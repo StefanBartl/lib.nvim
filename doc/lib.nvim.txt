@@ -34,16 +34,48 @@ compatible signature for classic Vim where feasible.
 ==============================================================================
 2. INSTALLATION                                         *lib.nvim-installation*
 
-With lazy.nvim, as a standalone plugin: >lua
+How you install lib.nvim depends on WHEN it is needed.
+
+As a dependency of other plugins (loaded on demand): >lua
+
+    {
+      "you/my-plugin.nvim",
+      dependencies = { "StefanBartl/lib.nvim" },
+    }
+<
+Standalone, lazily on first require: >lua
 
     { "StefanBartl/lib.nvim", lazy = true }
 <
-As a dependency of your own plugins: >lua
+                                                       *lib.nvim-bootstrap*
+Config-wide use ~
 
-    {
-      "StefanBartl/my-plugin.nvim",
-      dependencies = { "StefanBartl/lib.nvim" },
-    }
+If you use lib.* directly in your own config (lua/config/*, lua/plugins/*,
+autocmds, mappings, ...), it is needed BEFORE lazy.nvim finishes reading your
+plugin specs. A normal spec is too late, and rtp:prepend alone does not help:
+lazy.nvim installs its own module loader that ignores runtimepath entries added
+afterwards. You must also register lib.nvim on package.path (the C require
+searcher, which lazy does not replace).
+
+Bootstrap it in init.lua, BEFORE require("lazy").setup(): >lua
+
+    local libpath = vim.fn.stdpath("data") .. "/lazy/lib.nvim"
+    if not (vim.uv or vim.loop).fs_stat(libpath) then
+      vim.fn.system({
+        "git", "clone", "--filter=blob:none",
+        "https://github.com/StefanBartl/lib.nvim.git", libpath,
+      })
+    end
+    vim.opt.rtp:prepend(libpath)
+    package.path = table.concat({
+      libpath .. "/lua/?.lua",
+      libpath .. "/lua/?/init.lua",
+      package.path,
+    }, ";")
+<
+Then add a managed spec so :Lazy update keeps it current: >lua
+
+    { "StefanBartl/lib.nvim", lazy = false, priority = 1000 }
 <
 lib.nvim has no third-party dependencies; it uses only `vim` and itself.
 
