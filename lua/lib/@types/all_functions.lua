@@ -1,0 +1,101 @@
+---@meta
+---@module 'lib.@types.all_functions'
+---
+--- Aggregated type surface of `require("lib")`.
+--- This `Lib` class is assigned (`---@type Lib`) to the table exported by the
+--- aggregator strategies (lib/strategies/*.lua), so referencing the `lib` module
+--- yields full LSP completion/types for every exported key.
+---
+--- KEEP IN SYNC with the aggregator export surface (MODULE_MAP / SPECIAL_HANDLERS
+--- in lib/strategies/metatable.lua). Generated to match exactly those keys.
+
+---@class Lib
+--- === Namespaces (whole submodules) ===
+---@field array TablesArray
+---@field core LibTablesCore
+---@field dict TablesDict
+---@field functional LibTablesFn
+---@field unique_table Lib.Tables.UniqueTable
+---@field strings Lib.Strings
+---@field notify Lib.Notify
+---@field autocmd Lib.AutoCmd
+---@field usercmd Lib.UsrCmd
+---@field normalize Lib.Normalize
+---@field memo Lib.Memo
+---@field lazy Lib.Lazy
+---@field hl Lib.UI.HL
+--- === Flat helper functions ===
+---@field always_false fun(): boolean # Constant-false predicate. Always returns false regardless of input. Useful as a disabling predicate or sentinel.
+---@field always_true fun(): boolean # Constant-true predicate. Always returns true regardless of input. Useful as a default filter or guard function.
+---@field camel_case fun(s: string): string
+---@field capitalize fun(s: string): string
+---@field const fun(value: any): fun(): any # Constant value generator. Returns a function that always yields the provided value. Useful for lazy defaults, dependency injection, or testing.
+---@field contains fun(s: string, needle: string): boolean
+---@field copy_to_clipboard fun(text: string): boolean # Copy text to system clipboard using platform-appropriate backend
+---@field count_lines fun(s: string): integer # Count lines in a string
+---@field dedent fun(s: string): string
+---@field delete_terminal_buf fun(bufnr: integer): boolean|nil # Deletes terminal buffer
+---@field ends_with fun(s: string, suffix: string): boolean
+---@field ensure_dir fun(path: string): boolean, string? # Ensure directory exists
+---@field escape_lua_magic fun(s: string): string
+---@field find_plain fun(s: string, needle: string): integer|nil, integer|nil
+---@field find_upward_dir fun(names: string[], from: string): string|nil # Find directory containing files
+---@field has_exec fun(bin: string): boolean
+---@field has_scheme fun(s: string): boolean
+---@field hex_to_string fun(hex: string): string
+---@field hover_select Lib.UI.HoverSelect # Hover select module
+---@field identity fun(v: any): any # Identity function. Returns the value it was given unchanged. Commonly used in functional pipelines as a default mapper or when a transformation hook is optional.
+---@field indent fun(s: string, n: integer): string
+---@field insert_lines fun(lines: string[], pos?: Lib.Buf.InsertLinesPos): nil # Insert lines into buffer
+---@field is fun(platform?: Lib.Cross.Platform.PlatformName): boolean|Lib.Cross.Platform.PlatformName # Dual behavior: returns platform name or boolean check
+---@field is_dir fun(p: string): boolean # Check if path is a directory
+---@field is_empty_or_space fun(s: any): boolean
+---@field is_linux fun(): boolean # returns true if corrent os is linux
+---@field is_macos fun(): boolean # returns true if corrent os is macos
+---@field is_markdown_buf fun(bufnr_arg: integer|nil): integer|nil # Returns buffer number if valid markdown buffer
+---@field is_subpath fun(path: string, base: string): boolean # Check if path is subpath of base
+---@field is_terminal_buf fun(bufnr: integer): boolean|nil # Checks if buffer is terminal
+---@field is_web_url fun(s: string): boolean
+---@field is_windows fun(): boolean # returns true if corrent os is windows
+---@field is_wsl fun(): boolean # returns true if corrent os is wsl
+---@field join fun(parts: string[], sep: string): string
+---@field joinpath fun(parts: string[]): string # Joins variable strings to one path
+---@field kebab_case fun(s: string): string
+---@field map fun(modes: string|string[], lhs: string, rhs: string|function, opts: Lib.Map.Opts|nil, desc: string?): nil # Keymap helper
+---@field noop fun(): nil # No-operation function. Explicitly does nothing and returns nil.
+---@field normalize_anchor fun(s: string): string
+---@field pad_center fun(s: string, width: integer): string
+---@field pad_end fun(s: string, width: integer): string
+---@field pad_start fun(s: string, width: integer): string
+---@field path_shorten fun(path: string, max_len: integer): string # Shorten path for display
+---@field raise fun(err: any): nil # Error passthrough helper. Always throws an error. LuaLS has no `never` type, so `nil` is used as a pragmatic substitute.
+---@field relpath fun(path: string, base: string): string # Compute relative path
+---@field remove_prefix fun(s: string, list?: string[]): string
+---@field replace_all fun(s: string, from: string, to: string): string
+---@field replace_plain fun(s: string, from: string, to: string): string
+---@field require_dir fun(dir: string, calls?: string|string[]|""): nil # Load all modules in a directory
+---@field require_lazy fun(module_name: string): fun(): table # Lazy-loading wrapper
+---@field require_safe fun(name: string): boolean, any # Safe require with structured error handling
+---@field resolve_log_level fun(level?: LogLevel, default?: LogLevelNumber): integer # Resolve log level
+---@field run fun(cmd: string, cb: fun(ok:boolean, res:OsRunResult): nil): nil # Async run using vim.system when available; falls back to jobstart
+---@field run_blocking fun(cmd: string): OsRunResult # Blocking run (utility for quick conversions / probing)
+---@field safe Lib.Notify.Safe
+---@field set fun(group: string, opts: Lib.Highlight.Opts, ns: string|integer|nil)-
+---@field shell fun(): OsShell # Pick a shell suitable for the platform
+---@field simple_echo fun(msg: string, hl: string|nil, is_error: boolean|nil): integer|string # This module returns a single function that echoes messages using vim.api.nvim_echo
+---@field slugify fun(s: string): string
+---@field snake_case fun(s: string): string
+---@field split fun(s: string, sep: string): string[]
+---@field starts_with fun(s: string, prefix: string): boolean
+---@field surround fun(s: string, left: string, right: string): string
+---@field terminal_escape fun(path: string): string # Cross-platform path escaping
+---@field time_diff fun(): Lib.Time.TimeDiff # Create time diff instance
+---@field trim fun(s: any): string
+---@field uncapitalize fun(s: string): string
+---@field uri_decode fun(s: string): string
+---@field url_under_cursor fun(line: string, col: integer): string|nil
+---@field write_to_file fun(path: string, content: string): boolean, string|nil # Write string content to given path. Makes sure that directory exists. Return sucess boolean and in cade of no success string notice
+--- === Misc exported helpers ===
+---@field with fun(base: table|nil, extra: table|nil): table
+---@field run_argv fun(argv: string[], opts?: table): any
+---@field json_decode_to_string_array fun(value: any): string[]

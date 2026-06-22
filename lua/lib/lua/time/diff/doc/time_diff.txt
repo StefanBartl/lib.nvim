@@ -1,0 +1,835 @@
+*time_diff.txt*  High-precision time measurement and interval tracking
+
+Author:  lib.lua.time.diff maintainers
+License: Same as Neovim
+
+================================================================================
+CONTENTS                                                    *time_diff-contents*
+
+1. Introduction ............................ |time_diff-introduction|
+2. Usage ................................... |time_diff-usage|
+3. API Reference ........................... |time_diff-api|
+4. Dynamic Properties ...................... |time_diff-properties|
+5. Statistics .............................. |time_diff-statistics|
+6. Iterator Support ........................ |time_diff-iterator|
+7. Examples ................................ |time_diff-examples|
+8. Technical Notes ......................... |time_diff-technical|
+
+================================================================================
+INTRODUCTION                                            *time_diff-introduction*
+
+The `lib.lua.time.diff` module provides a lightweight, reusable timer for measuring
+elapsed time between code sections. Each call to `require("lib.lua.time.diff")`
+returns a fresh timer instance with independent state.
+
+Key features:
+- Nanosecond precision via `vim.uv.hrtime()` (default output unit)
+- Multiple checkpoints with automatic interval calculation
+- Dynamic property generation (diff.first, diff.second, ..., diff.last)
+- Configurable output units: ns (default), us, ms, s
+- Comprehensive statistics (min, max, avg, median, stddev, CV)
+- Pretty-printed summary tables with adjustable units
+- Iterator support with custom labels and index display
+- Metatable-based callable interface (`print(diff)`, `diff()`)
+
+Default unit: Nanoseconds (ns). All methods accept an optional unit parameter.
+
+================================================================================
+USAGE                                                          *time_diff-usage*
+
+Basic workflow:
+>
+  local diff = require("lib.lua.time.diff")
+  diff.start()  -- Optional, timer starts automatically
+
+  -- Code block 1 (default: nanoseconds)
+  local t1 = diff.check()
+
+  -- Code block 2 (explicit milliseconds)
+  local t2 = diff.check("ms")
+
+  -- Access via dynamic properties (always in ns)
+  print(diff.first)   -- First checkpoint
+  print(diff.second)  -- Second checkpoint
+  print(diff.last)    -- Last checkpoint
+
+  -- Statistics
+  print(diff.fastest("ms"))  -- Fastest interval
+  print(diff.average("ms"))  -- Average interval
+
+  -- Output
+  print(diff("ms"))        -- Print all checkpoints in ms
+  print(diff.pretty("ms")) -- Formatted table with statistics
+<
+
+================================================================================
+API REFERENCE                                                    *time_diff-api*
+
+--------------------------------------------------------------------------------
+CORE METHODS                                                *time_diff-methods*
+
+diff.start()                                                   *diff.start()*
+  Start or reset the timer. Clears all previous checkpoints and sets a new
+  baseline timestamp.
+
+  Returns: ~
+    `nil`
+
+diff.check({unit})                                             *diff.check()*
+  Record a checkpoint and return elapsed time since `start()`.
+  Can be called multiple times to measure intermediate intervals.
+
+  Parameters: ~
+    {unit} `string|nil` - Output unit: "ns" (default), "us", "ms", "s"
+
+  Returns: ~
+    `number` - Elapsed time in specified unit
+
+  Errors: ~
+    Throws error if `start()` was not called first.
+    Throws error if invalid unit is provided.
+
+  Example: ~
+>
+    local t1 = diff.check()      -- Nanoseconds (default)
+    local t2 = diff.check("ms")  -- Milliseconds
+<
+
+diff.result({unit})                                           *diff.result()*
+  Get total elapsed time since start. Equivalent to the last checkpoint
+  if `check()` was called.
+
+  Parameters: ~
+    {unit} `string|nil` - Output unit: "ns" (default), "us", "ms", "s"
+
+  Returns: ~
+    `number|nil` - Total time in specified unit, or `nil` if no checkpoints
+
+  Example: ~
+>
+    local total = diff.result("ms")
+    print("Total time:", total, "ms")
+<
+
+diff.get({idx}, {unit})                                          *diff.get()*
+  Get elapsed time of a specific checkpoint by index.
+  Index is 1-based (Lua convention).
+
+  Parameters: ~
+    {idx}  `integer`     - Checkpoint index (1 = first, 2 = second, etc.)
+    {unit} `string|nil`  - Output unit: "ns" (default), "us", "ms", "s"
+
+  Returns: ~
+    `number|nil` - Elapsed time in specified unit, or `nil` if out of bounds
+
+  Example: ~
+>
+    local t1 = diff.get(1, "ms")  -- First checkpoint in ms
+    local t3 = diff.get(3, "us")  -- Third checkpoint in us
+<
+
+--------------------------------------------------------------------------------
+OUTPUT METHODS                                              *time_diff-output*
+
+diff.results({unit})                                         *diff.results()*
+  Generate a summary string with all checkpoint times and statistics.
+
+  Parameters: ~
+    {unit} `string|nil` - Output unit: "ns" (default), "us", "ms", "s"
+
+  Format: ~
+    "Check 1: X.XXXns | ... | Total: Z.ZZZns | Fastest: A.AAAns | ..."
+
+  Returns: ~
+    `string` - Human-readable summary
+
+  Example: ~
+>
+    print(diff.results("ms"))
+    -- Output: "Check 1: 12.345ms | ... | Fastest: 10.000ms | ..."
+<
+
+diff.pretty({unit})                                           *diff.pretty()*
+  Generate a pretty-printed table suitable for `:messages` or notify windows.
+  Includes comprehensive statistics section.
+
+  Parameters: ~
+    {unit} `string|nil` - Output unit: "ns" (default), "us", "ms", "s"
+
+  Columns: ~
+    - Index: Checkpoint number
+    - Elapsed: Time since start
+    - Delta: Time since previous checkpoint
+
+  Statistics Section: ~
+    - Fastest Δ: Minimum interval between checkpoints
+    - Longest Δ: Maximum interval between checkpoints
+    - Average Δ: Mean interval
+    - Median Δ: Median interval
+    - Range: Difference between longest and fastest
+    - Std Dev: Standard deviation (if >= 2 checkpoints)
+    - CV: Coefficient of variation in % (if >= 2 checkpoints)
+
+  Returns: ~
+    `string` - Multi-line formatted table
+
+  Example output (milliseconds): ~
+>
+    ┌────────┬─────────────────┬─────────────────┐
+    │ Index  │  Elapsed (ms)  │   Delta (ms)   │
+    ├────────┼─────────────────┼─────────────────┤
+    │      1 │       12.345    │       12.345    │
+    │      2 │       23.456    │       11.111    │
+    ├────────┴─────────────────┴─────────────────┤
+    │ Total:     23.456ms                        │
+    ├──────────────────────────────────────────────┤
+    │ Statistics:                                  │
+    ├──────────────────────────────────────────────┤
+    │ Fastest Δ:       11.111ms                │
+    │ Longest Δ:       12.345ms                │
+    │ Average Δ:       11.728ms                │
+    │ Median Δ:        11.728ms                │
+    │ Range:            1.234ms                │
+    │ Std Dev:          0.617ms                │
+    │ CV:               5.26%                   │
+    └──────────────────────────────────────────────┘
+<
+
+--------------------------------------------------------------------------------
+METATABLE BEHAVIOR                                         *time_diff-callable*
+
+The timer instance is callable via metatable:
+>
+  print(diff())        -- Same as diff.results()
+  print(diff("ms"))    -- Same as diff.results("ms")
+  print(tostring(diff)) -- Same as diff.results()
+<
+
+================================================================================
+DYNAMIC PROPERTIES                                       *time_diff-properties*
+
+The timer instance automatically generates properties for all checkpoints.
+Properties always return values in NANOSECONDS, regardless of the unit
+specified in `check()`.
+
+Available properties:
+
+diff.first                                                       *diff.first*
+  First checkpoint elapsed time (nanoseconds).
+  Same as `diff.get(1)`.
+
+  Type: `number|nil` (nil if checkpoint doesn't exist)
+
+diff.second                                                     *diff.second*
+  Second checkpoint elapsed time (nanoseconds).
+  Same as `diff.get(2)`.
+
+  Type: `number|nil`
+
+diff.third                                                       *diff.third*
+  Third checkpoint elapsed time (nanoseconds).
+  Same as `diff.get(3)`.
+
+  Type: `number|nil`
+
+diff.fourth through diff.tenth                      *diff.fourth* *diff.tenth*
+  Fourth through tenth checkpoint elapsed times (nanoseconds).
+  Same as `diff.get(4)` through `diff.get(10)`.
+
+  Type: `number|nil`
+
+diff.last                                                         *diff.last*
+  Last checkpoint elapsed time (nanoseconds).
+  Same as `diff.result()` (without unit parameter).
+
+  Type: `number|nil` (nil if no checkpoints recorded)
+
+Example: ~
+>
+  local diff = require("lib.lua.time.diff")
+
+  diff.check()  -- First checkpoint
+  diff.check()  -- Second checkpoint
+  diff.check()  -- Third checkpoint
+
+  print(diff.first)   -- First checkpoint (ns)
+  print(diff.second)  -- Second checkpoint (ns)
+  print(diff.third)   -- Third checkpoint (ns)
+  print(diff.last)    -- Last checkpoint (same as third, in ns)
+
+  -- Calculate delta
+  local delta_ns = diff.third - diff.first
+  print("Delta:", delta_ns, "ns")
+
+  -- Convert to milliseconds manually if needed
+  print("Delta:", delta_ns / 1e6, "ms")
+<
+
+Note: ~
+  Properties are dynamically generated via metatable `__index` and do not
+  create actual table entries. Accessing non-existent checkpoints returns nil.
+
+================================================================================
+STATISTICS                                                *time_diff-statistics*
+
+The timer provides comprehensive statistical analysis of intervals between
+checkpoints. All statistics operate on deltas (differences between consecutive
+checkpoints), not cumulative checkpoint times.
+
+diff.fastest({unit})                                         *diff.fastest()*
+  Get the minimum interval between any two consecutive checkpoints.
+
+  Parameters: ~
+    {unit} `string|nil` - Output unit: "ns" (default), "us", "ms", "s"
+
+  Returns: ~
+    `number|nil` - Fastest interval, or nil if fewer than 1 checkpoint
+
+  Example: ~
+>
+    local min_time = diff.fastest("ms")
+    print("Fastest operation:", min_time, "ms")
+<
+
+diff.longest({unit})                                         *diff.longest()*
+  Get the maximum interval between any two consecutive checkpoints.
+
+  Parameters: ~
+    {unit} `string|nil` - Output unit: "ns" (default), "us", "ms", "s"
+
+  Returns: ~
+    `number|nil` - Longest interval, or nil if fewer than 1 checkpoint
+
+  Example: ~
+>
+    local max_time = diff.longest("ms")
+    print("Longest operation:", max_time, "ms")
+<
+
+diff.average({unit})                                         *diff.average()*
+  Get the arithmetic mean of all intervals between checkpoints.
+
+  Parameters: ~
+    {unit} `string|nil` - Output unit: "ns" (default), "us", "ms", "s"
+
+  Returns: ~
+    `number|nil` - Average interval, or nil if fewer than 1 checkpoint
+
+  Formula: ~
+    average = sum(all_intervals) / count(intervals)
+
+  Example: ~
+>
+    local avg = diff.average("ms")
+    print("Average time:", avg, "ms")
+<
+
+diff.median({unit})                                           *diff.median()*
+  Get the median interval between checkpoints.
+
+  Parameters: ~
+    {unit} `string|nil` - Output unit: "ns" (default), "us", "ms", "s"
+
+  Returns: ~
+    `number|nil` - Median interval, or nil if fewer than 1 checkpoint
+
+  Calculation: ~
+    For odd count: middle value
+    For even count: average of two middle values
+
+  Example: ~
+>
+    local med = diff.median("ms")
+    print("Median time:", med, "ms")
+<
+
+diff.stddev({unit})                                           *diff.stddev()*
+  Get the standard deviation of intervals between checkpoints.
+  Measures the amount of variation or dispersion.
+
+  Parameters: ~
+    {unit} `string|nil` - Output unit: "ns" (default), "us", "ms", "s"
+
+  Returns: ~
+    `number|nil` - Standard deviation, or nil if fewer than 2 checkpoints
+
+  Formula: ~
+    stddev = sqrt(sum((interval - avg)^2) / count)
+
+  Example: ~
+>
+    local sd = diff.stddev("ms")
+    print("Standard deviation:", sd, "ms")
+<
+
+diff.cv()                                                         *diff.cv()*
+  Get the coefficient of variation (CV) as a percentage.
+  Measures relative variability: lower values indicate more consistent timing.
+
+  Returns: ~
+    `number|nil` - CV in percent, or nil if fewer than 2 checkpoints
+
+  Formula: ~
+    CV = (stddev / mean) * 100
+
+  Interpretation: ~
+    < 10%:  Very consistent performance
+    10-30%: Moderate variation
+    > 30%:  High variability
+
+  Example: ~
+>
+    local cv = diff.cv()
+    if cv < 10 then
+      print("Very consistent performance:", cv, "%")
+    end
+<
+
+diff.calc_diff({iv1}, {iv2}, {unit})                       *diff.calc_diff()*
+  Calculate absolute difference between two intervals.
+  Accepts checkpoint indices, statistical keywords, or raw time values.
+  Always returns positive difference regardless of argument order.
+
+  Parameters: ~
+    {iv1}  `integer|string|number` - First interval specifier
+    {iv2}  `integer|string|number` - Second interval specifier
+    {unit} `string|nil`            - Output unit: "ns" (default), "us", "ms", "s"
+
+  Interval Specifiers: ~
+    - Integer (1-10): Checkpoint index
+    - String keywords: "average"/"avg", "fastest"/"min", "longest"/"max",
+                       "median"/"med"
+    - Large number: Treated as raw time value in nanoseconds
+
+  Returns: ~
+    `number|nil` - Absolute difference, or nil if invalid input
+
+  Examples: ~
+>
+    -- Between checkpoints
+    local d1 = diff.calc_diff(1, 3, "ms")
+
+    -- Checkpoint vs statistics
+    local d2 = diff.calc_diff(2, "average", "ms")
+    local d3 = diff.calc_diff(1, "fastest", "ms")
+
+    -- Between statistics
+    local range = diff.calc_diff("fastest", "longest", "ms")
+
+    -- With raw time value
+    local target = 100000000  -- 100ms in ns
+    local d4 = diff.calc_diff(1, target, "ms")
+<
+
+Note: ~
+  Checkpoints represent cumulative time since start.
+  Statistics (fastest, longest, average, median) represent intervals (deltas)
+  between consecutive checkpoints. The `calc_diff()` function works with both.
+
+================================================================================
+ITERATOR SUPPORT                                            *time_diff-iterator*
+
+The iterator provides sequential access to checkpoints with optional
+formatting.
+
+diff.next({label}, {unit})                                        *diff.next()*
+  Iterator: Returns the next checkpoint sequentially.
+  Resets to the beginning when all checkpoints are exhausted.
+
+  Parameters: ~
+    {label} `string|nil` - Custom label for this specific call (overrides
+                           iterator label set by `reset_iterator()`)
+    {unit}  `string|nil` - Output unit: "ns" (default), "us", "ms", "s"
+
+  Returns: ~
+    `string|number|nil` - Formatted string if label is set, raw number
+                          otherwise, or `nil` if no more checkpoints remain
+
+  Behavior: ~
+    - If no label is set (neither via parameter nor `reset_iterator()`),
+      returns raw numeric value
+    - If label is set, returns formatted string:
+      - Without index: "Label VALUE"
+      - With index: "Label INDEX: VALUE"
+    - Label from parameter overrides iterator label for this call only
+
+  Examples: ~
+>
+    -- Numeric output
+    diff.reset_iterator()
+    local t = diff.next()  -- Returns: 12345678 (ns)
+
+    -- String output with label
+    diff.reset_iterator("Checkpoint")
+    local s = diff.next(nil, "ms")  -- Returns: "Checkpoint 12.345ms"
+
+    -- String output with label and index
+    diff.reset_iterator("Step", true)
+    local s = diff.next(nil, "ms")  -- Returns: "Step 1: 12.345ms"
+
+    -- Override label for one call
+    diff.reset_iterator("Default", true)
+    local s = diff.next("Custom", "ms")  -- Returns: "Custom 2: 23.456ms"
+<
+
+diff.reset_iterator({label}, {show_index})            *diff.reset_iterator()*
+  Reset the iterator to the beginning. Optionally set a custom label and
+  enable index display for subsequent `next()` calls.
+
+  Parameters: ~
+    {label}      `string|nil`  - Custom label to prepend to iterator output
+    {show_index} `boolean|nil` - Whether to include checkpoint index
+
+  Returns: ~
+    `nil`
+
+  Examples: ~
+>
+    -- Reset without label
+    diff.reset_iterator()
+
+    -- Reset with label only
+    diff.reset_iterator("Checkpoint")
+
+    -- Reset with label and index
+    diff.reset_iterator("Step", true)
+<
+
+--------------------------------------------------------------------------------
+ITERATOR USAGE PATTERNS                                  *time_diff-iter-usage*
+
+Basic numeric iteration: ~
+>
+  diff.reset_iterator()
+  while true do
+    local t = diff.next()  -- Returns number (ns)
+    if not t then break end
+    print(t)
+  end
+<
+
+With label: ~
+>
+  diff.reset_iterator("Checkpoint")
+  while true do
+    local s = diff.next(nil, "ms")  -- Returns string
+    if not s then break end
+    print(s)  -- "Checkpoint 12.345ms"
+  end
+<
+
+With label and index: ~
+>
+  diff.reset_iterator("Step", true)
+  while true do
+    local s = diff.next(nil, "ms")
+    if not s then break end
+    print(s)  -- "Step 1: 12.345ms", "Step 2: 23.456ms", ...
+  end
+<
+
+Override label for single call: ~
+>
+  diff.reset_iterator("Default", true)
+  print(diff.next(nil, "ms"))       -- "Default 1: 12.345ms"
+  print(diff.next("Custom", "ms"))  -- "Custom 2: 23.456ms"
+  print(diff.next(nil, "ms"))       -- "Default 3: 34.567ms"
+<
+
+================================================================================
+EXAMPLES                                                    *time_diff-examples*
+
+--------------------------------------------------------------------------------
+Example 1: Basic timing ~
+>
+  local diff = require("lib.lua.time.diff")
+
+  diff.start()
+  vim.fn.sleep(100)  -- Sleep 100ms
+  local t1 = diff.check("ms")
+
+  vim.fn.sleep(200)
+  local t2 = diff.check("ms")
+
+  print(diff.pretty("ms"))
+<
+
+--------------------------------------------------------------------------------
+Example 2: Calculating deltas ~
+>
+  local diff = require("lib.lua.time.diff")
+
+  diff.start()
+
+  -- Code block 1
+  diff.check()
+
+  -- Code block 2
+  diff.check()
+
+  -- Code block 3
+  diff.check()
+
+  -- Properties are always in nanoseconds
+  print("First:", diff.first, "ns")
+  print("Third:", diff.third, "ns")
+  print("Delta:", diff.third - diff.first, "ns")
+
+  -- Convert to milliseconds manually
+  print("Delta:", (diff.third - diff.first) / 1e6, "ms")
+<
+
+--------------------------------------------------------------------------------
+Example 3: Iterator with labels ~
+>
+  local diff = require("lib.lua.time.diff")
+
+  -- Create 3 checkpoints
+  for i = 1, 3 do
+    vim.fn.sleep(100)
+    diff.check()
+  end
+
+  -- Iterator with label and index
+  diff.reset_iterator("Measurement", true)
+
+  while true do
+    local s = diff.next(nil, "ms")
+    if not s then break end
+    print(s)
+    -- Output:
+    -- "Measurement 1: 100.123ms"
+    -- "Measurement 2: 200.456ms"
+    -- "Measurement 3: 300.789ms"
+  end
+<
+
+--------------------------------------------------------------------------------
+Example 4: Multiple independent timers ~
+>
+  local timer1 = require("lib.lua.time.diff")
+  local timer2 = require("lib.lua.time.diff")
+
+  timer1.start()
+  -- ... some code ...
+  timer1.check()
+
+  timer2.start()
+  -- ... other code ...
+  timer2.check()
+
+  print("Timer 1:", timer1.result("ms"), "ms")
+  print("Timer 2:", timer2.result("ms"), "ms")
+<
+
+--------------------------------------------------------------------------------
+Example 5: Benchmark with unit conversion ~
+>
+  local diff = require("lib.lua.time.diff")
+
+  diff.start()
+
+  -- Benchmark math.sqrt
+  for i = 1, 1000000 do
+    math.sqrt(i)
+  end
+  local t1 = diff.check("ms")
+
+  -- Benchmark math.sin
+  for i = 1, 1000000 do
+    math.sin(i)
+  end
+  local t2 = diff.check("ms")
+
+  print(diff.pretty("ms"))
+  print("Difference:", t2 - t1, "ms")
+
+  -- Or use properties (always in ns)
+  print("Delta (ns):", diff.second - diff.first)
+  print("Delta (ms):", (diff.second - diff.first) / 1e6)
+<
+
+--------------------------------------------------------------------------------
+Example 6: Statistics and analysis ~
+>
+  local diff = require("lib.lua.time.diff")
+
+  -- Simulate variable execution times
+  for i = 1, 10 do
+    vim.fn.sleep(math.random(50, 150))
+    diff.check()
+  end
+
+  -- Comprehensive statistics
+  print(diff.pretty("ms"))
+
+  -- Individual values
+  print("\nDetailed Analysis:")
+  print("Fastest:", diff.fastest("ms"), "ms")
+  print("Longest:", diff.longest("ms"), "ms")
+  print("Average:", diff.average("ms"), "ms")
+  print("Median:", diff.median("ms"), "ms")
+  print("StdDev:", diff.stddev("ms"), "ms")
+  print("CV:", diff.cv(), "%")
+
+  -- Calculate differences
+  print("\nDifferences:")
+  print("Range:", diff.calc_diff("fastest", "longest", "ms"), "ms")
+  print("Check 1 vs Avg:", diff.calc_diff(1, "average", "ms"), "ms")
+<
+
+--------------------------------------------------------------------------------
+Example 7: Performance comparison ~
+>
+  local diff = require("lib.lua.time.diff")
+
+  -- Benchmark multiple operations
+  local ops = {"sqrt", "sin", "cos", "tan"}
+
+  for _, op in ipairs(ops) do
+    for i = 1, 100000 do
+      math[op](i)
+    end
+    diff.check()
+  end
+
+  print(diff.pretty("us"))
+
+  -- Find slowest operation
+  local longest_idx = 1
+  local longest_val = diff.get(1)
+  for i = 2, #ops do
+    local val = diff.get(i)
+    if val > longest_val then
+      longest_idx = i
+      longest_val = val
+    end
+  end
+
+  print("\nSlowest:", ops[longest_idx])
+  print("Time:", diff.get(longest_idx, "ms"), "ms")
+
+  -- Compare to average
+  for i, op in ipairs(ops) do
+    local dev = diff.calc_diff(i, "average", "ms")
+    print(string.format("%s: %+.3fms from average", op, dev))
+  end
+<
+
+--------------------------------------------------------------------------------
+Example 8: Iterator with override labels ~
+>
+  local diff = require("lib.lua.time.diff")
+
+  -- Create checkpoints
+  for i = 1, 5 do
+    vim.fn.sleep(50)
+    diff.check()
+  end
+
+  -- Set default label with index
+  diff.reset_iterator("Checkpoint", true)
+
+  -- First three with default label
+  for i = 1, 3 do
+    print(diff.next(nil, "ms"))
+    -- Output:
+    -- "Checkpoint 1: 50.123ms"
+    -- "Checkpoint 2: 100.456ms"
+    -- "Checkpoint 3: 150.789ms"
+  end
+
+  -- Override label for fourth
+  print(diff.next("Special", "ms"))
+  -- Output: "Special 4: 200.234ms"
+
+  -- Back to default for fifth
+  print(diff.next(nil, "ms"))
+  -- Output: "Checkpoint 5: 250.567ms"
+<
+
+================================================================================
+TECHNICAL NOTES                                            *time_diff-technical*
+
+Precision ~
+  - Uses `vim.uv.hrtime()` for nanosecond precision
+  - Default output: nanoseconds (ns)
+  - Configurable units: ns, us, ms, s
+  - Properties always return nanoseconds
+
+State Isolation ~
+  Each `require("lib.lua.time.diff")` creates a new instance with independent
+  state. No shared global variables.
+
+Unit Conversion ~
+  - 1 second (s)       = 1,000,000,000 ns
+  - 1 millisecond (ms) = 1,000,000 ns
+  - 1 microsecond (us) = 1,000 ns
+  - 1 nanosecond (ns)  = 1 ns
+
+Statistics ~
+  - Statistics operate on intervals (deltas) between consecutive checkpoints
+  - Checkpoints represent cumulative time since start
+  - Example:
+    Checkpoints: 10ms, 25ms, 50ms
+    Intervals:   10ms, 15ms, 25ms
+    Statistics:  fastest=10ms, longest=25ms, average=16.67ms
+
+Coefficient of Variation (CV) ~
+  - CV = (standard deviation / mean) * 100
+  - Interpretation:
+    < 10%:  Very consistent performance
+    10-30%: Moderate variation
+    > 30%:  High variability in timing
+
+calc_diff() Resolution ~
+  The function intelligently determines whether a number is an index or
+  a raw time value:
+  - Small integers (1-10): Treated as checkpoint indices
+  - Large numbers: Treated as raw nanosecond values
+  - Strings: Resolved to statistical keywords
+
+Error Handling ~
+  - Calling `check()` before `start()` throws an error:
+>
+    [lib.lua.time.diff] Timer not started. Call `start()` first.
+<
+  - Invalid unit parameter throws an error:
+>
+    [lib.lua.time.diff] Invalid unit: xyz
+<
+  - Statistical functions return nil if insufficient checkpoints exist
+
+Dynamic Properties ~
+  - Generated via metatable `__index`
+  - Up to 10 named checkpoints: first through tenth
+  - Special property `last` for last checkpoint
+  - Properties return nil if checkpoint doesn't exist
+  - Always return values in nanoseconds
+
+Iterator Behavior ~
+  - Maintains internal index for sequential traversal
+  - Returns nil when exhausted (resets index to 0)
+  - Label and index display are optional and configurable
+  - Override label persists for single `next()` call only
+
+Performance ~
+  - Overhead per checkpoint: ~100-200ns
+  - Statistical calculations: O(n) where n = checkpoint count
+  - Suitable for micro-benchmarking and profiling
+  - Minimal memory footprint per instance
+
+Limitations ~
+  - No support for pausing/resuming timers
+  - Checkpoints cannot be removed once recorded
+  - Iterator does not support reverse traversal
+  - Maximum 10 named properties (first-tenth)
+  - Statistics require at least 1 checkpoint (2 for stddev/CV)
+
+Metatable Features ~
+  - `__call`: Makes instance callable -> `diff()` returns `results()`
+  - `__tostring`: String conversion -> `tostring(diff)` returns `results()`
+  - `__index`: Enables dynamic property access (first, second, etc.)
+
+================================================================================
+vim:tw=80:ts=2:ft=help:norl:

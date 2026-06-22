@@ -1,0 +1,50 @@
+---@meta
+---@module 'lib.lua.tables.@types.set'
+-- =========================================================
+-- Set Operations
+-- =========================================================
+
+---@class Lib.Tables.Set
+---@field from_array fun(xs: any[]): table<any, true> # Create a set from an array. Returns table where each array element becomes a key with value true.
+---
+---@field to_array fun(s: table<any, true>): any[] # Convert set back to array (no order guarantee). Returns array of all keys in set.
+---
+---@field add fun(s: table<any, true>, v: any) # Add a value to the set. Mutates set in-place.
+---
+---@field add_all fun(s: table<any, true>, xs: any[]) # Add multiple values from an array to set. Mutates set in-place.
+---
+---@field remove fun(s: table<any, true>, v: any) # Remove a value from the set. Mutates set in-place.
+---
+---@field remove_all fun(s: table<any, true>, xs: any[]) # Remove multiple values from an array. Mutates set in-place.
+---
+---@field clear fun(s: table<any, true>) # Clear a set in-place. Removes all elements.
+---
+---@field has fun(s: table<any, true>, v: any): boolean # Check membership. Returns true if value is in set.
+---
+---@field size fun(s: table<any, true>): integer # Number of elements in set.
+---
+---@field copy fun(s: table<any, true>): table<any, true> # Shallow copy of a set. Returns new set with same elements.
+---
+---@field from_keys fun(t: table): table<any, true> # Build a set from the keys of a table. Returns set containing all keys as elements.
+---
+---@field union fun(a: table<any, true>, b: table<any, true>): table<any, true> # Union of two sets (new set). Returns set containing all elements from both sets.
+---
+---@field intersection fun(a: table<any, true>, b: table<any, true>): table<any, true> # Intersection of two sets (new set). Returns set containing only elements present in both sets. Optimized to iterate smaller set.
+---
+---@field difference fun(a: table<any, true>, b: table<any, true>): table<any, true> # Difference (a \ b): elements in a that are not in b (new set).
+---
+---@field symmetric_difference fun(a: table<any, true>, b: table<any, true>): table<any, true> # Symmetric difference: elements in a or b but not both (new set).
+---
+---@field is_subset fun(a: table<any, true>, b: table<any, true>): boolean # Subset test: a ⊆ b. Returns true if all elements of a are in b.
+---
+---@field is_superset fun(a: table<any, true>, b: table<any, true>): boolean # Superset test: a ⊇ b. Returns true if a contains all elements of b.
+---
+---@field equals fun(a: table<any, true>, b: table<any, true>): boolean # Equality test (same elements). Returns true if sets contain exactly the same elements.
+---
+---@field filter fun(s: table<any, true>, pred: fun(value: any): boolean): table<any, true> # Filter set by predicate; returns a new set containing only elements matching predicate.
+---
+---@field map fun(s: table<any, true>, fn: fun(value: any): any): table<any, true> # Map set to a new set of possibly different element type. Note: collisions (two inputs mapping to same output) are naturally deduplicated.
+---
+---@field iter fun(s: table<any, true>): fun(): any # Iterator over set elements (no guaranteed order). Returns iterator function.
+
+return {}

@@ -1,0 +1,121 @@
+---@meta
+---@module 'lib.nvim.buf_win_tab.@types.windows_utils'
+-- =========================================================
+-- Window and State Inspection Utilities
+-- =========================================================
+
+---@alias WinInfo { bufnr: integer, name: string, listed: boolean, loaded: boolean, changed: boolean, filetype: string, buftype: string, modified: boolean, size: integer }
+--- Extended buffer metadata with additional state information.
+--- Fields:
+---   • bufnr: Buffer number (handle)
+---   • name: Buffer name/path ("[No Name:N]" if unnamed)
+---   • listed: Whether buffer is listed (buflisted=1)
+---   • loaded: Whether buffer is loaded into memory
+---   • changed: Whether buffer has unsaved changes (changed flag)
+---   • filetype: Buffer filetype (empty string if none)
+---   • buftype: Buffer type (empty for normal files, "terminal", "quickfix", etc.)
+---   • modified: Whether buffer is modified (alternative to changed)
+---   • size: Buffer size in bytes
+
+---@alias AggregatedState { platform: string, listed_count: integer, listed_ids: integer[], buffers_by_filetype: table<string, integer[]>, current: WinInfo, tabpage_buffers: integer[], only_nonfile_listed: boolean }
+--- Comprehensive state snapshot structure.
+--- Fields:
+---   • platform: "windows" or "unix" (detected via uv.os_uname)
+---   • listed_count: Total number of listed buffers
+---   • listed_ids: Array of listed buffer IDs
+---   • buffers_by_filetype: Map of filetype → buffer IDs
+---   • current: Metadata for current buffer
+---   • tabpage_buffers: Buffer IDs visible in current/specified tabpage
+---   • only_nonfile_listed: Whether only non-file buffers are listed
+
+---@alias WinReport { textual: string[], raw: table }
+--- Window inspection report structure.
+--- Fields:
+---   • textual: Array of human-readable lines describing window state
+---   • raw: Table containing structured window data (config, options, variables)
+
+---@class Lib.BufWinTab.WindowsUtils
+--- Cross-platform utility library for inspecting buffers, windows, and state.
+--- Works on Windows (MSYS/Cygwin/native), Linux, and macOS.
+--- All functions are safe and use pcall for API calls that may fail.
+---
+--- Design principles:
+---   • Platform-agnostic: No OS-specific dependencies
+---   • Safe: All API calls wrapped in pcall
+---   • Comprehensive: Provides both fine-grained and aggregated views
+---   • Grouped: Supports filetype-based buffer grouping
+---
+--- Performance notes:
+---   • list_all_buffers_info(): O(n) where n = buffer count
+---   • get_buffers_grouped_by_filetype(): O(n) with hash table grouping
+---   • show_aggregated_state(): Calls multiple functions (for debugging/logging)
+---
+---@field count_listed_buffers fun(): integer # Count all listed buffers (platform-agnostic). Uses vim.fn.getbufinfo({buflisted=1}). Emits DEBUG notification with count. Returns total count of listed buffers.
+---
+---@field list_all_buffers_info fun(): WinInfo[] # Get metadata for all buffers (listed and unlisted). Calls vim.fn.getbufinfo() and normalizes output. Fills in missing fields with safe defaults. Returns array of WinInfo structures.
+---
+---@field get_listed_buffer_ids fun(): integer[] # Get array of buffer IDs for all listed buffers. Uses vim.fn.getbufinfo({buflisted=1}). Returns integer[] of buffer numbers. Useful for iteration/filtering.
+---
+---@field get_buffers_grouped_by_filetype fun(): table<string, integer[]> # Group buffer IDs by filetype. Maps filetype string → array of buffer IDs. Buffers with no filetype grouped under "[no_ft]". Returns table with filetype keys and buffer ID arrays. Useful for filetype-specific operations.
+---
+---@field get_current_buffer_info fun(): WinInfo # Get metadata for current buffer. Uses nvim_get_current_buf() and nvim_buf_get_option. Safely handles API errors via pcall. Returns normalized WinInfo structure.
+---
+---@field get_tabpage_buffers fun(tabnr?: integer): integer[] # Get buffer IDs visible in specified tabpage (or current if nil). Iterates windows in tabpage and collects unique buffer IDs. Returns deduplicated array of buffer IDs. Useful for tabpage-scoped operations.
+---
+---@field format_buffers_report fun(): string # Format compact multi-line report of all buffers. Includes: listed status, modified flag, filetype, buftype, size, name. Returns newline-separated string suitable for :messages or logging.
+---
+---@field collect_all_state fun(): AggregatedState # Aggregate function: collect comprehensive system state. Includes: platform, buffer counts, filetype grouping, current buffer info, tabpage buffers. Returns AggregatedState structure with all metadata. Useful for debugging and status displays.
+---
+---@field show_aggregated_state fun(silent?: boolean): string|nil # Print or return aggregated state information. If silent=true: returns formatted string. If silent=false/nil: uses vim.notify with INFO level via vim.schedule. Includes platform, counts, IDs, detailed buffer list. Returns string if silent, nil otherwise.
+---
+---@field collect_win_report fun(winid?: integer): WinReport # Collect detailed window inspection report. If winid is nil, uses current window. Returns structure with textual array (human-readable lines) and raw table (structured data). Includes: buffer info, cursor position, window options, window variables, window config (float properties). Safe for invalid windows (returns error message).
+
+-- =========================================================
+-- Technical Notes
+-- =========================================================
+
+--- Platform Detection:
+--- - Uses vim.loop.os_uname() to detect Windows/MSYS/Cygwin
+--- - Fallback: treats unknown as "unix"
+--- - No behavioral differences based on platform (pure detection)
+---
+--- Safe API Usage:
+--- - All vim.fn.getbufinfo() calls wrapped in pcall
+--- - All nvim_buf_get_option() calls wrapped in pcall
+--- - Invalid buffers/windows return normalized empty values
+--- - No errors thrown for unloaded/deleted objects
+---
+--- Buffer Grouping:
+--- - get_buffers_grouped_by_filetype() uses hash table for O(1) insertion
+--- - Buffers with empty filetype grouped as "[no_ft]"
+--- - Each group is an array of buffer IDs (not deduplicated)
+---
+--- Tabpage Buffers:
+--- - get_tabpage_buffers() deduplicates buffers visible in multiple windows
+--- - Only returns buffers currently visible in windows
+--- - Does not include buffers loaded but not displayed
+---
+--- Window Reports:
+--- - collect_win_report() provides both human-readable and structured output
+--- - Textual: array of formatted strings for display
+--- - Raw: nested table with all window properties
+--- - Includes: config (float properties), options, variables, buffer metadata
+---
+--- Output Formatting:
+--- - format_buffers_report(): Multi-line string with consistent column alignment
+--- - show_aggregated_state(): Uses vim.schedule to avoid API reentrancy issues
+--- - Both functions suitable for :messages, notify, or logging
+---
+--- Performance:
+--- - list_all_buffers_info(): Single getbufinfo() call
+--- - get_buffers_grouped_by_filetype(): O(n) with hash table
+--- - collect_all_state(): Calls 6+ functions (not optimized)
+--- - show_aggregated_state(): Includes format_buffers_report() (can be slow for many buffers)
+---
+--- Edge Cases:
+--- - Empty buffer names shown as "[No Name:N]" where N is buffer number
+--- - Missing filetypes/buftypes shown as "-" or empty string
+--- - Invalid windows in collect_win_report() return { valid = false }
+--- - Scheduled notify may not execute if Neovim exits immediately
+
+return {}

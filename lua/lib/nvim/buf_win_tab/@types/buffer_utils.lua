@@ -1,0 +1,103 @@
+---@meta
+---@module 'lib.nvim.buf_win_tab.@types.buffer_utils'
+-- =========================================================
+-- Buffer Inspection and Utilities
+-- =========================================================
+
+---@alias BufInfo { id: integer, name: string, filetype: string, buflisted: boolean, modified: boolean, lines: integer, windows: integer[] }
+--- Complete buffer metadata structure.
+--- Fields:
+---   • id: Buffer number (handle)
+---   • name: Full buffer name/path (empty string if unnamed)
+---   • filetype: Buffer filetype ("" if none)
+---   • buflisted: Whether buffer appears in buffer list
+---   • modified: Whether buffer has unsaved changes
+---   • lines: Line count in buffer
+---   • windows: List of window IDs currently displaying this buffer
+
+---@alias BufCollectedInfo { listed_count: integer, real_listed_count: integer, listed: BufInfo[], all: BufInfo[], formatted_listed: string }
+--- Aggregated buffer information structure.
+--- Fields:
+---   • listed_count: Total number of listed buffers
+---   • real_listed_count: Listed buffers excluding plugins/ephemeral buffers
+---   • listed: Array of metadata for listed buffers only
+---   • all: Array of metadata for all buffers (listed + unlisted)
+---   • formatted_listed: Pretty-printed table string of listed buffers
+
+---@class Lib.BufWinTab.BufferUtils
+--- Utility library for inspecting and analyzing Neovim buffers.
+--- All functions are read-only and do not mutate buffer state.
+--- Compatible with all platforms (Windows, Linux, macOS).
+---
+--- Design principles:
+---   • Non-destructive: No buffer modifications
+---   • Safe: Uses pcall for API calls that may fail
+---   • Efficient: Preallocates arrays where size is known
+---   • Consistent: Normalizes vim.fn.getbufinfo and nvim_buf_* outputs
+---
+--- Performance notes:
+---   • list_all_buffers_info(): O(n) where n = buffer count
+---   • format_buffers_table(): O(n) string concatenation
+---   • count_real_listed_buffers(): O(n) with filetype filtering
+---
+---@field DEFAULT_EXCLUDE_FILETYPES string[] # Standard list of filetypes to exclude when counting "real" user buffers. Includes: neo-tree, NvimTree, qf, TelescopePrompt, alpha, startify, packer, help, notify. Modifiable list for custom filtering logic.
+---
+---@field count_listed_buffers fun(): integer # Count all listed buffers using vim.fn.getbufinfo({buflisted=1}). Listed buffers appear in :ls output. Returns total count. Emits DEBUG notification with count.
+---
+---@field get_buffer_info fun(bufnr: number): BufInfo # Get detailed metadata for a single buffer by ID. Uses pcall for safe API access (handles invalid/unloaded buffers). Collects windows currently displaying the buffer. Returns normalized BufInfo structure with all fields populated.
+---
+---@field count_real_listed_buffers fun(exclude_filetypes?: string[]): integer # Count listed buffers excluding plugin/ephemeral buffers. Uses exclude_filetypes list (defaults to DEFAULT_EXCLUDE_FILETYPES). Filters by filetype and non-empty name. Returns count of "real" user-editable buffers. Useful for "close last buffer" detection.
+---
+---@field list_all_buffers_info fun(): BufInfo[] # Gather metadata for ALL buffers (listed and unlisted). Iterates nvim_list_bufs() and calls get_buffer_info() for each. Returns array of BufInfo structures. Includes scratch, terminal, plugin buffers, etc.
+---
+---@field list_listed_buffers_info fun(): BufInfo[] # Gather metadata for listed buffers only. Uses vim.fn.getbufinfo({buflisted=1}) for efficiency. Normalizes output to match get_buffer_info() structure. Returns array of BufInfo structures for listed buffers.
+---
+---@field format_buffers_table fun(buftable: BufInfo[]): string # Format array of BufInfo into human-readable multi-line table. Columns: bufnr, ft, listed, modified, name. Header with separator line. Modified buffers marked with asterisk. Returns formatted string suitable for :messages or notify.
+---
+---@field print_buffers_table fun(buftable: BufInfo[]): nil # Print formatted buffer table to command line. Uses nvim_echo for terminal output (appears in :messages). Calls format_buffers_table() internally. Returns nothing.
+---
+---@field collect_all_buffer_info fun(): BufCollectedInfo # High-level collector: gathers all buffer information in one call. Includes: listed count, real listed count, listed buffer array, all buffer array, formatted table string. Returns comprehensive BufCollectedInfo structure. Useful for status displays and debugging.
+---
+---@field print_summary fun(): nil # Print compact buffer summary to command line. Shows: listed count, real listed count, formatted table of listed buffers. Uses nvim_out_write for immediate terminal output. Returns nothing.
+
+-- =========================================================
+-- Technical Notes
+-- =========================================================
+
+--- Buffer Type Detection:
+--- - Listed: Appears in :ls, typically user-editable files
+--- - Unlisted: Hidden buffers (help, terminal, plugins)
+--- - "Real" buffers: Listed buffers excluding DEFAULT_EXCLUDE_FILETYPES
+---
+--- Safe API Access:
+--- - All nvim_buf_* calls wrapped in pcall
+--- - Invalid buffers return normalized empty/nil values
+--- - No errors thrown for unloaded/deleted buffers
+---
+--- Filetype Filtering:
+--- - DEFAULT_EXCLUDE_FILETYPES is mutable (can be modified by caller)
+--- - count_real_listed_buffers() accepts custom exclusion list
+--- - Empty name ("") buffers excluded from "real" count
+---
+--- Window Tracking:
+--- - get_buffer_info() collects all windows displaying buffer
+--- - windows field: integer[] of valid window IDs
+--- - Useful for multi-window scenarios
+---
+--- Formatting:
+--- - format_buffers_table() uses fixed-width columns
+--- - Modified buffers marked with "*"
+--- - Unnamed buffers shown as "[no name]"
+--- - Filetypes shown as "<noft>" if empty
+---
+--- Performance:
+--- - list_all_buffers_info(): Iterates all buffers once
+--- - format_buffers_table(): O(n) string concatenation via table.concat
+--- - collect_all_buffer_info(): Calls multiple functions (not optimized for speed)
+---
+--- Platform Compatibility:
+--- - No OS-specific code
+--- - Works on Windows, Linux, macOS
+--- - No external dependencies
+
+return {}

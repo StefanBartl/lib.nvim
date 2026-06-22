@@ -1,0 +1,31 @@
+---@meta
+---@module 'lib.@types'
+-- =========================================================
+-- All Lib Modules
+-- =========================================================
+
+---@class Lib.Modules
+---@field autocmd Lib.AutoCmd
+---@field bufwintab Lib.BufWinTab
+---@field buffer Lib.Buffer
+---@field cross Lib.Cross
+---@field functions Lib.Functions
+---@field fs Lib.Fs
+---@field git Lib.Git
+---@field json Lib.JSON
+---@field lazy Lib.Lazy
+---@field lua_ls Lib.LuaLS
+---@field map Lib.Map
+---@field memo Lib.Memo
+---@field normalize Lib.Normalize
+---@field notifier Lib.Notify+
+---@field nvim Lib.Nvim
+---@field require Lib.Require
+---@field strings Lib.Strings
+---@field tables Lib.Tables
+---@field terminals Lib.Terminal
+---@field time Lib.Time
+---@field ui Lib.UI
+---@field usrcmd Lib.UsrCmd
+
+return {}

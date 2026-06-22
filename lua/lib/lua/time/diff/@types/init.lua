@@ -1,0 +1,175 @@
+---@meta
+---@module 'lib.lua.time.diff.@types'
+-- =========================================================
+-- Time Measurement and Interval Tracking
+-- =========================================================
+
+---@alias TimeUnit "ns"|"us"|"ms"|"s"
+--- Time unit for formatting output.
+--- - "ns": Nanoseconds (default, highest precision)
+--- - "us": Microseconds
+--- - "ms": Milliseconds
+--- - "s": Seconds
+
+---@alias TimeDiffIntervalSpec integer|string|number
+--- Specifier for an interval in calc_diff().
+--- Can be:
+--- - Integer (1-10): Checkpoint index (1-based)
+--- - String keyword: "average"/"avg", "fastest"/"min", "longest"/"max", "median"/"med"
+--- - Large number: Raw time value in nanoseconds
+
+-- =========================================================
+-- Core Timer Instance
+-- =========================================================
+
+---@class Lib.Time.TimeDiff
+--- High-precision timer instance with checkpoint tracking.
+--- Each instance maintains independent state and provides:
+--- - Nanosecond precision via vim.uv.hrtime()
+--- - Multiple checkpoints with automatic interval calculation
+--- - Dynamic property access (diff.first, diff.second, ..., diff.last)
+--- - Statistical analysis of intervals (min, max, avg, median, stddev, CV)
+--- - Pretty-printed output with configurable units
+--- - Iterator support with custom labels
+--- - Metatable-based callable interface
+---
+--- Usage:
+---   local diff = require("lib.lua.time.diff")
+---   diff.start()           -- Optional, auto-started on creation
+---   local t1 = diff.check("ms")  -- Record checkpoint in milliseconds
+---   print(diff.first)      -- Access first checkpoint (always in ns)
+---   print(diff("ms"))      -- Print summary in milliseconds
+---   print(diff.pretty("ms")) -- Formatted table output
+---
+--- Important:
+--- - All stored values are in nanoseconds internally
+--- - Dynamic properties (first, second, etc.) always return nanoseconds
+--- - Methods accept optional unit parameter for conversion
+--- - Each require() call creates a new independent instance
+---
+---@field private _start number # Initial timestamp (nanoseconds)
+---@field private _checks number[] # List of checkpoint timestamps (nanoseconds)
+---@field private _index integer # Iterator index for next()
+---@field private _iter_label string|nil # Custom label for iterator output
+---@field private _iter_show_index boolean # Whether to show index in iterator output
+---
+---@field start fun(): nil # Start or reset the timer. Clears all checkpoints and sets new baseline timestamp.
+---
+---@field check fun(unit?: TimeUnit): number # Record a checkpoint and return elapsed time since start. Can be called multiple times for intermediate intervals. Returns elapsed time in specified unit (default: ns).
+---
+---@field result fun(unit?: TimeUnit): number|nil # Get total elapsed time since start. Equivalent to last checkpoint if check() was called. Returns nil if no checkpoints exist.
+---
+---@field get fun(idx: integer, unit?: TimeUnit): number|nil # Get elapsed time of specific checkpoint by index (1-based). Returns nil if index out of bounds [1..n].
+---
+---@field next fun(label?: string, unit?: TimeUnit): string|number|nil # Iterator: Returns next checkpoint sequentially. Resets to beginning when exhausted. Returns formatted string if label is set (via parameter or reset_iterator), raw number otherwise, or nil when exhausted. Label parameter overrides iterator label for this call only.
+---
+---@field reset_iterator fun(label?: string, show_index?: boolean): nil # Reset iterator to beginning. Optionally set custom label and enable index display for subsequent next() calls.
+---
+---@field fastest fun(unit?: TimeUnit): number|nil # Get fastest (minimum) interval between consecutive checkpoints. Returns nil if fewer than 1 checkpoint. Operates on deltas, not cumulative times.
+---
+---@field longest fun(unit?: TimeUnit): number|nil # Get longest (maximum) interval between consecutive checkpoints. Returns nil if fewer than 1 checkpoint. Operates on deltas, not cumulative times.
+---
+---@field average fun(unit?: TimeUnit): number|nil # Get average interval between consecutive checkpoints. Returns nil if fewer than 1 checkpoint. Formula: sum(deltas) / count(deltas).
+---
+---@field median fun(unit?: TimeUnit): number|nil # Get median interval between consecutive checkpoints. Returns nil if fewer than 1 checkpoint. For even count: average of two middle values.
+---
+---@field stddev fun(unit?: TimeUnit): number|nil # Get standard deviation of intervals. Returns nil if fewer than 2 checkpoints. Measures variation/dispersion of timing. Formula: sqrt(sum((delta - avg)^2) / count).
+---
+---@field cv fun(): number|nil # Get coefficient of variation (CV) as percentage. Returns nil if fewer than 2 checkpoints. Formula: (stddev / mean) * 100. Interpretation: <10% = very consistent, 10-30% = moderate variation, >30% = high variability.
+---
+---@field calc_diff fun(iv1: TimeDiffIntervalSpec, iv2: TimeDiffIntervalSpec, unit?: TimeUnit): number|nil # Calculate absolute difference between two intervals. Accepts checkpoint indices (1-10), statistical keywords ("average", "fastest", "longest", "median"), or raw time values in nanoseconds. Always returns positive difference. Returns nil if invalid input.
+---
+---@field results fun(unit?: TimeUnit): string # Generate summary string with all checkpoint times and statistics. Format: "Check 1: X.XXXns | ... | Total: Z.ZZZns | Fastest: A.AAAns | Longest: B.BBBns | Average: C.CCCns | Range: D.DDDns"
+---
+---@field pretty fun(unit?: TimeUnit): string # Generate pretty-printed table suitable for :messages or notify windows. Includes columns: Index, Elapsed, Delta. Includes comprehensive statistics section: Fastest Δ, Longest Δ, Average Δ, Median Δ, Range, Std Dev, CV. Multi-line formatted output with box drawing characters.
+---
+---@field first number|nil # First checkpoint elapsed time (nanoseconds). Same as get(1). Nil if checkpoint doesn't exist. Always in nanoseconds regardless of check() unit.
+---
+---@field second number|nil # Second checkpoint elapsed time (nanoseconds). Same as get(2). Nil if checkpoint doesn't exist.
+---
+---@field third number|nil # Third checkpoint elapsed time (nanoseconds). Same as get(3). Nil if checkpoint doesn't exist.
+---
+---@field fourth number|nil # Fourth checkpoint elapsed time (nanoseconds). Same as get(4). Nil if checkpoint doesn't exist.
+---
+---@field fifth number|nil # Fifth checkpoint elapsed time (nanoseconds). Same as get(5). Nil if checkpoint doesn't exist.
+---
+---@field sixth number|nil # Sixth checkpoint elapsed time (nanoseconds). Same as get(6). Nil if checkpoint doesn't exist.
+---
+---@field seventh number|nil # Seventh checkpoint elapsed time (nanoseconds). Same as get(7). Nil if checkpoint doesn't exist.
+---
+---@field eighth number|nil # Eighth checkpoint elapsed time (nanoseconds). Same as get(8). Nil if checkpoint doesn't exist.
+---
+---@field ninth number|nil # Ninth checkpoint elapsed time (nanoseconds). Same as get(9). Nil if checkpoint doesn't exist.
+---
+---@field tenth number|nil # Tenth checkpoint elapsed time (nanoseconds). Same as get(10). Nil if checkpoint doesn't exist.
+---
+---@field last number|nil # Last checkpoint elapsed time (nanoseconds). Same as result(). Nil if no checkpoints recorded. Always in nanoseconds.
+
+-- =========================================================
+-- Module Factory
+-- =========================================================
+
+---@class Lib.Time.Diff
+--- Module factory for creating timer instances.
+--- Each call to require("lib.lua.time.diff") returns this factory.
+--- Calling the factory creates a new independent timer instance.
+---
+--- Usage:
+---   local diff = require("lib.lua.time.diff")  -- diff is a TimeDiff instance
+---   -- Timer is automatically started on creation
+---
+--- Notes:
+--- - Each require() call creates a NEW instance with independent state
+--- - No shared global variables
+--- - Instances are isolated from each other
+--- - Metatable __call enables factory pattern
+
+-- =========================================================
+-- Technical Notes
+-- =========================================================
+
+--- Precision:
+--- - Uses vim.uv.hrtime() for nanosecond precision
+--- - Default output: nanoseconds (ns)
+--- - Configurable units: ns, us, ms, s
+--- - Properties always return nanoseconds
+---
+--- Unit Conversion:
+--- - 1 second (s)       = 1,000,000,000 ns
+--- - 1 millisecond (ms) = 1,000,000 ns
+--- - 1 microsecond (us) = 1,000 ns
+--- - 1 nanosecond (ns)  = 1 ns
+---
+--- Statistics:
+--- - Statistics operate on intervals (deltas) between consecutive checkpoints
+--- - Checkpoints represent cumulative time since start
+--- - Example:
+---   Checkpoints: 10ms, 25ms, 50ms
+---   Intervals:   10ms, 15ms, 25ms
+---   Statistics:  fastest=10ms, longest=25ms, average=16.67ms
+---
+--- Metatable Features:
+--- - __call: Makes instance callable → diff() returns results()
+--- - __tostring: String conversion → tostring(diff) returns results()
+--- - __index: Enables dynamic property access (first, second, etc.)
+---
+--- Performance:
+--- - Overhead per checkpoint: ~100-200ns
+--- - Statistical calculations: O(n) where n = checkpoint count
+--- - Suitable for micro-benchmarking and profiling
+--- - Minimal memory footprint per instance
+---
+--- Limitations:
+--- - No support for pausing/resuming timers
+--- - Checkpoints cannot be removed once recorded
+--- - Iterator does not support reverse traversal
+--- - Maximum 10 named properties (first-tenth)
+--- - Statistics require at least 1 checkpoint (2 for stddev/CV)
+---
+--- Error Handling:
+--- - Calling check() before start() throws error (auto-started on creation)
+--- - Invalid unit parameter throws error
+--- - Statistical functions return nil if insufficient checkpoints
+--- - Dynamic properties return nil if checkpoint doesn't exist
+
+return {}

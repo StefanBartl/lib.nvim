@@ -1,0 +1,21 @@
+# Lua / LuaRocks
+*.luac
+luac.out
+.luarc.json
+
+# Test / coverage artifacts
+luacov.stats.out
+luacov.report.out
+.tests/
+.deps/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+*~
+tags
+
+# Local scratch
+scratch/
+*.local.lua

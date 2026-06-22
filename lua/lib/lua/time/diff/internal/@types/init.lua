@@ -1,0 +1,12 @@
+---@meta
+---@module 'lib.lua.time.diff.internal.@types'
+
+--- Statistics result structure
+---@class TimeDiffStats
+---@field min number Minimum interval (ns)
+---@field max number Maximum interval (ns)
+---@field avg number Average interval (ns)
+---@field median number Median interval (ns)
+---@field sum number Sum of all intervals (ns)
+---@field count integer Number of intervals
+---@field deltas number[] Array of all intervals (ns)

@@ -1,0 +1,44 @@
+---@meta
+---@module 'lib.lua.tables.@types.core'
+-- =========================================================
+-- Core Table Utilities
+-- =========================================================
+
+---@class Lib.Tables.Core
+---@field is_table fun(t: any): boolean # Check if value is a table type.
+---
+---@field is_array fun(t: any): boolean # Check if table is a dense array. Heuristic: consecutive integer keys starting at 1 with #t matching. Rejects mixed tables with extra non-integer keys.
+---
+---@field shallow_copy fun(t: table): table # Create a shallow copy of a table. Copies all key-value pairs but not nested tables.
+---
+---@field deep_copy fun(t: table): table # Create a deep copy of a table with cycle detection. Recursively copies all nested structures. Handles circular references via seen table.
+---
+---@field keys fun(t: table): string[] # Extract all string keys from a table. Returns array of string keys only.
+---
+---@field values fun(t: table): any[] # Extract all values from a table. Returns array of all values.
+---
+---@field invert_set fun(list: string[]): table<string, true> # Convert string array to set (table<string, true>). Non-string entries are skipped.
+---
+---@field pick fun(t: table, pick_keys: string[]): table # Create new table with only specified keys from source table.
+---
+---@field omit fun(t: table, omit_keys: string[]): table # Create new table excluding specified keys. Returns shallow copy without omitted keys.
+---
+---@field merge_shallow fun(dst: table, src: table): table # Merge src into dst (shallow). Mutates dst and returns it. Right-biased: src values overwrite dst.
+---
+---@field merge_deep fun(dst: table, src: table): table # Merge src into dst (deep). Recursively merges nested tables. Mutates dst and returns it.
+---
+---@field dedup_list fun(list: any[]): any[] # Deduplicate list preserving first occurrence order. Returns new array.
+---
+---@field slice fun(list: any[], i: integer, j?: integer): any[] # Extract slice from list [i..j]. Supports negative indices. Returns new array.
+---
+---@field unique_push fun(list: any[], v: any): boolean # Push value to list only if not already present. Mutates list. Returns true if added, false if duplicate.
+---
+---@field binary_search fun(list: any[], cmp: fun(a: any, b: any): boolean, x: any): integer, boolean # Binary search in sorted list. Returns (index, found). If not found, index is insertion point.
+---
+---@field group_by fun(list: any[], key: fun(item: any): any): table<any, any[]> # Group array elements by key function. Returns table mapping keys to arrays of matching elements.
+---
+---@field partition fun(list: any[], pred: fun(item: any): boolean): any[], any[] # Partition list by predicate. Returns (pass, fail) arrays.
+---
+---@field count_by fun(list: any[], key: fun(item: any): any): table<any, integer> # Count occurrences by key function. Returns table mapping keys to occurrence counts.
+
+return {}

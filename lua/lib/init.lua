@@ -1,0 +1,16 @@
+---@module 'lib'
+--- Public aggregator entry point for lib.nvim.
+---
+--- Delegates to the aggregator strategy selected via `lib.config` (default:
+--- "metatable"). All strategies expose the same surface; see `lib.config` and
+--- `:help lib.nvim-config`.
+---
+---   local lib = require("lib")
+---   lib.notify          -- -> lib.nvim.notify
+---   lib.tables          -- -> lib.lua.tables
+---
+--- Prefer direct module paths in plugin code (tree-shake friendly):
+---   local notify = require("lib.nvim.notify")
+---
+---@type Lib
+return require(require("lib.config").strategy_module())

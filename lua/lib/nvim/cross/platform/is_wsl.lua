@@ -1,0 +1,65 @@
+---@module 'lib.nvim.cross.platform.is_wsl'
+--- Single-purpose module that exports exactly one function to detect
+--- whether Neovim is running inside Windows Subsystem for Linux (WSL).
+--- This module intentionally returns the function itself (not a table),
+--- so it can be re-exported cleanly by `lib.init`.
+
+---@return boolean
+--- Returns true when the current runtime is WSL (either v1 or v2).
+--- Detection strategy (in order):
+---   1) Use `uv.os_uname().release` (contains "Microsoft"/"WSL" on WSL).
+---   2) Environment variables commonly set by WSL (`WSL_DISTRO_NAME`, `WSL_INTEROP`).
+---   3) Fallback: read `/proc/sys/kernel/osrelease` and look for markers.
+return function()
+  -- Prefer `vim.uv` (Neovim ≥ 0.10); fall back to `vim.loop` for older versions.
+  local uv = (vim and (vim.uv or vim.loop)) or nil
+
+  -- Local cache across calls to avoid repeated IO/syscalls.
+  -- Using upvalue to keep the module a single-function export.
+  ---@type boolean|nil
+  local cached
+
+  if cached ~= nil then
+    return cached
+  end
+
+  local is = false
+
+  -- 1) uname-based detection
+  if uv and uv.os_uname then
+    local ok, u = pcall(uv.os_uname)
+    if ok and type(u) == "table" and type(u.release) == "string" then
+      local rel = u.release:lower()
+      -- Typical markers: "microsoft-standard-WSL2", "...-microsoft-..." etc.
+      if rel:find("microsoft", 1, true) or rel:find("wsl", 1, true) then
+        is = true
+      end
+    end
+  end
+
+  -- 2) Environment variables exposed by WSL
+  if not is and vim and vim.env then
+    local env = vim.env
+    if type(env.WSL_DISTRO_NAME) == "string" and env.WSL_DISTRO_NAME ~= "" then
+      is = true
+    elseif type(env.WSL_INTEROP) == "string" and env.WSL_INTEROP ~= "" then
+      is = true
+    end
+  end
+
+  -- 3) Fallback: kernel release file (works when uv/os_uname didn't)
+  if not is then
+    local f = io.open("/proc/sys/kernel/osrelease", "r")
+    if f then
+      local line = f:read("*l") or ""
+      f:close()
+      local low = line:lower()
+      if low:find("microsoft", 1, true) or low:find("wsl", 1, true) then
+        is = true
+      end
+    end
+  end
+
+  cached = is
+  return is
+end

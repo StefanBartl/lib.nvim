@@ -1,0 +1,151 @@
+*lib.nvim.txt*            Reusable Lua/Neovim helper library
+
+==============================================================================
+CONTENTS                                                    *lib.nvim-contents*
+
+  1. Introduction ............................. |lib.nvim-introduction|
+  2. Installation ............................. |lib.nvim-installation|
+  3. Usage .................................... |lib.nvim-usage|
+  4. Namespaces ............................... |lib.nvim-namespaces|
+       lib.lua ................................ |lib.nvim-lib.lua|
+       lib.nvim ............................... |lib.nvim-lib.nvim|
+       lib.vim ................................ |lib.nvim-lib.vim|
+  5. Configuration ............................ |lib.nvim-config|
+  6. Health ................................... |lib.nvim-health|
+  7. Conventions .............................. |lib.nvim-conventions|
+
+==============================================================================
+1. INTRODUCTION                                         *lib.nvim-introduction*
+
+lib.nvim is a reusable Lua/Neovim helper library, extracted from a private
+Neovim configuration so that personal plugins can share one tested base via a
+|lazy.nvim| dependency.
+
+The library is split by responsibility into three namespaces:
+
+    lib.lua.*    general, editor-independent Lua helpers (no `vim` API)
+    lib.nvim.*   Neovim-specific helpers (adapters onto the `vim` API)
+    lib.vim.*    optional classic-Vim implementations, API-compatible
+
+Guiding rule: anything that does not need the `vim` API belongs in lib.lua.*.
+lib.nvim.* is only an adapter onto Neovim. lib.vim.* mirrors lib.nvim.* with a
+compatible signature for classic Vim where feasible.
+
+==============================================================================
+2. INSTALLATION                                         *lib.nvim-installation*
+
+With lazy.nvim, as a standalone plugin: >lua
+
+    { "StefanBartl/lib.nvim", lazy = true }
+<
+As a dependency of your own plugins: >lua
+
+    {
+      "StefanBartl/my-plugin.nvim",
+      dependencies = { "StefanBartl/lib.nvim" },
+    }
+<
+lib.nvim has no third-party dependencies; it uses only `vim` and itself.
+
+==============================================================================
+3. USAGE                                                       *lib.nvim-usage*
+
+Direct module paths are recommended in plugin code (tree-shake friendly): >lua
+
+    local notify = require("lib.nvim.notify")
+    local tables = require("lib.lua.tables")
+    local map    = require("lib.nvim.map")
+<
+Or via the aggregator (`require("lib")`), which resolves keys on first access: >lua
+
+    local lib = require("lib")
+    lib.notify          -- -> lib.nvim.notify
+    lib.map             -- -> lib.nvim.map
+    lib.is_windows()    -- -> lib.nvim.cross.platform.is_windows
+<
+==============================================================================
+4. NAMESPACES                                             *lib.nvim-namespaces*
+
+------------------------------------------------------------------------------
+lib.lua                                                      *lib.nvim-lib.lua*
+
+Editor-independent Lua helpers. No `vim` API; usable/testable outside Neovim.
+
+    lib.lua.tables      array / dict / set / functional / safe / unique / with
+    lib.lua.strings     trim, split/join, case conversion, padding, slugify, …
+    lib.lua.functions   meta helpers: noop, identity, const, raise, …
+    lib.lua.time        time / diff calculation
+    lib.lua.json        decode helpers (string array)
+    lib.lua.memo        memoization
+    lib.lua.lazy        lazy-require proxy
+
+------------------------------------------------------------------------------
+lib.nvim                                                    *lib.nvim-lib.nvim*
+
+Neovim adapters.
+
+    lib.nvim.notify        notify wrapper + log-level resolution
+    lib.nvim.map           keymap helpers
+    lib.nvim.usercmd       user-command helpers
+    lib.nvim.autocmd       autocmd / augroup helpers
+    lib.nvim.buffer        buffer helpers (insert_lines, is_markdown_buf, …)
+    lib.nvim.buf_win_tab   buffer / window / tab utilities
+    lib.nvim.window        window helpers
+    lib.nvim.ui            hover_select, highlight helpers
+    lib.nvim.fs            path / filesystem helpers (vim.fs / uv)
+    lib.nvim.cross         cross-platform: OS detection, run/argv, clipboard, uv
+    lib.nvim.normalize     path / value normalization
+    lib.nvim.git           git helpers
+    lib.nvim.terminal      terminal-buffer helpers
+    lib.nvim.require       safe / dir / lazy require
+    lib.nvim.lua_ls        LuaLS: module path, @module annotation
+    lib.nvim.core          misc Neovim helpers (has_exec, simple_echo)
+
+------------------------------------------------------------------------------
+lib.vim                                                      *lib.nvim-lib.vim*
+
+Mirrors the public API of lib.nvim.* for classic Vim. Where a port onto
+`vim.fn`/Vimscript is feasible there is a real implementation; otherwise an
+adapter with the identical signature raises a clear not-implemented error.
+See the bundled doc/vim-parity.md for the porting status.
+
+==============================================================================
+5. CONFIGURATION                                              *lib.nvim-config*
+
+The only runtime choice is which aggregator strategy `require("lib")` uses.
+All strategies expose the same surface; they differ only in WHEN submodules
+load. Configure BEFORE the first `require("lib")`: >lua
+
+    require("lib.config").setup({ strategy = "lazy" })
+    local lib = require("lib")
+<
+                                                       *lib.nvim-config-strategy*
+strategy ~
+    "metatable"  (default) per-key proxy; a submodule loads on first access.
+    "lazy"       eager key registry; submodules load on first access.
+    "eager"      every submodule is required up-front.
+
+Direct module paths (e.g. `require("lib.nvim.notify")`) ignore this setting and
+are always the most efficient way to consume the library.
+
+==============================================================================
+6. HEALTH                                                     *lib.nvim-health*
+
+Run a diagnostic with: >
+
+    :checkhealth lib
+<
+It reports the Neovim version, the configured aggregator strategy, whether a
+representative set of modules resolves, and the lib.vim parity status.
+
+==============================================================================
+7. CONVENTIONS                                           *lib.nvim-conventions*
+
+- One module per directory with `init.lua`; module path == directory path.
+- `---@module 'lib.<namespace>.<path>'` as the first line of every file.
+- LuaLS type definitions (`@class`, `@alias`, standalone `@type`) live in
+  `@types/` files, never inline in the source module.
+- Internal (non-public) modules are prefixed with `_` or live under
+  `internal/`; everything else is part of the public API.
+
+vim:tw=78:ts=8:sw=8:et:ft=help:norl:

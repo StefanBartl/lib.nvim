@@ -1,0 +1,185 @@
+---@meta
+---@module 'lib.lua.tables.@types'
+
+---@class Lib.Tables
+---@field array Lib.Tables.Array
+---@field core Lib.Tables.Core
+---@field dict Lib.Tables.Dict
+---@field set Lib.Tables.Set
+---@field functional Lib.Tables.Functional
+---@field safe Lib.Tables.Safe
+---@field with fun(base: table|nil, extra: table|nil): table
+---@field unique_table Lib.Tables.UniqueTable
+
+-- =========================================================
+-- All Array Operations
+-- =========================================================
+
+---@class Lib.Tables.All
+---@field len fun(xs: any[]): integer # Return length using # operator (assumes dense array).
+---
+---@field clone fun(xs: any[]): any[] # Create a shallow copy of a dense array with preallocation.
+---
+---@field map fun(xs: any[], f: fun(v: any, i: integer, xs: any[]): any): any[] # Map over a dense array with preallocation. Returns new array with transformed values.
+---
+---@field filter fun(xs: any[], pred: fun(v: any, i: integer, xs: any[]): boolean): any[] # Filter a dense array. Prealloc then compact in one pass. Returns new array with elements matching predicate.
+---
+---@field reduce fun(xs: any[], f: fun(acc: any, v: any, i: integer): any, init: any): any # Reduce with explicit initial accumulator. Iterates left-to-right.
+---
+---@field partition fun(xs: any[], pred: fun(v: any, i: integer, xs: any[]): boolean): any[], any[] # Partition into {pass, fail} according to predicate. Returns two arrays: passing elements and failing elements.
+---
+---@field flatten fun(xss: any[][]): any[] # Flatten one level of nested arrays. Preallocates based on total size.
+---
+---@field unique fun(xs: any[]): any[] # Unique by equality (O(n) with set if primitives). Preserves first occurrence order.
+---
+---@field pluck fun(xs: table[], key: string): any[] # Pluck a field from array of tables, skipping nils. Returns array of extracted values.
+---
+---@field sorted fun(xs: any[], cmp: fun(a: any, b: any): boolean): any[] # Sort copy (stable-ish for small arrays); does not mutate input. Uses table.sort internally.
+--
+-- =========================================================
+-- Core Table Utilities
+-- =========================================================
+--
+---@field is_table fun(t: any): boolean # Check if value is a table type.
+---
+---@field is_array fun(t: any): boolean # Check if table is a dense array. Heuristic: consecutive integer keys starting at 1 with #t matching. Rejects mixed tables with extra non-integer keys.
+---
+---@field shallow_copy fun(t: table): table # Create a shallow copy of a table. Copies all key-value pairs but not nested tables.
+---
+---@field deep_copy fun(t: table): table # Create a deep copy of a table with cycle detection. Recursively copies all nested structures. Handles circular references via seen table.
+---
+---@field keys fun(t: table): string[] # Extract all string keys from a table. Returns array of string keys only.
+---
+---@field values fun(t: table): any[] # Extract all values from a table. Returns array of all values.
+---
+---@field invert_set fun(list: string[]): table<string, true> # Convert string array to set (table<string, true>). Non-string entries are skipped.
+---
+---@field pick fun(t: table, pick_keys: string[]): table # Create new table with only specified keys from source table.
+---
+---@field omit fun(t: table, omit_keys: string[]): table # Create new table excluding specified keys. Returns shallow copy without omitted keys.
+---
+---@field merge_shallow fun(dst: table, src: table): table # Merge src into dst (shallow). Mutates dst and returns it. Right-biased: src values overwrite dst.
+---
+---@field merge_deep fun(dst: table, src: table): table # Merge src into dst (deep). Recursively merges nested tables. Mutates dst and returns it.
+---
+---@field dedup_list fun(list: any[]): any[] # Deduplicate list preserving first occurrence order. Returns new array.
+---
+---@field slice fun(list: any[], i: integer, j?: integer): any[] # Extract slice from list [i..j]. Supports negative indices. Returns new array.
+---
+---@field unique_push fun(list: any[], v: any): boolean # Push value to list only if not already present. Mutates list. Returns true if added, false if duplicate.
+---
+---@field binary_search fun(list: any[], cmp: fun(a: any, b: any): boolean, x: any): integer, boolean # Binary search in sorted list. Returns (index, found). If not found, index is insertion point.
+---
+---@field group_by fun(list: any[], key: fun(item: any): any): table<any, any[]> # Group array elements by key function. Returns table mapping keys to arrays of matching elements.
+---
+---@field count_by fun(list: any[], key: fun(item: any): any): table<any, integer> # Count occurrences by key function. Returns table mapping keys to occurrence counts.
+--
+-- =========================================================
+-- Dictionary Operations
+-- =========================================================
+--
+---@field dict_clone fun(t: table): table # Shallow copy of a dictionary. Copies all key-value pairs.
+---
+---@field dict_pick fun(t: table, keys: any[]): table # Pick subset of keys from dictionary. Returns new table with only specified keys (if they exist in source).
+---
+---@field dict_omit fun(t: table, keys: any[]): table # Omit specified keys from dictionary. Returns new table excluding specified keys.
+---
+---@field dict_merge fun(a: table, b: table): table # Merge two dictionaries (right-biased). Returns new table with b's values overwriting a's for shared keys.
+---
+---@field dict_keys fun(t: table): any[] # Extract all keys as array. Preallocates output array for performance.
+---
+---@field dict_values fun(t: table): any[] # Extract all values as array. Preallocates output array for performance.
+---
+---@field dict_group_by fun(xs: any[], keyfn: fun(v: any): string|number): table<string|number, any[]> # Group array of items into dict of arrays by key function. Returns table mapping keys to arrays of items with that key.
+--
+-- =========================================================
+-- Set Operations
+-- =========================================================
+--
+---@field from_array fun(xs: any[]): table<any, true> # Create a set from an array. Returns table where each array element becomes a key with value true.
+---
+---@field to_array fun(s: table<any, true>): any[] # Convert set back to array (no order guarantee). Returns array of all keys in set.
+---
+---@field add fun(s: table<any, true>, v: any) # Add a value to the set. Mutates set in-place.
+---
+---@field add_all fun(s: table<any, true>, xs: any[]) # Add multiple values from an array to set. Mutates set in-place.
+---
+---@field remove fun(s: table<any, true>, v: any) # Remove a value from the set. Mutates set in-place.
+---
+---@field remove_all fun(s: table<any, true>, xs: any[]) # Remove multiple values from an array. Mutates set in-place.
+---
+---@field clear fun(s: table<any, true>) # Clear a set in-place. Removes all elements.
+---
+---@field has fun(s: table<any, true>, v: any): boolean # Check membership. Returns true if value is in set.
+---
+---@field size fun(s: table<any, true>): integer # Number of elements in set.
+---
+---@field copy fun(s: table<any, true>): table<any, true> # Shallow copy of a set. Returns new set with same elements.
+---
+---@field from_keys fun(t: table): table<any, true> # Build a set from the keys of a table. Returns set containing all keys as elements.
+---
+---@field union fun(a: table<any, true>, b: table<any, true>): table<any, true> # Union of two sets (new set). Returns set containing all elements from both sets.
+---
+---@field intersection fun(a: table<any, true>, b: table<any, true>): table<any, true> # Intersection of two sets (new set). Returns set containing only elements present in both sets. Optimized to iterate smaller set.
+---
+---@field difference fun(a: table<any, true>, b: table<any, true>): table<any, true> # Difference (a \ b): elements in a that are not in b (new set).
+---
+---@field symmetric_difference fun(a: table<any, true>, b: table<any, true>): table<any, true> # Symmetric difference: elements in a or b but not both (new set).
+---
+---@field is_subset fun(a: table<any, true>, b: table<any, true>): boolean # Subset test: a ⊆ b. Returns true if all elements of a are in b.
+---
+---@field is_superset fun(a: table<any, true>, b: table<any, true>): boolean # Superset test: a ⊇ b. Returns true if a contains all elements of b.
+---
+---@field equals fun(a: table<any, true>, b: table<any, true>): boolean # Equality test (same elements). Returns true if sets contain exactly the same elements.
+---
+---@field set_filter fun(s: table<any, true>, pred: fun(value: any): boolean): table<any, true> # Filter set by predicate; returns a new set containing only elements matching predicate.
+---
+---@field set_map fun(s: table<any, true>, fn: fun(value: any): any): table<any, true> # Map set to a new set of possibly different element type. Note: collisions (two inputs mapping to same output) are naturally deduplicated.
+---
+---@field iter fun(s: table<any, true>): fun(): any # Iterator over set elements (no guaranteed order). Returns iterator function.
+--
+-- (Functional helpers live in lib.lua.tables.functional, not on the table root.)
+--
+-- =========================================================
+-- Safe Table Operations
+-- =========================================================
+--
+---@field ensure_list fun(list: any[]|nil): any[] # Ensure value is a list. Returns input if it's a table, otherwise returns empty table.
+---
+---@field ensure_table fun(t: table|nil): table # Ensure value is a table. Returns input if it's a table, otherwise returns empty table.
+---
+---@field push fun(list: any[], v: any): integer # Push value to end of list. Mutates list. Returns new length.
+---
+---@field pop fun(list: any[]): any|nil # Remove and return last element of list. Mutates list. Returns nil if list is empty.
+---
+---@field insert_at fun(list: any[], idx: integer, v: any): boolean # Insert value at specific index. Mutates list. Returns true on success, false if index out of bounds [1..n+1].
+---
+---@field remove_at fun(list: any[], idx: integer): boolean # Remove element at specific index. Mutates list. Returns true on success, false if index out of bounds [1..n].
+---
+---@field snapshot_shallow fun(t: table): table # Create shallow snapshot of table. Useful for before/after comparisons or safe iteration during mutation.
+---
+---@field safe_ipairs fun(list: any[]): fun(): integer, any # Safe iterator over array. Captures length at start, preventing issues if list is mutated during iteration.
+---
+-- =========================================================
+-- Unique Table
+-- =========================================================
+--
+---@field unique fun(list: Lib.Tables.UniqueTable.List<any>): Lib.Tables.UniqueTable.List<any> # Create a new list containing only unique elements from the input list. The first occurrence of each element is preserved.
+---@field unique_by fun(list: Lib.Tables.UniqueTable.List<any>, key_fn: Lib.Tables.UniqueTable.KeyFn<any>): Lib.Tables.UniqueTable.List<any> # Create a new list containing only unique elements from the input list, using a custom key extraction function. This is useful when values are tables or when only part of a value should participate in the uniqueness decision.
+---@field is_unique fun(list: Lib.Tables.UniqueTable.List<any>): boolean # Check whether a list already contains only unique elements.
+
+return {}
+
+---@class LibTablesSafe
+
+---@class TablesSet
+
+---@class LibTablesFn
+
+---@class TablesDict
+
+---@class TablesArray
+---@class Array<T>: { [integer]: T }
+
+---@class LibTablesCore
+---@alias K any

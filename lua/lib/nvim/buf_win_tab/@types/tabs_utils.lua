@@ -1,0 +1,111 @@
+---@meta
+---@module 'lib.nvim.buf_win_tab.@types.tabs_utils'
+-- =========================================================
+-- Tabpage Inspection and Formatting
+-- =========================================================
+
+---@alias TabInfo { tabnr: integer, tabpage: userdata, wins: integer[], bufs: integer[], current_win: integer, current_buf: integer }
+--- Complete tabpage metadata structure.
+--- Fields:
+---   • tabnr: Tab number (1-based display number)
+---   • tabpage: Tabpage handle (userdata from nvim_list_tabpages)
+---   • wins: Array of window IDs in this tabpage
+---   • bufs: Array of unique buffer IDs visible in this tabpage
+---   • current_win: Current/active window ID in this tabpage
+---   • current_buf: Buffer ID of current window in this tabpage
+---
+--- Notes:
+---   • bufs are deduplicated (same buffer may appear in multiple windows)
+---   • current_win is the window that has focus in this tabpage
+---   • tabnr corresponds to :tabnext N argument
+
+---@alias TabReport { count: integer, tabs: TabInfo[], textual: string[] }
+--- Structured tabpage report with counts and formatted output.
+--- Fields:
+---   • count: Total number of tabpages
+---   • tabs: Array of TabInfo structures for all tabs
+---   • textual: Array of formatted one-line summaries (one per tab)
+---
+--- Usage:
+---   Useful for debugging, status displays, or logging.
+---   textual array can be joined with "\n" for multi-line output.
+
+---@class Lib.BufWinTab.TabsUtils
+--- Small helper module for inspecting and formatting tabpage information.
+--- Platform-agnostic (Windows, Linux, macOS).
+--- No external dependencies beyond Neovim API.
+---
+--- Design principles:
+---   • Read-only: No tabpage modifications
+---   • Comprehensive: Collects windows, buffers, and current state
+---   • Formatted: Provides both structured and pretty-printed output
+---   • Safe: All operations use safe API calls
+---
+--- Performance notes:
+---   • list_tabs(): O(t × w) where t = tab count, w = window count per tab
+---   • print_tabs(): O(t × b) where b = buffer count per tab (optional detail)
+---   • All operations are lightweight for typical workloads (<100 tabs)
+---
+---@field list_tabs fun(): TabInfo[] # Return array of TabInfo for all tabpages. Collects: tab number, tabpage handle, windows, unique buffers, current window, current buffer. Deduplicates buffers visible in multiple windows. Returns complete TabInfo array.
+---
+---@field format_tab_one_line fun(info: TabInfo): string # Format single TabInfo into concise one-line description. Format: "tab=N wins=W bufs=B cur_buf=C" where N=tab number, W=window count, B=buffer count, C=current buffer ID. Returns formatted string suitable for logging or status display.
+---
+---@field print_tabs fun(tabs?: TabInfo[]): nil # Pretty-print tabpages to :messages via vim.notify. If tabs=nil, calls list_tabs() automatically. For each tab: prints one-line summary (format_tab_one_line) and detailed buffer list with names. Buffer names formatted as "~:." (relative to home/cwd) or "[no-name]" if empty. Uses DEBUG log level.
+---
+---@field get_current_tab fun(): TabInfo|nil # Get TabInfo for currently active tabpage. Uses nvim_get_current_tabpage() to determine active tab. Returns TabInfo structure or nil if no current tabpage (should never be nil in practice).
+---
+---@field get_tab_by_number fun(tabnr: integer): TabInfo|nil # Find and return TabInfo for specific tab number. Searches through list_tabs() output for matching tabnr. Returns TabInfo if found, nil if tab number doesn't exist. Tab numbers are 1-based (same as :tabnext argument).
+---
+---@field is_single_tab fun(): boolean # Check if only one tabpage is open. Returns true if nvim_list_tabpages() has length <= 1. Useful for "close last tab" or "open new tab" logic.
+---
+---@field collect_report fun(): TabReport # Collect structured tabpage report with counts and summaries. Returns TabReport structure containing: total count, TabInfo array, array of one-line textual summaries. Useful for debugging, status lines, or comprehensive state snapshots.
+
+-- =========================================================
+-- Technical Notes
+-- =========================================================
+
+--- Tab Numbering:
+--- - tabnr is 1-based (matches :tabnext N argument)
+--- - tabpage is userdata handle (opaque to user code)
+--- - current_win/current_buf refer to focused objects within tab
+---
+--- Buffer Deduplication:
+--- - Same buffer visible in multiple windows counted once
+--- - bufs array contains unique buffer IDs only
+--- - Deduplication logic: hash table during collection
+---
+--- Window vs Buffer:
+--- - wins: All window IDs in tabpage (may show same buffer)
+--- - bufs: Unique buffer IDs visible across all windows
+--- - current_win: Focused window in tabpage
+--- - current_buf: Buffer in focused window
+---
+--- Output Formatting:
+--- - format_tab_one_line(): Fixed format for parsing/logging
+--- - print_tabs(): Includes optional detailed buffer names
+--- - Buffer names use vim.fn.fnamemodify(":~:.") for relative paths
+--- - Empty names shown as "[no-name]"
+---
+--- Performance:
+--- - list_tabs(): Iterates all tabs and windows once
+--- - Deduplication uses Lua table as hash set (O(1) insert/lookup)
+--- - print_tabs() with details: Calls fnamemodify for each buffer (slow for many buffers)
+---
+--- Platform Compatibility:
+--- - No OS-specific code
+--- - Works on Windows, Linux, macOS
+--- - Uses standard Neovim API only
+---
+--- Edge Cases:
+--- - get_current_tab() should never return nil (always at least 1 tab)
+--- - get_tab_by_number() returns nil for invalid tab numbers
+--- - is_single_tab() handles edge case of 0 tabs (shouldn't happen)
+--- - print_tabs() safely handles empty buffer names
+---
+--- Usage Patterns:
+--- - Status line: format_tab_one_line(get_current_tab())
+--- - Debugging: print_tabs() for full output to :messages
+--- - Conditional logic: if is_single_tab() then ... end
+--- - Tab switching: get_tab_by_number(N) to verify tab exists
+
+return {}
