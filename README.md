@@ -143,7 +143,7 @@ lib.is_windows()    -- -> lib.nvim.cross.platform.is_windows
 | `lib.nvim.autocmd`     | autocmd / augroup helpers                           |
 | `lib.nvim.buffer`      | buffer helpers (`insert_lines`, `is_markdown_buf`)  |
 | `lib.nvim.buf_win_tab` | buffer / window / tab utilities                     |
-| `lib.nvim.window`      | window helpers                                      |
+| `lib.nvim.window`      | overlay/float helpers: `make_scratch`, `nice_quit`, `set_title`, `close_on_focus_lost`, `center`, `attach` |
 | `lib.nvim.ui`          | `hover_select`, highlight helpers                   |
 | `lib.nvim.fs`          | path / filesystem helpers (`vim.fs` / `uv`)         |
 | `lib.nvim.cross`       | cross-platform: OS detection, run/argv, clipboard   |
