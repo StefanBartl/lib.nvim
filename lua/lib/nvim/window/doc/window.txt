@@ -1,0 +1,173 @@
+*lib.nvim.window.txt*        Helpers for overlay / floating windows
+
+lib.nvim.window                                            *lib.nvim-window*
+
+Small, focused helpers for overlay and floating windows — hover popups,
+pickers, debug panels, transient info floats. Instead of re-implementing the
+same boilerplate (scratch buffers, close-on-key, titles, positioning) in every
+plugin, call one helper and pass the window id.
+
+==============================================================================
+CONTENTS                                          *lib.nvim-window-contents*
+
+  1. Design ..................................... |lib.nvim-window-design|
+  2. Usage ...................................... |lib.nvim-window-usage|
+  3. Functions .................................. |lib.nvim-window-functions|
+       make_scratch ............................ |lib.nvim-window-make_scratch|
+       nice_quit ............................... |lib.nvim-window-nice_quit|
+       set_title ............................... |lib.nvim-window-set_title|
+       close_on_focus_lost ..................... |lib.nvim-window-close_on_focus_lost|
+       center .................................. |lib.nvim-window-center|
+       attach .................................. |lib.nvim-window-attach|
+
+==============================================================================
+1. DESIGN                                           *lib.nvim-window-design*
+
+* One responsibility per function — small, independently testable building
+  blocks.
+* Idempotent and defensive — an invalid window id is a safe no-op (guarded by
+  `pcall` / `nvim_win_is_valid`), never a crash.
+* Buffer-local — keymaps and autocommands only affect the target window.
+* Composable — make_scratch builds on nice_quit; nothing is implemented twice.
+
+==============================================================================
+2. USAGE                                             *lib.nvim-window-usage*
+
+Free functions (recommended in plugin code; tree-shake friendly): >lua
+
+    local window = require("lib.nvim.window")
+    local winid, bufnr = window.make_scratch({ lines = { "hi" }, title = "Info" })
+    window.nice_quit(winid)
+    window.center(winid)
+<
+Constructor (attach) — a handle bound to one window id, called with DOT
+syntax (no implicit `self`): >lua
+
+    local w = require("lib.nvim.window").attach(winid)
+    w.nice_quit()
+    w.set_title("New Title")
+    w.center()
+<
+attach is pure sugar: every method delegates to the matching free function
+with `winid` pre-applied. The free functions remain the single source of
+truth.
+
+Individual functions can also be required directly: >lua
+
+    local make_scratch = require("lib.nvim.window.make_scratch")
+<
+==============================================================================
+3. FUNCTIONS                                     *lib.nvim-window-functions*
+
+------------------------------------------------------------------------------
+make_scratch({opts})                            *lib.nvim-window-make_scratch*
+
+Create an unlisted scratch buffer (`nofile`, `bufhidden=wipe`, no swapfile)
+inside a centered float. Returns `winid, bufnr`, or `nil, nil` on failure (the
+buffer is cleaned up again in that case). >lua
+
+    local winid, bufnr = window.make_scratch({
+      lines     = { "line 1", "line 2" },
+      title     = "Hover",
+      nice_quit = true,        -- q / <Esc> close immediately
+      filetype  = "markdown",
+    })
+<
+Options ~
+    lines       string[]        initial content (default {})
+    width       integer         default sizes to content, clamped to editor
+    height      integer         default is line count, clamped to editor
+    relative    string          "editor" | "cursor" | "win" (default "editor")
+    row, col    integer         explicit position; default centers on editor
+    border      string|string[] border style (default "rounded")
+    title       string          float title (only shown with a border)
+    title_pos   string          "left" | "center" | "right"
+    focusable   boolean         whether the float is focusable (default true)
+    enter       boolean         focus the new window on creation (default true)
+    zindex      integer         stacking order
+    filetype    string          buffer filetype
+    modifiable  boolean         keep buffer writable (default false, read-only)
+    nice_quit   boolean|table   attach q / <Esc> close behaviour
+    wo          table           window-local option overrides
+    bo          table           buffer-local option overrides
+
+Overlay window defaults (number=false, relativenumber=false, signcolumn=no,
+wrap=false, cursorline=false, style=minimal) can be overridden via `opts.wo`.
+Content is set first, then the buffer is locked to `nomodifiable` (unless
+`modifiable = true`).
+
+------------------------------------------------------------------------------
+nice_quit({winid}, {opts})                          *lib.nvim-window-nice_quit*
+
+Bind `q` and `<Esc>` (buffer-local, NORMAL mode only) to close the window.
+Returns true when the keymaps were attached. >lua
+
+    window.nice_quit(winid)
+    window.nice_quit(winid, { keys = { "q" }, force = true })
+<
+Options ~
+    keys    string[]    normal-mode keys to close (default { "q", "<Esc>" })
+    force   boolean      discard unsaved changes (default false)
+
+Why normal mode only: this gives the natural "double Escape" for free. The
+first <Esc> leaves Insert/Terminal mode (Vim default), the second <Esc> — now
+in Normal mode — closes the window. Insert/Terminal mode is never mapped, so
+TUI programs (fzf, lazygit, …) keep Escape for themselves. The maps use
+`nowait`, so there is no `timeoutlen` delay. The last window in the tabpage is
+never closed.
+
+------------------------------------------------------------------------------
+set_title({winid}, {title}, {opts})                *lib.nvim-window-set_title*
+
+Set (or clear, with `nil`) the title of a floating window. A safe no-op on any
+non-floating window. >lua
+
+    window.set_title(winid, "New Title", { pos = "center" })
+    window.set_title(winid, nil)   -- clear
+<
+Options ~
+    pos     string      title_pos: "left" | "center" | "right"
+
+Note: Neovim only stores and renders a float title when the float has a
+border. Without a border the title has no effect (a debug notice is emitted).
+
+------------------------------------------------------------------------------
+close_on_focus_lost({winid}, {opts})      *lib.nvim-window-close_on_focus_lost*
+
+Register a one-shot, buffer-local autocommand that closes the window as soon as
+focus leaves it — the usual hover/popup dismiss. Returns the augroup id, which
+can be cancelled again via `nvim_del_augroup_by_id`. >lua
+
+    local grp = window.close_on_focus_lost(winid)
+    vim.api.nvim_del_augroup_by_id(grp)  -- cancel
+<
+Options ~
+    events  string[]    events counting as focus loss
+                        (default { "WinLeave", "BufLeave" })
+    force   boolean      discard unsaved changes (default true)
+
+The autocommand is `once = true` (self-cleaning) and closes via `vim.schedule`,
+since closing directly from inside WinLeave would be unsafe.
+
+------------------------------------------------------------------------------
+center({winid})                                       *lib.nvim-window-center*
+
+Recenter an existing float on the editor, using its current width/height and
+the editor size. A safe no-op on non-floats and invalid ids. >lua
+
+    window.center(winid)
+<
+------------------------------------------------------------------------------
+attach({winid})                                       *lib.nvim-window-attach*
+
+Construct a handle bound to `winid`. Every function above that takes `winid` as
+its first argument is available as a method (dot syntax). >lua
+
+    local w = window.attach(winid)
+    w.set_title("Title")
+    w.nice_quit()
+    w.center()
+    w.close_on_focus_lost()
+<
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:
