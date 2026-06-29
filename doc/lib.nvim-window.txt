@@ -1,4 +1,4 @@
-*lib.nvim.window.txt*        Helpers for overlay / floating windows
+*lib.nvim-window.txt*        Helpers for overlay / floating windows
 
 lib.nvim.window                                            *lib.nvim-window*
 

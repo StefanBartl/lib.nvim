@@ -13,6 +13,7 @@ CONTENTS                                                    *lib.nvim-contents*
   5. Configuration ............................ |lib.nvim-config|
   6. Health ................................... |lib.nvim-health|
   7. Conventions .............................. |lib.nvim-conventions|
+  8. Module reference ......................... |lib.nvim-modules|
 
 ==============================================================================
 1. INTRODUCTION                                         *lib.nvim-introduction*
@@ -179,5 +180,23 @@ representative set of modules resolves, and the lib.vim parity status.
   `@types/` files, never inline in the source module.
 - Internal (non-public) modules are prefixed with `_` or live under
   `internal/`; everything else is part of the public API.
+- Documentation is two-tier: a per-module `README.md` next to the source (the
+  detailed function reference) and, for modules with `:help` docs, a file
+  `doc/lib.nvim-<module>.txt` in THIS directory tagged `*lib.nvim-<module>*`.
+  Help only works from the runtimepath-root `doc/`, so all `.txt` help lives
+  here, one file per module — never in a nested `doc/`.
+
+==============================================================================
+8. MODULE REFERENCE                                          *lib.nvim-modules*
+
+Modules with dedicated `:help` documentation. Jump to one via its tag, or
+`:help` the file directly.
+
+    lib.nvim.window      overlay / floating window helpers  |lib.nvim-window|
+    lib.nvim.ui          hover_select floating selection UI |lib.nvim-hover_select|
+    lib.lua.time.diff    high-precision time / interval diff |lib.nvim-time_diff|
+
+Every other module documents itself in a `README.md` next to its source; see
+the namespace tables under |lib.nvim-namespaces|.
 
 vim:tw=78:ts=8:sw=8:et:ft=help:norl:

@@ -1,6 +1,6 @@
-hover-select.txt
+*lib.nvim-hover_select.txt*   Floating selection UI for plugin authors
 
-hover-select                                         *hover-select*
+hover-select                          *lib.nvim-hover_select*  *hover-select*
 
 A small, minimal helper module for displaying and selecting items in a
 floating window relative to the cursor position.

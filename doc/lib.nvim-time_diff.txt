@@ -1,4 +1,4 @@
-*time_diff.txt*  High-precision time measurement and interval tracking
+*lib.nvim-time_diff.txt*  *lib.nvim-time_diff*  High-precision time measurement
 
 Author:  lib.lua.time.diff maintainers
 License: Same as Neovim
