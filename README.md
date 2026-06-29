@@ -25,6 +25,7 @@ It has **no third-party dependencies** — only `vim` and itself.
 - [Namespaces & modules](#namespaces--modules)
 - [Configuration](#configuration)
 - [Health](#health)
+- [Help docs](#help-docs)
 - [Conventions](#conventions)
 
 ---
@@ -136,23 +137,23 @@ lib.is_windows()    -- -> lib.nvim.cross.platform.is_windows
 | `lib.lua.tables`   | array / dict / set / functional / safe / unique / `with`|
 | `lib.lua.strings`  | trim, split/join, case conversion, padding, slugify, …  |
 | `lib.lua.functions`| meta helpers: noop, identity, const, raise, …           |
-| `lib.lua.time`     | time / diff calculation                                 |
+| [`lib.lua.time`](lua/lib/lua/time/diff/README.md) | time / diff calculation ([`:help`](doc/lib.nvim-time_diff.txt)) |
 | `lib.lua.json`     | decode helpers (string array)                           |
-| `lib.lua.memo`     | memoization                                             |
-| `lib.lua.lazy`     | lazy-`require` proxy                                     |
+| [`lib.lua.memo`](lua/lib/lua/memo/README.md) | memoization                          |
+| [`lib.lua.lazy`](lua/lib/lua/lazy/README.md) | lazy-`require` proxy                 |
 
 ### `lib.nvim.*` — Neovim
 
 | Module                 | Contents                                            |
 | ---------------------- | --------------------------------------------------- |
-| `lib.nvim.notify`      | notify wrapper + log-level resolution               |
+| [`lib.nvim.notify`](lua/lib/nvim/notify/README.md) | notify wrapper + log-level resolution |
 | `lib.nvim.map`         | keymap helpers                                      |
 | `lib.nvim.usercmd`     | user-command helpers                                |
 | `lib.nvim.autocmd`     | autocmd / augroup helpers                           |
 | `lib.nvim.buffer`      | buffer helpers (`insert_lines`, `is_markdown_buf`)  |
 | `lib.nvim.buf_win_tab` | buffer / window / tab utilities                     |
-| `lib.nvim.window`      | overlay/float helpers: `make_scratch`, `nice_quit`, `set_title`, `close_on_focus_lost`, `center`, `attach` |
-| `lib.nvim.ui`          | `hover_select`, highlight helpers                   |
+| [`lib.nvim.window`](lua/lib/nvim/window/README.md) | overlay/float helpers: `make_scratch`, `nice_quit`, `set_title`, `close_on_focus_lost`, `center`, `attach` ([`:help`](doc/lib.nvim-window.txt)) |
+| [`lib.nvim.ui`](lua/lib/nvim/ui/hover_select/README.md) | `hover_select` ([`:help`](doc/lib.nvim-hover_select.txt)), highlight helpers |
 | `lib.nvim.fs`          | path / filesystem helpers (`vim.fs` / `uv`)         |
 | `lib.nvim.cross`       | cross-platform: OS detection, run/argv, clipboard   |
 | `lib.nvim.normalize`   | path / value normalization                          |
@@ -165,6 +166,25 @@ lib.is_windows()    -- -> lib.nvim.cross.platform.is_windows
 ### `lib.vim.*` — classic Vim
 
 Mirrors the public API of `lib.nvim.*`. Where a port onto `vim.fn`/Vimscript is feasible there is a real implementation; otherwise an adapter with the identical signature raises a clear not-implemented error. See [`doc/vim-parity.md`](doc/vim-parity.md) for the porting status.
+
+### Per-module documentation
+
+Larger modules carry their own detailed docs. Markdown references sit next to
+the source (good for browsing on GitHub); `:help` pages live in [`doc/`](doc/)
+and are generated on install by your plugin manager (see [Help docs](#help-docs)).
+
+**Markdown references**
+
+- [`lib.lua.memo`](lua/lib/lua/memo/README.md) · [`lib.lua.lazy`](lua/lib/lua/lazy/README.md) · [`lib.lua.time.diff`](lua/lib/lua/time/diff/README.md)
+- [`lib.nvim.notify`](lua/lib/nvim/notify/README.md) · [`lib.nvim.window`](lua/lib/nvim/window/README.md) · [`lib.nvim.ui.hover_select`](lua/lib/nvim/ui/hover_select/README.md)
+- [`lib.nvim.buf_win_tab.capture`](lua/lib/nvim/buf_win_tab/capture/README.md) · [`lib.nvim.buf_win_tab.resize_guarded`](lua/lib/nvim/buf_win_tab/resize_guarded/README.md)
+- [`lib.nvim.fs.ignore.list`](lua/lib/nvim/fs/ignore/list/README.md) · [`lib.nvim.fs.is_subpath`](lua/lib/nvim/fs/is_subpath/README.md) · [`lib.nvim.fs.polymorphic_rootresolver`](lua/lib/nvim/fs/polymorphic_rootresolver/README.md)
+- [`lib.nvim.lua_ls.insert.module_annotation`](lua/lib/nvim/lua_ls/insert/module_annnotation/README.md)
+
+**`:help` pages**
+
+- `:help lib.nvim` — overview hub · `:help lib.nvim-modules` — module index
+- `:help lib.nvim-window` · `:help lib.nvim-hover_select` · `:help lib.nvim-time_diff`
 
 ---
 
@@ -206,11 +226,37 @@ Reports the Neovim version, the configured strategy, whether a representative se
 
 ---
 
+## Help docs
+
+All `:help` documentation lives in the runtimepath-root [`doc/`](doc/) directory,
+one file per documented module (`doc/lib.nvim-<module>.txt`), with
+`doc/lib.nvim.txt` as the hub. Start at `:help lib.nvim`.
+
+**You do not need to generate help tags yourself.** Plugin managers run
+`:helptags` on a plugin's `doc/` directory automatically on install/update —
+[lazy.nvim], packer and vim-plug all do this. After the next install/update the
+`:help lib.nvim*` tags resolve out of the box. (The `doc/tags` index is
+generated per-user and is intentionally git-ignored.)
+
+> Help only works from the **runtimepath-root** `doc/`. A `doc/` folder nested
+> inside `lua/…` is never indexed — that is why every help file lives in the
+> top-level `doc/`.
+
+---
+
 ## Conventions
 
 - One module per directory with `init.lua`; module path == directory path.
 - `---@module 'lib.<namespace>.<path>'` as the first line of every file.
 - LuaLS type definitions (`@class`, `@alias`, standalone `@type`) live in `@types/` files, never inline in the source module.
 - Internal (non-public) modules are prefixed with `_` or live under `internal/`; everything else is part of the public API.
+
+### Documenting a new module
+
+Two-tier docs, three steps — keep it mechanical so it stays easy to extend:
+
+1. Add a per-module `README.md` next to the source (the detailed function reference).
+2. For `:help`-worthy modules, add `doc/lib.nvim-<module>.txt` tagged `*lib.nvim-<module>*` (and `*lib.nvim-<module>-<fn>*` per function).
+3. Wire it into the indexes: one row in the [namespace tables](#namespaces--modules) + a bullet under [Per-module documentation](#per-module-documentation), and — for help files — one `|lib.nvim-<module>|` line in the `doc/lib.nvim.txt` hub (`*lib.nvim-modules*` section).
 
 ---
