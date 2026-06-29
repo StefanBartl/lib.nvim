@@ -400,4 +400,4 @@ hover_select.open({
 ## See Also
 
 - Example configuration: `docs/EXAMPLE-CONFIGURATION.lua`
-- Help documentation: `doc/hover_select.txt`
+- Help documentation: `:help lib.nvim-hover_select` (`doc/lib.nvim-hover_select.txt`)
