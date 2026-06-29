@@ -6,8 +6,16 @@
 plugins can share a single, tested set of helpers as a [lazy.nvim] dependency.
 It has **no third-party dependencies** — only `vim` and itself.
 
-> **Status: early.** The API is not yet stable. Module paths may change before
-> `v1.0.0`.
+> **Status: early — no stability guarantees.** This library tracks my personal
+> Neovim setup. I may change, rename, or remove modules and functions at any
+> time, without notice or deprecation period, and provide **no warranty of any
+> kind** — use it at your own risk.
+>
+> I keep `lib.nvim` in sync with **my own** plugins and config, so compatibility
+> *there* is guaranteed. For anyone else: you are welcome to use it, but I will
+> not hold the API stable for external consumers and cannot take your use cases
+> into account. If you depend on it, **pin a commit** (via your plugin manager's
+> lockfile) and upgrade deliberately.
 
 ## Table of contents
 
