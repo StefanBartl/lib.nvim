@@ -162,6 +162,7 @@ lib.is_windows()    -- -> lib.nvim.cross.platform.is_windows
 | `lib.nvim.require`     | safe / dir / lazy require                           |
 | `lib.nvim.lua_ls`      | LuaLS: module path, `@module` annotation            |
 | `lib.nvim.core`        | misc Neovim helpers (`has_exec`, `simple_echo`)     |
+| `lib.nvim.neotree`     | neo-tree helpers: `node` (get_path / collect_nodes / extract_paths) |
 
 ### `lib.vim.*` — classic Vim
 
