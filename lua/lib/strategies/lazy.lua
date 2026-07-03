@@ -303,5 +303,8 @@ LIB.time_diff = lazy_module("lib.lua.time.diff")
 -- === NORMALIZE ===
 LIB.normalize = lazy_module("lib.nvim.normalize")
 
+-- === SYSTEM ===
+LIB.system = lazy_module("lib.nvim.system")
+
 ---@type Lib
 return LIB
