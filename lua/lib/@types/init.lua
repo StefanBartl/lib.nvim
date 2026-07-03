@@ -22,6 +22,7 @@
 ---@field nvim Lib.Nvim
 ---@field require Lib.Require
 ---@field strings Lib.Strings
+---@field system Lib.System
 ---@field tables Lib.Tables
 ---@field terminals Lib.Terminal
 ---@field time Lib.Time

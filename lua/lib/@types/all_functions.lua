@@ -21,6 +21,7 @@
 ---@field autocmd Lib.AutoCmd
 ---@field usercmd Lib.UsrCmd
 ---@field normalize Lib.Normalize
+---@field system Lib.System
 ---@field memo Lib.Memo
 ---@field lazy Lib.Lazy
 ---@field hl Lib.UI.HL

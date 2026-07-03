@@ -67,6 +67,9 @@ local MODULE_MAP = {
   -- NORMALIZE
   normalize = "lib.nvim.normalize",
 
+  -- SYSTEM (env snapshot + rpc pipe)
+  system = "lib.nvim.system",
+
   -- TERMINAL
   terminal_escape = "lib.nvim.terminal",
   is_terminal_buf = "lib.nvim.terminal",

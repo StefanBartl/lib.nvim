@@ -139,5 +139,8 @@ LIB.time_diff = require("lib.lua.time.diff")
 -- === NORMALIZE ===
 LIB.normalize = require("lib.nvim.normalize")
 
+-- === SYSTEM ===
+LIB.system = require("lib.nvim.system")
+
 ---@type Lib
 return LIB
