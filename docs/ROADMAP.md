@@ -9,14 +9,14 @@
 
 ## General
 
-1. [vim-parity](../doc/vim-parity.md) implementieren
+1. Implement [vim-parity](../doc/vim-parity.md)
 
 ---
 
 ## Finish
 
-1. Module ausbauen
-2. Optimierungen
-3. ROADMAP erstellen, welche features eventuel sinnvoll wären
+1. Expand modules
+2. Optimizations
+3. Create a ROADMAP of features that might be worthwhile
 
 ---

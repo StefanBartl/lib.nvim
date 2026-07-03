@@ -2,42 +2,42 @@
 
 ---
 
-## Überblick
+## Overview
 
-Das Modul `lib.nvim.window` bündelt kleine, fokussierte Helfer für **Overlay-
-und Floating-Fenster** — also alles, was kein normales Datei-Fenster ist:
-Hover-Popups, Picker, Debug-Panels, transiente Infofenster.
+The `lib.nvim.window` module bundles small, focused helpers for **overlay and
+floating windows** — that is, anything that is not a normal file window:
+hover popups, pickers, debug panels, transient info windows.
 
-Statt in jedem Plugin denselben Boilerplate für Scratch-Buffer, Schließen-per-
-Taste, Titel und Positionierung neu zu schreiben, ruft man hier eine kleine
-Funktion auf und übergibt die Window-ID.
+Instead of rewriting the same boilerplate for scratch buffers, close-on-key,
+title and positioning in every plugin, you call a small function here and pass
+the window ID.
 
-Leitgedanken:
+Guiding ideas:
 
-* **eine Aufgabe pro Funktion** — kleine, einzeln testbare Bausteine
-* **idempotent & defensiv** — ungültige IDs sind ein sicherer No-op (`pcall`,
-  `nvim_win_is_valid`), nie ein Crash
-* **buffer-lokal** — Keymaps und Autocmds betreffen nur das Ziel-Fenster
-* **komponierbar** — `make_scratch` baut auf `nice_quit` auf; nichts wird
-  doppelt implementiert
+* **one task per function** — small, individually testable building blocks
+* **idempotent & defensive** — invalid IDs are a safe no-op (`pcall`,
+  `nvim_win_is_valid`), never a crash
+* **buffer-local** — keymaps and autocmds only affect the target window
+* **composable** — `make_scratch` builds on `nice_quit`; nothing is
+  implemented twice
 
 ---
 
-## Modulstruktur
+## Module structure
 
 ```
 lib.nvim.window/
-├── init.lua                 -- Aggregator + attach()-Konstruktor
-├── make_scratch.lua         -- Scratch-Buffer + Float in einem Call
-├── nice_quit.lua            -- q / <Esc> zum Schließen (Normal-Mode)
-├── set_title.lua            -- Float-Titel setzen / leeren
-├── close_on_focus_lost.lua  -- Auto-Close beim Fokusverlust
-├── center.lua               -- Float neu zentrieren
-└── @types/                  -- LuaLS-Typen
+├── init.lua                 -- aggregator + attach() constructor
+├── make_scratch.lua         -- scratch buffer + float in one call
+├── nice_quit.lua            -- q / <Esc> to close (normal mode)
+├── set_title.lua            -- set / clear a float title
+├── close_on_focus_lost.lua  -- auto-close on focus loss
+├── center.lua               -- re-center a float
+└── @types/                  -- LuaLS types
 ```
 
-Einstiegspunkt ist `require("lib.nvim.window")`. Einzelne Funktionen lassen sich
-auch direkt laden (tree-shake-freundlich, in Plugin-Code empfohlen):
+The entry point is `require("lib.nvim.window")`. Individual functions can also be
+loaded directly (tree-shake friendly, recommended in plugin code):
 
 ```lua
 local make_scratch = require("lib.nvim.window.make_scratch")
@@ -45,144 +45,139 @@ local make_scratch = require("lib.nvim.window.make_scratch")
 
 ---
 
-## Zwei Konsum-Stile
+## Two consumption styles
 
-**1) Freie Funktionen** — Window-ID jedes Mal übergeben:
+**1) Free functions** — pass the window ID every time:
 
 ```lua
 local window = require("lib.nvim.window")
-local winid, bufnr = window.make_scratch({ lines = { "Hallo" }, title = "Info" })
+local winid, bufnr = window.make_scratch({ lines = { "Hello" }, title = "Info" })
 window.nice_quit(winid)
 window.center(winid)
 ```
 
-**2) Konstruktor (`attach`)** — gebundener Handle, **Dot-Call** (kein `self`):
+**2) Constructor (`attach`)** — a bound handle, **dot-call** (no `self`):
 
 ```lua
 local window = require("lib.nvim.window")
 local w = window.attach(winid)
 w.nice_quit()
-w.set_title("Neuer Titel")
+w.set_title("New title")
 w.center()
 ```
 
-`attach` ist reiner Zucker: jede Methode delegiert mit vorgebundener `winid` an
-die freie Funktion. Die freien Funktionen bleiben die einzige Quelle der
-Wahrheit.
+`attach` is pure sugar: each method delegates with a pre-bound `winid` to the
+free function. The free functions remain the single source of truth.
 
 ---
 
-## Funktionen
+## Functions
 
 ### `make_scratch(opts?) -> winid, bufnr`
 
-Erzeugt einen unlisted **Scratch-Buffer** (`nofile`, `bufhidden=wipe`, kein
-Swapfile) in einem **zentrierten Float** und gibt `winid, bufnr` zurück
-(`nil, nil` bei Fehler — der Buffer wird dann wieder aufgeräumt).
+Creates an unlisted **scratch buffer** (`nofile`, `bufhidden=wipe`, no swapfile)
+in a **centered float** and returns `winid, bufnr` (`nil, nil` on error — the
+buffer is then cleaned up again).
 
 ```lua
 local winid, bufnr = window.make_scratch({
-  lines     = { "Zeile 1", "Zeile 2" },
+  lines     = { "Line 1", "Line 2" },
   title     = "Hover",
-  nice_quit = true,        -- q / <Esc> schließen sofort
+  nice_quit = true,        -- q / <Esc> close immediately
   filetype  = "markdown",
 })
 ```
 
-| Option        | Typ                                   | Default      | Bedeutung                                              |
+| Option        | Type                                  | Default      | Meaning                                                |
 | ------------- | ------------------------------------- | ------------ | ------------------------------------------------------ |
-| `lines`       | `string[]`                            | `{}`         | Anfangsinhalt                                          |
-| `width`       | `integer`                             | Inhalt       | Breite; sonst aus Inhalt abgeleitet, auf Editor geklemmt |
-| `height`      | `integer`                             | Zeilenzahl   | Höhe; auf Editor geklemmt                              |
-| `relative`    | `"editor"\|"cursor"\|"win"`           | `"editor"`   | Anker des Floats                                       |
-| `row` / `col` | `integer`                             | zentriert    | explizite Position (sonst Editor-Zentrierung)          |
-| `border`      | `string\|string[]`                    | `"rounded"`  | Border-Stil                                            |
-| `title`       | `string`                              | –            | Titel (nur mit Border sichtbar)                        |
-| `title_pos`   | `"left"\|"center"\|"right"`           | –            | Titel-Position                                         |
-| `focusable`   | `boolean`                             | `true`       | fokussierbar                                           |
-| `enter`       | `boolean`                             | `true`       | neues Fenster sofort fokussieren                       |
-| `zindex`      | `integer`                             | –            | Stapelreihenfolge                                      |
-| `filetype`    | `string`                              | –            | Buffer-`filetype`                                      |
-| `modifiable`  | `boolean`                             | `false`      | Buffer beschreibbar lassen (sonst Read-only)           |
-| `nice_quit`   | `boolean\|NiceQuitOpts`               | `false`      | `q`/`<Esc>`-Schließen direkt verdrahten                |
-| `wo`          | `table<string, any>`                  | –            | window-lokale Options-Overrides                        |
-| `bo`          | `table<string, any>`                  | –            | buffer-lokale Options-Overrides                        |
+| `lines`       | `string[]`                            | `{}`         | initial content                                        |
+| `width`       | `integer`                             | content      | width; otherwise derived from content, clamped to editor |
+| `height`      | `integer`                             | line count   | height; clamped to editor                              |
+| `relative`    | `"editor"\|"cursor"\|"win"`           | `"editor"`   | anchor of the float                                    |
+| `row` / `col` | `integer`                             | centered     | explicit position (otherwise editor-centered)          |
+| `border`      | `string\|string[]`                    | `"rounded"`  | border style                                           |
+| `title`       | `string`                              | –            | title (only visible with a border)                     |
+| `title_pos`   | `"left"\|"center"\|"right"`           | –            | title position                                         |
+| `focusable`   | `boolean`                             | `true`       | focusable                                              |
+| `enter`       | `boolean`                             | `true`       | focus the new window immediately                       |
+| `zindex`      | `integer`                             | –            | stacking order                                         |
+| `filetype`    | `string`                              | –            | buffer `filetype`                                      |
+| `modifiable`  | `boolean`                             | `false`      | keep the buffer writable (otherwise read-only)         |
+| `nice_quit`   | `boolean\|NiceQuitOpts`               | `false`      | wire up `q`/`<Esc>` closing directly                   |
+| `wo`          | `table<string, any>`                  | –            | window-local option overrides                          |
+| `bo`          | `table<string, any>`                  | –            | buffer-local option overrides                          |
 
-Overlay-Defaults für das Fenster (`number=false`, `relativenumber=false`,
-`signcolumn=no`, `wrap=false`, `cursorline=false`, `style=minimal`) sind über
-`opts.wo` überschreibbar. Der Inhalt wird gesetzt, **danach** wird der Buffer
-auf `nomodifiable` gelockt (außer `modifiable = true`).
+Overlay defaults for the window (`number=false`, `relativenumber=false`,
+`signcolumn=no`, `wrap=false`, `cursorline=false`, `style=minimal`) can be
+overridden via `opts.wo`. The content is set, **then** the buffer is locked to
+`nomodifiable` (unless `modifiable = true`).
 
 ---
 
 ### `nice_quit(winid, opts?) -> boolean`
 
-Bindet `q` und `<Esc>` **buffer-lokal, nur im Normal-Mode** an das Schließen des
-Fensters.
+Binds `q` and `<Esc>` **buffer-local, normal mode only** to closing the window.
 
 ```lua
 window.nice_quit(winid)
 window.nice_quit(winid, { keys = { "q" }, force = true })
 ```
 
-| Option  | Typ        | Default            | Bedeutung                                 |
+| Option  | Type       | Default            | Meaning                                   |
 | ------- | ---------- | ------------------ | ----------------------------------------- |
-| `keys`  | `string[]` | `{ "q", "<Esc>" }` | Normal-Mode-Tasten zum Schließen          |
-| `force` | `boolean`  | `false`            | ungespeicherte Änderungen verwerfen       |
+| `keys`  | `string[]` | `{ "q", "<Esc>" }` | normal-mode keys to close                 |
+| `force` | `boolean`  | `false`            | discard unsaved changes                   |
 
-**Warum nur Normal-Mode?** Dadurch entsteht das natürliche „doppelte Escape"
-gratis: Der erste `<Esc>` verlässt Insert-/Terminal-Mode (Vim-Default), der
-zweite `<Esc>` — jetzt im Normal-Mode — schließt das Fenster. Im Insert-/
-Terminal-Mode wird nichts gemappt, damit TUI-Programme (fzf, lazygit …) Escape
-weiterhin selbst erhalten. Die Keymaps nutzen `nowait`, sodass keine
-`timeoutlen`-Verzögerung entsteht. Das letzte Fenster der Tabpage wird nie
-geschlossen.
+**Why normal mode only?** This gives the natural "double escape" for free: the
+first `<Esc>` leaves insert/terminal mode (Vim default), the second `<Esc>` —
+now in normal mode — closes the window. In insert/terminal mode nothing is
+mapped, so TUI programs (fzf, lazygit …) still receive Escape themselves. The
+keymaps use `nowait`, so no `timeoutlen` delay occurs. The last window of the
+tabpage is never closed.
 
 ---
 
 ### `set_title(winid, title, opts?) -> boolean`
 
-Setzt (oder leert mit `nil`) den Titel eines **Floating-Fensters**. Auf Nicht-
-Floats ein sicherer No-op.
+Sets (or clears with `nil`) the title of a **floating window**. On non-floats a
+safe no-op.
 
 ```lua
-window.set_title(winid, "Neuer Titel", { pos = "center" })
-window.set_title(winid, nil)   -- Titel entfernen
+window.set_title(winid, "New title", { pos = "center" })
+window.set_title(winid, nil)   -- remove title
 ```
 
-> **Hinweis:** Neovim speichert und zeigt einen Float-Titel nur, wenn der Float
-> eine **Border** hat. Ohne Border bleibt der Titel wirkungslos (es kommt ein
-> Debug-Hinweis).
+> **Note:** Neovim stores and shows a float title only if the float has a
+> **border**. Without a border the title has no effect (a debug hint is emitted).
 
 ---
 
 ### `close_on_focus_lost(winid, opts?) -> augroup | nil`
 
-Registriert einen einmaligen, buffer-lokalen Autocmd, der das Fenster schließt,
-sobald der Fokus es verlässt — der typische Hover-/Popup-Dismiss. Gibt die
-**augroup-id** zurück, mit der man es über `nvim_del_augroup_by_id` wieder
-abbestellen kann.
+Registers a one-shot, buffer-local autocmd that closes the window as soon as
+focus leaves it — the typical hover/popup dismiss. Returns the **augroup id**,
+with which it can be canceled again via `nvim_del_augroup_by_id`.
 
 ```lua
 local grp = window.close_on_focus_lost(winid)
--- später ggf. abbrechen:
+-- cancel later if needed:
 vim.api.nvim_del_augroup_by_id(grp)
 ```
 
-| Option   | Typ        | Default                      | Bedeutung                        |
+| Option   | Type       | Default                      | Meaning                          |
 | -------- | ---------- | ---------------------------- | -------------------------------- |
-| `events` | `string[]` | `{ "WinLeave", "BufLeave" }` | Events, die als Fokusverlust gelten |
-| `force`  | `boolean`  | `true`                       | ungespeicherte Änderungen verwerfen |
+| `events` | `string[]` | `{ "WinLeave", "BufLeave" }` | events that count as focus loss  |
+| `force`  | `boolean`  | `true`                       | discard unsaved changes          |
 
-Der Autocmd ist `once = true` (räumt sich selbst auf) und schließt über
-`vim.schedule`, da das Schließen direkt aus `WinLeave` heraus unsicher wäre.
+The autocmd is `once = true` (cleans itself up) and closes via `vim.schedule`,
+since closing directly from within `WinLeave` would be unsafe.
 
 ---
 
 ### `center(winid) -> boolean`
 
-Zentriert ein bestehendes Float neu auf dem Editor (aus aktueller Breite/Höhe
-und Editorgröße). No-op auf Nicht-Floats und ungültigen IDs.
+Re-centers an existing float on the editor (from the current width/height and
+editor size). No-op on non-floats and invalid IDs.
 
 ```lua
 window.center(winid)
@@ -192,12 +187,12 @@ window.center(winid)
 
 ### `attach(winid) -> Handle`
 
-Erzeugt einen an `winid` gebundenen Handle. Alle obigen Funktionen, die `winid`
-als ersten Parameter nehmen, sind als Methoden (Dot-Call) verfügbar:
+Creates a handle bound to `winid`. All of the above functions that take `winid`
+as the first parameter are available as methods (dot-call):
 
 ```lua
 local w = window.attach(winid)
-w.set_title("Titel")
+w.set_title("Title")
 w.nice_quit()
 w.center()
 w.close_on_focus_lost()
@@ -205,28 +200,28 @@ w.close_on_focus_lost()
 
 ---
 
-## Typischer Ablauf
+## Typical flow
 
 ```lua
 local window = require("lib.nvim.window")
 
 local winid, bufnr = window.make_scratch({
-  lines     = vim.split(hilfetext, "\n"),
-  title     = " Hilfe ",
+  lines     = vim.split(help_text, "\n"),
+  title     = " Help ",
   title_pos = "center",
   filetype  = "markdown",
-  nice_quit = true,            -- q / <Esc> schließen
+  nice_quit = true,            -- q / <Esc> close
 })
 
-window.close_on_focus_lost(winid)  -- schließt auch beim Wegklicken
+window.close_on_focus_lost(winid)  -- also closes when clicking away
 ```
 
 ---
 
-## Hinweise
+## Notes
 
-* Floating-spezifische Funktionen (`set_title`, `center`) haben in klassischem
-  Vim kein Äquivalent; in `lib.vim.*` werden sie als not-implemented-Stub mit
-  gleicher Signatur geführt (siehe [`doc/vim-parity.md`](../../../../doc/vim-parity.md)).
-* Alle Funktionen sind defensiv: ungültige Window-IDs liefern einen sicheren
-  Rückgabewert (`false` / `nil`) plus einen Debug-`notify`, statt zu werfen.
+* Float-specific functions (`set_title`, `center`) have no equivalent in classic
+  Vim; in `lib.vim.*` they are carried as a not-implemented stub with the same
+  signature (see [`doc/vim-parity.md`](../../../../doc/vim-parity.md)).
+* All functions are defensive: invalid window IDs return a safe value
+  (`false` / `nil`) plus a debug `notify`, instead of throwing.

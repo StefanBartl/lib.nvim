@@ -1,4 +1,4 @@
-## Beispielverwendungen (vollständig typisiert, LuaLS-autocomplete):
+## Example usage (fully typed, LuaLS autocomplete):
 
 ```lua
 require("lib.nvim.lua_ls.insert.module_annotation")()
@@ -25,9 +25,9 @@ require("lib.nvim.lua_ls.insert.module_annotation")({
 })
 ```
 
-Eigenschaften der Lösung:
-* optionale Übergabe von `bufnr`, `row`, `col`
-* keine Argumente → aktueller Buffer + aktueller Cursor
-* explizite Position überschreibt Cursor vollständig
-* sauber getrennte Typen für LuaLS-Suggestions
-* kompatibel mit nicht-aktiven Buffern ohne implizite Fensterabhängigkei
+Properties of the solution:
+* optional passing of `bufnr`, `row`, `col`
+* no arguments → current buffer + current cursor
+* an explicit position fully overrides the cursor
+* cleanly separated types for LuaLS suggestions
+* works with non-active buffers without an implicit window dependency

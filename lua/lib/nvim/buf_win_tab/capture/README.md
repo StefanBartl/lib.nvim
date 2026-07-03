@@ -2,43 +2,44 @@
 
 ## Table of content
 
-  - [Einleitung](#einleitung)
+  - [Introduction](#introduction)
   - [Features](#features)
-  - [Einfache Nutzung (synchron)](#einfache-nutzung-synchron)
-  - [Asynchrone Nutzung](#asynchrone-nutzung)
-  - [Mehrere Objekte](#mehrere-objekte)
-  - [User-Events (Hooks)](#user-events-hooks)
-  - [Warum dieses Modul existiert](#warum-dieses-modul-existiert)
-  - [Designprinzipien](#designprinzipien)
-  - [Fazit](#fazit)
+  - [Simple usage (synchronous)](#simple-usage-synchronous)
+  - [Asynchronous usage](#asynchronous-usage)
+  - [Multiple objects](#multiple-objects)
+  - [User events (hooks)](#user-events-hooks)
+  - [Why this module exists](#why-this-module-exists)
+  - [Design principles](#design-principles)
+  - [Conclusion](#conclusion)
 
 ---
 
-## Einleitung
+## Introduction
 
-Deterministisches Erfassen von Buffern und Windows nach Ex-Commands in Neovim.
+Deterministic capture of buffers and windows after Ex commands in Neovim.
 
-Dieses Modul löst ein zentrales Problem der Neovim-API:
-Es gibt keine Garantie, dass nach einem Ex-Command (`:messages`, `:help`, Plugin-Commands)
-der aktuelle Buffer oder das aktuelle Window eindeutig bestimmbar ist.
+This module solves a core problem of the Neovim API:
+there is no guarantee that after an Ex command (`:messages`, `:help`, plugin
+commands) the current buffer or the current window can be unambiguously
+determined.
 
-Dieses Modul verwendet **Delta-Erkennung** plus optionales Polling,
-um neu erzeugte UI-Objekte zuverlässig zu identifizieren.
+This module uses **delta detection** plus optional polling to reliably identify
+newly created UI objects.
 
 ---
 
 ## Features
 
-- deterministisches Erfassen neuer Buffer und Windows
-- Async-Support für verzögert erzeugte UI-Elemente
-- konfigurierbare Timeouts
-- Mehrfach-Objekt-Erkennung
-- persistentes Buffer-Tagging
-- optionale User-Autocommands
+- deterministic capture of new buffers and windows
+- async support for UI elements created with a delay
+- configurable timeouts
+- multi-object detection
+- persistent buffer tagging
+- optional user autocommands
 
 ---
 
-## Einfache Nutzung (synchron)
+## Simple usage (synchronous)
 
 ```lua
 local capture = require("lib.nvim.buf_win_tab.capture")
@@ -50,15 +51,15 @@ local result = capture.capture("messages", {
   },
 })
 
--- result.bufs -> Liste neuer Buffer
--- result.wins -> Liste neuer Windows
+-- result.bufs -> list of new buffers
+-- result.wins -> list of new windows
 ```
 
 ---
 
-## Asynchrone Nutzung
+## Asynchronous usage
 
-Für Commands, die UI-Elemente verzögert erzeugen:
+For commands that create UI elements with a delay:
 
 ```lua
 capture.capture("SomeAsyncCommand", {
@@ -72,16 +73,16 @@ end)
 
 ---
 
-## Mehrere Objekte
+## Multiple objects
 
-Das Modul geht bewusst davon aus, dass:
+The module deliberately assumes that:
 
-* mehrere Buffer
-* mehrere Windows
+* multiple buffers
+* multiple windows
 
-entstehen können.
+can be created.
 
-Deshalb werden **Listen** zurückgegeben:
+Therefore it returns **lists**:
 
 ```lua
 result.bufs  -- integer[]
@@ -90,9 +91,9 @@ result.wins  -- integer[]
 
 ---
 
-## User-Events (Hooks)
+## User events (hooks)
 
-Optional kann nach erfolgreichem Capture ein User-Event ausgelöst werden:
+Optionally, a user event can be fired after a successful capture:
 
 ```lua
 capture.capture("messages", {
@@ -115,31 +116,31 @@ vim.api.nvim_create_autocmd("User", {
 
 ---
 
-## Warum dieses Modul existiert
+## Why this module exists
 
-* `current_buf` und `current_win` sind **keine stabilen APIs**
-* Plugins wie Noice, Telescope oder LSP erzeugen UI asynchron
-* Window- und Buffer-Typen sind nicht eindeutig
+* `current_buf` and `current_win` are **not stable APIs**
+* plugins like Noice, Telescope or LSP create UI asynchronously
+* window and buffer types are not unambiguous
 
-Dieses Modul löst das Problem durch:
-Zustandsvergleich statt Annahmen.
-
----
-
-## Designprinzipien
-
-* kein Vertrauen in Fokus
-* keine Heuristiken auf `buftype` oder `filetype`
-* explizite Zustandsdifferenz
-* Buffer-Identität vor Window-Fokus
+This module solves the problem via:
+state comparison instead of assumptions.
 
 ---
 
-## Fazit
+## Design principles
 
-Mit diesem Modul existiert nun eine **allgemeingültige Capture-Schicht** für Neovim,
-auf der sich zuverlässig komplexe UI-Interaktionen aufbauen lassen.
+* no reliance on focus
+* no heuristics on `buftype` or `filetype`
+* explicit state difference
+* buffer identity before window focus
 
-Das Pattern ist stabil, plugin-unabhängig und zukunftssicher.
+---
+
+## Conclusion
+
+With this module there is now a **general-purpose capture layer** for Neovim on
+which complex UI interactions can be built reliably.
+
+The pattern is stable, plugin-independent and future-proof.
 
 ---
