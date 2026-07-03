@@ -22,7 +22,7 @@ It has **no third-party dependencies** — only `vim` and itself.
 - [Design](#design)
 - [Installation](#installation)
 - [Usage](#usage)
-- [Namespaces & modules](#namespaces--modules)
+- [Namespaces & modules](#namespaces-modules)
 - [Configuration](#configuration)
 - [Health](#health)
 - [Help docs](#help-docs)
@@ -163,6 +163,7 @@ lib.is_windows()    -- -> lib.nvim.cross.platform.is_windows
 | `lib.nvim.lua_ls`      | LuaLS: module path, `@module` annotation            |
 | `lib.nvim.core`        | misc Neovim helpers (`has_exec`, `simple_echo`)     |
 | `lib.nvim.neotree`     | neo-tree helpers: `node` (get_path / collect_nodes / extract_paths) |
+| `lib.nvim.system`      | host env snapshot (`is_windows`/`is_wsl`/…, `home`, `pathsep`, `repo_base`) + Windows rpc pipe; opt-in `setup` |
 
 ### `lib.vim.*` — classic Vim
 
