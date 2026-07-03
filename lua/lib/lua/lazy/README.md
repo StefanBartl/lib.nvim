@@ -1,81 +1,81 @@
-# lib.lua.lazy – Wiederverwendbares Lazy-Loading für Neovim
+# lib.lua.lazy – Reusable lazy loading for Neovim
 
-Dieses Modul stellt einfache Hilfsfunktionen bereit, um Lua-Module in einer
-Neovim-Config oder in eigenen Plugins kontrolliert und lazy zu laden.
+This module provides simple helpers to load Lua modules in a Neovim config or in
+your own plugins in a controlled, lazy way.
 
-Ziel ist es, unnötige `require()`-Aufrufe beim Startup zu vermeiden und Module
-erst dann zu laden, wenn sie tatsächlich benötigt werden.
+The goal is to avoid unnecessary `require()` calls at startup and to load modules
+only when they are actually needed.
 
 ---
 
 ## Table of content
 
-- [lib.lua.lazy – Wiederverwendbares Lazy-Loading für Neovim](#liblazy-wiederverwendbares-lazy-loading-fr-neovim)
+- [lib.lua.lazy – Reusable lazy loading for Neovim](#liblazy-reusable-lazy-loading-for-neovim)
   - [Motivation](#motivation)
-    - [Lade- und Cache-Verhalten](#lade-und-cache-verhalten)
-    - [Konsequenzen](#konsequenzen)
+    - [Load and cache behavior](#load-and-cache-behavior)
+    - [Consequences](#consequences)
   - [API](#api)
     - [lazy.module(name)](#lazymodulename)
     - [lazy.require(name)](#lazyrequirename)
     - [lazy.fn(module, function_name)](#lazyfnmodule-function_name)
-  - [Performance-Abschätzung](#performance-abschtzung)
+  - [Performance estimate](#performance-estimate)
     - [Startup](#startup)
-    - [Laufzeit](#laufzeit)
-  - [Sicherheit und Korrektheit](#sicherheit-und-korrektheit)
-  - [Wann man es nicht einsetzen sollte](#wann-man-es-nicht-einsetzen-sollte)
-  - [Typische Einsatzgebiete](#typische-einsatzgebiete)
-  - [LSP-Unterstützung und Type-Annotations](#lsp-untersttzung-und-type-annotations)
-  - [Fazit](#fazit)
+    - [Runtime](#runtime)
+  - [Safety and correctness](#safety-and-correctness)
+  - [When you should not use it](#when-you-should-not-use-it)
+  - [Typical use cases](#typical-use-cases)
+  - [LSP support and type annotations](#lsp-support-and-type-annotations)
+  - [Conclusion](#conclusion)
 
 ---
 
 ## Motivation
 
-In vielen Neovim-Konfigurationen werden Module direkt im Filescope geladen:
+In many Neovim configurations, modules are loaded directly at file scope:
 
 ```lua
 local mod = require("heavy.module")
 ```
 
-Das bedeutet:
+This means:
 
-* das Modul wird immer beim Laden der Datei ausgeführt
-* auch wenn die zugehörige Funktion nie benutzt wird
-* Startup-Zeit und Speicherverbrauch steigen mit der Config-Größe
+* the module is always executed when the file is loaded
+* even if the associated function is never used
+* startup time and memory usage grow with the config size
 
-`lib.lua.lazy` erlaubt es, dieses Verhalten explizit zu kontrollieren.
+`lib.lua.lazy` lets you control this behavior explicitly.
 
-### Lade- und Cache-Verhalten
+### Load and cache behavior
 
-In Lua gilt:
-* `require()` lädt immer das komplette Modul
-* das Modul wird exakt einmal ausgeführt
-* das Rückgabeobjekt wird in `package.loaded[name]` gespeichert
-* alle definierten Funktionen werden erzeugt
-* ungenutzte Funktionen bleiben dennoch im Speicher
+In Lua:
+* `require()` always loads the complete module
+* the module is executed exactly once
+* the return object is stored in `package.loaded[name]`
+* all defined functions are created
+* unused functions still remain in memory
 
-Ablauf:
-1. `require("notify")` wird aufgerufen
-2. Lua sucht das Modul anhand von `package.searchers`
-3. die Datei wird vollständig gelesen
-4. der gesamte Top-Level-Code wird ausgeführt
-5. alle Funktionen werden erstellt
-6. das Rückgabeobjekt wird gecacht
-7. zukünftige `require()`-Aufrufe liefern nur die Referenz
+Sequence:
+1. `require("notify")` is called
+2. Lua looks up the module via `package.searchers`
+3. the file is read completely
+4. all top-level code is executed
+5. all functions are created
+6. the return object is cached
+7. future `require()` calls only return the reference
 
-Wichtig:
-* Lua kennt kein partielles Laden von Modulen
-* es existiert kein automatisches Tree Shaking
-* selbst wenn nur `warn()` genutzt wird, werden `info()`, `debug()` usw. ebenfalls erzeugt
+Important:
+* Lua has no partial loading of modules
+* there is no automatic tree shaking
+* even if only `warn()` is used, `info()`, `debug()` etc. are created as well
 
 ---
 
-### Konsequenzen
+### Consequences
 
-* Seiteneffekte im Top-Level-Code werden immer ausgeführt
-* Initialisierungskosten fallen vollständig beim ersten `require()` an
-* Moduldesign sollte initialisierungsarm sein
-* Lazy Loading muss manuell implementiert werden
+* side effects in top-level code are always executed
+* initialization cost falls entirely on the first `require()`
+* module design should be light on initialization
+* lazy loading must be implemented manually
 
 ---
 
@@ -83,7 +83,7 @@ Wichtig:
 
 ### lazy.module(name)
 
-Erzeugt einen Lazy-Wrapper für ein Modul.
+Creates a lazy wrapper for a module.
 
 ```lua
 local lazy = require("lib.lua.lazy")
@@ -92,40 +92,40 @@ local mymod = lazy.module("mymodule")
 mymod.get().do_work()
 ```
 
-Eigenschaften:
+Properties:
 
-* `require()` wird exakt einmal ausgeführt
-* Ergebnis wird in einem Upvalue gecached
-* nach dem ersten Zugriff minimaler Overhead (Nil-Check)
+* `require()` is executed exactly once
+* the result is cached in an upvalue
+* after the first access, minimal overhead (nil check)
 
-**Hinweis zur LSP-Unterstützung:**
+**Note on LSP support:**
 
-Bei Verwendung von `lazy.module()` erhält man ein Wrapper-Objekt vom Typ `Lib.LazyModule`, nicht das eigentliche Modul. Das bedeutet:
+When using `lazy.module()`, you get a wrapper object of type `Lib.LazyModule`, not the actual module. This means:
 
-* Keine automatische Type-Inference für das geladene Modul
-* Keine Autocompletion für Modul-Funktionen bis `.get()` aufgerufen wird
-* Man muss den Typ nach `.get()` manuell annotieren
+* no automatic type inference for the loaded module
+* no autocompletion for module functions until `.get()` is called
+* you must annotate the type manually after `.get()`
 
 ```lua
 local mymod_lazy = lazy.module("mymodule")
 
--- Kein LSP-Support hier:
--- mymod_lazy ist vom Typ Lib.LazyModule
+-- No LSP support here:
+-- mymod_lazy is of type Lib.LazyModule
 
 ---@type MyModule.Type
 local mymod = mymod_lazy.get()
 
--- Jetzt hat man LSP-Support:
+-- Now you have LSP support:
 mymod.do_work()
 ```
 
-Für bessere LSP-Unterstützung siehe `lazy.require()`.
+For better LSP support, see `lazy.require()`.
 
 ---
 
 ### lazy.require(name)
 
-Erzeugt ein lazy-geladenes Modul mit direkter Type-Inference-Unterstützung.
+Creates a lazily loaded module with direct type-inference support.
 
 ```lua
 local lazy = require("lib.lua.lazy")
@@ -133,43 +133,43 @@ local lazy = require("lib.lua.lazy")
 ---@type MyModule.Type
 local mymod = lazy.require("mymodule")
 
--- Volle LSP-Unterstützung ab hier:
+-- Full LSP support from here on:
 mymod.do_work()
 ```
 
-Eigenschaften:
+Properties:
 
-* `require()` wird exakt einmal ausgeführt (beim ersten Zugriff auf das Modul)
-* Ergebnis wird gecacht
-* Rückgabe ist das Modul selbst, nicht ein Wrapper
-* Vollständige LSP-Unterstützung durch Type-Annotation
+* `require()` is executed exactly once (on the first access to the module)
+* the result is cached
+* the return value is the module itself, not a wrapper
+* full LSP support through the type annotation
 
-**Unterschied zu `lazy.module()`:**
+**Difference from `lazy.module()`:**
 
-* `lazy.module()` gibt ein Wrapper-Objekt zurück (Typ: `Lib.LazyModule`)
-* `lazy.require()` gibt das tatsächliche Modul zurück (castbar auf jeden Typ)
-* `lazy.require()` ist die empfohlene Variante für Module mit komplexer API
+* `lazy.module()` returns a wrapper object (type: `Lib.LazyModule`)
+* `lazy.require()` returns the actual module (castable to any type)
+* `lazy.require()` is the recommended variant for modules with a complex API
 
-**Verwendung mit Type-Annotations:**
+**Usage with type annotations:**
 
 ```lua
 ---@type WkdNvC.UI.Stl.Modules.LSP.Cfg.Module
 local config_mod = lazy.require("wkdnvchad.ui.statusline.modules.lsp.config")
 
--- LSP kennt jetzt alle Funktionen:
+-- The LSP now knows all functions:
 local options = config_mod.get_cfg()
 config_mod.set("debounce_ms", 500)
 ```
 
-**Technischer Hintergrund:**
+**Technical background:**
 
-`lazy.require()` nutzt intern `lazy.module()`, gibt aber direkt das Ergebnis von `.get()` zurück. Die `---@diagnostic disable-next-line: return-type-mismatch` Annotation im Modul erlaubt es dem Language Server, den Generic-Type `T` anzunehmen, der durch die Type-Annotation am Call-Site definiert wird.
+`lazy.require()` internally uses `lazy.module()`, but returns the result of `.get()` directly. The `---@diagnostic disable-next-line: return-type-mismatch` annotation in the module allows the language server to assume the generic type `T` that is defined by the type annotation at the call site.
 
 ---
 
 ### lazy.fn(module, function_name)
 
-Erzeugt einen lazy geladenen Funktions-Wrapper.
+Creates a lazily loaded function wrapper.
 
 ```lua
 local lazy = require("lib.lua.lazy")
@@ -178,87 +178,87 @@ local do_work = lazy.fn("mymodule", "do_work")
 do_work(42)
 ```
 
-Eigenschaften:
+Properties:
 
-* `require()` läuft beim ersten Aufruf
-* danach wird die Funktion neu gebunden
-* kein weiterer Lazy-Check im Hot-Path
+* `require()` runs on the first call
+* afterwards the function is re-bound
+* no further lazy check in the hot path
 
-Diese Variante ist aggressiver und nur für Performance-kritische Pfade gedacht.
+This variant is more aggressive and only intended for performance-critical paths.
 
 ---
 
-## Performance-Abschätzung
+## Performance estimate
 
 ### Startup
 
-* kein Laden des Moduls beim Start
-* weniger Lua-Bytecode
-* weniger Initialisierung von Nebenlogik (Autocommands, Caches)
+* the module is not loaded at startup
+* less Lua bytecode
+* less initialization of secondary logic (autocommands, caches)
 
-### Laufzeit
+### Runtime
 
 * `lazy.module`:
-  * ein einfacher Nil-Check pro Zugriff
-  * vernachlässigbarer Overhead für die meisten Use-Cases
+  * a simple nil check per access
+  * negligible overhead for most use cases
 * `lazy.require`:
-  * identisch mit `lazy.module` (nutzt intern dasselbe Caching)
-  * kein Performance-Unterschied
+  * identical to `lazy.module` (uses the same caching internally)
+  * no performance difference
 * `lazy.fn`:
-  * nach dem ersten Aufruf keinerlei Zusatzkosten
+  * no additional cost at all after the first call
 
-Im Vergleich zu eager `require()` ist der Gesamteffekt in großen Configs
-spürbar positiv, besonders bei vielen optionalen Features.
-
----
-
-## Sicherheit und Korrektheit
-
-* `require()` wird nicht umgangen, sondern nur verzögert
-* Lua-Standard-Caching (`package.loaded`) bleibt vollständig erhalten
-* Fehler im Modul treten beim ersten Zugriff auf, nicht stillschweigend
-* keine globale Mutation, nur lokale Upvalues
-
-Das Verhalten ist deterministisch und reproduzierbar.
+Compared to eager `require()`, the overall effect in large configs is noticeably
+positive, especially with many optional features.
 
 ---
 
-## Wann man es nicht einsetzen sollte
+## Safety and correctness
 
-* bei sehr kleinen Utility-Modulen
-* bei Funktionen, die auf jedem Keypress laufen
-* bei Code, der bewusst beim Startup Seiteneffekte erzeugen soll
+* `require()` is not bypassed, only deferred
+* Lua's standard caching (`package.loaded`) is fully preserved
+* errors in the module surface on the first access, not silently
+* no global mutation, only local upvalues
 
-Lazy-Loading ist ein Werkzeug, kein Dogma.
-
----
-
-## Typische Einsatzgebiete
-
-* Feature-spezifische Logik
-* Event-Handler
-* Neo-tree / LSP / Git-Integrationen
-* eigene Plugins mit optionalen Komponenten
+The behavior is deterministic and reproducible.
 
 ---
 
-## LSP-Unterstützung und Type-Annotations
+## When you should not use it
 
-Für optimale LSP-Unterstützung mit Autocompletion und Type-Checking gibt es mehrere Ansätze:
+* for very small utility modules
+* for functions that run on every keypress
+* for code that is deliberately meant to produce side effects at startup
 
-### Variante 1: lazy.require mit Type-Annotation (empfohlen)
+Lazy loading is a tool, not a dogma.
+
+---
+
+## Typical use cases
+
+* feature-specific logic
+* event handlers
+* Neo-tree / LSP / Git integrations
+* your own plugins with optional components
+
+---
+
+## LSP support and type annotations
+
+For optimal LSP support with autocompletion and type checking, there are several approaches:
+
+### Variant 1: lazy.require with type annotation (recommended)
 
 ```lua
 ---@type MyModule.Type
 local mymod = lazy.require("mymodule")
 ```
 
-Vorteile:
-* Direkte LSP-Unterstützung
-* Keine Wrapper-Indirektion
-* Einfachste Syntax
+Advantages:
+* direct LSP support
+* no wrapper indirection
+* simplest syntax
 
-### Variante 2: lazy.module mit manuellem Cast
+### Variant 2: lazy.module with a manual cast
 
 ```lua
 local mymod_lazy = lazy.module("mymodule")
@@ -267,24 +267,24 @@ local mymod_lazy = lazy.module("mymodule")
 local mymod = mymod_lazy.get()
 ```
 
-Vorteile:
-* Explizite Trennung von Lazy-Wrapper und Modul
-* Nützlich wenn man den Lazy-Wrapper selbst weitergeben will
+Advantages:
+* explicit separation of the lazy wrapper and the module
+* useful when you want to pass the lazy wrapper around itself
 
-### Variante 3: Inline-Cast bei lazy.module
+### Variant 3: inline cast with lazy.module
 
 ```lua
 ---@type MyModule.Type
 local mymod = lazy.module("mymodule").get()
 ```
 
-Nachteile:
-* Kann zu Type-Mismatch-Warnungen führen
-* Erfordert möglicherweise `---@diagnostic disable-next-line`
+Disadvantages:
+* can lead to type-mismatch warnings
+* may require `---@diagnostic disable-next-line`
 
-### Type-Definitionen erstellen
+### Creating type definitions
 
-Für eigene Module sollte man Type-Definitionen in `@types` Ordnern anlegen:
+For your own modules, you should create type definitions in `@types` folders:
 
 ```lua
 ---@meta
@@ -301,24 +301,24 @@ Für eigene Module sollte man Type-Definitionen in `@types` Ordnern anlegen:
 return {}
 ```
 
-Diese Types können dann bei `lazy.require()` oder `lazy.module()` verwendet werden.
+These types can then be used with `lazy.require()` or `lazy.module()`.
 
 ---
 
-## Fazit
+## Conclusion
 
-`lib.lua.lazy` hilft dabei, Neovim-Konfigurationen:
+`lib.lua.lazy` helps make Neovim configurations:
 
-* strukturierter
-* performanter
-* besser skalierbar
+* more structured
+* more performant
+* more scalable
 
-zu gestalten, ohne komplexe Infrastruktur oder externe Abhängigkeiten.
+without complex infrastructure or external dependencies.
 
-Die Wahl zwischen `lazy.module()` und `lazy.require()` hängt vom Use-Case ab:
+The choice between `lazy.module()` and `lazy.require()` depends on the use case:
 
-* **`lazy.module()`**: Wenn man explizit mit dem Lazy-Wrapper arbeiten will
-* **`lazy.require()`**: Für direkten Zugriff mit optimaler LSP-Unterstützung (Standard-Fall)
-* **`lazy.fn()`**: Für einzelne Funktionen in Hot-Paths
+* **`lazy.module()`**: when you explicitly want to work with the lazy wrapper
+* **`lazy.require()`**: for direct access with optimal LSP support (the default case)
+* **`lazy.fn()`**: for individual functions in hot paths
 
 ---

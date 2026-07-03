@@ -1,59 +1,59 @@
-# `lib.vim` — Portierungsstatus (Vim-Parität)
+# `lib.vim` — porting status (Vim parity)
 
-Ziel: für jedes Modul aus `lib.nvim.*` ein API-gleiches Pendant in `lib.vim.*`,
-das unter **klassischem Vim** (ohne die Neovim-`vim.api`/`vim.uv`-Bridge)
-funktioniert.
+Goal: for every module in `lib.nvim.*`, an API-compatible counterpart in
+`lib.vim.*` that works under **classic Vim** (without the Neovim
+`vim.api`/`vim.uv` bridge).
 
-## Mechanik
+## Mechanics
 
-Jedes noch nicht portierte Modul `lib/vim/<modul>/init.lua` besteht aus:
+Every not-yet-ported module `lib/vim/<module>/init.lua` consists of:
 
 ```lua
-return require("lib.vim._stub")("<modul>")
+return require("lib.vim._stub")("<module>")
 ```
 
-`lib.vim._stub` liefert eine Tabelle, deren Funktionszugriffe die API-Oberfläche
-spiegeln, bei tatsächlichem **Aufruf** aber einen klaren Fehler werfen:
+`lib.vim._stub` returns a table whose function accesses mirror the API surface,
+but throw a clear error on actual **call**:
 
 ```
-lib.vim.<modul>.<fn>: noch nicht für klassisches Vim implementiert.
-Unter Neovim stattdessen lib.nvim.<modul> verwenden.
+lib.vim.<module>.<fn>: not yet implemented for classic Vim.
+Under Neovim, use lib.nvim.<module> instead.
 ```
 
-So können abhängige Plugins bereits gegen `lib.vim.*` programmieren, während die
-echten Implementierungen nach und nach ergänzt werden.
+This lets dependent plugins already program against `lib.vim.*` while the real
+implementations are added over time.
 
-## Portieren eines Moduls
+## Porting a module
 
-`lib/vim/<modul>/init.lua` durch eine echte Implementierung ersetzen, die die
-**gleiche öffentliche Signatur** wie `lib.nvim.<modul>` anbietet, intern aber
+Replace `lib/vim/<module>/init.lua` with a real implementation that offers the
+**same public signature** as `lib.nvim.<module>`, but internally uses
 `vim.fn`/Vimscript (`vim.fn.*`, `vim.cmd`, `:command`, `:map`, `execute()` …)
-statt `vim.api`/`vim.uv` nutzt. Anschließend Status unten auf ✅ setzen.
+instead of `vim.api`/`vim.uv`. Then set the status below to ✅.
 
 ## Status
 
-| Modul                  | Status | Anmerkung                                            |
-| ---------------------- | :----: | --------------------------------------------------- |
-| `lib.vim.notify`       |   ⬜   | `:echohl`/`echomsg` möglich                          |
+| Module                 | Status | Note                                                 |
+| ---------------------- | :----: | ---------------------------------------------------- |
+| `lib.vim.notify`       |   ⬜   | `:echohl`/`echomsg` possible                         |
 | `lib.vim.map`          |   ⬜   | `:map`/`mapset()`                                    |
 | `lib.vim.usercmd`      |   ⬜   | `:command!`                                          |
 | `lib.vim.autocmd`      |   ⬜   | `:autocmd`/`:augroup`                                |
 | `lib.vim.buffer`       |   ⬜   | `getline()`/`setline()`/`bufnr()`                    |
 | `lib.vim.buf_win_tab`  |   ⬜   | `win_*()`/`tabpage*()`                               |
 | `lib.vim.window`       |   ⬜   | `win_*()`                                            |
-| `lib.vim.ui`           |   ⬜   | `popup_*()`/`inputlist()` (aufwändig)                |
+| `lib.vim.ui`           |   ⬜   | `popup_*()`/`inputlist()` (involved)                 |
 | `lib.vim.fs`           |   ⬜   | `glob()`/`fnamemodify()`/`filereadable()`            |
 | `lib.vim.cross`        |   ⬜   | `has()`/`system()`/`job_start()`                     |
 | `lib.vim.normalize`    |   ⬜   | `fnamemodify()`/`substitute()`                       |
 | `lib.vim.git`          |   ⬜   | `system()`                                           |
-| `lib.vim.terminal`     |   ⬜   | `term_*()` (Vim) statt `:terminal`-Buffer            |
-| `lib.vim.require`      |   ⬜   | nur relevant mit `+lua`                              |
-| `lib.vim.lua_ls`       |   ⬜   | reines Pfad-/String-Handling, gut portierbar         |
+| `lib.vim.terminal`     |   ⬜   | `term_*()` (Vim) instead of `:terminal` buffer       |
+| `lib.vim.require`      |   ⬜   | only relevant with `+lua`                            |
+| `lib.vim.lua_ls`       |   ⬜   | pure path/string handling, ports well                |
 | `lib.vim.core`         |   ⬜   | `has_exec` → `executable()`; `simple_echo` → `echo`  |
 
-Legende: ✅ portiert · 🟡 teilweise · ⬜ Stub (Platzhalter)
+Legend: ✅ ported · 🟡 partial · ⬜ stub (placeholder)
 
-> Hinweis: Vieles in `lib.nvim.*` baut auf Funktionalität auf, die es in
-> klassischem Vim nicht gibt (z. B. Extmarks, `vim.uv`, Floating Windows). Solche
-> Teile bleiben dauerhaft ohne Vim-Pendant; das ist erwartet und in Ordnung —
-> `lib.vim.*` deckt nur den portierbaren Teil ab.
+> Note: much of `lib.nvim.*` builds on functionality that does not exist in
+> classic Vim (e.g. extmarks, `vim.uv`, floating windows). Such parts stay
+> permanently without a Vim counterpart; that is expected and fine —
+> `lib.vim.*` only covers the portable part.

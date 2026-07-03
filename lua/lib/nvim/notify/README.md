@@ -3,21 +3,21 @@
 ## Table of content
 
 - [`lib.nvim.notify`](#libnotify)
-  - [Beispiel: Verwendung in einem Modul](#beispiel-verwendung-in-einem-modul)
-  - [Beispiel: anderes Modul, anderer Prefix](#beispiel-anderes-modul-anderer-prefix)
+  - [Example: usage in a module](#example-usage-in-a-module)
+  - [Example: another module, another prefix](#example-another-module-another-prefix)
   - [`lib.nvim.notify.safe`](#libnotifysafe)
-    - [Wann wird `lib.nvim.notify.safe` benötigt](#wann-wird-libnotifysafe-bentigt)
+    - [When is `lib.nvim.notify.safe` needed](#when-is-libnotifysafe-needed)
     - [`safe.schedule`](#safeschedule)
     - [`safe.defer`](#safedefer)
     - [`safe.wrap`](#safewrap)
     - [`safe.notify`](#safenotify)
     - [`safe.create_safe(prefix)`](#safecreate_safeprefix)
-    - [Empfohlene Verwendung](#empfohlene-verwendung)
-  - [Eigenschaften des Designs](#eigenschaften-des-designs)
+    - [Recommended usage](#recommended-usage)
+  - [Design properties](#design-properties)
 
 ---
 
-## Beispiel: Verwendung in einem Modul
+## Example: usage in a module
 
 ```lua
 ---@module 'neotree_fs_refactor.core'
@@ -31,7 +31,7 @@ notify.error("LSP rename failed")
 
 ---
 
-## Beispiel: anderes Modul, anderer Prefix
+## Example: another module, another prefix
 
 ```lua
 ---@module 'config.lsp.setup'
@@ -42,32 +42,32 @@ notify.debug("Attaching server")
 ```
 
 ---
-AUDIT: Auf englisch übersetzten und `doc/` schreiben
+
 ## `lib.nvim.notify.safe`
 
-`lib.nvim.notify.safe` stellt sichere Wrapper um `vim.notify` bereit, die speziell für sogenannte *fast event contexts* entwickelt wurden. Dazu zählen unter anderem Callbacks aus `autocmd`s wie `TextChanged`, `CursorMoved`, `BufWritePost` oder andere hochfrequente Events, in denen ein direkter Aufruf von `vim.notify` zu Fehlern, Verzögerungen oder undefiniertem Verhalten führen kann.
+`lib.nvim.notify.safe` provides safe wrappers around `vim.notify`, specifically designed for so-called *fast event contexts*. These include, among others, callbacks from `autocmd`s such as `TextChanged`, `CursorMoved`, `BufWritePost` or other high-frequency events, in which a direct call to `vim.notify` can lead to errors, delays or undefined behavior.
 
-Das Modul kapselt alle gängigen Schutzmechanismen (`vim.schedule`, `vim.defer_fn`, `vim.schedule_wrap`) hinter einer konsistenten, gut typisierten API.
+The module encapsulates all common protection mechanisms (`vim.schedule`, `vim.defer_fn`, `vim.schedule_wrap`) behind a consistent, well-typed API.
 
 ---
 
-### Wann wird `lib.nvim.notify.safe` benötigt
+### When is `lib.nvim.notify.safe` needed
 
-Man sollte die Safe-Varianten verwenden, wenn:
+You should use the safe variants when:
 
-* Benachrichtigungen aus Autocommands stammen
-* Benachrichtigungen aus LSP-, Tree- oder UI-Callbacks ausgelöst werden
-* Code potenziell mehrfach pro Sekunde ausgeführt wird
-* nicht garantiert ist, dass man sich im Haupt-Event-Loop befindet
+* notifications originate from autocommands
+* notifications are triggered from LSP, tree or UI callbacks
+* code is potentially executed multiple times per second
+* it is not guaranteed that you are in the main event loop
 
-Für normale, direkte Benutzeraktionen (Commands, Keymaps) ist weiterhin `lib.nvim.notify.create` ausreichend.
+For normal, direct user actions (commands, keymaps), `lib.nvim.notify.create` is still sufficient.
 
 ---
 
 ### `safe.schedule`
 
-Plant die Benachrichtigung mit `vim.schedule` direkt im nächsten Main-Loop-Tick ein.
-Dies ist die empfohlene Standardlösung für fast alle Safe-Fälle.
+Schedules the notification with `vim.schedule` directly in the next main-loop tick.
+This is the recommended default solution for almost all safe cases.
 
 ```lua
 local safe = require("lib.nvim.notify").safe
@@ -75,34 +75,34 @@ local safe = require("lib.nvim.notify").safe
 safe.schedule("Scheduled notification", vim.log.levels.INFO)
 ```
 
-Eigenschaften:
+Properties:
 
-* sofortige, aber sichere Ausführung
-* minimaler Overhead
-* bevorzugte Default-Strategie
+* immediate, but safe execution
+* minimal overhead
+* preferred default strategy
 
 ---
 
 ### `safe.defer`
 
-Verzögert die Benachrichtigung um eine definierte Zeitspanne mittels `vim.defer_fn`.
+Delays the notification by a defined time span using `vim.defer_fn`.
 
 ```lua
 safe.defer("Delayed warning", vim.log.levels.WARN, {}, 150)
 ```
 
-Eigenschaften:
+Properties:
 
-* kontrollierte Verzögerung
-* nützlich bei UI-Übergängen oder Debouncing
-* optionaler Delay in Millisekunden
+* controlled delay
+* useful for UI transitions or debouncing
+* optional delay in milliseconds
 
 ---
 
 ### `safe.wrap`
 
-Erzeugt eine wiederverwendbare, bereits geschedulte Notify-Funktion.
-Ideal für wiederholte Aufrufe in Hotpaths.
+Creates a reusable, already-scheduled notify function.
+Ideal for repeated calls in hot paths.
 
 ```lua
 local wrapped = safe.wrap()
@@ -110,26 +110,26 @@ local wrapped = safe.wrap()
 wrapped("Repeated debug message", vim.log.levels.DEBUG)
 ```
 
-Eigenschaften:
+Properties:
 
-* effizient bei vielen Aufrufen
-* vermeidet wiederholtes Erzeugen von Closures
-* optimal für Schleifen oder Event-Handler
+* efficient for many calls
+* avoids repeatedly creating closures
+* optimal for loops or event handlers
 
 ---
 
 ### `safe.notify`
 
-Ein Convenience-Wrapper, der je nach Modus automatisch die passende Strategie wählt.
+A convenience wrapper that automatically chooses the appropriate strategy depending on the mode.
 
 ```lua
 safe.notify("Auto scheduled", vim.log.levels.INFO)
 safe.notify("Deferred", vim.log.levels.WARN, {}, "defer", 100)
 ```
 
-Unterstützte Modi:
+Supported modes:
 
-* `"schedule"` (Standard)
+* `"schedule"` (default)
 * `"defer"`
 * `"wrap"`
 
@@ -137,7 +137,7 @@ Unterstützte Modi:
 
 ### `safe.create_safe(prefix)`
 
-Erzeugt einen sicheren Notifier mit festem Prefix, analog zu `lib.nvim.notify.create`, jedoch vollständig fast-event-safe.
+Creates a safe notifier with a fixed prefix, analogous to `lib.nvim.notify.create`, but fully fast-event-safe.
 
 ```lua
 local safe_notify = require("lib.nvim.notify").safe.create_safe("[plugin]")
@@ -146,47 +146,47 @@ safe_notify.info("Safe info message")
 safe_notify.error("Safe error message")
 ```
 
-Eigenschaften:
+Properties:
 
-* Prefix wird einmal normalisiert
-* identische API zu normalen Notifiern (`info`, `warn`, `error`, `debug`)
-* intern immer `vim.schedule`
-* keine doppelten Prefixes möglich
+* the prefix is normalized once
+* identical API to normal notifiers (`info`, `warn`, `error`, `debug`)
+* internally always `vim.schedule`
+* no duplicate prefixes possible
 
 ---
 
-### Empfohlene Verwendung
+### Recommended usage
 
 * `lib.nvim.notify.create`
-  für Commands, Keymaps, Benutzeraktionen
+  for commands, keymaps, user actions
 
 * `lib.nvim.notify.safe.*`
-  für Autocommands, Callbacks, LSP-Events, UI-Hooks
+  for autocommands, callbacks, LSP events, UI hooks
 
-Beide Varianten sind vollständig kompatibel und können parallel im selben Projekt eingesetzt werden.
+Both variants are fully compatible and can be used in parallel within the same project.
 
 ```vim
- Standard Verwendung (wie bisher)
+ Standard usage (as before)
 local notify = require("lib.nvim.notify").create("[plugin]")
 notify.info("Standard notification")
 
--- Safe-Varianten für fast event contexts
+-- Safe variants for fast event contexts
 local safe = require("lib.nvim.notify").safe
 
--- Variante 1: schedule (Standard)
+-- Variant 1: schedule (default)
 safe.schedule("Message from fast event", vim.log.levels.INFO)
 
--- Variante 2: defer mit Verzögerung
+-- Variant 2: defer with delay
 safe.defer("Delayed message", vim.log.levels.WARN, {}, 100)
 
--- Variante 3: wrapped notifier für wiederholte Aufrufe
+-- Variant 3: wrapped notifier for repeated calls
 local wrapped_notify = safe.wrap()
 wrapped_notify("Efficient repeated call", vim.log.levels.DEBUG)
 
--- Variante 4: Convenience wrapper
+-- Variant 4: convenience wrapper
 safe.notify("Auto-scheduled", vim.log.levels.INFO, {}, "schedule")
 
--- Variante 5: Safe notifier mit Prefix
+-- Variant 5: safe notifier with prefix
 local safe_notify = safe.create_safe("[plugin]")
 safe_notify.info("Safe + prefixed")
 safe_notify.error("Error from fast context")
@@ -194,12 +194,12 @@ safe_notify.error("Error from fast context")
 
 ---
 
-## Eigenschaften des Designs
+## Design properties
 
-* ein zentrales, generisches Notify-Modul
-* Prefix wird **einmal pro Datei** festgelegt
-* kein doppeltes Prefixing möglich
-* API identisch zu `vim.notify`
-* problemlos für jede Plugin- oder Config-Komponente wiederverwendbar
+* one central, generic notify module
+* the prefix is set **once per file**
+* no double prefixing possible
+* API identical to `vim.notify`
+* easily reusable for any plugin or config component
 
 ---

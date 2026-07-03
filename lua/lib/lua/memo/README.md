@@ -2,50 +2,50 @@
 
 ---
 
-## Überblick
+## Overview
 
-Das Modul `lib.lua.memo` stellt eine kleine, in sich geschlossene Caching-Infrastruktur für Neovim-Lua-Code bereit.
-Der Fokus liegt auf:
+The `lib.lua.memo` module provides a small, self-contained caching infrastructure for Neovim Lua code.
+The focus is on:
 
-* vorhersehbarem Speicherverbrauch
-* konstanten Laufzeiten
-* klaren, expliziten Semantiken
-* einfacher Integration in bestehende `lib.*`-Hilfsmodule
+* predictable memory usage
+* constant runtimes
+* clear, explicit semantics
+* easy integration into existing `lib.*` helper modules
 
-Das Modul ist bewusst unabhängig von Neovim-spezifischen APIs implementiert und kann daher auch in reinem Lua-Kontext verwendet werden, eignet sich aber besonders für:
+The module is deliberately implemented independently of Neovim-specific APIs and can therefore also be used in a pure Lua context, but it is particularly suited for:
 
-* Wrapper um teure Neovim-APIs
-* Memoisierung von reinen Hilfsfunktionen
-* Caching von berechneten Konfigurationen
-* Reduktion von Overhead bei wiederholten `require`-ähnlichen Zugriffen
+* wrappers around expensive Neovim APIs
+* memoization of pure helper functions
+* caching of computed configurations
+* reducing overhead on repeated `require`-like accesses
 
 ---
 
-## Modulstruktur
+## Module structure
 
 ```
 lib.lua.memo/
-├── init.lua        -- Aggregierter Export
-├── lru.lua         -- LRU-Cache-Implementierung
-└── memo.lua        -- Memoization auf Basis des LRU-Caches
+├── init.lua        -- aggregated export
+├── lru.lua         -- LRU cache implementation
+└── memo.lua        -- memoization based on the LRU cache
 ```
 
-Der Einstiegspunkt ist immer `require("lib.lua.memo")`.
+The entry point is always `require("lib.lua.memo")`.
 
 ---
 
-## lib.lua.memo (Aggregator)
+## lib.lua.memo (aggregator)
 
-Das Top-Level-Modul bündelt die einzelnen Cache-Strategien unter einem gemeinsamen Namespace.
+The top-level module bundles the individual cache strategies under a common namespace.
 
-Verfügbare Submodule:
+Available submodules:
 
-| Feld | Beschreibung                         |
-| ---- | ------------------------------------ |
-| lru  | LRU-Cache mit O(1) Zugriff           |
-| memo | Memoization-Helfer auf Basis von LRU |
+| Field | Description                          |
+| ----- | ------------------------------------ |
+| lru   | LRU cache with O(1) access           |
+| memo  | memoization helper based on LRU      |
 
-Beispiel:
+Example:
 
 ```lua
 local cache = require("lib.lua.memo")
@@ -58,32 +58,32 @@ local memoize = cache.memo.memoize
 
 ## lib.lua.memo.lru
 
-### Zweck
+### Purpose
 
-`lib.lua.memo.lru` implementiert einen klassischen Least-Recently-Used-Cache mit:
+`lib.lua.memo.lru` implements a classic least-recently-used cache with:
 
-* O(1) Zugriff (`get`)
-* O(1) Einfügen (`put`)
-* deterministischem Speicherlimit
-* Hashmap + doppelt verketteter Liste
+* O(1) access (`get`)
+* O(1) insertion (`put`)
+* a deterministic memory limit
+* a hashmap + doubly linked list
 
-Damit eignet sich der Cache besonders für:
+This makes the cache particularly suited for:
 
-* Funktionsresultate
-* teure Berechnungen
-* Normalisierungsschritte
-* kleine, häufig genutzte Datensätze
+* function results
+* expensive computations
+* normalization steps
+* small, frequently used data sets
 
 ---
 
-### Datenmodell
+### Data model
 
-Intern besteht der Cache aus:
+Internally the cache consists of:
 
-* einer Map `key -> node`
-* einer doppelt verketteten Liste zur Reihenfolgeverwaltung
-* `head`: zuletzt verwendetes Element
-* `tail`: am längsten nicht verwendetes Element
+* a map `key -> node`
+* a doubly linked list for order management
+* `head`: the most recently used element
+* `tail`: the element not used for the longest time
 
 ---
 
@@ -91,10 +91,10 @@ Intern besteht der Cache aus:
 
 #### new(capacity)
 
-Erzeugt einen neuen LRU-Cache.
+Creates a new LRU cache.
 
-* `capacity` muss ≥ 1 sein
-* bei Überschreiten wird automatisch das älteste Element entfernt
+* `capacity` must be ≥ 1
+* when exceeded, the oldest element is automatically removed
 
 ```lua
 local LRU = require("lib.lua.memo.lru")
@@ -106,10 +106,10 @@ local cache = LRU.new(128)
 
 #### get(key)
 
-Liest einen Wert aus dem Cache.
+Reads a value from the cache.
 
-* verschiebt den Eintrag an den Kopf (most-recent)
-* gibt `nil` zurück, wenn der Key nicht existiert
+* moves the entry to the head (most-recent)
+* returns `nil` if the key does not exist
 
 ```lua
 local value = cache:get("foo")
@@ -119,11 +119,11 @@ local value = cache:get("foo")
 
 #### put(key, value)
 
-Speichert einen Wert im Cache.
+Stores a value in the cache.
 
-* überschreibt vorhandene Einträge
-* verschiebt den Eintrag an den Kopf
-* entfernt automatisch das LRU-Element bei Overflow
+* overwrites existing entries
+* moves the entry to the head
+* automatically removes the LRU element on overflow
 
 ```lua
 cache:put("foo", 42)
@@ -133,36 +133,36 @@ cache:put("foo", 42)
 
 ## lib.lua.memo.memo
 
-### Zweck
+### Purpose
 
-`lib.lua.memo.memo` stellt einen Memoization-Wrapper bereit, der auf dem LRU-Cache basiert.
+`lib.lua.memo.memo` provides a memoization wrapper based on the LRU cache.
 
-Er eignet sich für:
+It is suited for:
 
-* reine Funktionen
-* deterministische Hilfsfunktionen
-* Wrapper um teure Berechnungen
-* Funktionen mit kleinen, primitiven Argumenten
+* pure functions
+* deterministic helper functions
+* wrappers around expensive computations
+* functions with small, primitive arguments
 
 ---
 
 ### memoize(fn, cap, keyer)
 
-Erzeugt eine memoizierte Variante einer Funktion.
+Creates a memoized variant of a function.
 
-Parameter:
+Parameters:
 
-| Parameter | Bedeutung                                   |
+| Parameter | Meaning                                     |
 | --------- | ------------------------------------------- |
-| fn        | zu memoizierende Funktion                   |
-| cap       | maximale Cachegröße (Default: 128)          |
-| keyer     | optionale Funktion zur Schlüsselgenerierung |
+| fn        | function to memoize                         |
+| cap       | maximum cache size (default: 128)           |
+| keyer     | optional function for key generation        |
 
-Standardmäßig wird der Cache-Key aus den Funktionsargumenten erzeugt.
+By default, the cache key is generated from the function arguments.
 
 ---
 
-#### Beispiel ohne keyer
+#### Example without keyer
 
 ```lua
 local memo = require("lib.lua.memo.memo")
@@ -174,13 +174,13 @@ end, 64)
 
 ---
 
-#### Beispiel mit keyer
+#### Example with keyer
 
-Empfohlen bei:
+Recommended for:
 
-* Tabellen
-* komplexen Argumenten
-* nicht eindeutig stringifizierbaren Werten
+* tables
+* complex arguments
+* values that are not uniquely stringifiable
 
 ```lua
 local memo = require("lib.lua.memo.memo")
@@ -198,80 +198,80 @@ local fn = memo.memoize(
 
 ---
 
-### Einschränkungen
+### Limitations
 
-* Standard-Keying nutzt `table.concat({ ... })`
-* Rückgabewert `nil` wird nicht gecacht
-* nicht für Nebenwirkungen geeignet
-* Argumente sollten deterministisch sein
-
----
-
-## Typische Anwendungsfälle in Neovim
-
-* Caching von `vim.fn.expand`, `vim.fn.resolve`
-* Memoisierung von Path-Normalisierungen
-* Wiederverwendung von berechneten Highlight-Definitionen
-* Optimierung von LSP- oder Tree-Sitter-Hilfsfunktionen
-* Wrapper um teure Lua-Pattern-Matches
+* default keying uses `table.concat({ ... })`
+* a `nil` return value is not cached
+* not suitable for side effects
+* arguments should be deterministic
 
 ---
 
-## Designentscheidungen
+## Typical use cases in Neovim
 
-* explizite Kapazitätsgrenze statt unbounded Cache
-* keine Weak-Tables für maximale Vorhersagbarkeit
-* kein automatisches Expiring (TTL)
-* einfache, lesbare Implementierung statt Micro-Optimierung
-* vollständige LuaLS-Kompatibilität
+* caching `vim.fn.expand`, `vim.fn.resolve`
+* memoization of path normalizations
+* reuse of computed highlight definitions
+* optimization of LSP or Tree-sitter helper functions
+* wrappers around expensive Lua pattern matches
 
 ---
 
-## Feature-Roadmap (Vorschläge)
+## Design decisions
 
-### Kurzfristig
+* an explicit capacity limit instead of an unbounded cache
+* no weak tables, for maximum predictability
+* no automatic expiring (TTL)
+* a simple, readable implementation instead of micro-optimization
+* full LuaLS compatibility
+
+---
+
+## Feature roadmap (proposals)
+
+### Short-term
 
 * `peek(key)`
-  Lesen ohne Aktualisierung der LRU-Reihenfolge
+  read without updating the LRU order
 
 * `clear()`
-  Cache vollständig leeren
+  fully empty the cache
 
 * `len()`
-  Aktuelle Anzahl gespeicherter Einträge
+  current number of stored entries
 
 ---
 
-### Mittelfristig
+### Mid-term
 
-* optionale TTL-Unterstützung
-  Zeitbasierte Invalidierung zusätzlich zur LRU-Strategie
+* optional TTL support
+  time-based invalidation in addition to the LRU strategy
 
 * `invalidate(predicate)`
-  Selektives Entfernen von Keys
+  selective removal of keys
 
-* Statistik-API
-  Hits, Misses, Evictions
-
----
-
-### Langfristig
-
-* Weak-Key / Weak-Value Varianten
-  Für GC-freundliche Spezialfälle
-
-* Shared Cache Registry
-  Mehrere Memoizer teilen sich denselben LRU
-
-* Async-/Deferred-Integration
-  Kombination mit `vim.schedule` oder `vim.uv`
+* statistics API
+  hits, misses, evictions
 
 ---
 
-## Abgrenzung
+### Long-term
 
-`lib.lua.memo` ist bewusst kein generisches Datenstruktur-Framework.
-Es stellt gezielt pragmatische Werkzeuge für reale Neovim-Konfigurationen bereit und ergänzt andere `lib.*`-Module wie:
+* weak-key / weak-value variants
+  for GC-friendly special cases
+
+* shared cache registry
+  multiple memoizers share the same LRU
+
+* async/deferred integration
+  combination with `vim.schedule` or `vim.uv`
+
+---
+
+## Scope
+
+`lib.lua.memo` is deliberately not a generic data-structure framework.
+It provides targeted, pragmatic tools for real Neovim configurations and complements other `lib.*` modules such as:
 
 * `lib.nvim.fs`
 * `lib.schedule`

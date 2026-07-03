@@ -1,101 +1,101 @@
-# `lib.lua.time.diff` – Zeitmessung mit Checkpoint-Tracking
+# `lib.lua.time.diff` – Time measurement with checkpoint tracking
 
 ## Table of content
 
-- [`lib.lua.time.diff` – Zeitmessung mit Checkpoint-Tracking](#libtimediff-zeitmessung-mit-checkpoint-tracking)
-  - [Übersicht](#bersicht)
-  - [Statistik-Funktionen](#statistik-funktionen)
-    - [Basisfunktionen](#basisfunktionen)
-    - [Erweiterte Statistiken](#erweiterte-statistiken)
-  - [Differenzberechnung zwischen Intervallen](#differenzberechnung-zwischen-intervallen)
-    - [1. Zwischen zwei Checkpoints (Index)](#1-zwischen-zwei-checkpoints-index)
-    - [2. Checkpoint gegen statistische Werte](#2-checkpoint-gegen-statistische-werte)
-    - [3. Zwischen statistischen Werten](#3-zwischen-statistischen-werten)
-    - [4. Mit rohen Zeitwerten](#4-mit-rohen-zeitwerten)
-    - [Unterstützte Keywords](#untersttzte-keywords)
+- [`lib.lua.time.diff` – Time measurement with checkpoint tracking](#libtimediff-time-measurement-with-checkpoint-tracking)
+  - [Overview](#overview)
+  - [Statistics functions](#statistics-functions)
+    - [Basic functions](#basic-functions)
+    - [Advanced statistics](#advanced-statistics)
+  - [Difference calculation between intervals](#difference-calculation-between-intervals)
+    - [1. Between two checkpoints (index)](#1-between-two-checkpoints-index)
+    - [2. Checkpoint against statistical values](#2-checkpoint-against-statistical-values)
+    - [3. Between statistical values](#3-between-statistical-values)
+    - [4. With raw time values](#4-with-raw-time-values)
+    - [Supported keywords](#supported-keywords)
   - [Installation](#installation)
-  - [Grundlegende Verwendung](#grundlegende-verwendung)
-    - [1. Timer starten](#1-timer-starten)
-    - [2. Checkpoints setzen](#2-checkpoints-setzen)
-    - [3. Gesamtzeit abrufen](#3-gesamtzeit-abrufen)
-    - [4. Intervalle zwischen Checkpoints](#4-intervalle-zwischen-checkpoints)
-  - [Dynamische Properties für Checkpoints](#dynamische-properties-fr-checkpoints)
-  - [Ausgabe aller Checkpoints](#ausgabe-aller-checkpoints)
-    - [Standard-Format](#standard-format)
-    - [Formatierte Tabelle](#formatierte-tabelle)
-  - [Iterator-Unterstützung](#iterator-untersttzung)
-    - [Einfacher Iterator (nur Zahlenwerte)](#einfacher-iterator-nur-zahlenwerte)
-    - [Iterator mit Custom-Label](#iterator-mit-custom-label)
-    - [Iterator mit Label und Index](#iterator-mit-label-und-index)
-    - [Iterator mit Override-Label](#iterator-mit-override-label)
-  - [Mehrere unabhängige Timer](#mehrere-unabhngige-timer)
-  - [API-Referenz](#api-referenz)
-    - [Methoden](#methoden)
-    - [Dynamische Properties](#dynamische-properties)
-  - [Fehlerbehandlung](#fehlerbehandlung)
-  - [Beispiel: Benchmark einer Funktion](#beispiel-benchmark-einer-funktion)
-  - [Beispiel: Iterator mit Labels](#beispiel-iterator-mit-labels)
-  - [Beispiel: Erweiterte Statistiken](#beispiel-erweiterte-statistiken)
-  - [Beispiel: Performance-Analyse](#beispiel-performance-analyse)
-  - [Technische Details](#technische-details)
-    - [Statistik-Berechnungen](#statistik-berechnungen)
-    - [Variationskoeffizient (CV)](#variationskoeffizient-cv)
+  - [Basic usage](#basic-usage)
+    - [1. Start the timer](#1-start-the-timer)
+    - [2. Set checkpoints](#2-set-checkpoints)
+    - [3. Get the total time](#3-get-the-total-time)
+    - [4. Intervals between checkpoints](#4-intervals-between-checkpoints)
+  - [Dynamic properties for checkpoints](#dynamic-properties-for-checkpoints)
+  - [Output of all checkpoints](#output-of-all-checkpoints)
+    - [Standard format](#standard-format)
+    - [Formatted table](#formatted-table)
+  - [Iterator support](#iterator-support)
+    - [Simple iterator (numeric values only)](#simple-iterator-numeric-values-only)
+    - [Iterator with a custom label](#iterator-with-a-custom-label)
+    - [Iterator with label and index](#iterator-with-label-and-index)
+    - [Iterator with an override label](#iterator-with-an-override-label)
+  - [Multiple independent timers](#multiple-independent-timers)
+  - [API reference](#api-reference)
+    - [Methods](#methods)
+    - [Dynamic properties](#dynamic-properties)
+  - [Error handling](#error-handling)
+  - [Example: benchmark a function](#example-benchmark-a-function)
+  - [Example: iterator with labels](#example-iterator-with-labels)
+  - [Example: advanced statistics](#example-advanced-statistics)
+  - [Example: performance analysis](#example-performance-analysis)
+  - [Technical details](#technical-details)
+    - [Statistics calculations](#statistics-calculations)
+    - [Coefficient of variation (CV)](#coefficient-of-variation-cv)
 
 ---
 
-## Übersicht
+## Overview
 
-Das `lib.lua.time.diff`-Modul bietet eine einfache, präzise Methode zur Messung von Zeitintervallen in Lua-Code. Es nutzt `vim.uv.hrtime()` für Nanosekundenpräzision (Standard) und ermöglicht mehrere Messpunkte innerhalb eines Zeitraums.
+The `lib.lua.time.diff` module offers a simple, precise method to measure time intervals in Lua code. It uses `vim.uv.hrtime()` for nanosecond precision (default) and allows multiple measurement points within a time span.
 
-Jeder Aufruf von `require("lib.lua.time.diff")` erzeugt eine unabhängige Timer-Instanz mit eigenem Zustand.
+Every call to `require("lib.lua.time.diff")` creates an independent timer instance with its own state.
 
-**Standard-Einheit:** Nanosekunden (ns). Alle Methoden können optional eine andere Einheit (`"ms"`, `"us"`, `"s"`) akzeptieren.
+**Default unit:** nanoseconds (ns). All methods can optionally accept another unit (`"ms"`, `"us"`, `"s"`).
 
-## Statistik-Funktionen
+## Statistics functions
 
-Das Modul bietet umfangreiche Statistiken über die gemessenen Intervalle:
+The module offers extensive statistics about the measured intervals:
 
-### Basisfunktionen
+### Basic functions
 
 ```lua
 local diff = require("lib.lua.time.diff")
 
--- Mehrere Checkpoints setzen
+-- Set multiple checkpoints
 for i = 1, 5 do
   vim.fn.sleep(math.random(50, 150))
   diff.check()
 end
 
--- Schnellstes Intervall
+-- Fastest interval
 print("Fastest:", diff.fastest("ms"), "ms")
 
--- Längstes Intervall
+-- Longest interval
 print("Longest:", diff.longest("ms"), "ms")
 
--- Durchschnittsintervall
+-- Average interval
 print("Average:", diff.average("ms"), "ms")
 
--- Median-Intervall
+-- Median interval
 print("Median:", diff.median("ms"), "ms")
 ```
 
-### Erweiterte Statistiken
+### Advanced statistics
 
 ```lua
--- Standardabweichung
+-- Standard deviation
 print("StdDev:", diff.stddev("ms"), "ms")
 
--- Variationskoeffizient (in Prozent)
+-- Coefficient of variation (in percent)
 print("CV:", diff.cv(), "%")
 ```
 
 ---
 
-## Differenzberechnung zwischen Intervallen
+## Difference calculation between intervals
 
-Die `calc_diff()`-Funktion ist sehr flexibel und kann verschiedene Arten von Eingaben verarbeiten:
+The `calc_diff()` function is very flexible and can process various kinds of input:
 
-### 1. Zwischen zwei Checkpoints (Index)
+### 1. Between two checkpoints (index)
 
 ```lua
 local diff = require("lib.lua.time.diff")
@@ -104,66 +104,66 @@ diff.check()  -- Checkpoint 1
 diff.check()  -- Checkpoint 2
 diff.check()  -- Checkpoint 3
 
--- Differenz zwischen Checkpoint 1 und 3
+-- Difference between checkpoint 1 and 3
 local delta = diff.calc_diff(1, 3, "ms")
 print("Delta:", delta, "ms")
 ```
 
-### 2. Checkpoint gegen statistische Werte
+### 2. Checkpoint against statistical values
 
 ```lua
--- Checkpoint 2 gegen Durchschnitt
+-- Checkpoint 2 against the average
 local d1 = diff.calc_diff(2, "average", "ms")
 print("Checkpoint 2 vs Average:", d1, "ms")
 
--- Checkpoint 1 gegen schnellstes Intervall
+-- Checkpoint 1 against the fastest interval
 local d2 = diff.calc_diff(1, "fastest", "ms")
 print("Checkpoint 1 vs Fastest:", d2, "ms")
 
--- Checkpoint 3 gegen längstes Intervall
+-- Checkpoint 3 against the longest interval
 local d3 = diff.calc_diff(3, "longest", "ms")
 print("Checkpoint 3 vs Longest:", d3, "ms")
 
--- Checkpoint 2 gegen Median
+-- Checkpoint 2 against the median
 local d4 = diff.calc_diff(2, "median", "ms")
 print("Checkpoint 2 vs Median:", d4, "ms")
 ```
 
-### 3. Zwischen statistischen Werten
+### 3. Between statistical values
 
 ```lua
--- Differenz zwischen schnellstem und längstem Intervall
+-- Difference between the fastest and longest interval
 local range = diff.calc_diff("fastest", "longest", "ms")
 print("Range:", range, "ms")
 
--- Durchschnitt gegen Median
+-- Average against median
 local diff_avg_med = diff.calc_diff("average", "median", "ms")
 print("Avg vs Median:", diff_avg_med, "ms")
 ```
 
-### 4. Mit rohen Zeitwerten
+### 4. With raw time values
 
 ```lua
--- Direkter Vergleich mit Zeitwert in Nanosekunden
+-- Direct comparison with a time value in nanoseconds
 local target = 100000000  -- 100ms in ns
 local d5 = diff.calc_diff(1, target, "ms")
 print("Checkpoint 1 vs 100ms:", d5, "ms")
 ```
 
-### Unterstützte Keywords
+### Supported keywords
 
-| Keyword       | Aliase          | Bedeutung                |
+| Keyword       | Aliases         | Meaning                  |
 |---------------|-----------------|--------------------------|
-| `"average"`   | `"avg"`         | Durchschnittsintervall   |
-| `"fastest"`   | `"min"`         | Schnellstes Intervall    |
-| `"longest"`   | `"max"`         | Längstes Intervall       |
-| `"median"`    | `"med"`         | Median-Intervall         |
+| `"average"`   | `"avg"`         | average interval         |
+| `"fastest"`   | `"min"`         | fastest interval         |
+| `"longest"`   | `"max"`         | longest interval         |
+| `"median"`    | `"med"`         | median interval          |
 
-**Wichtig:** `calc_diff()` gibt immer den **Betrag** der Differenz zurück (positive Zahl), unabhängig von der Reihenfolge der Argumente.
+**Important:** `calc_diff()` always returns the **absolute value** of the difference (a positive number), regardless of the order of the arguments.
 
 ## Installation
 
-Das Modul liegt unter `lua/lib/time/diff/init.lua`. Man importiert es wie gewohnt:
+The module lives under `lua/lib/time/diff/init.lua`. You import it as usual:
 
 ```lua
 local diff = require("lib.lua.time.diff")
@@ -171,75 +171,75 @@ local diff = require("lib.lua.time.diff")
 
 ---
 
-## Grundlegende Verwendung
+## Basic usage
 
-### 1. Timer starten
+### 1. Start the timer
 
 ```lua
 local diff = require("lib.lua.time.diff")
-diff.start()  -- Startet die Zeitmessung
+diff.start()  -- Starts the time measurement
 ```
 
-Der Timer startet automatisch beim Erstellen der Instanz. `start()` kann verwendet werden, um den Timer zurückzusetzen.
+The timer starts automatically when the instance is created. `start()` can be used to reset the timer.
 
 ---
 
-### 2. Checkpoints setzen
+### 2. Set checkpoints
 
 ```lua
--- Code-Block 1 (Standard: Nanosekunden)
+-- Code block 1 (default: nanoseconds)
 local first_diff = diff.check()
-print("Erster Check:", first_diff, "ns")
+print("First check:", first_diff, "ns")
 
--- Code-Block 2 (explizit Millisekunden)
+-- Code block 2 (explicit milliseconds)
 local second_diff = diff.check("ms")
-print("Zweiter Check:", second_diff, "ms")
+print("Second check:", second_diff, "ms")
 
--- Code-Block 3 (Mikrosekunden)
+-- Code block 3 (microseconds)
 local third_diff = diff.check("us")
-print("Dritter Check:", third_diff, "us")
+print("Third check:", third_diff, "us")
 ```
 
-Jeder Aufruf von `check()` gibt die verstrichene Zeit seit `start()` zurück.
+Every call to `check()` returns the elapsed time since `start()`.
 
-**Verfügbare Einheiten:**
-- `"ns"` – Nanosekunden (Standard)
-- `"us"` – Mikrosekunden
-- `"ms"` – Millisekunden
-- `"s"` – Sekunden
+**Available units:**
+- `"ns"` – nanoseconds (default)
+- `"us"` – microseconds
+- `"ms"` – milliseconds
+- `"s"` – seconds
 
 ---
 
-### 3. Gesamtzeit abrufen
+### 3. Get the total time
 
 ```lua
--- Standard: Nanosekunden
+-- Default: nanoseconds
 local total = diff.result()
-print("Gesamtzeit:", total, "ns")
+print("Total time:", total, "ns")
 
--- Explizit Millisekunden
+-- Explicit milliseconds
 local total_ms = diff.result("ms")
-print("Gesamtzeit:", total_ms, "ms")
+print("Total time:", total_ms, "ms")
 ```
 
-Alternativ kann man die letzte Checkpoint-Zeit direkt verwenden:
+Alternatively, you can use the last checkpoint time directly:
 
 ```lua
-print("Total:", diff.last)  -- Immer in Nanosekunden
+print("Total:", diff.last)  -- Always in nanoseconds
 ```
 
 ---
 
-### 4. Intervalle zwischen Checkpoints
+### 4. Intervals between checkpoints
 
-Man berechnet Differenzen direkt:
+You compute differences directly:
 
 ```lua
 local delta = third_diff - first_diff
-print("Zeit zwischen erstem und drittem Check:", delta, "ns")
+print("Time between the first and third check:", delta, "ns")
 ```
 
-Oder mit dynamischen Properties:
+Or with dynamic properties:
 
 ```lua
 print("Delta:", diff.third - diff.first, "ns")
@@ -247,76 +247,76 @@ print("Delta:", diff.third - diff.first, "ns")
 
 ---
 
-## Dynamische Properties für Checkpoints
+## Dynamic properties for checkpoints
 
-Das Modul erzeugt automatisch Properties für alle vorhandenen Checkpoints:
+The module automatically creates properties for all existing checkpoints:
 
-| Property      | Bedeutung                                    |
+| Property      | Meaning                                      |
 |---------------|----------------------------------------------|
-| `diff.first`  | Erster Checkpoint (falls vorhanden)          |
-| `diff.second` | Zweiter Checkpoint (falls vorhanden)         |
-| `diff.third`  | Dritter Checkpoint (falls vorhanden)         |
-| `diff.fourth` | Vierter Checkpoint (falls vorhanden)         |
-| ...           | Bis `tenth` (zehnter Checkpoint)             |
-| `diff.last`   | Letzter Checkpoint (immer vorhanden wenn >0) |
+| `diff.first`  | first checkpoint (if present)                |
+| `diff.second` | second checkpoint (if present)               |
+| `diff.third`  | third checkpoint (if present)                |
+| `diff.fourth` | fourth checkpoint (if present)               |
+| ...           | up to `tenth` (tenth checkpoint)             |
+| `diff.last`   | last checkpoint (always present if >0)       |
 
-**Wichtig:** Properties geben immer Werte in **Nanosekunden** zurück.
+**Important:** properties always return values in **nanoseconds**.
 
-Beispiel:
+Example:
 
 ```lua
 local diff = require("lib.lua.time.diff")
 
-diff.check()  -- Erster Checkpoint
-diff.check()  -- Zweiter Checkpoint
+diff.check()  -- First checkpoint
+diff.check()  -- Second checkpoint
 
-print(diff.first)   -- Erster Checkpoint in ns
-print(diff.second)  -- Zweiter Checkpoint in ns
-print(diff.last)    -- Letzter Checkpoint in ns (gleich wie second)
+print(diff.first)   -- First checkpoint in ns
+print(diff.second)  -- Second checkpoint in ns
+print(diff.last)    -- Last checkpoint in ns (same as second)
 
--- Wenn nur ein Checkpoint existiert:
+-- If only one checkpoint exists:
 local diff2 = require("lib.lua.time.diff")
 diff2.check()
-print(diff2.first)  -- Funktioniert
-print(diff2.second) -- nil (nicht vorhanden)
+print(diff2.first)  -- Works
+print(diff2.second) -- nil (not present)
 ```
 
 ---
 
-## Ausgabe aller Checkpoints
+## Output of all checkpoints
 
-### Standard-Format
+### Standard format
 
 ```lua
--- Standard: Nanosekunden
+-- Default: nanoseconds
 print(diff.results())
--- Ausgabe: "Check 1: 12345678ns | Check 2: 23456789ns | ... | Total: 45678901ns | Fastest: 10000000ns | Longest: 15000000ns | Average: 12500000ns | Range: 5000000ns"
+-- Output: "Check 1: 12345678ns | Check 2: 23456789ns | ... | Total: 45678901ns | Fastest: 10000000ns | Longest: 15000000ns | Average: 12500000ns | Range: 5000000ns"
 
--- Explizit Millisekunden
+-- Explicit milliseconds
 print(diff.results("ms"))
--- Ausgabe: "Check 1: 12.345ms | Check 2: 23.456ms | ... | Total: 45.678ms | Fastest: 10.000ms | Longest: 15.000ms | Average: 12.500ms | Range: 5.000ms"
+-- Output: "Check 1: 12.345ms | Check 2: 23.456ms | ... | Total: 45.678ms | Fastest: 10.000ms | Longest: 15.000ms | Average: 12.500ms | Range: 5.000ms"
 ```
 
-Oder mit Metatable-Magie:
+Or with metatable magic:
 
 ```lua
-print(diff())        -- Standard: Nanosekunden
-print(diff("ms"))    -- Explizit Millisekunden
+print(diff())        -- Default: nanoseconds
+print(diff("ms"))    -- Explicit milliseconds
 ```
 
-### Formatierte Tabelle
+### Formatted table
 
-Für bessere Lesbarkeit in `:messages` oder Notify-Fenstern:
+For better readability in `:messages` or notify windows:
 
 ```lua
--- Standard: Nanosekunden
+-- Default: nanoseconds
 print(diff.pretty())
 
--- Explizit Millisekunden
+-- Explicit milliseconds
 print(diff.pretty("ms"))
 ```
 
-Beispielausgabe (Millisekunden):
+Example output (milliseconds):
 
 ```
 ┌────────┬─────────────────┬─────────────────┐
@@ -342,39 +342,39 @@ Beispielausgabe (Millisekunden):
 
 ---
 
-## Iterator-Unterstützung
+## Iterator support
 
-Man kann sequenziell durch alle Checkpoints iterieren:
+You can iterate sequentially through all checkpoints:
 
-### Einfacher Iterator (nur Zahlenwerte)
+### Simple iterator (numeric values only)
 
 ```lua
-diff.reset_iterator()  -- Zum Anfang zurückspringen
+diff.reset_iterator()  -- Jump back to the start
 
 while true do
-  local t = diff.next()  -- Standard: ns
+  local t = diff.next()  -- Default: ns
   if not t then break end
-  print("Nächster Checkpoint:", t, "ns")
+  print("Next checkpoint:", t, "ns")
 end
 ```
 
-### Iterator mit Custom-Label
+### Iterator with a custom label
 
 ```lua
--- Label setzen
+-- Set a label
 diff.reset_iterator("Checkpoint")
 
 while true do
-  local output = diff.next(nil, "ms")  -- Mit Einheit
+  local output = diff.next(nil, "ms")  -- With a unit
   if not output then break end
   print(output)  -- "Checkpoint 12.345ms"
 end
 ```
 
-### Iterator mit Label und Index
+### Iterator with label and index
 
 ```lua
--- Label und Index-Anzeige aktivieren
+-- Enable label and index display
 diff.reset_iterator("Checkpoint", true)
 
 while true do
@@ -384,165 +384,165 @@ while true do
 end
 ```
 
-### Iterator mit Override-Label
+### Iterator with an override label
 
 ```lua
 diff.reset_iterator("Checkpoint", true)
 
--- Erstes next() mit Standard-Label
+-- First next() with the default label
 print(diff.next(nil, "ms"))  -- "Checkpoint 1: 12.345ms"
 
--- Zweites next() mit Override-Label
+-- Second next() with an override label
 print(diff.next("Custom", "ms"))  -- "Custom 2: 23.456ms"
 
--- Drittes next() wieder mit Standard-Label
+-- Third next() again with the default label
 print(diff.next(nil, "ms"))  -- "Checkpoint 3: 45.678ms"
 ```
 
 ---
 
-## Mehrere unabhängige Timer
+## Multiple independent timers
 
-Jeder `require`-Aufruf erzeugt eine neue Instanz:
+Every `require` call creates a new instance:
 
 ```lua
 local timer1 = require("lib.lua.time.diff")
 local timer2 = require("lib.lua.time.diff")
 
 timer1.start()
--- ... Code ...
+-- ... code ...
 timer1.check()
 
 timer2.start()
--- ... anderer Code ...
+-- ... other code ...
 timer2.check()
 
-print(timer1.result())  -- Unabhängig von timer2
+print(timer1.result())  -- Independent of timer2
 print(timer2.result())
 ```
 
 ---
 
-## API-Referenz
+## API reference
 
-### Methoden
+### Methods
 
-| Methode                         | Parameter                        | Rückgabe         | Beschreibung                                      |
+| Method                          | Parameters                       | Returns          | Description                                       |
 |---------------------------------|----------------------------------|------------------|---------------------------------------------------|
-| `start()`                       | -                                | `nil`            | Startet oder setzt den Timer zurück               |
-| `check(unit?)`                  | `"ns"\|"us"\|"ms"\|"s"`          | `number`         | Setzt Checkpoint, gibt Zeit seit Start zurück     |
-| `result(unit?)`                 | `"ns"\|"us"\|"ms"\|"s"`          | `number\|nil`    | Gibt Gesamtzeit zurück (letzter Checkpoint)       |
-| `get(idx, unit?)`               | `integer, "ns"\|"us"\|"ms"\|"s"` | `number\|nil`    | Gibt Zeit für Checkpoint `idx` zurück             |
-| `next(label?, unit?)`           | `string?, "ns"\|"us"\|"ms"\|"s"` | `string\|number\|nil` | Gibt nächsten Checkpoint zurück (Iterator) |
-| `reset_iterator(label?, show?)` | `string?, boolean`               | `nil`            | Setzt Iterator zurück, optional mit Label/Index   |
-| `results(unit?)`                | `"ns"\|"us"\|"ms"\|"s"`          | `string`         | Erzeugt Zusammenfassung aller Checkpoints         |
-| `pretty(unit?)`                 | `"ns"\|"us"\|"ms"\|"s"`          | `string`         | Erzeugt formatierte Tabelle                       |
+| `start()`                       | -                                | `nil`            | Starts or resets the timer                        |
+| `check(unit?)`                  | `"ns"\|"us"\|"ms"\|"s"`          | `number`         | Sets a checkpoint, returns time since start       |
+| `result(unit?)`                 | `"ns"\|"us"\|"ms"\|"s"`          | `number\|nil`    | Returns the total time (last checkpoint)          |
+| `get(idx, unit?)`               | `integer, "ns"\|"us"\|"ms"\|"s"` | `number\|nil`    | Returns the time for checkpoint `idx`             |
+| `next(label?, unit?)`           | `string?, "ns"\|"us"\|"ms"\|"s"` | `string\|number\|nil` | Returns the next checkpoint (iterator)       |
+| `reset_iterator(label?, show?)` | `string?, boolean`               | `nil`            | Resets the iterator, optionally with label/index  |
+| `results(unit?)`                | `"ns"\|"us"\|"ms"\|"s"`          | `string`         | Creates a summary of all checkpoints              |
+| `pretty(unit?)`                 | `"ns"\|"us"\|"ms"\|"s"`          | `string`         | Creates a formatted table                         |
 
-### Dynamische Properties
+### Dynamic properties
 
-| Property       | Typ             | Beschreibung                  |
+| Property       | Type            | Description                   |
 |----------------|-----------------|-------------------------------|
-| `first`        | `number\|nil`   | Erster Checkpoint (ns)        |
-| `second`       | `number\|nil`   | Zweiter Checkpoint (ns)       |
-| `third`        | `number\|nil`   | Dritter Checkpoint (ns)       |
-| `fourth`-`tenth` | `number\|nil` | Vierter bis zehnter Checkpoint (ns) |
-| `last`         | `number\|nil`   | Letzter Checkpoint (ns)       |
+| `first`        | `number\|nil`   | first checkpoint (ns)         |
+| `second`       | `number\|nil`   | second checkpoint (ns)        |
+| `third`        | `number\|nil`   | third checkpoint (ns)         |
+| `fourth`-`tenth` | `number\|nil` | fourth to tenth checkpoint (ns) |
+| `last`         | `number\|nil`   | last checkpoint (ns)          |
 
-**Wichtig:** Properties geben immer Werte in Nanosekunden zurück, unabhängig von der bei `check()` gewählten Einheit.
+**Important:** properties always return values in nanoseconds, regardless of the unit chosen in `check()`.
 
 ---
 
-## Fehlerbehandlung
+## Error handling
 
-Falls `check()` aufgerufen wird, ohne vorher `start()` zu nutzen:
+If `check()` is called without using `start()` first:
 
 ```lua
 local diff = require("lib.lua.time.diff")
--- start() wird automatisch aufgerufen, aber bei manuellem Reset:
+-- start() is called automatically, but on a manual reset:
 diff.start()
 diff.check()  -- OK
 ```
 
-Falls eine ungültige Einheit übergeben wird:
+If an invalid unit is passed:
 
 ```lua
-diff.check("invalid")  -- Fehler: "Invalid unit: invalid"
+diff.check("invalid")  -- Error: "Invalid unit: invalid"
 ```
 
 ---
 
-## Beispiel: Benchmark einer Funktion
+## Example: benchmark a function
 
 ```lua
 local diff = require("lib.lua.time.diff")
 
 diff.start()
 
--- Code-Block 1
+-- Code block 1
 for i = 1, 1000000 do
   math.sqrt(i)
 end
 local t1 = diff.check("ms")
 
--- Code-Block 2
+-- Code block 2
 for i = 1, 1000000 do
   math.sin(i)
 end
 local t2 = diff.check("ms")
 
 print(diff.pretty("ms"))
-print("Differenz:", t2 - t1, "ms")
+print("Difference:", t2 - t1, "ms")
 
--- Oder mit Properties
-print("Delta:", diff.second - diff.first, "ns")  -- Properties sind in ns!
+-- Or with properties
+print("Delta:", diff.second - diff.first, "ns")  -- Properties are in ns!
 
--- Statistiken
+-- Statistics
 print("Fastest interval:", diff.fastest("ms"), "ms")
 print("Longest interval:", diff.longest("ms"), "ms")
 print("Average interval:", diff.average("ms"), "ms")
 ```
 
-## Beispiel: Iterator mit Labels
+## Example: iterator with labels
 
 ```lua
 local diff = require("lib.lua.time.diff")
 
--- Drei Checkpoints setzen
+-- Set three checkpoints
 for i = 1, 3 do
   vim.fn.sleep(100)
   diff.check()
 end
 
--- Iterator mit Label und Index
-diff.reset_iterator("Messung", true)
+-- Iterator with label and index
+diff.reset_iterator("Measurement", true)
 
 while true do
   local output = diff.next(nil, "ms")
   if not output then break end
   print(output)
-  -- Ausgabe:
-  -- "Messung 1: 100.123ms"
-  -- "Messung 2: 200.456ms"
-  -- "Messung 3: 300.789ms"
+  -- Output:
+  -- "Measurement 1: 100.123ms"
+  -- "Measurement 2: 200.456ms"
+  -- "Measurement 3: 300.789ms"
 end
 ```
 
-## Beispiel: Erweiterte Statistiken
+## Example: advanced statistics
 
 ```lua
 local diff = require("lib.lua.time.diff")
 
--- Simuliere variable Ausführungszeiten
+-- Simulate variable execution times
 for i = 1, 10 do
   vim.fn.sleep(math.random(50, 150))
   diff.check()
 end
 
--- Detaillierte Statistiken
+-- Detailed statistics
 print(diff.pretty("ms"))
 
--- Einzelne Werte abrufen
-print("\nDetaillierte Analyse:")
+-- Retrieve individual values
+print("\nDetailed analysis:")
 print("Fastest:", diff.fastest("ms"), "ms")
 print("Longest:", diff.longest("ms"), "ms")
 print("Average:", diff.average("ms"), "ms")
@@ -550,19 +550,19 @@ print("Median:", diff.median("ms"), "ms")
 print("StdDev:", diff.stddev("ms"), "ms")
 print("CV:", diff.cv(), "%")
 
--- Differenzen berechnen
-print("\nDifferenzen:")
+-- Compute differences
+print("\nDifferences:")
 print("Range (longest - fastest):", diff.calc_diff("fastest", "longest", "ms"), "ms")
 print("Checkpoint 1 vs Average:", diff.calc_diff(1, "average", "ms"), "ms")
 print("Checkpoint 5 vs Median:", diff.calc_diff(5, "median", "ms"), "ms")
 ```
 
-## Beispiel: Performance-Analyse
+## Example: performance analysis
 
 ```lua
 local diff = require("lib.lua.time.diff")
 
--- Mehrere Operationen benchmarken
+-- Benchmark multiple operations
 local operations = {
   "string concatenation",
   "table insertion",
@@ -571,16 +571,16 @@ local operations = {
 }
 
 for _, op in ipairs(operations) do
-  -- Simuliere Operation
+  -- Simulate the operation
   for i = 1, 100000 do
     math.sqrt(i)
   end
   diff.check()
 end
 
-print(diff.pretty("us"))  -- Ausgabe in Mikrosekunden
+print(diff.pretty("us"))  -- Output in microseconds
 
--- Finde langsamste Operation
+-- Find the slowest operation
 local longest_idx = 1
 local longest_val = diff.get(1)
 for i = 2, #operations do
@@ -591,11 +591,11 @@ for i = 2, #operations do
   end
 end
 
-print("\nLangsamste Operation:", operations[longest_idx])
-print("Zeit:", diff.get(longest_idx, "ms"), "ms")
+print("\nSlowest operation:", operations[longest_idx])
+print("Time:", diff.get(longest_idx, "ms"), "ms")
 
--- Vergleiche mit Durchschnitt
-print("\nAbweichung vom Durchschnitt:")
+-- Compare with the average
+print("\nDeviation from the average:")
 for i, op in ipairs(operations) do
   local dev = diff.calc_diff(i, "average", "ms")
   print(string.format("%s: %+.3fms", op, dev))
@@ -604,44 +604,44 @@ end
 
 ---
 
-## Technische Details
+## Technical details
 
-- **Präzision**: Nanosekunden (via `vim.uv.hrtime()`)
-- **Standard-Einheit**: Nanosekunden (ns)
-- **Verfügbare Einheiten**: `"ns"`, `"us"`, `"ms"`, `"s"`
-- **Rückgabewerte**: Gleitkommazahl
-- **Properties**: Immer in Nanosekunden
-- **Metatable**: Unterstützt `__call` und `__tostring` für direkten Aufruf
-- **Unabhängigkeit**: Jede Instanz hat eigenen Zustand
-- **Dynamische Properties**: Bis zu 10 benannte Checkpoints (`first` bis `tenth`) + `last`
-- **Statistiken**: Min/Max/Avg/Median/StdDev/CV werden aus Intervallen zwischen Checkpoints berechnet
+- **Precision**: nanoseconds (via `vim.uv.hrtime()`)
+- **Default unit**: nanoseconds (ns)
+- **Available units**: `"ns"`, `"us"`, `"ms"`, `"s"`
+- **Return values**: floating-point number
+- **Properties**: always in nanoseconds
+- **Metatable**: supports `__call` and `__tostring` for direct invocation
+- **Independence**: each instance has its own state
+- **Dynamic properties**: up to 10 named checkpoints (`first` to `tenth`) + `last`
+- **Statistics**: min/max/avg/median/stddev/CV are computed from the intervals between checkpoints
 
-### Statistik-Berechnungen
+### Statistics calculations
 
-**Intervalle vs. Checkpoints:**
-- Checkpoints sind kumulative Zeiten seit Start
-- Intervalle sind Differenzen zwischen aufeinanderfolgenden Checkpoints
-- Statistiken beziehen sich auf Intervalle (Deltas)
+**Intervals vs. checkpoints:**
+- checkpoints are cumulative times since start
+- intervals are differences between consecutive checkpoints
+- statistics refer to intervals (deltas)
 
-**Beispiel:**
+**Example:**
 ```lua
--- 3 Checkpoints bei 10ms, 25ms, 50ms
-diff.check()  -- Checkpoint 1: 10ms (Intervall 1: 10ms)
-diff.check()  -- Checkpoint 2: 25ms (Intervall 2: 15ms)
-diff.check()  -- Checkpoint 3: 50ms (Intervall 3: 25ms)
+-- 3 checkpoints at 10ms, 25ms, 50ms
+diff.check()  -- Checkpoint 1: 10ms (interval 1: 10ms)
+diff.check()  -- Checkpoint 2: 25ms (interval 2: 15ms)
+diff.check()  -- Checkpoint 3: 50ms (interval 3: 25ms)
 
--- Statistiken beziehen sich auf Intervalle:
--- fastest = 10ms (Intervall 1)
--- longest = 25ms (Intervall 3)
+-- Statistics refer to the intervals:
+-- fastest = 10ms (interval 1)
+-- longest = 25ms (interval 3)
 -- average = (10 + 15 + 25) / 3 = 16.67ms
 ```
 
-### Variationskoeffizient (CV)
+### Coefficient of variation (CV)
 
-Der CV gibt die relative Streuung in Prozent an:
-- CV = (Standardabweichung / Mittelwert) × 100
-- Niedrige Werte (< 10%): konsistente Performance
-- Mittlere Werte (10-30%): moderate Variation
-- Hohe Werte (> 30%): stark schwankende Performance
+The CV expresses the relative dispersion in percent:
+- CV = (standard deviation / mean) × 100
+- low values (< 10%): consistent performance
+- medium values (10-30%): moderate variation
+- high values (> 30%): strongly fluctuating performance
 
 ---
