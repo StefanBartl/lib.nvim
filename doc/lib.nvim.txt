@@ -126,7 +126,8 @@ Neovim adapters.
     lib.nvim.window        overlay/float helpers (make_scratch, nice_quit, …)
     lib.nvim.ui            hover_select, highlight helpers
     lib.nvim.fs            path / filesystem helpers (vim.fs / uv)
-    lib.nvim.cross         cross-platform: OS detection, run/argv, clipboard, uv
+    lib.nvim.cross         cross-platform: OS detection, run/argv, clipboard, uv,
+                           path separators
     lib.nvim.normalize     path / value normalization
     lib.nvim.git           git helpers
     lib.nvim.terminal      terminal-buffer helpers

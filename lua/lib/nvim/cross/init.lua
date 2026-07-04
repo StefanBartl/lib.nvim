@@ -19,6 +19,7 @@ M.fs = {
 M.separators = {
   has_win_sep = require("lib.nvim.cross.fs.separators.has_win_sep"),
   normalize = require("lib.nvim.cross.fs.separators.normalize"),
+  unify_slashes = require("lib.nvim.cross.fs.separators.unify_slashes"),
 }
 
 -- UV/Loop compatibility
