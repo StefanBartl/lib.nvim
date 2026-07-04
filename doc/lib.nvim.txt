@@ -44,6 +44,18 @@ As a dependency of other plugins (loaded on demand): >lua
       dependencies = { "StefanBartl/lib.nvim" },
     }
 <
+With packer.nvim: >lua
+
+    use {
+      "you/my-plugin.nvim",
+      requires = { "StefanBartl/lib.nvim" },
+    }
+<
+The package.path bootstrap below (|lib.nvim-bootstrap|) is specific to
+lazy.nvim's module loader. Under packer or another manager, adapt the same
+idea: prepend lib.nvim's lua/ dir to package.path before your first
+require("lib.*").
+
 Standalone, lazily on first require: >lua
 
     { "StefanBartl/lib.nvim", lazy = true }

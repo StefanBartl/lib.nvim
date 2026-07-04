@@ -21,9 +21,7 @@
 local M = {}
 
 ---@type Lib.Config.Options
-local defaults = {
-  strategy = "metatable",
-}
+local defaults = require("lib.config.DEFAULTS")
 
 ---@type table<string, string>
 local STRATEGY_MODULES = {
