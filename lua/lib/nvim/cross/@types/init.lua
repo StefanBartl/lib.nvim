@@ -5,6 +5,8 @@
 ---@field platform Lib.Cross.Platform
 ---@field run Lib.Cross.Run
 ---@field clipboard Lib.Cross.Clipboard
+---@field fs Lib.Cross.Fs
+---@field separators Lib.Cross.Separators
 
 ---@class Lib.Cross.ALL
 ---@field is_windows fun(): boolean

@@ -155,7 +155,7 @@ lib.is_windows()    -- -> lib.nvim.cross.platform.is_windows
 | [`lib.nvim.window`](lua/lib/nvim/window/README.md) | overlay/float helpers: `make_scratch`, `nice_quit`, `set_title`, `close_on_focus_lost`, `center`, `attach` ([`:help`](doc/lib.nvim-window.txt)) |
 | [`lib.nvim.ui`](lua/lib/nvim/ui/hover_select/README.md) | `hover_select` ([`:help`](doc/lib.nvim-hover_select.txt)), highlight helpers |
 | `lib.nvim.fs`          | path / filesystem helpers (`vim.fs` / `uv`)         |
-| `lib.nvim.cross`       | cross-platform: OS detection, run/argv, clipboard   |
+| `lib.nvim.cross`       | cross-platform: OS detection, run/argv, clipboard, path separators |
 | `lib.nvim.normalize`   | path / value normalization                          |
 | `lib.nvim.git`         | git helpers                                         |
 | `lib.nvim.terminal`    | terminal-buffer helpers                             |
