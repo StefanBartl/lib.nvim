@@ -1,5 +1,23 @@
 # lib.nvim
 
+```
+  _ _ _                 _
+ | (_) |__   _ ____   _(_)_ __ ___
+ | | | '_ \ | '_ \ \ / / | '_ ` _ \
+ | | | |_) || | | \ V /| | | | | | |
+ |_|_|_.__(_)_| |_|\_/ |_|_| |_| |_|
+```
+
+![version](https://img.shields.io/badge/version-0.1.0-blue.svg)
+![status](https://img.shields.io/badge/status-early-orange.svg)
+![Neovim](https://img.shields.io/badge/Neovim-0.10%2B-success.svg)
+![Lua](https://img.shields.io/badge/language-Lua-yellow.svg)
+![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)
+
+> Looking for a plugin to use alongside your own `lib.nvim`-based setup? Check out
+> [project-insight.nvim](https://github.com/StefanBartl/project-insight.nvim), a project-analysis
+> plugin (symbols, metrics, file tree, imports) from the same author.
+
 > Reusable Lua/Neovim helper library — one tested base for your own plugins.
 
 `lib.nvim` is extracted from a private Neovim configuration so that personal
@@ -61,6 +79,21 @@ dependency — [lazy.nvim] loads it on demand:
   dependencies = { "StefanBartl/lib.nvim" },
 }
 ```
+
+With [packer.nvim]:
+
+```lua
+use {
+  "you/my-plugin.nvim",
+  requires = { "StefanBartl/lib.nvim" },
+}
+```
+
+> The `package.path` bootstrap trick described under [Config-wide
+> use](#config-wide-use-bootstrap-required) below is specific to lazy.nvim's
+> module loader. If you need `lib.*` before your plugin manager has finished
+> loading specs under packer or another manager, adapt the same idea (prepend
+> `lib.nvim`'s `lua/` dir to `package.path` before your first `require("lib.*")`).
 
 Standalone (loaded lazily on first `require`):
 
