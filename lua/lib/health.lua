@@ -19,6 +19,7 @@ local PROBE = {
   "lib.lua.strings",
   "lib.lua.functions.meta",
   "lib.nvim.notify",
+  "lib.nvim.progress",
   "lib.nvim.map",
   "lib.nvim.fs.is_dir",
   "lib.nvim.core",

@@ -209,6 +209,7 @@ Modules with dedicated `:help` documentation. Jump to one via its tag, or
     lib.nvim.window      overlay / floating window helpers  |lib.nvim-window|
     lib.nvim.ui          hover_select floating selection UI |lib.nvim-hover_select|
     lib.lua.time.diff    high-precision time / interval diff |lib.nvim-time_diff|
+    lib.nvim.progress    style-agnostic progress indicator   |lib.nvim-progress|
 
 Every other module documents itself in a `README.md` next to its source; see
 the namespace tables under |lib.nvim-namespaces|.

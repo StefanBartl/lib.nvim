@@ -1,0 +1,108 @@
+*lib.nvim-progress.txt*    Cross-platform, style-agnostic progress indicator
+
+lib.nvim.progress                                        *lib.nvim-progress*
+
+A progress indicator abstraction for long-running operations (searches,
+scans, batch edits, …) that decouples "when/what to report" from "how it is
+shown". Plugins call `create` / `update` / `finish`; the active style decides
+whether that becomes a `vim.notify` call, a statusline value, a fidget.nvim
+handle, or a small interactive floating window.
+
+==============================================================================
+CONTENTS                                        *lib.nvim-progress-contents*
+
+  1. Design ................................... |lib.nvim-progress-design|
+  2. Usage ..................................... |lib.nvim-progress-usage|
+  3. Styles .................................... |lib.nvim-progress-styles|
+  4. Functions ................................. |lib.nvim-progress-functions|
+       create .................................. |lib.nvim-progress-create|
+  5. Handle .................................... |lib.nvim-progress-handle|
+
+==============================================================================
+1. DESIGN                                         *lib.nvim-progress-design*
+
+* One handle per operation — no global singleton state, so concurrent
+  progress indicators (different plugins, nested operations) never collide.
+* A handle stays invisible until `delay_ms` has elapsed (default 150ms), so a
+  fast operation never flashes UI. `finish`/`cancel` before that deadline is
+  silent — nothing was ever shown.
+* Styles are swappable renderers behind one identical interface; adding a new
+  style means adding one file under `lib/nvim/progress/styles/`, not
+  touching call sites.
+* Only `vim.uv` / `vim.api` / `vim.notify` are used — no OS-specific calls,
+  no third-party hard dependency. Behaves identically on Linux, macOS and
+  Windows.
+
+==============================================================================
+2. USAGE                                           *lib.nvim-progress-usage*
+>lua
+    local progress = require("lib.nvim.progress")
+
+    local h = progress.create({ title = "[my-plugin]" })
+    h:update({ text = "searching", current = 12, total = 128 })
+    h:finish("128 matches in 19 files")
+<
+Cancellable operations register a callback and let the caller decide when to
+trigger it (e.g. from a keymap): >lua
+
+    local h = progress.create({ title = "[my-plugin]" })
+    h:on_cancel(function() job:kill() end)
+
+    vim.keymap.set("n", "<Esc>", function() h:request_cancel() end, { buffer = bufnr })
+<
+The "float" style wires this up for you: focus its window and press <Esc> in
+normal mode to get a short confirm prompt; any other window is completely
+unaffected (the keymap is buffer-local), so the operation keeps running in
+the background until confirmed: >lua
+
+    local h = progress.create({ title = "[my-plugin]", style = "float" })
+    h:on_cancel(function() job:kill() end)   -- still your job to stop the work
+<
+==============================================================================
+3. STYLES                                          *lib.nvim-progress-styles*
+
+    "auto"          (default) fidget.nvim if installed, else "notify".
+                    Never picks "float" automatically.
+    "notify"        vim.notify, updated in place when the active backend
+                    supports it (e.g. nvim-notify), else sequential notifies
+    "statusline"    headless — read `lib.nvim.progress.styles.statusline`.active()
+                    from your own statusline component. Calls :redrawstatus on
+                    every change so it refreshes while you're idle.
+    "fidget"        delegates to fidget.nvim's LSP-style progress API
+    "float"         small floating window (bottom-right, never steals focus);
+                    focus it + <Esc> asks to cancel via request_cancel()
+
+==============================================================================
+4. FUNCTIONS                                    *lib.nvim-progress-functions*
+
+------------------------------------------------------------------------------
+create({opts})                                     *lib.nvim-progress-create*
+
+Create a new, independent progress handle. >lua
+
+    local h = progress.create({
+      title    = "[replacer]",
+      style    = "auto",     -- "auto" | "notify" | "statusline" | "fidget" | "float"
+      delay_ms = 150,
+    })
+<
+Options ~
+    title       string      prefix shown in front of every message
+    style       string      renderer selection (default "auto")
+    delay_ms    integer     suppress the indicator until it has run this
+                            long (default 150)
+    level       integer     vim.log.levels.* used by the "notify" style
+
+==============================================================================
+5. HANDLE                                           *lib.nvim-progress-handle*
+
+    h:update({ text, current, total })   merge fields, re-render if visible
+    h:finish(text)                       final message, stop the indicator
+    h:cancel(text)                       final "cancelled" message, stop it
+    h:on_cancel(fn)                      register a callback for request_cancel
+    h:request_cancel()                   mark cancelled, run callbacks, then
+                                          call h:cancel()
+    h.cancelled                          boolean, readable after request_cancel
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:
