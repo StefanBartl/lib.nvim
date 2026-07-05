@@ -1,3 +1,4 @@
+---@module 'lib.nvim.cross.uv.spawn_shell_command'
 --- Cross-platform helper to spawn shell commands in Neovim using uv.spawn.
 --- On Windows, uses cmd.exe; on Linux/macOS, uses /bin/sh.
 --- Ensures commands like "npm run dev:server" work reliably.
