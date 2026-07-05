@@ -23,12 +23,9 @@ lib.nvim was audited against the project checklists. Full per-rule status:
 - Feature relevance map: [NEOTREE_FEATURES.md](ROADMAP/NEOTREE_FEATURES.md)
 
 **Prioritized action items surfaced by the audits:**
-1. Add the missing `---@module` tag to
-   `lua/lib/nvim/cross/uv/spawn_shell_command.lua` (the one file out of 211
-   without it).
-2. **Generalize or rename `lib.nvim.window.neotree.get_neotree_window`** —
-   its name/implementation bakes in Neo-tree specifically, which cuts against
-   lib.nvim's own cross-plugin, manager-agnostic design goal. See
+1. ~~Add the missing `---@module` tag to `spawn_shell_command.lua`.~~ Done.
+2. ~~Generalize `lib.nvim.window.neotree.get_neotree_window`.~~ Done — now
+   `lib.nvim.window.find_by_filetype(filetype)`. See
    [NEOTREE_FEATURES.md](ROADMAP/NEOTREE_FEATURES.md).
 3. **Recursive directory collector** — no `lib.nvim.fs.collect_recursive`
    equivalent exists yet; every consumer (e.g. filetree.nvim's `util.fs`)

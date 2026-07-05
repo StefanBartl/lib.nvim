@@ -34,7 +34,7 @@ audits *lib.nvim* against filetree.nvim's category layout) and complements
 | Close window on focus lost | `lib.nvim.window.close_on_focus_lost` | ui | 🟡 candidate |
 | Set floating window title | `lib.nvim.window.set_title` | ui | 🟡 candidate |
 | Generic window attach/lifecycle helper | `lib.nvim.window.attach` | nav | 🟡 candidate |
-| **Neo-tree-specific window lookup** | `lib.nvim.window.neotree.get_neotree_window()` | nav | ℹ️ **finding** — hardcodes "neotree" in the name/impl; conflicts with the "manager-agnostic" goal. If ported, generalize behind an adapter-style lookup instead of a Neo-tree-only helper. |
+| Window lookup by filetype (generic) | `lib.nvim.window.find_by_filetype(filetype)` | nav | ✅ generalized — was `window.neotree.get_neotree_window()` (hardcoded `"neo-tree"`), now takes any filetype string (`"neo-tree"`, `"NvimTree"`, …) |
 | Buffer normalization (skip specials, find a normal win) | `lib.nvim.buf_win_tab.normal_buffer` | nav/infra | 🟡 candidate — filetree.nvim's own `ROADMAP.md` already flags `util.buffer` → this module as a migration target |
 | Adjacent-buffer resolution (safe) | `lib.nvim.buf_win_tab.safe_adjacent_buffer` | fileops | 🟡 candidate — overlaps `actions/save/adjacent_buffer` lineage |
 | Window/tab/buffer capture (session-like state) | `lib.nvim.buf_win_tab.capture` | infra | 🟡 candidate |
@@ -94,11 +94,10 @@ audits *lib.nvim* against filetree.nvim's category layout) and complements
   used for `map`/`usercmd`/`autocmd`/`hover_select`.
 - The one concrete **gap** worth closing in lib.nvim first is the recursive
   directory collector (no `fs.collect_recursive` equivalent yet).
-- The one concrete **finding** is `lib.nvim.window.neotree.get_neotree_window`:
-  its name and implementation are Neo-tree-specific, which cuts against the
-  "cross-platform & filetree-manager agnostic" principle this very checklist
-  item calls for. If/when filetree.nvim wants this helper, it should be
-  generalized (e.g. adapter-supplied window lookup) rather than ported as-is.
+- The former Neo-tree-specific window lookup has been generalized to
+  `lib.nvim.window.find_by_filetype(filetype)` — filetree.nvim can now call it
+  with whatever filetype its active adapter uses, instead of a Neo-tree-only
+  helper.
 - Cross-reference: filetree.nvim's own `docs/ROADMAP.md` → "lib.nvim adoption
   (shared code)" section lists the same candidates from its side of the
   fence; keep the two lists in sync as migrations land.
