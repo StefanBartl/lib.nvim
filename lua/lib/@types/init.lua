@@ -20,6 +20,7 @@
 ---@field normalize Lib.Normalize
 ---@field notifier Lib.Notify+
 ---@field nvim Lib.Nvim
+---@field progress Lib.Progress
 ---@field require Lib.Require
 ---@field strings Lib.Strings
 ---@field system Lib.System
