@@ -22,6 +22,9 @@ M.basenames = {
   ".stfolder",
   ".stversions",
 
+  ".agents",
+  ".claude",
+
   "node_modules",
   ".pnpm-store",
   ".yarn",
