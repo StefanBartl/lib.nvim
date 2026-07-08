@@ -40,6 +40,7 @@
 ---@field ensure_dir fun(path: string): boolean, string? # Ensure directory exists
 ---@field escape_lua_magic fun(s: string): string
 ---@field find_plain fun(s: string, needle: string): integer|nil, integer|nil
+---@field find_root fun(opts?: Lib.Fs.FindRoot.Opts): Lib.Fs.FindRoot # Cached marker-based project-root finder (factory → { find, clear })
 ---@field find_upward_dir fun(names: string[], from: string): string|nil # Find directory containing files
 ---@field has_exec fun(bin: string): boolean
 ---@field has_scheme fun(s: string): boolean

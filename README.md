@@ -215,7 +215,7 @@ and are generated on install by your plugin manager (see [Help docs](#help-docs)
 - [`lib.nvim.notify`](lua/lib/nvim/notify/README.md) · [`lib.nvim.window`](lua/lib/nvim/window/README.md) · [`lib.nvim.ui.hover_select`](lua/lib/nvim/ui/hover_select/README.md)
 - [`lib.nvim.system`](lua/lib/nvim/system/README.md) · [`lib.nvim.progress`](lua/lib/nvim/progress/README.md)
 - [`lib.nvim.buf_win_tab.capture`](lua/lib/nvim/buf_win_tab/capture/README.md) · [`lib.nvim.buf_win_tab.resize_guarded`](lua/lib/nvim/buf_win_tab/resize_guarded/README.md)
-- [`lib.nvim.fs.ignore.list`](lua/lib/nvim/fs/ignore/list/README.md) · [`lib.nvim.fs.is_subpath`](lua/lib/nvim/fs/is_subpath/README.md) · [`lib.nvim.fs.polymorphic_rootresolver`](lua/lib/nvim/fs/polymorphic_rootresolver/README.md)
+- [`lib.nvim.fs.ignore.list`](lua/lib/nvim/fs/ignore/list/README.md) · [`lib.nvim.fs.is_subpath`](lua/lib/nvim/fs/is_subpath/README.md) · [`lib.nvim.fs.polymorphic_rootresolver`](lua/lib/nvim/fs/polymorphic_rootresolver/README.md) · [`lib.nvim.fs.find_root`](lua/lib/nvim/fs/find_root/README.md)
 - [`lib.nvim.lua_ls.insert.module_annotation`](lua/lib/nvim/lua_ls/insert/module_annnotation/README.md)
 
 **`:help` pages**
