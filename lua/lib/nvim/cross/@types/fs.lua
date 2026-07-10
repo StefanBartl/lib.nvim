@@ -8,6 +8,6 @@
 ---@field has_win_sep fun(s: string): boolean
 ---@field normalize fun(path: string): string|nil
 ---@field unify_slashes fun(path: string): string
----@field collapse_dots fun(path: string): string
+---@field collapse_dots fun(path: string): string # Lexically collapse './..' + repeated separators (pure; forward-slash form; keeps POSIX root & 'C:' drive prefix)
 
 return {}
