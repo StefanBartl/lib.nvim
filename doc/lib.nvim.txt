@@ -140,7 +140,9 @@ Neovim adapters.
     lib.nvim.fs            path / filesystem helpers (vim.fs / uv); cached
                            marker-based root finding (find_root), relpath
     lib.nvim.cross         cross-platform: OS detection, run/argv, clipboard, uv,
-                           path separators
+                           path separators: unify_slashes (\ -> /), normalize
+                           (-> OS-native), collapse_dots (lexical ./.. collapse),
+                           has_win_sep (C:\ drive predicate)
     lib.nvim.normalize     path / value normalization
     lib.nvim.git           git helpers
     lib.nvim.terminal      terminal-buffer helpers
