@@ -1,0 +1,123 @@
+*lib.nvim-logger.txt*        Structured logging, diagnostics & crash dumps
+
+==============================================================================
+CONTENTS                                            *lib.nvim-logger-contents*
+
+  1. Introduction ......................... |lib.nvim-logger-intro|
+  2. Creating a logger .................... |lib.nvim-logger-new|
+  3. Logging .............................. |lib.nvim-logger-log|
+  4. Switches (enable/disable, tags) ...... |lib.nvim-logger-switches|
+  5. Crash capture ........................ |lib.nvim-logger-capture|
+  6. File sink ............................ |lib.nvim-logger-file|
+  7. Command .............................. |lib.nvim-logger-command|
+
+==============================================================================
+1. INTRODUCTION                                        *lib.nvim-logger-intro*
+
+lib.nvim.logger is a richer sibling of |lib.nvim-notify|. Next to a normal
+notify it records a message plus a structured context table into a bounded
+in-memory ring buffer, optionally streams JSONL to a file, and can dump that
+ring when a guarded entrypoint fails.
+
+It is designed so that logging — all of it, or only parts selected by level or
+by tag — can be switched off with de-facto zero runtime cost, so a plugin can
+ship with debug logging left in place.
+
+Cross-platform: paths resolve through `stdpath("log")`; writes go through
+`lib.nvim.fs.write.append`; no shell-outs.
+
+==============================================================================
+2. CREATING A LOGGER                                     *lib.nvim-logger-new*
+
+>lua
+    local log = require("lib.nvim.logger").new({
+      name         = "myplugin",  -- scope / prefix
+      level        = "debug",     -- min level to RECORD
+      notify_level = "warn",      -- min level to also vim.notify
+      file         = nil,         -- nil=stdpath default, false=off, string=path
+      capture      = true,        -- flush ring on VimLeavePre
+      history      = 200,         -- ring-buffer size
+      redact       = { "token" }, -- context keys to scrub
+    })
+<
+Levels accept a number (|vim.log.levels|) or a name: "trace", "debug", "info",
+"warn", "error", "off".
+
+==============================================================================
+3. LOGGING                                                *lib.nvim-logger-log*
+
+>lua
+    log.info("cache warm", { entries = 128, took_ms = 12 })
+    log.warn("slow query", { ms = 340 })
+    log.error("write failed", { path = p, err = err })
+    log.debug("state", function() return expensive_snapshot() end) -- thunk
+    log.info("tagged", { x = 1 }, { tags = { "net" } })            -- call opts
+<
+`log.<level>(msg, ctx?, opts?)` — `ctx` is a table OR a function returning one
+(the thunk is only invoked when the level is active, so expensive context is
+free when the level is off). `opts` is |lib.nvim-logger| CallOpts:
+`tags`, `to` (per-call file override), `notify` (force/suppress).
+
+Extras: >lua
+    log.once("k", "warn", "shown once")   -- log a key at most once
+    local stop = log.timer("index build") -- returns stop() logging elapsed ms
+    stop({ files = 42 })
+    log.assert(cond, "must hold", ctx)    -- log + raise on falsy
+<
+
+==============================================================================
+4. SWITCHES                                          *lib.nvim-logger-switches*
+
+Global (affect every logger; the master switch is checked first in the hot
+path, so a disabled logger costs one comparison): >lua
+    local L = require("lib.nvim.logger")
+    L.set_enabled(false)          -- master kill switch (zero-cost when off)
+    L.set_level("warn")           -- global min-level override; nil clears
+    L.disable_tag("net")          -- drop every record carrying tag "net"
+    L.enable_tag("net")
+    L.only_tags({ "cache" })      -- whitelist: keep only these tags; nil clears
+<
+Per-logger: >lua
+    log.set_enabled(false)
+    log.set_level("error")
+<
+
+==============================================================================
+5. CRASH CAPTURE                                       *lib.nvim-logger-capture*
+
+There is no global "uncaught error" hook in Neovim, so capture combines:
+
+  1. Synchronous file writes — every record (incl. errors) is durable the
+     moment it is logged, so context survives a subsequent crash.
+  2. guard()/wrap() — xpcall wrappers that log an ERROR with a traceback and
+     flush the ring before re-raising (guard) or swallowing (wrap): >lua
+        vim.keymap.set("n", "<leader>x", log.guard(function() risky() end))
+        M.run = log.wrap(M.run, "run")
+<
+  3. VimLeavePre flush — the ring is written to the file sink on exit.
+
+`log.flush()` writes the whole ring to the file now; `log.snapshot()` returns
+a copy; `log.clear()` empties it.
+
+==============================================================================
+6. FILE SINK                                              *lib.nvim-logger-file*
+
+Records are appended as JSONL (one JSON object per line). Default location is
+`stdpath("log")/lib-logger/<name>.jsonl`; pass `file = "/path"` to override, or
+`file = false` to disable. Context tables are sanitized before encoding
+(functions/userdata stringified, cycles broken, depth/width capped, redacted
+keys scrubbed).
+
+==============================================================================
+7. COMMAND                                             *lib.nvim-logger-command*
+
+`:LibLogger` is installed on the first `logger.new()` call:
+>
+    :LibLogger show [n]   open the n most recent records in a float
+    :LibLogger on|off     global enable / disable
+    :LibLogger level <l>  set the global min level
+    :LibLogger dump       flush every logger's ring to its file
+    :LibLogger clear      empty every ring buffer
+    :LibLogger tags       show disabled / whitelisted tags
+<
+ vim:tw=78:ts=8:ft=help:norl:

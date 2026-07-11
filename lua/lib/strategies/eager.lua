@@ -42,6 +42,7 @@ LIB.relpath = require("lib.nvim.fs.relpath")
 LIB.find_upward_dir = require("lib.nvim.fs.find_upward_dir")
 LIB.path_shorten = require("lib.nvim.fs.path_shorten")
 LIB.write_to_file = require("lib.nvim.fs.write.to_file")
+LIB.write_append = require("lib.nvim.fs.write.append")
 
 -- === REQUIRE ===
 local lib_require = require("lib.nvim.require")
@@ -120,6 +121,9 @@ LIB.usercmd = require("lib.nvim.usercmd")
 -- === NOTIFY ===
 LIB.notify = require("lib.nvim.notify")
 LIB.resolve_log_level = require("lib.nvim.notify.resolve_log_level")
+
+-- === LOGGER ===
+LIB.logger = require("lib.nvim.logger")
 
 -- === LAZY ===
 LIB.lazy = require("lib.lua.lazy")

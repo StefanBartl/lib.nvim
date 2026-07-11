@@ -25,6 +25,7 @@
 ---@field memo Lib.Memo
 ---@field lazy Lib.Lazy
 ---@field hl Lib.UI.HL
+---@field logger Lib.Logger # Structured logging / diagnostics / crash dumps (factory via `.new`)
 --- === Flat helper functions ===
 ---@field always_false fun(): boolean # Constant-false predicate. Always returns false regardless of input. Useful as a disabling predicate or sentinel.
 ---@field always_true fun(): boolean # Constant-true predicate. Always returns true regardless of input. Useful as a default filter or guard function.
@@ -97,6 +98,7 @@
 ---@field uri_decode fun(s: string): string
 ---@field url_under_cursor fun(line: string, col: integer): string|nil
 ---@field write_to_file fun(path: string, content: string): boolean, string|nil # Write string content to given path. Makes sure that directory exists. Return sucess boolean and in cade of no success string notice
+---@field write_append fun(path: string, content: string): boolean, string|nil # Append content to a file (creates parent dirs, adds trailing newline). Sibling of write_to_file, which truncates.
 --- === Misc exported helpers ===
 ---@field with fun(base: table|nil, extra: table|nil): table
 ---@field run_argv fun(argv: string[], opts?: table): any
