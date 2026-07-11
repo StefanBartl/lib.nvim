@@ -5,6 +5,7 @@
 ---
 ---   local system = require("lib.nvim.system")
 ---   local env = system.env.get()          -- computed snapshot (memoized)
+---   system.info.show()                    -- system-info float + clipboard
 ---   system.setup({ publish_globals = true }) -- opt-in vim.g.* + more
 ---
 --- Direct requiring stays tree-shake friendly:
@@ -18,6 +19,7 @@ local M = {}
 
 M.env = require("lib.nvim.system.env")
 M.rpc_pipe = require("lib.nvim.system.rpc_pipe")
+M.info = require("lib.nvim.system.info")
 
 --- Opt-in activation of environment "features".
 --- Everything is off by default so the module stays a pure helper; a config
@@ -35,6 +37,11 @@ function M.setup(opts)
   local rpc = opts.rpc_pipe
   if rpc then
     M.rpc_pipe.setup(type(rpc) == "table" and rpc or nil)
+  end
+
+  local uc = opts.info_usercmd
+  if uc then
+    M.info.create_usercmd(type(uc) == "string" and uc or nil)
   end
 
   return M.env.get()

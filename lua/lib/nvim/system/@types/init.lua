@@ -18,11 +18,13 @@
 ---@class Lib.System.SetupOptions
 ---@field publish_globals? boolean|{ fields?: string[] } # Mirror the snapshot to `vim.g.*`. `true` uses defaults; a table forwards `fields`.
 ---@field rpc_pipe? boolean|table # Start the Windows named-pipe RPC server. `true` uses defaults; a table is forwarded to `rpc_pipe.setup`.
+---@field info_usercmd? boolean|string # Register the system-info user command. `true` uses ":SystemInfo"; a string sets the command name.
 
 --- Aggregator surface of `require("lib.nvim.system")`.
 ---@class Lib.System
 ---@field env Lib.System.Env.Module
 ---@field rpc_pipe Lib.System.RpcPipe
+---@field info Lib.System.Info
 ---@field setup fun(opts?: Lib.System.SetupOptions): Lib.System.Env
 
 --- `lib.nvim.system.env` module surface.
@@ -36,5 +38,21 @@
 ---@field is_active fun(): boolean
 ---@field get_address fun(): string|nil
 ---@field clear fun(): nil
+
+--- Options for `lib.nvim.system.info.build_cmd` / `get`.
+---@class Lib.System.Info.BuildCmdOpts
+---@field prefer_fetch? boolean # Use fastfetch/neofetch when installed (default true). `false` forces the uniform "Key : Value" platform probe.
+
+--- Options for `lib.nvim.system.info.show`.
+---@class Lib.System.Info.ShowOpts : Lib.System.Info.BuildCmdOpts
+---@field clipboard? boolean # Copy the output to the system clipboard (default true).
+---@field title? string # Float title, defaults to " System Information ".
+
+--- `lib.nvim.system.info` module surface (cross-platform system information).
+---@class Lib.System.Info
+---@field build_cmd fun(opts?: Lib.System.Info.BuildCmdOpts): string[] # Probe command as argv list (fastfetch/neofetch or platform-native fallback).
+---@field get fun(opts?: Lib.System.Info.BuildCmdOpts): string[]|nil, string|nil # Run the probe; cleaned output lines or nil + error.
+---@field show fun(opts?: Lib.System.Info.ShowOpts): integer|nil, integer|nil # Float + clipboard; returns winid, bufnr.
+---@field create_usercmd fun(name?: string, opts?: Lib.System.Info.ShowOpts): nil # Register the user command (default :SystemInfo).
 
 return {}
