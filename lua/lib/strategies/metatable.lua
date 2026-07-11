@@ -29,6 +29,7 @@ local MODULE_MAP = {
   find_upward_dir = "lib.nvim.fs.find_upward_dir",
   path_shorten = "lib.nvim.fs.path_shorten",
   write_to_file = "lib.nvim.fs.write.to_file",
+  write_append = "lib.nvim.fs.write.append",
 
   -- BUFFER
   is_markdown_buf = "lib.nvim.buffer.is_markdown_buf",
@@ -46,6 +47,9 @@ local MODULE_MAP = {
   -- NOTIFY
   notify = "lib.nvim.notify",
   resolve_log_level = "lib.nvim.notify.resolve_log_level",
+
+  -- LOGGER
+  logger = "lib.nvim.logger",
 
   -- LAZY/MEMO (eager - used internally)
   lazy = "lib.lua.lazy",

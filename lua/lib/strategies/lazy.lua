@@ -105,6 +105,7 @@ LIB.relpath = lazy_module("lib.nvim.fs.relpath")
 LIB.find_upward_dir = lazy_module("lib.nvim.fs.find_upward_dir")
 LIB.path_shorten = lazy_module("lib.nvim.fs.path_shorten")
 LIB.write_to_file = require("lib.nvim.fs.write.to_file")
+LIB.write_append = require("lib.nvim.fs.write.append")
 
 -- === REQUIRE ===
 do
@@ -296,6 +297,9 @@ LIB.usercmd = lazy_module("lib.nvim.usercmd")
 -- === NOTIFY ===
 LIB.notify = lazy_module("lib.nvim.notify")
 LIB.resolve_log_level = lazy_module("lib.nvim.notify.resolve_log_level")
+
+-- === LOGGER ===
+LIB.logger = lazy_module("lib.nvim.logger")
 
 -- === TIME ===
 LIB.time_diff = lazy_module("lib.lua.time.diff")

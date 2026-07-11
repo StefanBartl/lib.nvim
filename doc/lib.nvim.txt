@@ -130,6 +130,7 @@ lib.nvim                                                    *lib.nvim-lib.nvim*
 Neovim adapters.
 
     lib.nvim.notify        notify wrapper + log-level resolution
+    lib.nvim.logger        structured logging / diagnostics / crash dumps
     lib.nvim.map           keymap helpers
     lib.nvim.usercmd       user-command helpers
     lib.nvim.autocmd       autocmd / augroup helpers
