@@ -157,6 +157,7 @@ LIB.json_is_array_like = lazy_module("lib.lua.json.decode.to_string_array").is_a
 LIB.json_ensure_string_array = lazy_module("lib.lua.json.decode.to_string_array").ensure_string_array
 LIB.json_table_to_string_array =
   lazy_module("lib.lua.json.decode.to_string_array").table_to_string_array
+LIB.json_encode = lazy_module("lib.lua.json.encode").encode
 
 -- === STRINGS ===
 -- Strings module is frequently used, but we still lazy-load it
@@ -309,6 +310,7 @@ LIB.normalize = lazy_module("lib.nvim.normalize")
 
 -- === SYSTEM ===
 LIB.system = lazy_module("lib.nvim.system")
+LIB.system_info = lazy_module("lib.nvim.system.info")
 
 ---@type Lib
 return LIB

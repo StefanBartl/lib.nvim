@@ -103,3 +103,5 @@
 ---@field with fun(base: table|nil, extra: table|nil): table
 ---@field run_argv fun(argv: string[], opts?: table): any
 ---@field json_decode_to_string_array fun(value: any): string[]
+---@field json_encode fun(value: any, opts?: Lib.JSON.EncodeOpts): string|nil, string|nil # Pure-Lua JSON encoder; returns JSON string or nil + error message
+---@field system_info Lib.System.Info # Cross-platform system information (get lines, float + clipboard, :SystemInfo usercmd)

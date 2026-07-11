@@ -71,8 +71,9 @@ local MODULE_MAP = {
   -- NORMALIZE
   normalize = "lib.nvim.normalize",
 
-  -- SYSTEM (env snapshot + rpc pipe)
+  -- SYSTEM (env snapshot + rpc pipe + system info)
   system = "lib.nvim.system",
+  system_info = "lib.nvim.system.info",
 
   -- TERMINAL
   terminal_escape = "lib.nvim.terminal",
@@ -152,6 +153,9 @@ local SPECIAL_HANDLERS = {
 
   -- json decode
   json_decode_to_string_array = { mod = "lib.lua.json.decode.to_string_array", key = "json_decode" },
+
+  -- json encode (pure Lua)
+  json_encode = { mod = "lib.lua.json.encode", key = "encode" },
 }
 
 -- ============================================================================

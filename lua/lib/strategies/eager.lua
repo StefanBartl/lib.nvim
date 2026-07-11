@@ -133,6 +133,7 @@ LIB.json = require("lib.lua.json")
 LIB.json.is_array_like = require("lib.lua.json.decode.to_string_array").is_array_like
 LIB.json.ensure_string_array = require("lib.lua.json.decode.to_string_array").ensure_string_array
 LIB.json.table_to_string_array =require("lib.lua.json.decode.to_string_array").table_to_string_array
+LIB.json_encode = require("lib.lua.json.encode").encode
 
 -- === MEMO ===
 LIB.memo = require("lib.lua.memo")
@@ -145,6 +146,7 @@ LIB.normalize = require("lib.nvim.normalize")
 
 -- === SYSTEM ===
 LIB.system = require("lib.nvim.system")
+LIB.system_info = require("lib.nvim.system.info")
 
 ---@type Lib
 return LIB

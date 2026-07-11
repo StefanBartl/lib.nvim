@@ -1,8 +1,9 @@
 # `lib.nvim.system`
 
 Host-environment namespace: a cached snapshot of the OS / shell / well-known
-paths, plus a Windows named-pipe RPC helper. This is the library-side home of
-what used to live in a per-config `system` module.
+paths, a Windows named-pipe RPC helper, and a cross-platform system-information
+probe. This is the library-side home of what used to live in a per-config
+`system` module.
 
 Guiding ideas:
 
@@ -19,9 +20,10 @@ Guiding ideas:
 
 ```
 lib.nvim.system/
-├── init.lua       -- aggregator: env, rpc_pipe, and opt-in setup()
+├── init.lua       -- aggregator: env, rpc_pipe, info, and opt-in setup()
 ├── env.lua        -- computed, memoized host-environment snapshot
 ├── rpc_pipe.lua   -- predictable Windows named-pipe RPC server
+├── info.lua       -- cross-platform system information (float + clipboard)
 └── @types/        -- LuaLS types (Lib.System.*)
 ```
 
@@ -131,6 +133,51 @@ rpc.clear()        -- unset NVIM_LISTEN_ADDRESS (useful in tests)
 
 ---
 
+## `lib.nvim.system.info`
+
+Cross-platform system information (OS, CPU, RAM, GPU, uptime, …), extracted
+from a per-config `:SystemInfo` user command.
+
+Backend selection (`build_cmd`):
+
+1. `fastfetch --logo none` if installed,
+2. `neofetch --off` if installed,
+3. otherwise a platform-native probe with uniform `Key : Value` output:
+   * **Windows** — PowerShell (`pwsh` preferred) + CIM queries,
+   * **macOS** — `sw_vers` / `sysctl` / `system_profiler`,
+   * **Linux & WSL** — `/etc/os-release`, `/proc`, DMI (each field degrades
+     gracefully when a source is missing).
+
+Commands are built as **argv lists**, never shell strings — Neovim executes
+them directly (no `'shell'`/cmd.exe), so quoting problems (^M remnants, broken
+escapes) cannot occur. Pass `{ prefer_fetch = false }` to skip the fetch tools
+and force the uniform probe.
+
+### API
+
+```lua
+local info = require("lib.nvim.system.info")
+
+info.build_cmd(opts?)          -- string[]: the probe argv
+info.get(opts?)                -- string[]|nil, string|nil: cleaned lines or nil + error
+info.show(opts?)               -- winid|nil, bufnr|nil: centered float, q/<Esc> closes
+info.create_usercmd(name?, opts?)  -- register :SystemInfo (or a custom name)
+```
+
+`show` copies the output to the system clipboard by default (`+` register via
+`lib.nvim.cross.copy_to_clipboard`, plus the `*` selection where available);
+disable with `{ clipboard = false }`. The float reuses
+`lib.nvim.window.make_scratch` (centered, rounded border, `nice_quit`).
+
+```lua
+-- Typical config bootstrap:
+require("lib.nvim.system.info").create_usercmd()   -- :SystemInfo
+-- or via setup (see below):
+require("lib.nvim.system").setup({ info_usercmd = true })
+```
+
+---
+
 ## `lib.nvim.system.setup(opts?)`
 
 One opt-in entry point that activates the environment "features" a config
@@ -142,12 +189,13 @@ you ask for a side effect.
 require("lib.nvim.system").setup({
   publish_globals = true,  -- mirror the snapshot to vim.g.* (or { fields = {...} })
   rpc_pipe = true,         -- start the Windows named-pipe RPC server (or an opts table)
+  info_usercmd = true,     -- register :SystemInfo (or a string for a custom name)
 })
 ```
 
-Both flags accept either `true` (use defaults) or a table (forwarded to
-`env.publish_globals` / `rpc_pipe.setup`). The call returns the cached
-`Lib.System.Env` snapshot.
+The flags accept either `true` (use defaults) or a table/string (forwarded to
+`env.publish_globals` / `rpc_pipe.setup` / `info.create_usercmd`). The call
+returns the cached `Lib.System.Env` snapshot.
 
 ---
 
