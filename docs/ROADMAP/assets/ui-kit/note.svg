@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 360" font-family="ui-sans-serif, Segoe UI, Roboto, sans-serif">
+  <rect width="720" height="360" rx="10" fill="#f7f6f2"/>
+  <text x="360" y="34" text-anchor="middle" font-size="15" font-weight="700" fill="#4a4640">note template — centered message float</text>
+
+  <!-- faint editor -->
+  <rect x="40" y="56" width="640" height="272" rx="6" fill="#efede7" stroke="#e0ddd3" stroke-width="2"/>
+
+  <!-- centered note float -->
+  <rect x="238" y="128" width="244" height="128" rx="6" fill="#ffffff" stroke="#1f2430" stroke-width="3"/>
+  <!-- title bar -->
+  <rect x="238" y="128" width="244" height="30" rx="6" fill="#faf1d6"/>
+  <rect x="238" y="150" width="244" height="8" fill="#faf1d6"/>
+  <text x="360" y="149" text-anchor="middle" font-size="12" font-weight="700" fill="#b3801a">Saved</text>
+  <!-- message -->
+  <rect x="258" y="176" width="180" height="8" rx="2" fill="#8a8478"/>
+  <rect x="258" y="196" width="146" height="8" rx="2" fill="#cfcabd"/>
+  <!-- hint -->
+  <text x="462" y="246" text-anchor="end" font-size="11" fill="#a9a49a">q / &lt;Esc&gt;</text>
+
+  <text x="360" y="330" text-anchor="middle" font-size="12" fill="#9a948a">auto-sized · optional timeout auto-dismiss · nice_quit</text>
+</svg>
