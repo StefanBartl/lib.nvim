@@ -110,6 +110,7 @@ LIB.delete_terminal_buf = terminal.delete_terminal_buf
 -- === UI ===
 LIB.hover_select = require("lib.nvim.ui.hover_select")
 LIB.hl = require("lib.nvim.ui.hl")
+LIB.kit = require("lib.nvim.ui.kit")
 
 -- === AUTOCMD/KEYMAP ===
 LIB.autocmd = require("lib.nvim.autocmd")

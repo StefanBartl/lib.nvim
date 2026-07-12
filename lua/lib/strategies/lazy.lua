@@ -287,6 +287,7 @@ end
 -- === UI ===
 LIB.hover_select = lazy_module("lib.nvim.ui.hover_select")
 LIB.hl = lazy_module("lib.nvim.ui.hl")
+LIB.kit = lazy_module("lib.nvim.ui.kit")
 
 -- === AUTOCMD/KEYMAP ===
 LIB.autocmd = lazy_module("lib.nvim.autocmd")

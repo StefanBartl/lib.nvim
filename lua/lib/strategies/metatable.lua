@@ -38,6 +38,7 @@ local MODULE_MAP = {
   -- UI
   hover_select = "lib.nvim.ui.hover_select",
   hl = "lib.nvim.ui.hl",
+  kit = "lib.nvim.ui.kit",
 
   -- AUTOCMD/KEYMAP
   autocmd = "lib.nvim.autocmd",

@@ -25,6 +25,7 @@
 ---@field memo Lib.Memo
 ---@field lazy Lib.Lazy
 ---@field hl Lib.UI.HL
+---@field kit Lib.UI.Kit # Themed, composable UI toolkit (theme/preset engine, surface primitive, popup components)
 ---@field logger Lib.Logger # Structured logging / diagnostics / crash dumps (factory via `.new`)
 --- === Flat helper functions ===
 ---@field always_false fun(): boolean # Constant-false predicate. Always returns false regardless of input. Useful as a disabling predicate or sentinel.
