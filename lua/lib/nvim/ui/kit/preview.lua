@@ -29,8 +29,11 @@ local REFERENCE = {
   "-- …or the override table above (merged over the active default).",
   "--   border : none | single | double | rounded | solid | ascii",
   "--   hl.*   : normal border title selection accent muted error",
-  '--            each = "HighlightGroup"  or  { fg=, bg=, bold=true }',
-  "-- <Tab> cycles presets · updates as you type · q closes",
+  "--            (each is a HIGHLIGHT GROUP name to link to, or",
+  '--             { fg=, bg=, bold=true }; e.g. hl.title = "ErrorMsg")',
+  "-- <Tab>   cycles presets",
+  "-- <S-Tab> cycles nvim colorschemes (restored on close)",
+  "-- updates as you type · q closes",
 }
 
 --- Initial config: an override table on top, reference below.
@@ -110,7 +113,13 @@ local function render_gallery(resolved)
     push("")
   end
 
-  push("Theme preview — border=" .. tostring(resolved.border), "KitMuted")
+  push(
+    ("Theme preview — border=%s · colorscheme=%s"):format(
+      tostring(resolved.border),
+      vim.g.colors_name or "default"
+    ),
+    "KitMuted"
+  )
   push("")
 
   box("note", {
@@ -242,8 +251,26 @@ function M.open()
     M.render(config_buf, preview_buf)
   end, { buffer = config_buf, nowait = true, desc = "kit preview: next preset" })
 
-  -- q closes the whole playground tab from either window.
+  -- <S-Tab> cycles installed nvim colorschemes (kit highlights link to standard
+  -- groups, so the whole preview restyles). The original scheme is restored on
+  -- close.
+  local orig_scheme = vim.g.colors_name
+  local schemes = vim.fn.getcompletion("", "color")
+  local scheme_idx = 0
+  vim.keymap.set("n", "<S-Tab>", function()
+    if #schemes == 0 then
+      return
+    end
+    scheme_idx = scheme_idx % #schemes + 1
+    pcall(vim.cmd.colorscheme, schemes[scheme_idx])
+    M.render(config_buf, preview_buf)
+  end, { buffer = config_buf, nowait = true, desc = "kit preview: next colorscheme" })
+
+  -- q closes the whole playground tab from either window and restores the scheme.
   local function close()
+    if orig_scheme and orig_scheme ~= vim.g.colors_name then
+      pcall(vim.cmd.colorscheme, orig_scheme)
+    end
     pcall(vim.cmd, "tabclose")
   end
   for _, b in ipairs({ config_buf, preview_buf }) do

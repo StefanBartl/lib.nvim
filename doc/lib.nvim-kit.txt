@@ -24,7 +24,9 @@ Live theme playground: >
     :KitPreview
 <
 Opens a new tab split in two — a config buffer on the left and a gallery on the
-right that re-renders with your theme as you type. Also `kit.preview()`.
+right that re-renders with your theme as you type. <Tab> cycles the built-in
+presets; <S-Tab> cycles installed nvim colorschemes (applied live, restored on
+close). Also `kit.preview()`.
 
 ==============================================================================
 2. THEMES & PRESETS                                       *lib.nvim-kit-theme*

@@ -35,13 +35,28 @@ local BASE = {
 --- Built-in presets (overrides layered onto BASE).
 ---@type table<string, table>
 local BUILTIN = {
-  minimal = { border = "none" },
-  rounded = { border = "rounded" },
-  solid = { border = "single" },
-  double = { border = "double" },
+  -- Presets differ in border AND in which standard groups their highlights link
+  -- to, so they look distinct under *any* colorscheme (no colours are
+  -- hardcoded — everything stays theme-adaptive).
+  minimal = {
+    border = "none",
+    hl = { selection = "Visual", accent = "NonText", muted = "NonText", title = "Comment" },
+  },
+  rounded = {
+    border = "rounded", -- the default palette (see BASE.hl)
+  },
+  solid = {
+    border = "single",
+    hl = { selection = "PmenuSel", accent = "Statement", title = "Title" },
+  },
+  double = {
+    border = "double",
+    hl = { border = "Special", title = "Title", accent = "WarningMsg" },
+  },
   ascii = {
     border = { "+", "-", "+", "|", "+", "-", "+", "|" },
     ascii_border = true,
+    hl = { border = "Comment", accent = "Identifier", title = "Todo" },
   },
 }
 
