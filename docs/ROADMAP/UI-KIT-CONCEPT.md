@@ -229,6 +229,70 @@ surfaces, wires a shared `close`/resize handler, and returns a group handle.
 This layer is pure geometry math (no I/O), hence trivially unit-testable — and
 it is the direct answer to the "3 aligned windows are hard" pain point.
 
+### 7a. Layout templates (ready-made arrangements)
+
+Nobody should hand-write the picker spec above every time. `kit.layout` ships a
+registry of **named templates**: each is a finished window arrangement (a
+sketch below) *plus* the ready layout spec, so you either mount it as-is or
+tweak it. Every template is **usable and modifiable** — override a slot's
+size, swap what fills a slot, or start from the template and edit the spec.
+
+```lua
+-- Mount a template as-is:
+local picker = kit.layout.template("picker", {
+  theme  = "rounded",
+  prompt = "picker",              -- see prompt behavior below
+  on_change = function(query) … end,   -- fired as the user types
+  on_submit = function(item) … end,    -- <CR> on the selected result
+})
+picker.slots.results:set_lines(matches)   -- fill slots yourself
+picker.slots.preview:set_lines(preview_lines)
+
+-- …or take the template's spec and modify it:
+local spec = kit.layout.templates.picker.spec
+spec.rows[1].height = 1                    -- a slimmer prompt
+spec.rows[2].cols[1].width = 0.5           -- 50/50 split
+local custom = kit.layout.mount(spec, render)
+```
+
+**Sketches → templates.** Sketches live in
+[`assets/ui-kit/`](assets/ui-kit/) and are the design reference for each
+template (they can be replaced by real screenshots once the components exist).
+
+**`picker`** — prompt (full width, top) · result list (bottom-left, 0.4) ·
+preview (bottom-right, 0.6). Matches the hand sketch that motivated this
+section.
+
+![picker template](assets/ui-kit/picker.svg)
+
+**`note`** — a single centered message float.
+
+![note template](assets/ui-kit/note.svg)
+
+**`confirm`** — message + horizontal buttons (the Phase-4 button component).
+
+![confirm template](assets/ui-kit/confirm-buttons.svg)
+
+**`toast`** — stacked, auto-dismissing corner notifications.
+
+![toast template](assets/ui-kit/toast.svg)
+
+**Prompt behavior in a template.** A template slot named `prompt` can be
+mounted in two modes (your choice per call):
+
+- `prompt = "picker"` (default for the picker template) — the prompt slot is an
+  **interactive picker prompt**: an insert-mode input that debounces keystrokes
+  and calls `on_change(query)` to drive the result list, with `<CR>` →
+  `on_submit(selected)`, `<C-n>`/`<C-p>` (and arrows) moving the selection in
+  the results slot, `<Esc>` closing the group. This is what makes the template
+  behave like a Telescope prompt out of the box.
+- `prompt = "plain"` — the prompt slot is just a themed `surface`; the caller
+  wires its buffer/keymaps however they like. Use this when the template's
+  built-in prompt behavior is not what you want.
+
+So the same template serves both "give me a working picker prompt" and "give me
+three aligned windows, I'll drive the top one myself".
+
 ## 8. Layer D — Components
 
 `kit.popup(opts)` is the friendly front door; it dispatches on `opts.type`.
@@ -305,24 +369,33 @@ here so it can be built in a focused pass (in this repo or a dedicated
 `lib.nvim` session) and then adopted by e.g. filetree.nvim through a
 `confirmations.type = "list" | "buttons"` switch.
 
-## 10. Relationship to `hover_select`
+## 10. hover_select absorption plan
 
-`ui.hover_select` is used ~10× across the author's other plugins and **stays
-as-is** — its public API (`open`/`close`/`is_open`, `Lib.HoverSelect.Options`)
-does not change. Plan:
+**Clear end goal:** `hover_select` is fully absorbed into `ui.kit` — its
+functionality becomes the kit's native `select` chooser, and the standalone
+module survives only as a thin, API-compatible shim (or is retired once every
+call site has moved). It is used ~10× across the author's plugins, so the path
+is deliberately non-breaking: the public API (`open`/`close`/`is_open`,
+`Lib.HoverSelect.Options`) keeps working at every step.
 
-1. Phase 1 — `kit.popup({ type = "select" })` **delegates** to the existing
-   `ui.hover_select` under the hood. No behavior change, hover_select is the
-   engine.
-2. Phase 3 — a native themed chooser is built inside `kit` (same navigation
-   semantics: `j`/`k`/arrows, `<CR>`, `<Esc>`/`q`, `h`/`l` blocked — matching
-   today's [navigation.lua](../../lua/lib/nvim/ui/hover_select/navigation.lua)).
-3. Later — `ui.hover_select` is reimplemented as a thin shim that calls the
-   `kit` chooser, keeping its signature so the ~10 call sites never break. Only
-   the internals move; the module name and API remain.
+The absorption runs alongside the phased roadmap (§13):
 
-So the new module is designed as a **superset** of hover_select from day one,
-and the migration is internal-only.
+| Step | When | What happens | hover_select call sites |
+| ---- | ---- | ------------ | ----------------------- |
+| **1. Delegate** | Phase 1 | `kit.popup({ type = "select" })` calls the existing `ui.hover_select` under the hood. hover_select is still the engine; the kit just themes/positions around it. | untouched |
+| **2. Native chooser** | Phase 3 | A native themed chooser is built inside kit, reusing hover_select's proven navigation semantics (`j`/`k`/arrows, `<CR>`, `<Esc>`/`q`, `h`/`l` blocked — see [navigation.lua](../../lua/lib/nvim/ui/hover_select/navigation.lua)) and multi-select (see [init.lua](../../lua/lib/nvim/ui/hover_select/init.lua)). `kit`'s `select` now uses the native chooser; delegation is dropped. | untouched |
+| **3. Shim** | Phase 3–4 | `ui.hover_select` is reimplemented as a thin adapter: `open(opts)` maps `Lib.HoverSelect.Options` → the kit chooser and forwards the callback. Same signature, same behavior; only the internals move. hover_select's `buffer`/`window`/`navigation`/`highlight` submodules are deleted (logic now lives in kit). | still work, unchanged API |
+| **4. Migrate & (optionally) retire** | after Phase 4 | Call sites are migrated to `kit` at leisure. Once none remain, `ui.hover_select` can be removed — or kept indefinitely as the shim if convenient. A `:checkhealth`/grep sweep tracks remaining users. | migrated one by one |
+
+Design implication for the native chooser (Phase 3): it must be a **superset**
+of `Lib.HoverSelect.Options` so the Step-3 shim is a pure mapping with no
+feature gaps — single + multi select, custom `on_select(items, indices)`,
+cursor-relative or explicit positioning, and the same key handling. That
+constraint is baked into the chooser's design from the start.
+
+The absorption is entirely **internal**: no consumer of `lib.nvim.ui.hover_select`
+sees a behavior change at any step; the only externally visible addition is the
+new, richer `kit.popup({ type = "select" })` entry point.
 
 ## 11. Cross-platform notes
 
@@ -369,18 +442,25 @@ surfaces the library already uses:
 | ----- | ----------- | ----- |
 | **1** | Theme/preset engine (Layer A) + surface primitive (Layer B) + `setup()` | Foundation; ships built-in presets; `note` as first component |
 | **2** | Short-lived popups: `toast`, `prompt(confirm/text)`, `input`; `select` delegating to hover_select | The high-frequency, quick-win components |
-| **3** | Layout engine (Layer C) + `picker` scaffold; native `select` chooser | The multi-window composition payoff; hover_select internals start migrating |
-| **4** | `confirm` with horizontal buttons (§9); retire hover_select internals behind a shim | Highest-effort component last; API-stable migration |
+| **3** | Layout engine (Layer C) + layout **templates** (§7a) + `picker` template with interactive prompt; native `select` chooser | The multi-window composition payoff; hover_select absorption steps 2–3 (§10) |
+| **4** | `confirm` with horizontal buttons (§9); hover_select shim + call-site migration | Highest-effort component last; API-stable migration |
 
 ## 14. Open decisions
 
-1. **Namespace / name.** Recommendation: `lib.nvim.ui.kit`. Alternatives:
-   `ui.overlay`, `ui.deck`, or honoring the original sketch `window.popup`
-   (rejected: mixes low-level float code with themed components). *Pick before
-   Phase 1.*
-2. **Native select now or later.** Recommendation: **delegate to hover_select
-   first** (Phase 1), build native in Phase 3. Lets the kit ship without
-   touching 10 external call sites early.
+1. **Namespace / name.** Recommendation: `lib.nvim.ui.kit` — short, honest
+   ("a kit of coordinated UI pieces"), sits cleanly beside `ui.hl` /
+   `ui.hover_select`. Alternatives, by flavor:
+   - *toolkit-ish:* `ui.kit` ✅, `ui.studio`, `ui.forge`
+   - *surface/overlay-ish:* `ui.surface`, `ui.overlay`, `ui.canvas`
+   - *composition-ish:* `ui.deck`, `ui.compose`, `ui.stage`
+   Rejected: the original sketch's `window.popup` (mixes low-level float code
+   with themed components — primitives stay in `lib.nvim.window`). *Pick before
+   Phase 1;* the whole doc uses `ui.kit` as the working name.
+2. **Native select — decided.** Delegate to hover_select in Phase 1, build the
+   native chooser in Phase 3, then absorb hover_select behind a shim (full plan
+   in §10). Clear end goal: hover_select's functionality lives in `ui.kit`; the
+   standalone module becomes a compatibility shim and is retired once call sites
+   have moved.
 3. **Toast stacking scope.** A corner-toast manager needs a tiny bit of
    module-level state (the stack of active toasts). Recommendation: allow it,
    confined to the toast submodule, exposed via getters — consistent with the
