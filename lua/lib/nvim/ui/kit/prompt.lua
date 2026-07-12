@@ -5,6 +5,7 @@
 
 local select = require("lib.nvim.ui.kit.select")
 local input = require("lib.nvim.ui.kit.input")
+local confirm = require("lib.nvim.ui.kit.confirm")
 
 local M = {}
 
@@ -31,8 +32,19 @@ function M.open(opts)
     })
   end
 
-  -- confirm: yes/no (or a custom `choices` list). on_answer receives a boolean
-  -- for the default two-choice case, or the chosen string when `choices` is set.
+  -- confirm: yes/no (or a custom `choices` list). `layout = "buttons"` uses the
+  -- horizontal button dialog; the default is a vertical list chooser. on_answer
+  -- receives a boolean for the default two-choice case, or the chosen string
+  -- when `choices` is set.
+  if opts.layout == "buttons" then
+    return confirm.open({
+      question = opts.question,
+      choices = opts.choices,
+      theme = opts.theme,
+      on_answer = on_answer,
+    })
+  end
+
   local custom = type(opts.choices) == "table" and #opts.choices > 0
   local choices = custom and opts.choices or { "Yes", "No" }
 

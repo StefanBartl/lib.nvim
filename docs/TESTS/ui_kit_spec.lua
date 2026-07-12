@@ -1,6 +1,7 @@
 -- docs/TESTS/ui_kit_spec.lua — lib.nvim.ui.kit
 -- Phase 1 (theme, surface, note), Phase 2 (toast, input, prompt),
--- Phase 3 (layout compute/mount + picker template, native chooser + hover_select shim).
+-- Phase 3 (layout + picker, native chooser + hover_select shim, interactive picker),
+-- Phase 4 (button-confirm).
 
 return function(H)
   local eq, ok = H.eq, H.ok
@@ -220,6 +221,90 @@ return function(H)
   ok(plain.slots.prompt:is_valid(), "plain picker has slots")
   plain.close()
   vim.cmd("stopinsert")
+
+  -- --------------------------------------------------------------- confirm (buttons)
+  local confirm = require("lib.nvim.ui.kit.confirm")
+
+  -- default Yes/No -> boolean; focus starts on Yes
+  local yn
+  local cs = assert(
+    kit.confirm({
+      question = "Delete 3 files?",
+      on_answer = function(a)
+        yn = a
+      end,
+    }),
+    "confirm opens"
+  )
+  ok(cs:is_valid(), "confirm float valid")
+  eq(confirm.current_focus(), 1, "focus starts on the first button")
+  confirm.confirm() -- Yes
+  eq(yn, true, "default confirm: Yes -> true")
+
+  -- move to No, confirm -> false
+  kit.confirm({
+    question = "Sure?",
+    on_answer = function(a)
+      yn = a
+    end,
+  })
+  confirm.move(1) -- Yes -> No
+  eq(confirm.current_focus(), 2, "move advances focus")
+  confirm.confirm()
+  eq(yn, false, "default confirm: No -> false")
+
+  -- move wraps around
+  kit.confirm({ question = "Wrap?", on_answer = function() end })
+  confirm.move(-1) -- from Yes wraps to No
+  eq(confirm.current_focus(), 2, "move(-1) wraps to the last button")
+  confirm.close()
+
+  -- custom choices -> chosen string
+  local choice
+  kit.confirm({
+    question = "Pick",
+    choices = { "Keep", "Discard", "Cancel" },
+    on_answer = function(c)
+      choice = c
+    end,
+  })
+  confirm.move(1) -- Keep -> Discard
+  confirm.confirm()
+  eq(choice, "Discard", "custom confirm returns the chosen label")
+
+  -- cancel: default -> false, custom -> nil
+  kit.confirm({
+    question = "X",
+    on_answer = function(a)
+      yn = a
+    end,
+  })
+  confirm.cancel()
+  eq(yn, false, "cancel on default confirm -> false")
+
+  local custom_cancel = "sentinel"
+  kit.confirm({
+    question = "Y",
+    choices = { "A", "B" },
+    on_answer = function(a)
+      custom_cancel = a
+    end,
+  })
+  confirm.cancel()
+  eq(custom_cancel, nil, "cancel on custom confirm -> nil")
+
+  -- routed via prompt(answer_type = "confirm", layout = "buttons")
+  kit.prompt({
+    question = "Route?",
+    answer_type = "confirm",
+    layout = "buttons",
+    on_answer = function() end,
+  })
+  ok(confirm.is_open(), "prompt layout=buttons opens the button-confirm")
+  confirm.close()
+
+  -- focused button carries the selection highlight
+  ok(vim.fn.hlexists("KitSelection") == 1, "KitSelection group defined for confirm focus")
 
   -- popup dispatch: still-unimplemented types return nil without throwing
   eq(kit.popup({ type = "menu" }), nil, "planned type returns nil (no throw)")

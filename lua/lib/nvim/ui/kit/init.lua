@@ -16,6 +16,7 @@ local theme = require("lib.nvim.ui.kit.theme")
 local surface = require("lib.nvim.ui.kit.surface")
 local layout = require("lib.nvim.ui.kit.layout")
 local picker = require("lib.nvim.ui.kit.picker")
+local confirm = require("lib.nvim.ui.kit.confirm")
 local note = require("lib.nvim.ui.kit.note")
 local toast = require("lib.nvim.ui.kit.toast")
 local input = require("lib.nvim.ui.kit.input")
@@ -74,6 +75,13 @@ function M.picker(opts)
   return picker.open(opts)
 end
 
+--- Open a button-confirm dialog (horizontal buttons, h/l to move, <CR> confirm).
+---@param opts table
+---@return Lib.UI.Kit.Surface|nil
+function M.confirm(opts)
+  return confirm.open(opts)
+end
+
 --- Component dispatch table.
 local COMPONENTS = {
   note = note.open,
@@ -82,6 +90,7 @@ local COMPONENTS = {
   select = select.open,
   prompt = prompt.open,
   picker = picker.open,
+  confirm = confirm.open,
 }
 
 --- Friendly front door: dispatch on `opts.type` (default "note"). Types not yet
@@ -100,7 +109,6 @@ function M.popup(opts)
   local planned = {
     menu = "Phase 3",
     progress = "Phase 3",
-    confirm = "Phase 4",
   }
   local when = planned[t]
   if when then

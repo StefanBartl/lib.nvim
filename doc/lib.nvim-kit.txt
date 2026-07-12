@@ -85,16 +85,20 @@ select, prompt. Not-yet-built types warn with their planned phase. >lua
   select  native themed list chooser (single/multi-select). `lib.nvim.ui`
           hover_select is now a thin shim over this same chooser.
   prompt  ask: `answer_type = "confirm"` (yes/no, boolean answer) or `"text"`.
+          Add `layout = "buttons"` for the horizontal button dialog.
+  confirm button dialog: horizontal buttons, h/l/arrows move focus, <CR>
+          confirms, <Esc>/q cancels. Default Yes/No -> boolean; custom `choices`
+          -> chosen string (cancel -> nil).
 
 ==============================================================================
 5. STATUS / ROADMAP                                      *lib.nvim-kit-status*
 
 Phase 1: theme/preset engine, `surface` primitive, `note`.
 Phase 2: `toast`, `input`, `select`, `prompt`.
-Phase 3 (this release): layout engine (`kit.layout`) + template registry +
-native `select` chooser (hover_select is now a shim over it) + interactive
-`kit.picker`.
-Planned: button-confirm (Phase 4). See docs/ROADMAP/UI-KIT-CONCEPT.md.
+Phase 3: layout engine (`kit.layout`) + template registry + native `select`
+chooser (hover_select is now a shim over it) + interactive `kit.picker`.
+Phase 4 (this release): button-confirm (`kit.confirm` / `prompt` with
+`layout = "buttons"`). The roadmap is complete; see docs/ROADMAP/UI-KIT-CONCEPT.md.
 
 The layout engine turns a declarative region spec into aligned nvim_open_win
 geometry for several coordinated floats: >lua
