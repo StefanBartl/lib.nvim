@@ -17,6 +17,7 @@ local surface = require("lib.nvim.ui.kit.surface")
 local layout = require("lib.nvim.ui.kit.layout")
 local picker = require("lib.nvim.ui.kit.picker")
 local confirm = require("lib.nvim.ui.kit.confirm")
+local menu = require("lib.nvim.ui.kit.menu")
 local note = require("lib.nvim.ui.kit.note")
 local toast = require("lib.nvim.ui.kit.toast")
 local input = require("lib.nvim.ui.kit.input")
@@ -82,6 +83,22 @@ function M.confirm(opts)
   return confirm.open(opts)
 end
 
+--- Open a cursor-anchored action menu (label → callback).
+---@param opts table
+---@return Lib.UI.Kit.Surface|nil
+function M.menu(opts)
+  return menu.open(opts)
+end
+
+--- Progress indicator. Thin passthrough to the dedicated `lib.nvim.progress`
+--- module (styles: fidget / float / notify / statusline); not reimplemented
+--- here. Returns its handle (`:update` / `:finish` / `:cancel`).
+---@param opts table
+---@return table
+function M.progress(opts)
+  return require("lib.nvim.progress").create(opts)
+end
+
 --- Component dispatch table.
 local COMPONENTS = {
   note = note.open,
@@ -91,10 +108,14 @@ local COMPONENTS = {
   prompt = prompt.open,
   picker = picker.open,
   confirm = confirm.open,
+  menu = menu.open,
+  progress = function(opts)
+    return require("lib.nvim.progress").create(opts)
+  end,
 }
 
---- Friendly front door: dispatch on `opts.type` (default "note"). Types not yet
---- implemented warn with their planned phase.
+--- Friendly front door: dispatch on `opts.type` (default "note"). Supported
+--- types: note, toast, input, select, prompt, picker, confirm, menu, progress.
 ---@param opts table
 ---@return any
 function M.popup(opts)
@@ -106,16 +127,7 @@ function M.popup(opts)
     return handler(opts)
   end
 
-  local planned = {
-    menu = "Phase 3",
-    progress = "Phase 3",
-  }
-  local when = planned[t]
-  if when then
-    notify.warn(("popup type %q is planned for %s and is not implemented yet"):format(t, when))
-  else
-    notify.error(("unknown popup type %q"):format(tostring(t)))
-  end
+  notify.error(("unknown popup type %q"):format(tostring(t)))
   return nil
 end
 

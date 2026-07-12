@@ -89,6 +89,10 @@ select, prompt. Not-yet-built types warn with their planned phase. >lua
   confirm button dialog: horizontal buttons, h/l/arrows move focus, <CR>
           confirms, <Esc>/q cancels. Default Yes/No -> boolean; custom `choices`
           -> chosen string (cancel -> nil).
+  menu    cursor-anchored action list: items = { { label, action }, … };
+          picking an item runs its callback.
+  progress passthrough to |lib.nvim-progress| (lib.nvim.progress.create);
+          returns its handle (:update / :finish / :cancel).
 
 ==============================================================================
 5. STATUS / ROADMAP                                      *lib.nvim-kit-status*
