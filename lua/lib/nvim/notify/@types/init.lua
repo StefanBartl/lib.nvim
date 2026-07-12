@@ -1,6 +1,13 @@
 ---@meta
 ---@module 'lib.nvim.notify.@types'
 
+--- A concrete vim.log.levels value (0-5).
+---@alias LogLevelNumber integer
+--- A log level as accepted by resolve_log_level: a number (0-5), a level name
+--- ("trace"/"debug"/"info"/"warn"/"error"/"off", case-insensitive), or a
+--- vim.log.levels table value.
+---@alias LogLevel LogLevelNumber|string
+
 ---@class Lib.Notify.Notifier
 ---@field notify? fun(msg: string, level?: integer, opts?: table)
 ---@field info? fun(msg: string, opts?: table)
