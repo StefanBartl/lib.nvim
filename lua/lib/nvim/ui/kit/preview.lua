@@ -6,8 +6,9 @@
 ---   :KitPreview            -- or require("lib.nvim.ui.kit").preview()
 ---
 --- The gallery is a static, faithful rendering (borders + KitSelection /
---- KitAccent / KitTitle / KitMuted highlights) rather than live interactive
---- floats, so editing the config never fights the components for focus.
+--- KitAccent / KitTitle / KitMuted highlights bounded to each box) rather than
+--- live interactive floats, so editing the config never fights the components
+--- for focus. <Tab> in the config buffer cycles the built-in presets.
 
 local theme = require("lib.nvim.ui.kit.theme")
 
@@ -17,22 +18,44 @@ local M = {}
 
 local NS = api.nvim_create_namespace("lib_kit_preview")
 
---- Starting content of the config buffer.
-local TEMPLATE = {
-  "-- lib.nvim.ui.kit — live theme playground.",
-  "-- Edit the value below; the preview on the right updates as you type.",
-  '-- Return a preset name ("minimal"|"rounded"|"solid"|"double"|"ascii")',
-  "-- or an override table merged over the active default. Press q to close.",
+local PRESETS = { "minimal", "rounded", "solid", "double", "ascii" }
+
+--- Reference block shown BELOW the return value in the config buffer.
+local REFERENCE = {
   "",
-  "return {",
-  '  border = "rounded",',
-  "  hl = {",
-  '    selection = "PmenuSel",',
-  '    accent    = "Special",',
-  '    title     = "FloatTitle",',
-  "  },",
-  "}",
+  "-- ── reference ─────────────────────────────────────────────",
+  '-- Return a preset name   →   return "double"',
+  "--   presets: minimal | rounded | solid | double | ascii",
+  "-- …or the override table above (merged over the active default).",
+  "--   border : none | single | double | rounded | solid | ascii",
+  "--   hl.*   : normal border title selection accent muted error",
+  '--            each = "HighlightGroup"  or  { fg=, bg=, bold=true }',
+  "-- <Tab> cycles presets · updates as you type · q closes",
 }
+
+--- Initial config: an override table on top, reference below.
+local function initial_lines()
+  local out = {
+    "return {",
+    '  border = "rounded",',
+    "  hl = {",
+    '    selection = "PmenuSel",   -- current item / focused button',
+    '    accent    = "Special",    -- marked items / accents',
+    '    title     = "FloatTitle",',
+    "  },",
+    "}",
+  }
+  vim.list_extend(out, REFERENCE)
+  return out
+end
+
+--- Config buffer contents for a bare preset name, reference below.
+---@param name string
+local function preset_lines(name)
+  local out = { ("return %q"):format(name) }
+  vim.list_extend(out, REFERENCE)
+  return out
+end
 
 --- Evaluate the config buffer to a theme argument.
 ---@param bufnr integer
@@ -50,8 +73,8 @@ local function eval_config(bufnr)
   return true, result
 end
 
---- Build the gallery: returns lines and a list of highlights
---- ({ row, group } for whole-line, or { row, col0, col1, group }).
+--- Build the gallery: returns lines and a list of box-bounded highlights.
+--- Each hl is { row, group } (whole box row) or { row, col0, col1, group }.
 ---@param resolved Lib.UI.Kit.Theme
 ---@return string[] lines, table[] hls
 local function render_gallery(resolved)
@@ -66,24 +89,19 @@ local function render_gallery(resolved)
     end
   end
 
-  -- One bordered box with a title and pre-built body rows. `body` entries are
-  -- { text, group? }; the box edges are drawn with the theme's glyphs.
+  -- One bordered box with a title and body rows ({ text, group? }).
   local function box(title, body)
     if g then
-      local top = g.tl .. string.rep(g.h, W) .. g.tr
-      push(top, "KitBorder")
-      -- title row
+      push(g.tl .. string.rep(g.h, W) .. g.tr, "KitBorder")
       local t = " " .. title .. " "
       local pad = math.max(0, W - vim.fn.strdisplaywidth(t))
       push(g.v .. t .. string.rep(" ", pad) .. g.v, "KitTitle")
       for _, row in ipairs(body) do
-        local text = row[1]
-        local w = math.max(0, W - vim.fn.strdisplaywidth(text) - 1)
-        push(g.v .. " " .. text .. string.rep(" ", w) .. g.v, row[2])
+        local w = math.max(0, W - vim.fn.strdisplaywidth(row[1]) - 1)
+        push(g.v .. " " .. row[1] .. string.rep(" ", w) .. g.v, row[2])
       end
       push(g.bl .. string.rep(g.h, W) .. g.br, "KitBorder")
     else
-      -- borderless theme: indent, no box
       push("  " .. title, "KitTitle")
       for _, row in ipairs(body) do
         push("    " .. row[1], row[2])
@@ -115,11 +133,8 @@ local function render_gallery(resolved)
     push("  confirm", "KitTitle")
   end
   local prefix = g and (g.v .. "   ") or "    "
-  local btns = "[ Yes ]  [ No ]  [ Cancel ]"
-  local line = prefix .. btns
-  push(line)
+  push(prefix .. "[ Yes ]  [ No ]  [ Cancel ]")
   do
-    -- highlight "[ No ]" (the focused button) with KitSelection
     local start = #prefix + #"[ Yes ]  "
     hls[#hls + 1] =
       { row = #lines - 1, col0 = start, col1 = start + #"[ No ]", group = "KitSelection" }
@@ -128,7 +143,7 @@ local function render_gallery(resolved)
     push(g.bl .. string.rep(g.h, W) .. g.br, "KitBorder")
   end
   push("")
-  push("q = close · edit the left buffer to restyle", "KitMuted")
+  push("q = close · <Tab> cycles presets", "KitMuted")
 
   return lines, hls
 end
@@ -146,7 +161,7 @@ function M.render(config_buf, preview_buf)
   local lines, hls
   if not ok then
     lines = { "⚠ config error:", "", tostring(arg) }
-    hls = { { row = 0, group = "KitError" } }
+    hls = { { row = 0, col0 = 0, col1 = #lines[1], group = "KitError" } }
   else
     local resolved = theme.resolve(arg)
     theme.materialize(resolved)
@@ -159,29 +174,48 @@ function M.render(config_buf, preview_buf)
 
   api.nvim_buf_clear_namespace(preview_buf, NS, 0, -1)
   for _, h in ipairs(hls) do
-    if h.col0 then
-      pcall(api.nvim_buf_set_extmark, preview_buf, NS, h.row, h.col0, {
-        end_col = h.col1,
-        hl_group = h.group,
-      })
-    else
-      pcall(api.nvim_buf_set_extmark, preview_buf, NS, h.row, 0, { line_hl_group = h.group })
+    -- Bound every highlight to the rendered text width (never the whole window
+    -- line): explicit col range, or col 0..#line for a "whole box row".
+    local col0 = h.col0 or 0
+    local col1 = h.col1
+    if not col1 then
+      local line = api.nvim_buf_get_lines(preview_buf, h.row, h.row + 1, false)[1] or ""
+      col1 = #line
     end
+    pcall(api.nvim_buf_set_extmark, preview_buf, NS, h.row, col0, {
+      end_col = col1,
+      hl_group = h.group,
+    })
   end
 end
 
---- Open the live theme playground in a new tab.
+--- Install the :KitPreview user command once (idempotent).
+function M.ensure_command()
+  if M._command_installed then
+    return
+  end
+  M._command_installed = true
+  pcall(function()
+    require("lib.nvim.usercmd").create("KitPreview", function()
+      M.open()
+    end, { desc = "lib.nvim.ui.kit: live theme playground", force = true })
+  end)
+end
+
+--- Open the live theme playground in a new tab (config left, preview right).
 ---@return integer config_buf, integer preview_buf
 function M.open()
+  M.ensure_command()
+
   vim.cmd("tabnew")
   local config_win = api.nvim_get_current_win()
   local config_buf = api.nvim_create_buf(false, true)
   api.nvim_set_option_value("bufhidden", "wipe", { buf = config_buf })
   api.nvim_set_option_value("filetype", "lua", { buf = config_buf })
-  api.nvim_buf_set_lines(config_buf, 0, -1, false, TEMPLATE)
+  api.nvim_buf_set_lines(config_buf, 0, -1, false, initial_lines())
   api.nvim_win_set_buf(config_win, config_buf)
 
-  vim.cmd("vsplit")
+  vim.cmd("rightbelow vsplit") -- preview window to the right
   local preview_win = api.nvim_get_current_win()
   local preview_buf = api.nvim_create_buf(false, true)
   api.nvim_set_option_value("bufhidden", "wipe", { buf = preview_buf })
@@ -199,6 +233,14 @@ function M.open()
     end,
     desc = "lib.nvim.ui.kit.preview: live re-render",
   })
+
+  -- <Tab> (normal mode) cycles the built-in presets.
+  local preset_idx = 0
+  vim.keymap.set("n", "<Tab>", function()
+    preset_idx = preset_idx % #PRESETS + 1
+    api.nvim_buf_set_lines(config_buf, 0, -1, false, preset_lines(PRESETS[preset_idx]))
+    M.render(config_buf, preview_buf)
+  end, { buffer = config_buf, nowait = true, desc = "kit preview: next preset" })
 
   -- q closes the whole playground tab from either window.
   local function close()

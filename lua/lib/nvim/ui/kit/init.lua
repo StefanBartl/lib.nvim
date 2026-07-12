@@ -31,19 +31,10 @@ M.theme = theme
 M.surface = surface
 M.layout = layout
 
---- Register user presets / set the active default preset. Also installs the
---- `:KitPreview` command (live theme playground).
+--- Register user presets / set the active default preset.
 ---@param opts? Lib.UI.Kit.SetupOpts
 function M.setup(opts)
   theme.setup(opts)
-  if not M._command_installed then
-    M._command_installed = true
-    pcall(function()
-      require("lib.nvim.usercmd").create("KitPreview", function()
-        preview.open()
-      end, { desc = "lib.nvim.ui.kit: live theme playground" })
-    end)
-  end
 end
 
 --- Open the live theme playground (config buffer + live-updating gallery).
@@ -146,6 +137,10 @@ function M.popup(opts)
   notify.error(("unknown popup type %q"):format(tostring(t)))
   return nil
 end
+
+-- Register :KitPreview as soon as the kit is loaded, so the playground is
+-- reachable without an explicit setup() call.
+pcall(preview.ensure_command)
 
 ---@type Lib.UI.Kit
 return M
