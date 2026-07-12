@@ -1,6 +1,16 @@
 # hover-select
 
-hover-select is a small, modular Neovim helper module for displaying and selecting items in a floating window relative to the cursor position. It is intentionally minimal and designed as a building block for custom plugins or internal tools.
+hover-select displays and selects items in a floating window relative to the
+cursor. It is intentionally minimal and designed as a building block for custom
+plugins or internal tools.
+
+> **Now a compatibility shim.** The chooser has been absorbed into
+> [`lib.nvim.ui.kit`](../kit/README.md) — `lib.nvim.ui.hover_select` keeps its
+> original public API (`open` / `close` / `is_open`, `Lib.HoverSelect.Options`)
+> but delegates to `lib.nvim.ui.kit.chooser`. New code should prefer
+> `require("lib.nvim.ui.kit").select{ … }`. See
+> [docs/ROADMAP/UI-KIT-CONCEPT.md](../../../../../docs/ROADMAP/UI-KIT-CONCEPT.md) §10.
+> The sections below describe the original module for historical reference.
 
 ---
 

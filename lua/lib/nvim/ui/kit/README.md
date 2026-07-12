@@ -77,7 +77,7 @@ kit.popup({ type = "prompt", question = "Delete?", answer_type = "confirm", on_a
 | `note`   | centered title + message float; optional `timeout` (ms) auto-dismiss |
 | `toast`  | ephemeral top-right message; stacks; never steals focus; auto-dismiss |
 | `input`  | single-line insert-mode prompt; `<CR>` submits, `<Esc>` cancels |
-| `select` | list chooser (delegates to `hover_select` this phase) |
+| `select` | native themed list chooser (single/multi; `j`/`k`, `<CR>`, `<Tab>` mark) |
 | `prompt` | ask: `answer_type = "confirm"` (yes/no → boolean) or `"text"` |
 
 ## Layout engine (Phase 3, partial)

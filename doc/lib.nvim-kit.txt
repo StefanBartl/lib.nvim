@@ -82,7 +82,8 @@ select, prompt. Not-yet-built types warn with their planned phase. >lua
   note    centered title + message float; optional `timeout` (ms) auto-dismiss.
   toast   ephemeral top-right message; stacks; never steals focus; auto-dismiss.
   input   single-line insert-mode prompt; <CR> submits, <Esc> cancels.
-  select  list chooser (delegates to |lib.nvim-ui| hover_select in this phase).
+  select  native themed list chooser (single/multi-select). `lib.nvim.ui`
+          hover_select is now a thin shim over this same chooser.
   prompt  ask: `answer_type = "confirm"` (yes/no, boolean answer) or `"text"`.
 
 ==============================================================================
