@@ -82,8 +82,8 @@ select, prompt. Not-yet-built types warn with their planned phase. >lua
   note    centered title + message float; optional `timeout` (ms) auto-dismiss.
   toast   ephemeral top-right message; stacks; never steals focus; auto-dismiss.
   input   single-line insert-mode prompt; <CR> submits, <Esc> cancels.
-  select  native themed list chooser (single/multi-select). `lib.nvim.ui`
-          hover_select is now a thin shim over this same chooser.
+  select  native themed list chooser (single/multi-select). This absorbed the
+          former lib.nvim.ui.hover_select module, which has been removed.
   prompt  ask: `answer_type = "confirm"` (yes/no, boolean answer) or `"text"`.
           Add `layout = "buttons"` for the horizontal button dialog.
   confirm button dialog: horizontal buttons, h/l/arrows move focus, <CR>
@@ -100,7 +100,7 @@ select, prompt. Not-yet-built types warn with their planned phase. >lua
 Phase 1: theme/preset engine, `surface` primitive, `note`.
 Phase 2: `toast`, `input`, `select`, `prompt`.
 Phase 3: layout engine (`kit.layout`) + template registry + native `select`
-chooser (hover_select is now a shim over it) + interactive `kit.picker`.
+chooser (which absorbed and replaced the removed hover_select) + `kit.picker`.
 Phase 4 (this release): button-confirm (`kit.confirm` / `prompt` with
 `layout = "buttons"`). The roadmap is complete; see docs/ROADMAP/UI-KIT-CONCEPT.md.
 

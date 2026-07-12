@@ -1,7 +1,7 @@
 ---@module 'lib.nvim.ui.kit.select'
 --- Select component. Backed by the native themed chooser
---- (lib.nvim.ui.kit.chooser). `lib.nvim.ui.hover_select` is now a thin shim over
---- the same chooser (see docs/ROADMAP/UI-KIT-CONCEPT.md §10).
+--- (lib.nvim.ui.kit.chooser), which absorbed and replaced the former
+--- lib.nvim.ui.hover_select module (now removed; see UI-KIT-CONCEPT.md §10).
 
 local chooser = require("lib.nvim.ui.kit.chooser")
 

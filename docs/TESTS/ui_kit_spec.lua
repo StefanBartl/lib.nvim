@@ -142,23 +142,6 @@ return function(H)
   -- theme selection highlight is wired
   ok(vim.fn.hlexists("KitSelection") == 1, "KitSelection group defined for the chooser")
 
-  -- ------------------------------------------------- hover_select shim (regression)
-  local hs = require("lib.nvim.ui.hover_select")
-  local shim_item, shim_idx
-  local bufnr, winid = hs.open({
-    items = { "x", "y", "z" },
-    on_select = function(it, i)
-      shim_item, shim_idx = it, i
-    end,
-  })
-  ok(type(bufnr) == "number" and type(winid) == "number", "hover_select.open returns bufnr, winid")
-  ok(hs.is_open(), "hover_select.is_open() true via shim")
-  chooser.move(2) -- highlight "z"
-  chooser.submit()
-  eq(shim_item, "z", "hover_select callback fires with the same (item, idx) contract")
-  eq(shim_idx, 3, "hover_select callback index preserved")
-  ok(not hs.is_open(), "hover_select closed after selection")
-
   -- --------------------------------------------------------------- layout (pure)
   local geo = kit.layout.compute(kit.layout.templates.picker.spec)
   ok(geo.slots.prompt ~= nil, "picker layout has a prompt slot")

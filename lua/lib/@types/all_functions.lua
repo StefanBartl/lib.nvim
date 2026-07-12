@@ -47,7 +47,6 @@
 ---@field has_exec fun(bin: string): boolean
 ---@field has_scheme fun(s: string): boolean
 ---@field hex_to_string fun(hex: string): string
----@field hover_select Lib.UI.HoverSelect # Hover select module
 ---@field identity fun(v: any): any # Identity function. Returns the value it was given unchanged. Commonly used in functional pipelines as a default mapper or when a transformation hook is optional.
 ---@field indent fun(s: string, n: integer): string
 ---@field insert_lines fun(lines: string[], pos?: Lib.Buf.InsertLinesPos): nil # Insert lines into buffer
