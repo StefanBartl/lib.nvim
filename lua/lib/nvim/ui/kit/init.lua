@@ -15,6 +15,10 @@ local notify = require("lib.nvim.notify").create("[lib.nvim.ui.kit]")
 local theme = require("lib.nvim.ui.kit.theme")
 local surface = require("lib.nvim.ui.kit.surface")
 local note = require("lib.nvim.ui.kit.note")
+local toast = require("lib.nvim.ui.kit.toast")
+local input = require("lib.nvim.ui.kit.input")
+local select = require("lib.nvim.ui.kit.select")
+local prompt = require("lib.nvim.ui.kit.prompt")
 
 local M = {}
 
@@ -34,27 +38,59 @@ function M.note(opts)
   return note.open(opts)
 end
 
---- Friendly front door: dispatch on `opts.type`. Phase 1 implements "note";
---- the remaining component types are recognized but not yet built.
+--- Show an ephemeral corner toast.
+---@param opts table
+---@return Lib.UI.Kit.Surface|nil
+function M.toast(opts)
+  return toast.open(opts)
+end
+
+--- Open a single-line input.
+---@param opts table
+---@return Lib.UI.Kit.Surface|nil
+function M.input(opts)
+  return input.open(opts)
+end
+
+--- Open a list chooser (delegates to hover_select in Phase 2).
+---@param opts table
+function M.select(opts)
+  return select.open(opts)
+end
+
+--- Ask a question (confirm / text).
+---@param opts table
+function M.prompt(opts)
+  return prompt.open(opts)
+end
+
+--- Component dispatch table.
+local COMPONENTS = {
+  note = note.open,
+  toast = toast.open,
+  input = input.open,
+  select = select.open,
+  prompt = prompt.open,
+}
+
+--- Friendly front door: dispatch on `opts.type` (default "note"). Types not yet
+--- implemented warn with their planned phase.
 ---@param opts table
 ---@return any
 function M.popup(opts)
   opts = opts or {}
   local t = opts.type or "note"
 
-  if t == "note" then
-    return note.open(opts)
+  local handler = COMPONENTS[t]
+  if handler then
+    return handler(opts)
   end
 
   local planned = {
-    toast = "Phase 2",
-    prompt = "Phase 2",
-    input = "Phase 2",
-    select = "Phase 2",
     menu = "Phase 3",
     progress = "Phase 3",
-    confirm = "Phase 4",
     picker = "Phase 3",
+    confirm = "Phase 4",
   }
   local when = planned[t]
   if when then

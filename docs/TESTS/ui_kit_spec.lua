@@ -1,4 +1,5 @@
--- docs/TESTS/ui_kit_spec.lua — lib.nvim.ui.kit Phase 1 (theme, surface, note).
+-- docs/TESTS/ui_kit_spec.lua — lib.nvim.ui.kit
+-- Phase 1 (theme, surface, note) + Phase 2 (toast, input, select/prompt).
 
 return function(H)
   local eq, ok = H.eq, H.ok
@@ -73,6 +74,34 @@ return function(H)
   eq(#vim.api.nvim_buf_get_lines(n2.bufnr, 0, -1, false), 3, "note renders array message lines")
   n2:close()
 
-  -- popup dispatch: unimplemented types return nil without throwing
-  eq(kit.popup({ type = "toast", message = "x" }), nil, "planned type returns nil (no throw)")
+  -- --------------------------------------------------------------- toast
+  local toast_mod = require("lib.nvim.ui.kit.toast")
+  toast_mod.clear()
+  local t1 = assert(kit.toast({ message = "first", timeout = 0 }), "toast opens")
+  ok(t1:is_valid(), "toast float valid")
+  eq(toast_mod.active(), 1, "one toast active")
+  local t2 = assert(kit.toast({ message = "second", timeout = 0 }), "second toast opens")
+  eq(toast_mod.active(), 2, "two toasts stack")
+  -- stacked below the first (higher row)
+  local r1 = vim.api.nvim_win_get_config(t1.winid).row
+  local r2 = vim.api.nvim_win_get_config(t2.winid).row
+  ok(tonumber(tostring(r2)) > tonumber(tostring(r1)), "second toast sits below the first")
+  toast_mod.clear()
+  eq(toast_mod.active(), 0, "clear removes all toasts")
+
+  -- --------------------------------------------------------------- input
+  local inp = assert(kit.input({ prompt = "Name", default = "sb" }), "input opens")
+  ok(inp:is_valid(), "input float valid")
+  eq(vim.api.nvim_buf_get_lines(inp.bufnr, 0, 1, false)[1], "sb", "input seeded with default")
+  vim.cmd("stopinsert")
+  inp:close()
+
+  -- --------------------------------------------------------------- prompt (confirm)
+  kit.prompt({ question = "OK?", answer_type = "confirm" })
+  local hs = require("lib.nvim.ui.hover_select")
+  ok(hs.is_open(), "confirm prompt opened a chooser")
+  hs.close()
+
+  -- popup dispatch: still-unimplemented types return nil without throwing
+  eq(kit.popup({ type = "menu" }), nil, "planned type returns nil (no throw)")
 end

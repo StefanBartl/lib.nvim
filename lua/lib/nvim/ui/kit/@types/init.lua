@@ -76,8 +76,12 @@
 --- The `lib.nvim.ui.kit` module.
 ---@class Lib.UI.Kit
 ---@field setup fun(opts?: Lib.UI.Kit.SetupOpts)
----@field popup fun(opts: table): any            # dispatch on opts.type ("note" in Phase 1)
----@field note fun(opts: Lib.UI.Kit.NoteOpts): Lib.UI.Kit.Surface
+---@field popup fun(opts: table): any            # dispatch on opts.type
+---@field note fun(opts: Lib.UI.Kit.NoteOpts): Lib.UI.Kit.Surface|nil
+---@field toast fun(opts: table): Lib.UI.Kit.Surface|nil    # ephemeral corner message
+---@field input fun(opts: table): Lib.UI.Kit.Surface|nil    # single-line insert-mode prompt
+---@field select fun(opts: table): any                       # list chooser (delegates to hover_select)
+---@field prompt fun(opts: table): any                       # ask: confirm (yes/no) or text
 ---@field surface Lib.UI.Kit.SurfaceModule
 ---@field theme Lib.UI.Kit.ThemeModule
 

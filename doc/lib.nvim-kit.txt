@@ -66,23 +66,32 @@ returns the handle, or nil on failure.
 ==============================================================================
 4. COMPONENTS                                        *lib.nvim-kit-components*
 
-`kit.popup(opts)` dispatches on `opts.type`. In this release only "note" is
-implemented; the others warn that they are planned. >lua
+`kit.popup(opts)` dispatches on `opts.type`. Implemented: note, toast, input,
+select, prompt. Not-yet-built types warn with their planned phase. >lua
 
-    kit.popup({ type = "note", title = "Saved", message = "Wrote 3 files",
-                timeout = 2000 })
-    -- equivalently:
-    kit.note({ title = "Saved", message = { "line one", "line two" } })
+    kit.popup({ type = "note",  title = "Saved", message = "Wrote 3 files", timeout = 2000 })
+    kit.popup({ type = "toast", message = "background job done" })
+    kit.popup({ type = "input", prompt = "New name", default = "x",
+                on_submit = function(text) end })
+    kit.popup({ type = "select", message = "Pick", selection = { "a", "b" },
+                on_select = function(choice, idx) end })
+    kit.popup({ type = "prompt", question = "Delete?", answer_type = "confirm",
+                on_answer = function(yes) end })
+    -- convenience aliases: kit.note / kit.toast / kit.input / kit.select / kit.prompt
 <
-A note is a centered title + message float, auto-sized, closable with q / <Esc>,
-with an optional `timeout` (ms) for auto-dismiss.
+  note    centered title + message float; optional `timeout` (ms) auto-dismiss.
+  toast   ephemeral top-right message; stacks; never steals focus; auto-dismiss.
+  input   single-line insert-mode prompt; <CR> submits, <Esc> cancels.
+  select  list chooser (delegates to |lib.nvim-ui| hover_select in this phase).
+  prompt  ask: `answer_type = "confirm"` (yes/no, boolean answer) or `"text"`.
 
 ==============================================================================
 5. STATUS / ROADMAP                                      *lib.nvim-kit-status*
 
-Phase 1 (this release): theme/preset engine, `surface` primitive, `note`.
-Planned: toast / prompt / input / select (Phase 2), layout engine + templates +
-picker + native select chooser (Phase 3), button-confirm (Phase 4). See
-docs/ROADMAP/UI-KIT-CONCEPT.md.
+Phase 1: theme/preset engine, `surface` primitive, `note`.
+Phase 2 (this release): `toast`, `input`, `select` (delegates to hover_select),
+`prompt` (confirm/text).
+Planned: layout engine + templates + picker + native select chooser (Phase 3),
+button-confirm (Phase 4). See docs/ROADMAP/UI-KIT-CONCEPT.md.
 
  vim:tw=78:ts=8:ft=help:norl:

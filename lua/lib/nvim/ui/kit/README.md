@@ -5,8 +5,10 @@ coordinated, or override colors/borders per call. Built in layers on top of
 [`lib.nvim.window`](../../window) (`make_scratch`, `nice_quit`) and
 [`lib.nvim.ui.hl`](../hl) — nothing shells out, so it is cross-platform.
 
-> **Phase 1** (this release): theme/preset engine + `surface` primitive +
-> `note`. The full design (layout engine, templates, more components) lives in
+> **Phases 1–2** (this release): theme/preset engine + `surface` primitive +
+> components `note`, `toast`, `input`, `select` (delegates to hover_select) and
+> `prompt` (confirm/text). The full design (layout engine, templates, native
+> select chooser, button-confirm) lives in
 > [`docs/ROADMAP/UI-KIT-CONCEPT.md`](../../../../../docs/ROADMAP/UI-KIT-CONCEPT.md).
 
 ## Themes & presets
@@ -58,13 +60,22 @@ s:close()
 
 ## Components
 
-`kit.popup(opts)` dispatches on `opts.type`. Phase 1 implements `note`; other
-types warn that they are planned.
+`kit.popup(opts)` dispatches on `opts.type` (convenience aliases: `kit.note`,
+`kit.toast`, `kit.input`, `kit.select`, `kit.prompt`). Not-yet-built types warn
+with their planned phase.
 
 ```lua
-kit.popup({ type = "note", title = "Saved", message = "Wrote 3 files", timeout = 2000 })
-kit.note({ title = "Saved", message = { "line one", "line two" } })
+kit.popup({ type = "note",  title = "Saved", message = "Wrote 3 files", timeout = 2000 })
+kit.popup({ type = "toast", message = "background job done" })
+kit.popup({ type = "input", prompt = "New name", default = "x", on_submit = function(t) end })
+kit.popup({ type = "select", message = "Pick", selection = { "a", "b" }, on_select = function(c, i) end })
+kit.popup({ type = "prompt", question = "Delete?", answer_type = "confirm", on_answer = function(yes) end })
 ```
 
-A note is a centered title + message float, auto-sized, closable with `q` /
-`<Esc>`, with an optional `timeout` (ms) for auto-dismiss.
+| Type     | What it is |
+| -------- | ---------- |
+| `note`   | centered title + message float; optional `timeout` (ms) auto-dismiss |
+| `toast`  | ephemeral top-right message; stacks; never steals focus; auto-dismiss |
+| `input`  | single-line insert-mode prompt; `<CR>` submits, `<Esc>` cancels |
+| `select` | list chooser (delegates to `hover_select` this phase) |
+| `prompt` | ask: `answer_type = "confirm"` (yes/no → boolean) or `"text"` |
