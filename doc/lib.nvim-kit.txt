@@ -1,0 +1,88 @@
+*lib.nvim-kit.txt*         Themed, composable UI toolkit (lib.nvim.ui.kit)
+
+==============================================================================
+CONTENTS                                               *lib.nvim-kit-contents*
+
+  1. Introduction ......................... |lib.nvim-kit-intro|
+  2. Themes & presets ..................... |lib.nvim-kit-theme|
+  3. Surface .............................. |lib.nvim-kit-surface|
+  4. Components ........................... |lib.nvim-kit-components|
+  5. Status / roadmap ..................... |lib.nvim-kit-status|
+
+==============================================================================
+1. INTRODUCTION                                           *lib.nvim-kit-intro*
+
+lib.nvim.ui.kit is a themed, composable UI toolkit. Pick a preset once and every
+popup is visually coordinated, or override colors/borders per call. It is built
+in layers on top of |lib.nvim-window| (make_scratch, nice_quit) and
+`lib.nvim.ui.hl`; nothing shells out, so it is cross-platform.
+
+Full design: docs/ROADMAP/UI-KIT-CONCEPT.md.
+
+==============================================================================
+2. THEMES & PRESETS                                       *lib.nvim-kit-theme*
+
+A theme is a token table (border, padding, zindex, title_pos, dims, hl). Built-in
+presets differ mainly in border strength: >
+
+    minimal   no border
+    rounded   rounded border (default)
+    solid     single border
+    double    double border
+    ascii     ASCII border glyphs (terminals without good Unicode)
+<
+Highlights link to standard groups (NormalFloat / FloatBorder / FloatTitle /
+PmenuSel / …) so the default look is correct in any colorscheme.
+
+Register presets / choose the active default: >lua
+
+    require("lib.nvim.ui.kit").setup({
+      default = "rounded",
+      presets = {
+        myproject = { border = "double", hl = { title = "Title" } },
+      },
+    })
+<
+A theme argument (anywhere one is accepted) is a preset name, a partial override
+table (deep-merged over the active default), or nil.
+
+==============================================================================
+3. SURFACE                                              *lib.nvim-kit-surface*
+
+A surface is one themed float plus a lifecycle handle. >lua
+
+    local kit = require("lib.nvim.ui.kit")
+    local s = kit.surface.open({ lines = { "hi" }, theme = "double", title = "X" })
+    s:set_lines({ "new", "content" })
+    s:set_title("Y")
+    s:focus()
+    s:on_close(function() end)
+    s:close()
+<
+`open(opts)` accepts: lines, theme, title, title_pos, width, height, relative,
+row, col, zindex, enter, focusable, nice_quit, filetype, modifiable, wo, bo. It
+returns the handle, or nil on failure.
+
+==============================================================================
+4. COMPONENTS                                        *lib.nvim-kit-components*
+
+`kit.popup(opts)` dispatches on `opts.type`. In this release only "note" is
+implemented; the others warn that they are planned. >lua
+
+    kit.popup({ type = "note", title = "Saved", message = "Wrote 3 files",
+                timeout = 2000 })
+    -- equivalently:
+    kit.note({ title = "Saved", message = { "line one", "line two" } })
+<
+A note is a centered title + message float, auto-sized, closable with q / <Esc>,
+with an optional `timeout` (ms) for auto-dismiss.
+
+==============================================================================
+5. STATUS / ROADMAP                                      *lib.nvim-kit-status*
+
+Phase 1 (this release): theme/preset engine, `surface` primitive, `note`.
+Planned: toast / prompt / input / select (Phase 2), layout engine + templates +
+picker + native select chooser (Phase 3), button-confirm (Phase 4). See
+docs/ROADMAP/UI-KIT-CONCEPT.md.
+
+ vim:tw=78:ts=8:ft=help:norl:

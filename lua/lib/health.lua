@@ -24,6 +24,7 @@ local PROBE = {
   "lib.nvim.map",
   "lib.nvim.fs.is_dir",
   "lib.nvim.core",
+  "lib.nvim.ui.kit",
   "lib.vim.notify",
 }
 
