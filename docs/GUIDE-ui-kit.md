@@ -58,13 +58,17 @@ kit.popup({ type = "select", selection = { "a", "b" }, on_select = fn })
 A **theme** is a table of tokens (border, padding, zindex, title position, and
 semantic highlight groups). Built-in **presets** differ mainly in border:
 
-| Preset      | Border                                   |
-| ----------- | ---------------------------------------- |
-| `minimal`   | none                                     |
-| `rounded`   | rounded (default)                        |
-| `solid`     | single                                   |
-| `double`    | double                                   |
-| `ascii`     | ASCII glyphs (terminals w/o good Unicode) |
+| Preset      | Border | Look |
+| ----------- | ------ | ---- |
+| `minimal`   | none   | subdued (selection→`Visual`, accents muted) |
+| `rounded`   | rounded (default) | base palette |
+| `solid`     | single | `Statement` accents, bold `Title` |
+| `double`    | double | `Special` border, `WarningMsg` accents |
+| `ascii`     | ASCII glyphs | `Comment` border, `Identifier` accents |
+
+Presets differ in border **and** in which standard highlight groups they link
+to, so they look distinct under any colorscheme — no colors are hardcoded, so
+everything stays theme-adaptive.
 
 Anywhere a component takes a `theme`, you can pass:
 
@@ -197,9 +201,17 @@ Not sure how a theme will look? Run:
 Edit the left buffer (a preset name or an override table); the right pane
 re-renders instantly with your theme's borders and `KitSelection` / `KitAccent`
 / `KitTitle` / `KitMuted` colors. A quick-reference of presets and `hl` keys
-sits **below** the return value in the config buffer. Press **`<Tab>`** to cycle
-through the built-in presets (`minimal` → `rounded` → `solid` → `double` →
-`ascii`). A broken config shows an error instead of throwing. Press `q` to close.
+sits **below** the return value in the config buffer.
+
+- **`<Tab>`** cycles the built-in presets (`minimal` → `rounded` → `solid` →
+  `double` → `ascii`).
+- **`<S-Tab>`** cycles installed **nvim colorschemes** and applies them live —
+  because the kit's highlights link to standard groups, the whole preview
+  restyles under each colorscheme. Your original scheme is restored on close.
+
+Note: the `hl.*` keys (`title`, `selection`, `accent`, …) are **highlight-group
+links**, not text — e.g. `hl.title = "ErrorMsg"` recolors titles. A broken
+config shows an error instead of throwing. Press `q` to close.
 
 `:KitPreview` is available as soon as `lib.nvim.ui.kit` is loaded (e.g. after a
 `require("lib.nvim.ui.kit")` or `require("lib").kit` in your config).

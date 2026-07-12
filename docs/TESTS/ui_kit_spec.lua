@@ -20,6 +20,15 @@ return function(H)
   -- ascii preset flag
   eq(theme.resolve("ascii").ascii_border, true, "ascii preset sets ascii_border")
 
+  -- presets differ beyond the border: distinct highlight link targets
+  eq(
+    theme.resolve("minimal").hl.selection,
+    "Visual",
+    "minimal preset has a distinct selection link"
+  )
+  eq(theme.resolve("double").hl.accent, "WarningMsg", "double preset has a distinct accent link")
+  eq(theme.resolve("rounded").hl.normal, "NormalFloat", "rounded (default) keeps the base palette")
+
   -- partial override merges over the active default
   local custom = theme.resolve({ hl = { accent = "WarningMsg" } })
   eq(custom.border, "rounded", "override keeps default preset's border")
