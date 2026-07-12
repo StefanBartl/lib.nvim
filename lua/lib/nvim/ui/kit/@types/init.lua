@@ -91,6 +91,7 @@
 ---@field confirm fun(opts: table): Lib.UI.Kit.Surface|nil    # button-confirm dialog (horizontal buttons)
 ---@field menu fun(opts: table): Lib.UI.Kit.Surface|nil        # cursor-anchored action list (label → callback)
 ---@field progress fun(opts: table): table                     # passthrough to lib.nvim.progress.create
+---@field preview fun(): integer, integer                       # open the live theme playground (also :KitPreview)
 ---@field surface Lib.UI.Kit.SurfaceModule
 ---@field theme Lib.UI.Kit.ThemeModule
 ---@field layout Lib.UI.Kit.LayoutModule
@@ -120,6 +121,8 @@
 ---@class Lib.UI.Kit.ThemeModule
 ---@field resolve fun(theme?: Lib.UI.Kit.ThemeArg): Lib.UI.Kit.Theme
 ---@field apply fun(winid: integer, resolved: Lib.UI.Kit.Theme)
+---@field materialize fun(resolved: Lib.UI.Kit.Theme)   # define the Kit* highlight groups (no window)
+---@field border_glyphs fun(resolved: Lib.UI.Kit.Theme): table|nil  # box-drawing glyph set, or nil (borderless)
 ---@field setup fun(opts?: Lib.UI.Kit.SetupOpts)
 ---@field presets fun(): string[]
 

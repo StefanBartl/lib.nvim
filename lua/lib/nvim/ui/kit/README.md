@@ -5,6 +5,9 @@ coordinated, or override colors/borders per call. Built in layers on top of
 [`lib.nvim.window`](../../window) (`make_scratch`, `nice_quit`) and
 [`lib.nvim.ui.hl`](../hl) — nothing shells out, so it is cross-platform.
 
+> **New here?** Read the [User Guide](../../../../../docs/GUIDE-ui-kit.md)
+> (with layout sketches), or run **`:KitPreview`** for a live theme playground.
+
 > **Phases 1–2** (this release): theme/preset engine + `surface` primitive +
 > components `note`, `toast`, `input`, `select` (delegates to hover_select) and
 > `prompt` (confirm/text). The full design (layout engine, templates, native
