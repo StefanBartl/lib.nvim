@@ -306,6 +306,43 @@ return function(H)
   -- focused button carries the selection highlight
   ok(vim.fn.hlexists("KitSelection") == 1, "KitSelection group defined for confirm focus")
 
-  -- popup dispatch: still-unimplemented types return nil without throwing
-  eq(kit.popup({ type = "menu" }), nil, "planned type returns nil (no throw)")
+  -- --------------------------------------------------------------- menu
+  local ran
+  local ms = assert(
+    kit.menu({
+      title = "Actions",
+      items = {
+        {
+          label = "Rename",
+          action = function()
+            ran = "rename"
+          end,
+        },
+        {
+          label = "Delete",
+          action = function()
+            ran = "delete"
+          end,
+        },
+      },
+    }),
+    "menu opens"
+  )
+  ok(ms:is_valid(), "menu float valid")
+  eq(vim.api.nvim_buf_get_lines(ms.bufnr, 0, 1, false)[1], "Rename", "menu shows the item labels")
+  -- pick the second item -> runs its action
+  chooser.move(1)
+  chooser.submit()
+  eq(ran, "delete", "menu runs the picked item's action")
+
+  -- --------------------------------------------------------------- progress (passthrough)
+  local ph = kit.progress({ text = "working", style = "notify" })
+  ok(
+    type(ph) == "table" and type(ph.finish) == "function",
+    "kit.progress returns a lib.nvim.progress handle"
+  )
+  ph:finish() -- stays silent (never became visible)
+
+  -- popup dispatch: unknown types return nil without throwing
+  eq(kit.popup({ type = "does-not-exist" }), nil, "unknown type returns nil (no throw)")
 end

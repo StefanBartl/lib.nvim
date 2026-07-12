@@ -80,6 +80,8 @@ kit.popup({ type = "prompt", question = "Delete?", answer_type = "confirm", on_a
 | `select` | native themed list chooser (single/multi; `j`/`k`, `<CR>`, `<Tab>` mark) |
 | `prompt` | ask: `answer_type = "confirm"` (yes/no → boolean) or `"text"` |
 | `confirm` | button dialog — horizontal buttons, `h`/`l`/arrows move, `<CR>` confirm, `<Esc>` cancel |
+| `menu`    | cursor-anchored action list — `{ label, action }` items; picking runs the action |
+| `progress`| passthrough to [`lib.nvim.progress`](../../progress/README.md) (`:update`/`:finish`/`:cancel`) |
 
 ## Layout engine (Phase 3, partial)
 

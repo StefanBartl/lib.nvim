@@ -68,6 +68,11 @@
 ---@field height? integer
 ---@field relative? "editor"|"cursor"|"win"
 
+--- One entry of a `kit.menu`.
+---@class Lib.UI.Kit.MenuItem
+---@field label string       # display text
+---@field action? fun()      # callback run when the item is picked (alias: cb)
+
 --- Options for `kit.setup`.
 ---@class Lib.UI.Kit.SetupOpts
 ---@field default? string                       # active preset name
@@ -84,6 +89,8 @@
 ---@field prompt fun(opts: table): any                       # ask: confirm (yes/no) or text
 ---@field picker fun(opts: table): table|nil                 # interactive picker (prompt drives results)
 ---@field confirm fun(opts: table): Lib.UI.Kit.Surface|nil    # button-confirm dialog (horizontal buttons)
+---@field menu fun(opts: table): Lib.UI.Kit.Surface|nil        # cursor-anchored action list (label → callback)
+---@field progress fun(opts: table): table                     # passthrough to lib.nvim.progress.create
 ---@field surface Lib.UI.Kit.SurfaceModule
 ---@field theme Lib.UI.Kit.ThemeModule
 ---@field layout Lib.UI.Kit.LayoutModule

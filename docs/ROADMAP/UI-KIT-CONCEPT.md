@@ -442,10 +442,11 @@ surfaces the library already uses:
 ## 13. Phased roadmap
 
 > Status: **Phases 1–4 shipped — the roadmap is complete.** Theme engine,
-> surface, all components (`note`/`toast`/`input`/`select`/`prompt`/`picker`/
-> `confirm`), the layout engine + `picker` template, and hover_select absorbed
-> to a shim. Follow-ups: migrate the ~10 hover_select call sites to `kit.select`
-> (§10 step 4), and optional extras (menu/progress).
+> surface, and every component (`note`/`toast`/`input`/`select`/`prompt`/
+> `picker`/`confirm`/`menu`/`progress`), the layout engine + `picker` template,
+> and hover_select absorbed to a shim. `menu` is a cursor-anchored action list;
+> `progress` passes through to the dedicated `lib.nvim.progress`. Only follow-up:
+> migrate the ~10 hover_select call sites to `kit.select` (§10 step 4).
 
 | Phase | Deliverable | Notes |
 | ----- | ----------- | ----- |
