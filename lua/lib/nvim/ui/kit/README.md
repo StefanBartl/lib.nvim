@@ -102,5 +102,23 @@ local geo = kit.layout.compute({
 })
 ```
 
-Still to come this phase: the interactive picker prompt and a native `select`
-chooser (absorbing `hover_select`).
+### Interactive picker
+
+`kit.picker(opts)` turns the picker template into a working, Telescope-style
+picker: an insert-mode prompt drives the results slot.
+
+```lua
+local p = kit.picker({
+  on_change = function(query)          -- debounced as the user types
+    p.set_results(compute_matches(query))
+  end,
+  on_submit = function(idx, text)      -- <CR> on the highlighted result
+    open(text)
+  end,
+})
+-- <C-n>/<C-p> or arrows move the selection; <Esc> closes.
+-- p.query() / p.set_results(lines) / p.move(delta) / p.submit() / p.close()
+```
+
+`kit.picker({ prompt = "plain" })` falls back to a bare
+`kit.layout.template("picker")` whose prompt slot you wire yourself.
