@@ -17,7 +17,14 @@ popup is visually coordinated, or override colors/borders per call. It is built
 in layers on top of |lib.nvim-window| (make_scratch, nice_quit) and
 `lib.nvim.ui.hl`; nothing shells out, so it is cross-platform.
 
-Full design: docs/ROADMAP/UI-KIT-CONCEPT.md.
+User guide (with layout sketches): docs/GUIDE-ui-kit.md
+Full design: docs/ROADMAP/UI-KIT-CONCEPT.md
+Live theme playground: >
+
+    :KitPreview
+<
+Opens a new tab split in two — a config buffer on the left and a gallery on the
+right that re-renders with your theme as you type. Also `kit.preview()`.
 
 ==============================================================================
 2. THEMES & PRESETS                                       *lib.nvim-kit-theme*

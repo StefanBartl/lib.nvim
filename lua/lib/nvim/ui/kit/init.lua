@@ -18,6 +18,7 @@ local layout = require("lib.nvim.ui.kit.layout")
 local picker = require("lib.nvim.ui.kit.picker")
 local confirm = require("lib.nvim.ui.kit.confirm")
 local menu = require("lib.nvim.ui.kit.menu")
+local preview = require("lib.nvim.ui.kit.preview")
 local note = require("lib.nvim.ui.kit.note")
 local toast = require("lib.nvim.ui.kit.toast")
 local input = require("lib.nvim.ui.kit.input")
@@ -30,10 +31,25 @@ M.theme = theme
 M.surface = surface
 M.layout = layout
 
---- Register user presets / set the active default preset.
+--- Register user presets / set the active default preset. Also installs the
+--- `:KitPreview` command (live theme playground).
 ---@param opts? Lib.UI.Kit.SetupOpts
 function M.setup(opts)
   theme.setup(opts)
+  if not M._command_installed then
+    M._command_installed = true
+    pcall(function()
+      require("lib.nvim.usercmd").create("KitPreview", function()
+        preview.open()
+      end, { desc = "lib.nvim.ui.kit: live theme playground" })
+    end)
+  end
+end
+
+--- Open the live theme playground (config buffer + live-updating gallery).
+---@return integer config_buf, integer preview_buf
+function M.preview()
+  return preview.open()
 end
 
 --- Open a note popup (title + message).

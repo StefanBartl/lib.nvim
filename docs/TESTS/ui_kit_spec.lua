@@ -326,6 +326,29 @@ return function(H)
   )
   ph:finish() -- stays silent (never became visible)
 
+  -- --------------------------------------------------------------- preview playground
+  local P = require("lib.nvim.ui.kit.preview")
+  local cfg_buf, prev_buf = kit.preview()
+  ok(
+    vim.api.nvim_buf_is_valid(cfg_buf) and vim.api.nvim_buf_is_valid(prev_buf),
+    "preview opens a config + preview buffer"
+  )
+  local rendered = table.concat(vim.api.nvim_buf_get_lines(prev_buf, 0, -1, false), "\n")
+  ok(rendered:find("border=rounded", 1, true), "preview renders the default (rounded) theme")
+
+  -- editing the config re-renders live
+  vim.api.nvim_buf_set_lines(cfg_buf, 0, -1, false, { 'return "double"' })
+  P.render(cfg_buf, prev_buf)
+  local rendered2 = table.concat(vim.api.nvim_buf_get_lines(prev_buf, 0, -1, false), "\n")
+  ok(rendered2:find("border=double", 1, true), "editing the config restyles the preview")
+
+  -- a broken config shows an error instead of throwing
+  vim.api.nvim_buf_set_lines(cfg_buf, 0, -1, false, { "return { border =" })
+  P.render(cfg_buf, prev_buf)
+  local rendered3 = table.concat(vim.api.nvim_buf_get_lines(prev_buf, 0, -1, false), "\n")
+  ok(rendered3:find("config error", 1, true), "a broken config shows an error, no throw")
+  pcall(vim.cmd, "tabclose")
+
   -- popup dispatch: unknown types return nil without throwing
   eq(kit.popup({ type = "does-not-exist" }), nil, "unknown type returns nil (no throw)")
 end

@@ -91,6 +91,37 @@ local function materialize(resolved)
   end
 end
 
+--- Public: define the Kit* highlight groups for a resolved theme, without
+--- touching any window. Used by the preview playground to colour its buffer.
+---@param resolved Lib.UI.Kit.Theme
+function M.materialize(resolved)
+  materialize(resolved)
+end
+
+--- Map a resolved theme's border to a box-drawing glyph set for rendering
+--- static previews (tl/tr/bl/br/h/v). Falls back to `single`.
+---@param resolved Lib.UI.Kit.Theme
+---@return { tl:string, tr:string, bl:string, br:string, h:string, v:string }|nil  # nil for a borderless theme
+function M.border_glyphs(resolved)
+  local SETS = {
+    rounded = { tl = "╭", tr = "╮", bl = "╰", br = "╯", h = "─", v = "│" },
+    single = { tl = "┌", tr = "┐", bl = "└", br = "┘", h = "─", v = "│" },
+    double = { tl = "╔", tr = "╗", bl = "╚", br = "╝", h = "═", v = "║" },
+    ascii = { tl = "+", tr = "+", bl = "+", br = "+", h = "-", v = "|" },
+  }
+  if resolved.ascii_border then
+    return SETS.ascii
+  end
+  local b = resolved.border
+  if b == "none" then
+    return nil
+  end
+  if type(b) == "string" and SETS[b] then
+    return SETS[b]
+  end
+  return SETS.single
+end
+
 --- Apply a resolved theme to an open window: materialize its groups and point
 --- the float's built-in groups at them via winhighlight.
 ---@param winid integer
