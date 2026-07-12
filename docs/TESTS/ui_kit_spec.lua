@@ -193,6 +193,34 @@ return function(H)
   -- unknown template returns nil without throwing
   eq(kit.layout.template("nope"), nil, "unknown template returns nil")
 
+  -- --------------------------------------------------------------- picker (interactive)
+  local submit_idx, submit_text
+  local p = assert(
+    kit.picker({
+      on_submit = function(i, t)
+        submit_idx, submit_text = i, t
+      end,
+    }),
+    "picker opens"
+  )
+  ok(p.slots.prompt:is_valid(), "picker prompt slot valid")
+  ok(p.slots.results:is_valid(), "picker results slot valid")
+  ok(p.slots.preview:is_valid(), "picker preview slot valid")
+
+  -- caller fills the results slot (as on_change would), selection resets to top
+  p.set_results({ "match-1", "match-2", "match-3" })
+  p.move(1) -- to match-2
+  p.submit()
+  eq(submit_idx, 2, "picker submit reports the highlighted index")
+  eq(submit_text, "match-2", "picker submit reports the highlighted line text")
+  vim.cmd("stopinsert")
+
+  -- plain mode falls back to a bare template mount
+  local plain = assert(kit.picker({ prompt = "plain" }), "plain picker mounts")
+  ok(plain.slots.prompt:is_valid(), "plain picker has slots")
+  plain.close()
+  vim.cmd("stopinsert")
+
   -- popup dispatch: still-unimplemented types return nil without throwing
   eq(kit.popup({ type = "menu" }), nil, "planned type returns nil (no throw)")
 end

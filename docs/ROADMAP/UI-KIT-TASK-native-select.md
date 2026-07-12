@@ -1,5 +1,10 @@
 # Task: native select chooser + interactive picker prompt (UI kit, Phase 3 finish)
 
+> **Status: DONE.** Part A (native `lib.nvim.ui.kit.chooser`, `kit.select`
+> rewire, hover_select shim) and Part B (interactive `kit.picker`) are both
+> implemented, tested, and pushed. Phase 3 is complete; the notes below are the
+> original task spec, kept for reference.
+>
 > Type: **implementation task** (not a concept — the design is settled).
 > Parent design: [UI-KIT-CONCEPT.md](UI-KIT-CONCEPT.md) (§7a templates, §8
 > components, §10 hover_select absorption). Everything cross-platform.

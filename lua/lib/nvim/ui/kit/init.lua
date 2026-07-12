@@ -15,6 +15,7 @@ local notify = require("lib.nvim.notify").create("[lib.nvim.ui.kit]")
 local theme = require("lib.nvim.ui.kit.theme")
 local surface = require("lib.nvim.ui.kit.surface")
 local layout = require("lib.nvim.ui.kit.layout")
+local picker = require("lib.nvim.ui.kit.picker")
 local note = require("lib.nvim.ui.kit.note")
 local toast = require("lib.nvim.ui.kit.toast")
 local input = require("lib.nvim.ui.kit.input")
@@ -54,7 +55,7 @@ function M.input(opts)
   return input.open(opts)
 end
 
---- Open a list chooser (delegates to hover_select in Phase 2).
+--- Open a native themed list chooser (single/multi-select).
 ---@param opts table
 function M.select(opts)
   return select.open(opts)
@@ -66,6 +67,13 @@ function M.prompt(opts)
   return prompt.open(opts)
 end
 
+--- Open an interactive picker (prompt drives the results/preview slots).
+---@param opts table
+---@return table|nil
+function M.picker(opts)
+  return picker.open(opts)
+end
+
 --- Component dispatch table.
 local COMPONENTS = {
   note = note.open,
@@ -73,6 +81,7 @@ local COMPONENTS = {
   input = input.open,
   select = select.open,
   prompt = prompt.open,
+  picker = picker.open,
 }
 
 --- Friendly front door: dispatch on `opts.type` (default "note"). Types not yet
@@ -91,7 +100,6 @@ function M.popup(opts)
   local planned = {
     menu = "Phase 3",
     progress = "Phase 3",
-    picker = "Phase 3",
     confirm = "Phase 4",
   }
   local when = planned[t]

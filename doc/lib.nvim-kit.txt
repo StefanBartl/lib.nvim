@@ -90,10 +90,10 @@ select, prompt. Not-yet-built types warn with their planned phase. >lua
 5. STATUS / ROADMAP                                      *lib.nvim-kit-status*
 
 Phase 1: theme/preset engine, `surface` primitive, `note`.
-Phase 2: `toast`, `input`, `select` (delegates to hover_select), `prompt`.
-Phase 3 (this release, partial): layout engine (`kit.layout.compute`/`mount`) +
-template registry (`kit.layout.template("picker", …)`). Still to do: the
-interactive picker prompt and the native select chooser.
+Phase 2: `toast`, `input`, `select`, `prompt`.
+Phase 3 (this release): layout engine (`kit.layout`) + template registry +
+native `select` chooser (hover_select is now a shim over it) + interactive
+`kit.picker`.
 Planned: button-confirm (Phase 4). See docs/ROADMAP/UI-KIT-CONCEPT.md.
 
 The layout engine turns a declarative region spec into aligned nvim_open_win
@@ -106,5 +106,11 @@ geometry for several coordinated floats: >lua
 <
 `kit.layout.compute(spec)` returns the pure geometry (unit-testable);
 `kit.layout.mount(spec, opts)` opens themed surfaces into the slots.
+
+`kit.picker(opts)` makes the picker template interactive (Telescope-style): an
+insert-mode prompt debounces into `on_change(query)` (the caller fills the
+results slot via `handle.set_results(lines)`), <C-n>/<C-p>/arrows move the
+selection, <CR> calls `on_submit(idx, text)`, <Esc> closes. Pass
+`prompt = "plain"` for a bare template you wire yourself.
 
  vim:tw=78:ts=8:ft=help:norl:

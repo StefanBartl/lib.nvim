@@ -438,16 +438,16 @@ surfaces the library already uses:
 
 ## 13. Phased roadmap
 
-> Status: **Phase 1 & 2 shipped**, **Phase 3 nearly complete** — layout engine
-> (`kit.layout`), template registry (`picker`), and the **native `select`
-> chooser** with **hover_select absorbed to a shim** (§10 steps 2–3) all landed.
-> Remaining: the interactive picker prompt (Part B). Phase 4 pending.
+> Status: **Phases 1–3 shipped.** Layout engine (`kit.layout`), template
+> registry (`picker`), native `select` chooser with **hover_select absorbed to a
+> shim** (§10 steps 2–3), and the **interactive picker** (`kit.picker`) all
+> landed. Phase 4 (button-confirm) pending.
 
 | Phase | Deliverable | Notes |
 | ----- | ----------- | ----- |
 | **1** ✅ | Theme/preset engine (Layer A) + surface primitive (Layer B) + `setup()` | Foundation; ships built-in presets; `note` as first component |
 | **2** ✅ | Short-lived popups: `toast`, `prompt(confirm/text)`, `input`; `select` delegating to hover_select | The high-frequency, quick-win components |
-| **3** 🔨 | Layout engine (Layer C) ✅ + templates (§7a) ✅ + native `select` chooser ✅ + hover_select shim ✅; interactive picker prompt ⏳ | Composition + absorption landed; interactive prompt (Part B) remains |
+| **3** ✅ | Layout engine (Layer C) + templates (§7a) + native `select` chooser + hover_select shim + interactive `kit.picker` | Composition + absorption + Telescope-style picker |
 | **4** | `confirm` with horizontal buttons (§9); hover_select shim + call-site migration | Highest-effort component last; API-stable migration |
 
 ## 14. Open decisions
