@@ -388,7 +388,7 @@ The absorption runs alongside the phased roadmap (§13):
 | **1. Delegate** ✅ | Phase 1–2 | `kit.popup({ type = "select" })` called the existing `ui.hover_select` under the hood. | untouched |
 | **2. Native chooser** ✅ | Phase 3 | Built `lib.nvim.ui.kit.chooser` (themed, superset of `Lib.HoverSelect.Options`), matching hover_select's navigation (`j`/`k`/arrows, `<CR>`, `<Esc>`/`q`, `h`/`l` blocked) and multi-select. `kit.select` now uses it; the delegation is gone. | untouched |
 | **3. Shim** ✅ | Phase 3 | `ui.hover_select` is now a thin adapter over `kit.chooser`: `open(opts)` maps `Lib.HoverSelect.Options` → the chooser and returns `(bufnr, winid)`; `close`/`is_open` delegate. Same signature/behavior; the `buffer`/`window`/`navigation`/`highlight`/`config` submodules were deleted (logic lives in the kit). | still work, unchanged API |
-| **4. Migrate & (optionally) retire** ⏳ | later | Call sites move to `kit.select` at leisure; once none remain, the shim can be removed. A grep sweep tracks remaining users. | migrated one by one |
+| **4. Migrate & (optionally) retire** 🔨 | now | Call sites moved to `kit.select`: **markdown.nvim, pdfport.nvim, pickers.nvim** done (pushed); **filetree.nvim** migrated + tested (127/127) but its commit is pending a held git lock. Once all are in and confirmed, the shim can be removed. | markdown/pdfport/pickers ✅, filetree ⏳ |
 
 Design implication for the native chooser (Phase 3): it must be a **superset**
 of `Lib.HoverSelect.Options` so the Step-3 shim is a pure mapping with no
