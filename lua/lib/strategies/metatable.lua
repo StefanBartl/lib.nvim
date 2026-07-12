@@ -36,7 +36,6 @@ local MODULE_MAP = {
   insert_lines = "lib.nvim.buffer.insert_lines",
 
   -- UI
-  hover_select = "lib.nvim.ui.hover_select",
   hl = "lib.nvim.ui.hl",
   kit = "lib.nvim.ui.kit",
 

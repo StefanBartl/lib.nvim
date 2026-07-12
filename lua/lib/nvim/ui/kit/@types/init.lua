@@ -85,7 +85,7 @@
 ---@field note fun(opts: Lib.UI.Kit.NoteOpts): Lib.UI.Kit.Surface|nil
 ---@field toast fun(opts: table): Lib.UI.Kit.Surface|nil    # ephemeral corner message
 ---@field input fun(opts: table): Lib.UI.Kit.Surface|nil    # single-line insert-mode prompt
----@field select fun(opts: table): any                       # list chooser (delegates to hover_select)
+---@field select fun(opts: table): any                       # native themed list chooser (single/multi)
 ---@field prompt fun(opts: table): any                       # ask: confirm (yes/no) or text
 ---@field picker fun(opts: table): table|nil                 # interactive picker (prompt drives results)
 ---@field confirm fun(opts: table): Lib.UI.Kit.Surface|nil    # button-confirm dialog (horizontal buttons)

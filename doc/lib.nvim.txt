@@ -137,7 +137,7 @@ Neovim adapters.
     lib.nvim.buffer        buffer helpers (insert_lines, is_markdown_buf, …)
     lib.nvim.buf_win_tab   buffer / window / tab utilities
     lib.nvim.window        overlay/float helpers (make_scratch, nice_quit, …)
-    lib.nvim.ui            hover_select, highlight helpers, kit (themed UI)
+    lib.nvim.ui            kit (themed UI toolkit), highlight helpers
     lib.nvim.fs            path / filesystem helpers (vim.fs / uv); cached
                            marker-based root finding (find_root), relpath
     lib.nvim.cross         cross-platform: OS detection, run/argv, clipboard, uv,
@@ -212,7 +212,7 @@ Modules with dedicated `:help` documentation. Jump to one via its tag, or
 `:help` the file directly.
 
     lib.nvim.window      overlay / floating window helpers  |lib.nvim-window|
-    lib.nvim.ui          hover_select floating selection UI |lib.nvim-hover_select|
+    lib.nvim.ui.kit      themed, composable UI toolkit       |lib.nvim-kit|
     lib.lua.time.diff    high-precision time / interval diff |lib.nvim-time_diff|
     lib.nvim.progress    style-agnostic progress indicator   |lib.nvim-progress|
 

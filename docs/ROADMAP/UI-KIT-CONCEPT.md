@@ -388,7 +388,7 @@ The absorption runs alongside the phased roadmap (§13):
 | **1. Delegate** ✅ | Phase 1–2 | `kit.popup({ type = "select" })` called the existing `ui.hover_select` under the hood. | untouched |
 | **2. Native chooser** ✅ | Phase 3 | Built `lib.nvim.ui.kit.chooser` (themed, superset of `Lib.HoverSelect.Options`), matching hover_select's navigation (`j`/`k`/arrows, `<CR>`, `<Esc>`/`q`, `h`/`l` blocked) and multi-select. `kit.select` now uses it; the delegation is gone. | untouched |
 | **3. Shim** ✅ | Phase 3 | `ui.hover_select` is now a thin adapter over `kit.chooser`: `open(opts)` maps `Lib.HoverSelect.Options` → the chooser and returns `(bufnr, winid)`; `close`/`is_open` delegate. Same signature/behavior; the `buffer`/`window`/`navigation`/`highlight`/`config` submodules were deleted (logic lives in the kit). | still work, unchanged API |
-| **4. Migrate & (optionally) retire** 🔨 | now | Call sites moved to `kit.select`: **markdown.nvim, pdfport.nvim, pickers.nvim** done (pushed); **filetree.nvim** migrated + tested (127/127) but its commit is pending a held git lock. Once all are in and confirmed, the shim can be removed. | markdown/pdfport/pickers ✅, filetree ⏳ |
+| **4. Migrate & retire** ✅ | done | All call sites moved to `kit.select` — filetree.nvim, markdown.nvim, pdfport.nvim, pickers.nvim (pushed) and the author's nvim config (switcher / pdfport action). With no consumers left, the shim was **removed**: `lib.nvim.ui.hover_select` and its help/types/aggregator entries are gone. | migrated ✅, shim removed ✅ |
 
 Design implication for the native chooser (Phase 3): it must be a **superset**
 of `Lib.HoverSelect.Options` so the Step-3 shim is a pure mapping with no
@@ -441,12 +441,13 @@ surfaces the library already uses:
 
 ## 13. Phased roadmap
 
-> Status: **Phases 1–4 shipped — the roadmap is complete.** Theme engine,
-> surface, and every component (`note`/`toast`/`input`/`select`/`prompt`/
-> `picker`/`confirm`/`menu`/`progress`), the layout engine + `picker` template,
-> and hover_select absorbed to a shim. `menu` is a cursor-anchored action list;
-> `progress` passes through to the dedicated `lib.nvim.progress`. Only follow-up:
-> migrate the ~10 hover_select call sites to `kit.select` (§10 step 4).
+> Status: **Phases 1–4 shipped — the roadmap is complete, hover_select fully
+> absorbed.** Theme engine, surface, and every component
+> (`note`/`toast`/`input`/`select`/`prompt`/`picker`/`confirm`/`menu`/`progress`),
+> the layout engine + `picker` template. `menu` is a cursor-anchored action
+> list; `progress` passes through to the dedicated `lib.nvim.progress`. All
+> hover_select call sites were migrated to `kit.select` and the standalone
+> `lib.nvim.ui.hover_select` module has been **removed** (§10 step 4 done).
 
 | Phase | Deliverable | Notes |
 | ----- | ----------- | ----- |
