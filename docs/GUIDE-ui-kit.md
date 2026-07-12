@@ -196,8 +196,13 @@ Not sure how a theme will look? Run:
 
 Edit the left buffer (a preset name or an override table); the right pane
 re-renders instantly with your theme's borders and `KitSelection` / `KitAccent`
-/ `KitTitle` / `KitMuted` colors. A broken config shows an error instead of
-throwing. Press `q` to close.
+/ `KitTitle` / `KitMuted` colors. A quick-reference of presets and `hl` keys
+sits **below** the return value in the config buffer. Press **`<Tab>`** to cycle
+through the built-in presets (`minimal` → `rounded` → `solid` → `double` →
+`ascii`). A broken config shows an error instead of throwing. Press `q` to close.
+
+`:KitPreview` is available as soon as `lib.nvim.ui.kit` is loaded (e.g. after a
+`require("lib.nvim.ui.kit")` or `require("lib").kit` in your config).
 
 ## 7. Highlight groups
 
