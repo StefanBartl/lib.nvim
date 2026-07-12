@@ -79,6 +79,7 @@ kit.popup({ type = "prompt", question = "Delete?", answer_type = "confirm", on_a
 | `input`  | single-line insert-mode prompt; `<CR>` submits, `<Esc>` cancels |
 | `select` | native themed list chooser (single/multi; `j`/`k`, `<CR>`, `<Tab>` mark) |
 | `prompt` | ask: `answer_type = "confirm"` (yes/no → boolean) or `"text"` |
+| `confirm` | button dialog — horizontal buttons, `h`/`l`/arrows move, `<CR>` confirm, `<Esc>` cancel |
 
 ## Layout engine (Phase 3, partial)
 
@@ -122,3 +123,18 @@ local p = kit.picker({
 
 `kit.picker({ prompt = "plain" })` falls back to a bare
 `kit.layout.template("picker")` whose prompt slot you wire yourself.
+
+### Button-confirm
+
+`kit.confirm(opts)` (or `kit.popup({ type = "prompt", answer_type = "confirm",
+layout = "buttons" })`) shows a question with a row of horizontal buttons.
+
+```lua
+kit.confirm({ question = "Delete 3 files?", on_answer = function(yes) end })     -- Yes/No -> boolean
+kit.confirm({ question = "Pick", choices = { "Keep", "Discard", "Cancel" },
+              on_answer = function(choice) end })                               -- custom -> string
+```
+
+`h`/`l`/arrows/`<Tab>` move focus (the focused button uses `KitSelection`),
+`<CR>` confirms, `<Esc>`/`q` cancels (default → `false`, custom → `nil`). See
+[assets/ui-kit/confirm-buttons.svg](../../../../../docs/ROADMAP/assets/ui-kit/confirm-buttons.svg).

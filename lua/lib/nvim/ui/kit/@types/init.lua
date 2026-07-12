@@ -83,6 +83,7 @@
 ---@field select fun(opts: table): any                       # list chooser (delegates to hover_select)
 ---@field prompt fun(opts: table): any                       # ask: confirm (yes/no) or text
 ---@field picker fun(opts: table): table|nil                 # interactive picker (prompt drives results)
+---@field confirm fun(opts: table): Lib.UI.Kit.Surface|nil    # button-confirm dialog (horizontal buttons)
 ---@field surface Lib.UI.Kit.SurfaceModule
 ---@field theme Lib.UI.Kit.ThemeModule
 ---@field layout Lib.UI.Kit.LayoutModule

@@ -336,7 +336,10 @@ Proposed component set (the task asked "are there more sensible ones?" — yes):
 themed surfaces + shared lifecycle from Layer C) that a plugin fills with its
 own matching/preview logic. It demonstrates the whole stack working together.
 
-## 9. The button-confirm component (phased, highest effort)
+## 9. The button-confirm component (phased, highest effort) — ✅ shipped
+
+> **Implemented** as `lib.nvim.ui.kit.confirm` (`kit.confirm` / `prompt` with
+> `layout = "buttons"`). The design below is what was built.
 
 The "cherry on top": a confirm dialog whose options are **horizontal buttons**
 reachable with `h`/`l`/arrows, `<CR>` to confirm, `<Esc>` to cancel.
@@ -438,16 +441,18 @@ surfaces the library already uses:
 
 ## 13. Phased roadmap
 
-> Status: **Phases 1–3 shipped.** Layout engine (`kit.layout`), template
-> registry (`picker`), native `select` chooser with **hover_select absorbed to a
-> shim** (§10 steps 2–3), and the **interactive picker** (`kit.picker`) all
-> landed. Phase 4 (button-confirm) pending.
+> Status: **Phases 1–4 shipped — the roadmap is complete.** Theme engine,
+> surface, all components (`note`/`toast`/`input`/`select`/`prompt`/`picker`/
+> `confirm`), the layout engine + `picker` template, and hover_select absorbed
+> to a shim. Follow-ups: migrate the ~10 hover_select call sites to `kit.select`
+> (§10 step 4), and optional extras (menu/progress).
 
 | Phase | Deliverable | Notes |
 | ----- | ----------- | ----- |
 | **1** ✅ | Theme/preset engine (Layer A) + surface primitive (Layer B) + `setup()` | Foundation; ships built-in presets; `note` as first component |
 | **2** ✅ | Short-lived popups: `toast`, `prompt(confirm/text)`, `input`; `select` delegating to hover_select | The high-frequency, quick-win components |
 | **3** ✅ | Layout engine (Layer C) + templates (§7a) + native `select` chooser + hover_select shim + interactive `kit.picker` | Composition + absorption + Telescope-style picker |
+| **4** ✅ | Button-confirm (§9) — horizontal buttons, h/l navigation, `KitSelection` focus; routed via `kit.confirm` and `prompt(answer_type="confirm", layout="buttons")` | The highest-effort component |
 | **4** | `confirm` with horizontal buttons (§9); hover_select shim + call-site migration | Highest-effort component last; API-stable migration |
 
 ## 14. Open decisions
