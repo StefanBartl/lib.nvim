@@ -14,6 +14,7 @@ require("lib.nvim.ui.kit.@types")
 local notify = require("lib.nvim.notify").create("[lib.nvim.ui.kit]")
 local theme = require("lib.nvim.ui.kit.theme")
 local surface = require("lib.nvim.ui.kit.surface")
+local layout = require("lib.nvim.ui.kit.layout")
 local note = require("lib.nvim.ui.kit.note")
 local toast = require("lib.nvim.ui.kit.toast")
 local input = require("lib.nvim.ui.kit.input")
@@ -24,6 +25,7 @@ local M = {}
 
 M.theme = theme
 M.surface = surface
+M.layout = layout
 
 --- Register user presets / set the active default preset.
 ---@param opts? Lib.UI.Kit.SetupOpts
