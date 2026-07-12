@@ -1,6 +1,6 @@
 -- docs/TESTS/ui_kit_spec.lua — lib.nvim.ui.kit
--- Phase 1 (theme, surface, note), Phase 2 (toast, input, select/prompt),
--- Phase 3 (layout compute/mount + picker template).
+-- Phase 1 (theme, surface, note), Phase 2 (toast, input, prompt),
+-- Phase 3 (layout compute/mount + picker template, native chooser + hover_select shim).
 
 return function(H)
   local eq, ok = H.eq, H.ok
@@ -97,11 +97,66 @@ return function(H)
   vim.cmd("stopinsert")
   inp:close()
 
-  -- --------------------------------------------------------------- prompt (confirm)
-  kit.prompt({ question = "OK?", answer_type = "confirm" })
+  -- --------------------------------------------------------------- chooser (native select)
+  local chooser = require("lib.nvim.ui.kit.chooser")
+
+  -- single select: submit fires on_select(item, idx) and closes
+  local picked_item, picked_idx
+  kit.select({
+    selection = { "alpha", "beta", "gamma" },
+    on_select = function(it, i)
+      picked_item, picked_idx = it, i
+    end,
+  })
+  ok(chooser.is_open(), "chooser opened")
+  chooser.move(1) -- alpha -> beta
+  eq(chooser.current_index(), 2, "move advances selection")
+  chooser.submit()
+  eq(picked_item, "beta", "single-select returned the highlighted item")
+  eq(picked_idx, 2, "single-select returned its index")
+  ok(not chooser.is_open(), "chooser closed after submit")
+
+  -- move wraps around
+  kit.select({ selection = { "a", "b" }, on_select = function() end })
+  chooser.move(-1) -- from line 1 wraps to line 2
+  eq(chooser.current_index(), 2, "move(-1) wraps to the last row")
+  chooser.close()
+
+  -- multi-select: toggle marks then submit returns (items[], indices[])
+  local multi_items, multi_idx
+  kit.select({
+    selection = { "one", "two", "three" },
+    multi = true,
+    on_select = function(items, idxs)
+      multi_items, multi_idx = items, idxs
+    end,
+  })
+  chooser.toggle() -- mark line 1
+  chooser.move(2) -- to line 3
+  chooser.toggle() -- mark line 3
+  chooser.submit()
+  eq(table.concat(multi_items, ","), "one,three", "multi-select returned marked items in order")
+  eq(table.concat(multi_idx, ","), "1,3", "multi-select returned marked indices")
+
+  -- theme selection highlight is wired
+  ok(vim.fn.hlexists("KitSelection") == 1, "KitSelection group defined for the chooser")
+
+  -- ------------------------------------------------- hover_select shim (regression)
   local hs = require("lib.nvim.ui.hover_select")
-  ok(hs.is_open(), "confirm prompt opened a chooser")
-  hs.close()
+  local shim_item, shim_idx
+  local bufnr, winid = hs.open({
+    items = { "x", "y", "z" },
+    on_select = function(it, i)
+      shim_item, shim_idx = it, i
+    end,
+  })
+  ok(type(bufnr) == "number" and type(winid) == "number", "hover_select.open returns bufnr, winid")
+  ok(hs.is_open(), "hover_select.is_open() true via shim")
+  chooser.move(2) -- highlight "z"
+  chooser.submit()
+  eq(shim_item, "z", "hover_select callback fires with the same (item, idx) contract")
+  eq(shim_idx, 3, "hover_select callback index preserved")
+  ok(not hs.is_open(), "hover_select closed after selection")
 
   -- --------------------------------------------------------------- layout (pure)
   local geo = kit.layout.compute(kit.layout.templates.picker.spec)

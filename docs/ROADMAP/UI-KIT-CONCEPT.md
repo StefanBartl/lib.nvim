@@ -382,10 +382,10 @@ The absorption runs alongside the phased roadmap (§13):
 
 | Step | When | What happens | hover_select call sites |
 | ---- | ---- | ------------ | ----------------------- |
-| **1. Delegate** | Phase 1 | `kit.popup({ type = "select" })` calls the existing `ui.hover_select` under the hood. hover_select is still the engine; the kit just themes/positions around it. | untouched |
-| **2. Native chooser** | Phase 3 | A native themed chooser is built inside kit, reusing hover_select's proven navigation semantics (`j`/`k`/arrows, `<CR>`, `<Esc>`/`q`, `h`/`l` blocked — see [navigation.lua](../../lua/lib/nvim/ui/hover_select/navigation.lua)) and multi-select (see [init.lua](../../lua/lib/nvim/ui/hover_select/init.lua)). `kit`'s `select` now uses the native chooser; delegation is dropped. | untouched |
-| **3. Shim** | Phase 3–4 | `ui.hover_select` is reimplemented as a thin adapter: `open(opts)` maps `Lib.HoverSelect.Options` → the kit chooser and forwards the callback. Same signature, same behavior; only the internals move. hover_select's `buffer`/`window`/`navigation`/`highlight` submodules are deleted (logic now lives in kit). | still work, unchanged API |
-| **4. Migrate & (optionally) retire** | after Phase 4 | Call sites are migrated to `kit` at leisure. Once none remain, `ui.hover_select` can be removed — or kept indefinitely as the shim if convenient. A `:checkhealth`/grep sweep tracks remaining users. | migrated one by one |
+| **1. Delegate** ✅ | Phase 1–2 | `kit.popup({ type = "select" })` called the existing `ui.hover_select` under the hood. | untouched |
+| **2. Native chooser** ✅ | Phase 3 | Built `lib.nvim.ui.kit.chooser` (themed, superset of `Lib.HoverSelect.Options`), matching hover_select's navigation (`j`/`k`/arrows, `<CR>`, `<Esc>`/`q`, `h`/`l` blocked) and multi-select. `kit.select` now uses it; the delegation is gone. | untouched |
+| **3. Shim** ✅ | Phase 3 | `ui.hover_select` is now a thin adapter over `kit.chooser`: `open(opts)` maps `Lib.HoverSelect.Options` → the chooser and returns `(bufnr, winid)`; `close`/`is_open` delegate. Same signature/behavior; the `buffer`/`window`/`navigation`/`highlight`/`config` submodules were deleted (logic lives in the kit). | still work, unchanged API |
+| **4. Migrate & (optionally) retire** ⏳ | later | Call sites move to `kit.select` at leisure; once none remain, the shim can be removed. A grep sweep tracks remaining users. | migrated one by one |
 
 Design implication for the native chooser (Phase 3): it must be a **superset**
 of `Lib.HoverSelect.Options` so the Step-3 shim is a pure mapping with no
@@ -438,16 +438,16 @@ surfaces the library already uses:
 
 ## 13. Phased roadmap
 
-> Status: **Phase 1 & 2 shipped**, **Phase 3 in progress** — the layout engine
-> (`kit.layout.compute`/`mount`) and the template registry (`picker`) landed;
-> the interactive picker prompt and the native `select` chooser (hover_select
-> absorption) are the remaining Phase 3 work. Phase 4 pending.
+> Status: **Phase 1 & 2 shipped**, **Phase 3 nearly complete** — layout engine
+> (`kit.layout`), template registry (`picker`), and the **native `select`
+> chooser** with **hover_select absorbed to a shim** (§10 steps 2–3) all landed.
+> Remaining: the interactive picker prompt (Part B). Phase 4 pending.
 
 | Phase | Deliverable | Notes |
 | ----- | ----------- | ----- |
 | **1** ✅ | Theme/preset engine (Layer A) + surface primitive (Layer B) + `setup()` | Foundation; ships built-in presets; `note` as first component |
 | **2** ✅ | Short-lived popups: `toast`, `prompt(confirm/text)`, `input`; `select` delegating to hover_select | The high-frequency, quick-win components |
-| **3** 🔨 | Layout engine (Layer C) ✅ + templates (§7a) ✅ + `picker` template; interactive prompt + native `select` chooser ⏳ | Composition payoff landed; hover_select absorption steps 2–3 (§10) still to do |
+| **3** 🔨 | Layout engine (Layer C) ✅ + templates (§7a) ✅ + native `select` chooser ✅ + hover_select shim ✅; interactive picker prompt ⏳ | Composition + absorption landed; interactive prompt (Part B) remains |
 | **4** | `confirm` with horizontal buttons (§9); hover_select shim + call-site migration | Highest-effort component last; API-stable migration |
 
 ## 14. Open decisions

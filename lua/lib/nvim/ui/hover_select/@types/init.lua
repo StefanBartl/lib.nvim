@@ -5,39 +5,18 @@
 
 ---@class Lib.UI.HoverSelect
 ---@description
---- Öffentliche API des Hover-Select-UI-Moduls.
---- Stellt Funktionen zum Öffnen, Schließen und Abfragen eines
---- interaktiven Floating-Auswahlfensters bereit.
+--- Public API of the hover-select UI module. Since the chooser was absorbed into
+--- lib.nvim.ui.kit, this is a thin shim over lib.nvim.ui.kit.chooser; the surface
+--- below is unchanged for backward compatibility.
 ---
 ---@field open fun(opts: Lib.HoverSelect.Options): integer|nil, integer|nil
---- Öffnet ein neues Hover-Select-Fenster.
---- Erstellt Buffer und Floating-Window, initialisiert Navigation,
---- Highlighting und internen Zustand.
---- Gibt Buffer- und Window-ID zurück oder nil bei Fehlern.
+--- Open a hover-select window. Returns buffer and window id, or nil on failure.
 ---
 ---@field close fun()
---- Schließt das aktuell geöffnete Hover-Select-Fenster.
---- Entfernt Fenster, Buffer und Highlights und setzt den Zustand zurück.
+--- Close the active hover-select window.
 ---
 ---@field is_open fun(): boolean
---- Prüft, ob aktuell ein Hover-Select-Fenster geöffnet und gültig ist.
---- Gibt true zurück, wenn ein gültiges Window existiert.
----
----@field _toggle_selection fun()
---- Interne Hilfsfunktion.
---- Schaltet den Selektionsstatus der aktuellen Zeile um.
---- Wird ausschließlich im Multi-Select-Modus verwendet.
----
----@field _update_selection_highlights fun()
---- Interne Hilfsfunktion.
---- Aktualisiert alle visuellen Hervorhebungen für selektierte Zeilen
---- basierend auf dem aktuellen Selektionszustand.
----
----@field _handle_selection fun()
---- Interne Hilfsfunktion.
---- Verarbeitet die finale Auswahl (Single- oder Multi-Select),
---- ruft den konfigurierten Callback auf und schließt anschließend
---- das Hover-Select-Fenster.
+--- Whether a hover-select window is currently open and valid.
 
 ---@class Lib.HoverSelect.Options
 ---@field items string[] List of items to display (one per line)
@@ -60,6 +39,5 @@
 ---@field multi_select boolean     # Whether multi-selection is enabled
 ---@field selections table<integer, boolean> # Selected line indices
 ---@field ns_id integer            # Highlight namespace id
-
 
 return {}
