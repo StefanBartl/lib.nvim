@@ -79,3 +79,28 @@ kit.popup({ type = "prompt", question = "Delete?", answer_type = "confirm", on_a
 | `input`  | single-line insert-mode prompt; `<CR>` submits, `<Esc>` cancels |
 | `select` | list chooser (delegates to `hover_select` this phase) |
 | `prompt` | ask: `answer_type = "confirm"` (yes/no → boolean) or `"text"` |
+
+## Layout engine (Phase 3, partial)
+
+Turn a declarative region spec into aligned `nvim_open_win` geometry for several
+coordinated floats — the "three windows that line up perfectly" primitive.
+
+```lua
+-- ready-made picker template (prompt / results / preview):
+local group = kit.layout.template("picker", { theme = "rounded" })
+group.slots.results:set_lines(matches)
+group.slots.preview:set_lines(preview_lines)
+group.close()               -- closes every slot
+
+-- or compute geometry yourself (pure, no I/O) and mount:
+local geo = kit.layout.compute({
+  width = 0.8, height = 0.8, gap = 0,
+  rows = {
+    { name = "prompt", height = 3 },
+    { cols = { { name = "results", width = 0.4 }, { name = "preview", width = 0.6 } } },
+  },
+})
+```
+
+Still to come this phase: the interactive picker prompt and a native `select`
+chooser (absorbing `hover_select`).

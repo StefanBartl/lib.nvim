@@ -438,14 +438,16 @@ surfaces the library already uses:
 
 ## 13. Phased roadmap
 
-> Status: **Phase 1 & 2 shipped** (`lib.nvim.ui.kit` — theme engine, surface,
-> note, toast, input, select, prompt). Phases 3–4 pending.
+> Status: **Phase 1 & 2 shipped**, **Phase 3 in progress** — the layout engine
+> (`kit.layout.compute`/`mount`) and the template registry (`picker`) landed;
+> the interactive picker prompt and the native `select` chooser (hover_select
+> absorption) are the remaining Phase 3 work. Phase 4 pending.
 
 | Phase | Deliverable | Notes |
 | ----- | ----------- | ----- |
 | **1** ✅ | Theme/preset engine (Layer A) + surface primitive (Layer B) + `setup()` | Foundation; ships built-in presets; `note` as first component |
 | **2** ✅ | Short-lived popups: `toast`, `prompt(confirm/text)`, `input`; `select` delegating to hover_select | The high-frequency, quick-win components |
-| **3** | Layout engine (Layer C) + layout **templates** (§7a) + `picker` template with interactive prompt; native `select` chooser | The multi-window composition payoff; hover_select absorption steps 2–3 (§10) |
+| **3** 🔨 | Layout engine (Layer C) ✅ + templates (§7a) ✅ + `picker` template; interactive prompt + native `select` chooser ⏳ | Composition payoff landed; hover_select absorption steps 2–3 (§10) still to do |
 | **4** | `confirm` with horizontal buttons (§9); hover_select shim + call-site migration | Highest-effort component last; API-stable migration |
 
 ## 14. Open decisions

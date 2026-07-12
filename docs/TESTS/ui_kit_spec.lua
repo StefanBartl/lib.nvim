@@ -1,5 +1,6 @@
 -- docs/TESTS/ui_kit_spec.lua — lib.nvim.ui.kit
--- Phase 1 (theme, surface, note) + Phase 2 (toast, input, select/prompt).
+-- Phase 1 (theme, surface, note), Phase 2 (toast, input, select/prompt),
+-- Phase 3 (layout compute/mount + picker template).
 
 return function(H)
   local eq, ok = H.eq, H.ok
@@ -101,6 +102,41 @@ return function(H)
   local hs = require("lib.nvim.ui.hover_select")
   ok(hs.is_open(), "confirm prompt opened a chooser")
   hs.close()
+
+  -- --------------------------------------------------------------- layout (pure)
+  local geo = kit.layout.compute(kit.layout.templates.picker.spec)
+  ok(geo.slots.prompt ~= nil, "picker layout has a prompt slot")
+  ok(geo.slots.results ~= nil, "picker layout has a results slot")
+  ok(geo.slots.preview ~= nil, "picker layout has a preview slot")
+
+  -- prompt spans the full outer width; results+preview are narrower halves
+  ok(geo.slots.prompt.width >= geo.slots.results.width, "prompt wider than results")
+  ok(geo.slots.results.width < geo.slots.preview.width, "results (0.4) narrower than preview (0.6)")
+
+  -- prompt sits above the results/preview row
+  ok(geo.slots.prompt.row < geo.slots.results.row, "prompt above results")
+  eq(geo.slots.results.row, geo.slots.preview.row, "results and preview share a row")
+
+  -- gap = 0, border = 1 -> preview.col == results.col + results.width + 2
+  eq(
+    geo.slots.preview.col,
+    geo.slots.results.col + geo.slots.results.width + 2,
+    "results and preview align edge-to-edge (shared border, no gap)"
+  )
+
+  -- --------------------------------------------------------------- layout (mount)
+  local group =
+    assert(kit.layout.template("picker", { theme = "double" }), "picker template mounts")
+  ok(group.slots.prompt:is_valid(), "prompt slot surface valid")
+  ok(group.slots.results:is_valid(), "results slot surface valid")
+  ok(group.slots.preview:is_valid(), "preview slot surface valid")
+  -- closing the group closes every slot
+  group.close()
+  ok(not group.slots.results:is_valid(), "group.close() closed the results slot")
+  ok(not group.slots.preview:is_valid(), "group.close() closed the preview slot")
+
+  -- unknown template returns nil without throwing
+  eq(kit.layout.template("nope"), nil, "unknown template returns nil")
 
   -- popup dispatch: still-unimplemented types return nil without throwing
   eq(kit.popup({ type = "menu" }), nil, "planned type returns nil (no throw)")

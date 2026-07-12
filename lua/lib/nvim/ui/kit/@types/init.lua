@@ -84,9 +84,29 @@
 ---@field prompt fun(opts: table): any                       # ask: confirm (yes/no) or text
 ---@field surface Lib.UI.Kit.SurfaceModule
 ---@field theme Lib.UI.Kit.ThemeModule
+---@field layout Lib.UI.Kit.LayoutModule
 
 ---@class Lib.UI.Kit.SurfaceModule
 ---@field open fun(opts?: Lib.UI.Kit.SurfaceOpts): Lib.UI.Kit.Surface|nil
+
+--- Geometry for one slot (an nvim_open_win config).
+---@class Lib.UI.Kit.Slot
+---@field relative "editor"
+---@field row integer
+---@field col integer
+---@field width integer
+---@field height integer
+
+--- A mounted layout group.
+---@class Lib.UI.Kit.Group
+---@field slots table<string, Lib.UI.Kit.Surface>
+---@field close fun()
+
+---@class Lib.UI.Kit.LayoutModule
+---@field compute fun(spec: table): { slots: table<string, Lib.UI.Kit.Slot>, outer: table }
+---@field mount fun(spec: table, opts?: table): Lib.UI.Kit.Group
+---@field template fun(name: string, opts?: table): Lib.UI.Kit.Group|nil
+---@field templates table<string, { spec: table }>
 
 ---@class Lib.UI.Kit.ThemeModule
 ---@field resolve fun(theme?: Lib.UI.Kit.ThemeArg): Lib.UI.Kit.Theme
