@@ -8,5 +8,6 @@
 ---@field find_plain fun(s: string, needle: string): integer|nil, integer|nil
 ---@field replace_plain fun(s: string, from: string, to: string): string
 ---@field surround fun(s: string, left: string, right: string): string
+---@field strip_ansi fun(s: string): string
 
 return {}

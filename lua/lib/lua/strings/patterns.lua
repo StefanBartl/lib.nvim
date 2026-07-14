@@ -57,4 +57,12 @@ function P.surround(s, left, right)
   return left .. s .. right
 end
 
+---Strip ANSI escape (SGR color) sequences from a string.
+---@nodiscard
+---@param s string
+---@return string
+function P.strip_ansi(s)
+  return (s:gsub("\27%[[%d;]*m", ""))
+end
+
 return P

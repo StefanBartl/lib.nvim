@@ -31,6 +31,7 @@ M.escape_lua_magic = require("lib.lua.strings.patterns").escape_lua_magic
 M.find_plain = require("lib.lua.strings.patterns").find_plain
 M.replace_plain = require("lib.lua.strings.patterns").replace_plain
 M.surround = require("lib.lua.strings.patterns").surround
+M.strip_ansi = require("lib.lua.strings.patterns").strip_ansi
 
 -- links module
 M.uri_decode = require("lib.lua.strings.links").uri_decode
