@@ -134,22 +134,27 @@ Neovim adapters.
     lib.nvim.map           keymap helpers
     lib.nvim.usercmd       user-command helpers
     lib.nvim.autocmd       autocmd / augroup helpers
-    lib.nvim.buffer        buffer helpers (insert_lines, is_markdown_buf, …)
+    lib.nvim.buffer        buffer helpers (insert_lines, is_markdown_buf,
+                           open_background, …)
     lib.nvim.buf_win_tab   buffer / window / tab utilities
     lib.nvim.window        overlay/float helpers (make_scratch, nice_quit, …)
     lib.nvim.ui            kit (themed UI toolkit), highlight helpers
     lib.nvim.fs            path / filesystem helpers (vim.fs / uv); cached
-                           marker-based root finding (find_root), relpath
+                           marker-based root finding (find_root), relpath,
+                           create_entry, normkey, project_key, path_shorten
     lib.nvim.cross         cross-platform: OS detection, run/argv, clipboard, uv,
                            path separators: unify_slashes (\ -> /), normalize
                            (-> OS-native), collapse_dots (lexical ./.. collapse),
-                           has_win_sep (C:\ drive predicate)
+                           has_win_sep (C:\ drive predicate), drive_upper
+                           (uppercase C: prefix)
     lib.nvim.normalize     path / value normalization
     lib.nvim.git           git helpers
     lib.nvim.terminal      terminal-buffer helpers
     lib.nvim.require       safe / dir / lazy require
     lib.nvim.lua_ls        LuaLS: module path, @module annotation
     lib.nvim.core          misc Neovim helpers (has_exec, simple_echo)
+    lib.nvim.treesitter    filetype allowlist gate for treesitter features
+                           |lib.nvim-treesitter|
     lib.nvim.system        host env snapshot + Windows rpc pipe + cross-platform
                            system info (float + clipboard, :SystemInfo usercmd)
 
@@ -215,6 +220,7 @@ Modules with dedicated `:help` documentation. Jump to one via its tag, or
     lib.nvim.ui.kit      themed, composable UI toolkit       |lib.nvim-kit|
     lib.lua.time.diff    high-precision time / interval diff |lib.nvim-time_diff|
     lib.nvim.progress    style-agnostic progress indicator   |lib.nvim-progress|
+    lib.nvim.treesitter  filetype allowlist gate            |lib.nvim-treesitter|
 
 Every other module documents itself in a `README.md` next to its source; see
 the namespace tables under |lib.nvim-namespaces|.
