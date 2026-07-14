@@ -64,6 +64,8 @@
 ---
 ---@field dedup_list fun(list: any[]): any[] # Deduplicate list preserving first occurrence order. Returns new array.
 ---
+---@field dedup_indices fun(list: any[], key_fn: fun(item: any): any): integer[] # Pure: indices to remove (ascending) so only the first occurrence per key_fn(item) survives. Does not mutate list.
+---
 ---@field slice fun(list: any[], i: integer, j?: integer): any[] # Extract slice from list [i..j]. Supports negative indices. Returns new array.
 ---
 ---@field unique_push fun(list: any[], v: any): boolean # Push value to list only if not already present. Mutates list. Returns true if added, false if duplicate.

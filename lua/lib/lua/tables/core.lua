@@ -184,6 +184,29 @@ function M.dedup_list(list)
   return out
 end
 
+---Find indices to remove so only the first occurrence per key survives.
+---Pure: does not mutate `list`. Indices are returned in ascending order,
+---suitable for removal from the end backwards.
+---@nodiscard
+---@generic T
+---@param list T[]
+---@param key_fn fun(item: T): any
+---@return integer[] indices
+function M.dedup_indices(list, key_fn)
+  local seen = {} ---@type table<any, boolean>
+  ---@type integer[]
+  local out = {}
+  for i = 1, #list do
+    local k = key_fn(list[i])
+    if seen[k] then
+      out[#out + 1] = i
+    else
+      seen[k] = true
+    end
+  end
+  return out
+end
+
 ---@nodiscard
 ---@generic T
 ---@param list T[]
