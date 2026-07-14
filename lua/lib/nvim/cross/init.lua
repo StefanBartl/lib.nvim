@@ -21,6 +21,7 @@ M.separators = {
   normalize = require("lib.nvim.cross.fs.separators.normalize"),
   unify_slashes = require("lib.nvim.cross.fs.separators.unify_slashes"),
   collapse_dots = require("lib.nvim.cross.fs.separators.collapse_dots"),
+  drive_upper = require("lib.nvim.cross.fs.separators.drive_upper"),
 }
 
 -- UV/Loop compatibility

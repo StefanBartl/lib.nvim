@@ -1,8 +1,117 @@
 ---@module 'lib.nvim.fs.path_shorten'
--- Utility module to shorten file paths for use in Telescope and fzf-lua.
--- The algorithm preserves the path start (drive/root) and the filename at the end,
--- and replaces a variable-length middle section with an ellipsis ("…") until the
--- resulting string fits the requested maximum length.
+-- Utility module to shorten file paths for display.
+--
+-- Two styles, selected via `opts.style`:
+--   "fit"   (default) preserves the path start (drive/root) and the filename
+--           at the end, replacing a variable-length middle section with an
+--           ellipsis ("…" by default) until the result fits `max_len`.
+--   "label" always renders "<root>/<ellipsis>/<parent>/<file>" ("...." by
+--           default), ignoring `max_len` — ported from Harpoon's menu-label
+--           formatter. Independent algorithm; only dispatch and the ellipsis
+--           marker are shared with "fit".
+
+local uv = vim.uv or vim.loop
+
+--------------------------------------------------------------------------------
+-- "label" style — <root>/<ellipsis>/<parent>/<file>
+--------------------------------------------------------------------------------
+
+---@return string
+local function label_homedir()
+  return (uv.os_homedir and uv.os_homedir()) or vim.fn.expand("~")
+end
+
+---@param p string
+---@return string
+local function label_to_display_sep(p)
+  return (p:gsub("\\", "/"))
+end
+
+---@param p string
+---@return boolean
+local function label_is_unc(p)
+  return p:match("^//") ~= nil
+end
+
+---@param p string
+---@return string, string
+local function label_split_unc_root(p)
+  local s = p:match("^//([^/]+/[^/]+)")
+  if not s then
+    local rest = (p:gsub("^//+", ""))
+    return "//", rest
+  end
+  local root = "//" .. s
+  local rest = p:sub(#root + 2)
+  return root, rest
+end
+
+---@param p string
+---@return boolean
+local function label_is_windows_drive(p)
+  return p:match("^%a:[/\\]") ~= nil
+end
+
+---@param p string
+---@return string, string
+local function label_split_drive_root(p)
+  local drive = p:sub(1, 2):upper()
+  local rest = p:sub(3)
+  rest = rest:gsub("^[/\\]+", "")
+  return drive, rest
+end
+
+---@param path string
+---@param ellipsis string
+---@return string
+local function build_label(path, ellipsis)
+  if type(path) ~= "string" or path == "" then
+    return ""
+  end
+
+  local rp = (uv.fs_realpath and uv.fs_realpath(path)) or path
+  local p = label_to_display_sep(rp)
+
+  local home = label_to_display_sep(label_homedir())
+  local root, rest
+
+  if label_is_unc(p) then
+    root, rest = label_split_unc_root(p)
+  elseif label_is_windows_drive(p) then
+    root, rest = label_split_drive_root(p)
+    root = root .. "/"
+  elseif p:sub(1, #home + 1) == (home .. "/") then
+    root, rest = "~", p:sub(#home + 2)
+    root = root .. "/"
+  elseif p == home then
+    return "~"
+  elseif p:sub(1, 1) == "/" then
+    root, rest = "/", p:sub(2)
+  else
+    local cwd = label_to_display_sep((uv.cwd and uv.cwd()) or vim.fn.getcwd())
+    if p:sub(1, 1) ~= "/" and not label_is_windows_drive(p) and not label_is_unc(p) then
+      p = cwd .. "/" .. p
+    end
+    return build_label(p, ellipsis)
+  end
+
+  local parent = rest:match("(.+)/[^/]+$") or ""
+  local file = rest:match("[^/]+$") or rest
+
+  if parent == "" then
+    if root == "//" then
+      return "//" .. file
+    end
+    return root .. file
+  end
+
+  local parent_name = parent:match("[^/]+$") or parent
+  return string.format("%s%s/%s/%s", root, ellipsis, parent_name, file)
+end
+
+--------------------------------------------------------------------------------
+-- "fit" style — width-budget ellipsis collapsing
+--------------------------------------------------------------------------------
 
 --- Determine path separator depending on platform.
 --- @return string separator ("/" on POSIX, "\" on Windows)
@@ -62,23 +171,33 @@ local function strlen(s)
   return #s
 end
 
---- Shorten a path so that it fits within max_len characters.
---- Preserves the first meaningful segment (drive or root marker) and the last segment (filename).
---- Collapses middle segments by replacing them with an ellipsis ("…") and progressively
---- reduces kept segments until the result fits.
+--- Shorten a path for display. Default ("fit") style preserves the first
+--- meaningful segment (drive or root marker) and the last segment (filename),
+--- collapsing the middle with an ellipsis until the result fits `max_len`.
+--- "label" style always shows "<root>/<ellipsis>/<parent>/<file>", ignoring
+--- `max_len`.
 --- @param path string full path to shorten
---- @param max_len integer maximum allowed length (characters, >=1)
---- @return string shortened path (never longer than max_len if max_len >= 1)
-return function(path, max_len)
+--- @param max_len integer|nil maximum allowed length (characters, >=1); ignored for style "label"
+--- @param opts? Lib.Fs.PathShortenOpts
+--- @return string shortened path
+return function(path, max_len, opts)
   if type(path) ~= "string" then
     return path
   end
+
+  opts = opts or {}
+  local style = opts.style or "fit"
+
+  if style == "label" then
+    return build_label(path, opts.ellipsis or "....")
+  end
+
   if type(max_len) ~= "number" or max_len < 1 then
     return path
   end
 
   local sep = get_sep()
-  local ell = "…"
+  local ell = opts.ellipsis or "…"
 
   -- fast path: already fits
   if strlen(path) <= max_len then

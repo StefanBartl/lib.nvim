@@ -9,5 +9,6 @@
 ---@field normalize fun(path: string): string|nil
 ---@field unify_slashes fun(path: string): string
 ---@field collapse_dots fun(path: string): string # Lexically collapse './..' + repeated separators (pure; forward-slash form; keeps POSIX root & 'C:' drive prefix)
+---@field drive_upper fun(path: string): string # Uppercase a bare Windows drive prefix ("c:/foo" -> "C:/foo"); no-op elsewhere
 
 return {}
