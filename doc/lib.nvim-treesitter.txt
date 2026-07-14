@@ -1,0 +1,43 @@
+*lib.nvim-treesitter.txt*     Filetype allowlist gate for treesitter features
+
+lib.nvim.treesitter                                    *lib.nvim-treesitter*
+
+Filetype allowlist gate for treesitter-dependent features (highlighting,
+foldexpr, indentexpr). Not a parser-availability probe — a curated allowlist
+of filetypes considered safe/desired for treesitter activation, kept
+centrally so multiple activation hooks share one list.
+
+==============================================================================
+CONTENTS                                       *lib.nvim-treesitter-contents*
+
+  1. Usage ................................ |lib.nvim-treesitter-usage|
+  2. Functions ............................ |lib.nvim-treesitter-functions|
+       is_enabled ......................... |lib.nvim-treesitter-is_enabled|
+
+==============================================================================
+1. USAGE                                          *lib.nvim-treesitter-usage*
+>lua
+    local guard = require("lib.nvim.treesitter.guard")
+
+    vim.api.nvim_create_autocmd("FileType", {
+      callback = function(args)
+        if guard.is_enabled(args.buf) then
+          vim.treesitter.start(args.buf)
+        end
+      end,
+    })
+<
+==============================================================================
+2. FUNCTIONS                                  *lib.nvim-treesitter-functions*
+
+------------------------------------------------------------------------------
+is_enabled({bufnr}, {whitelist})            *lib.nvim-treesitter-is_enabled*
+
+Whether treesitter should be enabled for `bufnr`. `whitelist` defaults to
+`guard.DEFAULT_WHITELIST` (`table<string, boolean>`, keyed by filetype). >lua
+
+    guard.is_enabled(bufnr)
+    guard.is_enabled(bufnr, { lua = true, python = true })
+<
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:

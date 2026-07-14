@@ -183,12 +183,12 @@ lib.is_windows()    -- -> lib.nvim.cross.platform.is_windows
 | `lib.nvim.map`         | keymap helpers                                      |
 | `lib.nvim.usercmd`     | user-command helpers                                |
 | `lib.nvim.autocmd`     | autocmd / augroup helpers                           |
-| `lib.nvim.buffer`      | buffer helpers (`insert_lines`, `is_markdown_buf`)  |
+| `lib.nvim.buffer`      | buffer helpers (`insert_lines`, `is_markdown_buf`, `open_background`) |
 | `lib.nvim.buf_win_tab` | buffer / window / tab utilities                     |
 | [`lib.nvim.window`](lua/lib/nvim/window/README.md) | overlay/float helpers: `make_scratch`, `nice_quit`, `set_title`, `close_on_focus_lost`, `center`, `attach` ([`:help`](doc/lib.nvim-window.txt)) |
 | [`lib.nvim.ui`](lua/lib/nvim/ui/hover_select/README.md) | `hover_select` ([`:help`](doc/lib.nvim-hover_select.txt)), highlight helpers |
-| `lib.nvim.fs`          | path / filesystem helpers (`vim.fs` / `uv`)         |
-| [`lib.nvim.cross`](lua/lib/nvim/cross/fs/separators/README.md) | cross-platform: OS detection, run/argv, clipboard, uv, [path separators](lua/lib/nvim/cross/fs/separators/README.md) (`unify_slashes`, `normalize`, `collapse_dots`, `has_win_sep`) |
+| `lib.nvim.fs`          | path / filesystem helpers (`vim.fs` / `uv`): [`create_entry`](lua/lib/nvim/fs/create_entry/README.md), [`normkey`](lua/lib/nvim/fs/normkey/README.md), [`project_key`](lua/lib/nvim/fs/project_key/README.md), `path_shorten` (fit/label styles), [`find_root`](lua/lib/nvim/fs/find_root/README.md), `relpath` |
+| [`lib.nvim.cross`](lua/lib/nvim/cross/fs/separators/README.md) | cross-platform: OS detection, run/argv, clipboard, uv, [path separators](lua/lib/nvim/cross/fs/separators/README.md) (`unify_slashes`, `normalize`, `collapse_dots`, `has_win_sep`, `drive_upper`) |
 | `lib.nvim.normalize`   | path / value normalization                          |
 | `lib.nvim.git`         | git helpers                                         |
 | `lib.nvim.terminal`    | terminal-buffer helpers                             |
@@ -196,6 +196,7 @@ lib.is_windows()    -- -> lib.nvim.cross.platform.is_windows
 | `lib.nvim.lua_ls`      | LuaLS: module path, `@module` annotation            |
 | `lib.nvim.core`        | misc Neovim helpers (`has_exec`, `simple_echo`)     |
 | `lib.nvim.neotree`     | neo-tree helpers: `node` (get_path / collect_nodes / extract_paths) |
+| [`lib.nvim.treesitter`](lua/lib/nvim/treesitter/guard/README.md) | `guard`: filetype allowlist gate for treesitter activation ([`:help`](doc/lib.nvim-treesitter.txt)) |
 | [`lib.nvim.system`](lua/lib/nvim/system/README.md) | host env snapshot (`is_windows`/`is_wsl`/…, `home`, `pathsep`, `repo_base`) + Windows rpc pipe; opt-in `setup` |
 | [`lib.nvim.progress`](lua/lib/nvim/progress/README.md) | style-agnostic progress indicator: `notify`/`statusline`/`fidget`/`float` renderers, delay-guard, focus-gated cancel-with-confirm ([`:help`](doc/lib.nvim-progress.txt)) |
 
@@ -216,12 +217,14 @@ and are generated on install by your plugin manager (see [Help docs](#help-docs)
 - [`lib.nvim.system`](lua/lib/nvim/system/README.md) · [`lib.nvim.progress`](lua/lib/nvim/progress/README.md)
 - [`lib.nvim.buf_win_tab.capture`](lua/lib/nvim/buf_win_tab/capture/README.md) · [`lib.nvim.buf_win_tab.resize_guarded`](lua/lib/nvim/buf_win_tab/resize_guarded/README.md)
 - [`lib.nvim.fs.ignore.list`](lua/lib/nvim/fs/ignore/list/README.md) · [`lib.nvim.fs.is_subpath`](lua/lib/nvim/fs/is_subpath/README.md) · [`lib.nvim.fs.polymorphic_rootresolver`](lua/lib/nvim/fs/polymorphic_rootresolver/README.md) · [`lib.nvim.fs.find_root`](lua/lib/nvim/fs/find_root/README.md)
+- [`lib.nvim.fs.create_entry`](lua/lib/nvim/fs/create_entry/README.md) · [`lib.nvim.fs.normkey`](lua/lib/nvim/fs/normkey/README.md) · [`lib.nvim.fs.project_key`](lua/lib/nvim/fs/project_key/README.md)
 - [`lib.nvim.lua_ls.insert.module_annotation`](lua/lib/nvim/lua_ls/insert/module_annnotation/README.md)
+- [`lib.nvim.treesitter.guard`](lua/lib/nvim/treesitter/guard/README.md)
 
 **`:help` pages**
 
 - `:help lib.nvim` — overview hub · `:help lib.nvim-modules` — module index
-- `:help lib.nvim-window` · `:help lib.nvim-hover_select` · `:help lib.nvim-time_diff` · `:help lib.nvim-progress`
+- `:help lib.nvim-window` · `:help lib.nvim-hover_select` · `:help lib.nvim-time_diff` · `:help lib.nvim-progress` · `:help lib.nvim-treesitter`
 
 ---
 
