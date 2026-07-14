@@ -42,6 +42,7 @@ M.omit = core_module.omit
 M.merge_shallow = core_module.merge_shallow
 M.merge_deep = core_module.merge_deep
 M.dedup_list = core_module.dedup_list
+M.dedup_indices = core_module.dedup_indices
 M.slice = core_module.slice
 M.unique_push = core_module.unique_push
 M.binary_search = core_module.binary_search
