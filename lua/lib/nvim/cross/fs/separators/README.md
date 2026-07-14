@@ -11,6 +11,7 @@ only. Each is a single-function module; they are also aggregated under
 | `normalize`     | → the **current OS's** native separator              |     ✓      |
 | `collapse_dots` | simplify `.`/`..` and repeated separators (segments) |     ✓      |
 | `has_win_sep`   | predicate: does it start with a `C:\` / `C:/` drive? |     —      |
+| `drive_upper`   | uppercase a bare Windows drive prefix (`c:` → `C:`)  |     ✓      |
 
 `unify_slashes` and `normalize` move in **opposite** directions: use
 `unify_slashes` to keep a path in `/` form regardless of OS (Neovim's API and
@@ -28,6 +29,7 @@ sep.unify_slashes([[a\b\c]])        --> "a/b/c"
 sep.normalize("a/b/c")              --> "a\\b\\c" on Windows, "a/b/c" elsewhere
 sep.has_win_sep([[E:\repos]])       --> true   (truthy match)
 sep.collapse_dots("a/./b/../c")     --> "a/c"
+sep.drive_upper("c:/repos")         --> "C:/repos"
 ```
 
 ## `collapse_dots(path) -> string`
@@ -54,3 +56,17 @@ Implementation note: the module deliberately fans the transform out into small
 pure helpers (`validate`, `detect_root`, `split_segments`, `is_drive_prefix`,
 `collapse_segments`, `join`) that the returned function only orchestrates, so
 each step can be tested or modified in isolation.
+
+> **Known gap:** `collapse_dots` does not special-case a UNC prefix
+> (`//server/share/...`) — `detect_root` only recognizes a single leading `/`,
+> so a UNC path's double leading slash currently collapses to one, corrupting
+> it. No current caller passes UNC paths through `collapse_dots`, so this is
+> tracked but not yet fixed. `lib.nvim.fs.normkey` needs UNC-safe repeated-slash
+> collapsing and deliberately does its own (guarded) collapse instead of
+> routing through this function — see its README.
+
+## `drive_upper(path) -> string`
+
+Uppercases a bare Windows drive-letter prefix (`c:` → `C:`); a no-op on POSIX
+paths, UNC shares, and relative paths. Pure string transform, same guard style
+as the other helpers here.
