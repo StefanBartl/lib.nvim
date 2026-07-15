@@ -199,6 +199,7 @@ lib.is_windows()    -- -> lib.nvim.cross.platform.is_windows
 | [`lib.nvim.treesitter`](lua/lib/nvim/treesitter/guard/README.md) | `guard`: filetype allowlist gate for treesitter activation ([`:help`](doc/lib.nvim-treesitter.txt)) |
 | [`lib.nvim.system`](lua/lib/nvim/system/README.md) | host env snapshot (`is_windows`/`is_wsl`/…, `home`, `pathsep`, `repo_base`) + Windows rpc pipe; opt-in `setup` |
 | [`lib.nvim.progress`](lua/lib/nvim/progress/README.md) | style-agnostic progress indicator: `notify`/`statusline`/`fidget`/`float` renderers, delay-guard, focus-gated cancel-with-confirm ([`:help`](doc/lib.nvim-progress.txt)) |
+| [`lib.nvim.selection`](lua/lib/nvim/selection/README.md) | reselect a Visual line/char range after a mapping mutates it: `keep_lines`/`keep_chars` ([`:help`](doc/lib.nvim-selection.txt)) |
 
 ### `lib.vim.*` — classic Vim
 
@@ -214,7 +215,7 @@ and are generated on install by your plugin manager (see [Help docs](#help-docs)
 
 - [`lib.lua.memo`](lua/lib/lua/memo/README.md) · [`lib.lua.lazy`](lua/lib/lua/lazy/README.md) · [`lib.lua.time.diff`](lua/lib/lua/time/diff/README.md)
 - [`lib.nvim.notify`](lua/lib/nvim/notify/README.md) · [`lib.nvim.window`](lua/lib/nvim/window/README.md) · [`lib.nvim.ui.hover_select`](lua/lib/nvim/ui/hover_select/README.md)
-- [`lib.nvim.system`](lua/lib/nvim/system/README.md) · [`lib.nvim.progress`](lua/lib/nvim/progress/README.md)
+- [`lib.nvim.system`](lua/lib/nvim/system/README.md) · [`lib.nvim.progress`](lua/lib/nvim/progress/README.md) · [`lib.nvim.selection`](lua/lib/nvim/selection/README.md)
 - [`lib.nvim.buf_win_tab.capture`](lua/lib/nvim/buf_win_tab/capture/README.md) · [`lib.nvim.buf_win_tab.resize_guarded`](lua/lib/nvim/buf_win_tab/resize_guarded/README.md)
 - [`lib.nvim.fs.ignore.list`](lua/lib/nvim/fs/ignore/list/README.md) · [`lib.nvim.fs.is_subpath`](lua/lib/nvim/fs/is_subpath/README.md) · [`lib.nvim.fs.polymorphic_rootresolver`](lua/lib/nvim/fs/polymorphic_rootresolver/README.md) · [`lib.nvim.fs.find_root`](lua/lib/nvim/fs/find_root/README.md)
 - [`lib.nvim.fs.create_entry`](lua/lib/nvim/fs/create_entry/README.md) · [`lib.nvim.fs.normkey`](lua/lib/nvim/fs/normkey/README.md) · [`lib.nvim.fs.project_key`](lua/lib/nvim/fs/project_key/README.md)
@@ -224,7 +225,7 @@ and are generated on install by your plugin manager (see [Help docs](#help-docs)
 **`:help` pages**
 
 - `:help lib.nvim` — overview hub · `:help lib.nvim-modules` — module index
-- `:help lib.nvim-window` · `:help lib.nvim-hover_select` · `:help lib.nvim-time_diff` · `:help lib.nvim-progress` · `:help lib.nvim-treesitter`
+- `:help lib.nvim-window` · `:help lib.nvim-hover_select` · `:help lib.nvim-time_diff` · `:help lib.nvim-progress` · `:help lib.nvim-treesitter` · `:help lib.nvim-selection`
 
 ---
 

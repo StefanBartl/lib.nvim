@@ -157,6 +157,9 @@ Neovim adapters.
                            |lib.nvim-treesitter|
     lib.nvim.system        host env snapshot + Windows rpc pipe + cross-platform
                            system info (float + clipboard, :SystemInfo usercmd)
+    lib.nvim.selection     reselect a Visual line/char range after a mapping
+                           mutates it (keep_lines, keep_chars)
+                           |lib.nvim-selection|
 
 ------------------------------------------------------------------------------
 lib.vim                                                      *lib.nvim-lib.vim*
@@ -221,6 +224,7 @@ Modules with dedicated `:help` documentation. Jump to one via its tag, or
     lib.lua.time.diff    high-precision time / interval diff |lib.nvim-time_diff|
     lib.nvim.progress    style-agnostic progress indicator   |lib.nvim-progress|
     lib.nvim.treesitter  filetype allowlist gate            |lib.nvim-treesitter|
+    lib.nvim.selection   reselect a Visual range after mutation |lib.nvim-selection|
 
 Every other module documents itself in a `README.md` next to its source; see
 the namespace tables under |lib.nvim-namespaces|.
