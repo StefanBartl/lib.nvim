@@ -1,0 +1,120 @@
+*lib.nvim-selection.txt*   Reselect a Visual range after a mapping mutates it
+
+lib.nvim.selection                                      *lib.nvim-selection*
+
+Neovim drops the Visual selection the instant a mapped function returns,
+which forces every "act on the selection, then keep it selected" mapping to
+hand-roll the same feedkeys dance. `keep_lines`/`keep_chars` do that dance
+once: capture the current selection's extent, run the caller's mutation,
+then restore an equivalent selection over the (rewritten) same rows or same
+byte-column span.
+
+==============================================================================
+CONTENTS                                        *lib.nvim-selection-contents*
+
+  1. Design ................................... |lib.nvim-selection-design|
+  2. Usage ..................................... |lib.nvim-selection-usage|
+  3. Functions .............................. |lib.nvim-selection-functions|
+       lines ................................. |lib.nvim-selection-lines|
+       reselect_lines ............... |lib.nvim-selection-reselect_lines|
+       keep_lines ....................... |lib.nvim-selection-keep_lines|
+       chars ................................. |lib.nvim-selection-chars|
+       reselect_chars ............... |lib.nvim-selection-reselect_chars|
+       keep_chars ....................... |lib.nvim-selection-keep_chars|
+
+==============================================================================
+1. DESIGN                                         *lib.nvim-selection-design*
+
+Two shapes are supported, matching the two patterns real callers need:
+
+    lines   a linewise (V) row range. For actions that rewrite whole lines
+            in place but never add or remove any (bullet/checkbox toggles,
+            sort/reverse/rotate, indent, ...).
+    chars   a same-line charwise (v) byte-column range. For actions that
+            rewrite part of a single line without changing its total
+            length (swap-with-neighbor, inline transforms, ...).
+
+`gv` is deliberately not used: the '< / '> marks it reads are only set once
+Visual mode actually ENDS, so calling `gv` from inside a mapping that is
+still conceptually "in" Visual mode reselects the PREVIOUS selection, not
+the current one. Reselection instead uses an explicit <Esc> followed by
+pure normal-mode motions — never a `:` command: entering Visual mode
+auto-prefixes a typed `:` with `'<,'>`, which would corrupt any `:call ...`
+sequence queued mid-selection.
+
+==============================================================================
+2. USAGE                                           *lib.nvim-selection-usage*
+
+A visual-mode ("x") keymap that toggles something on every selected line and
+should leave the same lines selected afterwards: >lua
+
+    local selection = require("lib.nvim.selection")
+
+    vim.keymap.set("x", "<A-->", function()
+      local bufnr = vim.api.nvim_get_current_buf()
+      selection.keep_lines(function(srow, erow)
+        my_toggle_range(bufnr, srow, erow)
+      end)
+    end)
+<
+A visual-mode keymap that swaps a same-line selection with its right
+neighbor char, falling back to `gv` when the selection isn't same-line
+charwise: >lua
+
+    vim.keymap.set("x", "<leader><Right>", function()
+      local _, applicable = selection.keep_chars(function(row, scol, ecol)
+        my_swap_right(row, scol, ecol)
+      end)
+      if not applicable then
+        vim.api.nvim_feedkeys(vim.keycode("gv"), "n", false)
+      end
+    end)
+<
+==============================================================================
+3. FUNCTIONS                                   *lib.nvim-selection-functions*
+
+------------------------------------------------------------------------------
+lines()                                            *lib.nvim-selection-lines*
+
+0-based inclusive `srow, erow` row range of the active Visual selection (any
+submode). Reads `line("v")`/`line(".")`, which stay live during Visual mode
+— unlike the '< / '> marks `gv` relies on.
+
+------------------------------------------------------------------------------
+reselect_lines({srow}, {erow})           *lib.nvim-selection-reselect_lines*
+
+Restore a linewise (V) selection over [srow, erow] (0-based inclusive),
+queued to run once the current mapping returns.
+
+------------------------------------------------------------------------------
+keep_lines({fn})                             *lib.nvim-selection-keep_lines*
+
+Capture the current row range, run `fn(srow, erow)`, then reselect the same
+rows linewise. Returns `fn`'s return value. Use for actions that rewrite
+line CONTENTS in place without changing the line count.
+
+------------------------------------------------------------------------------
+chars()                                            *lib.nvim-selection-chars*
+
+0-based `row, scol, ecol` (inclusive byte columns) of the active selection,
+if (and only if) it is charwise and confined to one line; otherwise nil.
+
+------------------------------------------------------------------------------
+reselect_chars({row}, {scol}, {ecol})    *lib.nvim-selection-reselect_chars*
+
+Restore a charwise (v) selection spanning byte columns [scol, ecol] on
+`row`. Byte columns are converted to character offsets first, so multibyte
+text still lands on the right boundary (`l` motions move per character, not
+per byte).
+
+------------------------------------------------------------------------------
+keep_chars({fn})                             *lib.nvim-selection-keep_chars*
+
+Capture the current same-line charwise selection, run
+`fn(row, scol, ecol)`, then reselect it. Returns `ret, applicable`;
+`applicable` is false (and `fn` is not called) when the current selection is
+not a same-line charwise selection — fall back to your own handling (e.g.
+`gv`) in that case.
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:
