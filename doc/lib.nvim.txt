@@ -116,11 +116,28 @@ lib.lua                                                      *lib.nvim-lib.lua*
 
 Editor-independent Lua helpers. No `vim` API; usable/testable outside Neovim.
 
-    lib.lua.tables      array / dict / set / functional / safe / unique / with
-    lib.lua.strings     trim, split/join, case conversion, padding, slugify, …
+    lib.lua.tables      array / dict / set / functional / safe / unique / with;
+                        deep_merge (mutating recursive merge)
+    lib.lua.strings     trim, split/join, case conversion, padding, slugify, …;
+                        utf8 (codepoint encode/decode/iter), encoding
+                        (percent-encode, base64), distance (levenshtein,
+                        similarity), format (format_bytes, format_number),
+                        location (parse "path:line:col" and friends), case
+                        (case_shape/apply_shape, change_case), wrap
+                        (center_text, center_text_lines)
     lib.lua.functions   meta helpers: noop, identity, const, raise, …
-    lib.lua.time        time / diff calculation
+    lib.lua.time        time / diff calculation; presets (today/yesterday/
+                        last_week/this_{month,quarter,year}); format
+                        (iso/human/short/log/filename/unix timestamps)
     lib.lua.json        encode (pure-Lua JSON encoder) + decode helpers
+    lib.lua.yaml        minimal, deliberately non-spec-complete YAML decoder
+    lib.lua.uuid        UUIDv4 generate/format
+    lib.lua.numeral     roman <-> int, bijective base-26 alpha <-> int
+    lib.lua.diff        lines (common-prefix/suffix splice region), myers
+                        (LCS edit script)
+    lib.lua.error       structured errors ({kind, message, data}) + safe_call
+                        with traceback
+    lib.lua.dump        recursive Lua value dumper (vim.inspect alternative)
     lib.lua.memo        memoization
     lib.lua.lazy        lazy-require proxy
 
