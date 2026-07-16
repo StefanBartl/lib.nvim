@@ -16,7 +16,10 @@
 ---@return string|nil content
 ---@return string|nil err
 return function(path)
-  local f, open_err = io.open(path, "r")
+  -- Binary mode: matches fs.write.to_file's fix (io.open's "r" is text
+  -- mode, which on Windows silently collapses "\r\n" to "\n" on read —
+  -- content must round-trip byte-exact through write.to_file/read).
+  local f, open_err = io.open(path, "rb")
   if not f then
     return nil, "open failed: " .. (open_err or path)
   end
