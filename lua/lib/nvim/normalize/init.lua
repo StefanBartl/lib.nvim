@@ -33,6 +33,9 @@ local M = {}
 -- =========================================================
   M.as_int = validators.as_int
   M.as_bool = validators.as_bool
+  M.is_one_of = validators.is_one_of
+  M.buf_valid = validators.buf_valid
+  M.win_valid = validators.win_valid
 -- =========================================================
 -- Utility Fuctions
 -- =========================================================

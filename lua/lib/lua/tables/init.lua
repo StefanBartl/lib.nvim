@@ -41,6 +41,7 @@ M.pick = core_module.pick
 M.omit = core_module.omit
 M.merge_shallow = core_module.merge_shallow
 M.merge_deep = core_module.merge_deep
+M.deep_merge = core_module.deep_merge
 M.dedup_list = core_module.dedup_list
 M.dedup_indices = core_module.dedup_indices
 M.slice = core_module.slice

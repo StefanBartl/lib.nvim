@@ -81,4 +81,44 @@ function M.run_blocking(cmd)
   }
 end
 
+--- Launch `argv` detached from Neovim (fire-and-forget, no output capture).
+--- On Windows/WSL, GUI processes (e.g. `explorer.exe`, `notepad`) are launched
+--- via `jobstart(..., { detach = true })` instead of `vim.system`, because
+--- `vim.system`'s process detachment is unreliable for GUI processes on
+--- those platforms — `jobstart` with `detach = true` handles it correctly.
+--- Elsewhere, `vim.system(argv, { detach = true })` is used when available.
+---@param argv string[]
+---@return boolean ok
+---@return string|nil err
+function M.run_detached(argv)
+  if type(argv) ~= "table" or not argv[1] then
+    return false, "argv must be a non-empty string list"
+  end
+
+  local is_windows = require("lib.nvim.cross.platform.is_windows")()
+  local is_wsl = require("lib.nvim.cross.platform.is_wsl")()
+
+  if is_windows or is_wsl then
+    local jid = vim.fn.jobstart(argv, { detach = true })
+    if jid <= 0 then
+      return false, "jobstart failed"
+    end
+    return true, nil
+  end
+
+  if vim.system then
+    local ok, err = pcall(vim.system, argv, { detach = true })
+    if not ok then
+      return false, tostring(err)
+    end
+    return true, nil
+  end
+
+  local jid = vim.fn.jobstart(argv, { detach = true })
+  if jid <= 0 then
+    return false, "jobstart failed"
+  end
+  return true, nil
+end
+
 return M

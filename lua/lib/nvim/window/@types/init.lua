@@ -47,5 +47,12 @@
 ---@field close_on_focus_lost fun(winid: integer, opts?: Lib.Window.CloseOnFocusLostOpts): integer|nil
 ---@field center fun(winid: integer): boolean
 ---@field attach fun(winid: integer): Lib.Window.Handle
+---@field is_usable_window fun(winid: integer): boolean # True when winid is a normal, non-floating, non-sidebar window.
+---@field target_window fun(opts?: { current_tab_only?: boolean }): integer|nil # Find the first usable normal window, preferring the current one.
+---@field ensure_bottom fun(winid: integer): nil # Scroll winid's cursor to the last line of its buffer (retries if the window isn't valid yet).
+---@field make_focusable fun(winid: integer): boolean # Flip a floating window's focusable config to true.
+---@field force_focus fun(winid: integer): boolean # Make winid focusable (if floating) and switch to it.
+---@field focus_and_bottom fun(winid: integer): boolean # force_focus + ensure_bottom.
+---@field open_named_scratch fun(name: string, lines?: string[], opts?: { filetype?: string, split?: "above"|"below"|"left"|"right", size?: integer, modifiable?: boolean }): integer, integer # Find-or-create a named scratch buffer shown in a split; returns bufnr, winid.
 
 return {}

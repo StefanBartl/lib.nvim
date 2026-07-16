@@ -24,16 +24,22 @@ M.separators = {
   drive_upper = require("lib.nvim.cross.fs.separators.drive_upper"),
 }
 
+M.fs.expand_path = require("lib.nvim.cross.fs.expand_path")
+M.fs.mutate = require("lib.nvim.cross.fs.mutate")
+
 -- UV/Loop compatibility
 M.uv = {
   spawn_command = require("lib.nvim.cross.uv.spawn_command"),
   spawn_shell_command = require("lib.nvim.cross.uv.spawn_shell_command"),
+  spawn_capture = require("lib.nvim.cross.uv.spawn_capture"),
+  wait_until = require("lib.nvim.cross.uv.wait_until"),
 }
 
 M.run = {
   shell = require("lib.nvim.cross.run").shell,
   run = require("lib.nvim.cross.run").run,
   run_blocking = require("lib.nvim.cross.run").run_blocking,
+  run_detached = require("lib.nvim.cross.run").run_detached,
   run_argv = require("lib.nvim.cross.run_argv"),
 }
 

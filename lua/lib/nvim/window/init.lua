@@ -26,6 +26,13 @@ M.set_title = require("lib.nvim.window.set_title")
 M.make_scratch = require("lib.nvim.window.make_scratch")
 M.close_on_focus_lost = require("lib.nvim.window.close_on_focus_lost")
 M.center = require("lib.nvim.window.center")
+M.is_usable_window = require("lib.nvim.window.find_usable").is_usable_window
+M.target_window = require("lib.nvim.window.find_usable").target_window
+M.ensure_bottom = require("lib.nvim.window.focus_helpers").ensure_bottom
+M.make_focusable = require("lib.nvim.window.focus_helpers").make_focusable
+M.force_focus = require("lib.nvim.window.focus_helpers").force_focus
+M.focus_and_bottom = require("lib.nvim.window.focus_helpers").focus_and_bottom
+M.open_named_scratch = require("lib.nvim.window.open_named_scratch")
 
 ---Construct a fluent wrapper bound to a single window id.
 ---Methods are called with **dot syntax** (`w.nice_quit()`), not colon syntax:

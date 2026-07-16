@@ -120,6 +120,37 @@ function M.head_short_hash(git_cmd)
   return git_system(bin .. " rev-parse --short HEAD")
 end
 
+--- Parse `git status --porcelain -u` output into a path -> status-code map.
+--- Handles ordinary XY codes (M/A/D/R/C/U, "??" untracked, "!!" ignored) and
+--- rename/copy entries ("R  old -> new" / "C  old -> new"), keying renames
+--- by their *new* path while recording the old path alongside the code.
+---@param git_cmd? string
+---@return table<string, { code: string, orig_path: string|nil }>|nil
+function M.status_porcelain(git_cmd)
+  local bin = git_cmd or "git"
+  local out = vim.fn.system(bin .. " status --porcelain -u 2>/dev/null")
+  if type(out) ~= "string" then
+    return nil
+  end
+  if vim.v.shell_error ~= 0 and out == "" then
+    return nil
+  end
+
+  local result = {} ---@type table<string, { code: string, orig_path: string|nil }>
+  for line in out:gmatch("[^\r\n]+") do
+    local code, rest = line:sub(1, 2), line:sub(4)
+    if code ~= "" and rest ~= "" then
+      local orig_path, new_path = rest:match("^(.-)%s*%->%s*(.+)$")
+      if orig_path and new_path then
+        result[new_path] = { code = code, orig_path = orig_path }
+      else
+        result[rest] = { code = code, orig_path = nil }
+      end
+    end
+  end
+  return result
+end
+
 --- Create a buffer-scoped function that clears all virtual text
 --- in the given namespace.
 ---
