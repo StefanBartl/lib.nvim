@@ -1,0 +1,20 @@
+---@meta
+---@module 'lib.nvim.safe_api.@types'
+
+---@class Lib.SafeApi
+---@field safe_call fun(fn: function, ...: any): boolean, any|nil, string|nil
+---@field is_valid_buffer fun(bufnr: integer): boolean
+---@field is_valid_window fun(winnr: integer): boolean
+---@field buf_get_lines fun(bufnr: integer, start: integer, end_: integer, strict_indexing: boolean): boolean, string[]|nil, string|nil
+---@field buf_line_count fun(bufnr: integer): boolean, integer|nil, string|nil
+---@field buf_get_option fun(bufnr: integer, name: string): boolean, any|nil, string|nil
+---@field buf_set_option fun(bufnr: integer, name: string, value: any): boolean, nil, string|nil
+---@field buf_set_extmark fun(bufnr: integer, ns_id: integer, line: integer, col: integer, opts: table): boolean, integer|nil, string|nil
+---@field set_extmark fun(bufnr: integer, ns_id: integer, line: integer, col_start: integer, col_end: integer, hl_group: any, line_content: string, priority?: integer): boolean, integer|nil, string|nil
+---@field buf_clear_namespace fun(bufnr: integer, ns_id: integer, line_start: integer, line_end: integer): boolean, nil, string|nil
+---@field win_get_option fun(winnr: integer, name: string): boolean, any|nil, string|nil
+---@field win_set_option fun(winnr: integer, name: string, value: any): boolean, nil, string|nil
+---@field win_get_buf fun(winnr: integer): boolean, integer|nil, string|nil
+---@field win_close fun(winnr: integer, force: boolean): boolean, nil, string|nil
+---@field buf_delete fun(bufnr: integer, opts?: table): boolean, nil, string|nil
+---@field with_retry fun(fn: function, max_retries: integer, ...: any): boolean, any|nil, string|nil

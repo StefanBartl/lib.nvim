@@ -196,4 +196,29 @@ return function(H)
   local scalar_dst = { k = { deep = 1 } }
   tables.deep_merge(scalar_dst, { k = "now a string" })
   eq(scalar_dst.k, "now a string", "tables.deep_merge: scalar in src replaces a table in dst")
+
+  -- --------------------------------------------------------------- lib.lua.dump
+  local dump = require("lib.lua.dump")
+
+  eq(dump.to_string(42), "(number) 42", "dump.to_string: scalar")
+  eq(dump.to_string("hi"), '(string) hi', "dump.to_string: string")
+  eq(dump.to_string(nil), "nil", "dump.to_string: nil")
+
+  local plain = dump.to_lines({ a = 1 })
+  eq(#plain, 2, "dump.to_lines: table header + one field")
+  ok(plain[1]:match("%(table%)") ~= nil, "dump.to_lines: table header marker")
+  ok(plain[2]:match("%[a%] = %(number%) 1") ~= nil, "dump.to_lines: field line")
+
+  local cyclic = {}
+  cyclic.self = cyclic
+  local cyclic_lines = dump.to_lines(cyclic, { max_depth = 3 })
+  ok(#cyclic_lines > 0, "dump.to_lines: cyclic table does not hang")
+  ok(cyclic_lines[#cyclic_lines]:match("max depth reached") ~= nil,
+    "dump.to_lines: cyclic table hits the depth cap")
+
+  local with_meta = setmetatable({ x = 1 }, { y = 2 })
+  local meta_lines = dump.to_lines(with_meta)
+  local joined = table.concat(meta_lines, "\n")
+  ok(joined:match("%[x%] = %(number%) 1") ~= nil, "dump.to_lines: own field survives alongside a metatable")
+  ok(joined:match("metatable") ~= nil, "dump.to_lines: metatable is also dumped")
 end
