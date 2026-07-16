@@ -13,7 +13,9 @@ end
 local unpack_fn = table.unpack or unpack
 
 ---@param argv string[] Command and arguments, e.g. { "curl", "-sS", url }
----@param opts? { timeout_ms?: integer, cwd?: string, env?: table<string,string> }
+---@param opts? { timeout_ms?: integer, cwd?: string, env?: string[] } `env`, like
+---libuv's own spawn `env` option, is an array of `"KEY=VALUE"` strings — not
+---a `{ [key] = value }` dict. Passed straight through, unconverted.
 ---@param on_done fun(result: { ok: boolean, code: integer, signal: integer, stdout: string, stderr: string, timed_out: boolean })
 return function(argv, opts, on_done)
   opts = opts or {}

@@ -4,7 +4,7 @@
 ---@class Lib.Cross.Uv.SpawnCapture.Opts
 ---@field timeout_ms? integer
 ---@field cwd? string
----@field env? table<string, string>
+---@field env? string[] Array of "KEY=VALUE" strings (libuv's own env shape), not a `{[key]=value}` dict.
 
 ---@class Lib.Cross.Uv.SpawnCapture.Result
 ---@field ok boolean
