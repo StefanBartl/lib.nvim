@@ -21,6 +21,7 @@ return function(H)
     "lib.nvim.cross", "lib.nvim.cross.fs.expand_path", "lib.nvim.cross.fs.mutate",
     "lib.nvim.cross.uv.spawn_capture", "lib.nvim.cross.uv.wait_until",
     "lib.nvim.window", "lib.nvim.core", "lib.nvim.git", "lib.nvim.normalize",
+    "lib.nvim.safe_api",
   }) do
     ok(require(mod) ~= nil, "loads: " .. mod)
   end
@@ -109,6 +110,62 @@ return function(H)
   vim.bo[buf].filetype = "lua"
   eq(get_option(buf, "filetype"), "lua", "get_option: reads filetype")
   eq(get_option(99999, "filetype"), nil, "get_option: invalid buffer -> nil")
+
+  -- ------------------------------------------------------------ safe_api
+  local safe_api = require("lib.nvim.safe_api")
+
+  ok(safe_api.is_valid_buffer(buf), "safe_api.is_valid_buffer: real buffer")
+  ok(not safe_api.is_valid_buffer(99999), "safe_api.is_valid_buffer: bogus handle")
+  ok(not safe_api.is_valid_buffer("nope"), "safe_api.is_valid_buffer: non-number")
+
+  local win = vim.api.nvim_get_current_win()
+  ok(safe_api.is_valid_window(win), "safe_api.is_valid_window: real window")
+  ok(not safe_api.is_valid_window(99999), "safe_api.is_valid_window: bogus handle")
+
+  local sok, slines = safe_api.buf_get_lines(buf, 0, -1, false)
+  ok(sok, "safe_api.buf_get_lines: succeeds on a valid buffer")
+  eq(slines[1], "hello don't world", "safe_api.buf_get_lines: reads the content")
+
+  local bok, _, berr = safe_api.buf_get_lines(99999, 0, -1, false)
+  ok(not bok, "safe_api.buf_get_lines: fails on an invalid buffer")
+  ok(berr ~= nil, "safe_api.buf_get_lines: yields an error message")
+
+  local cok, cnt = safe_api.buf_line_count(buf)
+  ok(cok, "safe_api.buf_line_count: succeeds")
+  eq(cnt, 1, "safe_api.buf_line_count: counts lines")
+
+  local ns = vim.api.nvim_create_namespace("safe_api_spec")
+  local eok, eid = safe_api.buf_set_extmark(buf, ns, 0, 0, {})
+  ok(eok, "safe_api.buf_set_extmark: succeeds")
+  ok(type(eid) == "number", "safe_api.buf_set_extmark: returns an id")
+
+  local sxok, _, sxerr = safe_api.set_extmark(buf, ns, 0, 0, 5, "Comment", "hello don't world")
+  ok(sxok, "safe_api.set_extmark: in-range columns succeed")
+  local oxok, _, oxerr = safe_api.set_extmark(buf, ns, 0, 0, 999, "Comment", "hello don't world")
+  ok(not oxok, "safe_api.set_extmark: out-of-range col_end fails cleanly")
+  ok(oxerr:match("out of range") ~= nil, "safe_api.set_extmark: error mentions the range")
+
+  local wok, wval = safe_api.win_get_option(win, "wrap")
+  ok(wok, "safe_api.win_get_option: succeeds")
+  eq(type(wval), "boolean", "safe_api.win_get_option: returns the option value")
+
+  local rcalls = 0
+  local rok, rres = safe_api.with_retry(function()
+    rcalls = rcalls + 1
+    if rcalls < 2 then
+      error("invalid handle")
+    end
+    return "ok"
+  end, 3)
+  ok(rok, "safe_api.with_retry: succeeds after a transient handle-like failure")
+  eq(rres, "ok", "safe_api.with_retry: returns the eventual result")
+  eq(rcalls, 2, "safe_api.with_retry: retried exactly once")
+
+  local nrok, _, nrerr = safe_api.with_retry(function()
+    error("totally unrelated failure")
+  end, 3)
+  ok(not nrok, "safe_api.with_retry: does not retry a non-handle error")
+  ok(nrerr:match("unrelated") ~= nil, "safe_api.with_retry: surfaces the original error")
 
   -- ---------------------------------------------------- fs round-trips on disk
   local tmp = vim.fn.tempname()
