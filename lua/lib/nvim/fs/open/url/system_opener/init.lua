@@ -1,19 +1,27 @@
 ---@module 'lib.nvim.fs.open.url.system_opener'
+--- Open a path/URL with the OS default handler — the shared per-OS dispatch
+--- every plugin that shells out to `open`/`xdg-open`/`start` was reimplementing
+--- independently (see the `lib_NEW_MODULES.md`/`replace_moduls.md` survey).
+---
+--- `cfg` is entirely optional. Windows support is enabled by default (via
+--- `cmd.exe /c start`); pass `cfg.enable_windows_opener = false` to opt back
+--- out. `cfg.open_cmd_mac`/`open_cmd_unix` override the mac/Linux command.
 
 local M = {}
 
 --- In-place "open URL" via system opener.
 ---@param url string
----@param cfg AutoCmds.General.MD.GotoFile.Cfg
+---@param cfg? AutoCmds.General.MD.GotoFile.Cfg
 ---@return boolean opened
 function M.open(url, cfg)
+  cfg = cfg or {}
   local opener ---@type string[]|nil
 
   if vim.fn.has("macunix") == 1 then
     opener = cfg.open_cmd_mac or { "open", url }
   elseif vim.fn.has("unix") == 1 then
     opener = cfg.open_cmd_unix or { "xdg-open", url }
-  elseif cfg.enable_windows_opener and vim.fn.has("win32") == 1 then
+  elseif cfg.enable_windows_opener ~= false and vim.fn.has("win32") == 1 then
     opener = { "cmd.exe", "/c", "start", "", url }
   end
 
