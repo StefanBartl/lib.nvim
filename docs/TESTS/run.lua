@@ -19,6 +19,8 @@ local specs = {
   "ui_kit_spec.lua",
   "lua_helpers_spec.lua",
   "nvim_helpers_spec.lua",
+  "context_spec.lua",
+  "cache_spec.lua",
 }
 
 local failed = 0

@@ -27,6 +27,9 @@
 ---@field hl Lib.UI.HL
 ---@field kit Lib.UI.Kit # Themed, composable UI toolkit (theme/preset engine, surface primitive, popup components)
 ---@field logger Lib.Logger # Structured logging / diagnostics / crash dumps (factory via `.new`)
+---@field cache Lib.Cache # Disk (persistent JSON, TTL) + memory (namespace, TTL/tick, opt-in auto-invalidation) caching
+---@field buffer_context Lib.Buffer.Context # Changedtick-cached buffer metadata accessor
+---@field window_context Lib.Window.Context # Same-event-cached window metadata accessor
 --- === Flat helper functions ===
 ---@field always_false fun(): boolean # Constant-false predicate. Always returns false regardless of input. Useful as a disabling predicate or sentinel.
 ---@field always_true fun(): boolean # Constant-true predicate. Always returns true regardless of input. Useful as a default filter or guard function.
