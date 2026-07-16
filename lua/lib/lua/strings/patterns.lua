@@ -57,12 +57,22 @@ function P.surround(s, left, right)
   return left .. s .. right
 end
 
----Strip ANSI escape (SGR color) sequences from a string.
+---Strip ANSI escape sequences from a string: SGR color codes (`\27[...m`),
+---OSC sequences terminated by BEL (`\27]...\7`, e.g. terminal title-setting),
+---stray null bytes, and a broader CSI-like catch-all for sequences the first
+---two patterns miss. Upstreamed from mdview.nvim's adapter/log.lua, whose
+---version covered all of these against raw subprocess relay output — this
+---module's previous single-pattern version only handled SGR codes.
 ---@nodiscard
 ---@param s string
 ---@return string
 function P.strip_ansi(s)
-  return (s:gsub("\27%[[%d;]*m", ""))
+  return (
+    s:gsub("%z", "")
+      :gsub("\27%[[%d;]*m", "")
+      :gsub("\27%]%d+;.-\7", "")
+      :gsub("\27%[?%d+;?%d*%p?", "")
+  )
 end
 
 return P
