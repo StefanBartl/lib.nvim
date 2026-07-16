@@ -4,6 +4,14 @@
 --- This module intentionally returns the function itself (not a table),
 --- so it can be re-exported cleanly by `lib.init`.
 
+-- Cache across calls, declared outside the returned function so it is a
+-- shared upvalue (not reset to nil on every invocation — a `local cached`
+-- declared *inside* the function body would never actually persist, and this
+-- module's fallback path does real file IO, so that matters more here than
+-- in the sibling is_windows/is_macos/is_linux modules).
+---@type boolean|nil
+local cached
+
 ---@return boolean
 --- Returns true when the current runtime is WSL (either v1 or v2).
 --- Detection strategy (in order):
@@ -11,17 +19,12 @@
 ---   2) Environment variables commonly set by WSL (`WSL_DISTRO_NAME`, `WSL_INTEROP`).
 ---   3) Fallback: read `/proc/sys/kernel/osrelease` and look for markers.
 return function()
-  -- Prefer `vim.uv` (Neovim ≥ 0.10); fall back to `vim.loop` for older versions.
-  local uv = (vim and (vim.uv or vim.loop)) or nil
-
-  -- Local cache across calls to avoid repeated IO/syscalls.
-  -- Using upvalue to keep the module a single-function export.
-  ---@type boolean|nil
-  local cached
-
   if cached ~= nil then
     return cached
   end
+
+  -- Prefer `vim.uv` (Neovim ≥ 0.10); fall back to `vim.loop` for older versions.
+  local uv = (vim and (vim.uv or vim.loop)) or nil
 
   local is = false
 
