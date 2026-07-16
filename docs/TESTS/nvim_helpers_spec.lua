@@ -54,6 +54,22 @@ return function(H)
   eq(type(cross.fs.expand_path), "function", "cross aggregator: fs.expand_path wired")
   eq(type(cross.fs.mutate.mkdir_p), "function", "cross aggregator: fs.mutate wired")
   eq(type(cross.uv.spawn_capture), "function", "cross aggregator: uv.spawn_capture wired")
+
+  -- Actually invoke it (not just load-check): this is what caught spawn_capture
+  -- passing argv through table.unpack, which LuaJIT does not provide.
+  local spawn_capture = require("lib.nvim.cross.uv.spawn_capture")
+  local spawn_result = nil
+  spawn_capture({ vim.v.progpath, "--version" }, {}, function(r) spawn_result = r end)
+  vim.wait(5000, function() return spawn_result ~= nil end)
+  ok(spawn_result ~= nil, "spawn_capture: callback fires")
+  ok(spawn_result.ok, "spawn_capture: nvim --version exits 0")
+  ok(spawn_result.stdout:match("NVIM") ~= nil, "spawn_capture: captures stdout")
+
+  local bad_spawn_result = nil
+  spawn_capture({ "definitely_not_a_real_binary_xyz" }, {}, function(r) bad_spawn_result = r end)
+  vim.wait(2000, function() return bad_spawn_result ~= nil end)
+  ok(bad_spawn_result ~= nil, "spawn_capture: callback fires for a missing binary")
+  ok(not bad_spawn_result.ok, "spawn_capture: missing binary -> not ok")
   eq(type(cross.uv.wait_until), "function", "cross aggregator: uv.wait_until wired")
   eq(type(cross.run.run_detached), "function", "cross aggregator: run.run_detached wired")
   eq(type(cross.fs.cwd), "function", "cross aggregator: pre-existing fs.cwd still wired")
