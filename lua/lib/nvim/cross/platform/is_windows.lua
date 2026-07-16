@@ -3,19 +3,21 @@
 --- whether Neovim is running on native Windows (not WSL).
 --- The module returns the function itself (not a table).
 
+-- Cache across calls, declared outside the returned function so it is a
+-- shared upvalue (not reset to nil on every invocation — a `local cached`
+-- declared *inside* the function body would never actually persist).
+---@type boolean|nil
+local cached
+
 ---@return boolean
 --- Returns true when the current runtime is native Windows.
 return function()
-  -- Prefer `vim.uv` (Neovim ≥ 0.10); fall back to `vim.loop` for older versions.
-  local uv = (vim and (vim.uv or vim.loop)) or nil
-
-  -- Local cache across calls to avoid repeated syscalls.
-  ---@type boolean|nil
-  local cached
-
   if cached ~= nil then
     return cached
   end
+
+  -- Prefer `vim.uv` (Neovim ≥ 0.10); fall back to `vim.loop` for older versions.
+  local uv = (vim and (vim.uv or vim.loop)) or nil
 
   local is = false
 
