@@ -195,6 +195,26 @@ return function(H)
   eq(missing, nil, "fs.read: missing file -> nil")
   ok(rerr ~= nil, "fs.read: missing file yields an error message")
 
+  -- Regression: io.open's text mode ("w"/"r") silently rewrites "\n" <->
+  -- "\r\n" on Windows. Both must be binary-mode so writes/reads are
+  -- byte-exact and platform-independent.
+  local crlf_check_p = tmp .. "/crlf_check.txt"
+  ok(write_to_file(crlf_check_p, "a\nb\n"), "fs.write.to_file: writes multi-line content")
+  local raw_f = io.open(crlf_check_p, "rb")
+  local raw = raw_f:read("*a")
+  raw_f:close()
+  eq(raw, "a\nb\n", "fs.write.to_file: no CRLF translation on write (binary mode)")
+  eq(read(crlf_check_p), "a\nb\n", "fs.read: no CRLF collapsing on read (binary mode)")
+
+  local write_append = require("lib.nvim.fs.write.append")
+  local append_p = tmp .. "/append_check.txt"
+  ok(write_append(append_p, "x\n"), "fs.write.append: first append")
+  ok(write_append(append_p, "y\n"), "fs.write.append: second append")
+  local append_f = io.open(append_p, "rb")
+  local append_raw = append_f:read("*a")
+  append_f:close()
+  eq(append_raw, "x\ny\n", "fs.write.append: no CRLF translation (binary mode)")
+
   local json = require("lib.nvim.fs.json")
   local jp = tmp .. "/data.json"
   ok(json.write(jp, { a = 1, b = { "x", "y" } }), "fs.json.write: succeeds")

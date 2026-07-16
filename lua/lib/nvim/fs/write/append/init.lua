@@ -18,7 +18,9 @@ return function(path, content)
   if not ok_mkdir then
     return false, "mkdir failed: " .. tostring(err_mkdir)
   end
-  local f, err = io.open(path, "a")
+  -- Binary mode, matching to_file's fix: "a" is text mode, which on Windows
+  -- silently rewrites every "\n" in `content` to "\r\n".
+  local f, err = io.open(path, "ab")
   if not f then
     return false, "open failed: " .. (err or path)
   end
