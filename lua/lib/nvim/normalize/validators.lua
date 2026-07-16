@@ -353,5 +353,33 @@ function M.as_bool(name, v)
   return true, v, nil
 end
 
+--- Check whether `v` equals one of `candidates` (plain `==` comparison, no
+--- coercion). Useful for guarding enum-like config fields.
+---@param v any
+---@param candidates any[]
+---@return boolean
+function M.is_one_of(v, candidates)
+  for i = 1, #candidates do
+    if v == candidates[i] then
+      return true
+    end
+  end
+  return false
+end
+
+--- True when `bufnr` is a valid, currently-loaded buffer handle.
+---@param bufnr any
+---@return boolean
+function M.buf_valid(bufnr)
+  return type(bufnr) == "number" and vim.api.nvim_buf_is_valid(bufnr)
+end
+
+--- True when `winid` is a valid window handle.
+---@param winid any
+---@return boolean
+function M.win_valid(winid)
+  return type(winid) == "number" and vim.api.nvim_win_is_valid(winid)
+end
+
 ---@type Lib.Normalize.Validators
 return M

@@ -71,6 +71,10 @@
 --- Returns: (ok, val, err)
 --- Only Lua booleans are accepted; strings like "true"/"false" are NOT coerced.
 --- For permissive conversion, use to_bool() + apply_bool_loose().
+---
+---@field is_one_of fun(v: any, candidates: any[]): boolean # Check whether v equals one of candidates (plain ==, no coercion).
+---@field buf_valid fun(bufnr: any): boolean # True when bufnr is a valid, currently-loaded buffer handle.
+---@field win_valid fun(winid: any): boolean # True when winid is a valid window handle.
 
 return {}
 

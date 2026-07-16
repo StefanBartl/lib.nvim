@@ -62,6 +62,8 @@
 ---
 ---@field merge_deep fun(dst: table, src: table): table # Merge src into dst (deep). Recursively merges nested tables. Mutates dst and returns it.
 ---
+---@field deep_merge fun(dst: table, src: table): table # Recursively merge src into dst: nested tables present in both are merged recursively, scalars in src overwrite dst (right-biased). Mutates and returns dst.
+---
 ---@field dedup_list fun(list: any[]): any[] # Deduplicate list preserving first occurrence order. Returns new array.
 ---
 ---@field dedup_indices fun(list: any[], key_fn: fun(item: any): any): integer[] # Pure: indices to remove (ascending) so only the first occurrence per key_fn(item) survives. Does not mutate list.

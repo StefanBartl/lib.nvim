@@ -12,6 +12,13 @@
 ---@field links Lib.Strings.Links
 ---@field patterns Lib.Strings.Patterns
 ---@field convert Lib.Strings.Convert
+---@field utf8 Lib.Strings.Utf8
+---@field encoding Lib.Strings.Encoding
+---@field distance Lib.Strings.Distance
+---@field format Lib.Strings.Format
+---@field location Lib.Strings.Location.Mod
+---@field case Lib.Strings.Case
+---@field wrap Lib.Strings.Wrap
 
 -- ALL String Functions
 ---@class Lib.Strings.ALL
@@ -75,6 +82,77 @@
 -- lib.lua.strings.convert
 -- =========================================================
 ---@field hex_to_string fun(hex: string): string
+-- =========================================================
+-- lib.lua.strings.utf8
+-- =========================================================
+---@field utf8_char_len fun(lead_byte: integer): integer # Byte length (1-4) of the UTF-8 sequence starting with this lead byte.
+---@field utf8_encode fun(cp: integer): string # Encode a Unicode codepoint as UTF-8 bytes.
+---@field utf8_decode fun(str: string, i?: integer): integer|nil, integer # Decode the UTF-8 char at byte index i; returns (codepoint, next_index).
+---@field utf8_iter fun(str: string): fun(): integer|nil, integer|nil # Iterate codepoints, yielding (codepoint, byte_index).
+-- =========================================================
+-- lib.lua.strings.encoding
+-- =========================================================
+---@field url_encode fun(str: string): string # Percent-encode a string (RFC 3986 unreserved chars pass through).
+---@field url_decode fun(str: string): string # Decode a percent-encoded string.
+---@field base64_encode fun(data: string): string
+---@field base64_decode fun(data: string): string
+-- =========================================================
+-- lib.lua.strings.distance
+-- =========================================================
+---@field levenshtein fun(a: string, b: string): integer # Levenshtein edit distance.
+---@field similarity fun(a: string, b: string): number # Normalized similarity in [0,1]; 1 = identical.
+-- =========================================================
+-- lib.lua.strings.format
+-- =========================================================
+---@field format_bytes fun(n: integer, decimals?: integer): string # Human-readable byte size, e.g. 1536 -> "1.5 KB".
+---@field format_number fun(n: number, sep?: string): string # Thousands separators, e.g. 1234567 -> "1,234,567".
+-- =========================================================
+-- lib.lua.strings.location
+-- =========================================================
+---@field parse_location fun(str: string): Lib.Strings.Location|nil # Parse "path:line:col"-style locations out of arbitrary text.
+-- =========================================================
+-- lib.lua.strings.case
+-- =========================================================
+---@field case_shape fun(word: string): "lower"|"upper"|"capital"|"mixed" # Detect a word's casing shape.
+---@field apply_shape fun(word: string, shape: "lower"|"upper"|"capital"|"mixed"): string # Reapply a detected shape onto text ("mixed" is a no-op).
+---@field change_case fun(str: string, mode: "title"|"sentence"|"upper"|"lower"): string
+-- =========================================================
+-- lib.lua.strings.wrap
+-- =========================================================
+---@field center_text fun(str: string, width: integer): string # Center a line within width columns.
+---@field center_text_lines fun(lines: string[], width: integer): string[] # Center each line of a block.
+
+---@class Lib.Strings.Utf8
+---@field char_len fun(lead_byte: integer): integer
+---@field encode fun(cp: integer): string
+---@field decode fun(str: string, i?: integer): integer|nil, integer
+---@field iter fun(str: string): fun(): integer|nil, integer|nil
+
+---@class Lib.Strings.Encoding
+---@field url_encode fun(str: string): string
+---@field url_decode fun(str: string): string
+---@field base64_encode fun(data: string): string
+---@field base64_decode fun(data: string): string
+
+---@class Lib.Strings.Distance
+---@field levenshtein fun(a: string, b: string): integer
+---@field similarity fun(a: string, b: string): number
+
+---@class Lib.Strings.Format
+---@field format_bytes fun(n: integer, decimals?: integer): string
+---@field format_number fun(n: number, sep?: string): string
+
+---@class Lib.Strings.Location.Mod
+---@field parse_location fun(str: string): Lib.Strings.Location|nil
+
+---@class Lib.Strings.Case
+---@field case_shape fun(word: string): "lower"|"upper"|"capital"|"mixed"
+---@field apply_shape fun(word: string, shape: "lower"|"upper"|"capital"|"mixed"): string
+---@field change_case fun(str: string, mode: "title"|"sentence"|"upper"|"lower"): string
+
+---@class Lib.Strings.Wrap
+---@field center_text fun(str: string, width: integer): string
+---@field center_text_lines fun(lines: string[], width: integer): string[]
 
 ---@type Lib.Strings
 local strings

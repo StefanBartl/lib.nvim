@@ -184,6 +184,24 @@ function M.dedup_list(list)
   return out
 end
 
+---Recursively merge `src` into `dst`. Unlike `merge_deep`, nested tables in
+---`dst` that are also tables in `src` are merged recursively rather than
+---replaced wholesale; scalar values in `src` overwrite `dst` (right-biased).
+---Mutates and returns `dst`. Cycle-unsafe (matches `merge_deep`'s contract).
+---@param dst table
+---@param src table
+---@return table dst
+function M.deep_merge(dst, src)
+  for k, v in pairs(src) do
+    if type(v) == "table" and type(dst[k]) == "table" then
+      M.deep_merge(dst[k], v)
+    else
+      dst[k] = v
+    end
+  end
+  return dst
+end
+
 ---Find indices to remove so only the first occurrence per key survives.
 ---Pure: does not mutate `list`. Indices are returned in ascending order,
 ---suitable for removal from the end backwards.

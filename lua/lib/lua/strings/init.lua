@@ -40,6 +40,38 @@ M.has_scheme = require("lib.lua.strings.links").has_scheme
 M.is_web_url = require("lib.lua.strings.links").is_web_url
 M.url_under_cursor = require("lib.lua.strings.links").url_under_cursor
 
+-- utf8 module
+M.utf8_char_len = require("lib.lua.strings.utf8").char_len
+M.utf8_encode = require("lib.lua.strings.utf8").encode
+M.utf8_decode = require("lib.lua.strings.utf8").decode
+M.utf8_iter = require("lib.lua.strings.utf8").iter
+
+-- encoding module
+M.url_encode = require("lib.lua.strings.encoding").url_encode
+M.url_decode = require("lib.lua.strings.encoding").url_decode
+M.base64_encode = require("lib.lua.strings.encoding").base64_encode
+M.base64_decode = require("lib.lua.strings.encoding").base64_decode
+
+-- distance module
+M.levenshtein = require("lib.lua.strings.distance").levenshtein
+M.similarity = require("lib.lua.strings.distance").similarity
+
+-- format module
+M.format_bytes = require("lib.lua.strings.format").format_bytes
+M.format_number = require("lib.lua.strings.format").format_number
+
+-- location module
+M.parse_location = require("lib.lua.strings.location").parse_location
+
+-- case module
+M.case_shape = require("lib.lua.strings.case").case_shape
+M.apply_shape = require("lib.lua.strings.case").apply_shape
+M.change_case = require("lib.lua.strings.case").change_case
+
+-- wrap module
+M.center_text = require("lib.lua.strings.wrap").center_text
+M.center_text_lines = require("lib.lua.strings.wrap").center_text_lines
+
 ---@type Lib.Strings
 return M
 
