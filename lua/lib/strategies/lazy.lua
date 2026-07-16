@@ -127,6 +127,13 @@ end
 -- === BUFFER ===
 LIB.is_markdown_buf = lazy_module("lib.nvim.buffer.is_markdown_buf")
 LIB.insert_lines = lazy_module("lib.nvim.buffer.insert_lines")
+LIB.buffer_context = lazy_module("lib.nvim.buffer.context")
+
+-- === WINDOW ===
+LIB.window_context = lazy_module("lib.nvim.window.context")
+
+-- === CACHE (disk + memory) ===
+LIB.cache = lazy_module("lib.nvim.cache")
 
 -- === TABLES ===
 

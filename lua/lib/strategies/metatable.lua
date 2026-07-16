@@ -34,6 +34,13 @@ local MODULE_MAP = {
   -- BUFFER
   is_markdown_buf = "lib.nvim.buffer.is_markdown_buf",
   insert_lines = "lib.nvim.buffer.insert_lines",
+  buffer_context = "lib.nvim.buffer.context",
+
+  -- WINDOW
+  window_context = "lib.nvim.window.context",
+
+  -- CACHE (disk + memory)
+  cache = "lib.nvim.cache",
 
   -- UI
   hl = "lib.nvim.ui.hl",

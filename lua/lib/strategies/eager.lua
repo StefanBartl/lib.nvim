@@ -53,6 +53,13 @@ LIB.require_lazy = lib_require.lazy
 -- === BUFFER ===
 LIB.is_markdown_buf = require("lib.nvim.buffer.is_markdown_buf")
 LIB.insert_lines = require("lib.nvim.buffer.insert_lines")
+LIB.buffer_context = require("lib.nvim.buffer.context")
+
+-- === WINDOW ===
+LIB.window_context = require("lib.nvim.window.context")
+
+-- === CACHE (disk + memory) ===
+LIB.cache = require("lib.nvim.cache")
 
 -- === TABLES ===
 LIB.with = require("lib.lua.tables.with")

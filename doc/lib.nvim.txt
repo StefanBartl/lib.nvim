@@ -135,9 +135,12 @@ Neovim adapters.
     lib.nvim.usercmd       user-command helpers
     lib.nvim.autocmd       autocmd / augroup helpers
     lib.nvim.buffer        buffer helpers (insert_lines, is_markdown_buf,
-                           open_background, …)
+                           open_background, …); buffer.context: changedtick-
+                           cached buffer metadata accessor
     lib.nvim.buf_win_tab   buffer / window / tab utilities
-    lib.nvim.window        overlay/float helpers (make_scratch, nice_quit, …)
+    lib.nvim.window        overlay/float helpers (make_scratch, nice_quit, …);
+                           window.context: same-event-cached window metadata
+                           accessor
     lib.nvim.ui            kit (themed UI toolkit), highlight helpers
     lib.nvim.fs            path / filesystem helpers (vim.fs / uv); cached
                            marker-based root finding (find_root), relpath,
@@ -159,6 +162,9 @@ Neovim adapters.
                            system info (float + clipboard, :SystemInfo usercmd)
     lib.nvim.selection     reselect a Visual line/char range after a mapping
                            mutates it (keep_lines, keep_chars)
+    lib.nvim.cache         disk: persistent JSON cache with TTL; memory:
+                           namespace cache with TTL/changedtick validation
+                           and opt-in, toggleable autocmd auto-invalidation
                            |lib.nvim-selection|
 
 ------------------------------------------------------------------------------
