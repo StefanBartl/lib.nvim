@@ -20,7 +20,7 @@
 ---@field count? integer
 ---@field complete? string|fun(arg_lead:string, cmd_line:string, cursor_pos:number):string[]
 ---@field desc? string
----@field force? boolean
+---@field force? boolean # Overwrite an existing command instead of erroring (E174). Default: true.
 
 ---@class Lib.UsrCmd
 ---@field create fun(name: string, callback: string|fun(args:Lib.UserCommand.Args), opts: LibUserCommandOpts|nil): nil
