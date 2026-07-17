@@ -24,8 +24,12 @@ function M.create(name, callback, opts)
     opts.nargs = 0
   end
 
+  -- Default to Neovim's native behavior (`force = true`): overwrite an
+  -- existing command instead of raising E174. This keeps command creation
+  -- idempotent under config hot-reload (e.g. NvChad's ReloadNvChad
+  -- BufWritePost autocmd re-sources chadrc on every save).
   if opts.force == nil then
-    opts.force = false
+    opts.force = true
   end
 
   if type(callback) == "function" then
