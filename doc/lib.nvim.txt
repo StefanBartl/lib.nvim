@@ -177,6 +177,8 @@ Neovim adapters.
                            |lib.nvim-treesitter|
     lib.nvim.system        host env snapshot + Windows rpc pipe + cross-platform
                            system info (float + clipboard, :SystemInfo usercmd)
+                           + proc_trace (blocking-call instrumentation for
+                           freeze diagnosis, see lua/lib/nvim/system/README.md)
     lib.nvim.selection     reselect a Visual line/char range after a mapping
                            mutates it (keep_lines, keep_chars)
     lib.nvim.cache         disk: persistent JSON cache with TTL; memory:

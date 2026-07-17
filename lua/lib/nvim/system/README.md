@@ -20,11 +20,12 @@ Guiding ideas:
 
 ```
 lib.nvim.system/
-├── init.lua       -- aggregator: env, rpc_pipe, info, and opt-in setup()
-├── env.lua        -- computed, memoized host-environment snapshot
-├── rpc_pipe.lua   -- predictable Windows named-pipe RPC server
-├── info.lua       -- cross-platform system information (float + clipboard)
-└── @types/        -- LuaLS types (Lib.System.*)
+├── init.lua        -- aggregator: env, rpc_pipe, info, proc_trace, and opt-in setup()
+├── env.lua         -- computed, memoized host-environment snapshot
+├── rpc_pipe.lua    -- predictable Windows named-pipe RPC server
+├── info.lua        -- cross-platform system information (float + clipboard)
+├── proc_trace.lua  -- instrumentation for system()/jobstart/vim.system calls
+└── @types/         -- LuaLS types (Lib.System.*)
 ```
 
 Entry point is `require("lib.nvim.system")`. Individual submodules can also be
@@ -178,6 +179,74 @@ require("lib.nvim.system").setup({ info_usercmd = true })
 
 ---
 
+## `lib.nvim.system.proc_trace`
+
+Instrumentation for the process-spawning APIs: `vim.fn.system`,
+`vim.fn.systemlist`, `vim.system`, `vim.fn.jobstart`. Wraps each one to
+measure call duration and, for calls at or above a configurable threshold,
+appends a stack traceback pointing at the caller to a log file.
+
+**Why this exists.** A UI freeze on the main thread is almost always one of
+these calls (or a burst of them) blocking longer than expected — a hung
+external process, a slow filesystem/network path, or too many spawns in a
+tight loop. `proc_trace` turns "something froze for a while" into "this call,
+from this plugin, took this long" without attaching a debugger.
+
+### API
+
+```lua
+local trace = require("lib.nvim.system.proc_trace")
+
+trace.start(opts?)   -- Lib.System.ProcTrace.Result: { path, active }. Idempotent.
+trace.stop()          -- Lib.System.ProcTrace.Result. Restores the originals.
+trace.is_active()     -- boolean
+trace.log_path()       -- string|nil: path of the active (or last) log file
+```
+
+`opts` (all optional):
+
+| Field           | Default                                | Meaning                                    |
+| --------------- | --------------------------------------- | ------------------------------------------ |
+| `threshold_ms`  | `200`                                    | Calls at/above this duration get a traceback. |
+| `path`          | `stdpath("state") .. "/proc_trace.log"`  | Log file location.                          |
+
+```lua
+-- As early as possible (ideally the first line of init.lua — see limits below):
+require("lib.nvim.system.proc_trace").start({ threshold_ms = 200 })
+
+-- ... reproduce the freeze ...
+
+local result = require("lib.nvim.system.proc_trace").stop()
+vim.cmd("edit " .. result.path)
+```
+
+Log format — one line per call, with a traceback appended for slow ones:
+
+```
+[+    2873ms] jobstart          2103ms  git -C . rev-parse --show-toplevel
+    stack traceback:
+    	.../workspace-diagnostics.nvim/lua/workspace-diagnostics/init.lua:13: in function 'workspace_files'
+    	...
+```
+
+### Honest limits (read before relying on this alone)
+
+* **Only calls through these exact API tables are seen.** A caller that
+  cached a local reference before `start()` ran (`local system =
+  vim.fn.system`) bypasses the wrapper entirely. Call `start()` as early as
+  possible — ideally the very first line of `init.lua` — to minimize this.
+* **LSP clients and other C-internal spawns are invisible here** — they never
+  go through `vim.fn.*` / `vim.system`. Pair this with an OS-level process
+  monitor for full coverage (debugging.nvim's `:Debug proc watch` drives one).
+* **`vim.system(...):wait()`** (synchronous use) is not separately timed;
+  only the async `on_exit` path is wrapped. The dominant real-world use
+  (async with a callback) is covered.
+
+Pure by default: nothing happens until `start()` is called, and `stop()`
+fully restores the original functions.
+
+---
+
 ## `lib.nvim.system.setup(opts?)`
 
 One opt-in entry point that activates the environment "features" a config
@@ -205,6 +274,7 @@ returns the cached `Lib.System.Env` snapshot.
 local lib = require("lib")
 lib.system.env.get().is_windows
 lib.system.setup({ publish_globals = true })
+lib.system.proc_trace.start()
 ```
 
 Direct module paths (`require("lib.nvim.system.env")`) are always the most
