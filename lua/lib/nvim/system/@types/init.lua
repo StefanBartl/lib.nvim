@@ -25,6 +25,7 @@
 ---@field env Lib.System.Env.Module
 ---@field rpc_pipe Lib.System.RpcPipe
 ---@field info Lib.System.Info
+---@field proc_trace Lib.System.ProcTrace
 ---@field setup fun(opts?: Lib.System.SetupOptions): Lib.System.Env
 
 --- `lib.nvim.system.env` module surface.
@@ -54,5 +55,22 @@
 ---@field get fun(opts?: Lib.System.Info.BuildCmdOpts): string[]|nil, string|nil # Run the probe; cleaned output lines or nil + error.
 ---@field show fun(opts?: Lib.System.Info.ShowOpts): integer|nil, integer|nil # Float + clipboard; returns winid, bufnr.
 ---@field create_usercmd fun(name?: string, opts?: Lib.System.Info.ShowOpts): nil # Register the user command (default :SystemInfo).
+
+--- Options accepted by `lib.nvim.system.proc_trace.start`.
+---@class Lib.System.ProcTrace.StartOptions
+---@field threshold_ms? integer # Calls at/above this duration get a traceback logged (default 200).
+---@field path? string # Log file path (default: stdpath("state") .. "/proc_trace.log").
+
+--- Result returned by `start`/`stop`.
+---@class Lib.System.ProcTrace.Result
+---@field path string # Log file path.
+---@field active boolean # Whether tracing is active after the call.
+
+--- `lib.nvim.system.proc_trace` module surface (blocking-call instrumentation).
+---@class Lib.System.ProcTrace
+---@field start fun(opts?: Lib.System.ProcTrace.StartOptions): Lib.System.ProcTrace.Result # Wrap vim.fn.system/systemlist, vim.system, vim.fn.jobstart; idempotent.
+---@field stop fun(): Lib.System.ProcTrace.Result # Restore the original functions.
+---@field is_active fun(): boolean
+---@field log_path fun(): string|nil # Path of the active (or last) log file.
 
 return {}

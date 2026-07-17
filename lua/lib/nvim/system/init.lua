@@ -6,6 +6,7 @@
 ---   local system = require("lib.nvim.system")
 ---   local env = system.env.get()          -- computed snapshot (memoized)
 ---   system.info.show()                    -- system-info float + clipboard
+---   system.proc_trace.start()             -- log slow system()/jobstart calls
 ---   system.setup({ publish_globals = true }) -- opt-in vim.g.* + more
 ---
 --- Direct requiring stays tree-shake friendly:
@@ -20,6 +21,7 @@ local M = {}
 M.env = require("lib.nvim.system.env")
 M.rpc_pipe = require("lib.nvim.system.rpc_pipe")
 M.info = require("lib.nvim.system.info")
+M.proc_trace = require("lib.nvim.system.proc_trace")
 
 --- Opt-in activation of environment "features".
 --- Everything is off by default so the module stays a pure helper; a config
