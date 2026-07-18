@@ -9,6 +9,8 @@
 
 require("lib.nvim.fs.create_entry.@types")
 
+local mkdirp = require("lib.nvim.fs.mkdirp")
+
 local fn = vim.fn
 
 ---True when `path` ends with a `/` or `\` separator.
@@ -35,7 +37,7 @@ return function(parent_dir, name)
 
   if ends_with_separator(name) then
     local dir_path = full_path:gsub("[/\\]$", "")
-    local ok, err = pcall(fn.mkdir, dir_path, "p")
+    local ok, err = mkdirp(dir_path)
     if not ok then
       return false, nil, "mkdir failed: " .. tostring(err)
     end
@@ -47,11 +49,9 @@ return function(parent_dir, name)
   end
 
   local parent = fn.fnamemodify(full_path, ":h")
-  if fn.isdirectory(parent) == 0 then
-    local ok, err = pcall(fn.mkdir, parent, "p")
-    if not ok then
-      return false, nil, "mkdir failed: " .. tostring(err)
-    end
+  local ok, err = mkdirp(parent)
+  if not ok then
+    return false, nil, "mkdir failed: " .. tostring(err)
   end
 
   local file, err = io.open(full_path, "w")

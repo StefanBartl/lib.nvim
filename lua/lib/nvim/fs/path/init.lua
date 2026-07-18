@@ -58,34 +58,36 @@ function M.joinpath(parts)
   return table.concat(parts, sep)
 end
 
--- Utility: ensure directory for a given path exists; returns true on success.
--- Uses vim.fn.mkdir with "p" flag to create parents; returns boolean.
----@param path string
----@return boolean, string?
+--- Ensure the *parent directory* of `path` exists, creating it (and any
+--- missing ancestors) if needed.
+---
+--- Fast-event safe: `vim.fs.dirname` is pure Lua and `lib.nvim.fs.mkdirp` is
+--- libuv-only, so this may be called from a `uv` timer, an `fs_event` watcher
+--- or a subprocess stdout callback — the exact places a log sink needs it, and
+--- the exact places the previous `vim.fn.mkdir`/`fnamemodify` implementation
+--- aborted with `E5560: Vimscript function must not be called in a fast event
+--- context`.
+---@param path string A *file* path; its parent directory is created
+---@return boolean ok
+---@return string? err
 function M.ensure_dir(path)
   if not path or path == "" then
     return false, "empty path"
   end
-  local dir = vim.fn.fnamemodify(path, ":h")
-  if dir == "" or dir == "." then
+
+  local dir = vim.fs.dirname(path)
+  if not dir or dir == "" or dir == "." then
     -- current directory; nothing to do
     return true
   end
+
+  local uv = vim.uv or vim.loop
   -- If dir already exists, done.
-  if vim.loop.fs_stat(dir) then
+  if uv.fs_stat(dir) then
     return true
   end
-  local ok, err = pcall(vim.fn.mkdir, dir, "p")
-  if ok then
-    -- mkdir returns 1 on success; verify dir exists now
-    if vim.loop.fs_stat(dir) then
-      return true
-    else
-      return false, "mkdir did not create directory"
-    end
-  else
-    return false, tostring(err)
-  end
+
+  return require("lib.nvim.fs.mkdirp")(dir)
 end
 
 return M
