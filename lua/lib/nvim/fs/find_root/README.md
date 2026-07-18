@@ -24,13 +24,46 @@ finder.find("/tmp/loose.txt")   --> nil       (no marker found)
 finder.clear()                  -- drop all cached lookups
 ```
 
+## Glob markers
+
+Markers are basenames, and may use `*` / `?` wildcards. That covers the
+ecosystems whose root marker has no fixed name:
+
+```lua
+local finder = find_root({
+  markers = { ".git", "package.json", "Cargo.toml", "*.rockspec", "*.cabal" },
+})
+```
+
+Plain (glob-free) marker sets keep taking the cheaper `vim.fs.find` name-list
+path; a set containing a glob is compiled into a predicate instead.
+
+## Chain caching
+
+By default only the *queried* directory is cached. With `cache_chain = true`
+the upward walk is done in this module and **every directory passed on the
+way** is cached with the resolved root:
+
+```lua
+local finder = find_root({ markers = { ".git" }, cache_chain = true })
+
+finder.find("/repo/a/b/c/x.lua")  --> "/repo"  (walks and caches a, b, c, repo)
+finder.find("/repo/a/y.lua")      --> "/repo"  (cache hit, no filesystem access)
+```
+
+Worth it when many files across one deep tree are resolved in a session; the
+plain mode stays cheaper for scattered one-off lookups. Because a chain
+inserts several entries per walk, the default LRU capacity rises to 512 in
+this mode.
+
 ## Options — `Lib.Fs.FindRoot.Opts`
 
-| Field      | Type        | Default     | Meaning                                            |
-|------------|-------------|-------------|----------------------------------------------------|
-| `markers`  | `string[]`  | `{ ".git" }`| Marker file/folder names that identify a root.     |
-| `capacity` | `integer`   | `256`       | LRU capacity, keyed per directory.                 |
-| `cache`    | `boolean`   | `true`      | Enable the per-directory LRU cache.                |
+| Field         | Type        | Default        | Meaning                                                            |
+|---------------|-------------|----------------|--------------------------------------------------------------------|
+| `markers`     | `string[]`  | `{ ".git" }`   | Marker file/folder names identifying a root; `*`/`?` globs allowed. |
+| `capacity`    | `integer`   | `256` / `512`  | LRU capacity, keyed per directory. `512` when `cache_chain` is set. |
+| `cache`       | `boolean`   | `true`         | Enable the per-directory LRU cache.                                 |
+| `cache_chain` | `boolean`   | `false`        | Cache every directory on the way up, not just the queried one.      |
 
 ## Returns — `Lib.Fs.FindRoot`
 
