@@ -160,9 +160,16 @@ Neovim adapters.
                            accessor
     lib.nvim.ui            kit (themed UI toolkit), highlight helpers
     lib.nvim.fs            path / filesystem helpers (vim.fs / uv); cached
-                           marker-based root finding (find_root), relpath,
-                           create_entry, normkey, project_key, path_shorten
-    lib.nvim.cross         cross-platform: OS detection, run/argv, clipboard, uv,
+                           marker-based root finding (find_root: glob markers
+                           like *.rockspec, opt-in chain caching), relpath,
+                           create_entry, mkdirp (mkdir -p on libuv only, safe
+                           in a fast event context), normkey, project_key,
+                           path_shorten, open.url.system_opener (vim.ui.open
+                           first, then per-OS argv, wslview under WSL)
+    lib.nvim.cross         cross-platform: OS detection, run/argv, clipboard,
+                           uv: spawn_capture (buffered, one callback at exit)
+                           and spawn_stream (line-by-line streaming, optional
+                           timeout, returns a kill handle),
                            path separators: unify_slashes (\ -> /), normalize
                            (-> OS-native), collapse_dots (lexical ./.. collapse),
                            has_win_sep (C:\ drive predicate), drive_upper

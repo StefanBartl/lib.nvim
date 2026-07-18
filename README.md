@@ -187,8 +187,8 @@ lib.is_windows()    -- -> lib.nvim.cross.platform.is_windows
 | `lib.nvim.buf_win_tab` | buffer / window / tab utilities                     |
 | [`lib.nvim.window`](lua/lib/nvim/window/README.md) | overlay/float helpers: `make_scratch`, `nice_quit`, `set_title`, `close_on_focus_lost`, `center`, `attach` ([`:help`](doc/lib.nvim-window.txt)) |
 | [`lib.nvim.ui`](lua/lib/nvim/ui/hover_select/README.md) | `hover_select` ([`:help`](doc/lib.nvim-hover_select.txt)), highlight helpers |
-| `lib.nvim.fs`          | path / filesystem helpers (`vim.fs` / `uv`): [`create_entry`](lua/lib/nvim/fs/create_entry/README.md), [`normkey`](lua/lib/nvim/fs/normkey/README.md), [`project_key`](lua/lib/nvim/fs/project_key/README.md), `path_shorten` (fit/label styles), [`find_root`](lua/lib/nvim/fs/find_root/README.md), `relpath` |
-| [`lib.nvim.cross`](lua/lib/nvim/cross/fs/separators/README.md) | cross-platform: OS detection, run/argv, clipboard, uv, [path separators](lua/lib/nvim/cross/fs/separators/README.md) (`unify_slashes`, `normalize`, `collapse_dots`, `has_win_sep`, `drive_upper`) |
+| `lib.nvim.fs`          | path / filesystem helpers (`vim.fs` / `uv`): [`create_entry`](lua/lib/nvim/fs/create_entry/README.md), [`mkdirp`](lua/lib/nvim/fs/mkdirp/README.md) (fast-event-safe `mkdir -p`), [`normkey`](lua/lib/nvim/fs/normkey/README.md), [`project_key`](lua/lib/nvim/fs/project_key/README.md), `path_shorten` (fit/label styles), [`find_root`](lua/lib/nvim/fs/find_root/README.md) (glob markers, optional chain cache), `relpath`, [`open.url.system_opener`](lua/lib/nvim/fs/open/url/system_opener/README.md) |
+| [`lib.nvim.cross`](lua/lib/nvim/cross/fs/separators/README.md) | cross-platform: OS detection, run/argv, clipboard, uv (`spawn_capture` buffered, [`spawn_stream`](lua/lib/nvim/cross/uv/spawn_stream/README.md) line-by-line), [path separators](lua/lib/nvim/cross/fs/separators/README.md) (`unify_slashes`, `normalize`, `collapse_dots`, `has_win_sep`, `drive_upper`) |
 | `lib.nvim.normalize`   | path / value normalization                          |
 | `lib.nvim.git`         | git helpers                                         |
 | `lib.nvim.terminal`    | terminal-buffer helpers                             |
@@ -218,7 +218,8 @@ and are generated on install by your plugin manager (see [Help docs](#help-docs)
 - [`lib.nvim.system`](lua/lib/nvim/system/README.md) · [`lib.nvim.progress`](lua/lib/nvim/progress/README.md) · [`lib.nvim.selection`](lua/lib/nvim/selection/README.md)
 - [`lib.nvim.buf_win_tab.capture`](lua/lib/nvim/buf_win_tab/capture/README.md) · [`lib.nvim.buf_win_tab.resize_guarded`](lua/lib/nvim/buf_win_tab/resize_guarded/README.md)
 - [`lib.nvim.fs.ignore.list`](lua/lib/nvim/fs/ignore/list/README.md) · [`lib.nvim.fs.is_subpath`](lua/lib/nvim/fs/is_subpath/README.md) · [`lib.nvim.fs.polymorphic_rootresolver`](lua/lib/nvim/fs/polymorphic_rootresolver/README.md) · [`lib.nvim.fs.find_root`](lua/lib/nvim/fs/find_root/README.md)
-- [`lib.nvim.fs.create_entry`](lua/lib/nvim/fs/create_entry/README.md) · [`lib.nvim.fs.normkey`](lua/lib/nvim/fs/normkey/README.md) · [`lib.nvim.fs.project_key`](lua/lib/nvim/fs/project_key/README.md)
+- [`lib.nvim.fs.create_entry`](lua/lib/nvim/fs/create_entry/README.md) · [`lib.nvim.fs.mkdirp`](lua/lib/nvim/fs/mkdirp/README.md) · [`lib.nvim.fs.normkey`](lua/lib/nvim/fs/normkey/README.md) · [`lib.nvim.fs.project_key`](lua/lib/nvim/fs/project_key/README.md)
+- [`lib.nvim.fs.open.url.system_opener`](lua/lib/nvim/fs/open/url/system_opener/README.md) · [`lib.nvim.cross.uv.spawn_stream`](lua/lib/nvim/cross/uv/spawn_stream/README.md)
 - [`lib.nvim.lua_ls.insert.module_annotation`](lua/lib/nvim/lua_ls/insert/module_annnotation/README.md)
 - [`lib.nvim.treesitter.guard`](lua/lib/nvim/treesitter/guard/README.md)
 
