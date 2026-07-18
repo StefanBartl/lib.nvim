@@ -32,6 +32,7 @@ M.uv = {
   spawn_command = require("lib.nvim.cross.uv.spawn_command"),
   spawn_shell_command = require("lib.nvim.cross.uv.spawn_shell_command"),
   spawn_capture = require("lib.nvim.cross.uv.spawn_capture"),
+  spawn_stream = require("lib.nvim.cross.uv.spawn_stream"),
   wait_until = require("lib.nvim.cross.uv.wait_until"),
 }
 

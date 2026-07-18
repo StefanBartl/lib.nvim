@@ -7,6 +7,15 @@
 ---@field clipboard Lib.Cross.Clipboard
 ---@field fs Lib.Cross.Fs
 ---@field separators Lib.Cross.Separators
+---@field uv Lib.Cross.Uv
+
+---Libuv-backed process helpers.
+---@class Lib.Cross.Uv
+---@field spawn_command fun(argv: string[], opts?: table): any # Fire-and-forget spawn with inherited stdio.
+---@field spawn_shell_command fun(cmd: string, opts?: table): any # Same, but through the platform shell.
+---@field spawn_capture Lib.Cross.Uv.SpawnCapture # Async argv spawn, output buffered, one callback at exit.
+---@field spawn_stream Lib.Cross.Uv.SpawnStream # Async argv spawn, output streamed line by line.
+---@field wait_until fun(predicate: fun(): boolean, opts?: table): any
 
 ---@class Lib.Cross.ALL
 ---@field is_windows fun(): boolean
