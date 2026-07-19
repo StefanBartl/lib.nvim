@@ -34,6 +34,10 @@ lib.nvim was audited against the project checklists. Full per-rule status:
    `docs/TESTS/**`); deliberately deferred, tracked here for later.
 5. Optional: a small lint/CI pipeline (`luacheck`) alongside the existing
    `.stylua.toml` formatting config.
+6. **Project-scoped persistent store** — `lib.nvim.cache.disk` +
+   `lib.nvim.git.repo_root` cover the two halves but nothing combines them;
+   at least 7 plugins hand-roll project-keyed JSON persistence separately.
+   Proposal: [project-store.md](ROADMAP/project-store.md).
 
 ---
 
