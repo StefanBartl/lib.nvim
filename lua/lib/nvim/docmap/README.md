@@ -164,6 +164,64 @@ node it was centered on, since a shallow layer (the root has one box) sharing
 a horizontal axis with a much wider deeper layer means the centered node can
 sit thousands of pixels from the left edge on a large map.
 
+### Modules vs Types
+
+Two "aufbereitungen" (renderings) of the same annotation data, toggled via
+buttons in the Hierarchy toolbar:
+
+- **Modules** — the directory/module hierarchy above: boxes are IR nodes,
+  solid edges are `children`, dashed edges are `ir.edges` filtered to the
+  laid-out subtree.
+- **Types** — a materially different graph, not a relabeling: boxes are
+  individual `@class`/`@alias` definitions from `node.types_detail`, and
+  edges are walked directly from `ir.edges`' `from_class`/`to_class` (which
+  can cross node boundaries freely — a field can reference a class owned by
+  any module in the map, and that's the point of this view). Requires
+  `opts.luals` to have run; shows a message pointing at `:LibMap full`
+  otherwise, or if the centered node has no types of its own.
+
+### Search re-centers, not just filters
+
+The same `#q` input that filters Tree rows re-centers the Hierarchy view on
+the best-matching module while typing, when the Hierarchy tab is active.
+Matching prefers an exact name/module match, then a name/module prefix, then
+a substring anywhere (including the summary).
+
+Typing updates the diagram live but does **not** touch browser history — see
+[Back/Forward](#backforward-navigation) for why that matters here
+specifically, not just as a nicety. Press Enter to commit the current match
+as a real, navigable stop.
+
+### Clickable findings
+
+Each row in the "Drift findings" table that names a real IR node (most of
+them — a couple of repo-specific checks report against synthetic paths that
+were never scanned nodes, and those rows just stay inert) is clickable:
+selects that node in the Tree tab.
+
+### Back/forward navigation
+
+Every discrete action (selecting a tree node, switching tabs, centering the
+Hierarchy view, toggling Modules/Types) pushes a real `history` entry, so the
+browser's own Back/Forward buttons step through the app's actual states —
+not just react to a directly-edited URL hash, which is all the original
+single-node `#<id>` scheme supported.
+
+The state serialized into the hash is `{tab, id, center, view}` — see
+`serializeState`/`parseState`/`applyState`/`navigate` in
+[`render/html.lua`](render/html.lua). One non-obvious rule worth knowing if
+you touch this: **live-preview updates (the Hierarchy search box while
+typing) must never call `history.replaceState`.** An earlier version did,
+and it silently broke Back — `replaceState` overwrites whatever entry is
+currently on top of the stack, which right after switching to the Hierarchy
+tab is the tab-switch entry itself. The first keystroke clobbered it, so
+committing the search with Enter ended up pushing a *duplicate* of the
+already-overwritten entry instead of a distinct new stop, and Back from the
+committed search landed on an indistinguishable copy of itself instead of
+the pre-search tab state. Live preview now calls `drawHierarchy()` directly,
+bypassing history entirely; only Enter (or any other discrete action) calls
+`navigate()`.
+
 ## Drift checks
 
 The rendered map is the visible half; the checks are the half that catches
