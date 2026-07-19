@@ -131,6 +131,7 @@ local function register(name, spec)
     nargs = "*",
     bang = wants_bang(spec),
     range = wants_range(spec),
+    buffer = spec.buffer,
     complete = complete.make(function()
       return root
     end),
@@ -167,6 +168,12 @@ local function make_builder(name)
 
   function builder:range(v)
     spec.range = (v == nil) and true or v
+    return self
+  end
+
+  --- Register buffer-locally: true = current buffer, or an explicit bufnr.
+  function builder:buffer(v)
+    spec.buffer = (v == nil) and true or v
     return self
   end
 

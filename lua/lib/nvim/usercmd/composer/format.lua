@@ -24,18 +24,28 @@ function M.arg_token(spec)
   return inner
 end
 
---- Render one flag spec as a placeholder token, e.g. `[--dry]`,
+--- Render one flag spec as a placeholder token, e.g. `[--dry|-d]`,
 --- `[--type=<value>]`, `[--engine=<value>]` — always optional (a flag is
 --- never required), repeatable ones get a trailing `...`.
 ---@param spec Lib.UserCmd.Composer.FlagSpec
 ---@return string
 function M.flag_token(spec)
+  local short = spec.short and ("|-" .. spec.short) or ""
   if spec.bool then
-    return "[--" .. spec.name .. "]"
+    return "[--" .. spec.name .. short .. "]"
   end
   local value = spec.enum and "<" .. table.concat(spec.enum, "|") .. ">" or "<value>"
-  local inner = "--" .. spec.name .. "=" .. value
+  local inner = "--" .. spec.name .. short .. "=" .. value
   return "[" .. inner .. (spec.repeatable and " ..." or "") .. "]"
+end
+
+--- Render one kv spec as a placeholder token, e.g. `[key=<value>]`,
+--- `[view=<vsplit|split>]` — always optional (a kv pair is never required).
+---@param spec Lib.UserCmd.Composer.KvSpec
+---@return string
+function M.kv_token(spec)
+  local value = spec.enum and "<" .. table.concat(spec.enum, "|") .. ">" or "<value>"
+  return "[" .. spec.key .. "=" .. value .. "]"
 end
 
 --- Full invocation string for a route, e.g.
@@ -54,6 +64,9 @@ function M.invocation(cmd_name, route)
   for _, flag in ipairs(route.flags or {}) do
     parts[#parts + 1] = M.flag_token(flag)
   end
+  for _, spec in ipairs(route.kv or {}) do
+    parts[#parts + 1] = M.kv_token(spec)
+  end
   return table.concat(parts, " ")
 end
 
@@ -70,6 +83,11 @@ function M.enum_notes(route)
   for _, flag in ipairs(route.flags or {}) do
     if flag.enum then
       notes[#notes + 1] = ("`--%s` ∈ `%s`"):format(flag.name, table.concat(flag.enum, " | "))
+    end
+  end
+  for _, spec in ipairs(route.kv or {}) do
+    if spec.enum then
+      notes[#notes + 1] = ("`%s=` ∈ `%s`"):format(spec.key, table.concat(spec.enum, " | "))
     end
   end
   return notes

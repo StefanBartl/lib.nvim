@@ -62,13 +62,34 @@ composer.verb("Replace")
   :build()
 ```
 
+### Buffer-local commands
+
+`spec.buffer = true` (current buffer) or an explicit bufnr registers via
+`nvim_buf_create_user_command` instead of the global
+`nvim_create_user_command` — for per-buffer commands like a markdown
+preview's `:TableView`, typically called from a `FileType` autocmd:
+
+```lua
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = "markdown",
+  callback = function()
+    composer.verb("TableView", { buffer = true, routes = { ... } })
+  end,
+})
+```
+
+Re-registering (e.g. the autocmd firing again for the same buffer) is safe —
+`nvim_buf_create_user_command` overwrites like the global form does. The
+fluent builder has the matching `:buffer(v)` method.
+
 ## The handler context (`ctx`)
 
 | Field       | What                                                        |
 | ----------- | ---------------------------------------------------------- |
 | `ctx.args`  | coerced positional args, keyed by `ArgSpec.name`           |
 | `ctx.pos`   | coerced positional args, in order                          |
-| `ctx.flags` | coerced `--flag` values, keyed by `FlagSpec.name`           |
+| `ctx.flags` | coerced `--flag`/`-x` values, keyed by `FlagSpec.name`      |
+| `ctx.kv`    | coerced bare `key=value` pairs, keyed by `KvSpec.key`       |
 | `ctx.rest`  | leftover tokens beyond the declared schema                 |
 | `ctx.path`  | the literal path that matched (e.g. `{ "surround" }`)      |
 | `ctx.bang`  | `true` when invoked as `:Verb!`                            |
@@ -154,6 +175,57 @@ dispatch-only.
 an unusual combination (a flat-grammar verb normally has no subcommand
 children at all). Dispatch is unaffected; only the `<Tab>` suggestion in that
 mixed case can be unhelpful.
+
+### Short-flag aliases (`-x`)
+
+A flag may declare a single-char `short` alias:
+
+```lua
+flags = {
+  { name = "replace", short = "r", bool = true },   -- --replace or -r
+  { name = "output",  short = "o", type = "STRING" },-- --output=<v> or -o <v> (next-token only, no -o=v)
+}
+```
+
+`-x` and `--name` are interchangeable and may be mixed in the same call
+(`:Recommend query -r --output=out.txt`). Short flags only take their value
+from the **next token** (`-o file.txt`), never `-o=file.txt` — that's the
+long form's job. An unrecognized `-x` (no `short` matches) is left as an
+ordinary positional rather than an error — unlike `--name`, a bare `-` prefix
+collides too easily with legitimate values (a negative number, a passthrough
+CLI arg). `<Tab>` after a bare `-` completes every declared short flag.
+
+## Bare `key=value` (no dashes)
+
+A route may separately declare `kv`, for grammars like
+`:Diff target=file.lua view=vsplit` (no `--`/`-` prefix at all):
+
+```lua
+composer.verb("Diff", {
+  routes = {
+    { path = {},
+      kv = {
+        { key = "target", type = "STRING" },
+        { key = "view", type = "STRING", enum = { "vsplit", "split" }, default = "vsplit" },
+      },
+      run = function(ctx)
+        -- ctx.kv.target, ctx.kv.view (defaults applied when omitted)
+      end },
+  },
+})
+```
+
+Unlike `flags`, an **undeclared** `key=value`-shaped token is left as an
+ordinary positional rather than an error — `=` shows up in too many
+legitimate positional values (URLs, passthrough env assignments, …) to treat
+every match as an intentional kv pair; only a token whose key matches a
+*declared* `KvSpec.key` is ever consumed. `<Tab>` offers `key=` for every
+declared key, and value completion after `key=` — kv tokens have no marker
+prefix, so these candidates are merged alongside whatever else is valid at
+that slot (a subcommand name, a positional arg's own completions, …), not
+used exclusively. `flags` and `kv` compose freely on the same route
+(`ctx.flags` and `ctx.kv` are both populated; parsing runs flags first, then
+kv, then whatever's left binds to `args`).
 
 ## Documentation generation
 
