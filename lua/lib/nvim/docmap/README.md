@@ -17,9 +17,9 @@ The generated map for this repo lives in [`docs/map/`](../../../../docs/map/):
 ```
 
 ```bash
-nvim --headless -l scripts/gen_map.lua              # regenerate
-nvim --headless -l scripts/gen_map.lua --check      # verify (exit 1 if stale)
-nvim --headless -l scripts/gen_map.lua --check --strict   # also fail on drift
+nvim --headless -l scripts/gen_map.lua               # regenerate
+nvim --headless -l scripts/gen_map.lua --check       # verify: stale or drift -> exit 1
+nvim --headless -l scripts/gen_map.lua --check --lenient  # fail on staleness only
 ```
 
 The `:LibMap` command is opt-in — call `require("lib.nvim.docmap.command").setup()`
@@ -130,6 +130,18 @@ A hook that regenerates and stages output produces diffs the author never
 intended, and interacts badly with `--amend` and rebase. `--check` fails with
 "module map is stale — run `:LibMap`" and leaves regeneration explicit.
 
-`--strict` additionally fails on error-severity findings. It is a separate
-flag because the tree carries pre-existing drift; a check that is red before
-anyone touches anything gets disabled. Turn it on once the backlog is clear.
+`--check` fails on both staleness and error-severity drift. Enforcing drift
+was originally opt-in, because the tree carried a backlog of it and a check
+that is red before anyone touches anything gets disabled. That backlog is
+cleared, so enforcement is the default and `--lenient` is the escape hatch.
+
+## Git hook
+
+```bash
+git config core.hooksPath scripts/hooks   # once per clone
+```
+
+[`scripts/hooks/pre-commit`](../../../../scripts/hooks/pre-commit) runs
+`--check` when `lua/`, `docs/map/` or the generator changed, and prints the
+findings plus the one command that fixes them. It never regenerates or stages
+anything itself. Bypass with `git commit --no-verify`.

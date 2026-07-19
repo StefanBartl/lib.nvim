@@ -4,20 +4,18 @@
 ---   nvim --headless -l scripts/gen_map.lua           # regenerate artifacts
 ---   nvim --headless -l scripts/gen_map.lua --check    # verify, write nothing
 ---
----   nvim --headless -l scripts/gen_map.lua --check --strict
+---   nvim --headless -l scripts/gen_map.lua --check --lenient
 ---
 --- `--check` is what hooks and CI run: it regenerates in memory, compares
---- against what is committed, and exits non-zero if the artifacts are stale.
---- It deliberately does *not* rewrite files — a hook that regenerates and
---- stages output produces diffs the author never intended and interacts badly
---- with amend and rebase.
+--- against what is committed, and exits non-zero if the artifacts are stale or
+--- if any error-severity drift finding exists. It deliberately does *not*
+--- rewrite files — a hook that regenerates and stages output produces diffs
+--- the author never intended and interacts badly with amend and rebase.
 ---
---- `--strict` additionally fails on error-severity drift findings. It is kept
---- separate because the tree already carries pre-existing drift (stale
---- `@module` headers, `Lib` fields whose handlers point at keys that no longer
---- exist); wiring the hook to fail on those from day one would mean the hook
---- is red before anyone has touched anything, and a check that is always red
---- gets disabled. Turn it on once the backlog is cleared.
+--- Enforcing drift was originally opt-in, because the tree carried a backlog
+--- of it and a check that is red before anyone touches anything gets disabled.
+--- That backlog is now cleared (0 errors), so enforcement is the default and
+--- `--lenient` is the escape hatch — report findings, fail only on staleness.
 
 local root = vim.uv.cwd():gsub("\\", "/"):gsub("/+$", "")
 vim.opt.runtimepath:prepend(root)
@@ -25,12 +23,12 @@ vim.opt.runtimepath:prepend(root)
 local docmap = require("lib.nvim.docmap")
 local opts = require("lib.nvim.docmap.config")(root)
 
-local check_only, strict = false, false
+local check_only, strict = false, true
 for _, a in ipairs(_G.arg or {}) do
   if a == "--check" then
     check_only = true
-  elseif a == "--strict" then
-    strict = true
+  elseif a == "--lenient" then
+    strict = false
   end
 end
 
@@ -74,23 +72,27 @@ if check_only then
   end
   table.sort(stale)
 
-  local tally = report(findings)
-
+  -- Verdict before detail: when this runs from a hook, the first lines are what
+  -- the author actually reads, and "which files are stale" beats a wall of
+  -- informational findings scrolling past.
   if #stale > 0 then
-    io.stderr:write("\nModule map is stale:\n")
+    io.stderr:write("Module map is stale:\n")
     for _, s in ipairs(stale) do
       io.stderr:write("  " .. s .. "\n")
     end
-    io.stderr:write("\nRun :LibMap (or nvim --headless -l scripts/gen_map.lua) and commit the result.\n")
+    io.stderr:write("\nRun :LibMap (or nvim --headless -l scripts/gen_map.lua) and commit the result.\n\n")
+    report(findings)
     vim.cmd("cq 1")
   end
 
+  local tally = report(findings)
+
   if tally.error > 0 then
     if strict then
-      io.stderr:write("\nModule map has " .. tally.error .. " error-severity findings (--strict).\n")
+      io.stderr:write("\nModule map has " .. tally.error .. " error-severity drift findings.\n")
       vim.cmd("cq 1")
     end
-    io.stdout:write(tally.error .. " error-severity findings (not failing; pass --strict to enforce).\n")
+    io.stdout:write(tally.error .. " error-severity findings (--lenient: not failing).\n")
   end
 
   io.stdout:write("Module map is up to date.\n")
