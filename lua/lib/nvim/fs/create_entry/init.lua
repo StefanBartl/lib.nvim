@@ -10,6 +10,7 @@
 require("lib.nvim.fs.create_entry.@types")
 
 local mkdirp = require("lib.nvim.fs.mkdirp")
+local is_valid_filename = require("lib.nvim.fs.is_valid_filename")
 
 local fn = vim.fn
 
@@ -18,6 +19,22 @@ local fn = vim.fn
 ---@return boolean
 local function ends_with_separator(path)
   return path:match("[/\\]$") ~= nil
+end
+
+---Validate every path segment of `name` individually (not the whole string
+---at once — `name` may legitimately contain `/`/`\` to create a new file
+---inside a not-yet-existing subdirectory in one step).
+---@param name string
+---@return boolean ok
+---@return string|nil err
+local function validate_segments(name)
+  for segment in name:gmatch("[^/\\]+") do
+    local ok, err = is_valid_filename(segment)
+    if not ok then
+      return false, err .. ": " .. segment
+    end
+  end
+  return true, nil
 end
 
 ---@param parent_dir string Parent directory the entry is created in
@@ -31,6 +48,10 @@ return function(parent_dir, name)
   end
   if type(name) ~= "string" or name == "" then
     return false, nil, "invalid name"
+  end
+  local segments_ok, segments_err = validate_segments(name)
+  if not segments_ok then
+    return false, nil, segments_err
   end
 
   local full_path = fn.resolve(parent_dir .. "/" .. name)
