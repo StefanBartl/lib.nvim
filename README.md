@@ -66,5 +66,6 @@ See [docs/installation.md](docs/installation.md) for config-wide setup (needed b
 - [Health](docs/health.md) — using `:checkhealth lib` to verify your setup.
 - [Help docs](docs/help.md) — how the `:help lib.nvim*` vimdoc tags are generated and indexed.
 - [Conventions](docs/conventions.md) — module layout rules and the steps for documenting a new module.
+- [Test-runner templates](nvim/templates/README.md) — copy-paste patterns for resolving `lib.nvim` in a dependent plugin's own headless test suite.
 
 `:help lib.nvim` is also available once installed — see [docs/help.md](docs/help.md) for details.
