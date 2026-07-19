@@ -14,13 +14,13 @@ local M = {}
 -- Internal helpers
 -- =========================================================
 
---- Execute a git command and return trimmed stdout.
+--- Execute a git command (argv, no shell) and return trimmed stdout.
 --- Stderr is suppressed to avoid user-facing noise.
----@param cmd string
+---@param argv string[]
 ---@return string|nil
-local function git_system(cmd)
-  local out = vim.fn.system(cmd .. " 2>/dev/null")
-  if type(out) ~= "string" then
+local function git_system(argv)
+  local ok, out = require("lib.nvim.cross.run_argv").run_blocking_captured(argv)
+  if not ok or type(out) ~= "string" then
     return nil
   end
   out = vim.trim(out)
@@ -39,7 +39,7 @@ end
 ---@return boolean
 function M.in_git_repo(git_cmd)
   local bin = git_cmd or "git"
-  local out = git_system(bin .. " rev-parse --is-inside-work-tree")
+  local out = git_system({ bin, "rev-parse", "--is-inside-work-tree" })
   return out == "true"
 end
 
@@ -48,7 +48,7 @@ end
 ---@return string|nil
 function M.repo_root(git_cmd)
   local bin = git_cmd or "git"
-  return git_system(bin .. " rev-parse --show-toplevel")
+  return git_system({ bin, "rev-parse", "--show-toplevel" })
 end
 
 --- Get the current branch name.
@@ -57,7 +57,7 @@ end
 ---@return string|nil
 function M.current_branch(git_cmd)
   local bin = git_cmd or "git"
-  return git_system(bin .. " symbolic-ref --short HEAD")
+  return git_system({ bin, "symbolic-ref", "--short", "HEAD" })
 end
 
 --- Check whether the repository is in a detached HEAD state.
@@ -65,7 +65,7 @@ end
 ---@return boolean
 function M.is_detached_head(git_cmd)
   local bin = git_cmd or "git"
-  local out = git_system(bin .. " symbolic-ref -q HEAD")
+  local out = git_system({ bin, "symbolic-ref", "-q", "HEAD" })
   return out == nil
 end
 
@@ -74,7 +74,7 @@ end
 ---@return boolean
 function M.is_dirty(git_cmd)
   local bin = git_cmd or "git"
-  local out = git_system(bin .. " status --porcelain")
+  local out = git_system({ bin, "status", "--porcelain" })
   return out ~= nil
 end
 
@@ -84,7 +84,7 @@ end
 ---@return boolean
 function M.is_tracked(path, git_cmd)
   local bin = git_cmd or "git"
-  local out = git_system(bin .. " ls-files --error-unmatch " .. vim.fn.shellescape(path))
+  local out = git_system({ bin, "ls-files", "--error-unmatch", path })
   return out ~= nil
 end
 
@@ -93,7 +93,7 @@ end
 ---@return string|nil
 function M.upstream(git_cmd)
   local bin = git_cmd or "git"
-  return git_system(bin .. " rev-parse --abbrev-ref --symbolic-full-name @{u}")
+  return git_system({ bin, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}" })
 end
 
 --- Check whether the current branch is ahead or behind its upstream.
@@ -101,7 +101,7 @@ end
 ---@return boolean ahead, boolean behind
 function M.ahead_behind(git_cmd)
   local bin = git_cmd or "git"
-  local out = git_system(bin .. " rev-list --left-right --count HEAD...@{u}")
+  local out = git_system({ bin, "rev-list", "--left-right", "--count", "HEAD...@{u}" })
   if not out then
     return false, false
   end
@@ -117,7 +117,7 @@ end
 ---@return string|nil
 function M.head_short_hash(git_cmd)
   local bin = git_cmd or "git"
-  return git_system(bin .. " rev-parse --short HEAD")
+  return git_system({ bin, "rev-parse", "--short", "HEAD" })
 end
 
 --- Parse `git status --porcelain -u` output into a path -> status-code map.
@@ -128,11 +128,11 @@ end
 ---@return table<string, { code: string, orig_path: string|nil }>|nil
 function M.status_porcelain(git_cmd)
   local bin = git_cmd or "git"
-  local out = vim.fn.system(bin .. " status --porcelain -u 2>/dev/null")
+  local ok, out = require("lib.nvim.cross.run_argv").run_blocking_captured({ bin, "status", "--porcelain", "-u" })
   if type(out) ~= "string" then
     return nil
   end
-  if vim.v.shell_error ~= 0 and out == "" then
+  if not ok and out == "" then
     return nil
   end
 
