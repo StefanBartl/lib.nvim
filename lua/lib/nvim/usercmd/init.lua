@@ -45,5 +45,15 @@ function M.create(name, callback, opts)
   vim.api.nvim_create_user_command(name, callback, opts)
 end
 
+-- Subcommand composer (`:Verb sub sub ARG` + completion + docgen). Exposed
+-- lazily to avoid a require cycle: the composer needs `usercmd.create`, so it
+-- must be reachable from here without eagerly loading it at module scope.
+---@type Lib.UserCmd.Composer
+M.composer = setmetatable({}, {
+  __index = function(_, k)
+    return require("lib.nvim.usercmd.composer")[k]
+  end,
+})
+
 ---@type Lib.UsrCmd
 return M

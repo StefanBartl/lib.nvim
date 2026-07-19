@@ -303,6 +303,7 @@ LIB.augroup = lazy_module("lib.nvim.autocmd.augroup")
 LIB.augroup_create_clear = lazy_module("lib.nvim.autocmd.augroup").create.clear
 LIB.map = lazy_module("lib.nvim.map")
 LIB.usercmd = lazy_module("lib.nvim.usercmd")
+LIB.composer = lazy_module("lib.nvim.usercmd.composer")
 
 -- === NOTIFY ===
 LIB.notify = lazy_module("lib.nvim.notify")

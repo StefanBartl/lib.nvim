@@ -20,6 +20,7 @@
 ---@field notify Lib.Notify
 ---@field autocmd Lib.AutoCmd
 ---@field usercmd Lib.UsrCmd
+---@field composer Lib.UserCmd.Composer # Subcommand user-command composer (:Verb sub … + completion + Markdown docgen)
 ---@field normalize Lib.Normalize
 ---@field system Lib.System
 ---@field memo Lib.Memo

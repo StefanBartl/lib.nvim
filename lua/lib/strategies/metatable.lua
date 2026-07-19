@@ -52,6 +52,7 @@ local MODULE_MAP = {
   autocmd = "lib.nvim.autocmd",
   map = "lib.nvim.map",
   usercmd = "lib.nvim.usercmd",
+  composer = "lib.nvim.usercmd.composer",
 
   -- NOTIFY
   notify = "lib.nvim.notify",

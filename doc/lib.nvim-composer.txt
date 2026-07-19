@@ -1,0 +1,155 @@
+*lib.nvim-composer.txt*    Subcommand user commands with completion and docgen
+
+lib.nvim.usercmd.composer                              *lib.nvim-composer*
+
+Compose a declarative route spec into ONE Neovim user command with
+subcommands, `<Tab>` completion, and Markdown docs — all read from the same
+route tree, so behavior and docs can never drift. Turns the
+`:VerbFeatureA` / `:VerbFeatureB` anti-pattern into `:Verb feature-a` /
+`:Verb feature-b`, where `{Verb}` is the central action (`:Replace`, `:File`).
+
+Full design: docs/ROADMAP/usrcmd_builder.md
+
+==============================================================================
+CONTENTS                                       *lib.nvim-composer-contents*
+
+  1. Usage ..................................... |lib.nvim-composer-usage|
+  2. Context ................................... |lib.nvim-composer-ctx|
+  3. Argument types ............................ |lib.nvim-composer-argtypes|
+  4. Flags ...................................... |lib.nvim-composer-flags|
+  5. Documentation generation .................. |lib.nvim-composer-docgen|
+  6. Functions ................................. |lib.nvim-composer-functions|
+
+==============================================================================
+1. USAGE                                          *lib.nvim-composer-usage*
+>lua
+    local composer = require("lib.nvim.usercmd.composer")
+
+    composer.verb("Replace", {
+      desc    = "Text replacement operations",
+      default = function(ctx) require("replacer").prompt() end,  -- bare :Replace
+      routes  = {
+        { path = { "buffer" }, desc = "Replace in the current buffer",
+          run = function(ctx) require("replacer").buffer() end },
+        { path = { "surround" },
+          args = {
+            { name = "kind",   type = "STRING", enum = { "quote", "paren" } },
+            { name = "target", type = "STRING" },
+          },
+          desc = "Wrap TARGET with KIND surroundings",
+          run  = function(ctx)
+            require("replacer").surround(ctx.args.kind, ctx.args.target)
+          end },
+      },
+    })
+<
+`:Replace <Tab>` completes `buffer | surround`; `:Replace surround <Tab>`
+completes `quote | paren`; bad input is reported with the route's usage.
+
+A fluent form is also available (`:build()` registers): >lua
+    composer.verb("Replace")
+      :desc("…")
+      :route("surround", { args = {...}, run = function(ctx) end })
+      :build()
+<
+==============================================================================
+2. CONTEXT                                          *lib.nvim-composer-ctx*
+
+Each `run` receives a context table:
+
+    ctx.args    coerced positional args, keyed by ArgSpec.name
+    ctx.pos     coerced positional args, in order
+    ctx.flags   coerced --flag values, keyed by FlagSpec.name
+    ctx.rest    leftover tokens beyond the declared schema
+    ctx.path    the literal path that matched, e.g. { "surround" }
+    ctx.bang    true when invoked as :Verb!
+    ctx.range   { line1, line2, count, range }
+    ctx.raw     the untouched nvim callback args
+
+==============================================================================
+3. ARGUMENT TYPES                              *lib.nvim-composer-argtypes*
+
+Each type carries validation and completion. Built-ins: STRING, INT, FLOAT,
+BOOL, PATH, DIR, FILE, BUFFER, plus `enum = {...}` on any ArgSpec (closed set,
+case-insensitive, completed from the members). Coercion reuses
+|lib.nvim.normalize| validators; PATH/DIR/FILE completion uses Neovim's own
+file completion. Register a custom type once: >lua
+    composer.register_type("HIGHLIGHT_GROUP", {
+      validate = function(raw) return true, raw, nil end,
+      complete = function(lead) return vim.fn.getcompletion(lead, "highlight") end,
+    })
+<
+`run` may also be a module-path string, required lazily on first dispatch.
+
+==============================================================================
+4. FLAGS                                            *lib.nvim-composer-flags*
+
+A route may declare `flags`, parsed out of its token tail before positional
+binding — modeled on replacer.nvim's BOOL_FLAGS/VALUE_FLAGS split. Strictly
+opt-in: a route with no `flags` behaves exactly as before a leading "--" in a
+positional value is never special-cased unless the route declares flags. >lua
+    composer.verb("Replace", {
+      routes = {
+        -- path = {} is the verb's ROOT route: it matches even with no
+        -- literal subcommand, reproducing replacer.nvim's flat grammar
+        -- :Replace {old} {new} [scope] [--flags] verbatim.
+        { path  = {},
+          args  = { { name = "old", type = "STRING" }, { name = "new", type = "STRING" } },
+          flags = {
+            { name = "dry",    bool = true },
+            { name = "type",   type = "STRING", repeatable = true },
+            { name = "engine", type = "STRING", enum = { "fzf", "telescope" } },
+          },
+          run = function(ctx) require("replacer").run(ctx.args, ctx.flags) end },
+      },
+    })
+<
+Flags may appear anywhere in the tail — before, after, or between positionals
+(`:Replace --dry foo bar` and `:Replace foo bar --dry` are equivalent) — and a
+literal "--" stops flag parsing (matches replacer.nvim's `flags_done`
+sentinel). A value flag accepts `--name=value` or `--name value`. An
+undeclared `--name` is a hard error, not silently treated as positional.
+`<Tab>` completes flag names and, after `--name=`, the flag's own value
+completer — derived from the same FlagSpec used for dispatch.
+
+Known limitation: completion is ambiguous for a verb mixing a `path = {}`
+root route with sibling subcommand routes (an unusual combination). Dispatch
+is unaffected; only the `<Tab>` suggestion in that mixed case can be
+unhelpful.
+
+==============================================================================
+5. DOCUMENTATION GENERATION                      *lib.nvim-composer-docgen*
+
+The route tree drives docs too: >lua
+    handle:document()                 -- one verb  -> docs/BINDINGS/Usercmds.md
+    composer.document()               -- every verb -> default path
+    composer.document("docs/CMDS.md") -- explicit path
+<
+`composer.setup({ docs = { path = "...", mode = "replace"|"section" } })` sets
+the default path and mode. "section" updates a delimited
+`<!-- lib.nvim:composer --> … <!-- /lib.nvim:composer -->` block so
+hand-written prose survives regeneration; "replace" overwrites the file.
+
+==============================================================================
+6. FUNCTIONS                                  *lib.nvim-composer-functions*
+
+composer.verb({name}, {spec?})                       *lib.nvim-composer-verb*
+    Register a verb. With {spec} it registers immediately and returns a
+    handle; without it, returns a fluent builder (call `:build()`).
+
+composer.document({path?})                       *lib.nvim-composer-document*
+    Write Markdown docs for every registered verb. Returns `ok, err`.
+
+composer.setup({opts?})                             *lib.nvim-composer-setup*
+    Configure docs defaults: `{ docs = { path, mode } }`.
+
+composer.register_type({name}, {def})       *lib.nvim-composer-register_type*
+    Register a custom argument type `{ validate, complete? }`.
+
+composer.registry()                              *lib.nvim-composer-registry*
+    The name->handle map of every verb built in this process.
+
+Access: `require("lib.nvim.usercmd.composer")` (direct),
+`require("lib").composer`, or `require("lib").usercmd.composer`.
+
+vim:tw=78:ts=8:sw=8:et:ft=help:norl:

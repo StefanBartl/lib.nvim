@@ -24,5 +24,6 @@
 
 ---@class Lib.UsrCmd
 ---@field create fun(name: string, callback: string|fun(args:Lib.UserCommand.Args), opts: LibUserCommandOpts|nil): nil
+---@field composer Lib.UserCmd.Composer # subcommand composer (:Verb sub … + completion + docgen)
 
 return {}

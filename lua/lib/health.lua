@@ -25,6 +25,7 @@ local PROBE = {
   "lib.nvim.fs.is_dir",
   "lib.nvim.core",
   "lib.nvim.ui.kit",
+  "lib.nvim.usercmd.composer",
   "lib.vim.notify",
 }
 
