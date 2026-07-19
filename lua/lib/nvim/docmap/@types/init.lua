@@ -14,6 +14,11 @@
 ---@field repo_url? string Base URL used to build source links (e.g. "https://github.com/user/repo").
 ---@field branch? string Branch used in source links. Default "main".
 ---@field extra_checks? Lib.Docmap.Check[] Repo-specific drift checks appended to the generic ones.
+---@field luals? boolean Merge `lua-language-server --doc` output into the IR (class/alias/field detail, type-reference edges). Off by default — a full-tree run costs real seconds. Default false.
+---@field luals_timeout_ms? integer Kill the `lua-language-server --doc` run after this long. Default 60000.
+---@field command_name? string Passed to `docmap.command.setup`: register a user command under this name. Default "LibMap".
+---@field watch? boolean `install()` only: rescan on `BufWritePost` under `source/**.lua`, debounced. Default false.
+---@field watch_ms? integer `install()` only: debounce interval for `watch`. Default 500.
 
 ---A repo-specific drift check.
 ---@alias Lib.Docmap.Check fun(ir: Lib.Docmap.IR, opts: Lib.Docmap.Opts): Lib.Docmap.Finding[]
@@ -41,6 +46,30 @@
 ---@field parent string? Parent node id.
 ---@field depth integer Distance from the root node.
 ---@field children string[] Child node ids, directories first, then files.
+---@field types_detail Lib.Docmap.TypeInfo[]? `@class`/`@alias` detail for this node's `types` files, from `lua-language-server --doc`. `nil` when LuaLS enrichment did not run; `{}` is a real "ran, found nothing here" result.
+
+---A single `@class`/`@alias` parsed from `lua-language-server --doc` output,
+---attached to whichever node owns the file it's defined in.
+---@class Lib.Docmap.TypeInfo
+---@field name string Fully-qualified type name, e.g. "Lib.Docmap.Node".
+---@field kind "class"|"alias"
+---@field desc string
+---@field file string Repo-relative file the type is defined in.
+---@field fields Lib.Docmap.TypeField[] Empty for aliases and field-less classes.
+
+---@class Lib.Docmap.TypeField
+---@field name string
+---@field view string Raw LuaCATS type text, e.g. "table<string, Lib.Docmap.Node>".
+---@field desc string
+
+---A directed type-reference edge: `via` field on the class at `from` has a
+---declared type that names the class at `to`. Only present when `opts.luals`
+---ran; `ir.edges` is `{}` otherwise (never `nil`, so renderers don't need a
+---presence check to iterate it).
+---@class Lib.Docmap.Edge
+---@field from string Node id owning the referencing class.
+---@field to string Node id owning the referenced class.
+---@field via string Field name that carries the reference.
 
 ---A drift finding.
 ---@class Lib.Docmap.Finding
@@ -67,9 +96,25 @@
 ---@field root string Root node id.
 ---@field order string[] All node ids in deterministic walk order.
 ---@field nodes table<string, Lib.Docmap.Node>
+---@field edges Lib.Docmap.Edge[] Type-reference edges from LuaLS enrichment. Always an array, empty when `opts.luals` did not run.
+
+---A live handle returned by `docmap.install()`. Keeps a scanned IR in memory
+---and, optionally, keeps it fresh — the object-in-source-code counterpart to
+---the file-based `generate()`/`:LibMap` path.
+---@class Lib.Docmap.Handle
+---@field root string The root this handle was installed for; the registry key.
+---@field ir fun(): Lib.Docmap.IR Current IR (already scanned; never triggers a scan itself).
+---@field findings fun(): Lib.Docmap.Finding[] Current drift findings.
+---@field node fun(id: string): Lib.Docmap.Node? Single node lookup on the current IR.
+---@field rescan fun(opts?: { luals?: boolean }): Lib.Docmap.IR, Lib.Docmap.Finding[] Force a rescan now; notifies `on_change` subscribers same as a watch-triggered one.
+---@field on_change fun(cb: fun(ir: Lib.Docmap.IR, findings: Lib.Docmap.Finding[])): fun() Subscribe; returns an unsubscribe function.
+---@field uninstall fun() Equivalent to `docmap.uninstall(handle)`.
 
 ---@class Lib.Docmap
 ---@field scan fun(opts: Lib.Docmap.Opts): Lib.Docmap.IR
 ---@field check fun(ir: Lib.Docmap.IR, opts: Lib.Docmap.Opts): Lib.Docmap.Finding[]
----@field generate fun(opts: Lib.Docmap.Opts): Lib.Docmap.IR, Lib.Docmap.Finding[]
+---@field scan_full fun(opts: Lib.Docmap.Opts): Lib.Docmap.IR, Lib.Docmap.Finding[] `scan` + optional LuaLS merge (`opts.luals`) + `check`, in one call. What `generate()` and `install()` both build on.
+---@field generate fun(opts: Lib.Docmap.Opts): Lib.Docmap.IR, Lib.Docmap.Finding[], string[]
+---@field install fun(opts: Lib.Docmap.Opts): Lib.Docmap.Handle
+---@field uninstall fun(handle: Lib.Docmap.Handle|string): boolean Accepts a handle or a root path.
 ---@field render table
