@@ -3,11 +3,25 @@
 ---
 ---   :LibMap          regenerate the artifacts
 ---   :LibMap check    verify without writing (what the hook runs)
+---   :LibMap full     regenerate with LuaLS enrichment (class/alias detail,
+---                    type-reference edges) — slower, opt-in per invocation
 ---   :LibMap open     open the generated HTML in the system browser
 ---
 --- Opt-in: nothing here runs unless a caller invokes `setup()`, so requiring
 --- `lib.nvim.docmap` in a plugin does not silently register a command in the
 --- user's editor.
+---
+--- Built on `docmap.registry`: `setup()` ensures a live handle exists for
+--- `opts.root` (reusing one from a prior `docmap.install()` call rather than
+--- scanning a second time) and drives every action through it, so `:LibMap`
+--- and any `on_change` subscriber another plugin registered stay in sync
+--- with the same IR instead of each holding their own stale copy.
+---
+--- `opts.command_name` (default "LibMap") is what lets a second `setup()`
+--- call — a consuming plugin generating its own map — pick a different name
+--- instead of silently overwriting this one; `usercmd.create` defaults to
+--- `force = true`, so two `setup()` calls with the same name is not an error,
+--- just a bug that changing the name avoids.
 
 local M = {}
 
@@ -24,31 +38,35 @@ local function self_root()
 end
 
 ---@param opts Lib.Docmap.Opts?
+---@return Lib.Docmap.Handle
 function M.setup(opts)
   local usercmd = require("lib.nvim.usercmd")
   local notify = require("lib.nvim.notify").create("[docmap]")
+  local registry = require("lib.nvim.docmap.registry")
+  local docmap = require("lib.nvim.docmap")
 
-  usercmd.create("LibMap", function(args)
-    local docmap = require("lib.nvim.docmap")
-    local root = (opts and opts.root) or self_root()
-    local cfg = opts or require("lib.nvim.docmap.config")(root)
+  local root = (opts and opts.root) or self_root()
+  local cfg = opts or require("lib.nvim.docmap.config")(root)
+  local command_name = cfg.command_name or "LibMap"
+
+  local handle = registry.get(cfg.root) or registry.install(cfg)
+
+  usercmd.create(command_name, function(args)
     local action = vim.trim(args.args or "")
 
     if action == "open" then
       local target = cfg.root .. "/" .. (cfg.out_dir or "docs/map") .. "/index.html"
       if vim.uv.fs_stat(target) == nil then
-        notify.warn("No map generated yet — run :LibMap first.")
+        notify.warn("No map generated yet — run :" .. command_name .. " first.")
         return
       end
       require("lib.nvim.fs.open.url.system_opener").open(target)
       return
     end
 
-    local ir = docmap.scan(cfg)
-    local findings = docmap.check(ir, cfg)
-    local tally = docmap.tally(findings)
-
     if action == "check" then
+      local ir, findings = handle.rescan()
+      local tally = docmap.tally(findings)
       local summary = ("%d errors · %d warnings · %d info"):format(tally.error, tally.warn, tally.info)
       if tally.error > 0 then
         notify.warn("Module map drift: " .. summary)
@@ -74,18 +92,31 @@ function M.setup(opts)
       return
     end
 
-    local _, _, written = docmap.generate(cfg)
+    if action == "full" then
+      local ir, findings = handle.rescan({ luals = true })
+      local written = docmap.write_artifacts(ir, findings, cfg)
+      local tally = docmap.tally(findings)
+      notify.info(("Wrote %d artifacts with LuaLS enrichment (%d modules, %d edges, %d errors)")
+        :format(#written, ir.meta.counts.module, #(ir.edges or {}), tally.error))
+      return
+    end
+
+    local ir, findings = handle.rescan()
+    local written = docmap.write_artifacts(ir, findings, cfg)
+    local tally = docmap.tally(findings)
     notify.info(("Wrote %d artifacts (%d modules, %d errors)")
       :format(#written, ir.meta.counts.module, tally.error))
   end, {
     nargs = "?",
-    desc = "Regenerate the lib.nvim module map (:LibMap [check|open])",
+    desc = "Regenerate the module map (:" .. command_name .. " [check|full|open])",
     complete = function(lead)
       return vim.tbl_filter(function(c)
         return c:find(lead, 1, true) == 1
-      end, { "check", "open" })
+      end, { "check", "full", "open" })
     end,
   })
+
+  return handle
 end
 
 return M

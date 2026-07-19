@@ -8,12 +8,21 @@
 --- directory layout or a repo URL.
 ---
 --- Pipeline:
----   scan   → Lib.Docmap.IR          (filesystem walk + header parse)
----   check  → Lib.Docmap.Finding[]   (drift between docs and reality)
----   render → html / mermaid / markdown / json
+---   scan       → Lib.Docmap.IR          (filesystem walk + header parse)
+---   luals      → merges into the IR     (opt-in: @class/@alias detail, type edges)
+---   check      → Lib.Docmap.Finding[]   (drift between docs and reality)
+---   render     → html / mermaid / markdown / json
 ---
 --- The IR is the contract between the halves: renderers never touch the
 --- filesystem, and the scanner never knows what will be drawn.
+---
+--- Two ways to drive the pipeline:
+---   generate(opts)  — one-shot: scan, check, render, write to opts.out_dir.
+---                      What :LibMap and the CI/hook CLI use.
+---   install(opts)   — live: keeps a scanned IR in memory, optionally
+---                      rescanning on save, with subscribers. What another
+---                      plugin's source code reaches for instead of parsing
+---                      module_map.json off disk.
 ---
 --- Usage:
 ---   require("lib.nvim.docmap").generate({
@@ -38,6 +47,43 @@ M.scan = scan.scan
 M.parse_header = scan.parse_header
 M.check = check.run
 M.tally = check.tally
+
+---`scan()` + optional LuaLS merge (`opts.luals`) + `check()`, in one call.
+---The shared step `generate()` and `install()`'s rescan both build on, so the
+---enrichment wiring exists in exactly one place rather than being repeated at
+---every entry point that needs a fully-formed IR.
+---@param opts Lib.Docmap.Opts
+---@return Lib.Docmap.IR
+---@return Lib.Docmap.Finding[]
+function M.scan_full(opts)
+  local ir = M.scan(opts)
+  ir.edges = ir.edges or {}
+
+  local luals_err
+  if opts.luals then
+    local luals = require("lib.nvim.docmap.luals")
+    local doc_json, err = luals.run(opts.root, opts.source or "lua", { timeout_ms = opts.luals_timeout_ms })
+    if doc_json then
+      luals.merge(ir, doc_json, opts.source or "lua")
+    else
+      -- Enrichment failing is not a reason to fail the whole scan — everything
+      -- scan() produced is still valid. Surface it as a finding instead of
+      -- letting it vanish silently.
+      luals_err = err
+    end
+  end
+
+  local findings = M.check(ir, opts)
+  if luals_err then
+    table.insert(findings, 1, {
+      severity = "info",
+      check = "luals-unavailable",
+      node = nil,
+      message = "opts.luals was set but enrichment did not run: " .. tostring(luals_err),
+    })
+  end
+  return ir, findings
+end
 
 M.render = {
   html = function(...)
@@ -83,6 +129,7 @@ function M.to_json(ir)
       '"body": ' .. str(n.body),
       '"readme": ' .. (n.readme and str(n.readme) or "null"),
       '"types": ' .. json.encode(n.types),
+      '"types_detail": ' .. (n.types_detail and json.encode(n.types_detail) or "null"),
       '"export": ' .. (n.export and str(n.export) or "null"),
       '"parent": ' .. (n.parent and str(n.parent) or "null"),
       '"depth": ' .. tostring(n.depth),
@@ -92,7 +139,9 @@ function M.to_json(ir)
     put(i < #ir.order and ",\n" or "\n")
   end
 
-  put("  ]\n}\n")
+  put("  ],\n  \"edges\": ")
+  put(json.encode(ir.edges or {}))
+  put("\n}\n")
   return table.concat(out)
 end
 
@@ -115,15 +164,16 @@ local function write(path, content)
   return true
 end
 
----Scan, check and render everything into `opts.out_dir`.
+---Render and write `module_map.json`/`index.html`/`overview.md` into
+---`opts.out_dir` for an already-scanned `ir`/`findings` pair. Split out of
+---`generate()` so a caller that already has a fresh IR (e.g. `:LibMap full`,
+---which scans through a registry handle to also update its cached IR) does
+---not have to scan a second time just to get the artifacts written.
+---@param ir Lib.Docmap.IR
+---@param findings Lib.Docmap.Finding[]
 ---@param opts Lib.Docmap.Opts
----@return Lib.Docmap.IR
----@return Lib.Docmap.Finding[]
 ---@return string[] written Repo-relative paths of the files written
-function M.generate(opts)
-  local ir = M.scan(opts)
-  local findings = M.check(ir, opts)
-
+function M.write_artifacts(ir, findings, opts)
   local root = opts.root:gsub("\\", "/"):gsub("/+$", "")
   local out_dir = opts.out_dir or "docs/map"
   local written = {}
@@ -144,7 +194,36 @@ function M.generate(opts)
   end
 
   table.sort(written)
+  return written
+end
+
+---Scan, check and render everything into `opts.out_dir`.
+---@param opts Lib.Docmap.Opts
+---@return Lib.Docmap.IR
+---@return Lib.Docmap.Finding[]
+---@return string[] written Repo-relative paths of the files written
+function M.generate(opts)
+  local ir, findings = M.scan_full(opts)
+  local written = M.write_artifacts(ir, findings, opts)
   return ir, findings, written
+end
+
+---Install a live handle: a scanned IR kept in memory, optionally rescanned on
+---save, with `on_change` subscribers. See `lua/lib/nvim/docmap/registry.lua`
+---for the collision reason this is a separate module from `command.lua`
+---rather than `install()` auto-registering a usercmd itself.
+---@param opts Lib.Docmap.Opts
+---@return Lib.Docmap.Handle
+function M.install(opts)
+  return require("lib.nvim.docmap.registry").install(opts)
+end
+
+---Tear down a handle from `install()`. Accepts the handle itself or its root
+---path. Idempotent: uninstalling twice is a no-op, not an error.
+---@param handle_or_root Lib.Docmap.Handle|string
+---@return boolean uninstalled
+function M.uninstall(handle_or_root)
+  return require("lib.nvim.docmap.registry").uninstall(handle_or_root)
 end
 
 return M
