@@ -70,4 +70,36 @@ function M.new(fn, ms)
   return { call = call, cancel = cancel }
 end
 
+---Like `M.new`, but also tracks how many calls arrived while a previous
+---timer was still pending (i.e. got superseded before firing) — useful for
+---"N updates coalesced" UI feedback. Upstreamed from reposcope.nvim's
+---`utils.protection.debounce_with_counter`.
+---@param fn fun(...:any)
+---@param ms integer
+---@return Lib.Debounce.Handle handle  `handle.call`/`handle.cancel` as in `M.new`
+---@return fun(): integer skipped  Number of calls superseded since the last fire
+function M.new_with_counter(fn, ms)
+  local skipped = 0
+  local pending = false
+
+  local handle = M.new(function(...)
+    pending = false
+    fn(...)
+  end, ms)
+
+  local function call(...)
+    if pending then
+      skipped = skipped + 1
+    end
+    pending = true
+    handle.call(...)
+  end
+
+  local function get_skipped()
+    return skipped
+  end
+
+  return { call = call, cancel = handle.cancel }, get_skipped
+end
+
 return M

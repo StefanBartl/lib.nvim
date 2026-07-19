@@ -11,6 +11,8 @@ M.is_macos = require("lib.nvim.cross.platform.is_macos")
 M.is_linux = require("lib.nvim.cross.platform.is_linux")
 M.is = require("lib.nvim.cross.platform.is")
 
+M.executable = require("lib.nvim.cross.executable")
+
 -- Filesystem
 M.fs = {
   cwd = require("lib.nvim.cross.fs._cwd"),
@@ -43,5 +45,7 @@ M.run = {
   run_detached = require("lib.nvim.cross.run").run_detached,
   run_argv = require("lib.nvim.cross.run_argv"),
 }
+
+M.open_default = require("lib.nvim.cross.open_default")
 
 return M
