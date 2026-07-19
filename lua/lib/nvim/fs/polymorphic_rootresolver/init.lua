@@ -1,4 +1,4 @@
----@module 'lib.nvim.fs.polymorphic_root_resolver'
+---@module 'lib.nvim.fs.polymorphic_rootresolver'
 --- Generic polymorphic root-directory resolver for Neovim LSPs.
 --- Supports both buffer numbers and filenames, optional callbacks, and configurable
 --- project root markers for VCS or tool-specific files.

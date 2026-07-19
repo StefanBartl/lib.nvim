@@ -3,7 +3,7 @@
 > **Generated** by `lib.nvim.docmap`. Do not edit by hand — run `:LibMap`
 > (or `nvim --headless -l scripts/gen_map.lua`) to regenerate.
 
-**121 modules** · 24 namespaces · 114 helper files
+**120 modules** · 24 namespaces · 106 helper files
 
 The [interactive map](index.html) has filtering, full descriptions and
 source links; this page is the version the code host renders directly.
@@ -180,7 +180,7 @@ flowchart LR
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.buf_win_tab.move_buffer_to_tab` | Moves the current buffer into a new tab and removes it from the original tab | [src](../../lua/lib/nvim/buf_win_tab/move_buffer_to_tab/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.buf_win_tab.normal_buffer` | Shared buffer/window primitives around "normal" file buffers. | [src](../../lua/lib/nvim/buf_win_tab/normal_buffer/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.buf_win_tab.resize_guarded` | Guarded resize helper that allows window resize shortcuts in normal editors while preserving keypresses in terminals and special plugin buffers. | [README](../../lua/lib/nvim/buf_win_tab/resize_guarded/README.md) · [src](../../lua/lib/nvim/buf_win_tab/resize_guarded/init.lua) |
-| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.buf_win_tab.save_adjacent_buffer` | Helper to force-save the last usable file buffer via :w! | [src](../../lua/lib/nvim/buf_win_tab/safe_adjacent_buffer/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.buf_win_tab.safe_adjacent_buffer` | Helper to force-save the last usable file buffer via :w! | [src](../../lua/lib/nvim/buf_win_tab/safe_adjacent_buffer/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.buf_win_tab.selection` | Read the visual selection, whether or not visual mode is still active. | [README](../../lua/lib/nvim/buf_win_tab/selection/README.md) · [src](../../lua/lib/nvim/buf_win_tab/selection/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.buf_win_tab.word_under_cursor` | Extract the word under the cursor using a configurable word-character pattern, and report its byte span. | [README](../../lua/lib/nvim/buf_win_tab/word_under_cursor/README.md) · [src](../../lua/lib/nvim/buf_win_tab/word_under_cursor/init.lua) |
 | &nbsp;&nbsp;`buffer` |  |  |
@@ -196,14 +196,14 @@ flowchart LR
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`separators` |  | [README](../../lua/lib/nvim/cross/fs/separators/README.md) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs.separators.collapse_dots` | Lexically collapse '.'/'..' segments and repeated separators in a path. | [src](../../lua/lib/nvim/cross/fs/separators/collapse_dots/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs.separators.drive_upper` | Uppercase a Windows drive-letter prefix ("c:/foo" -> "C:/foo"). | [src](../../lua/lib/nvim/cross/fs/separators/drive_upper/init.lua) |
-| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs.win.has_win_sep` |  | [src](../../lua/lib/nvim/cross/fs/separators/has_win_sep/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs.separators.has_win_sep` |  | [src](../../lua/lib/nvim/cross/fs/separators/has_win_sep/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs.separators.normalize` | Normalizes path separators for the current OS. | [src](../../lua/lib/nvim/cross/fs/separators/normalize/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs.separators.unify_slashes` | Convert every backslash in `path` to a forward slash — a pure string transform: no expansion, no absolute-path resolution, no collapsing of repeated… | [src](../../lua/lib/nvim/cross/fs/separators/unify_slashes/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`platform` |  |  |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.run` | Shell selection and runners FIX: Optimize, doc | [src](../../lua/lib/nvim/cross/run/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.run_argv` | Low-level argv-based process runner with stdin support. | [src](../../lua/lib/nvim/cross/run_argv/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`uv` |  |  |
-| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs._cwd` | Resolve the current working directory via libuv, compatible across NVIM versions. | [src](../../lua/lib/nvim/cross/uv/fs/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.uv.fs` | Resolve the current working directory via libuv, compatible across NVIM versions. | [src](../../lua/lib/nvim/cross/uv/fs/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.uv.spawn_capture` | Async spawn of an argv command with buffered stdout/stderr capture and an optional timeout. | [src](../../lua/lib/nvim/cross/uv/spawn_capture/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.uv.spawn_stream` | Async spawn of an argv command with **line-by-line** streaming of stdout/stderr and an optional timeout. | [README](../../lua/lib/nvim/cross/uv/spawn_stream/README.md) · [src](../../lua/lib/nvim/cross/uv/spawn_stream/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.uv.wait_until` | Poll a predicate on a libuv timer until it returns true or a maximum number of attempts is reached. | [src](../../lua/lib/nvim/cross/uv/wait_until/init.lua) |
@@ -230,7 +230,7 @@ flowchart LR
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.open.url.system_opener` | Open a path/URL with the OS default handler — the shared per-OS dispatch every plugin that shells out to `open`/`xdg-open`/`start` was reimplementing… | [README](../../lua/lib/nvim/fs/open/url/system_opener/README.md) · [src](../../lua/lib/nvim/fs/open/url/system_opener/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.path` |  | [src](../../lua/lib/nvim/fs/path/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.path_shorten` | Utility module to shorten file paths for display. | [src](../../lua/lib/nvim/fs/path_shorten/init.lua) |
-| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.polymorphic_root_resolver` | Generic polymorphic root-directory resolver for Neovim LSPs. | [README](../../lua/lib/nvim/fs/polymorphic_rootresolver/README.md) · [src](../../lua/lib/nvim/fs/polymorphic_rootresolver/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.polymorphic_rootresolver` | Generic polymorphic root-directory resolver for Neovim LSPs. | [README](../../lua/lib/nvim/fs/polymorphic_rootresolver/README.md) · [src](../../lua/lib/nvim/fs/polymorphic_rootresolver/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.project_key` | Stable per-project cache key: prefers the Git root of `path` (default cwd), falls back to `path`/cwd itself, and runs the result through `lib.nvim.fs.normkey`… | [README](../../lua/lib/nvim/fs/project_key/README.md) · [src](../../lua/lib/nvim/fs/project_key/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.read` | Read the whole contents of a file at `path` into a string. | [README](../../lua/lib/nvim/fs/read/README.md) · [src](../../lua/lib/nvim/fs/read/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.relpath` | Compute `path` relative to `base`. | [src](../../lua/lib/nvim/fs/relpath/init.lua) |
@@ -246,7 +246,7 @@ flowchart LR
 | &nbsp;&nbsp;`lua_ls` |  |  |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.lua_ls.get_module_path` | Convert file path to Lua module path | [src](../../lua/lib/nvim/lua_ls/get_module_path/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`insert` |  |  |
-| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.lua_ls.insert.module_annotation` | Insert a LuaLS @module annotation into a buffer at a configurable position | [README](../../lua/lib/nvim/lua_ls/insert/module_annnotation/README.md) · [src](../../lua/lib/nvim/lua_ls/insert/module_annnotation/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.lua_ls.insert.module_annnotation` | Insert a LuaLS @module annotation into a buffer at a configurable position | [README](../../lua/lib/nvim/lua_ls/insert/module_annnotation/README.md) · [src](../../lua/lib/nvim/lua_ls/insert/module_annnotation/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.map` | ========================================================= Keymap helper utilities. | [src](../../lua/lib/nvim/map/init.lua) |
 | &nbsp;&nbsp;`neotree` |  |  |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.neotree.node` | Neo-tree node extraction utilities. | [src](../../lua/lib/nvim/neotree/node/init.lua) |
@@ -263,7 +263,7 @@ flowchart LR
 | &nbsp;&nbsp;`lib.nvim.safe_api` | Validated, pcall-wrapped `vim.api` accessors for buffers/windows. | [README](../../lua/lib/nvim/safe_api/README.md) · [src](../../lua/lib/nvim/safe_api/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.selection` | Reselect a Visual-mode line/char range after a mapping mutates the buffer. | [README](../../lua/lib/nvim/selection/README.md) · [src](../../lua/lib/nvim/selection/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.system` | Host-environment namespace: OS/shell/path snapshot plus the Windows RPC-pipe helper. | [README](../../lua/lib/nvim/system/README.md) · [src](../../lua/lib/nvim/system/init.lua) |
-| &nbsp;&nbsp;`lib.terminals` | Terminal helper functions | [src](../../lua/lib/nvim/terminal/init.lua) |
+| &nbsp;&nbsp;`lib.nvim.terminal` | Terminal helper functions | [src](../../lua/lib/nvim/terminal/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.token` | Ephemeral session-nonce / token generator, for handshake IDs, temp-window IDs, correlation IDs, and similar internal bookkeeping. | [README](../../lua/lib/nvim/token/README.md) · [src](../../lua/lib/nvim/token/init.lua) |
 | &nbsp;&nbsp;`treesitter` |  |  |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.treesitter.guard` | Filetype allowlist gate for treesitter-dependent features (highlighting, foldexpr, indentexpr). | [README](../../lua/lib/nvim/treesitter/guard/README.md) · [src](../../lua/lib/nvim/treesitter/guard/init.lua) |
@@ -271,7 +271,6 @@ flowchart LR
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.ui.hl` | ========================================================= Highlight helper utilities. | [src](../../lua/lib/nvim/ui/hl/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.ui.kit` | Themed, composable UI toolkit for lib.nvim. | [README](../../lua/lib/nvim/ui/kit/README.md) · [src](../../lua/lib/nvim/ui/kit/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.usercmd` | ========================================================= User command helper utilities. | [src](../../lua/lib/nvim/usercmd/init.lua) |
-| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.usercmd.composer` | Compose a route spec into ONE Neovim user command with subcommands, `<Tab>` completion, and Markdown docs — all read from the same tree. | [README](../../lua/lib/nvim/usercmd/composer/README.md) · [src](../../lua/lib/nvim/usercmd/composer/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.window` | Window-control helpers for overlay / floating windows. | [README](../../lua/lib/nvim/window/README.md) · [src](../../lua/lib/nvim/window/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.window.context` | Window-metadata accessor with a same-event cache. | [README](../../lua/lib/nvim/window/context/README.md) · [src](../../lua/lib/nvim/window/context/init.lua) |
 | `lib.nvim_usrcmds` | Utility user commands that don't belong in a more specific plugin. | [src](../../lua/lib/nvim_usrcmds/init.lua) |
@@ -296,26 +295,10 @@ flowchart LR
 
 ## Drift
 
-15 errors · 11 warnings · 126 info
+0 errors · 10 warnings · 125 info
 
 | Severity | Check | Message |
 |---|---|---|
-| error | `module-path-mismatch` | lua/lib/nvim/buf_win_tab/safe_adjacent_buffer/init.lua declares @module 'lib.nvim.buf_win_tab.save_adjacent_buffer' but lives at 'lib.nvim.buf_win_tab.safe_adjacent_buffer' |
-| error | `module-path-mismatch` | lua/lib/nvim/cross/fs/separators/has_win_sep/init.lua declares @module 'lib.nvim.cross.fs.win.has_win_sep' but lives at 'lib.nvim.cross.fs.separators.has_win_sep' |
-| error | `module-path-mismatch` | lua/lib/nvim/cross/uv/fs/init.lua declares @module 'lib.nvim.cross.fs._cwd' but lives at 'lib.nvim.cross.uv.fs' |
-| error | `module-path-mismatch` | lua/lib/nvim/fs/is_subpath/alternative.lua declares @module 'utils.path' but lives at 'lib.nvim.fs.is_subpath.alternative' |
-| error | `module-path-mismatch` | lua/lib/nvim/fs/polymorphic_rootresolver/init.lua declares @module 'lib.nvim.fs.polymorphic_root_resolver' but lives at 'lib.nvim.fs.polymorphic_rootresolver' |
-| error | `module-path-mismatch` | lua/lib/nvim/lua_ls/insert/module_annnotation/init.lua declares @module 'lib.nvim.lua_ls.insert.module_annotation' but lives at 'lib.nvim.lua_ls.insert.module_annnotation' |
-| error | `module-path-mismatch` | lua/lib/nvim/terminal/init.lua declares @module 'lib.terminals' but lives at 'lib.nvim.terminal' |
-| error | `type-not-exported` | Lib class declares 'normalize_anchor' but require('lib').normalize_anchor is nil |
-| error | `type-not-exported` | Lib class declares 'raise' but require('lib').raise is nil |
-| error | `type-not-exported` | Lib class declares 'always_true' but require('lib').always_true is nil |
-| error | `type-not-exported` | Lib class declares 'noop' but require('lib').noop is nil |
-| error | `type-not-exported` | Lib class declares 'always_false' but require('lib').always_false is nil |
-| error | `type-not-exported` | Lib class declares 'json_decode_to_string_array' but require('lib').json_decode_to_string_array is nil |
-| error | `type-not-exported` | Lib class declares 'const' but require('lib').const is nil |
-| error | `type-not-exported` | Lib class declares 'identity' but require('lib').identity is nil |
-| warn | `dead-readme-link` | lua/lib/nvim/fs/write/async/README.md links to '../to_file/README.md' which does not exist |
 | warn | `missing-summary` | lua/lib/lua/functions/init.lua has ---@module but no description line |
 | warn | `missing-summary` | lua/lib/lua/json/init.lua has ---@module but no description line |
 | warn | `missing-summary` | lua/lib/lua/strings/init.lua has ---@module but no description line |
@@ -328,7 +311,7 @@ flowchart LR
 | warn | `missing-summary` | lua/lib/nvim/normalize/validators.lua has ---@module but no description line |
 
 <details>
-<summary>126 informational findings</summary>
+<summary>125 informational findings</summary>
 
 
 | Check | Message |
@@ -418,7 +401,7 @@ flowchart LR
 | `unreferenced-module` | lib.nvim.buf_win_tab.capture is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.buf_win_tab.move_buffer_to_tab is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.buf_win_tab.normal_buffer is required by no other file in the tree |
-| `unreferenced-module` | lib.nvim.buf_win_tab.save_adjacent_buffer is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim.buf_win_tab.safe_adjacent_buffer is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.buf_win_tab.selection is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.buf_win_tab.tabs_utils is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.buf_win_tab.windows_utils is required by no other file in the tree |
@@ -426,18 +409,17 @@ flowchart LR
 | `unreferenced-module` | lib.nvim.buffer.get_alternate is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.buffer.open_background is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.cross is required by no other file in the tree |
-| `unreferenced-module` | lib.nvim.cross.fs.win.has_win_sep is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim.cross.uv.fs is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.docmap.command is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.fs.create_entry is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.fs.ignore.list is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.fs.is_readable_file is required by no other file in the tree |
-| `unreferenced-module` | utils.path is required by no other file in the tree |
-| `unreferenced-module` | lib.nvim.fs.polymorphic_root_resolver is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim.fs.is_subpath.alternative is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim.fs.polymorphic_rootresolver is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.fs.project_key is required by no other file in the tree |
-| `unreferenced-module` | lib.nvim.lua_ls.insert.module_annotation is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim.lua_ls.insert.module_annnotation is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.neotree.node is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.selection is required by no other file in the tree |
-| `unreferenced-module` | lib.terminals is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.treesitter.guard is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.window.find_by_filetype is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim_usrcmds is required by no other file in the tree |

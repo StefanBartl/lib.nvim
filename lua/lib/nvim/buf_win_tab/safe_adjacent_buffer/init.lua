@@ -1,4 +1,4 @@
----@module 'lib.nvim.buf_win_tab.save_adjacent_buffer'
+---@module 'lib.nvim.buf_win_tab.safe_adjacent_buffer'
 ---Helper to force-save the last usable file buffer via :w!
 
 local M = {}

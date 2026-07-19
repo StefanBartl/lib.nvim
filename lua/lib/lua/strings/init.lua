@@ -35,6 +35,7 @@ M.strip_ansi = require("lib.lua.strings.patterns").strip_ansi
 
 -- links module
 M.uri_decode = require("lib.lua.strings.links").uri_decode
+M.normalize_anchor = require("lib.lua.strings.links").normalize_anchor
 M.normalize_ws = require("lib.lua.strings.links").normalize_ws
 M.has_scheme = require("lib.lua.strings.links").has_scheme
 M.is_web_url = require("lib.lua.strings.links").is_web_url

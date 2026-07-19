@@ -1,4 +1,4 @@
----@module 'lib.nvim.cross.fs._cwd'
+---@module 'lib.nvim.cross.uv.fs'
 -- Resolve the current working directory via libuv, compatible across NVIM versions.
 
 ---@return string
