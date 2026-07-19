@@ -117,6 +117,17 @@ local SPECIAL_HANDLERS = {
   joinpath = { mod = "lib.nvim.fs.path", key = "joinpath" },
   ensure_dir = { mod = "lib.nvim.fs.path", key = "ensure_dir" },
 
+  -- lib.lua.functions.meta exports multiple functions. These were present in
+  -- the eager and lazy strategies but not here, so under the *default*
+  -- strategy `lib.identity` raised "unknown key" while the Lib class happily
+  -- advertised it.
+  noop = { mod = "lib.lua.functions.meta", key = "noop" },
+  identity = { mod = "lib.lua.functions.meta", key = "identity" },
+  always_true = { mod = "lib.lua.functions.meta", key = "always_true" },
+  always_false = { mod = "lib.lua.functions.meta", key = "always_false" },
+  const = { mod = "lib.lua.functions.meta", key = "const" },
+  raise = { mod = "lib.lua.functions.meta", key = "raise" },
+
   -- lib.nvim.require exports multiple functions
   require_safe = { mod = "lib.nvim.require", key = "safe" },
   require_dir = { mod = "lib.nvim.require", key = "dir" },
@@ -161,7 +172,7 @@ local SPECIAL_HANDLERS = {
   count_lines = { mod = "lib.lua.strings", key = "count_lines" },
 
   -- json decode
-  json_decode_to_string_array = { mod = "lib.lua.json.decode.to_string_array", key = "json_decode" },
+  json_decode_to_string_array = { mod = "lib.lua.json.decode.to_string_array", key = "ensure_string_array" },
 
   -- json encode (pure Lua)
   json_encode = { mod = "lib.lua.json.encode", key = "encode" },
