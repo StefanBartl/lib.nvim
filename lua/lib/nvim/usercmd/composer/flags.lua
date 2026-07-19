@@ -1,13 +1,13 @@
 ---@module 'lib.nvim.usercmd.composer.flags'
---- --flag / --flag=value parsing, shared by dispatch and completion so a
+--- --flag / --flag=value / -x parsing, shared by dispatch and completion so a
 --- route's flags stay one declaration read by both (same principle as the
 --- route tree itself). Modeled on replacer.nvim's BOOL_FLAGS/VALUE_FLAGS
 --- tokenizer split (see docs/ROADMAP/usrcmd_builder.md Phase 6).
 ---
 --- Strictly opt-in per route: every function here is a no-op passthrough when
 --- `route.flags` is nil/empty, so a route that never declares flags keeps its
---- pre-Phase-6 behavior exactly — a leading "--" in one of its positional
---- values is not treated specially.
+--- pre-Phase-6 behavior exactly — a leading "--" or "-" in one of its
+--- positional values is not treated specially.
 
 local argtypes = require("lib.nvim.usercmd.composer.argtypes")
 
@@ -26,8 +26,8 @@ local function find_spec(route, name)
 end
 M.find_spec = find_spec
 
---- A flag-shaped token (`--name` or `--name=value`) — excludes the bare `--`
---- stop sentinel, which is a token of its own.
+--- A flag-shaped long token (`--name` or `--name=value`) — excludes the bare
+--- `--` stop sentinel, which is a token of its own.
 ---@param tok string
 ---@return boolean
 local function is_flag_token(tok)
@@ -35,11 +35,79 @@ local function is_flag_token(tok)
 end
 M.is_flag_token = is_flag_token
 
+--- A short-flag-shaped token: exactly "-" + one character, where that
+--- character matches a declared FlagSpec.short on this route. Lenient on
+--- non-matches (e.g. `-5` as a negative number) — unlike `--name`, an
+--- unrecognized short token is left as an ordinary positional, not an error,
+--- since single-dash prefixes collide far more easily with real values (a
+--- signed number, a passthrough CLI arg, ...).
+---@param route Lib.UserCmd.Composer.Route
+---@param tok string
+---@return Lib.UserCmd.Composer.FlagSpec|nil
+local function find_short_spec(route, tok)
+  if #tok ~= 2 or tok:sub(1, 1) ~= "-" or tok:sub(1, 2) == "--" then
+    return nil
+  end
+  local ch = tok:sub(2, 2)
+  for _, f in ipairs(route.flags or {}) do
+    if f.short == ch then
+      return f
+    end
+  end
+  return nil
+end
+M.find_short_spec = find_short_spec
+
+--- Consume one resolved flag occurrence (long or short) starting at
+--- `tokens[i]`, applying it to `flags`. `inline_val` is the `--name=value`
+--- payload when present (never set for short flags — those only take the
+--- next token as a value, no `-x=value` form).
+---@param route Lib.UserCmd.Composer.Route
+---@param spec Lib.UserCmd.Composer.FlagSpec
+---@param label string        # "--name" or "-x", for error messages
+---@param inline_val string|nil
+---@param tokens string[]
+---@param i integer
+---@param stopped boolean
+---@param flags table<string, any>
+---@return integer next_i, string|nil err
+local function consume_flag(route, spec, label, inline_val, tokens, i, stopped, flags)
+  if spec.bool then
+    if inline_val then
+      return i, ("flag '%s' takes no value"):format(label)
+    end
+    flags[spec.name] = true
+    return i, nil
+  end
+
+  local raw = inline_val
+  if raw == nil then
+    local nxt = tokens[i + 1]
+    if nxt == nil or nxt == "--" or (not stopped and (is_flag_token(nxt) or find_short_spec(route, nxt))) then
+      return i, ("flag '%s' requires a value"):format(label)
+    end
+    raw = nxt
+    i = i + 1
+  end
+  local ok, value, verr = argtypes.validate(raw, spec)
+  if not ok then
+    return i, ("flag '%s': %s"):format(label, verr)
+  end
+  if spec.repeatable then
+    flags[spec.name] = flags[spec.name] or {}
+    table.insert(flags[spec.name], value)
+  else
+    flags[spec.name] = value
+  end
+  return i, nil
+end
+
 --- Split `tokens` into (positionals, flags), honoring a literal `--` as "stop
 --- parsing flags — everything after is positional" (mirrors replacer.nvim's
 --- `flags_done` sentinel). An undeclared `--name` is a hard error, same
 --- fail-loud stance as a bad positional arg — silently downgrading it to a
---- positional would surprise a caller who mistyped a flag name.
+--- positional would surprise a caller who mistyped a flag name. An
+--- unrecognized `-x` is left as an ordinary positional (see find_short_spec).
 ---@param route Lib.UserCmd.Composer.Route
 ---@param tokens string[]
 ---@return string[]|nil positionals
@@ -55,8 +123,14 @@ function M.split(route, tokens)
   local i = 1
   while i <= #tokens do
     local tok = tokens[i]
+    local short_spec = (not stopped) and find_short_spec(route, tok) or nil
+
     if not stopped and tok == "--" then
       stopped = true
+    elseif not stopped and short_spec then
+      local next_i, err = consume_flag(route, short_spec, tok, nil, tokens, i, stopped, flags)
+      if err then return nil, nil, err end
+      i = next_i
     elseif not stopped and is_flag_token(tok) then
       local body = tok:sub(3)
       local eq = body:find("=", 1, true)
@@ -67,33 +141,9 @@ function M.split(route, tokens)
       if not spec then
         return nil, nil, ("unknown flag '--%s'"):format(name)
       end
-
-      if spec.bool then
-        if inline_val then
-          return nil, nil, ("flag '--%s' takes no value"):format(name)
-        end
-        flags[name] = true
-      else
-        local raw = inline_val
-        if raw == nil then
-          local nxt = tokens[i + 1]
-          if nxt == nil or nxt == "--" or is_flag_token(nxt) then
-            return nil, nil, ("flag '--%s' requires a value"):format(name)
-          end
-          raw = nxt
-          i = i + 1
-        end
-        local ok, value, verr = argtypes.validate(raw, spec)
-        if not ok then
-          return nil, nil, ("flag '--%s': %s"):format(name, verr)
-        end
-        if spec.repeatable then
-          flags[name] = flags[name] or {}
-          table.insert(flags[name], value)
-        else
-          flags[name] = value
-        end
-      end
+      local next_i, err = consume_flag(route, spec, "--" .. name, inline_val, tokens, i, stopped, flags)
+      if err then return nil, nil, err end
+      i = next_i
     else
       positionals[#positionals + 1] = tok
     end
@@ -127,8 +177,14 @@ function M.strip(route, tokens)
   local i = 1
   while i <= #tokens do
     local tok = tokens[i]
+    local short_spec = (not stopped) and find_short_spec(route, tok) or nil
+
     if not stopped and tok == "--" then
       stopped = true
+    elseif not stopped and short_spec then
+      if not short_spec.bool then
+        i = i + 1 -- also skip the value token
+      end
     elseif not stopped and is_flag_token(tok) then
       local body = tok:sub(3)
       if not body:find("=", 1, true) then
@@ -146,7 +202,8 @@ function M.strip(route, tokens)
 end
 
 --- Completion candidates for a flag-shaped `arg_lead` (route must declare
---- flags; returns {} otherwise).
+--- flags; returns {} otherwise). Short flags (`-x`) are offered as exact
+--- tokens once their prefix ("-") is typed, alongside the long `--name` forms.
 ---@param route Lib.UserCmd.Composer.Route|nil
 ---@param arg_lead string
 ---@return string[]
@@ -155,29 +212,44 @@ function M.candidates(route, arg_lead)
     return {}
   end
 
-  local eq = arg_lead:find("=", 1, true)
-  if eq then
-    local name = arg_lead:sub(3, eq - 1)
-    local value_lead = arg_lead:sub(eq + 1)
-    local spec = find_spec(route, name)
-    if not spec or spec.bool then
-      return {}
+  if arg_lead:sub(1, 2) == "--" then
+    local eq = arg_lead:find("=", 1, true)
+    if eq then
+      local name = arg_lead:sub(3, eq - 1)
+      local value_lead = arg_lead:sub(eq + 1)
+      local spec = find_spec(route, name)
+      if not spec or spec.bool then
+        return {}
+      end
+      local out = {}
+      for _, v in ipairs(argtypes.complete(value_lead, spec)) do
+        out[#out + 1] = ("--%s=%s"):format(name, v)
+      end
+      return out
     end
+
+    local prefix = arg_lead:sub(3)
     local out = {}
-    for _, v in ipairs(argtypes.complete(value_lead, spec)) do
-      out[#out + 1] = ("--%s=%s"):format(name, v)
+    for _, f in ipairs(route.flags) do
+      if f.name:sub(1, #prefix) == prefix then
+        out[#out + 1] = "--" .. f.name
+      end
     end
     return out
   end
 
-  local prefix = arg_lead:sub(3)
-  local out = {}
-  for _, f in ipairs(route.flags) do
-    if f.name:sub(1, #prefix) == prefix then
-      out[#out + 1] = "--" .. f.name
+  -- Bare "-": offer every declared short flag.
+  if arg_lead == "-" then
+    local out = {}
+    for _, f in ipairs(route.flags) do
+      if f.short then
+        out[#out + 1] = "-" .. f.short
+      end
     end
+    return out
   end
-  return out
+
+  return {}
 end
 
 return M

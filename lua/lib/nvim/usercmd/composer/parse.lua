@@ -7,6 +7,7 @@ local tree = require("lib.nvim.usercmd.composer.tree")
 local argtypes = require("lib.nvim.usercmd.composer.argtypes")
 local format = require("lib.nvim.usercmd.composer.format")
 local flags = require("lib.nvim.usercmd.composer.flags")
+local kv = require("lib.nvim.usercmd.composer.kv")
 
 local M = {}
 
@@ -100,7 +101,7 @@ function M.dispatch(cmd_name, spec, root, opts, notify)
   -- Bare `:Verb` → default handler (or usage).
   if #fargs == 0 then
     if spec.default then
-      return spec.default(M.build_ctx({}, {}, {}, {}, {}, opts))
+      return spec.default(M.build_ctx({}, {}, {}, {}, {}, {}, opts))
     end
     notify.info(M.usage(cmd_name, root))
     return
@@ -127,9 +128,15 @@ function M.dispatch(cmd_name, spec, root, opts, notify)
     rest[#rest + 1] = fargs[i]
   end
 
-  local positionals, flag_values, ferr = flags.split(route, rest)
+  local after_flags, flag_values, ferr = flags.split(route, rest)
   if ferr then
     notify.error(("%s\n  %s"):format(ferr, format.invocation(cmd_name, route)))
+    return
+  end
+
+  local positionals, kv_values, kverr = kv.split(route, after_flags)
+  if kverr then
+    notify.error(("%s\n  %s"):format(kverr, format.invocation(cmd_name, route)))
     return
   end
 
@@ -145,16 +152,17 @@ function M.dispatch(cmd_name, spec, root, opts, notify)
     return
   end
 
-  return run(M.build_ctx(args, pos, flag_values, leftover, route.path, opts))
+  return run(M.build_ctx(args, pos, flag_values, kv_values, leftover, route.path, opts))
 end
 
 --- Assemble the handler context.
 ---@return Lib.UserCmd.Composer.Ctx
-function M.build_ctx(args, pos, flag_values, rest, path, opts)
+function M.build_ctx(args, pos, flag_values, kv_values, rest, path, opts)
   return {
     args = args,
     pos = pos,
     flags = flag_values or {},
+    kv = kv_values or {},
     rest = rest,
     path = path,
     bang = opts.bang or false,

@@ -21,6 +21,7 @@
 ---@field complete? string|fun(arg_lead:string, cmd_line:string, cursor_pos:number):string[]
 ---@field desc? string
 ---@field force? boolean # Overwrite an existing command instead of erroring (E174). Default: true.
+---@field buffer? boolean|integer # Register buffer-locally via nvim_buf_create_user_command: true = current buffer, or an explicit bufnr. Default: nil (global).
 
 ---@class Lib.UsrCmd
 ---@field create fun(name: string, callback: string|fun(args:Lib.UserCommand.Args), opts: LibUserCommandOpts|nil): nil

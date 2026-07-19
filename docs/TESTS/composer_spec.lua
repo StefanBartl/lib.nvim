@@ -20,7 +20,7 @@ return function(H)
     "lib.nvim.usercmd.composer.parse", "lib.nvim.usercmd.composer.complete",
     "lib.nvim.usercmd.composer.argtypes", "lib.nvim.usercmd.composer.docgen",
     "lib.nvim.usercmd.composer.registry", "lib.nvim.usercmd.composer.format",
-    "lib.nvim.usercmd.composer.flags",
+    "lib.nvim.usercmd.composer.flags", "lib.nvim.usercmd.composer.kv",
   }) do
     ok(require(mod) ~= nil, "loads: " .. mod)
   end
@@ -332,5 +332,141 @@ return function(H)
     eq(captured.range, 2, "ctx.range.range reaches the handler")
     eq(captured.line1, 5, "ctx.range.line1 reaches the handler")
     eq(captured.line2, 9, "ctx.range.line2 reaches the handler")
+  end
+
+  -- ------------------------------------------------------- buffer-local commands
+  do
+    local buf1 = vim.api.nvim_create_buf(false, true)
+    local buf2 = vim.api.nvim_create_buf(false, true)
+    local fired_in
+
+    vim.api.nvim_set_current_buf(buf1)
+    composer.verb("ComposerSpecBufLocal", {
+      buffer = true,
+      routes = { { path = { "go" }, run = function() fired_in = vim.api.nvim_get_current_buf() end } },
+    })
+
+    vim.api.nvim_set_current_buf(buf1)
+    ok(vim.fn.exists(":ComposerSpecBufLocal") == 2, "buffer-local: registered in the buffer it was created in")
+    vim.cmd("ComposerSpecBufLocal go")
+    eq(fired_in, buf1, "buffer-local: dispatch runs correctly")
+
+    vim.api.nvim_set_current_buf(buf2)
+    ok(vim.fn.exists(":ComposerSpecBufLocal") == 0, "buffer-local: NOT registered in a different buffer")
+
+    vim.api.nvim_set_current_buf(buf1)
+    pcall(vim.api.nvim_buf_del_user_command, buf1, "ComposerSpecBufLocal")
+    pcall(vim.api.nvim_buf_delete, buf1, { force = true })
+    pcall(vim.api.nvim_buf_delete, buf2, { force = true })
+  end
+
+  -- --------------------------------------------------------------- short flags
+  local flags = require("lib.nvim.usercmd.composer.flags")
+  local short_route = {
+    path = {},
+    args = { { name = "query", type = "STRING" } },
+    flags = {
+      { name = "replace", short = "r", bool = true },
+      { name = "output", short = "o", type = "STRING" },
+    },
+  }
+
+  do
+    local p, f = flags.split(short_route, { "foo", "-r" })
+    eq(join(p), "foo", "short flag: bool -r extracted, positional untouched")
+    eq(f.replace, true, "short flag: -r resolves to the long name (replace)")
+  end
+  do
+    local p, f = flags.split(short_route, { "foo", "-o", "out.txt" })
+    eq(join(p), "foo", "short flag: value -o consumes the next token")
+    eq(f.output, "out.txt", "short flag: -o resolves to the long name (output)")
+  end
+  do
+    local p, f = flags.split(short_route, { "-r", "foo", "--output=out2.txt" })
+    eq(join(p), "foo", "short flag: mixes with long --flag=value in the same call")
+    eq(f.replace, true, "short + long mix: short flag value")
+    eq(f.output, "out2.txt", "short + long mix: long flag value")
+  end
+  do
+    -- Lenient: an unrecognized short-shaped token (no matching FlagSpec.short)
+    -- is left as an ordinary positional, not an error (e.g. a negative number).
+    local p, f, err = flags.split(short_route, { "-5", "foo" })
+    eq(err, nil, "short flag: unrecognized -x is not an error")
+    eq(join(p), "-5,foo", "short flag: unrecognized -x stays positional")
+  end
+  do
+    local names = flags.candidates(short_route, "-")
+    table.sort(names)
+    eq(table.concat(names, ","), "-o,-r", "short flag: bare '-' completes every declared short")
+  end
+  do
+    local root = tree.build({ vim.tbl_extend("force", short_route, { run = function() end }) })
+    local body = docgen.render({ { name = "ShortFlagDoc", spec = { routes = { short_route } }, root = root } })
+    ok(body:find("[--replace|-r]", 1, true), "docgen: short flag rendered alongside the long name")
+  end
+
+  -- --------------------------------------------------------------- kv (key=value)
+  local kv = require("lib.nvim.usercmd.composer.kv")
+  local kv_route = {
+    path = {},
+    kv = {
+      { key = "target", type = "STRING" },
+      { key = "view", type = "STRING", enum = { "vsplit", "split" }, default = "vsplit" },
+    },
+  }
+
+  do
+    local p, v = kv.split(kv_route, { "foo", "target=bar.txt", "view=split" })
+    eq(join(p), "foo", "kv: declared key=value pairs extracted, positional untouched")
+    eq(v.target, "bar.txt", "kv: target value coerced")
+    eq(v.view, "split", "kv: enum-constrained value coerced")
+  end
+  do
+    -- Lenient: an undeclared key=value-shaped token is left as an ordinary
+    -- positional, not an error -- "=" is common in real positional values.
+    local p, v, err = kv.split(kv_route, { "foo=bar", "baz" })
+    eq(err, nil, "kv: undeclared key=value is not an error")
+    eq(join(p), "foo=bar,baz", "kv: undeclared key=value stays positional")
+  end
+  do
+    local _, _, err = kv.split(kv_route, { "view=floating" })
+    ok(err and err:find("expected one of"), "kv: bad enum value -> error")
+  end
+  do
+    local _, v = kv.split(kv_route, {})
+    eq(v.view, "vsplit", "kv: default applied when the key is never passed")
+  end
+  do
+    local names = kv.candidates(kv_route, "")
+    table.sort(names)
+    eq(table.concat(names, ","), "target=,view=", "kv: empty prefix offers every declared key")
+    eq(join(kv.candidates(kv_route, "vi")), "view=", "kv: prefix filter on the key name")
+    local vals = kv.candidates(kv_route, "view=")
+    table.sort(vals)
+    eq(table.concat(vals, ","), "view=split,view=vsplit", "kv: value completion for a declared key")
+  end
+
+  -- kv + flags + positionals together, through real dispatch and a real
+  -- :command (proves the flags.split -> kv.split -> bind_args chain in parse.lua).
+  do
+    local seen
+    composer.verb("ComposerSpecKvFlags", {
+      routes = {
+        { path = {},
+          args = { { name = "name", type = "STRING" } },
+          kv = { { key = "view", type = "STRING", enum = { "vsplit", "split" } } },
+          flags = { { name = "verbose", short = "v", bool = true } },
+          run = function(ctx) seen = { name = ctx.args.name, view = ctx.kv.view, verbose = ctx.flags.verbose } end },
+      },
+    })
+    vim.cmd("ComposerSpecKvFlags myfile view=split -v")
+    eq(seen.name, "myfile", "kv+flags+positional: positional arg reaches the handler")
+    eq(seen.view, "split", "kv+flags+positional: kv value reaches the handler")
+    eq(seen.verbose, true, "kv+flags+positional: short flag reaches the handler")
+
+    local cc = vim.fn.getcompletion("ComposerSpecKvFlags ", "cmdline")
+    table.sort(cc)
+    ok(vim.tbl_contains(cc, "view="), "kv+flags+positional: cmdline completion offers the kv key")
+    pcall(vim.api.nvim_del_user_command, "ComposerSpecKvFlags")
   end
 end

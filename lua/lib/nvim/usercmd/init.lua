@@ -32,6 +32,13 @@ function M.create(name, callback, opts)
     opts.force = true
   end
 
+  -- Buffer-local registration: opts.buffer = true (current buffer) or an
+  -- explicit bufnr routes to nvim_buf_create_user_command instead of the
+  -- global nvim_create_user_command. Extracted before the real API call
+  -- since `buffer` isn't a real nvim_create_user_command opts field.
+  local bufnr = opts.buffer
+  opts.buffer = nil
+
   if type(callback) == "function" then
     local user_cb = callback
     callback = function(args)
@@ -42,7 +49,12 @@ function M.create(name, callback, opts)
     end
   end
 
-  vim.api.nvim_create_user_command(name, callback, opts)
+  if bufnr then
+    local buf = (bufnr == true) and vim.api.nvim_get_current_buf() or bufnr
+    vim.api.nvim_buf_create_user_command(buf, name, callback, opts)
+  else
+    vim.api.nvim_create_user_command(name, callback, opts)
+  end
 end
 
 -- Subcommand composer (`:Verb sub sub ARG` + completion + docgen). Exposed

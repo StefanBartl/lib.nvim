@@ -349,9 +349,9 @@ Naming and docs-path are settled; only the migration question stays open.
 
 ## 12. Phased roadmap
 
-> Status: **Phases 1–6 shipped.** Module lives at
+> Status: **Phases 1–7 shipped.** Module lives at
 > `lua/lib/nvim/usercmd/composer/` (init + argtypes + tree + parse + complete +
-> docgen + registry + format + flags), with `@types/`, `README.md`,
+> docgen + registry + format + flags + kv), with `@types/`, `README.md`,
 > `doc/lib.nvim-composer.txt`, a `docs/TESTS/composer_spec.lua` suite (green
 > headless), aggregator keys in all three strategies, the `usercmd.composer`
 > proxy, and a health PROBE entry. The `nvim_usrcmds` → `:Lib` dogfood is
@@ -359,7 +359,10 @@ Naming and docs-path are settled; only the migration question stays open.
 > `mdview.nvim` migration ([§13](#13-survey-of-existing-nvim-plugins)) — all 10
 > of its flat `:MDViewX` commands collapsed into one `:MDView <subcommand>`
 > verb, fully replacing the old names (no alongside period, by explicit
-> decision for that repo).
+> decision for that repo). 7 of the 26 personal `.nvim` plugins are fully
+> migrated as of Phase 7 (mdview.nvim, dap.nvim, cascade.nvim,
+> color_my_ascii.nvim, sessions.nvim, pdfport.nvim, lib.nvim's own dogfood) —
+> tracked in the nvim-config repo at `docs/ROADMAP/lib_nvim/usrcmd_composer.md`.
 
 | Phase | Deliverable | Status |
 | ----- | ----------- | ------ |
@@ -369,6 +372,7 @@ Naming and docs-path are settled; only the migration question stays open.
 | **4** | Docgen (`document()` per-verb + registry-wide) + `setup()` doc defaults + section-mode writer, default path `docs/BINDINGS/Usercmds.md` | ✅ shipped |
 | **5** | Fluent sugar (§5b) ✅; vimdoc/health/aggregator wiring ✅; dogfood `nvim_usrcmds` → `:Lib` ✅ (opt-in via `lib_verb`, alongside the flat commands) | ✅ shipped |
 | **6** | Flag-style args (`--flag=value`/`--flag value`, repeatable, enum), modeled on `replacer.nvim`'s `BOOL_FLAGS`/`VALUE_FLAGS` tokenizer split. Strictly opt-in per route (`route.flags`) — zero behavior change for any route that doesn't declare flags. A `path = {}` root route (already legal before Phase 6) reproduces replacer.nvim's actual flat grammar `:Replace {old} {new} [scope] [--flags]` verbatim, no new route-shape concept needed. | ✅ shipped |
+| **7** | Three capability gaps found while planning the remaining plugin migrations, built ahead of hitting them: (a) **buffer-local commands** — `spec.buffer = true\|bufnr` routes through `nvim_buf_create_user_command` (needed for markdown.nvim's per-buffer `:TableView`); (b) **short-flag aliases** — `FlagSpec.short` (`-r` alongside `--replace`), next-token-value only, lenient on unrecognized `-x` (needed for recommender.nvim); (c) **bare `key=value` grammar** — new `Route.kv` (`KvSpec[]`), a separate module (`kv.lua`) from `flags.lua` since the leniency stance differs (undeclared `key=value` stays positional, no error — unlike `--name`), composes freely with `flags` on the same route (needed for diff.nvim's `target=`/`view=vsplit`). All three opt-in, zero behavior change for routes that don't use them. | ✅ shipped |
 
 ## 13. Survey of existing `.nvim` plugins
 
