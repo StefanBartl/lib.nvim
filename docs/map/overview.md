@@ -3,7 +3,7 @@
 > **Generated** by `lib.nvim.docmap`. Do not edit by hand — run `:LibMap`
 > (or `nvim --headless -l scripts/gen_map.lua`) to regenerate.
 
-**120 modules** · 24 namespaces · 108 helper files
+**124 modules** · 24 namespaces · 117 helper files
 
 The [interactive map](index.html) has filtering, full descriptions and
 source links; this page is the version the code host renders directly.
@@ -189,6 +189,7 @@ flowchart LR
 | &nbsp;&nbsp;`lib.nvim.core` |  | [src](../../lua/lib/nvim/core/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.cross` | Cross-platform utilities for Neovim/Lua Provides platform detection, path normalization, and shell helpers | [src](../../lua/lib/nvim/cross/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.copy_to_clipboard` | Cross-platform clipboard write. | [src](../../lua/lib/nvim/cross/copy_to_clipboard/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.executable` | Executable lookup helpers: PATH resolution and Mason-managed binaries. | [src](../../lua/lib/nvim/cross/executable/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`fs` |  |  |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs._cwd` | Resolve the current working directory via libuv, compatible across NVIM versions. | [src](../../lua/lib/nvim/cross/fs/_cwd/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs.expand_path` | Expand `~`, `$VAR` (POSIX) and `%VAR%` (Windows) references in a raw path string. | [src](../../lua/lib/nvim/cross/fs/expand_path/init.lua) |
@@ -199,6 +200,7 @@ flowchart LR
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs.separators.has_win_sep` |  | [src](../../lua/lib/nvim/cross/fs/separators/has_win_sep/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs.separators.normalize` | Normalizes path separators for the current OS. | [src](../../lua/lib/nvim/cross/fs/separators/normalize/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs.separators.unify_slashes` | Convert every backslash in `path` to a forward slash — a pure string transform: no expansion, no absolute-path resolution, no collapsing of repeated… | [src](../../lua/lib/nvim/cross/fs/separators/unify_slashes/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.open_default` | Open a path or URL with the system's default application — the cross-platform equivalent of double-clicking it in a file manager (extension/URL-scheme… | [src](../../lua/lib/nvim/cross/open_default/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`platform` |  |  |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.run` | Shell selection and runners FIX: Optimize, doc | [src](../../lua/lib/nvim/cross/run/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.run_argv` | Low-level argv-based process runner with stdin support. | [src](../../lua/lib/nvim/cross/run_argv/init.lua) |
@@ -222,6 +224,7 @@ flowchart LR
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.is_dir` |  | [src](../../lua/lib/nvim/fs/is_dir/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.is_readable_file` | Ensure the path is valid | [src](../../lua/lib/nvim/fs/is_readable_file/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.is_subpath` | `vim.fs.normalize` always returns forward-slash paths (on every OS, including Windows) — so the separator used below must be "/" too. | [README](../../lua/lib/nvim/fs/is_subpath/README.md) · [src](../../lua/lib/nvim/fs/is_subpath/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.is_valid_filename` | Validate a bare filename (not a full path) for filesystem safety. | [src](../../lua/lib/nvim/fs/is_valid_filename/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.json` | Read/write JSON files, built on `lib.lua.json.encode` for encoding plus `lib.nvim.fs.read` and `lib.nvim.fs.write.to_file`. | [README](../../lua/lib/nvim/fs/json/README.md) · [src](../../lua/lib/nvim/fs/json/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.mkdirp` | Recursive directory creation (`mkdir -p`) built purely on libuv. | [README](../../lua/lib/nvim/fs/mkdirp/README.md) · [src](../../lua/lib/nvim/fs/mkdirp/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.normkey` | Canonical, cross-platform cache/dedup key for a filesystem path. | [README](../../lua/lib/nvim/fs/normkey/README.md) · [src](../../lua/lib/nvim/fs/normkey/init.lua) |
@@ -271,6 +274,7 @@ flowchart LR
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.ui.hl` | ========================================================= Highlight helper utilities. | [src](../../lua/lib/nvim/ui/hl/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.ui.kit` | Themed, composable UI toolkit for lib.nvim. | [README](../../lua/lib/nvim/ui/kit/README.md) · [src](../../lua/lib/nvim/ui/kit/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.usercmd` | ========================================================= User command helper utilities. | [src](../../lua/lib/nvim/usercmd/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.usercmd.composer` | Compose a route spec into ONE Neovim user command with subcommands, `<Tab>` completion, and Markdown docs — all read from the same tree. | [README](../../lua/lib/nvim/usercmd/composer/README.md) · [src](../../lua/lib/nvim/usercmd/composer/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.window` | Window-control helpers for overlay / floating windows. | [README](../../lua/lib/nvim/window/README.md) · [src](../../lua/lib/nvim/window/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.window.context` | Window-metadata accessor with a same-event cache. | [README](../../lua/lib/nvim/window/context/README.md) · [src](../../lua/lib/nvim/window/context/init.lua) |
 | `lib.nvim_usrcmds` | Utility user commands that don't belong in a more specific plugin. | [src](../../lua/lib/nvim_usrcmds/init.lua) |
@@ -295,7 +299,7 @@ flowchart LR
 
 ## Drift
 
-0 errors · 10 warnings · 125 info
+0 errors · 10 warnings · 128 info
 
 | Severity | Check | Message |
 |---|---|---|
@@ -311,7 +315,7 @@ flowchart LR
 | warn | `missing-summary` | lua/lib/nvim/normalize/validators.lua has ---@module but no description line |
 
 <details>
-<summary>125 informational findings</summary>
+<summary>128 informational findings</summary>
 
 
 | Check | Message |
@@ -334,6 +338,7 @@ flowchart LR
 | `missing-readme` | lua/lib/nvim/core has no README.md |
 | `missing-readme` | lua/lib/nvim/cross has no README.md |
 | `missing-readme` | lua/lib/nvim/cross/copy_to_clipboard has no README.md |
+| `missing-readme` | lua/lib/nvim/cross/executable has no README.md |
 | `missing-readme` | lua/lib/nvim/cross/fs/_cwd has no README.md |
 | `missing-readme` | lua/lib/nvim/cross/fs/expand_path has no README.md |
 | `missing-readme` | lua/lib/nvim/cross/fs/mutate has no README.md |
@@ -342,6 +347,7 @@ flowchart LR
 | `missing-readme` | lua/lib/nvim/cross/fs/separators/has_win_sep has no README.md |
 | `missing-readme` | lua/lib/nvim/cross/fs/separators/normalize has no README.md |
 | `missing-readme` | lua/lib/nvim/cross/fs/separators/unify_slashes has no README.md |
+| `missing-readme` | lua/lib/nvim/cross/open_default has no README.md |
 | `missing-readme` | lua/lib/nvim/cross/run has no README.md |
 | `missing-readme` | lua/lib/nvim/cross/run_argv has no README.md |
 | `missing-readme` | lua/lib/nvim/cross/uv/fs has no README.md |
@@ -351,6 +357,7 @@ flowchart LR
 | `missing-readme` | lua/lib/nvim/fs/find_upward_dir has no README.md |
 | `missing-readme` | lua/lib/nvim/fs/is_dir has no README.md |
 | `missing-readme` | lua/lib/nvim/fs/is_readable_file has no README.md |
+| `missing-readme` | lua/lib/nvim/fs/is_valid_filename has no README.md |
 | `missing-readme` | lua/lib/nvim/fs/path has no README.md |
 | `missing-readme` | lua/lib/nvim/fs/path_shorten has no README.md |
 | `missing-readme` | lua/lib/nvim/fs/relpath has no README.md |
