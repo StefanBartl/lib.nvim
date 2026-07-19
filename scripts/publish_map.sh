@@ -60,15 +60,26 @@ trap 'rm -rf "$STAGING" "$WORKTREE"; git worktree prune' EXIT
 
 # Start from an orphan branch each time, so the published tree contains
 # exactly the files above and nothing carried over from a previous publish.
+#
+# Checked out under a throwaway name, then pushed to refs/heads/$BRANCH —
+# not `git checkout --orphan "$BRANCH"` directly. That fails with "a branch
+# named 'gh-pages' already exists" on every publish after the first one on a
+# given clone, since the orphan checkout leaves a local branch behind. That
+# exact failure shipped once already: silenced by a stray `>/dev/null 2>&1`
+# on the checkout, `set -e` unwound the script with no message at all, and
+# it went unnoticed until gh-pages was found still serving a stale commit.
+# A disposable branch name never collides, and no local $BRANCH is ever
+# created to go stale against the remote.
 git worktree add --detach "$WORKTREE" >/dev/null
 (
   cd "$WORKTREE"
-  git checkout --orphan "$BRANCH" >/dev/null 2>&1
+  TMP_BRANCH="publish-map-$$"
+  git checkout --orphan "$TMP_BRANCH"
   git rm -rf . >/dev/null 2>&1 || true
   cp -r "$STAGING"/. .
   git add -A
   git commit -q -m "docs(map): publish module map from $SHA"
-  git push -q --force "$REMOTE" "$BRANCH"
+  git push --force "$REMOTE" "HEAD:refs/heads/$BRANCH"
 )
 
 echo "Published $BRANCH from $SHA."
