@@ -5,6 +5,7 @@
 ---   nvim --headless -l scripts/gen_map.lua --check    # verify, write nothing
 ---
 ---   nvim --headless -l scripts/gen_map.lua --check --lenient
+---   nvim --headless -l scripts/gen_map.lua --full     # + LuaLS enrichment
 ---
 --- `--check` is what hooks and CI run: it regenerates in memory, compares
 --- against what is committed, and exits non-zero if the artifacts are stale or
@@ -16,6 +17,11 @@
 --- of it and a check that is red before anyone touches anything gets disabled.
 --- That backlog is now cleared (0 errors), so enforcement is the default and
 --- `--lenient` is the escape hatch — report findings, fail only on staleness.
+---
+--- `--full` merges `lua-language-server --doc` output into the IR (class/
+--- alias detail, type-reference edges for the Hierarchy tab). Not the
+--- default: a full-repo `--doc` run costs several seconds, measured — see
+--- `lua/lib/nvim/docmap/luals.lua`.
 
 local root = vim.uv.cwd():gsub("\\", "/"):gsub("/+$", "")
 vim.opt.runtimepath:prepend(root)
@@ -29,6 +35,8 @@ for _, a in ipairs(_G.arg or {}) do
     check_only = true
   elseif a == "--lenient" then
     strict = false
+  elseif a == "--full" then
+    opts.luals = true
   end
 end
 
@@ -54,8 +62,7 @@ local function report(findings)
 end
 
 if check_only then
-  local ir = docmap.scan(opts)
-  local findings = docmap.check(ir, opts)
+  local ir, findings = docmap.scan_full(opts)
 
   local expected = {
     ["module_map.json"] = docmap.to_json(ir),
