@@ -1,4 +1,4 @@
----@module 'lib.nvim.cross.fs.win.has_win_sep'
+---@module 'lib.nvim.cross.fs.separators.has_win_sep'
 
 ---@param s string
 ---@return boolean

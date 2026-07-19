@@ -1,4 +1,4 @@
----@module 'lib.terminals'
+---@module 'lib.nvim.terminal'
 -- Terminal helper functions
 
 local M = {}
