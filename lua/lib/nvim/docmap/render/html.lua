@@ -69,8 +69,15 @@ h1 .sub{color:var(--muted);font-weight:400;font-size:14px;margin-left:8px}
 button{padding:6px 11px;border:1px solid var(--line);border-radius:7px;background:var(--panel);
   color:var(--ink);font-size:13px;cursor:pointer}
 button:hover{border-color:var(--accent);color:var(--accent)}
-main{display:grid;grid-template-columns:minmax(300px,1.1fr) minmax(0,1.4fr);
-  gap:0;align-items:start}
+.tabs{display:flex;gap:2px;padding:0 24px;border-bottom:1px solid var(--line)}
+.tab-btn{padding:9px 13px;border:none;background:none;color:var(--muted);font-size:13px;
+  cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab-btn:hover{color:var(--ink)}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+.view{display:none}
+.view.active{display:block}
+main.view.active{display:grid}
+main{grid-template-columns:minmax(300px,1.1fr) minmax(0,1.4fr);gap:0;align-items:start}
 @media (max-width:860px){main{grid-template-columns:1fr}}
 #tree{padding:12px 8px 60px 16px;border-right:1px solid var(--line);
   max-height:calc(100vh - 132px);overflow:auto}
@@ -118,6 +125,24 @@ code{font-family:var(--mono);font-size:.92em;background:var(--accent-soft);
 .sev.error{color:var(--error)} .sev.warn{color:var(--warn)} .sev.info{color:var(--info)}
 details>summary{cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0}
 .wrap{overflow-x:auto}
+#view-hierarchy{padding:16px 24px 60px}
+.hctl{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.hctl .hpath{font-family:var(--mono);font-size:12.5px;color:var(--muted);word-break:break-all}
+.hctl button{padding:4px 9px;font-size:12px}
+#hgraph-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+#hgraph{position:relative}
+.hnode{position:absolute;box-sizing:border-box;padding:7px 10px;border:1px solid var(--line);
+  border-radius:7px;background:var(--panel);cursor:pointer;overflow:hidden}
+.hnode:hover{border-color:var(--accent);z-index:1}
+.hnode .hnm{font-family:var(--mono);font-size:12px;font-weight:600;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.hnode .hsm{font-size:10.5px;color:var(--muted);margin-top:2px;max-height:2.6em;overflow:hidden}
+.hnode.k-module .hnm{color:var(--mod)} .hnode.k-namespace .hnm{color:var(--ns)} .hnode.k-file .hnm{color:var(--file)}
+#hsvg{position:absolute;top:0;left:0;pointer-events:none}
+.hedge{fill:none;stroke:var(--muted);stroke-width:1.5;opacity:.6}
+.hedge-type{stroke:var(--accent);stroke-dasharray:4 3;opacity:.75}
+.hmsg{color:var(--muted);font-size:13px;padding:20px;text-align:center}
+.htrunc{color:var(--warn);font-size:12px;margin-top:8px}
 ]]
 
 local JS = [[
@@ -200,6 +225,9 @@ local JS = [[
       var u2 = srcUrl(t);
       links.push(u2 ? '<a href="'+esc(u2)+'">types ↗</a>' : '<a href="'+esc(rel(t))+'">types</a>');
     });
+    if(n.kind !== "file"){
+      links.push('<a href="#" id="hlink">Hierarchy ↳</a>');
+    }
     if(links.length) h.push('<div class="links">'+links.join("")+'</div>');
 
     if(n.summary || n.body){
@@ -230,6 +258,15 @@ local JS = [[
     h.push('<div class="sec">Meta</div><ul class="lst"><li>'+esc(meta.join("  ·  "))+'</li></ul>');
 
     detailEl.innerHTML = h.join("");
+
+    var hlink = document.getElementById("hlink");
+    if(hlink){
+      hlink.addEventListener("click", function(ev){
+        ev.preventDefault();
+        activateTab("hierarchy");
+        drawHierarchy(n.id);
+      });
+    }
   }
 
   // Artifact lives in out_dir; repo-relative paths need to climb back out.
@@ -263,6 +300,182 @@ local JS = [[
   window.addEventListener("hashchange", function(){
     var id = decodeURIComponent(location.hash.slice(1)); if(byId[id]) select(id);
   });
+
+  // ---------------------------------------------------------------- tabs
+  function activateTab(name){
+    document.querySelectorAll(".tab-btn").forEach(function(b){
+      b.classList.toggle("active", b.dataset.tab === name);
+    });
+    document.getElementById("view-tree").classList.toggle("active", name === "tree");
+    document.getElementById("view-hierarchy").classList.toggle("active", name === "hierarchy");
+    if(name === "hierarchy" && !hgraph.childNodes.length) drawHierarchy();
+  }
+  document.querySelectorAll(".tab-btn").forEach(function(b){
+    b.addEventListener("click", function(){ activateTab(b.dataset.tab); });
+  });
+
+  // ------------------------------------------------------- hierarchy view
+  // Node positions are computed analytically from IR data (layer = depth
+  // from the centered node, position = index within the layer), not measured
+  // off the DOM. That sidesteps the usual "a box inside display:none has zero
+  // size" problem entirely — drawHierarchy() produces correct absolute pixel
+  // coordinates whether or not the pane is currently visible, so there is no
+  // separate re-layout-on-show step to get right.
+  var hgraphWrap = document.getElementById("hgraph-wrap");
+  var hgraph = document.getElementById("hgraph");
+  var hpathEl = document.getElementById("hpath");
+  var hcenter = null;
+  var MAX_HNODES = 90;
+  var BOX_W = 168, BOX_H = 52, GAP_X = 16, GAP_Y = 44, PAD = 20;
+
+  function edgePath(a, b){
+    var x1 = a.x + BOX_W/2, y1 = a.y + BOX_H;
+    var x2 = b.x + BOX_W/2, y2 = b.y;
+    var midY = (y1 + y2) / 2;
+    return "M" + x1 + "," + y1 + " C" + x1 + "," + midY + " " + x2 + "," + midY + " " + x2 + "," + y2;
+  }
+
+  function drawHierarchy(centerId){
+    hcenter = (centerId && byId[centerId]) ? centerId : (hcenter && byId[hcenter] ? hcenter : IR.root);
+    var center = byId[hcenter];
+    hpathEl.textContent = center.module || center.path;
+
+    hgraph.innerHTML = "";
+
+    // BFS from the centered node, layered by depth-from-center. Files count
+    // the same as modules/namespaces here — an earlier version excluded them
+    // as "just noise", which looked right at the whole-map scope but was
+    // wrong in practice: centering on a module implemented as a handful of
+    // flat files (no further module directories) then drew almost nothing.
+    // MAX_HNODES is what actually bounds noise at any scope, so there is no
+    // need for a second, cruder filter on top of it.
+    var layers = [];
+    var included = {};
+    var queue = [ { id: hcenter, d: 0 } ];
+    var count = 0;
+    var truncated = false;
+    while(queue.length){
+      var item = queue.shift();
+      var id = item.id, d = item.d;
+      if(included[id] !== undefined) continue;
+      if(count >= MAX_HNODES){ truncated = true; break; }
+      var node = byId[id];
+      if(!node) continue;
+      included[id] = d;
+      count++;
+      layers[d] = layers[d] || [];
+      layers[d].push(id);
+      (node.children || []).forEach(function(c){
+        if(byId[c]) queue.push({ id: c, d: d + 1 });
+      });
+    }
+
+    if(count === 0){
+      hgraph.innerHTML = '<p class="hmsg">Nothing to draw here.</p>';
+      return;
+    }
+
+    var maxRowWidth = 0;
+    layers.forEach(function(layer){
+      if(!layer) return;
+      maxRowWidth = Math.max(maxRowWidth, layer.length * BOX_W + (layer.length - 1) * GAP_X);
+    });
+
+    var positions = {};
+    var frag = document.createDocumentFragment();
+    layers.forEach(function(layer, d){
+      if(!layer) return;
+      var rowWidth = layer.length * BOX_W + (layer.length - 1) * GAP_X;
+      var startX = PAD + (maxRowWidth - rowWidth) / 2;
+      layer.forEach(function(id, i){
+        var x = startX + i * (BOX_W + GAP_X);
+        var y = PAD + d * (BOX_H + GAP_Y);
+        positions[id] = { x: x, y: y };
+        var n = byId[id];
+        var box = document.createElement("div");
+        box.className = "hnode k-" + n.kind;
+        box.style.left = x + "px";
+        box.style.top = y + "px";
+        box.style.width = BOX_W + "px";
+        box.title = n.summary || n.name;
+        box.innerHTML = '<div class="hnm">' + esc(n.name) + '</div>' +
+          (n.summary ? '<div class="hsm">' + esc(n.summary) + '</div>' : '');
+        box.addEventListener("click", function(){ activateTab("tree"); select(id); });
+        box.addEventListener("dblclick", function(ev){ ev.stopPropagation(); drawHierarchy(id); });
+        frag.appendChild(box);
+      });
+    });
+
+    var totalW = maxRowWidth + PAD * 2;
+    var totalH = PAD * 2 + layers.length * BOX_H + Math.max(0, layers.length - 1) * GAP_Y;
+
+    var svgNS = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(svgNS, "svg");
+    svg.id = "hsvg";
+    svg.setAttribute("width", totalW);
+    svg.setAttribute("height", totalH);
+
+    Object.keys(included).forEach(function(id){
+      (byId[id].children || []).forEach(function(c){
+        if(positions[id] && positions[c]){
+          var p = document.createElementNS(svgNS, "path");
+          p.setAttribute("d", edgePath(positions[id], positions[c]));
+          p.setAttribute("class", "hedge");
+          svg.appendChild(p);
+        }
+      });
+    });
+
+    // Type-reference edges from LuaLS enrichment (empty array when it didn't
+    // run). Only drawn when both endpoints are in the currently laid-out
+    // subtree — a field can reference a class anywhere in the whole map, and
+    // pulling in out-of-view targets would break the "scoped to one subtree"
+    // point of centering on a node at all.
+    (IR.edges || []).forEach(function(e){
+      if(e.from !== e.to && positions[e.from] && positions[e.to]){
+        var p = document.createElementNS(svgNS, "path");
+        p.setAttribute("d", edgePath(positions[e.from], positions[e.to]));
+        p.setAttribute("class", "hedge hedge-type");
+        var title = document.createElementNS(svgNS, "title");
+        title.textContent = "." + e.via;
+        p.appendChild(title);
+        svg.appendChild(p);
+      }
+    });
+
+    hgraph.style.width = totalW + "px";
+    hgraph.style.height = totalH + "px";
+    hgraph.appendChild(svg);
+    hgraph.appendChild(frag);
+
+    // Rows are centered on the widest layer, so the root box can sit
+    // thousands of pixels from the left edge on a wide map — without this,
+    // opening the tab scrolls to (0,0) and shows an arbitrary fragment of
+    // whichever layer is widest, not the node that was actually centered on.
+    var centerPos = positions[hcenter];
+    if(centerPos){
+      hgraphWrap.scrollLeft = Math.max(0, centerPos.x + BOX_W / 2 - hgraphWrap.clientWidth / 2);
+      hgraphWrap.scrollTop = 0;
+    }
+
+    if(truncated){
+      var note = document.createElement("div");
+      note.className = "htrunc";
+      note.textContent = "Showing the first " + MAX_HNODES + " nodes — double-click a box to re-center on a smaller subtree.";
+      hgraphWrap.parentNode.insertBefore(note, hgraphWrap.nextSibling);
+    }
+    var existingNote = hgraphWrap.parentNode.querySelector(".htrunc");
+    if(existingNote && !truncated) existingNote.remove();
+  }
+
+  document.getElementById("hup").addEventListener("click", function(){
+    var center = byId[hcenter || IR.root];
+    if(center && center.parent) drawHierarchy(center.parent);
+  });
+  document.getElementById("hroot").addEventListener("click", function(){
+    drawHierarchy(IR.root);
+  });
+
   var initial = decodeURIComponent(location.hash.slice(1));
   select(byId[initial] ? initial : IR.root);
 })();
@@ -286,7 +499,7 @@ function M.render(ir, findings, opts)
     nodes[#nodes + 1] = ir.nodes[id]
   end
 
-  local payload = json.encode({ meta = meta, root = ir.root, nodes = nodes })
+  local payload = json.encode({ meta = meta, root = ir.root, nodes = nodes, edges = ir.edges or {} })
   -- `</script>` inside JSON would terminate the block early.
   payload = payload:gsub("</", "<\\/")
 
@@ -320,12 +533,25 @@ function M.render(ir, findings, opts)
     '<span><b class="sev warn">', tostring(t.warn), "</b> warnings</span>",
     "</div></header>",
 
+    '<div class="tabs">',
+    '<button class="tab-btn active" data-tab="tree">Tree</button>',
+    '<button class="tab-btn" data-tab="hierarchy">Hierarchy</button>',
+    "</div>",
+
     '<div class="toolbar">',
     '<input id="q" type="search" placeholder="Filter modules, paths, descriptions…" autocomplete="off">',
     '<button id="expand">Expand all</button><button id="collapse">Collapse</button>',
     "</div>",
 
-    '<main><div id="tree"></div><div id="detail"></div></main>',
+    '<main id="view-tree" class="view active"><div id="tree"></div><div id="detail"></div></main>',
+
+    '<div id="view-hierarchy" class="view">',
+    '<div class="hctl">',
+    '<button id="hup">▲ Up</button><button id="hroot">⌂ Root</button>',
+    '<span class="hpath" id="hpath"></span>',
+    "</div>",
+    '<div id="hgraph-wrap"><div id="hgraph"></div></div>',
+    "</div>",
 
     '<div id="findings"><details><summary>Drift findings (',
     tostring(#findings), ")</summary><div class=\"wrap\"><table>",
