@@ -175,12 +175,19 @@ Neovim adapters.
                            has_win_sep (C:\ drive predicate), drive_upper
                            (uppercase C: prefix)
     lib.nvim.docmap        generated module map: scans the annotated Lua tree
-                           (---@module headers), checks it for documentation
-                           drift, renders a self-contained HTML page plus
-                           Markdown/Mermaid. :LibMap regenerates, :LibMap check
-                           sends drift to the quickfix list; a pre-commit hook
-                           (git config core.hooksPath scripts/hooks) blocks
-                           commits on a stale map. Reusable by other
+                           (---@module headers), optional lua-language-server
+                           --doc enrichment (class/alias detail, type-
+                           reference edges), checks it for documentation
+                           drift, renders a self-contained HTML page (Tree +
+                           Hierarchy tabs) plus Markdown/Mermaid. :LibMap
+                           regenerates, :LibMap check sends drift to the
+                           quickfix list, :LibMap full adds the LuaLS
+                           enrichment; a pre-commit hook (git config
+                           core.hooksPath scripts/hooks) blocks commits on a
+                           stale map. install()/uninstall() give a live,
+                           in-memory Handle (ir/node/on_change/rescan) other
+                           plugin code can subscribe to instead of parsing
+                           module_map.json off disk. Reusable by other
                            plugins: docmap.generate{ root = ..., source = ... }
                            see lua/lib/nvim/docmap/README.md
     lib.nvim.normalize     path / value normalization
