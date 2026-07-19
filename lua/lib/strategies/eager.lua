@@ -126,6 +126,7 @@ LIB.autogroup = require("lib.nvim.autocmd.augroup")
 LIB.autogroup_create_clear = require("lib.nvim.autocmd.augroup").create.clear
 LIB.map = require("lib.nvim.map")
 LIB.usercmd = require("lib.nvim.usercmd")
+LIB.composer = require("lib.nvim.usercmd.composer")
 
 -- === NOTIFY ===
 LIB.notify = require("lib.nvim.notify")

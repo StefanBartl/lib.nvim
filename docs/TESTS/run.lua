@@ -21,6 +21,7 @@ local specs = {
   "nvim_helpers_spec.lua",
   "context_spec.lua",
   "cache_spec.lua",
+  "composer_spec.lua",
 }
 
 local failed = 0
