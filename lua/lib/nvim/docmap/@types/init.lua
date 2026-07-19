@@ -69,6 +69,8 @@
 ---@class Lib.Docmap.Edge
 ---@field from string Node id owning the referencing class.
 ---@field to string Node id owning the referenced class.
+---@field from_class string Fully-qualified name of the referencing class.
+---@field to_class string Fully-qualified name of the referenced class.
 ---@field via string Field name that carries the reference.
 
 ---A drift finding.

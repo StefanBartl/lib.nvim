@@ -187,6 +187,20 @@ function M.merge(ir, doc_json, source)
   -- Second pass: now that every class's owning node is known, resolve field
   -- types into edges. Two passes because a field can reference a class
   -- defined later in doc_json's array order.
+  --
+  -- Edges are keyed by class, not just by owning node: `from`/`to` (node ids)
+  -- are what the Modules-view diagram draws between, but `from_class`/
+  -- `to_class` are what the Types view needs to draw a real class graph
+  -- rather than a coarser module-to-module one. Deduping only on
+  -- node|node|field-name (an earlier version did) silently collapsed two
+  -- distinct edges whenever two different classes in the same node happened
+  -- to have a same-named field pointing at two different classes in the same
+  -- target node — keying on the class names too fixes that for free.
+  --
+  -- Same-node self-references (a class referencing another class defined in
+  -- its own file) are kept here, unlike the earlier node-only version: at
+  -- class granularity they are real edges, even though the Modules view
+  -- still filters them out client-side as node-level self-loops.
   ir.edges = ir.edges or {}
   local seen_edge = {}
 
@@ -197,11 +211,17 @@ function M.merge(ir, doc_json, source)
         for _, ref_name in ipairs(referenced_classes(field.view, known_classes)) do
           if ref_name ~= ty.name then
             local target = class_owner[ref_name]
-            if target and target.id ~= node.id then
-              local key = node.id .. "|" .. target.id .. "|" .. field.name
+            if target then
+              local key = ty.name .. "|" .. ref_name .. "|" .. field.name
               if not seen_edge[key] then
                 seen_edge[key] = true
-                ir.edges[#ir.edges + 1] = { from = node.id, to = target.id, via = field.name }
+                ir.edges[#ir.edges + 1] = {
+                  from = node.id,
+                  to = target.id,
+                  from_class = ty.name,
+                  to_class = ref_name,
+                  via = field.name,
+                }
               end
             end
           end
@@ -210,12 +230,24 @@ function M.merge(ir, doc_json, source)
     end
   end
 
+  -- Sorted on every field, not just from/to/via: two edges can now tie on
+  -- all three (two different classes in the same pair of nodes, same field
+  -- name) and differ only in from_class/to_class. table.sort has no
+  -- stability guarantee, so leaving those as ties would make output order —
+  -- and therefore --full's byte-for-byte output — nondeterministic between
+  -- runs on unchanged input.
   table.sort(ir.edges, function(a, b)
     if a.from ~= b.from then
       return a.from < b.from
     end
     if a.to ~= b.to then
       return a.to < b.to
+    end
+    if a.from_class ~= b.from_class then
+      return a.from_class < b.from_class
+    end
+    if a.to_class ~= b.to_class then
+      return a.to_class < b.to_class
     end
     return a.via < b.via
   end)
