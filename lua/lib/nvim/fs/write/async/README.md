@@ -1,6 +1,6 @@
 # `lib.nvim.fs.write.async`
 
-Asynchronous counterpart to [`lib.nvim.fs.write.to_file`](../to_file/README.md).
+Asynchronous counterpart to [`lib.nvim.fs.write.to_file`](../to_file/init.lua).
 Creates the parent directory synchronously (same `mkdir -p` semantics), then
 opens, writes and closes the file through libuv so a large write never blocks
 the editor.

@@ -174,6 +174,22 @@ Neovim adapters.
                            (-> OS-native), collapse_dots (lexical ./.. collapse),
                            has_win_sep (C:\ drive predicate), drive_upper
                            (uppercase C: prefix)
+    lib.nvim.docmap        generated module map: scans the annotated Lua tree
+                           (---@module headers), optional lua-language-server
+                           --doc enrichment (class/alias detail, type-
+                           reference edges), checks it for documentation
+                           drift, renders a self-contained HTML page (Tree +
+                           Hierarchy tabs) plus Markdown/Mermaid. :LibMap
+                           regenerates, :LibMap check sends drift to the
+                           quickfix list, :LibMap full adds the LuaLS
+                           enrichment; a pre-commit hook (git config
+                           core.hooksPath scripts/hooks) blocks commits on a
+                           stale map. install()/uninstall() give a live,
+                           in-memory Handle (ir/node/on_change/rescan) other
+                           plugin code can subscribe to instead of parsing
+                           module_map.json off disk. Reusable by other
+                           plugins: docmap.generate{ root = ..., source = ... }
+                           see lua/lib/nvim/docmap/README.md
     lib.nvim.normalize     path / value normalization
     lib.nvim.git           git helpers
     lib.nvim.terminal      terminal-buffer helpers
@@ -257,6 +273,7 @@ Modules with dedicated `:help` documentation. Jump to one via its tag, or
     lib.nvim.progress    style-agnostic progress indicator   |lib.nvim-progress|
     lib.nvim.treesitter  filetype allowlist gate            |lib.nvim-treesitter|
     lib.nvim.selection   reselect a Visual range after mutation |lib.nvim-selection|
+    lib.nvim.usercmd.composer  subcommand user commands + docgen |lib.nvim-composer|
 
 Every other module documents itself in a `README.md` next to its source; see
 the namespace tables under |lib.nvim-namespaces|.

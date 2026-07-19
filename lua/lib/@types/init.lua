@@ -9,6 +9,7 @@
 ---@field bufwintab Lib.BufWinTab
 ---@field buffer Lib.Buffer
 ---@field cross Lib.Cross
+---@field docmap Lib.Docmap
 ---@field functions Lib.Functions
 ---@field fs Lib.Fs
 ---@field git Lib.Git
