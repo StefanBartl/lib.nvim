@@ -1,0 +1,12 @@
+# Shell scripts and git hooks must keep LF endings regardless of core.autocrlf.
+# With CRLF, `set -euo pipefail` is parsed as `pipefail\r` and bash aborts with
+# "invalid option name" — the hook and the publish script silently stop working
+# on a Windows clone.
+*.sh        text eol=lf
+scripts/hooks/*  text eol=lf
+
+# Generated map artifacts: keep them out of diffs and language stats, but do
+# not mark them binary — they are reviewed on purpose.
+docs/map/index.html      linguist-generated=true
+docs/map/module_map.json linguist-generated=true
+docs/map/overview.md     linguist-generated=true
