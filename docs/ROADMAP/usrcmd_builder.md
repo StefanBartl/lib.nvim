@@ -359,10 +359,11 @@ Naming and docs-path are settled; only the migration question stays open.
 > `mdview.nvim` migration ([§13](#13-survey-of-existing-nvim-plugins)) — all 10
 > of its flat `:MDViewX` commands collapsed into one `:MDView <subcommand>`
 > verb, fully replacing the old names (no alongside period, by explicit
-> decision for that repo). 7 of the 26 personal `.nvim` plugins are fully
+> decision for that repo). 8 of the 26 personal `.nvim` plugins are fully
 > migrated as of Phase 7 (mdview.nvim, dap.nvim, cascade.nvim,
-> color_my_ascii.nvim, sessions.nvim, pdfport.nvim, lib.nvim's own dogfood) —
-> tracked in the nvim-config repo at `docs/ROADMAP/lib_nvim/usrcmd_composer.md`.
+> color_my_ascii.nvim, sessions.nvim, pdfport.nvim, buffer-ctx.nvim, lib.nvim's
+> own dogfood) — tracked in the nvim-config repo at
+> `docs/ROADMAP/personal/lib_nvim/usrcmd_composer.md`.
 
 | Phase | Deliverable | Status |
 | ----- | ----------- | ------ |
