@@ -143,6 +143,15 @@ details>summary{cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0}
 .hedge-type{stroke:var(--accent);stroke-dasharray:4 3;opacity:.75}
 .hmsg{color:var(--muted);font-size:13px;padding:20px;text-align:center}
 .htrunc{color:var(--warn);font-size:12px;margin-top:8px}
+.hview-toggle{display:flex;gap:0;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.hview-toggle button{border:none;border-radius:0;padding:4px 10px;font-size:12px}
+.hview-toggle button+button{border-left:1px solid var(--line)}
+.hview-toggle button.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.hnode.t-class .hnm{color:var(--mod)}
+.hnode.t-alias .hnm{color:var(--ns)}
+.hnode .hkind{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-top:1px}
+#findings tbody tr[data-node]{cursor:pointer}
+#findings tbody tr[data-node]:hover{background:var(--accent-soft)}
 ]]
 
 local JS = [[
@@ -155,12 +164,126 @@ local JS = [[
   FIND.forEach(function(f){ if(!f.node) return;
     (findByNode[f.node] = findByNode[f.node] || []).push(f); });
 
+  // className -> { info: Lib.Docmap.TypeInfo, nodeId: owning node id }. Built
+  // once so the Types hierarchy view and any class lookup can go straight to
+  // a class by name instead of re-scanning every node's types_detail.
+  var classByName = {};
+  IR.nodes.forEach(function(n){
+    (n.types_detail || []).forEach(function(t){ classByName[t.name] = { info: t, nodeId: n.id }; });
+  });
+
   var repo = IR.meta.repo_url, branch = IR.meta.branch || "main";
   function srcUrl(p){ return repo ? repo + "/blob/" + branch + "/" + p : null; }
 
+  function esc(s){ return (s||"").replace(/[&<>"]/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+
+  // Artifact lives in out_dir; repo-relative paths need to climb back out.
+  function rel(p){ return (IR.meta.out_depth ? "../".repeat(IR.meta.out_depth) : "") + p; }
+
+  // =====================================================================
+  // State + history
+  //
+  // One object describes everything the page can be showing:
+  //   { tab: "tree"|"hierarchy", id: <selected tree node>,
+  //     center: <hierarchy centered node>, view: "modules"|"types" }
+  // navigate(patch) is the single entry point every discrete click handler
+  // calls; it merges the patch into current state, updates the DOM, and
+  // pushes a real history entry so the browser Back/Forward buttons step
+  // through actual states instead of only reacting to a directly-edited
+  // hash. Live preview while typing in the Hierarchy search box does not go
+  // through navigate() at all — see the "input" listener below for why
+  // going through history.replaceState there was a real bug, not just an
+  // unnecessary one.
+  // =====================================================================
+  var state = { tab: "tree", id: null, center: null, view: "modules" };
+  // Tracks only the hash of the last *pushed* entry — deliberately never
+  // touched by a replace. Search-as-you-type replaces the current entry on
+  // every keystroke; without this separation, typing to a match and then
+  // pressing Enter to commit it would compute the same resulting hash the
+  // last replace already wrote, and a single "skip if hash unchanged" guard
+  // would then suppress the deliberate push entirely — Enter would silently
+  // do nothing. Keeping the two trackers apart means a push always executes
+  // unless the *previous push* (not the previous replace) had that hash.
+  var lastPushedHash = null;
+
+  function serializeState(s){
+    var parts = ["tab=" + encodeURIComponent(s.tab)];
+    if(s.tab === "tree"){
+      if(s.id) parts.push("id=" + encodeURIComponent(s.id));
+    } else {
+      if(s.center) parts.push("center=" + encodeURIComponent(s.center));
+      parts.push("view=" + encodeURIComponent(s.view || "modules"));
+    }
+    return "#" + parts.join("&");
+  }
+
+  function parseState(hash){
+    var s = { tab: "tree", id: null, center: null, view: "modules" };
+    var raw = (hash || "").replace(/^#/, "");
+    if(!raw) return s;
+    // A bare node id with no "=" is the pre-existing #<id> scheme (also what
+    // a hand-typed or externally shared link looks like) — treat it as
+    // "select this node in the Tree tab".
+    if(raw.indexOf("=") === -1){
+      s.id = decodeURIComponent(raw);
+      return s;
+    }
+    raw.split("&").forEach(function(kv){
+      var i = kv.indexOf("=");
+      if(i < 0) return;
+      var k = kv.slice(0, i), v = decodeURIComponent(kv.slice(i + 1));
+      if(k === "tab") s.tab = v;
+      else if(k === "id") s.id = v;
+      else if(k === "center") s.center = v;
+      else if(k === "view") s.view = v;
+    });
+    return s;
+  }
+
+  // Applies `s` to the DOM. `push` controls history: true adds a Back-stack
+  // entry (every discrete navigate() call), false replaces the current entry
+  // in place (restoring state after a popstate, and the very first load —
+  // neither should itself create a Back-stack entry). Never mutates `state`
+  // directly outside this function, so `state` always reflects exactly what
+  // is on screen.
+  function applyState(s, push){
+    state = s;
+
+    document.querySelectorAll(".tab-btn").forEach(function(b){
+      b.classList.toggle("active", b.dataset.tab === s.tab);
+    });
+    document.getElementById("view-tree").classList.toggle("active", s.tab === "tree");
+    document.getElementById("view-hierarchy").classList.toggle("active", s.tab === "hierarchy");
+
+    if(s.tab === "tree" && s.id && byId[s.id]) selectRow(s.id);
+    if(s.tab === "hierarchy") drawHierarchy(s.center || IR.root, s.view || "modules");
+
+    var hash = serializeState(s);
+    if(push){
+      if(hash !== lastPushedHash){
+        history.pushState(s, "", hash);
+        lastPushedHash = hash;
+      }
+    } else {
+      history.replaceState(s, "", hash);
+    }
+  }
+
+  function navigate(patch){
+    applyState(Object.assign({}, state, patch), true);
+  }
+
+  window.addEventListener("popstate", function(ev){
+    applyState(ev.state || parseState(location.hash), false);
+  });
+
+  // =====================================================================
+  // Tree tab
+  // =====================================================================
   var treeEl = document.getElementById("tree");
   var detailEl = document.getElementById("detail");
-  var selected = null;
+  var selectedRowId = null;
 
   function badges(n){
     var b = [];
@@ -197,22 +320,24 @@ local JS = [[
         this.textContent = kidsEl.classList.contains("hide") ? "▸" : "▾";
       });
     }
-    row.addEventListener("click", function(){ select(n.id); });
+    row.addEventListener("click", function(){ navigate({ tab: "tree", id: n.id }); });
     return box;
   }
 
-  function esc(s){ return (s||"").replace(/[&<>"]/g, function(c){
-    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
-
-  function select(id){
+  // DOM-only: row highlight + detail pane. No history side effects — that is
+  // applyState's job, so this can be called from anywhere (including a
+  // popstate restore) without ever touching the URL itself.
+  function selectRow(id){
     var n = byId[id]; if(!n) return;
-    if(selected) { var p = treeEl.querySelector('.row[data-id="'+CSS.escape(selected)+'"]');
+    if(selectedRowId){ var p = treeEl.querySelector('.row[data-id="'+CSS.escape(selectedRowId)+'"]');
       if(p) p.classList.remove("sel"); }
-    selected = id;
+    selectedRowId = id;
     var cur = treeEl.querySelector('.row[data-id="'+CSS.escape(id)+'"]');
     if(cur) cur.classList.add("sel");
-    if(location.hash.slice(1) !== id) history.replaceState(null,"","#"+id);
+    renderDetail(n);
+  }
 
+  function renderDetail(n){
     var h = [];
     h.push('<h2>'+esc(n.name)+'</h2>');
     h.push('<div class="mp">'+esc(n.module || n.path)+'</div>');
@@ -243,6 +368,14 @@ local JS = [[
       h.push('</ul>');
     }
 
+    if(n.types_detail && n.types_detail.length){
+      h.push('<div class="sec">Types ('+n.types_detail.length+')</div><ul class="lst">');
+      n.types_detail.forEach(function(t){
+        h.push('<li>'+t.kind+' <code>'+esc(t.name)+'</code>'+(t.fields.length?' — '+t.fields.length+' field'+(t.fields.length===1?'':'s'):'')+'</li>');
+      });
+      h.push('</ul>');
+    }
+
     var kids = (n.children||[]).map(function(i){return byId[i];}).filter(Boolean);
     if(kids.length){
       h.push('<div class="sec">Contains ('+kids.length+')</div><ul class="lst">');
@@ -263,27 +396,12 @@ local JS = [[
     if(hlink){
       hlink.addEventListener("click", function(ev){
         ev.preventDefault();
-        activateTab("hierarchy");
-        drawHierarchy(n.id);
+        navigate({ tab: "hierarchy", center: n.id });
       });
     }
   }
 
-  // Artifact lives in out_dir; repo-relative paths need to climb back out.
-  function rel(p){ return (IR.meta.out_depth ? "../".repeat(IR.meta.out_depth) : "") + p; }
-
   treeEl.appendChild(renderNode(byId[IR.root]));
-
-  var q = document.getElementById("q");
-  q.addEventListener("input", function(){
-    var v = this.value.toLowerCase().trim();
-    treeEl.querySelectorAll(".row").forEach(function(r){
-      var n = byId[r.dataset.id];
-      var hit = !v || (n.name+" "+(n.module||"")+" "+(n.summary||"")).toLowerCase().indexOf(v) >= 0;
-      r.style.display = hit ? "" : "none";
-    });
-    if(v) treeEl.querySelectorAll(".kids").forEach(function(k){ k.classList.remove("hide"); });
-  });
 
   document.getElementById("expand").addEventListener("click", function(){
     treeEl.querySelectorAll(".kids").forEach(function(k){ k.classList.remove("hide"); });
@@ -297,30 +415,41 @@ local JS = [[
     });
   });
 
-  window.addEventListener("hashchange", function(){
-    var id = decodeURIComponent(location.hash.slice(1)); if(byId[id]) select(id);
+  // =====================================================================
+  // Findings: clicking a row with a resolvable node id selects it. Rows for
+  // findings whose node isn't a real IR node (a couple of repo-specific
+  // checks report against synthetic paths) simply have no data-node
+  // attribute and stay inert — see render/html.lua for why.
+  // =====================================================================
+  document.querySelectorAll("#findings tbody tr[data-node]").forEach(function(tr){
+    var target = tr.dataset.node;
+    if(!byId[target]) return;
+    tr.addEventListener("click", function(){ navigate({ tab: "tree", id: target }); });
   });
 
-  // ---------------------------------------------------------------- tabs
-  function activateTab(name){
-    document.querySelectorAll(".tab-btn").forEach(function(b){
-      b.classList.toggle("active", b.dataset.tab === name);
-    });
-    document.getElementById("view-tree").classList.toggle("active", name === "tree");
-    document.getElementById("view-hierarchy").classList.toggle("active", name === "hierarchy");
-    if(name === "hierarchy" && !hgraph.childNodes.length) drawHierarchy();
-  }
+  // =====================================================================
+  // Tabs
+  // =====================================================================
   document.querySelectorAll(".tab-btn").forEach(function(b){
-    b.addEventListener("click", function(){ activateTab(b.dataset.tab); });
+    b.addEventListener("click", function(){ navigate({ tab: b.dataset.tab }); });
   });
 
-  // ------------------------------------------------------- hierarchy view
-  // Node positions are computed analytically from IR data (layer = depth
-  // from the centered node, position = index within the layer), not measured
-  // off the DOM. That sidesteps the usual "a box inside display:none has zero
-  // size" problem entirely — drawHierarchy() produces correct absolute pixel
-  // coordinates whether or not the pane is currently visible, so there is no
-  // separate re-layout-on-show step to get right.
+  // =====================================================================
+  // Hierarchy view
+  //
+  // Two "aufbereitungen" of the same annotation data, toggled via
+  // .hview-btn: "modules" draws the directory/module hierarchy (unchanged
+  // from before); "types" draws the class/alias graph from LuaLS
+  // enrichment — a materially different view of the same map, not just a
+  // relabeling, since it walks ir.edges' from_class/to_class rather than
+  // node.children.
+  //
+  // Node/class positions are computed analytically from IR data (layer =
+  // BFS depth, position = index within the layer), not measured off the
+  // DOM — this sidesteps "a box inside display:none has zero size" entirely
+  // rather than working around it with a re-layout-on-show step, since the
+  // math produces correct pixel coordinates regardless of visibility.
+  // =====================================================================
   var hgraphWrap = document.getElementById("hgraph-wrap");
   var hgraph = document.getElementById("hgraph");
   var hpathEl = document.getElementById("hpath");
@@ -335,79 +464,145 @@ local JS = [[
     return "M" + x1 + "," + y1 + " C" + x1 + "," + midY + " " + x2 + "," + midY + " " + x2 + "," + y2;
   }
 
-  function drawHierarchy(centerId){
-    hcenter = (centerId && byId[centerId]) ? centerId : (hcenter && byId[hcenter] ? hcenter : IR.root);
-    var center = byId[hcenter];
-    hpathEl.textContent = center.module || center.path;
-
-    hgraph.innerHTML = "";
-
-    // BFS from the centered node, layered by depth-from-center. Files count
-    // the same as modules/namespaces here — an earlier version excluded them
-    // as "just noise", which looked right at the whole-map scope but was
-    // wrong in practice: centering on a module implemented as a handful of
-    // flat files (no further module directories) then drew almost nothing.
-    // MAX_HNODES is what actually bounds noise at any scope, so there is no
-    // need for a second, cruder filter on top of it.
-    var layers = [];
-    var included = {};
-    var queue = [ { id: hcenter, d: 0 } ];
-    var count = 0;
-    var truncated = false;
+  // BFS over node.children from `startId`. Files count the same as modules/
+  // namespaces — an earlier version excluded them as "just noise", which was
+  // wrong in practice: centering on a module implemented as flat files with
+  // no further subdirectories then drew almost nothing. MAX_HNODES already
+  // bounds noise at any scope.
+  function layoutModules(startId){
+    var layers = [], included = {}, count = 0, truncated = false;
+    var queue = [ { id: startId, d: 0 } ];
     while(queue.length){
       var item = queue.shift();
-      var id = item.id, d = item.d;
-      if(included[id] !== undefined) continue;
+      if(included[item.id] !== undefined) continue;
       if(count >= MAX_HNODES){ truncated = true; break; }
-      var node = byId[id];
+      var node = byId[item.id];
       if(!node) continue;
-      included[id] = d;
+      included[item.id] = item.d;
       count++;
-      layers[d] = layers[d] || [];
-      layers[d].push(id);
+      layers[item.d] = layers[item.d] || [];
+      layers[item.d].push(item.id);
       (node.children || []).forEach(function(c){
-        if(byId[c]) queue.push({ id: c, d: d + 1 });
+        if(byId[c]) queue.push({ id: c, d: item.d + 1 });
       });
     }
+    return { layers: layers, included: included, count: count, truncated: truncated };
+  }
 
-    if(count === 0){
-      hgraph.innerHTML = '<p class="hmsg">Nothing to draw here.</p>';
-      return;
+  // BFS over ir.edges' from_class/to_class, seeded from the centered node's
+  // own types_detail. A field can reference a class owned by any node in the
+  // whole map, which is exactly the point of this view — unlike the Modules
+  // view, edges are not required to stay within the laid-out subtree, they
+  // define it.
+  function layoutTypes(startId){
+    var center = byId[startId];
+    var seeds = (center.types_detail || []).map(function(t){ return t.name; });
+    if(seeds.length === 0) return { layers: [], included: {}, count: 0, truncated: false };
+
+    var adj = {};
+    (IR.edges || []).forEach(function(e){
+      (adj[e.from_class] = adj[e.from_class] || []).push(e);
+    });
+
+    var layers = [], included = {}, count = 0, truncated = false;
+    var queue = seeds.map(function(name){ return { name: name, d: 0 }; });
+    while(queue.length){
+      var item = queue.shift();
+      if(included[item.name] !== undefined) continue;
+      if(!classByName[item.name]) continue;
+      if(count >= MAX_HNODES){ truncated = true; break; }
+      included[item.name] = item.d;
+      count++;
+      layers[item.d] = layers[item.d] || [];
+      layers[item.d].push(item.name);
+      (adj[item.name] || []).forEach(function(e){
+        if(classByName[e.to_class]) queue.push({ name: e.to_class, d: item.d + 1 });
+      });
     }
+    return { layers: layers, included: included, count: count, truncated: truncated, adj: adj };
+  }
 
+  function layerPositions(layers){
     var maxRowWidth = 0;
     layers.forEach(function(layer){
       if(!layer) return;
       maxRowWidth = Math.max(maxRowWidth, layer.length * BOX_W + (layer.length - 1) * GAP_X);
     });
-
     var positions = {};
-    var frag = document.createDocumentFragment();
     layers.forEach(function(layer, d){
       if(!layer) return;
       var rowWidth = layer.length * BOX_W + (layer.length - 1) * GAP_X;
       var startX = PAD + (maxRowWidth - rowWidth) / 2;
-      layer.forEach(function(id, i){
-        var x = startX + i * (BOX_W + GAP_X);
-        var y = PAD + d * (BOX_H + GAP_Y);
-        positions[id] = { x: x, y: y };
-        var n = byId[id];
+      layer.forEach(function(key, i){
+        positions[key] = { x: startX + i * (BOX_W + GAP_X), y: PAD + d * (BOX_H + GAP_Y) };
+      });
+    });
+    return { positions: positions, maxRowWidth: maxRowWidth };
+  }
+
+  function drawHierarchy(centerId, view){
+    view = view === "types" ? "types" : "modules";
+    hcenter = (centerId && byId[centerId]) ? centerId : (hcenter && byId[hcenter] ? hcenter : IR.root);
+    var center = byId[hcenter];
+
+    document.querySelectorAll(".hview-btn").forEach(function(b){
+      b.classList.toggle("active", b.dataset.view === view);
+    });
+
+    hgraph.innerHTML = "";
+    var oldNote = hgraphWrap.parentNode.querySelector(".htrunc");
+    if(oldNote) oldNote.remove();
+
+    var built = view === "types" ? layoutTypes(hcenter) : layoutModules(hcenter);
+
+    if(built.count === 0){
+      hpathEl.textContent = center.module || center.path;
+      if(view === "types"){
+        hgraph.innerHTML = IR.edges && IR.edges.length
+          ? '<p class="hmsg">'+esc(center.name)+' has no <code>@class</code>/<code>@alias</code> of its own — pick a module with type definitions, or switch back to Modules.</p>'
+          : '<p class="hmsg">No type data in this map — regenerate with <code>:LibMap full</code> (or <code>--full</code>) to include lua-language-server class/alias detail.</p>';
+      } else {
+        hgraph.innerHTML = '<p class="hmsg">Nothing to draw here.</p>';
+      }
+      return;
+    }
+
+    hpathEl.textContent = (center.module || center.path) + (view === "types" ? " · types" : "");
+
+    var laid = layerPositions(built.layers);
+    var positions = laid.positions;
+    var frag = document.createDocumentFragment();
+
+    if(view === "modules"){
+      Object.keys(positions).forEach(function(id){
+        var pos = positions[id], n = byId[id];
         var box = document.createElement("div");
         box.className = "hnode k-" + n.kind;
-        box.style.left = x + "px";
-        box.style.top = y + "px";
-        box.style.width = BOX_W + "px";
+        box.style.left = pos.x + "px"; box.style.top = pos.y + "px"; box.style.width = BOX_W + "px";
         box.title = n.summary || n.name;
         box.innerHTML = '<div class="hnm">' + esc(n.name) + '</div>' +
           (n.summary ? '<div class="hsm">' + esc(n.summary) + '</div>' : '');
-        box.addEventListener("click", function(){ activateTab("tree"); select(id); });
-        box.addEventListener("dblclick", function(ev){ ev.stopPropagation(); drawHierarchy(id); });
+        box.addEventListener("click", function(){ navigate({ tab: "tree", id: id }); });
+        box.addEventListener("dblclick", function(ev){ ev.stopPropagation(); navigate({ center: id }); });
         frag.appendChild(box);
       });
-    });
+    } else {
+      Object.keys(positions).forEach(function(name){
+        var pos = positions[name], cls = classByName[name];
+        var box = document.createElement("div");
+        box.className = "hnode t-" + cls.info.kind;
+        box.style.left = pos.x + "px"; box.style.top = pos.y + "px"; box.style.width = BOX_W + "px";
+        box.title = cls.info.desc || name;
+        box.innerHTML = '<div class="hnm">' + esc(name) + '</div>' +
+          '<div class="hkind">' + cls.info.kind + '</div>';
+        box.addEventListener("click", function(){ navigate({ tab: "tree", id: cls.nodeId }); });
+        box.addEventListener("dblclick", function(ev){ ev.stopPropagation(); navigate({ center: cls.nodeId }); });
+        frag.appendChild(box);
+      });
+    }
 
-    var totalW = maxRowWidth + PAD * 2;
-    var totalH = PAD * 2 + layers.length * BOX_H + Math.max(0, layers.length - 1) * GAP_Y;
+    var totalW = laid.maxRowWidth + PAD * 2;
+    var totalH = PAD * 2 + built.layers.length * BOX_H + Math.max(0, built.layers.length - 1) * GAP_Y;
 
     var svgNS = "http://www.w3.org/2000/svg";
     var svg = document.createElementNS(svgNS, "svg");
@@ -415,69 +610,160 @@ local JS = [[
     svg.setAttribute("width", totalW);
     svg.setAttribute("height", totalH);
 
-    Object.keys(included).forEach(function(id){
-      (byId[id].children || []).forEach(function(c){
-        if(positions[id] && positions[c]){
+    if(view === "modules"){
+      Object.keys(built.included).forEach(function(id){
+        (byId[id].children || []).forEach(function(c){
+          if(positions[id] && positions[c]){
+            var p = document.createElementNS(svgNS, "path");
+            p.setAttribute("d", edgePath(positions[id], positions[c]));
+            p.setAttribute("class", "hedge");
+            svg.appendChild(p);
+          }
+        });
+      });
+      // Type-reference edges layered on top (dashed), node-granularity,
+      // self-loops skipped — only meaningful when both endpoints are
+      // laid-out nodes; a field can reference a class anywhere in the whole
+      // map, and pulling in out-of-view targets would break "scoped to one
+      // subtree".
+      (IR.edges || []).forEach(function(e){
+        if(e.from !== e.to && positions[e.from] && positions[e.to]){
           var p = document.createElementNS(svgNS, "path");
-          p.setAttribute("d", edgePath(positions[id], positions[c]));
-          p.setAttribute("class", "hedge");
+          p.setAttribute("d", edgePath(positions[e.from], positions[e.to]));
+          p.setAttribute("class", "hedge hedge-type");
+          var title = document.createElementNS(svgNS, "title");
+          title.textContent = "." + e.via;
+          p.appendChild(title);
           svg.appendChild(p);
         }
       });
-    });
-
-    // Type-reference edges from LuaLS enrichment (empty array when it didn't
-    // run). Only drawn when both endpoints are in the currently laid-out
-    // subtree — a field can reference a class anywhere in the whole map, and
-    // pulling in out-of-view targets would break the "scoped to one subtree"
-    // point of centering on a node at all.
-    (IR.edges || []).forEach(function(e){
-      if(e.from !== e.to && positions[e.from] && positions[e.to]){
-        var p = document.createElementNS(svgNS, "path");
-        p.setAttribute("d", edgePath(positions[e.from], positions[e.to]));
-        p.setAttribute("class", "hedge hedge-type");
-        var title = document.createElementNS(svgNS, "title");
-        title.textContent = "." + e.via;
-        p.appendChild(title);
-        svg.appendChild(p);
-      }
-    });
+    } else {
+      Object.keys(built.included).forEach(function(name){
+        (built.adj[name] || []).forEach(function(e){
+          if(positions[name] && positions[e.to_class]){
+            var p = document.createElementNS(svgNS, "path");
+            p.setAttribute("d", edgePath(positions[name], positions[e.to_class]));
+            p.setAttribute("class", "hedge hedge-type");
+            var title = document.createElementNS(svgNS, "title");
+            title.textContent = "." + e.via;
+            p.appendChild(title);
+            svg.appendChild(p);
+          }
+        });
+      });
+    }
 
     hgraph.style.width = totalW + "px";
     hgraph.style.height = totalH + "px";
     hgraph.appendChild(svg);
     hgraph.appendChild(frag);
 
-    // Rows are centered on the widest layer, so the root box can sit
+    // Rows are centered on the widest layer, so the centered box can sit
     // thousands of pixels from the left edge on a wide map — without this,
     // opening the tab scrolls to (0,0) and shows an arbitrary fragment of
-    // whichever layer is widest, not the node that was actually centered on.
-    var centerPos = positions[hcenter];
-    if(centerPos){
-      hgraphWrap.scrollLeft = Math.max(0, centerPos.x + BOX_W / 2 - hgraphWrap.clientWidth / 2);
+    // whichever layer is widest, not the node/class actually centered on.
+    var selfPos = view === "modules" ? positions[hcenter] : null;
+    if(selfPos){
+      hgraphWrap.scrollLeft = Math.max(0, selfPos.x + BOX_W / 2 - hgraphWrap.clientWidth / 2);
+      hgraphWrap.scrollTop = 0;
+    } else {
+      // Types view centers on a set of seed classes, not a single box —
+      // scroll to the first seed instead of (0,0).
+      var firstLayer = built.layers[0];
+      var firstSeedKey = firstLayer ? firstLayer[0] : null;
+      var firstSeedPos = firstSeedKey ? positions[firstSeedKey] : null;
+      if(firstSeedPos){
+        hgraphWrap.scrollLeft = Math.max(0, firstSeedPos.x + BOX_W / 2 - hgraphWrap.clientWidth / 2);
+      }
       hgraphWrap.scrollTop = 0;
     }
 
-    if(truncated){
+    if(built.truncated){
       var note = document.createElement("div");
       note.className = "htrunc";
       note.textContent = "Showing the first " + MAX_HNODES + " nodes — double-click a box to re-center on a smaller subtree.";
       hgraphWrap.parentNode.insertBefore(note, hgraphWrap.nextSibling);
     }
-    var existingNote = hgraphWrap.parentNode.querySelector(".htrunc");
-    if(existingNote && !truncated) existingNote.remove();
   }
 
   document.getElementById("hup").addEventListener("click", function(){
     var center = byId[hcenter || IR.root];
-    if(center && center.parent) drawHierarchy(center.parent);
+    if(center && center.parent) navigate({ center: center.parent });
   });
   document.getElementById("hroot").addEventListener("click", function(){
-    drawHierarchy(IR.root);
+    navigate({ center: IR.root });
+  });
+  document.querySelectorAll(".hview-btn").forEach(function(b){
+    b.addEventListener("click", function(){ navigate({ view: b.dataset.view }); });
   });
 
-  var initial = decodeURIComponent(location.hash.slice(1));
-  select(byId[initial] ? initial : IR.root);
+  // =====================================================================
+  // Search — one input, two behaviors depending on the active tab: filters
+  // visible rows in the Tree tab (unchanged), re-centers the Hierarchy view
+  // on the best-matching node as you type in the Hierarchy tab. Typing
+  // updates live via a replaced (not pushed) history entry — five keystrokes
+  // finding the same module should not become five Back-button stops — and
+  // Enter commits the current match as a real, pushed navigation.
+  // =====================================================================
+  function findBestMatch(query){
+    var q = query.toLowerCase().trim();
+    if(!q) return null;
+    var starts = null, contains = null;
+    for(var i = 0; i < IR.nodes.length; i++){
+      var n = IR.nodes[i];
+      var name = (n.name || "").toLowerCase();
+      var mod = (n.module || "").toLowerCase();
+      if(name === q || mod === q) return n.id;
+      if(!starts && (name.indexOf(q) === 0 || mod.indexOf(q) === 0)) starts = n.id;
+      if(!contains && (name.indexOf(q) >= 0 || mod.indexOf(q) >= 0 || (n.summary||"").toLowerCase().indexOf(q) >= 0)) contains = n.id;
+    }
+    return starts || contains;
+  }
+
+  var q = document.getElementById("q");
+  q.addEventListener("input", function(){
+    var v = this.value.toLowerCase().trim();
+    if(state.tab === "hierarchy"){
+      // Live preview only — draws directly, deliberately bypassing
+      // navigate()/history entirely rather than replacing on every
+      // keystroke. An earlier version used navigate(patch, {push:false}),
+      // which calls history.replaceState on the *current top entry* — right
+      // after switching to the Hierarchy tab, that entry is the tab-switch
+      // itself, so the first keystroke overwrote it. Enter's subsequent
+      // pushState then pushed a duplicate of that already-overwritten entry
+      // instead of a distinct new stop, so Back from the committed search
+      // landed on an indistinguishable copy of itself instead of the
+      // pre-search tab state. Not writing to history at all while typing
+      // avoids the clobber; drawHierarchy still keeps its own `hcenter`
+      // current, so Up/Root/double-click after a preview (without ever
+      // pressing Enter) act on what's actually on screen.
+      var match = findBestMatch(this.value);
+      if(match) drawHierarchy(match, state.view);
+      return;
+    }
+    treeEl.querySelectorAll(".row").forEach(function(r){
+      var n = byId[r.dataset.id];
+      var hit = !v || (n.name+" "+(n.module||"")+" "+(n.summary||"")).toLowerCase().indexOf(v) >= 0;
+      r.style.display = hit ? "" : "none";
+    });
+    if(v) treeEl.querySelectorAll(".kids").forEach(function(k){ k.classList.remove("hide"); });
+  });
+  q.addEventListener("keydown", function(ev){
+    if(ev.key === "Enter" && state.tab === "hierarchy"){
+      var match = findBestMatch(this.value);
+      if(match) navigate({ center: match });
+    }
+  });
+
+  // =====================================================================
+  // Initial load: parse whatever hash the page was opened with (a bare
+  // #<id> from an old-style/shared link, a full serialized state from
+  // Back/Forward, or nothing) and apply it as a *replace*, not a push — the
+  // very first state should not itself create a Back-stack entry.
+  // =====================================================================
+  var initial = parseState(location.hash);
+  if(!initial.id && !initial.center) initial.id = IR.root;
+  applyState(initial, false);
 })();
 ]]
 
@@ -513,8 +799,16 @@ function M.render(ir, findings, opts)
 
   local rows = {}
   for _, f in ipairs(findings) do
-    rows[#rows + 1] = ([[<tr><td><span class="sev %s">%s</span></td><td class="msg">%s</td><td class="msg">%s</td></tr>]])
-      :format(f.severity, f.severity, esc(f.check), esc(f.message))
+    -- data-node drives the click-to-select wiring in JS. Left off entirely
+    -- (rather than set to an empty string) when the finding has no node, or
+    -- points at something that isn't a real IR node id (config.lua's
+    -- aggregator check reports against a synthetic "lua/lib/@types" path
+    -- that was never a scanned node) — the click handler only wires up rows
+    -- that actually carry the attribute, so an unresolvable target silently
+    -- stays inert instead of being a dead click.
+    local node_attr = f.node and (' data-node="%s"'):format(esc(f.node)) or ""
+    rows[#rows + 1] = ([[<tr%s><td><span class="sev %s">%s</span></td><td class="msg">%s</td><td class="msg">%s</td></tr>]])
+      :format(node_attr, f.severity, f.severity, esc(f.check), esc(f.message))
   end
 
   return table.concat({
@@ -548,6 +842,10 @@ function M.render(ir, findings, opts)
     '<div id="view-hierarchy" class="view">',
     '<div class="hctl">',
     '<button id="hup">▲ Up</button><button id="hroot">⌂ Root</button>',
+    '<div class="hview-toggle">',
+    '<button class="hview-btn active" data-view="modules">Modules</button>',
+    '<button class="hview-btn" data-view="types">Types</button>',
+    "</div>",
     '<span class="hpath" id="hpath"></span>',
     "</div>",
     '<div id="hgraph-wrap"><div id="hgraph"></div></div>',
