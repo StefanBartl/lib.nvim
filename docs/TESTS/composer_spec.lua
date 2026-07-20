@@ -301,6 +301,53 @@ return function(H)
     pcall(vim.api.nvim_del_user_command, "ComposerSpecE2E")
   end
 
+  -- ------------------------------------------- bare invocation of a root route
+  -- Real regression, found migrating markdown.nvim's buffer-local TableView*
+  -- commands (all invoked bare in the common case, e.g. plain :TableViewClose):
+  -- M.dispatch's `#fargs == 0` branch unconditionally treated bare invocation
+  -- as "use spec.default or show usage", completely bypassing a registered
+  -- `path = {}` root route even though tree.walk(root, {}) resolves to it
+  -- just fine -- a root route with all-optional (or zero) args silently never
+  -- fired on the single most common way to call it. diff.nvim's :DiffClear/
+  -- :DiffOrig/:DiffExit (already shipped) hit this same gap.
+  do
+    local fired = "unset"
+    composer.verb("ComposerSpecBareRoot", {
+      routes = { { path = {}, args = { { name = "scope", type = "STRING", optional = true } },
+        run = function(ctx) fired = ctx.args.scope end } },
+    })
+    vim.cmd("ComposerSpecBareRoot")
+    eq(fired, nil, "bare invocation of a path={} root route with only optional args dispatches (not the usage fallback)")
+    vim.cmd("ComposerSpecBareRoot foo")
+    eq(fired, "foo", "the same root route still binds a provided arg normally")
+    pcall(vim.api.nvim_del_user_command, "ComposerSpecBareRoot")
+  end
+
+  do
+    -- Zero declared args at all (e.g. :DiffClear's shape) -- bare invocation
+    -- must still reach run(), not just routes with an optional arg slot.
+    local fired = false
+    composer.verb("ComposerSpecBareRootNoArgs", {
+      routes = { { path = {}, run = function() fired = true end } },
+    })
+    vim.cmd("ComposerSpecBareRootNoArgs")
+    ok(fired, "bare invocation of a path={} root route with NO declared args still dispatches")
+    pcall(vim.api.nvim_del_user_command, "ComposerSpecBareRootNoArgs")
+  end
+
+  do
+    -- spec.default still takes priority over an also-registered root route
+    -- (an unusual combination, but default must win if both exist).
+    local which
+    composer.verb("ComposerSpecDefaultWins", {
+      default = function() which = "default" end,
+      routes = { { path = {}, run = function() which = "root" end } },
+    })
+    vim.cmd("ComposerSpecDefaultWins")
+    eq(which, "default", "spec.default still wins over a root route on bare invocation")
+    pcall(vim.api.nvim_del_user_command, "ComposerSpecDefaultWins")
+  end
+
   -- route.range must reach the real :command registration (wants_range),
   -- not just spec.range -- a route declaring `range = true` with no
   -- verb-level spec.range previously registered a range-less command.

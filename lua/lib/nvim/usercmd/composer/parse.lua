@@ -98,13 +98,21 @@ end
 function M.dispatch(cmd_name, spec, root, opts, notify)
   local fargs = opts.fargs or {}
 
-  -- Bare `:Verb` → default handler (or usage).
+  -- Bare `:Verb` (no tokens): an explicit spec.default always wins. Otherwise,
+  -- if a `path = {}` root route is registered, fall through to the normal
+  -- tree-walk/dispatch pipeline below -- tree.walk(root, {}) resolves to the
+  -- root node itself, so a root route naturally handles bare invocation the
+  -- same way it handles any other, enforcing its own required args/flags/kv
+  -- instead of being silently skipped. Only when neither exists do we show
+  -- the auto-generated usage listing.
   if #fargs == 0 then
     if spec.default then
       return spec.default(M.build_ctx({}, {}, {}, {}, {}, {}, opts))
     end
-    notify.info(M.usage(cmd_name, root))
-    return
+    if not root.route then
+      notify.info(M.usage(cmd_name, root))
+      return
+    end
   end
 
   local node, consumed = tree.walk(root, fargs)
