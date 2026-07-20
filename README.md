@@ -15,7 +15,7 @@
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)
 
 > Looking for a plugin to use alongside your own `lib.nvim`-based setup? Check out
-> [project-insight.nvim](https://github.com/StefanBartl/project-insight.nvim), a project-analysis
+> [insights.nvim](https://github.com/StefanBartl/insights.nvim), a project-analysis
 > plugin (symbols, metrics, file tree, imports) from the same author.
 
 > Reusable Lua/Neovim helper library — one tested base for your own plugins.
