@@ -30,7 +30,7 @@
 | `lib.nvim.normalize`   | path / value normalization                          |
 | `lib.nvim.git`         | git helpers                                         |
 | `lib.nvim.terminal`    | terminal-buffer helpers                             |
-| `lib.nvim.require`     | safe / dir / lazy require                           |
+| `lib.nvim.require`     | safe / dir / lazy require, plus `ensure_plugin` (force-load a lazy.nvim dependency by plugin name before requiring one of its modules) |
 | `lib.nvim.lua_ls`      | LuaLS: module path, `@module` annotation            |
 | `lib.nvim.core`        | misc Neovim helpers (`has_exec`, `simple_echo`)     |
 | `lib.nvim.neotree`     | neo-tree helpers: `node` (get_path / collect_nodes / extract_paths) |

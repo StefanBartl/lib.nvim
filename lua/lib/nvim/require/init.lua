@@ -161,4 +161,57 @@ function M.lazy(module_name)
   end
 end
 
+---Ensure a lazy.nvim plugin is actually loaded before requiring one of its modules.
+---
+---Being listed in another plugin's `dependencies` only guarantees installation
+---and spec-merging - it does NOT force lazy.nvim to load a dependency that has
+---its own lazy triggers (cmd/event/ft/keys). If plugin B's config does
+---`require("a_module")` from plugin A, and A is only lazy-loaded via its own
+---`cmd`/`event`, that require can run before A ever reached the runtimepath.
+---
+---This tries, in order: (1) the module is already loaded, (2) ask lazy.nvim to
+---load the owning plugin by name, (3) as a last resort, locate the plugin's
+---install dir via lazy's own registry and prepend it to `rtp` directly.
+---@param plugin_name string lazy.nvim plugin name, e.g. "open.nvim"
+---@param module_name string Lua module to require afterwards, e.g. "open_nvim"
+---@return boolean ok
+---@return any result Module or error message
+function M.ensure_plugin(plugin_name, module_name)
+  if package.loaded[module_name] then
+    return true, package.loaded[module_name]
+  end
+
+  local ok_lazy, lazy = pcall(require, "lazy")
+  if ok_lazy then
+    pcall(lazy.load, { plugins = { plugin_name } })
+  end
+
+  local ok, mod = M.safe(module_name)
+  if ok then
+    return true, mod
+  end
+
+  if ok_lazy then
+    local ok_cfg, plugin = pcall(function()
+      return require("lazy.core.config").plugins[plugin_name]
+    end)
+    if ok_cfg and plugin and plugin.dir then
+      vim.opt.rtp:prepend(plugin.dir)
+      ok, mod = M.safe(module_name)
+      if ok then
+        return true, mod
+      end
+    end
+  end
+
+  notify.error(
+    ("[ensure_plugin] Could not load '%s' (module '%s'): %s"):format(
+      plugin_name,
+      module_name,
+      tostring(mod)
+    )
+  )
+  return false, mod
+end
+
 return M
