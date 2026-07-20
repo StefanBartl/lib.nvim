@@ -1,4 +1,4 @@
----@module 'lib.nvim.lua_ls.insert.module_annotation'
+---@module 'lib.nvim.lua_ls.insert.module_annnotation'
 ---Insert a LuaLS @module annotation into a buffer at a configurable position
 
 local notify = require("lib.nvim.notify").create("[lib.nvim.lua_ls.insert.module_annnotation]")

@@ -18,7 +18,7 @@
 | ---------------------- | --------------------------------------------------- |
 | [`lib.nvim.notify`](../lua/lib/nvim/notify/README.md) | notify wrapper + log-level resolution |
 | `lib.nvim.map`         | keymap helpers                                      |
-| `lib.nvim.usercmd`     | user-command helpers                                |
+| [`lib.nvim.usercmd`](../lua/lib/nvim/usercmd/composer/README.md) | user-command helpers: `create` + [`composer`](../lua/lib/nvim/usercmd/composer/README.md) (subcommand verbs, completion, docgen — [`:help`](../doc/lib.nvim-composer.txt)) |
 | `lib.nvim.autocmd`     | autocmd / augroup helpers                           |
 | `lib.nvim.buffer`      | buffer helpers (`insert_lines`, `is_markdown_buf`, `open_background`) |
 | `lib.nvim.buf_win_tab` | buffer / window / tab utilities                     |
@@ -26,6 +26,7 @@
 | [`lib.nvim.ui`](../lua/lib/nvim/ui/hover_select/README.md) | `hover_select` ([`:help`](../doc/lib.nvim-hover_select.txt)), highlight helpers |
 | `lib.nvim.fs`          | path / filesystem helpers (`vim.fs` / `uv`): [`create_entry`](../lua/lib/nvim/fs/create_entry/README.md), [`mkdirp`](../lua/lib/nvim/fs/mkdirp/README.md) (fast-event-safe `mkdir -p`), [`normkey`](../lua/lib/nvim/fs/normkey/README.md), [`project_key`](../lua/lib/nvim/fs/project_key/README.md), `path_shorten` (fit/label styles), [`find_root`](../lua/lib/nvim/fs/find_root/README.md) (glob markers, optional chain cache), `relpath`, [`open.url.system_opener`](../lua/lib/nvim/fs/open/url/system_opener/README.md) |
 | [`lib.nvim.cross`](../lua/lib/nvim/cross/fs/separators/README.md) | cross-platform: OS detection, run/argv, clipboard, uv (`spawn_capture` buffered, [`spawn_stream`](../lua/lib/nvim/cross/uv/spawn_stream/README.md) line-by-line), [path separators](../lua/lib/nvim/cross/fs/separators/README.md) (`unify_slashes`, `normalize`, `collapse_dots`, `has_win_sep`, `drive_upper`) |
+| [`lib.nvim.docmap`](../lua/lib/nvim/docmap/README.md) | generated module map: scans the annotated tree (opt-in LuaLS enrichment for type-reference edges), checks it for documentation drift, renders HTML (Tree tab + Hierarchy tab with Modules/Types views, search re-centering, clickable findings, real Back/Forward)/Markdown/Mermaid (`:LibMap`), plus `install()`/`uninstall()` for a live in-memory handle another plugin's code can subscribe to |
 | `lib.nvim.normalize`   | path / value normalization                          |
 | `lib.nvim.git`         | git helpers                                         |
 | `lib.nvim.terminal`    | terminal-buffer helpers                             |
@@ -57,12 +58,14 @@ and are generated on install by your plugin manager (see [Help docs](help.md)).
 - [`lib.nvim.fs.ignore.list`](../lua/lib/nvim/fs/ignore/list/README.md) · [`lib.nvim.fs.is_subpath`](../lua/lib/nvim/fs/is_subpath/README.md) · [`lib.nvim.fs.polymorphic_rootresolver`](../lua/lib/nvim/fs/polymorphic_rootresolver/README.md) · [`lib.nvim.fs.find_root`](../lua/lib/nvim/fs/find_root/README.md)
 - [`lib.nvim.fs.create_entry`](../lua/lib/nvim/fs/create_entry/README.md) · [`lib.nvim.fs.mkdirp`](../lua/lib/nvim/fs/mkdirp/README.md) · [`lib.nvim.fs.normkey`](../lua/lib/nvim/fs/normkey/README.md) · [`lib.nvim.fs.project_key`](../lua/lib/nvim/fs/project_key/README.md)
 - [`lib.nvim.fs.open.url.system_opener`](../lua/lib/nvim/fs/open/url/system_opener/README.md) · [`lib.nvim.cross.uv.spawn_stream`](../lua/lib/nvim/cross/uv/spawn_stream/README.md)
+- [`lib.nvim.docmap`](../lua/lib/nvim/docmap/README.md) — generated module map ([interactive](map/index.html) · [overview](map/overview.md))
 - [`lib.nvim.lua_ls.insert.module_annotation`](../lua/lib/nvim/lua_ls/insert/module_annnotation/README.md)
 - [`lib.nvim.treesitter.guard`](../lua/lib/nvim/treesitter/guard/README.md)
+- [`lib.nvim.usercmd.composer`](../lua/lib/nvim/usercmd/composer/README.md)
 
 **`:help` pages**
 
 - `:help lib.nvim` — overview hub · `:help lib.nvim-modules` — module index
-- `:help lib.nvim-window` · `:help lib.nvim-hover_select` · `:help lib.nvim-time_diff` · `:help lib.nvim-progress` · `:help lib.nvim-treesitter` · `:help lib.nvim-selection`
+- `:help lib.nvim-window` · `:help lib.nvim-hover_select` · `:help lib.nvim-time_diff` · `:help lib.nvim-progress` · `:help lib.nvim-treesitter` · `:help lib.nvim-selection` · `:help lib.nvim-composer`
 
 See [Conventions](conventions.md) for the steps to follow when documenting a new module, and [Help docs](help.md) for how `:help` tags are generated.
