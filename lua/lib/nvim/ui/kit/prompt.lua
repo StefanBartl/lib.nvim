@@ -10,7 +10,10 @@ local confirm = require("lib.nvim.ui.kit.confirm")
 local M = {}
 
 --- Open a prompt.
----@param opts table  # { question, answer_type = "confirm"|"text", choices?, default?, theme?, on_answer }
+---@param opts table  # { question, answer_type = "confirm"|"text", choices?, default?, theme?, on_answer, expand_env? }
+--- `expand_env = true` (only meaningful for `answer_type = "text"`) runs the
+--- answer through `lib.nvim.cross.fs.expand_path` before `on_answer` — see
+--- `lib.nvim.ui.kit.input`.
 ---@return any
 function M.open(opts)
   opts = opts or {}
@@ -23,6 +26,7 @@ function M.open(opts)
       title = opts.question,
       default = opts.default,
       theme = opts.theme,
+      expand_env = opts.expand_env,
       on_submit = function(text)
         on_answer(text)
       end,
