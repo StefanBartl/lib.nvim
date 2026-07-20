@@ -21,7 +21,7 @@ Every one of them currently hand-rolls it:
 | `sessions.nvim` | `lua/sessions/init.lua` | window/buffer layout, `project_aware` + `branch_aware` |
 | `filetree.nvim` | `lua/filetree/features/org/session/init.lua` | tree scroll/cursor/expanded-dirs, explicitly "keyed by project root" |
 | `language.nvim` | `lua/language/spell/core/ignore.lua` | persistent spell-ignore word list |
-| `nvim-cmdlog` | `lua/cmdlog/core/favorites.lua` | favorite commands — hand-rolls Windows-specific `mkdir`/ENOENT defensive fallbacks via `plenary.Path` |
+| `cmdlog.nvim` | `lua/cmdlog/core/favorites.lua` | favorite commands — hand-rolls Windows-specific `mkdir`/ENOENT defensive fallbacks via `plenary.Path` |
 | `reposcope.nvim` | `lua/reposcope/utils/metrics.lua` | API request metrics — raw `vim.fn.writefile`/`readfile` + `vim.json.decode` |
 | `gopath.nvim` | `lua/gopath/truncated/cache.lua` | filesystem-scan cache |
 | `pickers.nvim` | `lua/pickers/history/init.lua` | picker history |
@@ -29,7 +29,7 @@ Every one of them currently hand-rolls it:
 None of this is exotic — it's "find the project root, build a stable key from
 it, load/save JSON, don't crash if the directory or file is missing" — but
 each implementation differs slightly in path normalization, error handling,
-and fallback behavior when there's no git repo. `nvim-cmdlog`'s file even
+and fallback behavior when there's no git repo. `cmdlog.nvim`'s file even
 carries a comment documenting the Windows-specific defensive code it needed to
 write from scratch.
 
@@ -104,7 +104,7 @@ Mirrors the existing `lib.nvim.cache` module layout and `@types` convention.
 Not required, but each of these could drop its own persistence code in favor
 of `store.project` opportunistically, without behavior changes:
 
-- `nvim-cmdlog` favorites — removes the hand-rolled Windows ENOENT/mkdir path
+- `cmdlog.nvim` favorites — removes the hand-rolled Windows ENOENT/mkdir path
 - `reposcope.nvim` metrics — removes raw `writefile`/`readfile`/`json.decode`
 - `filetree.nvim` session state — already project-keyed, would become a
   thinner wrapper
