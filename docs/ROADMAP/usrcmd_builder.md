@@ -382,7 +382,7 @@ folded in below). Grepped each for `nvim_create_user_command`, classified the
 command surface, and checked for an existing `lib.nvim` dependency.
 
 **Headline finding: `lib.nvim.usercmd.create` is already the de-facto standard.**
-Every surveyed repo except `nvim-cmdlog` already has a `require("lib...")` edge
+Every surveyed repo except `cmdlog.nvim` already has a `require("lib...")` edge
 — most via a defensive shim (`local ok, lib = pcall(require, "lib.nvim.usercmd");
 has_lib = ok and lib.create ...`, else raw `nvim_create_user_command`), so it
 works standalone but prefers `lib.nvim` when present. That means `composer`
@@ -450,7 +450,7 @@ as every other repo surveyed.
 | **color_my_ascii.nvim** | 7 (`ColorMyAscii*`) | `:ColorMyAscii highlight\|toggle\|stats\|inspect char\|group\|inline\|highlight` |
 | **sessions.nvim** | flat (`SessionSave`, `SessionSaveTimestamp`, `SessionLoad`, …) | `:Session save [timestamp]\|load\|...`; its `lib.nvim.notify` fallback-shim pattern is worth reusing for `composer`'s own optional deps |
 | **pdfport.nvim** | 6 (`PdfPort`, `PdfPortText`, `PdfPortFloat`, `PdfPortSystem`, `PdfPortTerminal`, `PdfPortHealth`) | `:PdfPort open text\|float\|system\|terminal`, `:PdfPort health` |
-| **nvim-cmdlog** | 7 (`Cmdlog`, `CmdlogFull`, `CmdlogNvim`, …) | Only repo with **no** `lib.nvim` dependency at all — would need it added first; `:Cmdlog [nvim\|shell\|favorites] [full]` collapses a 2-axis flag combinatorics cleanly |
+| **cmdlog.nvim** | 7 (`Cmdlog`, `CmdlogFull`, `CmdlogNvim`, …) | Only repo with **no** `lib.nvim` dependency at all — would need it added first; `:Cmdlog [nvim\|shell\|favorites] [full]` collapses a 2-axis flag combinatorics cleanly |
 
 ### Single command / not applicable
 
