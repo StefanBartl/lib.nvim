@@ -42,7 +42,8 @@
 ---@class Lib.UserCmd.Composer.KvSpec
 ---@field key     string                          # matched as key=value
 ---@field type?   Lib.UserCmd.Composer.ArgType    # value type; default "STRING"
----@field enum?   string[]                        # closed set for the value
+---@field enum?   string[]                        # closed set for the value; validated + completed (see argtypes.validate)
+---@field values? string[]                        # completion-only hints for a STRING value (not enforced, unlike enum) — same argtypes.STRING.complete a plain ArgSpec uses
 ---@field default? any                            # value bound when the key is never passed
 
 --- A single command route: a literal token path, an optional positional arg
