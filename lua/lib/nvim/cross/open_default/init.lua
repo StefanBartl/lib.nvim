@@ -20,6 +20,7 @@
 --- was itself upstreamed from open.nvim previously.
 
 local run = require("lib.nvim.cross.run")
+local expand_path = require("lib.nvim.cross.fs.expand_path")
 
 ---@param text string
 ---@return boolean
@@ -56,12 +57,12 @@ return function(target)
   local cmd
 
   if is_windows and not is_wsl then
-    cmd = { "cmd.exe", "/C", "start", '""', target }
+    cmd = { "cmd.exe", "/C", "start", '""', expand_path(target) }
   elseif is_wsl then
     if looks_like_url(target) then
       cmd = { "cmd.exe", "/C", "start", '""', target }
     else
-      local win_path = wsl_to_win_path(vim.fn.expand(target))
+      local win_path = wsl_to_win_path(expand_path(target))
       if win_path then
         cmd = { "cmd.exe", "/C", "start", '""', win_path }
       elseif vim.fn.executable("xdg-open") == 1 then
@@ -71,12 +72,12 @@ return function(target)
       end
     end
   elseif is_macos then
-    cmd = { "open", vim.fn.expand(target) }
+    cmd = { "open", expand_path(target) }
   else
     if vim.fn.executable("xdg-open") ~= 1 then
       return false, "xdg-open not found — install xdg-utils"
     end
-    cmd = { "xdg-open", vim.fn.expand(target) }
+    cmd = { "xdg-open", expand_path(target) }
   end
 
   return run.run_detached(cmd)
