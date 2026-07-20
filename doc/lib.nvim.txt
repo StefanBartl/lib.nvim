@@ -175,13 +175,18 @@ Neovim adapters.
                            has_win_sep (C:\ drive predicate), drive_upper
                            (uppercase C: prefix)
     lib.nvim.docmap        generated module map: scans the annotated Lua tree
-                           (---@module headers), optional lua-language-server
-                           --doc enrichment (class/alias detail, type-
-                           reference edges), checks it for documentation
-                           drift, renders a self-contained HTML page (Tree +
-                           Hierarchy tabs — Hierarchy toggles Modules/Types
-                           views, search re-centers it, findings and real
-                           browser Back/Forward are wired up) plus Markdown/
+                           (---@module headers) plus per-function docs via
+                           vim.treesitter (signatures, @param/@return/
+                           @generic/@deprecated/@see/@async/@nodiscard/
+                           @overload, and the custom @example/@since),
+                           optional lua-language-server --doc enrichment
+                           (class/alias detail, type-reference edges), checks
+                           it for documentation drift (incl. dead @see
+                           targets and under-documented params), renders a
+                           self-contained HTML page (Tree + Hierarchy tabs —
+                           Hierarchy toggles Modules/Types views, search
+                           re-centers it, findings and real browser
+                           Back/Forward are wired up) plus Markdown/
                            Mermaid. :LibMap
                            regenerates, :LibMap check sends drift to the
                            quickfix list, :LibMap full adds the LuaLS
