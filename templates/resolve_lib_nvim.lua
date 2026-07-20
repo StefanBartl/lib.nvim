@@ -1,4 +1,4 @@
--- nvim/templates/resolve_lib_nvim.lua — reference implementation.
+-- templates/resolve_lib_nvim.lua — reference implementation.
 --
 -- Copy the `add_lib_nvim()` function below into a dependent plugin's headless
 -- test runner (typically `docs/TESTS/run.lua`). Do NOT `require()` this file:
