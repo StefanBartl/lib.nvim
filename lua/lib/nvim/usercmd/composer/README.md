@@ -82,6 +82,30 @@ Re-registering (e.g. the autocmd firing again for the same buffer) is safe —
 `nvim_buf_create_user_command` overwrites like the global form does. The
 fluent builder has the matching `:buffer(v)` method.
 
+### Count prefix (`:N Verb`)
+
+`spec.count = 0` (or any route's `route.count`) accepts a `:N Verb` count
+prefix, the same shape as `nvim_create_user_command`'s own `count` option —
+the number becomes the default `ctx.range.count` when the prefix is omitted:
+
+```lua
+composer.verb("File", {
+  count = 0,
+  routes = {
+    { path = { "next" }, run = function(ctx)
+        cycle.navigate("next", ctx.range.count > 0 and ctx.range.count or 1)
+      end },
+  },
+})
+-- :File next      → ctx.range.count == 0
+-- :3File next     → ctx.range.count == 3
+```
+
+Like `bang`/`range`, `nvim_create_user_command` has one `count` slot per
+command, not one per route — an explicit `spec.count` wins; otherwise the
+first route that declares `count` sets it. The fluent builder's `:count(v)`
+defaults to `0` when called with no argument.
+
 ## The handler context (`ctx`)
 
 | Field       | What                                                        |

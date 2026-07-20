@@ -19,8 +19,9 @@ CONTENTS                                       *lib.nvim-composer-contents*
   4. Flags ...................................... |lib.nvim-composer-flags|
   5. Bare key=value ............................. |lib.nvim-composer-kv|
   6. Buffer-local commands ...................... |lib.nvim-composer-buffer|
-  7. Documentation generation .................. |lib.nvim-composer-docgen|
-  8. Functions ................................. |lib.nvim-composer-functions|
+  7. Count prefix ............................... |lib.nvim-composer-count|
+  8. Documentation generation .................. |lib.nvim-composer-docgen|
+  9. Functions ................................. |lib.nvim-composer-functions|
 
 ==============================================================================
 1. USAGE                                          *lib.nvim-composer-usage*
@@ -185,7 +186,30 @@ nvim_buf_create_user_command overwrites like the global form does. The
 fluent builder has the matching :buffer(v) method.
 
 ==============================================================================
-7. DOCUMENTATION GENERATION                      *lib.nvim-composer-docgen*
+7. COUNT PREFIX                                     *lib.nvim-composer-count*
+
+spec.count = 0 (or any route's route.count) accepts a ":N Verb" count
+prefix, the same shape as nvim_create_user_command's own `count` option --
+the number becomes the default ctx.range.count when the prefix is
+omitted: >lua
+    composer.verb("File", {
+      count = 0,
+      routes = {
+        { path = { "next" }, run = function(ctx)
+            cycle.navigate("next", ctx.range.count > 0 and ctx.range.count or 1)
+          end },
+      },
+    })
+    -- :File next      -> ctx.range.count == 0
+    -- :3File next     -> ctx.range.count == 3
+<
+Like bang/range, nvim_create_user_command has one `count` slot per command,
+not one per route -- an explicit spec.count wins; otherwise the first route
+that declares count sets it. The fluent builder's :count(v) defaults to 0
+when called with no argument.
+
+==============================================================================
+8. DOCUMENTATION GENERATION                      *lib.nvim-composer-docgen*
 
 The route tree drives docs too: >lua
     handle:document()                 -- one verb  -> docs/BINDINGS/Usercmds.md
@@ -198,7 +222,7 @@ the default path and mode. "section" updates a delimited
 hand-written prose survives regeneration; "replace" overwrites the file.
 
 ==============================================================================
-8. FUNCTIONS                                  *lib.nvim-composer-functions*
+9. FUNCTIONS                                  *lib.nvim-composer-functions*
 
 composer.verb({name}, {spec?})                       *lib.nvim-composer-verb*
     Register a verb. With {spec} it registers immediately and returns a
