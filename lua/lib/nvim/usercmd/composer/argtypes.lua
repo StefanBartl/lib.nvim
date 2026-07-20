@@ -6,6 +6,7 @@
 
 local validators = require("lib.nvim.normalize.validators")
 local is_dir = require("lib.nvim.fs.is_dir")
+local expand_path = require("lib.nvim.cross.fs.expand_path")
 
 local M = {}
 
@@ -125,10 +126,12 @@ M.register("BOOL", {
 })
 
 -- Path family. Validation is intentionally soft for PATH (accept any token —
--- the handler decides), strict for DIR/FILE.
+-- the handler decides), strict for DIR/FILE. All three expand `~`, `$VAR`,
+-- `${VAR}` and `%VAR%` before validating/returning, so e.g. `root=$REPOS_DIR`
+-- resolves instead of failing "not a directory" on the literal token.
 M.register("PATH", {
   validate = function(raw)
-    return true, raw, nil
+    return true, expand_path(raw), nil
   end,
   complete = function(arg_lead)
     return vim.fn.getcompletion(arg_lead, "file")
@@ -137,10 +140,11 @@ M.register("PATH", {
 
 M.register("DIR", {
   validate = function(raw)
-    if not is_dir(vim.fn.fnamemodify(raw, ":p")) then
+    local expanded = expand_path(raw)
+    if not is_dir(vim.fn.fnamemodify(expanded, ":p")) then
       return false, nil, ("'%s' is not a directory"):format(raw)
     end
-    return true, raw, nil
+    return true, expanded, nil
   end,
   complete = function(arg_lead)
     return vim.fn.getcompletion(arg_lead, "dir")
@@ -149,11 +153,12 @@ M.register("DIR", {
 
 M.register("FILE", {
   validate = function(raw)
-    local p = vim.fn.fnamemodify(raw, ":p")
+    local expanded = expand_path(raw)
+    local p = vim.fn.fnamemodify(expanded, ":p")
     if vim.fn.filereadable(p) ~= 1 then
       return false, nil, ("'%s' is not a readable file"):format(raw)
     end
-    return true, raw, nil
+    return true, expanded, nil
   end,
   complete = function(arg_lead)
     return vim.fn.getcompletion(arg_lead, "file")

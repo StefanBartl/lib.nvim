@@ -3,13 +3,17 @@
 --- Opens focused in insert mode; `<CR>` submits the line, `<Esc>` cancels.
 
 local surface = require("lib.nvim.ui.kit.surface")
+local expand_path = require("lib.nvim.cross.fs.expand_path")
 
 local api = vim.api
 
 local M = {}
 
 --- Open a single-line input.
----@param opts table  # { title|prompt, default, theme, width, relative, on_submit, on_cancel }
+---@param opts table  # { title|prompt, default, theme, width, relative, on_submit, on_cancel, expand_env }
+--- `expand_env = true` runs the submitted line through `lib.nvim.cross.fs.expand_path`
+--- (`~`, `$VAR`, `${VAR}`, `%VAR%`) before it reaches `on_submit` — opt-in, for
+--- callers that know they're prompting for a path.
 ---@return Lib.UI.Kit.Surface|nil
 function M.open(opts)
   opts = opts or {}
@@ -41,6 +45,9 @@ function M.open(opts)
     pcall(vim.cmd, "stopinsert")
     surf:close()
     if submit then
+      if opts.expand_env then
+        line = expand_path(line)
+      end
       if opts.on_submit then
         opts.on_submit(line)
       end

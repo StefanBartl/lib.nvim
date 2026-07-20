@@ -1,5 +1,7 @@
 ---@module 'lib.nvim.normalize.utils'
 
+local expand_path = require("lib.nvim.cross.fs.expand_path")
+
 local M = {}
 
 
@@ -61,17 +63,23 @@ function M.dedup_strings(list)
 end
 
 --- Normalize a filesystem path using Neovim facilities if present.
+--- Expansion of `~`, `$VAR`, `${VAR}` and `%VAR%` is delegated to
+--- `lib.nvim.cross.fs.expand_path` first (the only one of the two that
+--- understands `%VAR%`), then `vim.fs.normalize` handles separator/`.`/`..`
+--- normalization with its own env expansion disabled to avoid doing that
+--- work twice.
 ---@param p any
 ---@return string
 function M.normalize_path(p)
   if type(p) ~= "string" or p == "" then
     return ""
   end
+  local expanded = expand_path(p)
   if vim and vim.fs and vim.fs.normalize then
-    return vim.fs.normalize(p)
+    return vim.fs.normalize(expanded, { expand_env = false })
   end
   -- Fallback: collapse consecutive slashes and strip trailing slash (except root)
-  local s = p:gsub("[/\\]+", "/")
+  local s = expanded:gsub("[/\\]+", "/")
   if #s > 1 and s:sub(-1) == "/" then
     s = s:sub(1, -2)
   end
