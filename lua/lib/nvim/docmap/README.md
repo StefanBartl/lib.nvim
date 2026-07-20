@@ -107,6 +107,7 @@ else — module prefix, directory layout, types directory name — is an option.
 | Stage | Module | Produces |
 |---|---|---|
 | Scan | [`scan.lua`](scan.lua) | `Lib.Docmap.IR` — hierarchy, summaries, links |
+| Scan | [`functions.lua`](functions.lua) | `node.functions` — per-function docs via `vim.treesitter`, unconditional (no LuaLS needed) |
 | LuaLS (opt-in) | [`luals.lua`](luals.lua) | class/alias detail + type-reference edges merged into the IR |
 | Check | [`check.lua`](check.lua) | `Lib.Docmap.Finding[]` — documentation drift |
 | Render | [`render/`](render/) | HTML (Tree + Hierarchy tabs), Markdown, Mermaid |
@@ -127,8 +128,60 @@ before the first non-comment line — and stops. That is reliable here because
 of a Lua front end.
 
 The consequence: the scanner alone knows *that* a module exists and what it
-says about itself, not what its functions are — that's what the opt-in LuaLS
-step above is for.
+says about itself, not what its functions are — that's [`functions.lua`](functions.lua)'s job.
+
+## Function-level scanning (`node.functions`)
+
+Unlike the header scanner, this one *does* need to find code, not just a
+leading comment block — but it still isn't `lua-language-server --doc`.
+Verified against real `doc.json` output: `--doc` only surfaces symbols
+reachable through a `@class`/`@alias` type graph, so an ordinary
+`function M.foo(...)` in a module with no aggregate class declaration for its
+exports simply never appears. Retrofitting every module with a redundant
+aggregate class (duplicating what `---@param`/`---@return` already say above
+each function) would have been a drift risk, not a shortcut.
+
+So [`functions.lua`](functions.lua) uses `vim.treesitter` instead — already a
+lib.nvim dependency (`lib.nvim.treesitter`), no new one added. A query finds
+the three function shapes this repo actually uses (`function M.foo(...)`,
+`local function foo(...)`, `M.foo = function(...)`), matched via
+`iter_matches` rather than `iter_captures` (the two shapes put `@fname`
+before or after `@fdef` in source order depending on which matched — only
+match-grouped iteration handles both correctly). Only functions declared
+directly in a file's top-level scope are scanned; a `local function` nested
+inside another function's body is an implementation detail, not part of the
+module's documented surface, and is walked past.
+
+Each function's doc-comment block (the contiguous `---` lines immediately
+above it, tracked by row-contiguity, not indentation guessing) is parsed for:
+
+- the already-common tags: `@param`, `@return`, `@generic`
+- previously-unused-in-this-repo LuaLS tags now given real value:
+  `@deprecated` (rendered as a banner), `@see` (rendered as a link, validated
+  by the `dead-see-target` check below), `@async`, `@nodiscard`, `@overload`
+- two tags outside the LuaCATS spec: `@example` (a fenced code block,
+  multi-line) and `@since` (deliberately not `@version`, which LuaLS defines
+  as a required-Lua-runtime declaration — a different question from "since
+  when has this existed in this project")
+
+See [`docs/ANNOTATIONS.md`](docs/ANNOTATIONS.md) for the full survey of which
+tags this repo already uses heavily, which real ones it doesn't (and why
+they'd be worth adopting), and where the two custom tags fit in.
+
+Two new generic checks build on this: `dead-see-target` (warn — an `@see`
+target that resolves to nothing, same idea as `dead-readme-link`) and
+`undocumented-param` (info — a text-based heuristic comparing the raw
+signature's parameter count to the number of `@param` lines; deliberately
+`info`-only since the heuristic can be wrong on complex signatures).
+
+On reusing `lib.nvim.logger`'s pattern: it was considered and rejected as
+direct code reuse — `logger.record` is built for runtime events (timestamps,
+levels, redaction, ring-buffer flush-on-crash), while this scans static
+source once. What *is* transferable is the shape of the idea: structured,
+tagged records plus a dedicated inspection command (`:LibLogger show` as a
+model for a possible future `:LibMap functions <module>`). Not built here —
+the HTML detail pane's Functions section covers the immediate need — but
+worth keeping in mind if a CLI-side query ever becomes worth adding.
 
 ## Structure of the map
 
@@ -235,6 +288,8 @@ bugs. Generic checks (any annotated Lua tree):
 | `dead-readme-link` | warn | A relative link in a README pointing at nothing. |
 | `missing-readme` | info | Module without a README — should be a decision, not an accident. |
 | `unreferenced-module` | info | Required by no other file in the tree. |
+| `dead-see-target` | warn | A function's `@see` target resolves to no known module or function. |
+| `undocumented-param` | info | A function has more parameters than `@param` lines (text-based heuristic, can be wrong on complex signatures — never fails `--check`). |
 
 Repo-specific checks are passed in via `opts.extra_checks`. lib.nvim adds one:
 

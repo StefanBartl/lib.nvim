@@ -52,8 +52,8 @@ function M.render(ir, findings, opts)
   put(mermaid.render(ir, findings, { max_depth = 2 }))
 
   put("\n\n## Modules\n")
-  put("| Module | Description | Docs |")
-  put("|---|---|---|")
+  put("| Module | Description | Fns | Docs |")
+  put("|---|---|---|---|")
 
   for _, id in ipairs(ir.order) do
     local n = ir.nodes[id]
@@ -67,7 +67,13 @@ function M.render(ir, findings, opts)
       if n.source then
         links[#links + 1] = "[src](" .. rel(out_dir, n.source) .. ")"
       end
-      put(("| %s%s | %s | %s |"):format(indent, name, cell(n.summary), table.concat(links, " · ")))
+      -- Full per-function detail (signatures, params, examples) is reserved
+      -- for the interactive HTML — a count here is enough to tell a reader
+      -- "there's documented API surface" without ~250 rows turning into
+      -- thousands once every function's signature is spelled out.
+      local fn_count = #(n.functions or {})
+      put(("| %s%s | %s | %s | %s |"):format(
+        indent, name, cell(n.summary), fn_count > 0 and tostring(fn_count) or "", table.concat(links, " · ")))
     end
   end
 

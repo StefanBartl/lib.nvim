@@ -70,10 +70,13 @@ end
 ---capped: a "sentence" that runs past `max` characters is almost always a
 ---module that never wrote a real summary line, and truncating it produces a
 ---better table than letting one row swallow the layout.
+---
+---Exported (not local) so `docmap.functions` can apply the same summary-line
+---logic to a function's doc-comment prose instead of duplicating it.
 ---@param prose string
 ---@return string summary
 ---@return string body
-local function split_summary(prose)
+function M.split_summary(prose)
   if prose == "" then
     return "", ""
   end
@@ -152,7 +155,7 @@ function M.parse_header(path)
     blob = tags.brief or tags.description or ""
   end
 
-  local summary, body = split_summary(blob)
+  local summary, body = M.split_summary(blob)
   return { module = module_path, summary = summary, body = body, tags = tags, meta = meta }
 end
 
@@ -270,6 +273,7 @@ function M.scan(opts)
       parent = parent_id,
       depth = depth,
       children = {},
+      functions = has_init and require("lib.nvim.docmap.functions").scan_file(init) or {},
     }
 
     index[id] = node
@@ -304,6 +308,7 @@ function M.scan(opts)
           parent = id,
           depth = depth + 1,
           children = {},
+          functions = require("lib.nvim.docmap.functions").scan_file(child_abs),
         }
         index[child_rel] = leaf
         order[#order + 1] = child_rel

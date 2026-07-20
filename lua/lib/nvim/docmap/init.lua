@@ -130,6 +130,7 @@ function M.to_json(ir)
       '"readme": ' .. (n.readme and str(n.readme) or "null"),
       '"types": ' .. json.encode(n.types),
       '"types_detail": ' .. (n.types_detail and json.encode(n.types_detail) or "null"),
+      '"functions": ' .. json.encode(n.functions),
       '"export": ' .. (n.export and str(n.export) or "null"),
       '"parent": ' .. (n.parent and str(n.parent) or "null"),
       '"depth": ' .. tostring(n.depth),

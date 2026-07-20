@@ -176,6 +176,74 @@ local function check_orphans(ir, findings, opts)
   end
 end
 
+--- `@see` is only useful if its target actually resolves to something in the
+--- map — same reasoning as `dead-readme-link` for README links. A target
+--- resolves against a node's `module` path, a qualified `module.bare_name`,
+--- or a function's raw declared name (e.g. "M.scan_full", as written).
+---@param ir Lib.Docmap.IR
+---@param findings Lib.Docmap.Finding[]
+local function check_see_targets(ir, findings)
+  local known = {}
+  for _, id in ipairs(ir.order) do
+    local node = ir.nodes[id]
+    if node.module then
+      known[node.module] = true
+    end
+    for _, fn in ipairs(node.functions) do
+      known[fn.name] = true
+      if node.module then
+        -- "M.foo" -> "foo": this repo's universal local-table convention is
+        -- `local M = {}`, so a leading capitalized identifier + dot is the
+        -- table, not part of the function's own name. A bare `local function
+        -- foo` has no dot and passes through unchanged.
+        local bare = fn.name:gsub("^%u[%w_]*%.", "")
+        known[node.module .. "." .. bare] = true
+      end
+    end
+  end
+
+  for _, id in ipairs(ir.order) do
+    local node = ir.nodes[id]
+    for _, fn in ipairs(node.functions) do
+      for _, target in ipairs(fn.see) do
+        if not known[target] then
+          add(findings, "warn", "dead-see-target", id,
+            ("%s: @see target '%s' does not resolve to a known module or function"):format(fn.name, target))
+        end
+      end
+    end
+  end
+end
+
+--- Text-based heuristic, not a real arity check: counts comma-separated
+--- names in the raw signature parameter list and compares against the
+--- number of `@param` lines. Deliberately `info`, not `warn`/`error` — a
+--- complex signature (default-valued table unpacking, `...`) can make this
+--- heuristic wrong, and it should never be the thing that fails `--check`.
+---@param ir Lib.Docmap.IR
+---@param findings Lib.Docmap.Finding[]
+local function check_undocumented_params(ir, findings)
+  for _, id in ipairs(ir.order) do
+    local node = ir.nodes[id]
+    for _, fn in ipairs(node.functions) do
+      local inside = fn.signature:match("%((.-)%)")
+      if inside and inside ~= "" then
+        local declared = 0
+        for token in inside:gmatch("[^,]+") do
+          token = vim.trim(token)
+          if token ~= "" and token ~= "..." then
+            declared = declared + 1
+          end
+        end
+        if declared > #fn.params then
+          add(findings, "info", "undocumented-param", id,
+            ("%s has %d parameter(s) but only %d @param line(s)"):format(fn.name, declared, #fn.params))
+        end
+      end
+    end
+  end
+end
+
 ---Run every check and return findings sorted by severity.
 ---@param ir Lib.Docmap.IR
 ---@param opts Lib.Docmap.Opts
@@ -188,6 +256,8 @@ function M.run(ir, opts)
   check_readmes(ir, findings)
   check_readme_links(ir, findings, opts)
   check_orphans(ir, findings, opts)
+  check_see_targets(ir, findings)
+  check_undocumented_params(ir, findings)
 
   for _, extra in ipairs(opts.extra_checks or {}) do
     for _, f in ipairs(extra(ir, opts) or {}) do
