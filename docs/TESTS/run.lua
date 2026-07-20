@@ -22,6 +22,7 @@ local specs = {
   "context_spec.lua",
   "cache_spec.lua",
   "composer_spec.lua",
+  "docmap_spec.lua",
 }
 
 local failed = 0

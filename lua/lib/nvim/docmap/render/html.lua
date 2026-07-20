@@ -94,6 +94,7 @@ main{grid-template-columns:minmax(300px,1.1fr) minmax(0,1.4fr);gap:0;align-items
 .bd{font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;padding:1px 5px;
   border-radius:4px;border:1px solid var(--line);color:var(--muted)}
 .bd.rd{color:var(--accent);border-color:var(--accent)}
+.bd.dep{color:var(--error);border-color:var(--error)}
 .kids{margin-left:15px;border-left:1px solid var(--line);padding-left:3px}
 .kids.hide{display:none}
 #detail{padding:22px 26px 60px;max-height:calc(100vh - 132px);overflow:auto}
@@ -113,6 +114,19 @@ main{grid-template-columns:minmax(300px,1.1fr) minmax(0,1.4fr);gap:0;align-items
 .lst{list-style:none;margin:0;padding:0}
 .lst li{font-family:var(--mono);font-size:12.5px;padding:2px 0;color:var(--muted)}
 .empty{color:var(--muted);font-size:13.5px;font-style:italic}
+.fn{margin-bottom:14px;padding-bottom:12px;border-bottom:1px dashed var(--line)}
+.fn:last-child{border-bottom:0;padding-bottom:0;margin-bottom:0}
+.fn-sig{font-family:var(--mono);font-size:12.5px;color:var(--ink);font-weight:600}
+.fn-badges{display:inline-flex;gap:4px;margin-left:8px;vertical-align:middle}
+.fn-desc{font-size:12.5px;color:var(--muted);margin:4px 0}
+.fn-dep{color:var(--error);font-size:11.5px;font-weight:600;margin:4px 0}
+.fn-plist{list-style:none;margin:4px 0;padding:0;font-size:11.5px}
+.fn-plist li{padding:1px 0}
+.fn-plist code{background:none;padding:0;color:var(--accent)}
+.fn-ex{font-family:var(--mono);font-size:11.5px;white-space:pre-wrap;background:var(--accent-soft);
+  border-radius:6px;padding:8px 10px;margin-top:6px;overflow-x:auto}
+.fn-see a{color:var(--accent);text-decoration:none}
+.fn-see a:hover{text-decoration:underline}
 code{font-family:var(--mono);font-size:.92em;background:var(--accent-soft);
   padding:1px 4px;border-radius:4px}
 #findings{padding:0 24px 50px}
@@ -170,6 +184,23 @@ local JS = [[
   var classByName = {};
   IR.nodes.forEach(function(n){
     (n.types_detail || []).forEach(function(t){ classByName[t.name] = { info: t, nodeId: n.id }; });
+  });
+
+  // @see target -> owning node id. Same three resolution shapes as
+  // docmap.check's check_see_targets, kept in sync deliberately: a bare
+  // module path, "module.bareName" (the qualified form a reader would
+  // actually write), and the raw declared name (e.g. "M.scan_full") as a
+  // fallback for targets copy-pasted straight from source.
+  var seeIndex = {};
+  IR.nodes.forEach(function(n){
+    if(n.module) seeIndex[n.module] = n.id;
+    (n.functions || []).forEach(function(fn){
+      seeIndex[fn.name] = n.id;
+      if(n.module){
+        var bare = fn.name.replace(/^[A-Z][\w]*\./, "");
+        seeIndex[n.module + "." + bare] = n.id;
+      }
+    });
   });
 
   var repo = IR.meta.repo_url, branch = IR.meta.branch || "main";
@@ -376,6 +407,49 @@ local JS = [[
       h.push('</ul>');
     }
 
+    if(n.functions && n.functions.length){
+      h.push('<div class="sec">Functions ('+n.functions.length+')</div>');
+      n.functions.forEach(function(fn){
+        h.push('<div class="fn">');
+        var badges = [];
+        if(fn.deprecated !== undefined) badges.push('<span class="bd dep">deprecated</span>');
+        if(fn.async) badges.push('<span class="bd">async</span>');
+        if(fn.nodiscard) badges.push('<span class="bd">nodiscard</span>');
+        if(fn.since) badges.push('<span class="bd">since '+esc(fn.since)+'</span>');
+        h.push('<div class="fn-sig">'+esc(fn.signature)
+          +(badges.length?'<span class="fn-badges">'+badges.join("")+'</span>':'')+'</div>');
+        if(fn.deprecated){ h.push('<div class="fn-dep">⚠ Deprecated: '+esc(fn.deprecated)+'</div>'); }
+        if(fn.summary){ h.push('<div class="fn-desc">'+esc(fn.summary)+'</div>'); }
+        if(fn.params && fn.params.length){
+          h.push('<ul class="fn-plist">');
+          fn.params.forEach(function(p){
+            h.push('<li><code>'+esc(p.name)+(p.optional?'?':'')+'</code> '+esc(p.type)
+              +(p.desc?' — '+esc(p.desc):'')+'</li>');
+          });
+          h.push('</ul>');
+        }
+        if(fn.returns && fn.returns.length){
+          h.push('<ul class="fn-plist">');
+          fn.returns.forEach(function(r){
+            h.push('<li>→ <code>'+esc(r.type)+'</code>'+(r.name?' '+esc(r.name):'')
+              +(r.desc?' — '+esc(r.desc):'')+'</li>');
+          });
+          h.push('</ul>');
+        }
+        if(fn.see && fn.see.length){
+          var seeLinks = fn.see.map(function(target){
+            var targetId = seeIndex[target];
+            return targetId
+              ? '<a href="#" data-see-target="'+esc(targetId)+'">'+esc(target)+'</a>'
+              : '<span title="unresolved">'+esc(target)+'</span>';
+          });
+          h.push('<div class="fn-desc fn-see">See also: '+seeLinks.join(", ")+'</div>');
+        }
+        if(fn.example){ h.push('<div class="fn-ex">'+esc(fn.example)+'</div>'); }
+        h.push('</div>');
+      });
+    }
+
     var kids = (n.children||[]).map(function(i){return byId[i];}).filter(Boolean);
     if(kids.length){
       h.push('<div class="sec">Contains ('+kids.length+')</div><ul class="lst">');
@@ -399,6 +473,13 @@ local JS = [[
         navigate({ tab: "hierarchy", center: n.id });
       });
     }
+
+    detailEl.querySelectorAll("a[data-see-target]").forEach(function(a){
+      a.addEventListener("click", function(ev){
+        ev.preventDefault();
+        navigate({ tab: "tree", id: a.dataset.seeTarget });
+      });
+    });
   }
 
   treeEl.appendChild(renderNode(byId[IR.root]));

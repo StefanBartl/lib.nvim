@@ -47,6 +47,7 @@
 ---@field depth integer Distance from the root node.
 ---@field children string[] Child node ids, directories first, then files.
 ---@field types_detail Lib.Docmap.TypeInfo[]? `@class`/`@alias` detail for this node's `types` files, from `lua-language-server --doc`. `nil` when LuaLS enrichment did not run; `{}` is a real "ran, found nothing here" result.
+---@field functions Lib.Docmap.FunctionInfo[] Documented functions found in this node's own source file (not its `@types/` files). Always an array, never nil — unlike `types_detail`, this runs unconditionally as part of `scan()`, no LuaLS required.
 
 ---A single `@class`/`@alias` parsed from `lua-language-server --doc` output,
 ---attached to whichever node owns the file it's defined in.
@@ -61,6 +62,40 @@
 ---@field name string
 ---@field view string Raw LuaCATS type text, e.g. "table<string, Lib.Docmap.Node>".
 ---@field desc string
+
+---One `---@param` on a documented function.
+---@class Lib.Docmap.ParamInfo
+---@field name string
+---@field type string Raw LuaCATS type text.
+---@field optional boolean Declared as `name?`.
+---@field desc string
+
+---One `---@return` on a documented function. LuaLS allows a bare type with no
+---name (`---@return boolean`); `name` is nil in that case.
+---@class Lib.Docmap.ReturnInfo
+---@field type string Raw LuaCATS type text.
+---@field name string?
+---@field desc string
+
+---A single documented function, extracted via `lib.nvim.docmap.functions`
+---(a `vim.treesitter` query, not `lua-language-server --doc` — see that
+---module's header for why). Attached to whichever node owns the file it's
+---defined in.
+---@class Lib.Docmap.FunctionInfo
+---@field name string Qualified name as written, e.g. "M.scan_full" or "M.bar".
+---@field signature string Name + parameter list, e.g. "scan_full(opts)".
+---@field summary string One-line prose from the doc block, if any.
+---@field line integer 1-based line the function definition starts on.
+---@field params Lib.Docmap.ParamInfo[]
+---@field returns Lib.Docmap.ReturnInfo[]
+---@field generic string[] `@generic` type names, if any.
+---@field deprecated string? `@deprecated` text; nil when not deprecated.
+---@field async boolean
+---@field nodiscard boolean
+---@field see string[] Raw `@see` targets, unresolved — `docmap.check` validates them.
+---@field overload string[] Raw `@overload` signatures, unparsed (rendered as-is).
+---@field example string? `@example` block text, if any.
+---@field since string? `@since` text, if any.
 
 ---A directed type-reference edge: `via` field on the class at `from` has a
 ---declared type that names the class at `to`. Only present when `opts.luals`
