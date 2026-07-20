@@ -1,0 +1,199 @@
+*lib.nvim-harvest.txt*   Collect from a scope, then show or export it
+
+lib.nvim.harvest                                          *lib.nvim-harvest*
+
+Building blocks for "collect something from a scope, then show or export it"
+features. Three independent pieces — `scope` turns a scope descriptor into
+lines with provenance, `render` turns rows into text, `sink` puts text
+somewhere. Use one, two, or all three; there is no pipeline object to buy
+into and no registry to register with.
+
+==============================================================================
+CONTENTS                                         *lib.nvim-harvest-contents*
+
+  1. Design ..................................... |lib.nvim-harvest-design|
+  2. Usage ....................................... |lib.nvim-harvest-usage|
+  3. Scope ....................................... |lib.nvim-harvest-scope|
+       resolve ......................... |lib.nvim-harvest-scope-resolve|
+       resolve_token ............. |lib.nvim-harvest-scope-resolve_token|
+  4. Render ..................................... |lib.nvim-harvest-render|
+       markdown_table ........... |lib.nvim-harvest-render-markdown_table|
+       csv ................................. |lib.nvim-harvest-render-csv|
+       lines ............................. |lib.nvim-harvest-render-lines|
+  5. Sink ......................................... |lib.nvim-harvest-sink|
+       clipboard ..................... |lib.nvim-harvest-sink-clipboard|
+       file ................................ |lib.nvim-harvest-sink-file|
+       scratch .......................... |lib.nvim-harvest-sink-scratch|
+       select ............................ |lib.nvim-harvest-sink-select|
+  6. Emit ......................................... |lib.nvim-harvest-emit|
+
+==============================================================================
+1. DESIGN                                          *lib.nvim-harvest-design*
+
+The middle step — deciding what counts as a hit — is domain logic and stays
+with the caller. The two steps AROUND it were being reimplemented every time.
+markdown.nvim alone carried two near-identical scope collectors, each with
+its own file filter, ignore handling, and "read the file, remember which file
+it was" bookkeeping.
+
+Deliberately NOT provided: a `run({ collect, transform, present })`
+framework. Wrapping a four-line `for` loop in injected callbacks buys
+ceremony, not reuse.
+
+A Source carries provenance, not just text: >lua
+
+    ---@class Lib.Harvest.Source
+    ---@field file  string|nil   absolute path, when read from disk
+    ---@field bufnr integer|nil  buffer it came from, when applicable
+    ---@field lines string[]
+    ---@field first integer      1-based line number of lines[1]
+<
+`first` is what lets a caller report real line numbers for a partial scan.
+Without it, every hit inside a Visual selection would be reported as if the
+selection started at line 1.
+
+==============================================================================
+2. USAGE                                            *lib.nvim-harvest-usage*
+>lua
+    local harvest = require("lib.nvim.harvest")
+
+    local sources = harvest.scope.resolve_token("cwd", { match = "%.md$" })
+
+    local rows = {}
+    for _, src in ipairs(sources) do
+      for i, line in ipairs(src.lines) do
+        if line:match("TODO") then
+          rows[#rows + 1] = { src.file or "[buffer]", src.first + i - 1, line }
+        end
+      end
+    end
+
+    harvest.emit(
+      harvest.render.markdown_table({ "File", "Line", "Text" }, rows),
+      "table"
+    )
+<
+==============================================================================
+3. SCOPE                                            *lib.nvim-harvest-scope*
+
+`require("lib.nvim.harvest.scope")`
+
+Scope kinds:
+
+    buffer    the current (or `opts.bufnr`) buffer
+    buffers   every listed, loaded buffer
+    range     a line range of one buffer (`opts.line1`/`opts.line2`)
+    cwd       every matching file under |getcwd()|
+    path      a single file, or every matching file under a directory
+
+Options (`Lib.Harvest.ScopeOpts`):
+
+    bufnr         buffer for "buffer"/"range"; defaults to the current one
+    line1, line2  1-based inclusive bounds for "range"
+    path          file or directory for "path" (required for that kind)
+    recursive     descend into subdirectories; default true
+    match         Lua pattern the basename must match, e.g. "%.md$"
+    ignore        prune predicate; defaults to lib.nvim's shared ignore list
+    max_files     stop after this many files; default 2000
+    max_filesize  skip files larger than this; default 1 MiB
+
+Files that are unreadable, oversized, or binary (a NUL-byte probe) are
+skipped rather than raising, so one stray .png cannot abort a whole harvest.
+CRLF is normalized, and a trailing newline does not produce a phantom final
+line.
+
+resolve({kind}, {opts})                     *lib.nvim-harvest-scope-resolve*
+
+    Resolve {kind} into sources. Returns `sources, err`. >lua
+
+        scope.resolve("buffer")
+        scope.resolve("range", { line1 = 10, line2 = 20 })
+        scope.resolve("cwd", { match = "%.md$" })
+        scope.resolve("path", { path = "~/notes", recursive = false })
+<
+resolve_token({token}, {opts})        *lib.nvim-harvest-scope-resolve_token*
+
+    Treat a free-form token the way a user command receives it: "" and "%"
+    mean the current buffer, "cwd"/"buffers"/"range" mean themselves, and
+    anything else is taken as a path. Returns `sources, err`.
+
+==============================================================================
+4. RENDER                                          *lib.nvim-harvest-render*
+
+`require("lib.nvim.harvest.render")`
+
+markdown_table({headers}, {rows}, {opts})
+                                     *lib.nvim-harvest-render-markdown_table*
+
+    Render a GFM table. {opts}.align is a per-column list of "l"|"c"|"r",
+    defaulting to all-left. >lua
+
+        render.markdown_table({ "File", "Link" }, rows, { align = { "l", "r" } })
+<
+    Column widths are measured with |strdisplaywidth()|, not `#`, so
+    multibyte and double-width text still lines up. Cell content is
+    flattened to one line and `|` is escaped — an unescaped pipe would
+    silently split one cell into two.
+
+csv({headers}, {rows}, {sep})                   *lib.nvim-harvest-render-csv*
+
+    Render delimiter-separated values, {sep} defaulting to ",". Fields
+    containing the separator, a quote, or a newline are quoted with their
+    quotes doubled (RFC 4180). Pass nil {headers} to omit the header row.
+
+lines({rows}, {sep})                          *lib.nvim-harvest-render-lines*
+
+    Render rows as plain lines, joining each row's cells with {sep}
+    (default two spaces).
+
+==============================================================================
+5. SINK                                              *lib.nvim-harvest-sink*
+
+`require("lib.nvim.harvest.sink")`
+
+clipboard({text})                           *lib.nvim-harvest-sink-clipboard*
+
+    Copy {text} to the system clipboard. Returns `ok, err`.
+
+file({text}, {path})                             *lib.nvim-harvest-sink-file*
+
+    Write {text} to {path}, creating parent directories. Returns `ok, err`.
+
+scratch({text}, {opts})                       *lib.nvim-harvest-sink-scratch*
+
+    Show {text} in a throwaway scratch buffer. {opts}: `title`, `filetype`
+    (default "markdown"), `split` ("split"|"vsplit"|"tab"|"current").
+
+    The buffer is `buflisted = false` + `bufhidden = wipe` on purpose: a
+    results view is not a document, so it stays out of |:ls|, out of buffer
+    pickers, and out of session files, and disappears with its window.
+
+select({items}, {opts}, {on_choose})           *lib.nvim-harvest-sink-select*
+
+    Present {items} and call `on_choose(item, idx)` with the pick. {opts}:
+    `prompt`, `format`. Prefers |lib.nvim-kit| `select`, falling back to
+    |vim.ui.select()|.
+
+==============================================================================
+6. EMIT                                              *lib.nvim-harvest-emit*
+
+emit({text}, {out}, {opts})
+
+    Send {text} to the sink named by {out}. The one convenience offered,
+    because mapping a user-supplied `out=` token to a sink is the part that
+    would otherwise be copy-pasted verbatim. Returns `ok, err`. >lua
+
+        harvest.emit(text, "clipboard")
+        harvest.emit(text, "file:/tmp/out.md")
+        harvest.emit(text, "table", { title = "Results" })
+<
+    Recognized: "buffer"/"table" (scratch buffer), "clipboard"/"clip",
+    "echo", and "file:<path>" (or "file" with `opts.path`).
+
+outputs()
+
+    The output tokens `emit` understands, as a list — for command
+    completion.
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:

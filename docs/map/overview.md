@@ -3,7 +3,7 @@
 > **Generated** by `lib.nvim.docmap`. Do not edit by hand — run `:LibMap`
 > (or `nvim --headless -l scripts/gen_map.lua`) to regenerate.
 
-**124 modules** · 24 namespaces · 117 helper files
+**125 modules** · 24 namespaces · 120 helper files
 
 The [interactive map](index.html) has filtering, full descriptions and
 source links; this page is the version the code host renders directly.
@@ -41,6 +41,7 @@ flowchart LR
   nlua_lib_nvim_dotrepeat["dotrepeatbr/smallWire native Vim `.`-repeat through the…/small"]
   nlua_lib_nvim_fs["fs"]
   nlua_lib_nvim_git["gitbr/smallGit utility helpers for Neovim./small"]
+  nlua_lib_nvim_harvest["harvestbr/smallBuilding blocks for 'collect something from…/small"]
   nlua_lib_nvim_logger["loggerbr/smallStructured logging, diagnostics and crash…/small"]
   nlua_lib_nvim_lua_ls["lua_ls"]
   nlua_lib_nvim_map["mapbr/small============================================…/small"]
@@ -105,6 +106,7 @@ flowchart LR
   nlua_lib_nvim --> nlua_lib_nvim_dotrepeat
   nlua_lib_nvim --> nlua_lib_nvim_fs
   nlua_lib_nvim --> nlua_lib_nvim_git
+  nlua_lib_nvim --> nlua_lib_nvim_harvest
   nlua_lib_nvim --> nlua_lib_nvim_logger
   nlua_lib_nvim --> nlua_lib_nvim_lua_ls
   nlua_lib_nvim --> nlua_lib_nvim_map
@@ -245,6 +247,7 @@ flowchart LR
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.write.batch` | Write many files asynchronously and invoke one callback when all of them have finished (success or failure). | [README](../../lua/lib/nvim/fs/write/batch/README.md) · [src](../../lua/lib/nvim/fs/write/batch/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.write.to_file` |  | [src](../../lua/lib/nvim/fs/write/to_file/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.git` | Git utility helpers for Neovim. | [src](../../lua/lib/nvim/git/init.lua) |
+| &nbsp;&nbsp;`lib.nvim.harvest` | Building blocks for "collect something from a scope, then show or export it" features. | [README](../../lua/lib/nvim/harvest/README.md) · [src](../../lua/lib/nvim/harvest/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.logger` | Structured logging, diagnostics and crash dumps for lib.nvim plugins. | [README](../../lua/lib/nvim/logger/README.md) · [src](../../lua/lib/nvim/logger/init.lua) |
 | &nbsp;&nbsp;`lua_ls` |  |  |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.lua_ls.get_module_path` | Convert file path to Lua module path | [src](../../lua/lib/nvim/lua_ls/get_module_path/init.lua) |
