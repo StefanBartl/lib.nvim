@@ -56,6 +56,7 @@
 ---@field desc?  string
 ---@field bang?  boolean                             # honor :Verb! for this route
 ---@field range? boolean|integer
+---@field count? integer                             # accept a :N Verb count prefix, defaulting to this value when omitted (see nvim_create_user_command's `count`)
 
 --- The full spec passed to `composer.verb(name, spec)`.
 ---@class Lib.UserCmd.Composer.Spec
@@ -64,6 +65,7 @@
 ---@field routes?  Lib.UserCmd.Composer.Route[]
 ---@field bang?    boolean                                   # allow the bang form at the command level (default: true if any route uses it)
 ---@field range?   boolean|integer                           # allow a range at the command level
+---@field count?   integer                                   # allow a :N Verb count prefix at the command level, default value when omitted
 ---@field buffer?  boolean|integer                           # register buffer-locally: true = current buffer, or an explicit bufnr. Default: nil (global)
 
 --- Handler context. Carries coerced args plus the raw command modifiers so

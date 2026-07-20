@@ -334,6 +334,31 @@ return function(H)
     eq(captured.line2, 9, "ctx.range.line2 reaches the handler")
   end
 
+  -- ------------------------------------------------------- count prefix (:N Verb)
+  -- Same "route-level opt-in must reach the real registration" shape as
+  -- range/bang above (Phase 8, added for fileops.nvim's `:N File next`).
+  do
+    local captured_count
+    composer.verb("ComposerSpecCount", {
+      count = 0,
+      routes = { { path = { "go" }, run = function(ctx) captured_count = ctx.range.count end } },
+    })
+    vim.cmd("5ComposerSpecCount go")
+    eq(captured_count, 5, "count=0 registers a :N Verb prefix that reaches ctx.range.count")
+    vim.cmd("ComposerSpecCount go")
+    eq(captured_count, 0, "omitted count prefix falls back to spec.count's default")
+    pcall(vim.api.nvim_del_user_command, "ComposerSpecCount")
+  end
+
+  do
+    composer.verb("ComposerSpecRouteCount", {
+      routes = { { path = { "go" }, count = 3, run = function() end } },
+    })
+    local ok_call = pcall(vim.cmd, "7ComposerSpecRouteCount go")
+    ok(ok_call, "route.count=3 (no spec.count) still propagates to the real user command (wants_count)")
+    pcall(vim.api.nvim_del_user_command, "ComposerSpecRouteCount")
+  end
+
   -- ------------------------------------------------------- buffer-local commands
   do
     local buf1 = vim.api.nvim_create_buf(false, true)

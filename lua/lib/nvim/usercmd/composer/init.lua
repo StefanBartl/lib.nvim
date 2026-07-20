@@ -83,6 +83,24 @@ local function wants_range(spec)
   return nil
 end
 
+--- Whether the command should accept a `:N Verb` count prefix: explicit
+--- spec.count wins, otherwise the first route to opt in wins (same
+--- single-command-level-option reasoning as wants_range — nvim_create_user_command
+--- has one `count`, not one per route).
+---@param spec Lib.UserCmd.Composer.Spec
+---@return integer|nil
+local function wants_count(spec)
+  if spec.count ~= nil then
+    return spec.count
+  end
+  for _, route in ipairs(spec.routes or {}) do
+    if route.count ~= nil then
+      return route.count
+    end
+  end
+  return nil
+end
+
 --- Build a handle for a registered verb.
 ---@param name string
 ---@param spec Lib.UserCmd.Composer.Spec
@@ -131,6 +149,7 @@ local function register(name, spec)
     nargs = "*",
     bang = wants_bang(spec),
     range = wants_range(spec),
+    count = wants_count(spec),
     buffer = spec.buffer,
     complete = complete.make(function()
       return root
@@ -168,6 +187,12 @@ local function make_builder(name)
 
   function builder:range(v)
     spec.range = (v == nil) and true or v
+    return self
+  end
+
+  --- Accept a :N Verb count prefix, defaulting to `v` (default 0) when omitted.
+  function builder:count(v)
+    spec.count = (v == nil) and 0 or v
     return self
   end
 
