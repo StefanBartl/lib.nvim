@@ -252,6 +252,47 @@ return function(H)
   eq(uv.fs_stat(tmp .. "/mut/moved.txt"), nil, "cross.fs.mutate: the file is gone")
   ok(not mutate.delete_file(tmp .. "/mut/ghost.txt"), "cross.fs.mutate: deleting a missing file fails cleanly")
 
+  -- Retry layer. Driven through mutate.retry with a fake op rather than a real
+  -- locked file: a genuine EPERM needs a second process holding a handle, which
+  -- is not reproducible in a headless spec (and not at all off Windows).
+  local prev_attempts = mutate.defaults.attempts
+  mutate.defaults.attempts = 3
+
+  local tries = 0
+  local r_ok = mutate.retry(function()
+    tries = tries + 1
+    if tries < 3 then return false, "EPERM: operation not permitted" end
+    return true, nil
+  end)
+  ok(r_ok, "mutate.retry: a transient EPERM is retried until it succeeds")
+  eq(tries, 3, "mutate.retry: it took exactly the expected number of attempts")
+
+  tries = 0
+  local n_ok, n_err = mutate.retry(function()
+    tries = tries + 1
+    return false, "ENOENT: no such file or directory"
+  end)
+  ok(not n_ok, "mutate.retry: a non-transient error fails")
+  eq(tries, 1, "mutate.retry: a non-transient error is not retried")
+  ok(n_err:match("ENOENT") ~= nil, "mutate.retry: the original error is returned")
+
+  tries = 0
+  local e_ok, e_err = mutate.retry(function()
+    tries = tries + 1
+    return false, "EBUSY: resource busy or locked"
+  end)
+  ok(not e_ok, "mutate.retry: exhausting all attempts fails")
+  eq(tries, 3, "mutate.retry: it stops after `attempts` tries")
+  ok(e_err:match("EBUSY") ~= nil, "mutate.retry: the last attempt's error is returned")
+
+  local hooks = 0
+  mutate.retry(function() return false, "EACCES: permission denied" end, {
+    on_retry = function() hooks = hooks + 1 end,
+  })
+  eq(hooks, 2, "mutate.retry: on_retry fires between attempts, not after the last")
+
+  mutate.defaults.attempts = prev_attempts
+
   local scan_roots = require("lib.nvim.fs.scan_roots")
   eq(#scan_roots.scan({ tmp .. "/walk" }, { ignore_dirs = { "skipme" } }), 1,
     "scan_roots: honors ignore_dirs")

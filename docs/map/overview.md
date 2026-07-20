@@ -193,7 +193,7 @@ flowchart LR
 | &nbsp;&nbsp;&nbsp;&nbsp;`fs` |  |  |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs._cwd` | Resolve the current working directory via libuv, compatible across NVIM versions. | [src](../../lua/lib/nvim/cross/fs/_cwd/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs.expand_path` | Expand `~`, `$VAR` (POSIX) and `%VAR%` (Windows) references in a raw path string. | [src](../../lua/lib/nvim/cross/fs/expand_path/init.lua) |
-| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs.mutate` | Injection-safe file mutation primitives, built directly on libuv (no shell involved) — safe to use with untrusted/user-controlled paths. | [src](../../lua/lib/nvim/cross/fs/mutate/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs.mutate` | Injection-safe file mutation primitives, built directly on libuv (no shell involved) — safe to use with untrusted/user-controlled paths. | [README](../../lua/lib/nvim/cross/fs/mutate/README.md) · [src](../../lua/lib/nvim/cross/fs/mutate/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`separators` |  | [README](../../lua/lib/nvim/cross/fs/separators/README.md) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs.separators.collapse_dots` | Lexically collapse '.'/'..' segments and repeated separators in a path. | [src](../../lua/lib/nvim/cross/fs/separators/collapse_dots/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs.separators.drive_upper` | Uppercase a Windows drive-letter prefix ("c:/foo" -> "C:/foo"). | [src](../../lua/lib/nvim/cross/fs/separators/drive_upper/init.lua) |
@@ -299,7 +299,7 @@ flowchart LR
 
 ## Drift
 
-0 errors · 10 warnings · 128 info
+0 errors · 10 warnings · 127 info
 
 | Severity | Check | Message |
 |---|---|---|
@@ -315,7 +315,7 @@ flowchart LR
 | warn | `missing-summary` | lua/lib/nvim/normalize/validators.lua has ---@module but no description line |
 
 <details>
-<summary>128 informational findings</summary>
+<summary>127 informational findings</summary>
 
 
 | Check | Message |
@@ -341,7 +341,6 @@ flowchart LR
 | `missing-readme` | lua/lib/nvim/cross/executable has no README.md |
 | `missing-readme` | lua/lib/nvim/cross/fs/_cwd has no README.md |
 | `missing-readme` | lua/lib/nvim/cross/fs/expand_path has no README.md |
-| `missing-readme` | lua/lib/nvim/cross/fs/mutate has no README.md |
 | `missing-readme` | lua/lib/nvim/cross/fs/separators/collapse_dots has no README.md |
 | `missing-readme` | lua/lib/nvim/cross/fs/separators/drive_upper has no README.md |
 | `missing-readme` | lua/lib/nvim/cross/fs/separators/has_win_sep has no README.md |
