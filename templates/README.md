@@ -1,4 +1,4 @@
-# nvim/templates
+# templates
 
 Copy-paste reference implementations for problems every `lib.nvim`-dependent
 plugin's headless test suite runs into. Nothing under this directory is
