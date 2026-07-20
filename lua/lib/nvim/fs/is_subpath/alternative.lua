@@ -1,4 +1,4 @@
----@module 'utils.path'
+---@module 'lib.nvim.fs.is_subpath.alternative'
 --- Utility helpers for path normalization and membership checks.
 --- Provides `norm` to canonicalize paths and `is_subpath` to test whether
 --- a candidate path is the same as or contained inside a base path.

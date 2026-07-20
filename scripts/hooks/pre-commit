@@ -1,0 +1,41 @@
+#!/usr/bin/env sh
+# Verify the module map is current and drift-free before a commit lands.
+#
+# Install (once, per clone — hooks are not versioned by git itself):
+#
+#   git config core.hooksPath scripts/hooks
+#
+# That points git at this directory instead of .git/hooks, so the hook is
+# shared through the repo and updates with it. To bypass a single commit:
+# `git commit --no-verify`.
+#
+# This hook only *checks*. It never regenerates and never stages: a hook that
+# writes into the commit it is validating produces diffs the author did not
+# intend, and misbehaves under `--amend` and rebase. When it fails, the fix is
+# one explicit command.
+
+set -e
+
+# Only worth running when Lua sources, docs or the generator itself changed.
+if ! git diff --cached --name-only | grep -qE '^(lua/|docs/map/|scripts/gen_map\.lua)'; then
+  exit 0
+fi
+
+if ! command -v nvim >/dev/null 2>&1; then
+  echo "pre-commit: nvim not found, skipping module map check." >&2
+  exit 0
+fi
+
+if nvim --headless -l scripts/gen_map.lua --check >/dev/null 2>&1; then
+  exit 0
+fi
+
+echo >&2
+echo "pre-commit: the module map is stale or has drift findings." >&2
+echo >&2
+nvim --headless -l scripts/gen_map.lua --check 2>&1 >/dev/null | sed 's/^/  /' >&2
+echo >&2
+echo "  Fix:     :LibMap   (or  nvim --headless -l scripts/gen_map.lua)" >&2
+echo "  Bypass:  git commit --no-verify" >&2
+echo >&2
+exit 1
