@@ -45,7 +45,7 @@ function M.count_listed_buffers()
   ---@type table[]
   local listed = getbufinfo({ buflisted = 1 })
   -- Debug notify; caller can remove or replace with logging.
-  vim.notify("Listed buffer: " .. tostring(#listed), vim.log.levels.DEBUG)
+  notify.debug("Listed buffer: " .. tostring(#listed))
   return #listed
 end
 

@@ -8,6 +8,7 @@ local M = {}
 local usercmd = require("lib.nvim.usercmd")
 local make_scratch = require("lib.nvim.window.make_scratch")
 local serialize = require("lib.nvim.logger.serialize")
+local notify = require("lib.nvim.notify").create("[lib.nvim.logger]")
 
 ---Collect recent records across all loggers, newest last, capped at `limit`.
 ---@param mod Lib.Logger
@@ -43,16 +44,13 @@ function M.install(mod)
 
     if sub == "on" then
       mod.set_enabled(true)
-      vim.notify("[lib.nvim.logger] enabled", vim.log.levels.INFO)
+      notify.info("enabled")
     elseif sub == "off" then
       mod.set_enabled(false)
-      vim.notify("[lib.nvim.logger] disabled (zero-cost)", vim.log.levels.INFO)
+      notify.info("disabled (zero-cost)")
     elseif sub == "level" then
       mod.set_level(rest)
-      vim.notify(
-        ("[lib.nvim.logger] global level -> %s"):format(tostring(rest)),
-        vim.log.levels.INFO
-      )
+      notify.info(("global level -> %s"):format(tostring(rest)))
     elseif sub == "dump" then
       local n = 0
       for _, inst in ipairs(mod.loggers()) do
@@ -60,21 +58,15 @@ function M.install(mod)
           n = n + 1
         end
       end
-      vim.notify(("[lib.nvim.logger] flushed %d file sink(s)"):format(n), vim.log.levels.INFO)
+      notify.info(("flushed %d file sink(s)"):format(n))
     elseif sub == "clear" then
       for _, inst in ipairs(mod.loggers()) do
         inst.clear()
       end
-      vim.notify("[lib.nvim.logger] cleared ring buffers", vim.log.levels.INFO)
+      notify.info("cleared ring buffers")
     elseif sub == "tags" then
       local t = mod.tags()
-      vim.notify(
-        ("[lib.nvim.logger] disabled=%s only=%s"):format(
-          vim.inspect(t.disabled),
-          vim.inspect(t.only)
-        ),
-        vim.log.levels.INFO
-      )
+      notify.info(("disabled=%s only=%s"):format(vim.inspect(t.disabled), vim.inspect(t.only)))
     else -- "show"
       local limit = tonumber(rest) or 50
       make_scratch({

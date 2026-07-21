@@ -1,6 +1,8 @@
 ---@module 'lib.nvim.buf_win_tab.buffer_utils'
 --- Utility library for inspecting and reacting to Neovim buffers.
 
+local notify = require("lib.nvim.notify").create("[lib.nvim.buf_win_tab.buffer_utils]")
+
 local M = {}
 
 -- Default filetypes and buffer-name fragments to exclude when deciding whether
@@ -39,7 +41,7 @@ function M.count_listed_buffers()
   -- Using getbufinfo({buflisted=1}) returns only listed buffers.
   local listed = vim.fn.getbufinfo({ buflisted = 1 })
   -- Debug notification is useful during development; this can be silenced by user.
-  vim.notify("Listed buffer: " .. tostring(#listed), vim.log.levels.DEBUG)
+  notify.debug("Listed buffer: " .. tostring(#listed))
   return #listed
 end
 

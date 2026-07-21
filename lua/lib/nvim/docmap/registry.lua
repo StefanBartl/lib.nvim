@@ -14,6 +14,8 @@
 --- never fight over registering the same command name — that collision was
 --- the actual bug this split avoids, not a hypothetical one.
 
+local notify = require("lib.nvim.notify").create("[docmap]")
+
 local M = {}
 
 ---@type table<string, { opts: Lib.Docmap.Opts, ir: Lib.Docmap.IR, findings: Lib.Docmap.Finding[], watchers: fun(ir: Lib.Docmap.IR, findings: Lib.Docmap.Finding[])[], augroup: integer?, debounce: Lib.Debounce.Handle?, handle: Lib.Docmap.Handle }>
@@ -33,7 +35,7 @@ local function notify_watchers(entry)
     local ok, err = pcall(cb, entry.ir, entry.findings)
     if not ok then
       vim.schedule(function()
-        vim.notify("[docmap] on_change subscriber errored: " .. tostring(err), vim.log.levels.WARN)
+        notify.warn("on_change subscriber errored: " .. tostring(err))
       end)
     end
   end
