@@ -16,6 +16,7 @@
 ---@field release       fun(paths: string|string[]): integer  Close handles on the given paths (and any subpath). Returns how many were released.
 ---@field with_release  fun(paths: string|string[], fn: fun(): any): any  release → fn → release again (catch watchers re-created during fn).
 ---@field count         fun(): integer                 Number of watchers currently tracked (diagnostics/tests).
+---@field list          fun(): { path: string, active: boolean, exists: boolean }[]  Sorted snapshot for diagnostics.
 ---@field clear         fun()                          Forget all tracked watchers without closing (tests).
 
 return {}

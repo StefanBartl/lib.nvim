@@ -33,6 +33,7 @@ return function(H)
   eq(watch.install(), false, "watch.install: false when neo-tree fs_watch absent")
   eq(watch.installed(), false, "watch.installed: false when not installed")
   eq(watch.count(), 0, "watch.count: empty registry")
+  eq(#watch.list(), 0, "watch.list: empty when nothing tracked")
   eq(watch.release("Z:/nope"), 0, "watch.release: no-op on empty registry")
   eq(watch.release({ "a", "b" }), 0, "watch.release: accepts a path list")
   eq(watch.with_release("x", function() return 7 end), 7,

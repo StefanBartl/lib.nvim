@@ -197,6 +197,24 @@ function M.count()
   return n
 end
 
+---Snapshot of the tracked watchers, for diagnostics (`:Filetree handles`, a
+---healthcheck). Sorted by path. `exists` flags a watcher still pointing at a
+---path that no longer exists on disk — the leak signature, since neo-tree left
+---a watcher behind on a moved/deleted directory.
+---@return { path: string, active: boolean, exists: boolean }[]
+function M.list()
+  local out = {}
+  for path, w in pairs(registry) do
+    out[#out + 1] = {
+      path   = path,
+      active = w.active == true,
+      exists = vim.fn.isdirectory(path) == 1 or vim.fn.filereadable(path) == 1,
+    }
+  end
+  table.sort(out, function(a, b) return a.path < b.path end)
+  return out
+end
+
 ---Forget all tracked watchers without closing their handles (tests only).
 function M.clear()
   registry = {}
