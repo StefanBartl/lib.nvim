@@ -21,6 +21,7 @@ local PROBE = {
   "lib.nvim.notify",
   "lib.nvim.logger",
   "lib.nvim.progress",
+  "lib.nvim.ui.kit",
   "lib.nvim.map",
   "lib.nvim.fs.is_dir",
   "lib.nvim.core",

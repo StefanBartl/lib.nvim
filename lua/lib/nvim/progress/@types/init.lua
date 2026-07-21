@@ -1,13 +1,14 @@
 ---@meta
 ---@module 'lib.nvim.progress.@types'
 
----@alias Lib.Progress.Style "auto"|"notify"|"statusline"|"fidget"|"float"
+---@alias Lib.Progress.Style "auto"|"notify"|"statusline"|"fidget"|"float"|"kit"
 
 ---@class Lib.Progress.Opts
 ---@field title? string Prefix shown in front of every message (default `""`)
 ---@field style? Lib.Progress.Style Renderer selection (default `"auto"`)
 ---@field delay_ms? integer Suppress the indicator until it has run this long (default `150`)
 ---@field level? integer `vim.log.levels.*` used by the `"notify"` style (default `INFO`)
+---@field kit_theme? string|table Preset name or partial override for the `"kit"` style; see `lib.nvim.ui.kit.theme` (default: the active default preset)
 
 ---Fields accepted by `Handle:update(...)`. All fields are optional and merge
 ---into the handle's running state; a field left `nil` keeps its previous value.

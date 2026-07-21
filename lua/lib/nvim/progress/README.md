@@ -29,12 +29,13 @@ Guiding ideas:
 ```
 lib.nvim.progress/
 ├── init.lua                 -- Handle: create(), delay-guard timer, cancel wiring
-├── resolve_style.lua        -- "auto" -> fidget || notify ("float" is opt-in only)
+├── resolve_style.lua        -- "auto" -> fidget || notify ("float"/"kit" are opt-in only)
 ├── styles/
 │   ├── notify.lua           -- default: vim.notify, in-place when backend supports replace
 │   ├── statusline.lua       -- headless: keeps text in memory, read via .active()
 │   ├── fidget.lua           -- optional fidget.nvim adapter
-│   └── float.lua            -- interactive floating window, cancel-with-confirm on <Esc>
+│   ├── float.lua            -- interactive floating window, cancel-with-confirm on <Esc>
+│   └── kit.lua              -- like "float", themed via lib.nvim.ui.kit's surface/preset system
 └── @types/                  -- LuaLS types
 ```
 
@@ -81,9 +82,10 @@ h:on_cancel(function() job:kill() end)   -- still your job to actually stop the 
 | Option     | Type      | Default   | Meaning                                              |
 | ---------- | --------- | --------- | ----------------------------------------------------- |
 | `title`    | `string`  | `""`      | prefix shown in front of every message                |
-| `style`    | `string`  | `"auto"`  | `"auto"` \| `"notify"` \| `"statusline"` \| `"fidget"` \| `"float"` |
+| `style`    | `string`  | `"auto"`  | `"auto"` \| `"notify"` \| `"statusline"` \| `"fidget"` \| `"float"` \| `"kit"` |
 | `delay_ms` | `integer` | `150`     | suppress the indicator until it has run this long      |
 | `level`    | `integer` | `INFO`    | `vim.log.levels.*` used by the `"notify"` style        |
+| `kit_theme`| `string\|table` | active default preset | preset name or partial override for the `"kit"` style, see [`lib.nvim.ui.kit`](../ui/kit/README.md) |
 
 ---
 
@@ -109,6 +111,7 @@ h:on_cancel(function() job:kill() end)   -- still your job to actually stop the 
 | `"statusline"`| headless — nothing is drawn; read `require("lib.nvim.progress.styles.statusline").active()` (`string[]`, oldest first) from your own statusline component. Calls `:redrawstatus` on every change so your component actually refreshes while you're idle, not just on the next unrelated redraw |
 | `"fidget"`    | delegates to `fidget.nvim`'s LSP-style progress handles                    |
 | `"float"`     | small floating window, bottom-right, `enter = false` (never steals focus); focus it and press `<Esc>` to ask for cancellation — opt-in only, see [Usage](#usage) |
+| `"kit"`       | same interaction model as `"float"`, but rendered via [`lib.nvim.ui.kit`](../ui/kit/README.md)'s themed `surface` — matches whatever preset/border/highlights the caller has configured for its other ui.kit popups instead of a fixed look. Pass `kit_theme` to pick a specific preset for this handle. Opt-in only, same reasoning as `"float"` |
 
 Adding a new style means adding one file under `styles/` that implements
 `start(spec, opts, request_cancel) -> state`, `update(state, spec, opts) -> state`,
