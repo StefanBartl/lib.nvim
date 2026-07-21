@@ -9,6 +9,7 @@
 
 local hl = require("lib.nvim.ui.hl")
 local config = require("lib.nvim.ui.kit.config")
+local autocmd = require("lib.nvim.autocmd")
 
 local M = {}
 
@@ -170,12 +171,15 @@ function M.setup(opts)
   -- change (set up once).
   if not M._colorscheme_hook then
     M._colorscheme_hook = true
+    -- Raw nvim_create_augroup on purpose, not autocmd.group(): its name ->
+    -- id cache would survive a hot-reload of just this module (which resets
+    -- _colorscheme_hook and re-enters this branch) without re-clearing,
+    -- leaving a stale duplicate callback registered.
     local group = vim.api.nvim_create_augroup("lib_ui_kit_theme", { clear = true })
-    vim.api.nvim_create_autocmd("ColorScheme", {
+    autocmd.create("ColorScheme", function()
+      pcall(materialize, M.resolve(nil))
+    end, {
       group = group,
-      callback = function()
-        pcall(materialize, M.resolve(nil))
-      end,
       desc = "lib.nvim.ui.kit: refresh theme highlight groups",
     })
   end
