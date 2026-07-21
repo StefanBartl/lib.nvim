@@ -28,9 +28,13 @@ local function resolve_style(want)
     return (require("lib.nvim.progress.styles.float"))
   end
 
+  if want == "kit" then
+    return (require("lib.nvim.progress.styles.kit"))
+  end
+
   -- "auto" (default) or unrecognized: prefer fidget, else notify.
-  -- "float" is opt-in only: it is more intrusive (an interactive window) and
-  -- must be requested explicitly, never picked automatically.
+  -- "float"/"kit" are opt-in only: both are more intrusive (an interactive
+  -- window) and must be requested explicitly, never picked automatically.
   if pcall(require, "fidget") then
     return (require("lib.nvim.progress.styles.fidget"))
   end

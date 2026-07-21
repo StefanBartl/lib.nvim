@@ -71,6 +71,8 @@ the background until confirmed: >lua
     "fidget"        delegates to fidget.nvim's LSP-style progress API
     "float"         small floating window (bottom-right, never steals focus);
                     focus it + <Esc> asks to cancel via request_cancel()
+    "kit"           same interaction as "float", themed via lib.nvim.ui.kit's
+                    surface/preset system; pass kit_theme to pick a preset
 
 ==============================================================================
 4. FUNCTIONS                                    *lib.nvim-progress-functions*
@@ -82,7 +84,7 @@ Create a new, independent progress handle. >lua
 
     local h = progress.create({
       title    = "[replacer]",
-      style    = "auto",     -- "auto" | "notify" | "statusline" | "fidget" | "float"
+      style    = "auto",     -- "auto" | "notify" | "statusline" | "fidget" | "float" | "kit"
       delay_ms = 150,
     })
 <
@@ -92,6 +94,8 @@ Options ~
     delay_ms    integer     suppress the indicator until it has run this
                             long (default 150)
     level       integer     vim.log.levels.* used by the "notify" style
+    kit_theme   string|table  preset name or partial override for the "kit"
+                            style (default: the active default preset)
 
 ==============================================================================
 5. HANDLE                                           *lib.nvim-progress-handle*
