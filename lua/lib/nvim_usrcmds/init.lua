@@ -9,6 +9,8 @@
 
 require("lib.nvim_usrcmds.@types")
 
+local notify = require("lib.nvim.notify").create("[lib.nvim_usrcmds]")
+
 local M = {}
 
 ---@type Lib.NvimUsrCmds.Options
@@ -35,7 +37,7 @@ end
 
 local function action_powershell_profile()
   if vim.fn.executable("powershell") ~= 1 then
-    vim.notify("[lib.nvim_usrcmds] PowershellProfile: powershell not available on this system", vim.log.levels.ERROR)
+    notify.error("PowershellProfile: powershell not available on this system")
     return
   end
   local res = vim.system(
@@ -46,7 +48,7 @@ local function action_powershell_profile()
   if path and path ~= "" then
     vim.cmd("edit " .. vim.fn.fnameescape(path))
   else
-    vim.notify("[lib.nvim_usrcmds] PowershellProfile: could not resolve profile path", vim.log.levels.ERROR)
+    notify.error("PowershellProfile: could not resolve profile path")
   end
 end
 

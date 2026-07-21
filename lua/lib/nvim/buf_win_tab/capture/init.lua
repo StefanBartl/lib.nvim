@@ -139,7 +139,7 @@ function M.capture(cmd, opts, cb)
   local start = uv.now()
   local timer = uv.new_timer()
   if not timer then
-    vim.notify("[BufWinCapture] timer is nil", 4)
+    notify.error("timer is nil")
     return nil
   end
 
