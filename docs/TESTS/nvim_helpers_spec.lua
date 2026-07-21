@@ -21,10 +21,22 @@ return function(H)
     "lib.nvim.cross", "lib.nvim.cross.fs.expand_path", "lib.nvim.cross.fs.mutate",
     "lib.nvim.cross.uv.spawn_capture", "lib.nvim.cross.uv.wait_until",
     "lib.nvim.window", "lib.nvim.core", "lib.nvim.git", "lib.nvim.normalize",
-    "lib.nvim.safe_api",
+    "lib.nvim.safe_api", "lib.nvim.neotree.node", "lib.nvim.neotree.watch",
   }) do
     ok(require(mod) ~= nil, "loads: " .. mod)
   end
+
+  -- ------------------------------------------------------- lib.nvim.neotree.watch
+  local watch = require("lib.nvim.neotree.watch")
+  -- Without neo-tree's fs_watch present, install() is a graceful no-op and the
+  -- registry stays empty, so release()/count() are safe to call unconditionally.
+  eq(watch.install(), false, "watch.install: false when neo-tree fs_watch absent")
+  eq(watch.installed(), false, "watch.installed: false when not installed")
+  eq(watch.count(), 0, "watch.count: empty registry")
+  eq(watch.release("Z:/nope"), 0, "watch.release: no-op on empty registry")
+  eq(watch.release({ "a", "b" }), 0, "watch.release: accepts a path list")
+  eq(watch.with_release("x", function() return 7 end), 7,
+    "watch.with_release: runs fn and returns its value")
 
   -- -------------------------------------------------------------- lib.nvim.token
   local token = require("lib.nvim.token")
