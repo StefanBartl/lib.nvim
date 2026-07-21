@@ -21,6 +21,7 @@ local config = require("lib.nvim.logger.config")
 local Ring = require("lib.nvim.logger.ring")
 local Record = require("lib.nvim.logger.record")
 local sinks = require("lib.nvim.logger.sinks")
+local autocmd = require("lib.nvim.autocmd")
 
 local unpack = table.unpack or unpack
 
@@ -266,12 +267,15 @@ function M.new(opts)
 
   -- Crash-capture safety net: flush the ring on editor exit.
   if opts.capture ~= false and inst.file then
+    -- Raw nvim_create_augroup on purpose, not autocmd.group(): that caches by
+    -- name and would stop re-clearing on a second logger.new() for the same
+    -- `name` (e.g. a hot-reloaded plugin), leaving the previous instance's
+    -- flush callback registered alongside the new one instead of replaced.
     local group = vim.api.nvim_create_augroup("lib_logger_" .. name, { clear = true })
-    vim.api.nvim_create_autocmd("VimLeavePre", {
+    autocmd.create("VimLeavePre", function()
+      pcall(inst.flush)
+    end, {
       group = group,
-      callback = function()
-        pcall(inst.flush)
-      end,
       desc = "lib.nvim.logger: flush ring buffer on exit",
     })
   end

@@ -15,6 +15,7 @@
 --- the actual bug this split avoids, not a hypothetical one.
 
 local notify = require("lib.nvim.notify").create("[docmap]")
+local autocmd = require("lib.nvim.autocmd")
 
 local M = {}
 
@@ -77,6 +78,11 @@ function M.install(opts)
   if opts.watch then
     local source_dir = root .. "/" .. (opts.source or "lua")
     local is_subpath = require("lib.nvim.fs.is_subpath")
+    -- Raw nvim_create_augroup on purpose, not autocmd.group(): uninstall()
+    -- below deletes this group by numeric id (nvim_del_augroup_by_id), which
+    -- autocmd.group()'s name -> id cache has no visibility into — a second
+    -- install() for the same root would hand back the now-stale cached id
+    -- instead of creating a fresh group.
     local group = vim.api.nvim_create_augroup("LibDocmapWatch:" .. root, { clear = true })
     local debounce = require("lib.nvim.debounce").new(function()
       rescan()
@@ -91,15 +97,14 @@ function M.install(opts)
     -- history has the same backslash bug on record), so scope with a cheap
     -- extension-only pattern and an explicit subpath check in the callback
     -- instead of trusting the glob engine with directory structure.
-    vim.api.nvim_create_autocmd({ "BufWritePost" }, {
+    autocmd.create({ "BufWritePost" }, function(args)
+      local buf_path = vim.api.nvim_buf_get_name(args.buf)
+      if buf_path ~= "" and is_subpath(buf_path, source_dir) then
+        debounce.call()
+      end
+    end, {
       group = group,
       pattern = "*.lua",
-      callback = function(args)
-        local buf_path = vim.api.nvim_buf_get_name(args.buf)
-        if buf_path ~= "" and is_subpath(buf_path, source_dir) then
-          debounce.call()
-        end
-      end,
     })
 
     entry.augroup = group

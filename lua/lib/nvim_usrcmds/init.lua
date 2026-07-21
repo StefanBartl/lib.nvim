@@ -10,6 +10,7 @@
 require("lib.nvim_usrcmds.@types")
 
 local notify = require("lib.nvim.notify").create("[lib.nvim_usrcmds]")
+local autocmd = require("lib.nvim.autocmd")
 
 local M = {}
 
@@ -59,11 +60,10 @@ end
 -- ── Flat commands (unchanged surface) ───────────────────────────────────────
 
 local function register_helptags()
-  vim.api.nvim_create_autocmd("User", {
-    pattern  = "LazyDone",
-    once     = true,
-    callback = function() action_helptags() end,
-    desc     = "[lib.nvim_usrcmds] regenerate helptags after lazy.nvim finishes loading",
+  autocmd.create("User", function() action_helptags() end, {
+    pattern = "LazyDone",
+    once    = true,
+    desc    = "[lib.nvim_usrcmds] regenerate helptags after lazy.nvim finishes loading",
   })
 end
 
