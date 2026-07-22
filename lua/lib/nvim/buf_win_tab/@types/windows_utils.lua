@@ -58,7 +58,7 @@
 ---
 ---@field get_buffers_grouped_by_filetype fun(): table<string, integer[]> # Group buffer IDs by filetype. Maps filetype string → array of buffer IDs. Buffers with no filetype grouped under "[no_ft]". Returns table with filetype keys and buffer ID arrays. Useful for filetype-specific operations.
 ---
----@field get_current_buffer_info fun(): WinInfo # Get metadata for current buffer. Uses nvim_get_current_buf() and nvim_buf_get_option. Safely handles API errors via pcall. Returns normalized WinInfo structure.
+---@field get_current_buffer_info fun(): WinInfo # Get metadata for current buffer. Uses nvim_get_current_buf() and nvim_get_option_value(). Safely handles API errors via pcall. Returns normalized WinInfo structure.
 ---
 ---@field get_tabpage_buffers fun(tabnr?: integer): integer[] # Get buffer IDs visible in specified tabpage (or current if nil). Iterates windows in tabpage and collects unique buffer IDs. Returns deduplicated array of buffer IDs. Useful for tabpage-scoped operations.
 ---
@@ -75,13 +75,13 @@
 -- =========================================================
 
 --- Platform Detection:
---- - Uses vim.loop.os_uname() to detect Windows/MSYS/Cygwin
+--- - Uses vim.uv.os_uname() to detect Windows/MSYS/Cygwin
 --- - Fallback: treats unknown as "unix"
 --- - No behavioral differences based on platform (pure detection)
 ---
 --- Safe API Usage:
 --- - All vim.fn.getbufinfo() calls wrapped in pcall
---- - All nvim_buf_get_option() calls wrapped in pcall
+--- - All nvim_get_option_value() calls wrapped in pcall
 --- - Invalid buffers/windows return normalized empty values
 --- - No errors thrown for unloaded/deleted objects
 ---

@@ -13,7 +13,7 @@ local M = {}
 ---@return boolean
 local function is_windows()
   -- Return true when running on Windows (MSYS/Cygwin/Windows native)
-  local ok, uname = pcall(vim.loop.os_uname)
+  local ok, uname = pcall(vim.uv.os_uname)
   if not ok or not uname or not uname.sysname then
     return false
   end

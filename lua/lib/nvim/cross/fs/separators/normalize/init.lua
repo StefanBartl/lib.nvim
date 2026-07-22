@@ -11,10 +11,10 @@ return function (path)
     "[lib.nvim.normalize.os_sep] parameter 'path' must be type of string, but is " .. type(path)
   )
 
-  -- use vim.loop.os_uname() to detect Windows.
+  -- use vim.uv.os_uname() to detect Windows.
   -- Some systems expose "Windows" in version; using sysname may be more direct on some platforms.
   local is_windows = false
-  local ok, osu = pcall(vim.loop.os_uname)
+  local ok, osu = pcall(vim.uv.os_uname)
   if ok and type(osu) == "table" and osu.version then
     is_windows = osu.version:match("Windows") and true or false
   elseif ok and type(osu) == "table" and osu.sysname then
