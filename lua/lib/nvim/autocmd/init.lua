@@ -67,7 +67,8 @@ function M.create(event, callback, opts)
   callback = function(args)
     local ok, err = pcall(user_cb, args)
     if not ok then
-      notify.error(("Autocmd failed (%s):\n%s"):format( table.concat(vim.tbl_flatten({ event }), ", "), err ))
+      local event_names = table.concat(vim.iter({ event }):flatten():totable(), ", ")
+      notify.error(("Autocmd failed (%s):\n%s"):format(event_names, err))
     end
   end
 
