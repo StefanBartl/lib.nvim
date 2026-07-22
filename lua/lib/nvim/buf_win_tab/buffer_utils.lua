@@ -76,7 +76,7 @@ function M.get_buffer_info(bufnr)
   if not ok_name then
     name = ""
   end
-  local ok_ft, ft = pcall(vim.api.nvim_buf_get_option, bufnr, "filetype")
+  local ok_ft, ft = pcall(vim.api.nvim_get_option_value, "filetype", { buf = bufnr })
   if not ok_ft then
     ft = ""
   end
@@ -84,7 +84,7 @@ function M.get_buffer_info(bufnr)
   if not ok_listed then
     buflisted = 0
   end
-  local ok_mod, modified = pcall(vim.api.nvim_buf_get_option, bufnr, "modified")
+  local ok_mod, modified = pcall(vim.api.nvim_get_option_value, "modified", { buf = bufnr })
   if not ok_mod then
     modified = false
   end
@@ -167,7 +167,7 @@ function M.format_buffers_table(buftable)
   return table.concat(lines, "\n")
 end
 
--- Print a buffer table to the command line (uses vim.api.nvim_out_write so it appears in terminal).
+-- Print a buffer table to the command line.
 ---@param buftable table[] list of buffer info
 function M.print_buffers_table(buftable)
   local s = M.format_buffers_table(buftable)
@@ -190,9 +190,11 @@ end
 -- Convenience wrapper: print a compact summary of current buffers to the command line.
 function M.print_summary()
   local coll = M.collect_all_buffer_info()
-  vim.api.nvim_out_write(string.format("Listed: %d  RealListed: %d\n", coll.listed_count, coll.real_listed_count))
-  vim.api.nvim_out_write("Listed buffers:\n")
-  vim.api.nvim_out_write(coll.formatted_listed .. "\n")
+  vim.api.nvim_echo({
+    { string.format("Listed: %d  RealListed: %d\n", coll.listed_count, coll.real_listed_count) },
+    { "Listed buffers:\n" },
+    { coll.formatted_listed .. "\n" },
+  }, true, { err = false })
 end
 
 ---@type Lib.BufWinTab.BufferUtils

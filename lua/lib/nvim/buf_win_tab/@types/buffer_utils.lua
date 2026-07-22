@@ -58,7 +58,7 @@
 ---
 ---@field collect_all_buffer_info fun(): BufCollectedInfo # High-level collector: gathers all buffer information in one call. Includes: listed count, real listed count, listed buffer array, all buffer array, formatted table string. Returns comprehensive BufCollectedInfo structure. Useful for status displays and debugging.
 ---
----@field print_summary fun(): nil # Print compact buffer summary to command line. Shows: listed count, real listed count, formatted table of listed buffers. Uses nvim_out_write for immediate terminal output. Returns nothing.
+---@field print_summary fun(): nil # Print compact buffer summary to command line. Shows: listed count, real listed count, formatted table of listed buffers. Uses nvim_echo for terminal output. Returns nothing.
 
 -- =========================================================
 -- Technical Notes
