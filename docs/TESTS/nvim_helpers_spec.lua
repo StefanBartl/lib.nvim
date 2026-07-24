@@ -11,17 +11,35 @@ return function(H)
 
   -- Every new module must at least load cleanly.
   for _, mod in ipairs({
-    "lib.nvim.debounce", "lib.nvim.debounce.buffer", "lib.nvim.dotrepeat",
-    "lib.nvim.token", "lib.nvim.net.curl", "lib.nvim.cache",
-    "lib.nvim.fs.collect_recursive", "lib.nvim.fs.trash", "lib.nvim.fs.read",
-    "lib.nvim.fs.json", "lib.nvim.fs.scan_roots",
-    "lib.nvim.fs.write.async", "lib.nvim.fs.write.batch",
-    "lib.nvim.buf_win_tab.get_option", "lib.nvim.buf_win_tab.selection",
+    "lib.nvim.debounce",
+    "lib.nvim.debounce.buffer",
+    "lib.nvim.dotrepeat",
+    "lib.nvim.token",
+    "lib.nvim.net.curl",
+    "lib.nvim.cache",
+    "lib.nvim.fs.collect_recursive",
+    "lib.nvim.fs.trash",
+    "lib.nvim.fs.read",
+    "lib.nvim.fs.json",
+    "lib.nvim.fs.scan_roots",
+    "lib.nvim.fs.scan_cached",
+    "lib.nvim.fs.write.async",
+    "lib.nvim.fs.write.batch",
+    "lib.nvim.buf_win_tab.get_option",
+    "lib.nvim.buf_win_tab.selection",
     "lib.nvim.buf_win_tab.word_under_cursor",
-    "lib.nvim.cross", "lib.nvim.cross.fs.expand_path", "lib.nvim.cross.fs.mutate",
-    "lib.nvim.cross.uv.spawn_capture", "lib.nvim.cross.uv.wait_until",
-    "lib.nvim.window", "lib.nvim.core", "lib.nvim.git", "lib.nvim.normalize",
-    "lib.nvim.safe_api", "lib.nvim.neotree.node", "lib.nvim.neotree.watch",
+    "lib.nvim.cross",
+    "lib.nvim.cross.fs.expand_path",
+    "lib.nvim.cross.fs.mutate",
+    "lib.nvim.cross.uv.spawn_capture",
+    "lib.nvim.cross.uv.wait_until",
+    "lib.nvim.window",
+    "lib.nvim.core",
+    "lib.nvim.git",
+    "lib.nvim.normalize",
+    "lib.nvim.safe_api",
+    "lib.nvim.neotree.node",
+    "lib.nvim.neotree.watch",
   }) do
     ok(require(mod) ~= nil, "loads: " .. mod)
   end
@@ -36,8 +54,13 @@ return function(H)
   eq(#watch.list(), 0, "watch.list: empty when nothing tracked")
   eq(watch.release("Z:/nope"), 0, "watch.release: no-op on empty registry")
   eq(watch.release({ "a", "b" }), 0, "watch.release: accepts a path list")
-  eq(watch.with_release("x", function() return 7 end), 7,
-    "watch.with_release: runs fn and returns its value")
+  eq(
+    watch.with_release("x", function()
+      return 7
+    end),
+    7,
+    "watch.with_release: runs fn and returns its value"
+  )
 
   -- -------------------------------------------------------------- lib.nvim.token
   local token = require("lib.nvim.token")
@@ -47,9 +70,15 @@ return function(H)
   -- --------------------------------------------------------------- lib.nvim.core
   local core = require("lib.nvim.core")
   ok(core.has_exec("nvim"), "core.has_exec: finds nvim on PATH")
-  ok(not core.has_exec("definitely_not_a_real_binary_xyz"), "core.has_exec: rejects a missing binary")
-  eq(core.first_available({ "definitely_not_a_real_binary_xyz", "nvim" }), "nvim",
-    "core.first_available: skips missing candidates")
+  ok(
+    not core.has_exec("definitely_not_a_real_binary_xyz"),
+    "core.has_exec: rejects a missing binary"
+  )
+  eq(
+    core.first_available({ "definitely_not_a_real_binary_xyz", "nvim" }),
+    "nvim",
+    "core.first_available: skips missing candidates"
+  )
   eq(core.first_available({ "nope_xyz_abc" }), nil, "core.first_available: none available -> nil")
 
   -- ---------------------------------------------------------- lib.nvim.normalize
@@ -72,15 +101,23 @@ return function(H)
   -- passing argv through table.unpack, which LuaJIT does not provide.
   local spawn_capture = require("lib.nvim.cross.uv.spawn_capture")
   local spawn_result = nil
-  spawn_capture({ vim.v.progpath, "--version" }, {}, function(r) spawn_result = r end)
-  vim.wait(5000, function() return spawn_result ~= nil end)
+  spawn_capture({ vim.v.progpath, "--version" }, {}, function(r)
+    spawn_result = r
+  end)
+  vim.wait(5000, function()
+    return spawn_result ~= nil
+  end)
   ok(spawn_result ~= nil, "spawn_capture: callback fires")
   ok(spawn_result.ok, "spawn_capture: nvim --version exits 0")
   ok(spawn_result.stdout:match("NVIM") ~= nil, "spawn_capture: captures stdout")
 
   local bad_spawn_result = nil
-  spawn_capture({ "definitely_not_a_real_binary_xyz" }, {}, function(r) bad_spawn_result = r end)
-  vim.wait(2000, function() return bad_spawn_result ~= nil end)
+  spawn_capture({ "definitely_not_a_real_binary_xyz" }, {}, function(r)
+    bad_spawn_result = r
+  end)
+  vim.wait(2000, function()
+    return bad_spawn_result ~= nil
+  end)
   ok(bad_spawn_result ~= nil, "spawn_capture: callback fires for a missing binary")
   ok(not bad_spawn_result.ok, "spawn_capture: missing binary -> not ok")
   eq(type(cross.uv.wait_until), "function", "cross aggregator: uv.wait_until wired")
@@ -98,13 +135,25 @@ return function(H)
   -- ------------------------------------------------------------- lib.nvim.window
   local window = require("lib.nvim.window")
   for _, fn in ipairs({
-    "is_usable_window", "target_window", "ensure_bottom", "make_focusable",
-    "force_focus", "focus_and_bottom", "open_named_scratch",
+    "is_usable_window",
+    "target_window",
+    "ensure_bottom",
+    "make_focusable",
+    "force_focus",
+    "focus_and_bottom",
+    "open_named_scratch",
   }) do
     eq(type(window[fn]), "function", "window aggregator exports " .. fn)
   end
-  eq(type(window.make_scratch), "function", "window aggregator: pre-existing make_scratch still wired")
-  ok(window.is_usable_window(vim.api.nvim_get_current_win()), "window.is_usable_window: a normal window")
+  eq(
+    type(window.make_scratch),
+    "function",
+    "window aggregator: pre-existing make_scratch still wired"
+  )
+  ok(
+    window.is_usable_window(vim.api.nvim_get_current_win()),
+    "window.is_usable_window: a normal window"
+  )
   ok(not window.is_usable_window(99999), "window.is_usable_window: bogus handle")
 
   -- ---------------------------------------------------------------- lib.nvim.git
@@ -259,11 +308,17 @@ return function(H)
   vim.fn.writefile({ "data" }, tmp .. "/mut/src.txt")
   ok(mutate.copy_file(tmp .. "/mut/src.txt", tmp .. "/mut/copy.txt"), "cross.fs.mutate.copy_file")
   ok(uv.fs_stat(tmp .. "/mut/copy.txt") ~= nil, "cross.fs.mutate: the copy exists")
-  ok(mutate.rename_file(tmp .. "/mut/copy.txt", tmp .. "/mut/moved.txt"), "cross.fs.mutate.rename_file")
+  ok(
+    mutate.rename_file(tmp .. "/mut/copy.txt", tmp .. "/mut/moved.txt"),
+    "cross.fs.mutate.rename_file"
+  )
   ok(uv.fs_stat(tmp .. "/mut/moved.txt") ~= nil, "cross.fs.mutate: the renamed file exists")
   ok(mutate.delete_file(tmp .. "/mut/moved.txt"), "cross.fs.mutate.delete_file")
   eq(uv.fs_stat(tmp .. "/mut/moved.txt"), nil, "cross.fs.mutate: the file is gone")
-  ok(not mutate.delete_file(tmp .. "/mut/ghost.txt"), "cross.fs.mutate: deleting a missing file fails cleanly")
+  ok(
+    not mutate.delete_file(tmp .. "/mut/ghost.txt"),
+    "cross.fs.mutate: deleting a missing file fails cleanly"
+  )
 
   -- Retry layer. Driven through mutate.retry with a fake op rather than a real
   -- locked file: a genuine EPERM needs a second process holding a handle, which
@@ -274,7 +329,9 @@ return function(H)
   local tries = 0
   local r_ok = mutate.retry(function()
     tries = tries + 1
-    if tries < 3 then return false, "EPERM: operation not permitted" end
+    if tries < 3 then
+      return false, "EPERM: operation not permitted"
+    end
     return true, nil
   end)
   ok(r_ok, "mutate.retry: a transient EPERM is retried until it succeeds")
@@ -299,22 +356,60 @@ return function(H)
   ok(e_err:match("EBUSY") ~= nil, "mutate.retry: the last attempt's error is returned")
 
   local hooks = 0
-  mutate.retry(function() return false, "EACCES: permission denied" end, {
-    on_retry = function() hooks = hooks + 1 end,
+  mutate.retry(function()
+    return false, "EACCES: permission denied"
+  end, {
+    on_retry = function()
+      hooks = hooks + 1
+    end,
   })
   eq(hooks, 2, "mutate.retry: on_retry fires between attempts, not after the last")
 
   mutate.defaults.attempts = prev_attempts
 
   local scan_roots = require("lib.nvim.fs.scan_roots")
-  eq(#scan_roots.scan({ tmp .. "/walk" }, { ignore_dirs = { "skipme" } }), 1,
-    "scan_roots: honors ignore_dirs")
+  eq(
+    #scan_roots.scan({ tmp .. "/walk" }, { ignore_dirs = { "skipme" } }),
+    1,
+    "scan_roots: honors ignore_dirs"
+  )
 
   local cache_p = tmp .. "/scan_cache.json"
   eq(#scan_roots.scan({ tmp .. "/walk" }, { cache_path = cache_p }), 2, "scan_roots: uncached scan")
   vim.fn.writefile({ "x" }, tmp .. "/walk/keep/c.txt")
-  eq(#scan_roots.scan({ tmp .. "/walk" }, { cache_path = cache_p }), 2,
-    "scan_roots: a cache hit returns the stale result (by design)")
-  eq(#scan_roots.scan({ tmp .. "/walk" }, { cache_path = cache_p, ttl_seconds = -1 }), 3,
-    "scan_roots: an expired TTL forces a rescan")
+  eq(
+    #scan_roots.scan({ tmp .. "/walk" }, { cache_path = cache_p }),
+    2,
+    "scan_roots: a cache hit returns the stale result (by design)"
+  )
+  eq(
+    #scan_roots.scan({ tmp .. "/walk" }, { cache_path = cache_p, ttl_seconds = -1 }),
+    3,
+    "scan_roots: an expired TTL forces a rescan"
+  )
+
+  local scan_cached = require("lib.nvim.fs.scan_cached")
+  eq(#scan_cached.scan(tmp .. "/walk"), 3, "scan_cached: uncached scan across the whole tree")
+  vim.fn.writefile({ "x" }, tmp .. "/walk/keep/d.txt")
+  eq(
+    #scan_cached.scan(tmp .. "/walk"),
+    3,
+    "scan_cached: a cache hit returns the stale result (by design)"
+  )
+  eq(
+    #scan_cached.scan(tmp .. "/walk", { refresh = true }),
+    4,
+    "scan_cached: refresh=true forces a rescan"
+  )
+  eq(
+    #scan_cached.scan(tmp .. "/walk", { ttl_seconds = 0, refresh = true }),
+    4,
+    "scan_cached: refresh with ttl_seconds=0 seeds a zero-ttl entry"
+  )
+  vim.fn.writefile({ "x" }, tmp .. "/walk/keep/e.txt")
+  eq(
+    #scan_cached.scan(tmp .. "/walk", { ttl_seconds = 0 }),
+    5,
+    "scan_cached: a zero-second ttl entry reads as expired on the next call"
+  )
 end
