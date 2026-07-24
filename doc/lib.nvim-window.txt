@@ -18,6 +18,8 @@ CONTENTS                                          *lib.nvim-window-contents*
        set_title ............................... |lib.nvim-window-set_title|
        close_on_focus_lost ..................... |lib.nvim-window-close_on_focus_lost|
        center .................................. |lib.nvim-window-center|
+       open_scratch_split ...................... |lib.nvim-window-open_scratch_split|
+       tag ...................................... |lib.nvim-window-tag|
        attach .................................. |lib.nvim-window-attach|
 
 ==============================================================================
@@ -157,6 +159,41 @@ the editor size. A safe no-op on non-floats and invalid ids. >lua
 
     window.center(winid)
 <
+------------------------------------------------------------------------------
+open_scratch_split({lines}, {opts})      *lib.nvim-window-open_scratch_split*
+
+Open a fresh scratch buffer (`nofile`, `bufhidden=wipe`, no swapfile) in a
+plain split. Every call opens its own window — unlike |lib.nvim-window|
+`open_named_scratch`, there is no de-duplication by buffer name, which is the
+right behaviour for report/audit-style output where a second invocation
+should produce its own buffer. Returns `bufnr, winid`. >lua
+
+    local bufnr, winid = window.open_scratch_split(report_lines, {
+      filetype = "my-plugin-report",
+    })
+<
+Options ~
+    filetype      string    buffer filetype
+    split         string    "above" | "below" | "left" | "right";
+                             unset honors 'splitbelow'/'splitright'
+    modifiable    boolean   keep buffer writable (default false, read-only)
+
+------------------------------------------------------------------------------
+tag                                                       *lib.nvim-window-tag*
+
+Small namespace for identifying a window later by an arbitrary string tag,
+without keeping your own registry (a registry can go stale when a window
+closes through a path you never observed). Uses the same
+`vim.w[win].custom_tag` convention as `lib.nvim.buf_win_tab.capture`'s `tag`
+option, so windows tagged by either can be found by the other. >lua
+
+    window.tag.set(winid, "my-plugin://report")
+    local found = window.tag.find("my-plugin://report")  -- nil if not open
+    local t = window.tag.get(winid)                        -- read it back
+<
+`tag.find` only matches live, real content windows (not hidden or degenerate
+floats with width/height <= 1).
+
 ------------------------------------------------------------------------------
 attach({winid})                                       *lib.nvim-window-attach*
 

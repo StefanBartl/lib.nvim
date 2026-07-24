@@ -33,6 +33,11 @@ lib.nvim.window/
 ├── set_title.lua            -- set / clear a float title
 ├── close_on_focus_lost.lua  -- auto-close on focus loss
 ├── center.lua               -- re-center a float
+├── open_named_scratch.lua   -- named, de-duplicated scratch split
+├── open_scratch_split.lua   -- fresh (non-de-duplicated) scratch split
+├── tag.lua                  -- find windows by an arbitrary string tag
+├── focus_helpers.lua        -- keep a log view scrolled to bottom / force focus
+├── find_usable.lua          -- find a normal, non-floating, non-sidebar window
 └── @types/                  -- LuaLS types
 ```
 
@@ -182,6 +187,48 @@ editor size). No-op on non-floats and invalid IDs.
 ```lua
 window.center(winid)
 ```
+
+---
+
+### `open_scratch_split(lines?, opts?) -> bufnr, winid`
+
+Opens a fresh scratch buffer (`nofile`, `bufhidden=wipe`, no swapfile) in a
+plain **split** — every call opens its own window, with no de-duplication by
+name. Use this for report/audit-style output where a second invocation should
+produce its own buffer rather than silently overwrite a previous run.
+Complements `make_scratch` (floats) and `open_named_scratch` (named,
+de-duplicated split).
+
+```lua
+local bufnr, winid = window.open_scratch_split(report_lines, {
+  filetype = "my-plugin-report",
+})
+```
+
+| Option       | Type                                  | Default    | Meaning                                              |
+| ------------ | -------------------------------------- | ---------- | ----------------------------------------------------- |
+| `filetype`   | `string`                              | –          | buffer `filetype`                                     |
+| `split`      | `"above"\|"below"\|"left"\|"right"`   | –          | split direction; unset honors 'splitbelow'/'splitright' |
+| `modifiable` | `boolean`                             | `false`    | keep the buffer writable (otherwise read-only)         |
+
+---
+
+### `tag` — find windows by an arbitrary string tag
+
+Small namespace for identifying a window later without keeping your own
+registry (a registry can go stale when a window closes through a path you
+never observed). Uses the same `vim.w[win].custom_tag` convention as
+`lib.nvim.buf_win_tab.capture`'s `tag` option, so windows tagged by either can
+be found by the other.
+
+```lua
+window.tag.set(winid, "my-plugin://report")
+local found = window.tag.find("my-plugin://report")  -- nil if not open / closed
+local t = window.tag.get(winid)                        -- read it back
+```
+
+`find` only matches live, real content windows (not hidden or degenerate
+floats with width/height <= 1).
 
 ---
 

@@ -12,6 +12,16 @@
 ---@field events? string[] Autocmd events that count as focus loss (default `{ "WinLeave", "BufLeave" }`)
 ---@field force? boolean Discard unsaved changes when closing (default `true`)
 
+---@class Lib.Window.OpenScratchSplitOpts
+---@field filetype? string Buffer `filetype`
+---@field split? "above"|"below"|"left"|"right" Split direction; default honors 'splitbelow'/'splitright'
+---@field modifiable? boolean Keep the buffer modifiable (default `false`, i.e. read-only)
+
+---@class Lib.Window.Tag
+---@field set fun(win: integer, tag: string, buf?: integer) Apply `tag` to a window (and optionally its buffer)
+---@field get fun(win: integer): string|nil Read the tag previously applied to `win`
+---@field find fun(tag: string): integer|nil Find a live content window carrying `tag`
+
 ---@class Lib.Window.MakeScratchOpts
 ---@field lines? string[] Initial buffer content (default empty)
 ---@field width? integer Float width; default sizes to content, clamped to editor
@@ -54,5 +64,7 @@
 ---@field force_focus fun(winid: integer): boolean # Make winid focusable (if floating) and switch to it.
 ---@field focus_and_bottom fun(winid: integer): boolean # force_focus + ensure_bottom.
 ---@field open_named_scratch fun(name: string, lines?: string[], opts?: { filetype?: string, split?: "above"|"below"|"left"|"right", size?: integer, modifiable?: boolean }): integer, integer # Find-or-create a named scratch buffer shown in a split; returns bufnr, winid.
+---@field open_scratch_split fun(lines?: string[], opts?: Lib.Window.OpenScratchSplitOpts): integer, integer # Open a fresh (non-de-duplicated) scratch buffer in a plain split; returns bufnr, winid.
+---@field tag Lib.Window.Tag # Tag/find windows by an arbitrary string via `vim.w[win].custom_tag`.
 
 return {}
