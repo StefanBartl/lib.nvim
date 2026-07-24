@@ -3,7 +3,7 @@
 > **Generated** by `lib.nvim.docmap`. Do not edit by hand — run `:LibMap`
 > (or `nvim --headless -l scripts/gen_map.lua`) to regenerate.
 
-**125 modules** · 25 namespaces · 121 helper files
+**126 modules** · 25 namespaces · 124 helper files
 
 The [interactive map](index.html) has filtering, full descriptions and
 source links; this page is the version the code host renders directly.
@@ -257,6 +257,7 @@ flowchart LR
 | &nbsp;&nbsp;`lib.nvim.map` | ========================================================= Keymap helper utilities. | 1 | [src](../../lua/lib/nvim/map/init.lua) |
 | &nbsp;&nbsp;`neotree` |  |  |  |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.neotree.node` | Neo-tree node extraction utilities. | 5 | [src](../../lua/lib/nvim/neotree/node/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.neotree.watch` | Neo-tree file-watcher handle registry + proactive release. | 10 | [README](../../lua/lib/nvim/neotree/watch/README.md) · [src](../../lua/lib/nvim/neotree/watch/init.lua) |
 | &nbsp;&nbsp;`net` |  |  |  |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.net.curl` | Async (and blocking) HTTP-via-curl helper with JSON-body decoding. | 6 | [README](../../lua/lib/nvim/net/curl/README.md) · [src](../../lua/lib/nvim/net/curl/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.normalize` | A small, dependency-free normalization toolkit for plugin configs. |  | [src](../../lua/lib/nvim/normalize/init.lua) |
@@ -303,7 +304,7 @@ flowchart LR
 
 ## Drift
 
-0 errors · 10 warnings · 145 info
+0 errors · 10 warnings · 147 info
 
 | Severity | Check | Message |
 |---|---|---|
@@ -319,7 +320,7 @@ flowchart LR
 | warn | `missing-summary` | lua/lib/nvim/normalize/validators.lua has ---@module but no description line |
 
 <details>
-<summary>145 informational findings</summary>
+<summary>147 informational findings</summary>
 
 
 | Check | Message |
@@ -398,16 +399,17 @@ flowchart LR
 | `undocumented-param` | escape_lua_pattern has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | invalid_ctx has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | M.normalize has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | M.norm has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | norm has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | split has 2 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | M.is_subpath has 2 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | join has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | is_subpath has 2 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | M.norm has 1 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | join has 1 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | split has 2 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | norm has 1 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | M.is_subpath has 2 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | split has 2 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | strlen has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | join has 2 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | notify_caller has 5 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | bind_cancel_on_escape has 3 parameter(s) but only 2 @param line(s) |
 | `undocumented-param` | bind_cancel_on_escape has 3 parameter(s) but only 2 @param line(s) |
 | `undocumented-param` | move_in has 3 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | M.build_ctx has 7 parameter(s) but only 0 @param line(s) |
@@ -447,6 +449,7 @@ flowchart LR
 | `unreferenced-module` | lib.nvim.fs.project_key is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.lua_ls.insert.module_annnotation is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.neotree.node is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim.neotree.watch is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.selection is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.treesitter.guard is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.window.find_by_filetype is required by no other file in the tree |

@@ -33,6 +33,8 @@ M.make_focusable = require("lib.nvim.window.focus_helpers").make_focusable
 M.force_focus = require("lib.nvim.window.focus_helpers").force_focus
 M.focus_and_bottom = require("lib.nvim.window.focus_helpers").focus_and_bottom
 M.open_named_scratch = require("lib.nvim.window.open_named_scratch")
+M.open_scratch_split = require("lib.nvim.window.open_scratch_split")
+M.tag = require("lib.nvim.window.tag")
 
 ---Construct a fluent wrapper bound to a single window id.
 ---Methods are called with **dot syntax** (`w.nice_quit()`), not colon syntax:
