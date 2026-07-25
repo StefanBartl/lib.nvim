@@ -5,9 +5,9 @@
 --- https:// → default browser).
 ---
 --- Platform dispatch:
----   Windows → cmd.exe /C start "" <target>
+---   Windows → explorer.exe <target>
 ---   WSL     → converts path to a Windows path via `wslpath`, then same as
----             Windows; a URL skips straight to cmd.exe's start (no path to
+---             Windows; a URL skips straight to explorer.exe (no path to
 ---             convert); falls back to `xdg-open` for a Linux-side file with
 ---             no Windows-side equivalent.
 ---   macOS   → open <target>
@@ -57,14 +57,20 @@ return function(target)
   local cmd
 
   if is_windows and not is_wsl then
-    cmd = { "cmd.exe", "/C", "start", '""', expand_path(target) }
+    -- explorer.exe hands the target straight to the registered protocol/file
+    -- handler with no cmd.exe re-tokenizing in between. `cmd.exe /C start`
+    -- silently truncates a URL/path containing an unescaped `&` (any link
+    -- with 2+ query params) because cmd.exe's own tokenizer treats a bare
+    -- `&` outside quotes as a command separator, and libuv/vim.system only
+    -- quote an argv entry that contains whitespace.
+    cmd = { "explorer.exe", expand_path(target) }
   elseif is_wsl then
     if looks_like_url(target) then
-      cmd = { "cmd.exe", "/C", "start", '""', target }
+      cmd = { "explorer.exe", target }
     else
       local win_path = wsl_to_win_path(expand_path(target))
       if win_path then
-        cmd = { "cmd.exe", "/C", "start", '""', win_path }
+        cmd = { "explorer.exe", win_path }
       elseif vim.fn.executable("xdg-open") == 1 then
         cmd = { "xdg-open", target }
       else

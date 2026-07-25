@@ -1,7 +1,7 @@
 # `lib.nvim.fs.open.url.system_opener`
 
 Open a path or URL with the OS default handler — the per-OS dispatch
-(`open` / `xdg-open` / `wslview` / `cmd.exe /c start`) that several plugins were
+(`open` / `xdg-open` / `wslview` / `explorer.exe`) that several plugins were
 reimplementing independently before this module existed as a real shared
 utility.
 
@@ -56,7 +56,7 @@ In a custom command array, the literal `"<url>"` is substituted with the URL.
 | Field                   | Type              | Default              | Meaning                                                        |
 |-------------------------|-------------------|----------------------|----------------------------------------------------------------|
 | `prefer_ui_open`        | `boolean?`        | `true`               | Try `vim.ui.open` first. Ignored when `on_exit` is set.         |
-| `enable_windows_opener` | `boolean?`        | `true`               | Enable the `cmd.exe /c start` opener.                           |
+| `enable_windows_opener` | `boolean?`        | `true`               | Enable the `explorer.exe` opener.                                |
 | `open_cmd_mac`          | `string[]?`       | `{ "open", url }`    | Override the macOS command.                                     |
 | `open_cmd_unix`         | `string[]?`       | `{ "xdg-open", url }`| Override the Linux command.                                     |
 | `open_cmd_wsl`          | `string[]?`       | `{ "wslview", url }` | Override the WSL command.                                       |

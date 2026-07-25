@@ -15,7 +15,7 @@
 ---      for `xdg-open` to talk to.
 ---
 --- `cfg` is entirely optional. Windows support is enabled by default (via
---- `cmd.exe /c start`); pass `cfg.enable_windows_opener = false` to opt back
+--- `explorer.exe`); pass `cfg.enable_windows_opener = false` to opt back
 --- out. `cfg.open_cmd_mac`/`open_cmd_unix`/`open_cmd_wsl` override the
 --- respective command.
 
@@ -42,9 +42,13 @@ local function resolve_opener(url, cfg)
   end
 
   if cfg.enable_windows_opener ~= false and vim.fn.has("win32") == 1 then
-    -- The empty string is `start`'s window-title argument: without it, a
-    -- quoted first argument is consumed as the title instead of the target.
-    return { "cmd.exe", "/c", "start", "", url }
+    -- explorer.exe hands the target straight to the registered protocol/file
+    -- handler with no cmd.exe re-tokenizing in between. `cmd.exe /c start`
+    -- silently truncates a URL/path containing an unescaped `&` (any link
+    -- with 2+ query params) because cmd.exe's own tokenizer treats a bare
+    -- `&` outside quotes as a command separator, and libuv/vim.system only
+    -- quote an argv entry that contains whitespace.
+    return { "explorer.exe", url }
   end
 
   return nil
