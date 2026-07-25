@@ -3,7 +3,7 @@
 
 ---@class AutoCmds.General.MD.GotoFile.Cfg
 ---@field prefer_ui_open? boolean Try `vim.ui.open` (Neovim 0.10+) before the per-OS argv dispatch (default true). Ignored when `on_exit` is set.
----@field enable_windows_opener? boolean Enable the Windows `cmd.exe /c start` opener (default true)
+---@field enable_windows_opener? boolean Enable the Windows `explorer.exe` opener (default true)
 ---@field open_cmd_mac? string[] Override the macOS open command (default `{ "open", url }`)
 ---@field open_cmd_unix? string[] Override the Linux open command (default `{ "xdg-open", url }`)
 ---@field open_cmd_wsl? string[] Override the WSL open command (default `{ "wslview", url }`, used only when `wslview` is executable)
