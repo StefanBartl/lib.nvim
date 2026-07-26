@@ -192,5 +192,7 @@ kit.live_input({
   on_change = function(query) end,   -- fired repeatedly as the user types
   on_submit = function(query) end,   -- <CR>
   on_cancel = function() end,        -- <Esc>
+  -- row/col (relative="editor" only) override the default centered
+  -- placement, e.g. to anchor the bar to the bottom edge of a host window.
 })
 ```

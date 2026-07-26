@@ -16,7 +16,7 @@ local api = vim.api
 local M = {}
 
 --- Open a live-incremental input.
----@param opts table  # { title|prompt, default?, theme?, width?, relative?, debounce?, on_change(query: string), on_submit?(query: string), on_cancel?() }
+---@param opts table  # { title|prompt, default?, theme?, width?, relative?, row?, col?, debounce?, on_change(query: string), on_submit?(query: string), on_cancel?() }
 ---@return Lib.UI.Kit.Surface|nil
 function M.open(opts)
   opts = opts or {}
@@ -28,6 +28,8 @@ function M.open(opts)
     width = opts.width or 40,
     height = 1,
     relative = opts.relative or "cursor",
+    row = opts.row,
+    col = opts.col,
     enter = true,
     modifiable = true,
     filetype = opts.filetype or "lib-kit-live-input",
