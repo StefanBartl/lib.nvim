@@ -49,9 +49,13 @@ local _installed = false
 ---@param p string
 ---@return string
 local function norm(p)
-  if type(p) ~= "string" then return "" end
+  if type(p) ~= "string" then
+    return ""
+  end
   p = (p:gsub("\\", "/")):gsub("/+$", "")
-  p = p:gsub("^(%a):", function(d) return d:lower() .. ":" end)
+  p = p:gsub("^(%a):", function(d)
+    return d:lower() .. ":"
+  end)
   return p
 end
 
@@ -62,8 +66,12 @@ end
 local function under(base, path)
   base = norm(base)
   path = norm(path)
-  if base == "" then return false end
-  if path == base then return true end
+  if base == "" then
+    return false
+  end
+  if path == base then
+    return true
+  end
   return path:sub(1, #base + 1) == base .. "/"
 end
 
@@ -81,18 +89,24 @@ end
 ---@param w Lib.Neotree.Watch.Watcher
 ---@param recreate boolean
 local function release_watcher(w, recreate)
-  if type(w) ~= "table" then return end
+  if type(w) ~= "table" then
+    return
+  end
   local h = w.handle
   -- Stop first (no-op if not active); guarded — a bad handle must not throw.
   if w.active and h then
-    pcall(function() h:stop() end)
+    pcall(function()
+      h:stop()
+    end)
   end
   w.active = false
   -- Close the OS handle. libuv closes asynchronously on the next loop tick, so
   -- a caller that needs the lock gone *now* must let the loop run (e.g.
   -- cross.fs.mutate's vim.wait backoff) before retrying.
   if h and not h:is_closing() then
-    pcall(function() h:close() end)
+    pcall(function()
+      h:close()
+    end)
   end
   if recreate then
     local ok, fresh = pcall(uv.new_fs_event)
@@ -107,11 +121,17 @@ end
 ---is unavailable (non-neotree setup, or called too early).
 ---@return boolean ok
 function M.install()
-  if _installed then return true end
+  if _installed then
+    return true
+  end
 
   local ok, fs_watch = pcall(require, "neo-tree.sources.filesystem.lib.fs_watch")
-  if not ok or type(fs_watch) ~= "table" then return false end
-  if type(fs_watch.watch_folder) ~= "function" then return false end
+  if not ok or type(fs_watch) ~= "table" then
+    return false
+  end
+  if type(fs_watch.watch_folder) ~= "function" then
+    return false
+  end
 
   -- Record every watcher neo-tree creates. Wrapping (not replacing) keeps this
   -- composable with any other wrapper on watch_folder (e.g. an EPERM-swallowing
@@ -163,8 +183,12 @@ end
 ---@param paths string|string[]
 ---@return integer released  How many watchers were released.
 function M.release(paths)
-  if type(paths) == "string" then paths = { paths } end
-  if type(paths) ~= "table" then return 0 end
+  if type(paths) == "string" then
+    paths = { paths }
+  end
+  if type(paths) ~= "table" then
+    return 0
+  end
 
   local released = 0
   for key, w in pairs(registry) do
@@ -194,7 +218,9 @@ function M.with_release(paths, fn)
   M.release(paths)
   local ok, res = pcall(fn)
   M.release(paths)
-  if not ok then error(res) end
+  if not ok then
+    error(res)
+  end
   return res
 end
 
@@ -202,7 +228,9 @@ end
 ---@return integer
 function M.count()
   local n = 0
-  for _ in pairs(registry) do n = n + 1 end
+  for _ in pairs(registry) do
+    n = n + 1
+  end
   return n
 end
 
@@ -215,12 +243,14 @@ function M.list()
   local out = {}
   for path, w in pairs(registry) do
     out[#out + 1] = {
-      path   = path,
+      path = path,
       active = w.active == true,
       exists = vim.fn.isdirectory(path) == 1 or vim.fn.filereadable(path) == 1,
     }
   end
-  table.sort(out, function(a, b) return a.path < b.path end)
+  table.sort(out, function(a, b)
+    return a.path < b.path
+  end)
   return out
 end
 

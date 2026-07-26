@@ -29,15 +29,17 @@ end
 ---code prefix rather than the whole string.
 ---@type table<string, true>
 local TRANSIENT = {
-  EPERM  = true,  -- Windows: handle open elsewhere (watcher, indexer, AV)
-  EACCES = true,  -- Windows: same cause, different libuv mapping
-  EBUSY  = true,  -- Windows: file mapped/in use; POSIX: mountpoint busy
+  EPERM = true, -- Windows: handle open elsewhere (watcher, indexer, AV)
+  EACCES = true, -- Windows: same cause, different libuv mapping
+  EBUSY = true, -- Windows: file mapped/in use; POSIX: mountpoint busy
 }
 
 ---@param err string|nil
 ---@return boolean
 local function is_transient(err)
-  if type(err) ~= "string" then return false end
+  if type(err) ~= "string" then
+    return false
+  end
   local code = err:match("^(%u+):") or err
   return TRANSIENT[code] == true
 end
@@ -45,9 +47,9 @@ end
 ---@type Lib.Cross.Fs.Mutate.RetryOpts
 M.defaults = {
   -- Retrying only pays off where the errors are spurious. See module header.
-  attempts    = is_windows() and 3 or 1,
-  backoff_ms  = 50,
-  on_retry    = nil,
+  attempts = is_windows() and 3 or 1,
+  backoff_ms = 50,
+  on_retry = nil,
 }
 
 ---Run `op` until it succeeds or its error stops looking transient.
@@ -63,20 +65,26 @@ M.defaults = {
 ---@return boolean ok
 ---@return string|nil err  Error of the final attempt.
 function M.retry(op, opts)
-  local cfg        = vim.tbl_extend("force", M.defaults, opts or {})
-  local attempts   = math.max(1, cfg.attempts or 1)
+  local cfg = vim.tbl_extend("force", M.defaults, opts or {})
+  local attempts = math.max(1, cfg.attempts or 1)
   local backoff_ms = cfg.backoff_ms or 50
 
   local ok, err
   for attempt = 1, attempts do
     ok, err = op()
-    if ok then return true, nil end
-    if not is_transient(err) then return false, err end
+    if ok then
+      return true, nil
+    end
+    if not is_transient(err) then
+      return false, err
+    end
     if attempt < attempts then
       -- Give a consumer the chance to release its own handles on the path
       -- before we try again — a retry alone does not help if *we* are the
       -- process holding it open.
-      if cfg.on_retry then pcall(cfg.on_retry, attempt, err) end
+      if cfg.on_retry then
+        pcall(cfg.on_retry, attempt, err)
+      end
       -- Escalating backoff: 50ms, 100ms, 200ms, … An AV scan or an indexer
       -- pass takes longer than a watcher close, so a flat delay would either
       -- be wastefully long for the common case or too short for the rare one.
@@ -134,7 +142,9 @@ function M.mkdir_p(path, opts)
     -- code, so is_transient never matches and this in practice does not retry
     -- — it goes through M.retry for a uniform signature, not for the retry.
     local ok, err = pcall(vim.fn.mkdir, path, "p")
-    if not ok then return false, tostring(err) end
+    if not ok then
+      return false, tostring(err)
+    end
     return true, nil
   end, opts)
 end

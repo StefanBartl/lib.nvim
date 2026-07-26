@@ -124,8 +124,12 @@ function M.dispatch(cmd_name, spec, root, opts, notify)
     if bad then
       notify.error(("unknown subcommand '%s'.\n%s"):format(bad, M.usage(cmd_name, root)))
     else
-      notify.error(("'%s' needs a subcommand.\n%s"):format(
-        table.concat({ cmd_name, unpack(fargs, 1, consumed) }, " "), M.usage(cmd_name, root)))
+      notify.error(
+        ("'%s' needs a subcommand.\n%s"):format(
+          table.concat({ cmd_name, unpack(fargs, 1, consumed) }, " "),
+          M.usage(cmd_name, root)
+        )
+      )
     end
     return
   end

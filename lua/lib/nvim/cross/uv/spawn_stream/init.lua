@@ -165,7 +165,13 @@ return function(argv, opts, on_line, on_exit)
     done = true
     if on_exit then
       vim.schedule(function()
-        on_exit({ ok = false, code = -1, signal = 0, timed_out = false, spawn_error = "failed to spawn: " .. tostring(argv[1]) })
+        on_exit({
+          ok = false,
+          code = -1,
+          signal = 0,
+          timed_out = false,
+          spawn_error = "failed to spawn: " .. tostring(argv[1]),
+        })
       end)
     end
     return nil

@@ -97,7 +97,6 @@ local MODULE_MAP = {
 -- Special handlers for modules with multiple exports
 local SPECIAL_HANDLERS = {
 
-
   -- lib.nvim
   has_exec = { mod = "lib.nvim.core", key = "has_exec" },
 
@@ -165,7 +164,10 @@ local SPECIAL_HANDLERS = {
   count_lines = { mod = "lib.lua.strings", key = "count_lines" },
 
   -- json decode
-  json_decode_to_string_array = { mod = "lib.lua.json.decode.to_string_array", key = "ensure_string_array" },
+  json_decode_to_string_array = {
+    mod = "lib.lua.json.decode.to_string_array",
+    key = "ensure_string_array",
+  },
 
   -- json encode (pure Lua)
   json_encode = { mod = "lib.lua.json.encode", key = "encode" },

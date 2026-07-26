@@ -61,7 +61,13 @@ function M.format_tab_one_line(info)
   local bufs_count = #info.bufs
   local wins_count = #info.wins
   local cur_buf = info.current_buf or 0
-  return string.format("tab=%d wins=%d bufs=%d cur_buf=%d", info.tabnr, wins_count, bufs_count, cur_buf)
+  return string.format(
+    "tab=%d wins=%d bufs=%d cur_buf=%d",
+    info.tabnr,
+    wins_count,
+    bufs_count,
+    cur_buf
+  )
 end
 
 -- Pretty-print tabs to messages (vim.notify).

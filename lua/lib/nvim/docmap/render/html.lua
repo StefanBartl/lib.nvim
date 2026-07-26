@@ -866,7 +866,8 @@ function M.render(ir, findings, opts)
     nodes[#nodes + 1] = ir.nodes[id]
   end
 
-  local payload = json.encode({ meta = meta, root = ir.root, nodes = nodes, edges = ir.edges or {} })
+  local payload =
+    json.encode({ meta = meta, root = ir.root, nodes = nodes, edges = ir.edges or {} })
   -- `</script>` inside JSON would terminate the block early.
   payload = payload:gsub("</", "<\\/")
 
@@ -888,24 +889,45 @@ function M.render(ir, findings, opts)
     -- that actually carry the attribute, so an unresolvable target silently
     -- stays inert instead of being a dead click.
     local node_attr = f.node and (' data-node="%s"'):format(esc(f.node)) or ""
-    rows[#rows + 1] = ([[<tr%s><td><span class="sev %s">%s</span></td><td class="msg">%s</td><td class="msg">%s</td></tr>]])
-      :format(node_attr, f.severity, f.severity, esc(f.check), esc(f.message))
+    rows[#rows + 1] = ([[<tr%s><td><span class="sev %s">%s</span></td><td class="msg">%s</td><td class="msg">%s</td></tr>]]):format(
+      node_attr,
+      f.severity,
+      f.severity,
+      esc(f.check),
+      esc(f.message)
+    )
   end
 
   return table.concat({
     "<!doctype html>",
     '<html lang="en"><head><meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width,initial-scale=1">',
-    "<title>", esc(ir.meta.title), " — module map</title>",
-    "<style>", CSS, "</style></head><body>",
+    "<title>",
+    esc(ir.meta.title),
+    " — module map</title>",
+    "<style>",
+    CSS,
+    "</style></head><body>",
 
-    "<header><h1>", esc(ir.meta.title), '<span class="sub">module map</span></h1>',
+    "<header><h1>",
+    esc(ir.meta.title),
+    '<span class="sub">module map</span></h1>',
     '<div class="stats">',
-    "<span><b>", tostring(c.module or 0), "</b> modules</span>",
-    "<span><b>", tostring(c.namespace or 0), "</b> namespaces</span>",
-    "<span><b>", tostring(c.file or 0), "</b> files</span>",
-    '<span><b class="sev error">', tostring(t.error), "</b> errors</span>",
-    '<span><b class="sev warn">', tostring(t.warn), "</b> warnings</span>",
+    "<span><b>",
+    tostring(c.module or 0),
+    "</b> modules</span>",
+    "<span><b>",
+    tostring(c.namespace or 0),
+    "</b> namespaces</span>",
+    "<span><b>",
+    tostring(c.file or 0),
+    "</b> files</span>",
+    '<span><b class="sev error">',
+    tostring(t.error),
+    "</b> errors</span>",
+    '<span><b class="sev warn">',
+    tostring(t.warn),
+    "</b> warnings</span>",
     "</div></header>",
 
     '<div class="tabs">',
@@ -933,14 +955,21 @@ function M.render(ir, findings, opts)
     "</div>",
 
     '<div id="findings"><details><summary>Drift findings (',
-    tostring(#findings), ")</summary><div class=\"wrap\"><table>",
+    tostring(#findings),
+    ')</summary><div class="wrap"><table>',
     "<thead><tr><th>Severity</th><th>Check</th><th>Message</th></tr></thead><tbody>",
     table.concat(rows),
     "</tbody></table></div></details></div>",
 
-    '<script type="application/json" id="ir">', payload, "</script>",
-    '<script type="application/json" id="findings-data">', findings_json, "</script>",
-    "<script>", JS, "</script>",
+    '<script type="application/json" id="ir">',
+    payload,
+    "</script>",
+    '<script type="application/json" id="findings-data">',
+    findings_json,
+    "</script>",
+    "<script>",
+    JS,
+    "</script>",
     "</body></html>",
   })
 end

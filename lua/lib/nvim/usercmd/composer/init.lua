@@ -44,8 +44,16 @@ local M = {}
 -- technique replacer.nvim uses). parse.lua stays synchronous/testable via its
 -- injected notifier; only production registration wraps it.
 local deferred = {
-  error = function(msg) vim.schedule(function() notify.error(msg) end) end,
-  info = function(msg) vim.schedule(function() notify.info(msg) end) end,
+  error = function(msg)
+    vim.schedule(function()
+      notify.error(msg)
+    end)
+  end,
+  info = function(msg)
+    vim.schedule(function()
+      notify.info(msg)
+    end)
+  end,
 }
 
 --- Whether the command should accept the bang form: explicit spec.bang wins,

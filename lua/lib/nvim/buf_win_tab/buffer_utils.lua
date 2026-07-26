@@ -152,7 +152,10 @@ end
 function M.format_buffers_table(buftable)
   local lines = {}
   -- header
-  table.insert(lines, string.format("%-6s %-8s %-6s %-7s %s", "bufnr", "ft", "listed", "modified", "name"))
+  table.insert(
+    lines,
+    string.format("%-6s %-8s %-6s %-7s %s", "bufnr", "ft", "listed", "modified", "name")
+  )
   table.insert(lines, string.rep("-", 80))
 
   for i = 1, #buftable do

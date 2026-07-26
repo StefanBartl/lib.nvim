@@ -178,15 +178,18 @@ function M.resolve(kind, opts)
       return {}, "empty range"
     end
     local name = vim.api.nvim_buf_get_name(bufnr)
-    return { {
-      file = name ~= "" and vim.fs.normalize(name) or nil,
-      bufnr = bufnr,
-      lines = vim.api.nvim_buf_get_lines(bufnr, l1 - 1, l2, false),
-      -- `first` is what lets a caller report real buffer line numbers for a
-      -- partial scan; without it every hit in a range would report as if the
-      -- selection started at line 1.
-      first = l1,
-    } }, nil
+    return {
+      {
+        file = name ~= "" and vim.fs.normalize(name) or nil,
+        bufnr = bufnr,
+        lines = vim.api.nvim_buf_get_lines(bufnr, l1 - 1, l2, false),
+        -- `first` is what lets a caller report real buffer line numbers for a
+        -- partial scan; without it every hit in a range would report as if the
+        -- selection started at line 1.
+        first = l1,
+      },
+    },
+      nil
   end
 
   if kind == "buffers" then

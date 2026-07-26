@@ -105,7 +105,5 @@ function LAZY.typed(module_name)
   return lazy.get()
 end
 
-
 ---@type Lib.Lazy
 return LAZY
-

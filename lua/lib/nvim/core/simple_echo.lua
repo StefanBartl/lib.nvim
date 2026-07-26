@@ -13,7 +13,6 @@
 		  simple_echo("File not found.", "WarningMsg", true)
 --]]
 
-
 --- Echo a message with optional highlight and error flag.
 --- @param msg string main message text
 --- @param hl string|nil highlight group name or nil

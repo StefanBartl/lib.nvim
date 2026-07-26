@@ -7,7 +7,6 @@
 -- - optional buffer scoping
 -- =========================================================
 
-
 -- ---@param flags Lib.Map.ErrorFlags
 -- ---@param modes? string|string[]
 -- ---@param lhs? string
@@ -39,24 +38,17 @@ local function notify_caller(flags, modes, lhs, rhs, opts)
   local errors = {}
 
   if flags.modes then
-    errors[#errors + 1] = string.format(
-      "invalid modes (expected string|string[], got %s)",
-      type(modes)
-    )
+    errors[#errors + 1] =
+      string.format("invalid modes (expected string|string[], got %s)", type(modes))
   end
 
   if flags.lhs then
-    errors[#errors + 1] = string.format(
-      "invalid lhs (expected string, got %s)",
-      type(lhs)
-    )
+    errors[#errors + 1] = string.format("invalid lhs (expected string, got %s)", type(lhs))
   end
 
   if flags.rhs then
-    errors[#errors + 1] = string.format(
-      ("invalid rhs (expected function or string, got %s)"),
-      type(rhs)
-    )
+    errors[#errors + 1] =
+      string.format("invalid rhs (expected function or string, got %s)", type(rhs))
   end
 
   if flags.buffer then
@@ -66,7 +58,13 @@ local function notify_caller(flags, modes, lhs, rhs, opts)
     )
   end
 
-  notify.error(string.format( "[lib.nvim.map] argument validation failed:\n %s\n caller: %s", table.concat(errors, "\n "), caller ))
+  notify.error(
+    string.format(
+      "[lib.nvim.map] argument validation failed:\n %s\n caller: %s",
+      table.concat(errors, "\n "),
+      caller
+    )
+  )
 end
 
 ---Convenience wrapper for vim.keymap.set with defaults.
@@ -81,9 +79,9 @@ return function(modes, lhs, rhs, opts, desc)
 
   ---@type Lib.Map.ErrorFlags
   local flags = {
-    modes  = not (type(modes) == "string" or type(modes) == "table"),
-    lhs    = type(lhs) ~= "string",
-    rhs    = type(rhs) ~= "function" and type(rhs) ~= "string",
+    modes = not (type(modes) == "string" or type(modes) == "table"),
+    lhs = type(lhs) ~= "string",
+    rhs = type(rhs) ~= "function" and type(rhs) ~= "string",
     buffer = opts.buffer ~= nil
       and type(opts.buffer) ~= "boolean"
       and type(opts.buffer) ~= "number",
@@ -121,4 +119,3 @@ return function(modes, lhs, rhs, opts, desc)
 
   vim.keymap.set(modes, lhs, rhs, opts)
 end
-

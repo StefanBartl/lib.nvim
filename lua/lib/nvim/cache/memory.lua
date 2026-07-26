@@ -244,17 +244,31 @@ function M.print_all_stats()
   local all = M.get_all_stats()
 
   print("Cache Statistics:")
-  print(string.format(
-    "%-30s %8s %8s %8s %8s %10s",
-    "Namespace", "Hits", "Misses", "Invalid", "Evict", "Hit Rate"
-  ))
+  print(
+    string.format(
+      "%-30s %8s %8s %8s %8s %10s",
+      "Namespace",
+      "Hits",
+      "Misses",
+      "Invalid",
+      "Evict",
+      "Hit Rate"
+    )
+  )
   print(string.rep("-", 80))
 
   for _, s in ipairs(all) do
-    print(string.format(
-      "%-30s %8d %8d %8d %8d %9.2f%%",
-      s.name, s.hits, s.misses, s.invalidations, s.evictions, s.hit_rate
-    ))
+    print(
+      string.format(
+        "%-30s %8d %8d %8d %8d %9.2f%%",
+        s.name,
+        s.hits,
+        s.misses,
+        s.invalidations,
+        s.evictions,
+        s.hit_rate
+      )
+    )
   end
 end
 

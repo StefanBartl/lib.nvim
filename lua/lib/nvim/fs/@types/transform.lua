@@ -18,5 +18,3 @@
 ---@field project_key fun(path?: string): string
 
 return {}
-
-

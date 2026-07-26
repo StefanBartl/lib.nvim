@@ -50,8 +50,15 @@ return function(H)
   for _, entry in ipairs(snapshot) do
     by_path[entry.path] = entry
   end
-  ok(by_path["c:/tmp/lib-nvim-spec/dir1"] ~= nil, "watch.list(): path normalized (lowercase drive, forward slashes)")
-  eq(by_path["c:/tmp/lib-nvim-spec/dir1"].active, true, "watch.list(): freshly tracked watcher is active")
+  ok(
+    by_path["c:/tmp/lib-nvim-spec/dir1"] ~= nil,
+    "watch.list(): path normalized (lowercase drive, forward slashes)"
+  )
+  eq(
+    by_path["c:/tmp/lib-nvim-spec/dir1"].active,
+    true,
+    "watch.list(): freshly tracked watcher is active"
+  )
 
   -- ---------------------------------------------------------- release()
   --
@@ -65,10 +72,18 @@ return function(H)
 
   local released_1 = watch.release(dir1)
   eq(released_1, 1, "release(): closes the tracked watcher on an exact path match")
-  eq(watch.count(), 2, "release(): the watcher STAYS in the registry (not forgotten) so it can be released again")
+  eq(
+    watch.count(),
+    2,
+    "release(): the watcher STAYS in the registry (not forgotten) so it can be released again"
+  )
 
   local released_again = watch.release(dir1)
-  eq(released_again, 1, "release(): releasing the SAME path a second time still finds and releases it")
+  eq(
+    released_again,
+    1,
+    "release(): releasing the SAME path a second time still finds and releases it"
+  )
 
   -- Releasing a PARENT path releases every tracked subpath.
   local base = "C:/tmp/lib-nvim-spec"
@@ -101,11 +116,19 @@ return function(H)
     fake_fs_watch.watch_folder(dir1, function() end)
     return "result"
   end)
-  eq(active_during, false, "with_release(): the watcher is already released (inactive) by the time fn runs")
+  eq(
+    active_during,
+    false,
+    "with_release(): the watcher is already released (inactive) by the time fn runs"
+  )
   eq(ran, "result", "with_release(): returns fn's own return value")
   for _, entry in ipairs(watch.list()) do
     if entry.path == "c:/tmp/lib-nvim-spec/dir1" then
-      eq(entry.active, false, "with_release(): the watcher re-established during fn is released again afterward")
+      eq(
+        entry.active,
+        false,
+        "with_release(): the watcher re-established during fn is released again afterward"
+      )
     end
   end
 
@@ -113,15 +136,26 @@ return function(H)
     error("boom")
   end)
   eq(raised_ok, false, "with_release(): re-raises an error from fn")
-  ok(tostring(raised_err):find("boom", 1, true) ~= nil, "with_release(): the original error message survives")
+  ok(
+    tostring(raised_err):find("boom", 1, true) ~= nil,
+    "with_release(): the original error message survives"
+  )
 
   -- ------------------------------------------------------ stop_watching wrap
 
   local before_stop = watch.count()
   ok(before_stop > 0, "watch: at least one watcher tracked before the stop_watching nuke")
   package.loaded[FS_WATCH_MODNAME].stop_watching()
-  eq(stop_watching_calls, 1, "install(): the wrapped stop_watching still calls through to the original")
-  eq(watch.count(), 0, "install(): stop_watching's wrap DOES forget every entry -- neo-tree is discarding them for good")
+  eq(
+    stop_watching_calls,
+    1,
+    "install(): the wrapped stop_watching still calls through to the original"
+  )
+  eq(
+    watch.count(),
+    0,
+    "install(): stop_watching's wrap DOES forget every entry -- neo-tree is discarding them for good"
+  )
 
   -- ---------------------------------------------------------------- clear()
 

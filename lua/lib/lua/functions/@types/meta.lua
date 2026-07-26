@@ -10,4 +10,3 @@
 ---@field raise fun(err: any): nil # Error passthrough helper. Always throws an error. LuaLS has no `never` type, so `nil` is used as a pragmatic substitute.
 
 return {}
-

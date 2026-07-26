@@ -41,4 +41,3 @@ return function()
   cached = is
   return is
 end
-

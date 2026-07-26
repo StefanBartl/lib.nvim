@@ -52,7 +52,10 @@ function M.check()
   else
     h_warn(
       ("Neovim %s is older than the recommended %d.%d.%d"):format(
-        vstr, MIN_NVIM[1], MIN_NVIM[2], MIN_NVIM[3]
+        vstr,
+        MIN_NVIM[1],
+        MIN_NVIM[2],
+        MIN_NVIM[3]
       ),
       { "Some lib.nvim modules use vim.uv / vim.fs and may not work." }
     )
@@ -69,7 +72,7 @@ function M.check()
   if ok_cfg then
     local strat = cfg.get().strategy
     h_ok(("aggregator strategy: %q"):format(strat))
-    h_info(("require(\"lib\") -> %s"):format(cfg.strategy_module()))
+    h_info(('require("lib") -> %s'):format(cfg.strategy_module()))
   else
     h_error("lib.config failed to load: " .. tostring(cfg))
   end

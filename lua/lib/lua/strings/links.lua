@@ -7,7 +7,9 @@ local M = {}
 ---@param s string
 ---@return string
 function M.uri_decode(s)
-  return (s:gsub("%%(%x%x)", function(hex) return string.char(tonumber(hex, 16)) end))
+  return (s:gsub("%%(%x%x)", function(hex)
+    return string.char(tonumber(hex, 16))
+  end))
 end
 
 --- Looser, Unicode-friendly anchor normalization:
@@ -57,7 +59,9 @@ function M.url_under_cursor(line, col)
   local i = 1
   while true do
     local ss, ee = line:find("https?://[%w%p]+", i)
-    if not ss then break end
+    if not ss then
+      break
+    end
     if col >= ss and col <= ee then
       local url = line:sub(ss, ee):gsub("[%)%]%.,;:]+$", "")
       return url

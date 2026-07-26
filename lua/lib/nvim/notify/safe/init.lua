@@ -39,7 +39,8 @@ Ziel:
 - keine direkten `vim.notify`-Aufrufe aus unsicheren Kontexten
 - klare, wiederverwendbare API
 - identisches Nutzungsgefühl wie bei normalen Notifiern
-]]--
+]]
+--
 
 local M = {}
 

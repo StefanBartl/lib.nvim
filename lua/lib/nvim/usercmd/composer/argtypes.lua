@@ -35,9 +35,14 @@ M.prefix = prefix
 ---@param name string
 ---@param def Lib.UserCmd.Composer.TypeDef
 function M.register(name, def)
-  assert(type(name) == "string" and name ~= "", "composer.argtypes: type name must be a non-empty string")
-  assert(type(def) == "table" and type(def.validate) == "function",
-    "composer.argtypes: type def needs a validate(raw, spec) function")
+  assert(
+    type(name) == "string" and name ~= "",
+    "composer.argtypes: type name must be a non-empty string"
+  )
+  assert(
+    type(def) == "table" and type(def.validate) == "function",
+    "composer.argtypes: type def needs a validate(raw, spec) function"
+  )
   REGISTRY[name] = def
 end
 

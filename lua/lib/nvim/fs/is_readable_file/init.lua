@@ -4,8 +4,8 @@
 ---@param filepath string
 ---@return boolean
 return function(filepath)
-if vim.fn.filereadable(filepath) ~= 1 and vim.fn.isdirectory(filepath) ~= 1 then
-  return false
-end
+  if vim.fn.filereadable(filepath) ~= 1 and vim.fn.isdirectory(filepath) ~= 1 then
+    return false
+  end
   return true
 end

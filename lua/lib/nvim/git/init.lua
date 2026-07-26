@@ -128,7 +128,8 @@ end
 ---@return table<string, { code: string, orig_path: string|nil }>|nil
 function M.status_porcelain(git_cmd)
   local bin = git_cmd or "git"
-  local ok, out = require("lib.nvim.cross.run_argv").run_blocking_captured({ bin, "status", "--porcelain", "-u" })
+  local ok, out =
+    require("lib.nvim.cross.run_argv").run_blocking_captured({ bin, "status", "--porcelain", "-u" })
   if type(out) ~= "string" then
     return nil
   end

@@ -46,10 +46,9 @@ local unpack_fn = table.unpack or unpack
 --- LuaJIT lacks. `n` is what makes embedded `nil`s survive the round-trip.
 ---@param ... any
 ---@return table
-local pack_fn = table.pack
-  or function(...)
-    return { n = select("#", ...), ... }
-  end
+local pack_fn = table.pack or function(...)
+  return { n = select("#", ...), ... }
+end
 
 ---Call `fn(...)` guarded by `xpcall`, capturing a full traceback on failure.
 ---

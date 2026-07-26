@@ -72,7 +72,9 @@ function M.list_all_buffers_info()
       filetype = (b.variables and b.variables.ft)
         or vim.api.nvim_get_option_value("filetype", { buf = b.bufnr or -1 })
         or "",
-      buftype = b.buftype or vim.api.nvim_get_option_value("buftype", { buf = b.bufnr or -1 }) or "",
+      buftype = b.buftype
+        or vim.api.nvim_get_option_value("buftype", { buf = b.bufnr or -1 })
+        or "",
       modified = vim.api.nvim_get_option_value("modified", { buf = b.bufnr or -1 }),
       size = b.size or 0,
     }
@@ -205,7 +207,11 @@ function M.show_aggregated_state(silent)
   lines[#lines + 1] = "Listed IDs: " .. table.concat(st.listed_ids or {}, ", ")
   lines[#lines + 1] = "Tabpage visible buffers: " .. table.concat(st.tabpage_buffers or {}, ", ")
   lines[#lines + 1] = "Only non-file listed buffers: " .. tostring(st.only_nonfile_listed)
-  lines[#lines + 1] = "Current buffer: #" .. tostring(st.current.bufnr) .. " (" .. st.current.filetype .. ")"
+  lines[#lines + 1] = "Current buffer: #"
+    .. tostring(st.current.bufnr)
+    .. " ("
+    .. st.current.filetype
+    .. ")"
   lines[#lines + 1] = ""
   lines[#lines + 1] = "Detailed buffer list:"
   local buflines = vim.split(M.format_buffers_report(), "\n")
@@ -234,7 +240,7 @@ function M.collect_win_report(winid)
   if not api.nvim_win_is_valid(winid) then
     return {
       textual = { string.format("Window %d is invalid", winid) },
-      raw = { valid = false, winid = winid }
+      raw = { valid = false, winid = winid },
     }
   end
 
@@ -256,8 +262,12 @@ function M.collect_win_report(winid)
 
   if ok_buf and bufnr then
     local ok_name, name = pcall(api.nvim_buf_get_name, bufnr)
-    local ok_ft, ft = pcall(function() return vim.bo[bufnr].filetype end)
-    local ok_bt, bt = pcall(function() return vim.bo[bufnr].buftype end)
+    local ok_ft, ft = pcall(function()
+      return vim.bo[bufnr].filetype
+    end)
+    local ok_bt, bt = pcall(function()
+      return vim.bo[bufnr].buftype
+    end)
 
     report.raw.buf_name = ok_name and name or nil
     report.raw.filetype = ok_ft and ft or nil
@@ -274,13 +284,21 @@ function M.collect_win_report(winid)
 
   -- Window options
   local win_opts = {
-    "number", "relativenumber", "wrap", "cursorline",
-    "winbar", "statusline", "signcolumn", "foldcolumn"
+    "number",
+    "relativenumber",
+    "wrap",
+    "cursorline",
+    "winbar",
+    "statusline",
+    "signcolumn",
+    "foldcolumn",
   }
 
   table.insert(report.textual, "Window Options:")
   for _, opt in ipairs(win_opts) do
-    local ok, val = pcall(function() return vim.wo[winid][opt] end)
+    local ok, val = pcall(function()
+      return vim.wo[winid][opt]
+    end)
     if ok then
       report.raw[opt] = val
       table.insert(report.textual, string.format("  %s: %s", opt, tostring(val)))
@@ -312,7 +330,6 @@ function M.collect_win_report(winid)
 
   return report
 end
-
 
 ---@type Lib.BufWinTab.WindowsUtils
 return M

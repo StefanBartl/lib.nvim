@@ -159,7 +159,6 @@ local strings
 
 return strings
 
-
 ---@class LibStringsCore
 
 ---@class LibStringsPatterns

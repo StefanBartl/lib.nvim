@@ -115,8 +115,14 @@ local function format_stats_section(stats, unit, has_stddev)
 
   local suffix = convert.unit_suffix(unit)
 
-  table.insert(lines, string.format("│ Fastest Δ: %11.3f%2s                │", fastest, suffix))
-  table.insert(lines, string.format("│ Longest Δ: %11.3f%2s                │", longest, suffix))
+  table.insert(
+    lines,
+    string.format("│ Fastest Δ: %11.3f%2s                │", fastest, suffix)
+  )
+  table.insert(
+    lines,
+    string.format("│ Longest Δ: %11.3f%2s                │", longest, suffix)
+  )
   table.insert(lines, string.format("│ Average Δ: %11.3f%2s                │", avg, suffix))
   table.insert(lines, string.format("│ Median Δ:  %11.3f%2s                │", med, suffix))
   table.insert(lines, string.format("│ Range:     %11.3f%2s                │", range, suffix))
@@ -127,7 +133,10 @@ local function format_stats_section(stats, unit, has_stddev)
 
     if stddev then
       local stddev_conv = convert.convert_time(stddev, unit)
-      table.insert(lines, string.format("│ Std Dev:   %11.3f%2s                │", stddev_conv, suffix))
+      table.insert(
+        lines,
+        string.format("│ Std Dev:   %11.3f%2s                │", stddev_conv, suffix)
+      )
     end
 
     if cv then
@@ -169,8 +178,14 @@ function M.format_pretty(checks, start_time, unit)
   -- Add total
   local total = checks[#checks] - start_time
   local total_conv = convert.convert_time(total, unit)
-  table.insert(lines, "├────────┴─────────────────┴─────────────────┤")
-  table.insert(lines, string.format("│ Total: %11.3f%2s                  │", total_conv, suffix))
+  table.insert(
+    lines,
+    "├────────┴─────────────────┴─────────────────┤"
+  )
+  table.insert(
+    lines,
+    string.format("│ Total: %11.3f%2s                  │", total_conv, suffix)
+  )
 
   -- Add statistics
   local stats = stats_module.calculate_stats(checks, start_time)
@@ -181,7 +196,10 @@ function M.format_pretty(checks, start_time, unit)
     end
   end
 
-  table.insert(lines, "└──────────────────────────────────────────────┘")
+  table.insert(
+    lines,
+    "└──────────────────────────────────────────────┘"
+  )
 
   return table.concat(lines, "\n")
 end

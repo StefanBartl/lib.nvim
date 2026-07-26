@@ -33,7 +33,8 @@ end
 ---@param unix_path string
 ---@return string|nil
 local function wsl_to_win_path(unix_path)
-  local ok, out = require("lib.nvim.cross.run_argv").run_blocking_captured({ "wslpath", "-w", unix_path })
+  local ok, out =
+    require("lib.nvim.cross.run_argv").run_blocking_captured({ "wslpath", "-w", unix_path })
   if not ok then
     return nil
   end

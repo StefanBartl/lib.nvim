@@ -11,8 +11,10 @@ return function(H)
   local uuid = require("lib.lua.uuid")
 
   local u = uuid.generate()
-  ok(u:match("^%x%x%x%x%x%x%x%x%-%x%x%x%x%-4%x%x%x%-[89ab]%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$") ~= nil,
-    "uuid.generate: matches the UUIDv4 shape (version nibble 4, variant 8/9/a/b)")
+  ok(
+    u:match("^%x%x%x%x%x%x%x%x%-%x%x%x%x%-4%x%x%x%-[89ab]%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$") ~= nil,
+    "uuid.generate: matches the UUIDv4 shape (version nibble 4, variant 8/9/a/b)"
+  )
   ok(uuid.generate() ~= uuid.generate(), "uuid.generate: consecutive calls differ")
   eq(#uuid.format(u, "compact"), 32, "uuid.format: compact strips hyphens")
   eq(uuid.format(u, "upper"), u:upper(), "uuid.format: upper")
@@ -45,7 +47,10 @@ return function(H)
   local myers = require("lib.lua.diff").myers
 
   eq(dlines.diff({ "a", "b" }, { "a", "b" }), nil, "diff.lines: identical arrays -> nil")
-  ok(dlines.diff({ "a", "b", "c" }, { "a", "x", "c" }) ~= nil, "diff.lines: substitution -> splice region")
+  ok(
+    dlines.diff({ "a", "b", "c" }, { "a", "x", "c" }) ~= nil,
+    "diff.lines: substitution -> splice region"
+  )
 
   local ops = myers.diff({ "a", "b", "c" }, { "a", "x", "c" })
   eq(ops[1].op, "equal", "diff.myers: common prefix is equal")
@@ -67,12 +72,16 @@ return function(H)
 
   -- safe_call must forward multiple return values (LuaJIT has no table.pack,
   -- so this exercises the 5.1 fallback).
-  local sok, a, b = E.safe_call(function(x, y) return x + y, x * y end, 3, 4)
+  local sok, a, b = E.safe_call(function(x, y)
+    return x + y, x * y
+  end, 3, 4)
   ok(sok, "error.safe_call: reports success")
   eq(a, 7, "error.safe_call: first return value")
   eq(b, 12, "error.safe_call: second return value")
 
-  local fok, ferr = E.safe_call(function() error("boom") end)
+  local fok, ferr = E.safe_call(function()
+    error("boom")
+  end)
   ok(not fok, "error.safe_call: reports failure")
   ok(E.is(ferr), "error.safe_call: failure yields a structured error")
   eq(ferr.kind, "runtime_error", "error.safe_call: failure kind")
@@ -107,7 +116,11 @@ return function(H)
   eq(tfmt.format_timestamp(ts, "short"), "2026-07-14", "time.format: short")
   eq(tfmt.format_timestamp(ts, "filename"), "20260714_143205", "time.format: filename is path-safe")
   eq(tfmt.format_timestamp(ts, "unix"), tostring(ts), "time.format: unix")
-  eq(tfmt.format_timestamp(ts, "bogus"), tfmt.format_timestamp(ts, "iso"), "time.format: unknown style falls back to iso")
+  eq(
+    tfmt.format_timestamp(ts, "bogus"),
+    tfmt.format_timestamp(ts, "iso"),
+    "time.format: unknown style falls back to iso"
+  )
 
   -- ------------------------------------------------------------ lib.lua.strings
   local utf8m = require("lib.lua.strings.utf8")
@@ -127,8 +140,11 @@ return function(H)
   eq(enc.url_decode("a%20b%26c"), "a b&c", "strings.encoding: url_decode")
   eq(enc.base64_encode("hello"), "aGVsbG8=", "strings.encoding: base64_encode pads")
   eq(enc.base64_decode("aGVsbG8="), "hello", "strings.encoding: base64_decode")
-  eq(enc.base64_decode(enc.base64_encode("any carnal pleasure")), "any carnal pleasure",
-    "strings.encoding: base64 round-trip")
+  eq(
+    enc.base64_decode(enc.base64_encode("any carnal pleasure")),
+    "any carnal pleasure",
+    "strings.encoding: base64 round-trip"
+  )
 
   local dist = require("lib.lua.strings.distance")
   eq(dist.levenshtein("kitten", "sitting"), 3, "strings.distance: classic kitten/sitting = 3")
@@ -166,16 +182,33 @@ return function(H)
   local wrap = require("lib.lua.strings.wrap")
   eq(wrap.center_text("ab", 6), "  ab  ", "strings.wrap: center_text")
   eq(wrap.center_text("toolong", 3), "toolong", "strings.wrap: overlong text passes through")
-  eq(#wrap.center_text_lines({ "a", "bb" }, 5), 2, "strings.wrap: center_text_lines maps every line")
+  eq(
+    #wrap.center_text_lines({ "a", "bb" }, 5),
+    2,
+    "strings.wrap: center_text_lines maps every line"
+  )
 
   -- The aggregator must re-export the new submodules alongside the old ones.
   local strings = require("lib.lua.strings")
   for _, fn in ipairs({
-    "utf8_encode", "utf8_decode", "utf8_char_len", "utf8_iter",
-    "url_encode", "url_decode", "base64_encode", "base64_decode",
-    "levenshtein", "similarity", "format_bytes", "format_number",
-    "parse_location", "case_shape", "apply_shape", "change_case",
-    "center_text", "center_text_lines",
+    "utf8_encode",
+    "utf8_decode",
+    "utf8_char_len",
+    "utf8_iter",
+    "url_encode",
+    "url_decode",
+    "base64_encode",
+    "base64_decode",
+    "levenshtein",
+    "similarity",
+    "format_bytes",
+    "format_number",
+    "parse_location",
+    "case_shape",
+    "apply_shape",
+    "change_case",
+    "center_text",
+    "center_text_lines",
   }) do
     eq(type(strings[fn]), "function", "lib.lua.strings aggregator exports " .. fn)
   end
@@ -201,7 +234,7 @@ return function(H)
   local dump = require("lib.lua.dump")
 
   eq(dump.to_string(42), "(number) 42", "dump.to_string: scalar")
-  eq(dump.to_string("hi"), '(string) hi', "dump.to_string: string")
+  eq(dump.to_string("hi"), "(string) hi", "dump.to_string: string")
   eq(dump.to_string(nil), "nil", "dump.to_string: nil")
 
   local plain = dump.to_lines({ a = 1 })
@@ -213,12 +246,17 @@ return function(H)
   cyclic.self = cyclic
   local cyclic_lines = dump.to_lines(cyclic, { max_depth = 3 })
   ok(#cyclic_lines > 0, "dump.to_lines: cyclic table does not hang")
-  ok(cyclic_lines[#cyclic_lines]:match("max depth reached") ~= nil,
-    "dump.to_lines: cyclic table hits the depth cap")
+  ok(
+    cyclic_lines[#cyclic_lines]:match("max depth reached") ~= nil,
+    "dump.to_lines: cyclic table hits the depth cap"
+  )
 
   local with_meta = setmetatable({ x = 1 }, { y = 2 })
   local meta_lines = dump.to_lines(with_meta)
   local joined = table.concat(meta_lines, "\n")
-  ok(joined:match("%[x%] = %(number%) 1") ~= nil, "dump.to_lines: own field survives alongside a metatable")
+  ok(
+    joined:match("%[x%] = %(number%) 1") ~= nil,
+    "dump.to_lines: own field survives alongside a metatable"
+  )
   ok(joined:match("metatable") ~= nil, "dump.to_lines: metatable is also dumped")
 end

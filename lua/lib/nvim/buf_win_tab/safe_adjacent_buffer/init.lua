@@ -62,4 +62,3 @@ end
 
 ---@type Lib.BufWinTab.SafeAdjacentBuffer
 return M
-

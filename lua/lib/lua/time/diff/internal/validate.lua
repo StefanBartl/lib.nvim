@@ -101,7 +101,10 @@ function M.resolve_interval_spec(spec, max_idx)
     -- Small integer → checkpoint index
     if spec == math.floor(spec) and spec >= 1 and spec <= 10 then
       if spec > max_idx then
-        return false, nil, nil, string.format("checkpoint index %d not found (max: %d)", spec, max_idx)
+        return false,
+          nil,
+          nil,
+          string.format("checkpoint index %d not found (max: %d)", spec, max_idx)
       end
       return true, "index", spec, nil
     end
@@ -137,7 +140,6 @@ function M.validate_label(label)
 
   return true, label
 end
-
 
 --- Validate show_index parameter
 ---@param show_index any

@@ -52,9 +52,21 @@ local function check_summaries(ir, findings)
     local node = ir.nodes[id]
     if node.kind ~= "namespace" then
       if not node.module then
-        add(findings, "error", "missing-module-tag", id, ("%s has no ---@module annotation"):format(node.source or id))
+        add(
+          findings,
+          "error",
+          "missing-module-tag",
+          id,
+          ("%s has no ---@module annotation"):format(node.source or id)
+        )
       elseif node.summary == "" then
-        add(findings, "warn", "missing-summary", id, ("%s has ---@module but no description line"):format(node.source or id))
+        add(
+          findings,
+          "warn",
+          "missing-summary",
+          id,
+          ("%s has ---@module but no description line"):format(node.source or id)
+        )
       end
     end
   end
@@ -72,8 +84,13 @@ local function check_module_paths(ir, findings, opts)
     if node.module and node.source then
       local want = expected_module(node.source, lua_root)
       if want and want ~= node.module then
-        add(findings, "error", "module-path-mismatch", id,
-          ("%s declares @module '%s' but lives at '%s'"):format(node.source, node.module, want))
+        add(
+          findings,
+          "error",
+          "module-path-mismatch",
+          id,
+          ("%s declares @module '%s' but lives at '%s'"):format(node.source, node.module, want)
+        )
       end
     end
   end
@@ -128,8 +145,13 @@ local function check_readme_links(ir, findings, opts)
             end
             local resolved = table.concat(stack, "/")
             if not uv.fs_stat(root .. "/" .. resolved) then
-              add(findings, "warn", "dead-readme-link", id,
-                ("%s links to '%s' which does not exist"):format(node.readme, target))
+              add(
+                findings,
+                "warn",
+                "dead-readme-link",
+                id,
+                ("%s links to '%s' which does not exist"):format(node.readme, target)
+              )
             end
           end
         end
@@ -169,8 +191,13 @@ local function check_orphans(ir, findings, opts)
       -- A module may legitimately be reached only through the aggregator's
       -- string map rather than a literal require, so this stays at `info`.
       if not required[node.module] then
-        add(findings, "info", "unreferenced-module", id,
-          ("%s is required by no other file in the tree"):format(node.module))
+        add(
+          findings,
+          "info",
+          "unreferenced-module",
+          id,
+          ("%s is required by no other file in the tree"):format(node.module)
+        )
       end
     end
   end
@@ -207,8 +234,16 @@ local function check_see_targets(ir, findings)
     for _, fn in ipairs(node.functions) do
       for _, target in ipairs(fn.see) do
         if not known[target] then
-          add(findings, "warn", "dead-see-target", id,
-            ("%s: @see target '%s' does not resolve to a known module or function"):format(fn.name, target))
+          add(
+            findings,
+            "warn",
+            "dead-see-target",
+            id,
+            ("%s: @see target '%s' does not resolve to a known module or function"):format(
+              fn.name,
+              target
+            )
+          )
         end
       end
     end
@@ -236,8 +271,17 @@ local function check_undocumented_params(ir, findings)
           end
         end
         if declared > #fn.params then
-          add(findings, "info", "undocumented-param", id,
-            ("%s has %d parameter(s) but only %d @param line(s)"):format(fn.name, declared, #fn.params))
+          add(
+            findings,
+            "info",
+            "undocumented-param",
+            id,
+            ("%s has %d parameter(s) but only %d @param line(s)"):format(
+              fn.name,
+              declared,
+              #fn.params
+            )
+          )
         end
       end
     end

@@ -67,7 +67,11 @@ function M.setup(opts)
     if action == "check" then
       local _, findings = handle.rescan()
       local tally = docmap.tally(findings)
-      local summary = ("%d errors · %d warnings · %d info"):format(tally.error, tally.warn, tally.info)
+      local summary = ("%d errors · %d warnings · %d info"):format(
+        tally.error,
+        tally.warn,
+        tally.info
+      )
       if tally.error > 0 then
         notify.warn("Module map drift: " .. summary)
       else
@@ -96,16 +100,27 @@ function M.setup(opts)
       local ir, findings = handle.rescan({ luals = true })
       local written = docmap.write_artifacts(ir, findings, cfg)
       local tally = docmap.tally(findings)
-      notify.info(("Wrote %d artifacts with LuaLS enrichment (%d modules, %d edges, %d errors)")
-        :format(#written, ir.meta.counts.module, #(ir.edges or {}), tally.error))
+      notify.info(
+        ("Wrote %d artifacts with LuaLS enrichment (%d modules, %d edges, %d errors)"):format(
+          #written,
+          ir.meta.counts.module,
+          #(ir.edges or {}),
+          tally.error
+        )
+      )
       return
     end
 
     local ir, findings = handle.rescan()
     local written = docmap.write_artifacts(ir, findings, cfg)
     local tally = docmap.tally(findings)
-    notify.info(("Wrote %d artifacts (%d modules, %d errors)")
-      :format(#written, ir.meta.counts.module, tally.error))
+    notify.info(
+      ("Wrote %d artifacts (%d modules, %d errors)"):format(
+        #written,
+        ir.meta.counts.module,
+        tally.error
+      )
+    )
   end, {
     nargs = "?",
     desc = "Regenerate the module map (:" .. command_name .. " [check|full|open])",

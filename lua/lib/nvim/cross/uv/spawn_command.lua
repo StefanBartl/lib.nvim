@@ -71,10 +71,14 @@ local function spawn_project_command(cmd, opts)
       on_exit(code, signal)
     else
       vim.schedule(function()
-        print(("Command '%s' exited with code %d, signal %s"):format(full_cmd, code, tostring(signal)))
+        print(
+          ("Command '%s' exited with code %d, signal %s"):format(full_cmd, code, tostring(signal))
+        )
       end)
     end
-    if handle then handle:close() end
+    if handle then
+      handle:close()
+    end
   end)
 
   return handle

@@ -52,9 +52,11 @@ function M.change_case(str, mode)
     local lowered = str:lower()
     return (lowered:gsub("^%s*(%a)", string.upper, 1))
   elseif mode == "title" then
-    return (str:gsub("(%a[%w']*)", function(word)
-      return word:sub(1, 1):upper() .. word:sub(2):lower()
-    end))
+    return (
+      str:gsub("(%a[%w']*)", function(word)
+        return word:sub(1, 1):upper() .. word:sub(2):lower()
+      end)
+    )
   end
   return str
 end

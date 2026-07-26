@@ -95,7 +95,9 @@ end
 ---@return string|nil error
 function M.buf_get_lines(bufnr, start, end_, strict_indexing)
   local valid, err = validate_buffer(bufnr)
-  if not valid then return false, nil, err end
+  if not valid then
+    return false, nil, err
+  end
   if type(start) ~= "number" or type(end_) ~= "number" then
     return false, nil, "Start and end must be numbers"
   end
@@ -108,7 +110,9 @@ end
 ---@return string|nil error
 function M.buf_line_count(bufnr)
   local valid, err = validate_buffer(bufnr)
-  if not valid then return false, nil, err end
+  if not valid then
+    return false, nil, err
+  end
   return M.safe_call(api.nvim_buf_line_count, bufnr)
 end
 
@@ -119,7 +123,9 @@ end
 ---@return string|nil error
 function M.buf_get_option(bufnr, name)
   local valid, err = validate_buffer(bufnr)
-  if not valid then return false, nil, err end
+  if not valid then
+    return false, nil, err
+  end
   if type(name) ~= "string" or name == "" then
     return false, nil, "Option name must be a non-empty string"
   end
@@ -134,7 +140,9 @@ end
 ---@return string|nil error
 function M.buf_set_option(bufnr, name, value)
   local valid, err = validate_buffer(bufnr)
-  if not valid then return false, nil, err end
+  if not valid then
+    return false, nil, err
+  end
   if type(name) ~= "string" or name == "" then
     return false, nil, "Option name must be a non-empty string"
   end
@@ -151,11 +159,21 @@ end
 ---@return string|nil error
 function M.buf_set_extmark(bufnr, ns_id, line, col, opts)
   local valid, err = validate_buffer(bufnr)
-  if not valid then return false, nil, err end
-  if type(ns_id) ~= "number" then return false, nil, "Namespace ID must be a number" end
-  if type(line) ~= "number" or line < 0 then return false, nil, "Line must be a non-negative number" end
-  if type(col) ~= "number" or col < 0 then return false, nil, "Column must be a non-negative number" end
-  if type(opts) ~= "table" then return false, nil, "Options must be a table" end
+  if not valid then
+    return false, nil, err
+  end
+  if type(ns_id) ~= "number" then
+    return false, nil, "Namespace ID must be a number"
+  end
+  if type(line) ~= "number" or line < 0 then
+    return false, nil, "Line must be a non-negative number"
+  end
+  if type(col) ~= "number" or col < 0 then
+    return false, nil, "Column must be a non-negative number"
+  end
+  if type(opts) ~= "table" then
+    return false, nil, "Options must be a table"
+  end
   return M.safe_call(api.nvim_buf_set_extmark, bufnr, ns_id, line, col, opts)
 end
 
@@ -179,11 +197,19 @@ function M.set_extmark(bufnr, ns_id, line, col_start, col_end, hl_group, line_co
   end
   local line_length = #line_content
   if type(col_start) ~= "number" or col_start < 0 or col_start > line_length then
-    return false, nil, string.format("col_start %s out of range (line length: %d)", tostring(col_start), line_length)
+    return false,
+      nil,
+      string.format("col_start %s out of range (line length: %d)", tostring(col_start), line_length)
   end
   if type(col_end) ~= "number" or col_end < col_start or col_end > line_length then
-    return false, nil,
-      string.format("col_end %s out of range (line length: %d, col_start: %d)", tostring(col_end), line_length, col_start)
+    return false,
+      nil,
+      string.format(
+        "col_end %s out of range (line length: %d, col_start: %d)",
+        tostring(col_end),
+        line_length,
+        col_start
+      )
   end
   return M.buf_set_extmark(bufnr, ns_id, line, col_start, {
     end_col = col_end,
@@ -201,8 +227,12 @@ end
 ---@return string|nil error
 function M.buf_clear_namespace(bufnr, ns_id, line_start, line_end)
   local valid, err = validate_buffer(bufnr)
-  if not valid then return false, nil, err end
-  if type(ns_id) ~= "number" then return false, nil, "Namespace ID must be a number" end
+  if not valid then
+    return false, nil, err
+  end
+  if type(ns_id) ~= "number" then
+    return false, nil, "Namespace ID must be a number"
+  end
   return M.safe_call(api.nvim_buf_clear_namespace, bufnr, ns_id, line_start, line_end)
 end
 
@@ -213,7 +243,9 @@ end
 ---@return string|nil error
 function M.win_get_option(winnr, name)
   local valid, err = validate_window(winnr)
-  if not valid then return false, nil, err end
+  if not valid then
+    return false, nil, err
+  end
   if type(name) ~= "string" or name == "" then
     return false, nil, "Option name must be a non-empty string"
   end
@@ -228,7 +260,9 @@ end
 ---@return string|nil error
 function M.win_set_option(winnr, name, value)
   local valid, err = validate_window(winnr)
-  if not valid then return false, nil, err end
+  if not valid then
+    return false, nil, err
+  end
   if type(name) ~= "string" or name == "" then
     return false, nil, "Option name must be a non-empty string"
   end
@@ -241,7 +275,9 @@ end
 ---@return string|nil error
 function M.win_get_buf(winnr)
   local valid, err = validate_window(winnr)
-  if not valid then return false, nil, err end
+  if not valid then
+    return false, nil, err
+  end
   return M.safe_call(api.nvim_win_get_buf, winnr)
 end
 
@@ -252,7 +288,9 @@ end
 ---@return string|nil error
 function M.win_close(winnr, force)
   local valid, err = validate_window(winnr)
-  if not valid then return false, nil, err end
+  if not valid then
+    return false, nil, err
+  end
   return M.safe_call(api.nvim_win_close, winnr, force)
 end
 
@@ -263,9 +301,13 @@ end
 ---@return string|nil error
 function M.buf_delete(bufnr, opts)
   local valid, err = validate_buffer(bufnr)
-  if not valid then return false, nil, err end
+  if not valid then
+    return false, nil, err
+  end
   opts = opts or {}
-  if type(opts) ~= "table" then return false, nil, "Options must be a table" end
+  if type(opts) ~= "table" then
+    return false, nil, "Options must be a table"
+  end
   return M.safe_call(api.nvim_buf_delete, bufnr, opts)
 end
 

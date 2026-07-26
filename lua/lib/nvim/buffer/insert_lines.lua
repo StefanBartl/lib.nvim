@@ -3,7 +3,6 @@
 
 local api = vim.api
 
-
 ---Insert lines into the current buffer at a typed position.
 ---
 ---Semantics:
@@ -24,24 +23,20 @@ local function insert_lines(lines, pos)
     -- Default: insert at start of file
     row = 0
     col = 0
-
   elseif pos.cursor == true then
     -- Insert at current cursor position
     local win = api.nvim_get_current_win()
     local cursor = api.nvim_win_get_cursor(win)
     row = cursor[1] - 1
     col = cursor[2]
-
   elseif pos.position == "end" then
     -- Insert at end of file
     row = api.nvim_buf_line_count(buf)
     col = 0
-
   elseif pos.row ~= nil then
     -- Explicit row (with optional column)
     row = pos.row
     col = pos.col or 0
-
   else
     -- Fallback safety: treat as start
     row = 0
@@ -51,11 +46,7 @@ local function insert_lines(lines, pos)
   api.nvim_buf_set_lines(buf, row, row, false, lines)
 
   -- Place cursor after inserted block
-  api.nvim_win_set_cursor(
-    api.nvim_get_current_win(),
-    { row + #lines + 1, col }
-  )
+  api.nvim_win_set_cursor(api.nvim_get_current_win(), { row + #lines + 1, col })
 end
 
 return insert_lines
-

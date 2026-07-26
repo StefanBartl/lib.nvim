@@ -77,4 +77,3 @@
 ---@field win_valid fun(winid: any): boolean # True when winid is a valid window handle.
 
 return {}
-

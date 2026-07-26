@@ -22,7 +22,8 @@ local unify_slashes = require("lib.nvim.cross.fs.separators.unify_slashes")
 local function validate(path)
   assert(
     type(path) == "string",
-    "[lib.nvim.cross.fs.separators.collapse_dots] parameter 'path' must be type of string, but is " .. type(path)
+    "[lib.nvim.cross.fs.separators.collapse_dots] parameter 'path' must be type of string, but is "
+      .. type(path)
   )
   return path
 end
@@ -92,8 +93,8 @@ end
 ---@return string
 return function(path)
   local unified = unify_slashes(validate(path))
-  local root    = detect_root(unified)
-  local raw     = split_segments(unified)
-  local kept    = collapse_segments(raw, root ~= "")
+  local root = detect_root(unified)
+  local raw = split_segments(unified)
+  local kept = collapse_segments(raw, root ~= "")
   return join(root, kept)
 end

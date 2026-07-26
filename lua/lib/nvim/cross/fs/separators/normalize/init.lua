@@ -4,7 +4,7 @@
 
 ---@param path string
 ---@return string|nil
-return function (path)
+return function(path)
   -- ensure the parameter is a string and fail early otherwise.
   assert(
     type(path) == "string",
@@ -29,7 +29,6 @@ return function (path)
     r = path:gsub("/", "\\")
     return r
   else
-
     -- Replace backslashes "\" with forward slashes "/".
     -- Matching a literal backslash in Lua patterns requires escaping the backslash for the pattern.
     -- The pattern string for a single backslash must be written as "\\\\" in source code:

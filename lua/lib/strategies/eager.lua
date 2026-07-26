@@ -29,7 +29,7 @@ LIB.identity = require("lib.lua.functions.meta").identity
 LIB.always_true = require("lib.lua.functions.meta").always_true
 LIB.always_false = require("lib.lua.functions.meta").always_false
 LIB.const = require("lib.lua.functions.meta").const
-LIB.raise  = require("lib.lua.functions.meta").raise
+LIB.raise = require("lib.lua.functions.meta").raise
 
 -- === FILESYSTEM ===
 local fs_path = require("lib.nvim.fs.path")
@@ -142,7 +142,8 @@ LIB.lazy = require("lib.lua.lazy")
 LIB.json = require("lib.lua.json")
 LIB.json.is_array_like = require("lib.lua.json.decode.to_string_array").is_array_like
 LIB.json.ensure_string_array = require("lib.lua.json.decode.to_string_array").ensure_string_array
-LIB.json.table_to_string_array =require("lib.lua.json.decode.to_string_array").table_to_string_array
+LIB.json.table_to_string_array =
+  require("lib.lua.json.decode.to_string_array").table_to_string_array
 LIB.json_encode = require("lib.lua.json.encode").encode
 
 -- === MEMO ===

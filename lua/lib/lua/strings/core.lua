@@ -260,7 +260,9 @@ end
 ---@param s string
 ---@return integer
 function S.count_lines(s)
-  if s == "" then return 0 end
+  if s == "" then
+    return 0
+  end
   local count = 0
   for _ in s:gmatch("[^\n]+") do
     count = count + 1

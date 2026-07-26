@@ -3,7 +3,7 @@
 ---@param path string
 ---@param content string
 ---@return boolean,string|nil
-return function (path, content)
+return function(path, content)
   local dir = vim.fn.fnamemodify(path, ":h")
   if dir == "" then
     return false, "Invalid directory for path: " .. path

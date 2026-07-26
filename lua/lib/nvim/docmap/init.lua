@@ -62,7 +62,8 @@ function M.scan_full(opts)
   local luals_err
   if opts.luals then
     local luals = require("lib.nvim.docmap.luals")
-    local doc_json, err = luals.run(opts.root, opts.source or "lua", { timeout_ms = opts.luals_timeout_ms })
+    local doc_json, err =
+      luals.run(opts.root, opts.source or "lua", { timeout_ms = opts.luals_timeout_ms })
     if doc_json then
       luals.merge(ir, doc_json, opts.source or "lua")
     else
@@ -140,7 +141,7 @@ function M.to_json(ir)
     put(i < #ir.order and ",\n" or "\n")
   end
 
-  put("  ],\n  \"edges\": ")
+  put('  ],\n  "edges": ')
   put(json.encode(ir.edges or {}))
   put("\n}\n")
   return table.concat(out)

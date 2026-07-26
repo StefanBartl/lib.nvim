@@ -45,7 +45,8 @@ function M.target_window(opts)
   if M.is_usable_window(cur) then
     return cur
   end
-  local wins = opts.current_tab_only and vim.api.nvim_tabpage_list_wins(0) or vim.api.nvim_list_wins()
+  local wins = opts.current_tab_only and vim.api.nvim_tabpage_list_wins(0)
+    or vim.api.nvim_list_wins()
   for _, winid in ipairs(wins) do
     if M.is_usable_window(winid) then
       return winid

@@ -8,10 +8,11 @@
 
 ---@param path string
 ---@return string
-return function (path)
+return function(path)
   assert(
     type(path) == "string",
-    "[lib.nvim.cross.fs.separators.unify_slashes] parameter 'path' must be type of string, but is " .. type(path)
+    "[lib.nvim.cross.fs.separators.unify_slashes] parameter 'path' must be type of string, but is "
+      .. type(path)
   )
   return (path:gsub("\\", "/"))
 end

@@ -6,4 +6,3 @@
 ---@field kit Lib.UI.Kit
 
 return {}
-

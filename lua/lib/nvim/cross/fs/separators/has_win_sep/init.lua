@@ -2,7 +2,7 @@
 
 ---@param s string
 ---@return boolean
-return function (s)
+return function(s)
   -- "E:/path/.." or "C:\path\.."
   return s:match("^[A-Za-z]:[\\/]")
 end

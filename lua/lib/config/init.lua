@@ -54,9 +54,11 @@ function M.setup(opts)
   -- the call order can be fixed (setup() must run BEFORE require("lib")).
   if M.options.strategy ~= prev and package.loaded["lib"] ~= nil then
     vim.notify(
-      ('lib.config: strategy changed to %q after require("lib") already ran; '
+      (
+        'lib.config: strategy changed to %q after require("lib") already ran; '
         .. "this has no effect. Call lib.config.setup() before the first "
-        .. 'require("lib").'):format(M.options.strategy),
+        .. 'require("lib").'
+      ):format(M.options.strategy),
       vim.log.levels.WARN
     )
   end

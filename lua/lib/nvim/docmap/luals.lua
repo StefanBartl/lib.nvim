@@ -54,7 +54,12 @@ function M.run(root, source, opts)
 
   local result
   spawn_capture(
-    { "lua-language-server", "--doc=" .. scan_dir, "--doc_out_path=" .. out_dir, "--logpath=" .. out_dir .. "/log" },
+    {
+      "lua-language-server",
+      "--doc=" .. scan_dir,
+      "--doc_out_path=" .. out_dir,
+      "--logpath=" .. out_dir .. "/log",
+    },
     { timeout_ms = timeout_ms },
     function(res)
       result = res
@@ -74,7 +79,11 @@ function M.run(root, source, opts)
     return nil, "lua-language-server --doc timed out after " .. timeout_ms .. "ms"
   end
   if not result.ok then
-    return nil, ("lua-language-server --doc exited %d: %s"):format(result.code, result.stderr ~= "" and result.stderr or "(no stderr)")
+    return nil,
+      ("lua-language-server --doc exited %d: %s"):format(
+        result.code,
+        result.stderr ~= "" and result.stderr or "(no stderr)"
+      )
   end
 
   local doc_path = out_dir .. "/doc.json"
@@ -158,7 +167,11 @@ function M.merge(ir, doc_json, source)
     -- "doc.class" vs "doc.alias" is LuaLS's own discriminator (verified: an
     -- ---@alias entry's defines[1].type is literally "doc.alias"). Anything
     -- else (doc.class members that aren't top-level types, etc.) is skipped.
-    if define and type(define.file) == "string" and (define.type == "doc.class" or define.type == "doc.alias") then
+    if
+      define
+      and type(define.file) == "string"
+      and (define.type == "doc.class" or define.type == "doc.alias")
+    then
       local rel_file = source .. "/" .. define.file
       local node = by_types_file[rel_file]
       if node then

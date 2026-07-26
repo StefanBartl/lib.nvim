@@ -53,7 +53,12 @@ local function dump_value(value, depth, key, lines, max_depth)
     for k, v in pairs(value) do
       dump_value(v, depth + 1, k, lines, max_depth)
     end
-  elseif type(value) == "function" or type(value) == "thread" or type(value) == "userdata" or value == nil then
+  elseif
+    type(value) == "function"
+    or type(value) == "thread"
+    or type(value) == "userdata"
+    or value == nil
+  then
     lines[#lines + 1] = spaces .. line_prefix .. tostring(value)
   else
     lines[#lines + 1] = spaces .. line_prefix .. "(" .. type(value) .. ") " .. tostring(value)
