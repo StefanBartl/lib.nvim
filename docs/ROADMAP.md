@@ -27,17 +27,22 @@ lib.nvim was audited against the project checklists. Full per-rule status:
 2. ~~Generalize `lib.nvim.window.neotree.get_neotree_window`.~~ Done — now
    `lib.nvim.window.find_by_filetype(filetype)`. See
    [NEOTREE_FEATURES.md](ROADMAP/NEOTREE_FEATURES.md).
-3. **Recursive directory collector** — no `lib.nvim.fs.collect_recursive`
-   equivalent exists yet; every consumer (e.g. filetree.nvim's `util.fs`)
-   currently hand-rolls this. Candidate for a new `lib.nvim.fs` helper.
-4. **Automated test suite** — still the biggest structural gap (no
-   `docs/TESTS/**`); deliberately deferred, tracked here for later.
-5. Optional: a small lint/CI pipeline (`luacheck`) alongside the existing
-   `.stylua.toml` formatting config.
-6. **Project-scoped persistent store** — `lib.nvim.cache.disk` +
-   `lib.nvim.git.repo_root` cover the two halves but nothing combines them;
-   at least 7 plugins hand-roll project-keyed JSON persistence separately.
-   Proposal: [project-store.md](ROADMAP/project-store.md).
+3. ~~Recursive directory collector~~ Done — `lib.nvim.fs.collect_recursive`
+   (flat walk) and `lib.nvim.fs.scan_cached` (TTL-cached wrapper) both ship.
+4. ~~Automated test suite~~ Done (at least the CI-wiring half) —
+   `docs/TESTS/**` now covers most modules (logger, ui.kit, lua helpers, nvim
+   helpers, window, buffer/window context, cache, store.project, composer,
+   docmap) and runs headless in CI (item 5's workflow). Growing coverage for
+   not-yet-tested modules remains open-ended, ordinary work — no longer a
+   structural gap.
+5. ~~Lint/CI pipeline~~ Done — `.luacheckrc` (LuaJIT std, `vim` global,
+   `lib.nvim` conventions codified as ignore rules) plus
+   `.github/workflows/ci.yml` (stylua --check, luacheck, headless test run)
+   on push/PR.
+6. ~~Project-scoped persistent store~~ Done — `lib.nvim.store.project`
+   ships, combining `lib.nvim.cache.disk` + `lib.nvim.fs.project_key`. See
+   [project-store.md](ROADMAP/project-store.md) (updated with its
+   implementation status) and `doc/lib.nvim-store.txt`.
 
 ---
 
