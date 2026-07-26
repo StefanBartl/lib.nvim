@@ -16,6 +16,7 @@ local H = dofile(dir .. "harness.lua")
 
 local specs = {
   "logger_spec.lua",
+  "autocmd_spec.lua",
   "ui_kit_spec.lua",
   "lua_helpers_spec.lua",
   "nvim_helpers_spec.lua",
