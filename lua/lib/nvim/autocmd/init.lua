@@ -50,7 +50,7 @@ end
 ---@param event string|string[]
 ---@param callback fun(args:Lib.Autocmd.Args)
 ---@param opts LibAutocmdOpts|nil
----@return nil
+---@return integer autocmd_id
 function M.create(event, callback, opts)
   opts = opts or {}
 
@@ -88,7 +88,7 @@ function M.create(event, callback, opts)
     native_opts.pattern = opts.pattern
   end
 
-  vim.api.nvim_create_autocmd(event, native_opts)
+  return vim.api.nvim_create_autocmd(event, native_opts)
 end
 
 -- Normalize event configuration to a non-empty list.

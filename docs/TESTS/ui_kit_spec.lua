@@ -168,8 +168,8 @@ return function(H)
         { name = "a", label = "A", default = "defA" },
         { name = "b", label = "B", default = "defB" },
       },
-      on_submit = function(v)
-        form_values = v
+      on_submit = function(values)
+        form_values = values
       end,
     }),
     "form opens (returns the first field's surface)"
@@ -192,8 +192,8 @@ return function(H)
       { name = "a", label = "A", default = "" },
       { name = "b", label = "B", default = "keepme" },
     },
-    on_submit = function(v)
-      skip_values = v
+    on_submit = function(values)
+      skip_values = values
     end,
   })
   skip_field() -- skip "a"
@@ -225,8 +225,8 @@ return function(H)
   kit.popup({
     type = "form",
     fields = { { name = "only", label = "Only", default = "x" } },
-    on_submit = function(v)
-      popup_values = v
+    on_submit = function(values)
+      popup_values = values
     end,
   })
   submit_field("via-popup")
