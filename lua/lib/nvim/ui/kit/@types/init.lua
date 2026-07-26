@@ -116,6 +116,8 @@
 ---@field theme? Lib.UI.Kit.ThemeArg
 ---@field width? integer
 ---@field relative? "editor"|"cursor"|"win"
+---@field row? integer                     # only with relative="editor"; overrides the default centered placement
+---@field col? integer                     # only with relative="editor"; overrides the default centered placement
 ---@field debounce? integer                # ms between the last keystroke and on_change (default 80)
 ---@field on_change fun(query: string)      # fired debounced as the user types
 ---@field on_submit? fun(query: string)     # <CR>

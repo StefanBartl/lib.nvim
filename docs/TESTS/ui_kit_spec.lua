@@ -197,6 +197,23 @@ return function(H)
   eq(li_coalesced[1], "hel", "the coalesced on_change carries the final value")
   li2:close()
 
+  -- row/col are forwarded to the surface (anchoring next to a host window,
+  -- e.g. filetree.nvim's live_search bar at the bottom of the tree window),
+  -- overriding the default editor-centered placement.
+  local li_pos = assert(
+    kit.live_input({
+      relative = "editor",
+      row = 3,
+      col = 5,
+      on_change = function() end,
+    }),
+    "live_input (row/col) opens"
+  )
+  local win_cfg = vim.api.nvim_win_get_config(li_pos.winid)
+  eq(win_cfg.row, 3, "row is forwarded to the surface")
+  eq(win_cfg.col, 5, "col is forwarded to the surface")
+  li_pos:close()
+
   -- <CR> submits the current query and closes
   local li_submitted
   kit.live_input({
