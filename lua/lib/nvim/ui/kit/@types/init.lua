@@ -86,6 +86,28 @@
 ---@field label string       # display text
 ---@field action? fun()      # callback run when the item is picked (alias: cb)
 
+--- One field of a `kit.form`. `name` is the key its answer is stored under
+--- in the result table handed to `on_submit`.
+---@class Lib.UI.Kit.FormField
+---@field name string                     # result table key
+---@field label? string                   # alias: prompt
+---@field prompt? string
+---@field default? string
+---@field required? boolean               # <Esc> aborts the whole form instead of skipping this field
+---@field expand_env? boolean             # run the answer through lib.nvim.cross.fs.expand_path
+---@field theme? Lib.UI.Kit.ThemeArg       # overrides opts.theme for this field
+---@field width? integer                  # overrides opts.width for this field
+---@field relative? "editor"|"cursor"|"win"  # overrides opts.relative for this field
+
+--- Options for `kit.form` / `kit.popup({ type = "form" })`.
+---@class Lib.UI.Kit.FormOpts
+---@field fields Lib.UI.Kit.FormField[]
+---@field theme? Lib.UI.Kit.ThemeArg
+---@field width? integer
+---@field relative? "editor"|"cursor"|"win"
+---@field on_submit fun(values: table<string, string>)
+---@field on_cancel? fun()
+
 --- Options for `kit.setup`.
 ---@class Lib.UI.Kit.SetupOpts
 ---@field default? string                       # active preset name
@@ -99,6 +121,7 @@
 ---@field viewer fun(opts: Lib.UI.Kit.ViewerOpts): Lib.UI.Kit.Surface|nil  # read-only info panel, closes on focus loss
 ---@field toast fun(opts: table): Lib.UI.Kit.Surface|nil    # ephemeral corner message
 ---@field input fun(opts: table): Lib.UI.Kit.Surface|nil    # single-line insert-mode prompt
+---@field form fun(opts: Lib.UI.Kit.FormOpts): Lib.UI.Kit.Surface|nil  # sequential multi-field prompt
 ---@field select fun(opts: table): any                       # native themed list chooser (single/multi)
 ---@field prompt fun(opts: table): any                       # ask: confirm (yes/no) or text
 ---@field picker fun(opts: table): table|nil                 # interactive picker (prompt drives results)

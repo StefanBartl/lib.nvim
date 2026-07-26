@@ -1,7 +1,8 @@
 -- docs/TESTS/ui_kit_spec.lua — lib.nvim.ui.kit
 -- Phase 1 (theme, surface, note), Phase 2 (toast, input, prompt),
 -- Phase 3 (layout + picker, native chooser + hover_select shim, interactive picker),
--- Phase 4 (button-confirm), Phase 5 (viewer: read-only info panel).
+-- Phase 4 (button-confirm), Phase 5 (viewer: read-only info panel),
+-- Phase 6 (form: sequential multi-field prompt).
 
 return function(H)
   local eq, ok = H.eq, H.ok
@@ -145,6 +146,91 @@ return function(H)
   eq(vim.api.nvim_buf_get_lines(inp.bufnr, 0, 1, false)[1], "sb", "input seeded with default")
   vim.cmd("stopinsert")
   inp:close()
+
+  -- --------------------------------------------------------------- form
+  -- Buffer edits + <CR>/<Esc> feedkeys stand in for typing: this headless
+  -- runner never actually enters insert mode (no UI attached to redraw into
+  -- it), but the input component binds <CR>/<Esc> in both "i" and "n" modes,
+  -- so driving it from Normal mode exercises the same finish() path.
+  local function submit_field(text)
+    vim.api.nvim_buf_set_lines(vim.api.nvim_get_current_buf(), 0, 1, false, { text })
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "x", false)
+  end
+  local function skip_field()
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "x", false)
+  end
+
+  -- full submit: both fields typed, on_submit gets a keyed table
+  local form_values
+  local form_surf = assert(
+    kit.form({
+      fields = {
+        { name = "a", label = "A", default = "defA" },
+        { name = "b", label = "B", default = "defB" },
+      },
+      on_submit = function(v)
+        form_values = v
+      end,
+    }),
+    "form opens (returns the first field's surface)"
+  )
+  ok(form_surf:is_valid(), "form's first field is a real surface")
+  eq(
+    vim.api.nvim_buf_get_lines(form_surf.bufnr, 0, 1, false)[1],
+    "defA",
+    "first field seeded with its default"
+  )
+  submit_field("hello")
+  submit_field("world")
+  eq(form_values.a, "hello", "form collects the first field under its name")
+  eq(form_values.b, "world", "form collects the second field under its name")
+
+  -- optional fields: <Esc> skips (keeps the default) and the form continues
+  local skip_values
+  kit.form({
+    fields = {
+      { name = "a", label = "A", default = "" },
+      { name = "b", label = "B", default = "keepme" },
+    },
+    on_submit = function(v)
+      skip_values = v
+    end,
+  })
+  skip_field() -- skip "a"
+  skip_field() -- skip "b" -> keeps default
+  eq(skip_values.a, "", "skipping an optional field with no default -> empty string")
+  eq(skip_values.b, "keepme", "skipping an optional field keeps its default")
+
+  -- required field: <Esc> aborts the whole form, on_cancel fires, no on_submit
+  local aborted, abort_submitted
+  kit.form({
+    fields = {
+      { name = "a", label = "A", default = "defA" },
+      { name = "b", label = "B", default = "defB", required = true },
+    },
+    on_submit = function()
+      abort_submitted = true
+    end,
+    on_cancel = function()
+      aborted = true
+    end,
+  })
+  submit_field("first ok") -- advance past the optional field
+  skip_field() -- <Esc> on the required field -> abort
+  ok(aborted, "on_cancel fires when <Esc> hits a required field")
+  ok(not abort_submitted, "on_submit never fires once the form was aborted")
+
+  -- routed via kit.popup({ type = "form" })
+  local popup_values
+  kit.popup({
+    type = "form",
+    fields = { { name = "only", label = "Only", default = "x" } },
+    on_submit = function(v)
+      popup_values = v
+    end,
+  })
+  submit_field("via-popup")
+  eq(popup_values.only, "via-popup", 'kit.popup({ type = "form" }) routes to the form component')
 
   -- --------------------------------------------------------------- chooser (native select)
   local chooser = require("lib.nvim.ui.kit.chooser")
