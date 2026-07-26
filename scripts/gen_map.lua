@@ -57,7 +57,9 @@ local function report(findings)
       io.stderr:write(("  [%s] %-22s %s\n"):format(f.severity, f.check, f.message))
     end
   end
-  io.stdout:write(("\n%d errors, %d warnings, %d info\n"):format(tally.error, tally.warn, tally.info))
+  io.stdout:write(
+    ("\n%d errors, %d warnings, %d info\n"):format(tally.error, tally.warn, tally.info)
+  )
   return tally
 end
 
@@ -87,7 +89,9 @@ if check_only then
     for _, s in ipairs(stale) do
       io.stderr:write("  " .. s .. "\n")
     end
-    io.stderr:write("\nRun :LibMap (or nvim --headless -l scripts/gen_map.lua) and commit the result.\n\n")
+    io.stderr:write(
+      "\nRun :LibMap (or nvim --headless -l scripts/gen_map.lua) and commit the result.\n\n"
+    )
     report(findings)
     vim.cmd("cq 1")
   end
@@ -110,7 +114,12 @@ local ir, findings, written = docmap.generate(opts)
 for _, w in ipairs(written) do
   io.stdout:write("wrote " .. w .. "\n")
 end
-io.stdout:write(("%d modules, %d namespaces, %d files\n")
-  :format(ir.meta.counts.module, ir.meta.counts.namespace, ir.meta.counts.file))
+io.stdout:write(
+  ("%d modules, %d namespaces, %d files\n"):format(
+    ir.meta.counts.module,
+    ir.meta.counts.namespace,
+    ir.meta.counts.file
+  )
+)
 local tally = report(findings)
 vim.cmd((strict and tally.error > 0) and "cq 1" or "cq 0")
