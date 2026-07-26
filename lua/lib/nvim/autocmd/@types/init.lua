@@ -19,6 +19,7 @@
 ---@class LibAutocmdOpts
 ---@field group? string|integer
 ---@field pattern? string|string[]
+---@field buffer? integer  # Buffer-local autocmd; mutually exclusive with pattern.
 ---@field desc? string
 ---@field once? boolean
 ---@field nested? boolean
