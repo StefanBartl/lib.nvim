@@ -53,18 +53,14 @@ function M.run(root, source, opts)
   end
 
   local result
-  spawn_capture(
-    {
-      "lua-language-server",
-      "--doc=" .. scan_dir,
-      "--doc_out_path=" .. out_dir,
-      "--logpath=" .. out_dir .. "/log",
-    },
-    { timeout_ms = timeout_ms },
-    function(res)
-      result = res
-    end
-  )
+  spawn_capture({
+    "lua-language-server",
+    "--doc=" .. scan_dir,
+    "--doc_out_path=" .. out_dir,
+    "--logpath=" .. out_dir .. "/log",
+  }, { timeout_ms = timeout_ms }, function(res)
+    result = res
+  end)
 
   -- spawn_capture's own on_done is vim.schedule'd; poll past the process
   -- timeout by a margin so the scheduler tick always has a chance to land.
