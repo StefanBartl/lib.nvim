@@ -17,9 +17,14 @@ return function(H)
   local buf_b = vim.api.nvim_create_buf(false, true)
 
   local fired_for = {}
-  autocmd.create("User", function(args)
+  local autocmd_id = autocmd.create("User", function(args)
     fired_for[#fired_for + 1] = args.buf
   end, { buffer = buf_a, desc = "spec: buffer-local autocmd" })
+  eq(type(autocmd_id), "number", "create() returns the created autocmd's id")
+  ok(
+    vim.api.nvim_get_autocmds({ id = autocmd_id })[1] ~= nil,
+    "the returned id resolves to a real autocmd"
+  )
 
   vim.api.nvim_exec_autocmds("User", { buffer = buf_a })
   eq(#fired_for, 1, "buffer-local autocmd fires for its own buffer")

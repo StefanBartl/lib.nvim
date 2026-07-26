@@ -9,7 +9,16 @@ local M = {}
 function M.run_blocking(cmd, input)
   -- vim.system path (Neovim ≥0.10)
   if vim.system then
-    local res = vim.system(cmd, { text = true, stdin = input }):wait()
+    -- vim.system raises synchronously when cmd[1] can't be spawned at all
+    -- (e.g. ENOENT) rather than yielding a failed SystemCompleted -- guard
+    -- it so that case returns (false, err) like every other failure here,
+    -- instead of an uncaught error escaping to the caller.
+    local ok, res = pcall(function()
+      return vim.system(cmd, { text = true, stdin = input }):wait()
+    end)
+    if not ok then
+      return false, tostring(res)
+    end
     if res.code == 0 then
       return true, nil
     end
@@ -35,7 +44,12 @@ end
 ---@return string output Captured stdout, both on success and failure
 function M.run_blocking_captured(cmd, input)
   if vim.system then
-    local res = vim.system(cmd, { text = true, stdin = input }):wait()
+    local ok, res = pcall(function()
+      return vim.system(cmd, { text = true, stdin = input }):wait()
+    end)
+    if not ok then
+      return false, tostring(res)
+    end
     return res.code == 0, res.stdout or ""
   end
 
