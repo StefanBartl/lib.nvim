@@ -1,0 +1,468 @@
+*lib.nvim-fs.txt*        Filesystem helpers: paths, scanning, IO, trash
+
+lib.nvim.fs                                                    *lib.nvim-fs*
+
+A flat directory of small, independent filesystem helpers — path predicates,
+normalization, recursive scanning (cached and uncached), JSON/text IO, safe
+entry creation, and cross-platform trash/open. There is no `fs/init.lua`
+aggregator: every submodule is required by its own full path, e.g.
+`require("lib.nvim.fs.is_dir")`. Most submodules return a function directly
+rather than a table — check each entry below.
+
+==============================================================================
+CONTENTS                                              *lib.nvim-fs-contents*
+
+  1. Design ......................................... |lib.nvim-fs-design|
+  2. Usage .......................................... |lib.nvim-fs-usage|
+  3. Predicates ..................................... |lib.nvim-fs-predicates|
+       is_dir .................................... |lib.nvim-fs-is_dir|
+       is_readable_file ........................ |lib.nvim-fs-is_readable_file|
+       is_valid_filename ....................... |lib.nvim-fs-is_valid_filename|
+       is_subpath .............................. |lib.nvim-fs-is_subpath|
+  4. Path utilities ................................. |lib.nvim-fs-path-utils|
+       path ....................................... |lib.nvim-fs-path|
+       path_shorten ............................ |lib.nvim-fs-path_shorten|
+       relpath .................................... |lib.nvim-fs-relpath|
+       normkey .................................... |lib.nvim-fs-normkey|
+       project_key .............................. |lib.nvim-fs-project_key|
+  5. Root discovery .................................. |lib.nvim-fs-roots|
+       find_root ................................ |lib.nvim-fs-find_root|
+       find_upward_dir ....................... |lib.nvim-fs-find_upward_dir|
+       polymorphic_rootresolver .. |lib.nvim-fs-polymorphic_rootresolver|
+  6. Scanning ........................................ |lib.nvim-fs-scanning|
+       collect_recursive .................... |lib.nvim-fs-collect_recursive|
+       scan_cached ............................. |lib.nvim-fs-scan_cached|
+       scan_roots ................................ |lib.nvim-fs-scan_roots|
+  7. IO ............................................... |lib.nvim-fs-io|
+       read ........................................ |lib.nvim-fs-read|
+       write.to_file ...................... |lib.nvim-fs-write.to_file|
+       write.append ......................... |lib.nvim-fs-write.append|
+       write.async ............................ |lib.nvim-fs-write.async|
+       write.batch ............................. |lib.nvim-fs-write.batch|
+       json ........................................ |lib.nvim-fs-json|
+       mkdirp .................................... |lib.nvim-fs-mkdirp|
+       create_entry ........................ |lib.nvim-fs-create_entry|
+  8. Ignore patterns ................................. |lib.nvim-fs-ignore|
+       ignore.list ................................ |lib.nvim-fs-ignore.list|
+  9. System ........................................... |lib.nvim-fs-system|
+       open.url.system_opener .. |lib.nvim-fs-open.url.system_opener|
+       trash ...................................... |lib.nvim-fs-trash|
+
+==============================================================================
+1. DESIGN                                               *lib.nvim-fs-design*
+
+* One responsibility per submodule; no shared aggregator table to keep
+  requires tree-shake friendly.
+* Blocking IO uses binary mode (`"rb"`/`"wb"`) so content round-trips
+  byte-exact across platforms; async IO (`write.async`, `write.batch`,
+  `trash.trash`) is libuv-based and safe to call from a fast-event context.
+* Errors are returned (`ok, err`), never thrown — callers decide whether a
+  failure is worth surfacing.
+* `scan_cached` (in-memory, session-lifetime) and `scan_roots` (optional
+  on-disk cache) both build on `collect_recursive`, the one actual directory
+  walker in this namespace — nothing else re-implements the walk.
+
+==============================================================================
+2. USAGE                                                 *lib.nvim-fs-usage*
+
+Every submodule is required individually: >lua
+
+    local is_dir = require("lib.nvim.fs.is_dir")
+    local collect_recursive = require("lib.nvim.fs.collect_recursive")
+    local json = require("lib.nvim.fs.json")
+<
+Submodules that return a single function are called directly; submodules
+that return a table expose one or more named functions on it (each entry
+below states which).
+
+==============================================================================
+3. PREDICATES                                     *lib.nvim-fs-predicates*
+
+------------------------------------------------------------------------------
+is_dir({p})                                            *lib.nvim-fs-is_dir*
+
+Function. Returns `true` iff `p` stats as a directory; `false` otherwise
+(including on stat failure). >lua
+
+    local is_dir = require("lib.nvim.fs.is_dir")
+    if is_dir("/repo/src") then ... end
+<
+------------------------------------------------------------------------------
+is_readable_file({filepath})                *lib.nvim-fs-is_readable_file*
+
+Function. `true` if `filepath` is a readable file OR a directory; `false`
+otherwise. Despite the name, directories pass too. >lua
+
+    local is_readable_file = require("lib.nvim.fs.is_readable_file")
+    if is_readable_file("/repo/README.md") then ... end
+<
+------------------------------------------------------------------------------
+is_valid_filename({name})                  *lib.nvim-fs-is_valid_filename*
+
+Function. Validates a bare filename (not a full path): rejects characters
+illegal on Windows (`\ / : * ? " < > |`), an embedded NUL, an empty or
+whitespace-only string. Returns `ok, err`. >lua
+
+    local is_valid_filename = require("lib.nvim.fs.is_valid_filename")
+    local ok, err = is_valid_filename("new_file.lua")
+<
+------------------------------------------------------------------------------
+is_subpath({path}, {base})                        *lib.nvim-fs-is_subpath*
+
+Function. `true` if `path == base` or `path` starts with `base .. "/"`,
+after `vim.fs.normalize`-ing both (always forward slashes). >lua
+
+    local is_subpath = require("lib.nvim.fs.is_subpath")
+    is_subpath("/a/b/c", "/a/b") -- true
+    is_subpath("/a/bc", "/a/b")  -- false
+<
+==============================================================================
+4. PATH UTILITIES                                *lib.nvim-fs-path-utils*
+
+------------------------------------------------------------------------------
+path                                                       *lib.nvim-fs-path*
+
+Table `M`: >lua
+
+    local path = require("lib.nvim.fs.path")
+
+    local abs = path.from_repo_relative("lua/init.lua")
+    -- absolute path: tries <git repo root>/raw, then cwd-relative,
+    -- returns the first filereadable candidate (else the last one tried)
+
+    local joined = path.joinpath({ "a", "b", "c.lua" })
+    -- vim.fs.joinpath if available, else table.concat with the OS separator
+
+    local ok, err = path.ensure_dir("/tmp/new/deep/file.txt")
+    -- creates the PARENT directory of a file path; fast-event safe
+<
+------------------------------------------------------------------------------
+path_shorten({path}, {max_len}, {opts})            *lib.nvim-fs-path_shorten*
+
+Function. Shorten a path for display. >lua
+
+    local path_shorten = require("lib.nvim.fs.path_shorten")
+    local short = path_shorten("/home/user/very/long/project/file.lua", 30)
+    local label = path_shorten("/home/user/project/src/file.lua", nil, { style = "label" })
+<
+Options ~
+    style      "fit"|"label"   "fit": preserve root + filename, collapse the
+                                middle to fit max_len (default). "label":
+                                always render <root>/<ellipsis>/<parent>/<file>,
+                                ignoring max_len. Ported from Harpoon's
+                                menu-label formatter.
+    ellipsis   string          collapsed-segment marker ("…" for fit,
+                                "...." for label)
+
+------------------------------------------------------------------------------
+relpath({path}, {base})                                *lib.nvim-fs-relpath*
+
+Function. `path` relative to `base` (both made absolute, forward-slashed
+first). `..` segments climb to the nearest common ancestor when `path` is
+not under `base`; cross-drive Windows paths return `path` unchanged;
+`path == base` yields `"."`. >lua
+
+    local relpath = require("lib.nvim.fs.relpath")
+    local rel = relpath("/repo/src/foo.lua", "/repo") -- "src/foo.lua"
+<
+------------------------------------------------------------------------------
+normkey({p}, {opts})                                    *lib.nvim-fs-normkey*
+
+Function. Canonical, cross-platform cache/dedup key for a path: expands `~`,
+optionally resolves symlinks, forces forward slashes, uppercases a Windows
+drive letter, collapses duplicate separators (UNC-safe). >lua
+
+    local normkey = require("lib.nvim.fs.normkey")
+    local key = normkey("~/project", { realpath = false })
+<
+Options ~
+    realpath   boolean   resolve symlinks via `uv.fs_realpath` (default true)
+
+------------------------------------------------------------------------------
+project_key({path})                                *lib.nvim-fs-project_key*
+
+Function. Stable per-project cache key: the Git root of `path` (default
+cwd) if inside a work-tree, else `path`/cwd itself — run through `normkey`.
+Uses the cached, marker-based `find_root` rather than shelling out to `git`
+on every call. >lua
+
+    local project_key = require("lib.nvim.fs.project_key")
+    local key = project_key()          -- current project
+    local key2 = project_key("/repo")  -- explicit path
+<
+==============================================================================
+5. ROOT DISCOVERY                                       *lib.nvim-fs-roots*
+
+------------------------------------------------------------------------------
+find_root({opts})                                    *lib.nvim-fs-find_root*
+
+Factory. Given a file/directory path, walks upward to the nearest ancestor
+holding any of the configured markers. Results are LRU-cached per
+directory. >lua
+
+    local find_root = require("lib.nvim.fs.find_root")
+    local finder = find_root({ markers = { ".git", "*.rockspec" } })
+    local root = finder.find("/repo/src/a.lua")  -- "/repo"
+    finder.clear()                                -- drop the cache
+<
+Options ~
+    markers        string[]   marker basenames or globs (default {".git"})
+    cache          boolean    enable the LRU cache (default true)
+    cache_chain    boolean    cache every ancestor visited, not just the
+                               queried directory (default false)
+    capacity       integer    LRU capacity (default 256, or 512 when
+                               cache_chain is true)
+
+------------------------------------------------------------------------------
+find_upward_dir({names}, {from})              *lib.nvim-fs-find_upward_dir*
+
+Function. Walk upward from `from`, return the nearest ancestor directory
+holding one of `names` (basenames, or `*`/`?` globs). >lua
+
+    local find_upward_dir = require("lib.nvim.fs.find_upward_dir")
+    local root = find_upward_dir({ ".git", "*.rockspec" }, vim.fn.expand("%:p:h"))
+<
+------------------------------------------------------------------------------
+polymorphic_rootresolver({cfg})    *lib.nvim-fs-polymorphic_rootresolver*
+
+Factory. Returns a resolver function for LSP-style root detection, accepting
+either a buffer number or a filename. >lua
+
+    local make_resolver = require("lib.nvim.fs.polymorphic_rootresolver")
+    local resolve_root = make_resolver({ markers = { ".git", "pyproject.toml" } })
+
+    local root = resolve_root("/home/user/project/src/main.lua")
+    local root_buf = resolve_root(0, function(res) print("root:", res) end)
+<
+Options ~
+    markers                   string[]   root markers passed to `vim.fs.root`
+                                          (default {".git", ".hg", ".svn"})
+    include_stdpath_config    boolean    snap the root to `stdpath("config")`
+                                          when it falls under it (default true)
+
+The returned resolver takes `(arg, cb?)`: `arg` is a buffer number or
+filename (empty falls back to cwd); `cb`, if given, is invoked with the
+resolved root in addition to it being returned synchronously.
+
+==============================================================================
+6. SCANNING                                          *lib.nvim-fs-scanning*
+
+------------------------------------------------------------------------------
+collect_recursive                          *lib.nvim-fs-collect_recursive*
+
+Table `M`. Recursive directory walker built on `fs_scandir`; returns a flat
+array of absolute paths. `M.collect`/`M.files`/`M.dirs`. >lua
+
+    local collect_recursive = require("lib.nvim.fs.collect_recursive")
+    local all = collect_recursive.collect("/repo", { kind = "files" })
+    local files = collect_recursive.files("/repo", {
+      ignore = function(p) return p:match("/%.git$") ~= nil end,
+    })
+    local dirs = collect_recursive.dirs("/repo")
+<
+Options ~
+    kind      "all"|"files"|"dirs"                      what to collect
+    ignore    fun(abs_path: string, is_dir: boolean): boolean
+                                        prune a path (and, for a dir, its
+                                        whole subtree) when it returns true
+
+------------------------------------------------------------------------------
+scan_cached({root}, {opts})                        *lib.nvim-fs-scan_cached*
+
+Function `M.scan`. In-memory, TTL-cached wrapper around `collect_recursive`
+for one root — the session-lifetime counterpart to `scan_roots`. >lua
+
+    local scan_cached = require("lib.nvim.fs.scan_cached")
+    local files = scan_cached.scan("/repo/lua", { ttl_seconds = 5 })
+    local fresh = scan_cached.scan("/repo/lua", { ttl_seconds = 5, refresh = true })
+<
+Options ~
+    kind          "files"|"dirs"|"all"   default "files"
+    ignore        function                forwarded to `collect_recursive`
+    ttl_seconds   integer                 cache freshness window (default 5)
+    refresh       boolean                 force a rescan, refreshing the cache
+
+Cache key is `root .. ":" .. kind`; only the walk is cached, not any
+downstream per-path work.
+
+------------------------------------------------------------------------------
+scan_roots({roots}, {opts})                          *lib.nvim-fs-scan_roots*
+
+Function `M.scan`. Scan multiple root directories sequentially, merged into
+one flat array, with an optional TTL-based **on-disk** JSON cache. >lua
+
+    local scan_roots = require("lib.nvim.fs.scan_roots")
+    local files = scan_roots.scan({ "/repo/src", "/repo/lua" }, {
+      ignore_dirs = { "node_modules", ".git" },
+      cache_path = vim.fn.stdpath("cache") .. "/my_plugin/scan.json",
+      ttl_seconds = 60,
+    })
+<
+Options ~
+    ignore_dirs    string[]              directory names to skip (default {})
+    kind           "files"|"dirs"|"all"  default "files"
+    cache_path     string                when set, results persist to this
+                                          JSON file
+    ttl_seconds    integer               cache lifetime; omit for "never
+                                          expires until manually invalidated"
+
+==============================================================================
+7. IO                                                     *lib.nvim-fs-io*
+
+------------------------------------------------------------------------------
+read({path})                                              *lib.nvim-fs-read*
+
+Function. Read a whole file into a string (binary mode, byte-exact).
+Returns `content, err`. >lua
+
+    local read = require("lib.nvim.fs.read")
+    local content, err = read("/repo/README.md")
+<
+------------------------------------------------------------------------------
+write.to_file({path}, {content})                *lib.nvim-fs-write.to_file*
+
+Function. Truncate-write `content` to `path`, creating parent directories.
+Adds a trailing newline when missing. Returns `ok, err`. >lua
+
+    local write_to_file = require("lib.nvim.fs.write.to_file")
+    local ok, err = write_to_file("/tmp/out.txt", "hello world")
+<
+------------------------------------------------------------------------------
+write.append({path}, {content})                  *lib.nvim-fs-write.append*
+
+Function. Append `content` to `path` (creating parent directories), adding a
+trailing newline when missing. Returns `ok, err`. >lua
+
+    local write_append = require("lib.nvim.fs.write.append")
+    local ok, err = write_append("/tmp/log.txt", "new line")
+<
+------------------------------------------------------------------------------
+write.async({path}, {content}, {cb})               *lib.nvim-fs-write.async*
+
+Function. Non-blocking counterpart to `write.to_file`, libuv-based. `cb` runs
+on the main loop via `vim.schedule`. >lua
+
+    local write_async = require("lib.nvim.fs.write.async")
+    write_async("/tmp/out.txt", "hello", function(ok, err)
+      if not ok then vim.notify("write failed: " .. tostring(err)) end
+    end)
+<
+------------------------------------------------------------------------------
+write.batch({entries}, {cb})                       *lib.nvim-fs-write.batch*
+
+Function. Write many files asynchronously (built on `write.async`), one
+callback when all have finished. `results` is index-aligned with
+`entries`. >lua
+
+    local write_batch = require("lib.nvim.fs.write.batch")
+    write_batch({
+      { path = "/tmp/a.txt", content = "a" },
+      { path = "/tmp/b.txt", content = "b" },
+    }, function(all_ok, results) end)
+<
+------------------------------------------------------------------------------
+json                                                       *lib.nvim-fs-json*
+
+Table `M`. Read/write JSON files; writes are atomic (`path .. ".tmp"` then
+rename). >lua
+
+    local json = require("lib.nvim.fs.json")
+    local ok, err = json.write("/tmp/state.json", { count = 1 })
+    local tbl, err2 = json.read("/tmp/state.json")
+<
+------------------------------------------------------------------------------
+mkdirp({path})                                          *lib.nvim-fs-mkdirp*
+
+Function. Recursive `mkdir -p` built purely on libuv — safe to call from a
+fast-event context (uv timer/fs_event/subprocess callback), unlike
+`vim.fn.mkdir`. Returns `ok, err`. >lua
+
+    local mkdirp = require("lib.nvim.fs.mkdirp")
+    local ok, err = mkdirp("/tmp/a/b/c")
+<
+------------------------------------------------------------------------------
+create_entry({parent_dir}, {name})                *lib.nvim-fs-create_entry*
+
+Function. Create a file or directory relative to `parent_dir` — the shared
+core behind "create file/folder" picker actions. A trailing separator on
+`name` creates a directory (`mkdir -p`); otherwise an empty file is created.
+Returns `ok, kind, path_or_err`. >lua
+
+    local create_entry = require("lib.nvim.fs.create_entry")
+    local ok, kind, path = create_entry("/repo/src", "new_file.lua")
+    local ok2, kind2, dir = create_entry("/repo/src", "sub/dir/")
+<
+==============================================================================
+8. IGNORE PATTERNS                                     *lib.nvim-fs-ignore*
+
+------------------------------------------------------------------------------
+ignore.list                                       *lib.nvim-fs-ignore.list*
+
+Table `M`. Canonical, centralized filesystem ignore definitions shared
+across dev tooling (LSP indexing, pickers, trees, search). Heuristic and
+conservative — not a `.gitignore` replacement. >lua
+
+    local ignore = require("lib.nvim.fs.ignore.list")
+    require("telescope").setup({
+      defaults = { file_ignore_patterns = ignore.as_telescope_patterns() },
+    })
+<
+Fields / functions ~
+    basenames                string[]   exact ignored basenames (.git, node_modules, ...)
+    patterns                 string[]   Lua-pattern ignores (%.pyc, %.log, ...)
+    normalize(s)              string    normalized basename for comparison
+    as_set()                  table     basenames as a lookup set
+    as_luals_patterns()       string[]  Lua.workspace.ignoreDir-compatible globs
+    as_telescope_patterns()   string[]  basenames + patterns combined
+    as_neotree_names()        string[]  basenames only
+
+==============================================================================
+9. SYSTEM                                              *lib.nvim-fs-system*
+
+------------------------------------------------------------------------------
+open.url.system_opener({url}, {cfg})   *lib.nvim-fs-open.url.system_opener*
+
+Table `M`. Open a path/URL with the OS default handler: `vim.ui.open` first
+(unless `cfg.on_exit` is set or `prefer_ui_open = false`), then a per-OS
+argv dispatch (never a shell string). WSL tries `wslview` before
+`xdg-open`. >lua
+
+    local system_opener = require("lib.nvim.fs.open.url.system_opener")
+    system_opener.open("https://github.com")
+    system_opener.open("/path/to/file.pdf", { prefer_ui_open = false })
+
+    system_opener.is_like("www.example.com") -- true (URL-shaped heuristic)
+<
+Options (`cfg`) ~
+    prefer_ui_open           boolean    try vim.ui.open first (default true;
+                                         ignored when on_exit is set)
+    enable_windows_opener     boolean    enable the explorer.exe opener
+                                          (default true)
+    open_cmd_mac              string[]   override macOS argv
+    open_cmd_unix              string[]   override Linux argv
+    open_cmd_wsl                string[]   override WSL argv
+    on_exit                    fun(code: integer)  observe exit code; runs
+                                         attached, skips vim.ui.open
+
+------------------------------------------------------------------------------
+trash({path}, {cb})                                      *lib.nvim-fs-trash*
+
+Table `M`. Cross-platform "send to trash" (not a permanent delete):
+PowerShell `FileSystem` API on Windows, Finder via `osascript` on macOS,
+`gio trash`/`trash-put` on Linux/WSL, with an XDG-trash-directory
+`fs_rename` fallback when no trash tool is present. >lua
+
+    local trash = require("lib.nvim.fs.trash")
+
+    trash.trash("/tmp/some_file.txt", function(ok, err)
+      if not ok then vim.notify(err, vim.log.levels.ERROR) end
+    end)
+
+    local ok, err = trash.trash_blocking("/tmp/some_dir")
+<
+`M.trash` is async (result via `cb`); `M.trash_blocking` blocks and returns
+`ok, err` directly. The fallback path does not write `.trashinfo`
+metadata, so "restore from trash" UIs may not show the original location.
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:
