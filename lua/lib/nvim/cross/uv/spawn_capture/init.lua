@@ -24,7 +24,7 @@ return function(argv, opts, on_done)
   local stdout_pipe = loop.new_pipe(false)
   local stderr_pipe = loop.new_pipe(false)
   local stdout_chunks, stderr_chunks = {}, {}
-  local handle, pid
+  local handle
   local timer
   local done = false
 
@@ -63,7 +63,7 @@ return function(argv, opts, on_done)
     env = opts.env,
   }
 
-  handle, pid = loop.spawn(argv[1], spawn_opts, function(code, signal)
+  handle = loop.spawn(argv[1], spawn_opts, function(code, signal)
     finish(code, signal, false)
   end)
 

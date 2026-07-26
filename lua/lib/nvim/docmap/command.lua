@@ -65,7 +65,7 @@ function M.setup(opts)
     end
 
     if action == "check" then
-      local ir, findings = handle.rescan()
+      local _, findings = handle.rescan()
       local tally = docmap.tally(findings)
       local summary = ("%d errors · %d warnings · %d info"):format(tally.error, tally.warn, tally.info)
       if tally.error > 0 then
