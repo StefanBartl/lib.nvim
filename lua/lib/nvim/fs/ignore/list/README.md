@@ -161,7 +161,7 @@ Suitable for:
 ### Lua Language Server
 
 ```lua
-local ignore = require("lib.nvim.fs.ignore")
+local ignore = require("lib.nvim.fs.ignore.list")
 
 settings = {
   Lua = {
@@ -170,14 +170,14 @@ settings = {
     },
   },
 }
-````
+```
 
 ---
 
 ### Telescope
 
 ```lua
-local ignore = require("lib.nvim.fs.ignore")
+local ignore = require("lib.nvim.fs.ignore.list")
 
 require("telescope").setup({
   defaults = {
@@ -191,7 +191,7 @@ require("telescope").setup({
 ### Neo-tree
 
 ```lua
-local ignore = require("lib.nvim.fs.ignore")
+local ignore = require("lib.nvim.fs.ignore.list")
 
 filesystem = {
   filtered_items = {
