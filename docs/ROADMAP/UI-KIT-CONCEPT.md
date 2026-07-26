@@ -441,11 +441,12 @@ surfaces the library already uses:
 
 ## 13. Phased roadmap
 
-> Status: **Phases 1–4 shipped — the roadmap is complete, hover_select fully
+> Status: **Phases 1–5 shipped — the roadmap is complete, hover_select fully
 > absorbed.** Theme engine, surface, and every component
-> (`note`/`toast`/`input`/`select`/`prompt`/`picker`/`confirm`/`menu`/`progress`),
+> (`note`/`viewer`/`toast`/`input`/`select`/`prompt`/`picker`/`confirm`/`menu`/`progress`),
 > the layout engine + `picker` template. `menu` is a cursor-anchored action
-> list; `progress` passes through to the dedicated `lib.nvim.progress`. All
+> list; `viewer` is a read-only info panel (auto-sized, closes on focus loss);
+> `progress` passes through to the dedicated `lib.nvim.progress`. All
 > hover_select call sites were migrated to `kit.select` and the standalone
 > `lib.nvim.ui.hover_select` module has been **removed** (§10 step 4 done).
 
@@ -455,7 +456,7 @@ surfaces the library already uses:
 | **2** ✅ | Short-lived popups: `toast`, `prompt(confirm/text)`, `input`; `select` delegating to hover_select | The high-frequency, quick-win components |
 | **3** ✅ | Layout engine (Layer C) + templates (§7a) + native `select` chooser + hover_select shim + interactive `kit.picker` | Composition + absorption + Telescope-style picker |
 | **4** ✅ | Button-confirm (§9) — horizontal buttons, h/l navigation, `KitSelection` focus; routed via `kit.confirm` and `prompt(answer_type="confirm", layout="buttons")` | The highest-effort component |
-| **4** | `confirm` with horizontal buttons (§9); hover_select shim + call-site migration | Highest-effort component last; API-stable migration |
+| **5** ✅ | `viewer` — read-only info panel: auto-sized to content, `q`/`<Esc>` closes, closes on `WinLeave`/`BufLeave` too (`close_on_focus_lost` opt-out) | Motivated by 6+ independent hand-rolled implementations across consumer plugins (§ui_kit_migration audit) |
 
 ## 14. Open decisions
 
