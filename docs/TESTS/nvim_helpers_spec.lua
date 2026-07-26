@@ -217,7 +217,7 @@ return function(H)
   ok(eok, "safe_api.buf_set_extmark: succeeds")
   ok(type(eid) == "number", "safe_api.buf_set_extmark: returns an id")
 
-  local sxok, _, sxerr = safe_api.set_extmark(buf, ns, 0, 0, 5, "Comment", "hello don't world")
+  local sxok = safe_api.set_extmark(buf, ns, 0, 0, 5, "Comment", "hello don't world")
   ok(sxok, "safe_api.set_extmark: in-range columns succeed")
   local oxok, _, oxerr = safe_api.set_extmark(buf, ns, 0, 0, 999, "Comment", "hello don't world")
   ok(not oxok, "safe_api.set_extmark: out-of-range col_end fails cleanly")

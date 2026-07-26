@@ -123,6 +123,7 @@ return function(H)
   msgs = {}
   eq(parse.dispatch("Demo", spec, rroot, { fargs = { "buffer" }, bang = true }, cap), true,
     "dispatch: ctx.bang reflects the ! form")
+  ok(not msgs.error, "dispatch: ctx.bang path produces no error")
   spec.routes[1].run = function() return "BUFFER" end -- restore
 
   -- ------------------------------------------------------------------- run resolution
@@ -237,8 +238,8 @@ return function(H)
         run = function(ctx) seen = ctx.flags end,
       }) },
     }
-    local root = tree.build(spec_with_flags.routes)
-    parse.dispatch("FlagsCtx", spec_with_flags, root,
+    local flags_ctx_root = tree.build(spec_with_flags.routes)
+    parse.dispatch("FlagsCtx", spec_with_flags, flags_ctx_root,
       { fargs = { "a", "b", "--dry" } }, cap)
     ok(seen and seen.dry == true, "dispatch: ctx.flags is populated end-to-end")
   end
@@ -265,8 +266,8 @@ return function(H)
 
   -- end-to-end completion: flag-name and enum-value slots on a real route tree
   do
-    local root = tree.build({ vim.tbl_extend("force", flag_route, { run = function() end }) })
-    local function comp(lead, line) return complete.candidates(root, lead, line) end
+    local flags_comp_root = tree.build({ vim.tbl_extend("force", flag_route, { run = function() end }) })
+    local function comp(lead, line) return complete.candidates(flags_comp_root, lead, line) end
     local top = comp("--e", "FlagsComp --e")
     eq(join(top), "--engine", "complete.candidates: flag-name completion routed through the engine")
     local vals = comp("--engine=", "FlagsComp --engine=")
@@ -276,8 +277,8 @@ return function(H)
 
   -- docgen renders flags in the invocation + enum notes
   do
-    local root = tree.build({ vim.tbl_extend("force", flag_route, { run = function() end }) })
-    local body = docgen.render({ { name = "FlagsDoc", spec = { routes = { flag_route } }, root = root } })
+    local flags_doc_root = tree.build({ vim.tbl_extend("force", flag_route, { run = function() end }) })
+    local body = docgen.render({ { name = "FlagsDoc", spec = { routes = { flag_route } }, root = flags_doc_root } })
     ok(body:find("[--dry]", 1, true), "docgen: bool flag rendered as [--dry]")
     ok(body:find("[--type=<value> ...]", 1, true), "docgen: repeatable value flag rendered with trailing ...")
     ok(body:find("[--engine=<fzf|telescope>]", 1, true), "docgen: enum flag renders its member list inline")
@@ -433,7 +434,6 @@ return function(H)
   end
 
   -- --------------------------------------------------------------- short flags
-  local flags = require("lib.nvim.usercmd.composer.flags")
   local short_route = {
     path = {},
     args = { { name = "query", type = "STRING" } },
@@ -462,7 +462,7 @@ return function(H)
   do
     -- Lenient: an unrecognized short-shaped token (no matching FlagSpec.short)
     -- is left as an ordinary positional, not an error (e.g. a negative number).
-    local p, f, err = flags.split(short_route, { "-5", "foo" })
+    local p, _, err = flags.split(short_route, { "-5", "foo" })
     eq(err, nil, "short flag: unrecognized -x is not an error")
     eq(join(p), "-5,foo", "short flag: unrecognized -x stays positional")
   end
@@ -472,8 +472,8 @@ return function(H)
     eq(table.concat(names, ","), "-o,-r", "short flag: bare '-' completes every declared short")
   end
   do
-    local root = tree.build({ vim.tbl_extend("force", short_route, { run = function() end }) })
-    local body = docgen.render({ { name = "ShortFlagDoc", spec = { routes = { short_route } }, root = root } })
+    local short_doc_root = tree.build({ vim.tbl_extend("force", short_route, { run = function() end }) })
+    local body = docgen.render({ { name = "ShortFlagDoc", spec = { routes = { short_route } }, root = short_doc_root } })
     ok(body:find("[--replace|-r]", 1, true), "docgen: short flag rendered alongside the long name")
   end
 
@@ -496,7 +496,7 @@ return function(H)
   do
     -- Lenient: an undeclared key=value-shaped token is left as an ordinary
     -- positional, not an error -- "=" is common in real positional values.
-    local p, v, err = kv.split(kv_route, { "foo=bar", "baz" })
+    local p, _, err = kv.split(kv_route, { "foo=bar", "baz" })
     eq(err, nil, "kv: undeclared key=value is not an error")
     eq(join(p), "foo=bar,baz", "kv: undeclared key=value stays positional")
   end
