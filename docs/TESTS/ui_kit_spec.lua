@@ -1,7 +1,7 @@
 -- docs/TESTS/ui_kit_spec.lua — lib.nvim.ui.kit
 -- Phase 1 (theme, surface, note), Phase 2 (toast, input, prompt),
 -- Phase 3 (layout + picker, native chooser + hover_select shim, interactive picker),
--- Phase 4 (button-confirm).
+-- Phase 4 (button-confirm), Phase 5 (viewer: read-only info panel).
 
 return function(H)
   local eq, ok = H.eq, H.ok
@@ -84,6 +84,45 @@ return function(H)
   local n2 = assert(kit.note({ message = { "a", "b", "c" } }), "note (array) opens")
   eq(#vim.api.nvim_buf_get_lines(n2.bufnr, 0, -1, false), 3, "note renders array message lines")
   n2:close()
+
+  -- -------------------------------------------------------------- viewer
+  local v = assert(kit.viewer({ title = "Info", lines = { "line 1", "line 2" } }), "viewer opens")
+  ok(v:is_valid(), "viewer float is valid")
+  eq(#vim.api.nvim_buf_get_lines(v.bufnr, 0, -1, false), 2, "viewer shows every line")
+  eq(
+    vim.api.nvim_get_option_value("modifiable", { buf = v.bufnr }),
+    false,
+    "viewer buffer is read-only"
+  )
+  v:close()
+
+  -- viewer accepts `message` as an alias for `lines` (single string, split on \n)
+  local v2 = assert(kit.viewer({ message = "a\nb\nc" }), "viewer (message alias) opens")
+  eq(
+    #vim.api.nvim_buf_get_lines(v2.bufnr, 0, -1, false),
+    3,
+    "viewer splits a string message on newlines"
+  )
+  v2:close()
+
+  -- viewer closes itself the moment focus moves elsewhere (unlike note)
+  local v3 = assert(kit.viewer({ message = "dismiss me" }), "viewer opens for focus-loss test")
+  ok(v3:is_valid(), "viewer valid before losing focus")
+  vim.cmd("new")
+  vim.wait(50)
+  ok(not v3:is_valid(), "viewer auto-closes on WinLeave")
+  vim.cmd("only")
+
+  -- close_on_focus_lost = false opts out of that behavior
+  local v4 = assert(
+    kit.viewer({ message = "stay open", close_on_focus_lost = false }),
+    "viewer opens with close_on_focus_lost disabled"
+  )
+  vim.cmd("new")
+  vim.wait(50)
+  ok(v4:is_valid(), "viewer stays open when close_on_focus_lost = false")
+  v4:close()
+  vim.cmd("only")
 
   -- --------------------------------------------------------------- toast
   local toast_mod = require("lib.nvim.ui.kit.toast")
