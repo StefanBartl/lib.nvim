@@ -165,7 +165,11 @@ Neovim adapters.
                            create_entry, mkdirp (mkdir -p on libuv only, safe
                            in a fast event context), normkey, project_key,
                            path_shorten, open.url.system_opener (vim.ui.open
-                           first, then per-OS argv, wslview under WSL)
+                           first, then per-OS argv, wslview under WSL),
+                           collect_recursive / scan_cached / scan_roots
+                           (recursive scanning, in-memory or on-disk TTL
+                           cache), trash (cross-platform send-to-trash)
+                           |lib.nvim-fs|
     lib.nvim.cross         cross-platform: OS detection, run/argv, clipboard,
                            uv: spawn_capture (buffered, one callback at exit)
                            and spawn_stream (line-by-line streaming, optional
@@ -216,6 +220,9 @@ Neovim adapters.
                            namespace cache with TTL/changedtick validation
                            and opt-in, toggleable autocmd auto-invalidation
                            |lib.nvim-selection|
+    lib.nvim.store         project: persistent state keyed by project root
+                           (git root, else cwd), built on cache.disk +
+                           fs.project_key |lib.nvim-store|
 
 ------------------------------------------------------------------------------
 lib.vim                                                      *lib.nvim-lib.vim*
@@ -282,6 +289,8 @@ Modules with dedicated `:help` documentation. Jump to one via its tag, or
     lib.nvim.treesitter  filetype allowlist gate            |lib.nvim-treesitter|
     lib.nvim.selection   reselect a Visual range after mutation |lib.nvim-selection|
     lib.nvim.usercmd.composer  subcommand user commands + docgen |lib.nvim-composer|
+    lib.nvim.fs          filesystem helpers: paths, scanning, IO, trash |lib.nvim-fs|
+    lib.nvim.store       project-scoped persistent state       |lib.nvim-store|
 
 Every other module documents itself in a `README.md` next to its source; see
 the namespace tables under |lib.nvim-namespaces|.
