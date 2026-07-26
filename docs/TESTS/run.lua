@@ -23,6 +23,8 @@ local specs = {
   "context_spec.lua",
   "cache_spec.lua",
   "project_store_spec.lua",
+  "harvest_spec.lua",
+  "mutate_spec.lua",
   "composer_spec.lua",
   "docmap_spec.lua",
 }
