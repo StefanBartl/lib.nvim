@@ -29,6 +29,9 @@ Deliberately **not** provided: a `run({ collect, transform, present })`
 framework. Wrapping a four-line `for` loop in injected callbacks buys ceremony,
 not reuse.
 
+Runnable scenarios: [docs/EXAMPLES](../../../../docs/EXAMPLES) —
+`harvest-scan-and-export.lua`, `harvest-collect-links.lua`.
+
 ## `harvest.scope`
 
 ```lua

@@ -14,6 +14,10 @@ Built on [`lib.nvim.usercmd.create`](../init.lua) (defensive registration),
 coercion), and [`lib.nvim.fs`](../../fs) (`PATH`/`DIR`/`FILE` args + docgen
 writing).
 
+Runnable scenarios: [docs/EXAMPLES](../../../../../docs/EXAMPLES) —
+`composer-basic-verb.lua`, `composer-flags-and-kv.lua`,
+`composer-buffer-local-and-count.lua`.
+
 ## Usage
 
 ```lua

@@ -6,7 +6,11 @@ coordinated, or override colors/borders per call. Built in layers on top of
 [`lib.nvim.ui.hl`](../hl) — nothing shells out, so it is cross-platform.
 
 > **New here?** Read the [User Guide](../../../../../docs/GUIDE-ui-kit.md)
-> (with layout sketches), or run **`:KitPreview`** for a live theme playground.
+> (with layout sketches), run **`:KitPreview`** for a live theme playground,
+> or see [docs/EXAMPLES](../../../../../docs/EXAMPLES) for one scenario per
+> component (`kit-note.lua`, `kit-toast.lua`, `kit-input.lua`,
+> `kit-select.lua`, `kit-prompt.lua`, `kit-confirm.lua`, `kit-menu.lua`,
+> `kit-picker.lua`, `kit-layout.lua`).
 
 > **Phases 1–2** (this release): theme/preset engine + `surface` primitive +
 > components `note`, `toast`, `input`, `select` (delegates to hover_select) and
