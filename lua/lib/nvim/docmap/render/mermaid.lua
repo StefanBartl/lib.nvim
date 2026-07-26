@@ -44,7 +44,7 @@ function M.render(ir, _findings, opts)
         end
         text = text .. "<br/><small>" .. short .. "</small>"
       end
-      out[#out + 1] = ("  %s[\"%s\"]"):format(safe_id(id), label(text))
+      out[#out + 1] = ('  %s["%s"]'):format(safe_id(id), label(text))
     end
   end
 

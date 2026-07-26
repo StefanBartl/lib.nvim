@@ -49,7 +49,10 @@ end
 ---@param opts Lib.Docmap.Opts
 ---@return Lib.Docmap.Handle
 function M.install(opts)
-  assert(type(opts) == "table" and type(opts.root) == "string" and opts.root ~= "", "docmap.install: opts.root is required")
+  assert(
+    type(opts) == "table" and type(opts.root) == "string" and opts.root ~= "",
+    "docmap.install: opts.root is required"
+  )
 
   local root = norm_root(opts.root)
   opts = vim.tbl_extend("force", {}, opts, { root = root })

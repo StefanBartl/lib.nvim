@@ -36,7 +36,9 @@ return function(cmd, args, opts)
     else
       print(("Command exited with code %d, signal %s"):format(code, tostring(signal)))
     end
-    if handle then handle:close() end
+    if handle then
+      handle:close()
+    end
   end)
 
   return handle

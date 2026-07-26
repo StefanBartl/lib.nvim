@@ -8,7 +8,8 @@
 return function(path)
   assert(
     type(path) == "string",
-    "[lib.nvim.cross.fs.separators.drive_upper] parameter 'path' must be type of string, but is " .. type(path)
+    "[lib.nvim.cross.fs.separators.drive_upper] parameter 'path' must be type of string, but is "
+      .. type(path)
   )
   return (path:gsub("^(%a):", function(d)
     return d:upper() .. ":"

@@ -152,18 +152,19 @@ LIB.safe = lazy_module("lib.lua.tables.safe")
 LIB.unique_table = lazy_module("lib.lua.tables.unique_table")
 -- Optional ergonomic shortcuts (flattened access)
 LIB.unique = function(...)
-return LIB.unique_table.unique(...)
+  return LIB.unique_table.unique(...)
 end
 LIB.unique_by = function(...)
-return LIB.unique_table.unique_by(...)
+  return LIB.unique_table.unique_by(...)
 end
 LIB.is_unique = function(...)
-return LIB.unique_table.is_unique(...)
+  return LIB.unique_table.is_unique(...)
 end
 
 -- === JSON ===
 LIB.json_is_array_like = lazy_module("lib.lua.json.decode.to_string_array").is_array_like
-LIB.json_ensure_string_array = lazy_module("lib.lua.json.decode.to_string_array").ensure_string_array
+LIB.json_ensure_string_array =
+  lazy_module("lib.lua.json.decode.to_string_array").ensure_string_array
 LIB.json_table_to_string_array =
   lazy_module("lib.lua.json.decode.to_string_array").table_to_string_array
 LIB.json_encode = lazy_module("lib.lua.json.encode").encode

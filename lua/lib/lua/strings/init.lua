@@ -4,7 +4,7 @@ local M = {}
 
 M.remove_prefix = require("lib.lua.strings.remove_prefix")
 -- core module
-M.trim =require("lib.lua.strings.core").trim
+M.trim = require("lib.lua.strings.core").trim
 M.slugify = require("lib.lua.strings.core").slugify
 M.kebab_case = require("lib.lua.strings.core").kebab_case
 M.starts_with = require("lib.lua.strings.core").starts_with
@@ -21,7 +21,7 @@ M.camel_case = require("lib.lua.strings.core").camel_case
 M.pad_start = require("lib.lua.strings.core").pad_start
 M.pad_end = require("lib.lua.strings.core").pad_end
 M.pad_center = require("lib.lua.strings.core").pad_center
-M.indent  = require("lib.lua.strings.core").indent
+M.indent = require("lib.lua.strings.core").indent
 M.dedent = require("lib.lua.strings.core").dedent
 M.is_empty_or_space = require("lib.lua.strings.core").is_empty_or_space
 M.count_lines = require("lib.lua.strings.core").count_lines
@@ -75,4 +75,3 @@ M.center_text_lines = require("lib.lua.strings.wrap").center_text_lines
 
 ---@type Lib.Strings
 return M
-

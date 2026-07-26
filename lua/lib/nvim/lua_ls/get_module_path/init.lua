@@ -3,7 +3,7 @@
 ---Convert file path to Lua module path
 ---@param filepath string Absolute path to file
 ---@return string|nil module_path
-return function (filepath)
+return function(filepath)
   local normalized = filepath:gsub("\\", "/")
   local lua_idx = normalized:find("/lua/")
   if not lua_idx then

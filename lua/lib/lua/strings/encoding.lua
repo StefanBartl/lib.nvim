@@ -10,9 +10,11 @@ local B64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz012345678
 ---@param str string
 ---@return string
 function M.url_encode(str)
-  return (str:gsub("([^%w%-%_%.%~])", function(c)
-    return string.format("%%%02X", c:byte())
-  end))
+  return (
+    str:gsub("([^%w%-%_%.%~])", function(c)
+      return string.format("%%%02X", c:byte())
+    end)
+  )
 end
 
 ---Decode a percent-encoded string.

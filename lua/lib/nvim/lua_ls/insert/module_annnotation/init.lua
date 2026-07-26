@@ -54,12 +54,8 @@ return function(opts)
 
   -- Move cursor (only if current buffer)
   if bufnr == api.nvim_get_current_buf() then
-    api.nvim_win_set_cursor(
-      api.nvim_get_current_win(),
-      { row + 2, col }
-    )
+    api.nvim_win_set_cursor(api.nvim_get_current_win(), { row + 2, col })
   end
 
   return true
 end
-

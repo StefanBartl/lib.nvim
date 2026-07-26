@@ -66,8 +66,15 @@ end
 function M.run_blocking(cmd)
   local sh = M.shell()
   if vim.system then
-    local obj = vim.system({ sh.prog, sh.args[1], sh.args[2], sh.args[3], cmd }, { text = true }):wait()
-    return { code = obj.code or 1, signal = obj.signal or 0, stdout = obj.stdout or "", stderr = obj.stderr or "" }
+    local obj = vim
+      .system({ sh.prog, sh.args[1], sh.args[2], sh.args[3], cmd }, { text = true })
+      :wait()
+    return {
+      code = obj.code or 1,
+      signal = obj.signal or 0,
+      stdout = obj.stdout or "",
+      stderr = obj.stderr or "",
+    }
   end
   -- Minimal blocking fallback via systemlist()
   local full = sh.prog .. " " .. table.concat(sh.args, " ") .. " " .. cmd

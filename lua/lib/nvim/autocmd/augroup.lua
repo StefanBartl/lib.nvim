@@ -1,13 +1,13 @@
 ---@module 'lib.nvim.autocmd.augroup'
 -- =========================================================
-    -- Augroup registry.
+-- Augroup registry.
 --
 -- Centralized augroup creation with optional prefixing
 -- and deduplication.
 -- =========================================================
 
 local M = {
-  create = {}
+  create = {},
 }
 
 --- Create/clear a namespaced augroup.
@@ -19,4 +19,3 @@ end
 
 ---@type Lib.AutoCmd.AuGroup
 return M
-

@@ -16,10 +16,10 @@ local M = {}
 
 ---@type Lib.NvimUsrCmds.Options
 local defaults = {
-  helptags           = true,
-  cwd_here           = true,
+  helptags = true,
+  cwd_here = true,
   powershell_profile = vim.fn.has("win32") == 1,
-  lib_verb           = true,
+  lib_verb = true,
 }
 
 -- ── Shared actions ──────────────────────────────────────────────────────────
@@ -31,7 +31,9 @@ local defaults = {
 -- NOTE; Ja das wird jedenfalls benötigt, ist mir schon mehrmals aufgefallen, dass dder fieltree ein refresh benötigte. Umsetzen!
 local function action_cwd_here()
   local bufname = vim.api.nvim_buf_get_name(0)
-  if bufname == "" then return end
+  if bufname == "" then
+    return
+  end
   local dir = vim.fn.fnamemodify(bufname, ":p:h")
   vim.cmd("lcd " .. vim.fn.fnameescape(dir))
 end
@@ -41,10 +43,9 @@ local function action_powershell_profile()
     notify.error("PowershellProfile: powershell not available on this system")
     return
   end
-  local res = vim.system(
-    { "powershell", "-NoProfile", "-Command", "[Console]::Write($PROFILE)" },
-    { text = true }
-  ):wait()
+  local res = vim
+    .system({ "powershell", "-NoProfile", "-Command", "[Console]::Write($PROFILE)" }, { text = true })
+    :wait()
   local path = res.code == 0 and res.stdout or nil
   if path and path ~= "" then
     vim.cmd("edit " .. vim.fn.fnameescape(path))
@@ -60,21 +61,29 @@ end
 -- ── Flat commands (unchanged surface) ───────────────────────────────────────
 
 local function register_helptags()
-  autocmd.create("User", function() action_helptags() end, {
+  autocmd.create("User", function()
+    action_helptags()
+  end, {
     pattern = "LazyDone",
-    once    = true,
-    desc    = "[lib.nvim_usrcmds] regenerate helptags after lazy.nvim finishes loading",
+    once = true,
+    desc = "[lib.nvim_usrcmds] regenerate helptags after lazy.nvim finishes loading",
   })
 end
 
 local function register_cwd_here()
-  vim.api.nvim_create_user_command("CwdHere", action_cwd_here,
-    { desc = "Set local cwd to the directory of the current buffer" })
+  vim.api.nvim_create_user_command(
+    "CwdHere",
+    action_cwd_here,
+    { desc = "Set local cwd to the directory of the current buffer" }
+  )
 end
 
 local function register_powershell_profile()
-  vim.api.nvim_create_user_command("PowershellProfile", action_powershell_profile,
-    { desc = "Open the active PowerShell profile in Neovim" })
+  vim.api.nvim_create_user_command(
+    "PowershellProfile",
+    action_powershell_profile,
+    { desc = "Open the active PowerShell profile in Neovim" }
+  )
 end
 
 -- ── :Lib verb (composer-built) ──────────────────────────────────────────────
@@ -86,15 +95,22 @@ end
 local function register_lib_verb(o)
   local routes = {
     { path = { "helptags" }, desc = "Regenerate all helptags now", run = action_helptags },
-    { path = { "cwd-here" }, desc = "lcd to the current buffer's directory", run = action_cwd_here },
+    {
+      path = { "cwd-here" },
+      desc = "lcd to the current buffer's directory",
+      run = action_cwd_here,
+    },
   }
   if o.powershell_profile then
-    routes[#routes + 1] =
-      { path = { "ps-profile" }, desc = "Open the active PowerShell profile", run = action_powershell_profile }
+    routes[#routes + 1] = {
+      path = { "ps-profile" },
+      desc = "Open the active PowerShell profile",
+      run = action_powershell_profile,
+    }
   end
 
   require("lib.nvim.usercmd.composer").verb("Lib", {
-    desc   = "lib.nvim utility commands",
+    desc = "lib.nvim utility commands",
     routes = routes,
   })
 end
@@ -102,10 +118,18 @@ end
 ---@param opts Lib.NvimUsrCmds.Options|nil
 function M.setup(opts)
   local o = vim.tbl_extend("force", defaults, opts or {})
-  if o.helptags           then register_helptags()           end
-  if o.cwd_here           then register_cwd_here()           end
-  if o.powershell_profile then register_powershell_profile() end
-  if o.lib_verb           then register_lib_verb(o)          end
+  if o.helptags then
+    register_helptags()
+  end
+  if o.cwd_here then
+    register_cwd_here()
+  end
+  if o.powershell_profile then
+    register_powershell_profile()
+  end
+  if o.lib_verb then
+    register_lib_verb(o)
+  end
 end
 
 return M

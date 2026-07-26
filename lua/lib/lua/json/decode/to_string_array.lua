@@ -40,7 +40,9 @@ function M.table_to_string_array(tbl)
   for k in pairs(tbl) do
     table.insert(keys, k)
   end
-  table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+  table.sort(keys, function(a, b)
+    return tostring(a) < tostring(b)
+  end)
 
   local out = {} ---@type string[]
   for i, k in ipairs(keys) do

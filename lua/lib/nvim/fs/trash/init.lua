@@ -68,7 +68,7 @@ end
 ---@param path string
 ---@return string
 local function macos_cmd(path)
-  return "osascript -e 'tell application \"Finder\" to delete POSIX file \""
+  return 'osascript -e \'tell application "Finder" to delete POSIX file "'
     .. osa_quote(path)
     .. "\"'"
 end

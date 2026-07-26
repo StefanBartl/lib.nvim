@@ -33,7 +33,9 @@ local M = {}
 -- a real query run that showed the name arriving before @fdef for the
 -- assignment form. iter_matches groups every capture belonging to one match
 -- together regardless of source order, which is what correct grouping needs.
-local FN_QUERY = vim.treesitter.query.parse("lua", [[
+local FN_QUERY = vim.treesitter.query.parse(
+  "lua",
+  [[
   (function_declaration
     name: (_) @fname
     parameters: (parameters) @params) @fdef
@@ -42,7 +44,8 @@ local FN_QUERY = vim.treesitter.query.parse("lua", [[
     (variable_list name: (_) @fname)
     (expression_list
       value: (function_definition parameters: (parameters) @params) @fdef))
-]])
+]]
+)
 
 local COMMENT_QUERY = vim.treesitter.query.parse("lua", "(comment) @comment")
 

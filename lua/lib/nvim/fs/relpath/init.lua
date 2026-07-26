@@ -34,8 +34,12 @@ return function(path, base)
   end
 
   local base_segs, path_segs = {}, {}
-  for seg in base:gmatch("[^/]+") do base_segs[#base_segs + 1] = seg end
-  for seg in path:gmatch("[^/]+") do path_segs[#path_segs + 1] = seg end
+  for seg in base:gmatch("[^/]+") do
+    base_segs[#base_segs + 1] = seg
+  end
+  for seg in path:gmatch("[^/]+") do
+    path_segs[#path_segs + 1] = seg
+  end
 
   local i = 1
   while base_segs[i] and path_segs[i] and base_segs[i] == path_segs[i] do

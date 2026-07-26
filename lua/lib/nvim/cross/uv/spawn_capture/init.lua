@@ -69,7 +69,14 @@ return function(argv, opts, on_done)
 
   if not handle then
     vim.schedule(function()
-      on_done({ ok = false, code = -1, signal = 0, stdout = "", stderr = "failed to spawn: " .. argv[1], timed_out = false })
+      on_done({
+        ok = false,
+        code = -1,
+        signal = 0,
+        stdout = "",
+        stderr = "failed to spawn: " .. argv[1],
+        timed_out = false,
+      })
     end)
     return
   end

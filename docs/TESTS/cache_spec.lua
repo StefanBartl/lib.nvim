@@ -35,13 +35,20 @@ return function(H)
   fw:write(vim.json.encode(entry))
   fw:close()
 
-  eq(disk.load("widgets", vim.tbl_extend("force", opts, { ttl_seconds = 60 })), nil,
-    "cache.disk: expired entry (by ttl_seconds) loads as nil")
+  eq(
+    disk.load("widgets", vim.tbl_extend("force", opts, { ttl_seconds = 60 })),
+    nil,
+    "cache.disk: expired entry (by ttl_seconds) loads as nil"
+  )
   ok(disk.load("widgets", opts) ~= nil, "cache.disk: load without ttl_seconds ignores age")
 
   eq(disk.clear("widgets", opts), true, "cache.disk: clear reports success")
   eq(disk.load("widgets", opts), nil, "cache.disk: load after clear is nil")
-  eq(disk.clear("widgets", opts), true, "cache.disk: clear on an already-absent namespace is still ok")
+  eq(
+    disk.clear("widgets", opts),
+    true,
+    "cache.disk: clear on an already-absent namespace is still ok"
+  )
 
   -- ------------------------------------------------------------ cache.memory
   local memory = require("lib.nvim.cache.memory")
@@ -85,7 +92,11 @@ return function(H)
   eq(memory.is_auto_invalidation_enabled(), false, "cache.memory: auto-invalidation off by default")
 
   memory.setup_auto_invalidation({ prefix = "lib.nvim.cache.memory.spec" })
-  eq(memory.is_auto_invalidation_enabled(), true, "cache.memory: setup_auto_invalidation enables it")
+  eq(
+    memory.is_auto_invalidation_enabled(),
+    true,
+    "cache.memory: setup_auto_invalidation enables it"
+  )
 
   -- Idempotent: calling setup again must not duplicate the autocmds. Note
   -- nvim_create_autocmd({"TextChanged", "TextChangedI"}, ...) registers one
@@ -101,7 +112,11 @@ return function(H)
   eq(ns3.get("x", bufnr), nil, "cache.memory: BufWritePost clears namespaces while enabled")
 
   memory.disable_auto_invalidation()
-  eq(memory.is_auto_invalidation_enabled(), false, "cache.memory: disable_auto_invalidation turns it off")
+  eq(
+    memory.is_auto_invalidation_enabled(),
+    false,
+    "cache.memory: disable_auto_invalidation turns it off"
+  )
 
   ns3.set("x2", "y2", bufnr)
   vim.api.nvim_exec_autocmds("BufWritePost", { buffer = bufnr })

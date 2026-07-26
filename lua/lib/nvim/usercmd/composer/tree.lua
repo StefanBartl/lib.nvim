@@ -21,7 +21,10 @@ function M.build(routes)
   local root = new_node(nil)
   for _, route in ipairs(routes or {}) do
     assert(type(route.path) == "table", "composer: every route needs a `path` array")
-    assert(route.run ~= nil, "composer: route " .. table.concat(route.path, " ") .. " needs a `run` handler")
+    assert(
+      route.run ~= nil,
+      "composer: route " .. table.concat(route.path, " ") .. " needs a `run` handler"
+    )
     local node = root
     for _, tok in ipairs(route.path) do
       node.children[tok] = node.children[tok] or new_node(tok)

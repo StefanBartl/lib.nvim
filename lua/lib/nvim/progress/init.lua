@@ -86,7 +86,9 @@ function M.create(opts)
       return
     end
     started = true
-    style_state = style.start(spec(), opts, function() handle:request_cancel() end)
+    style_state = style.start(spec(), opts, function()
+      handle:request_cancel()
+    end)
   end
 
   if delay_ms > 0 then

@@ -291,8 +291,6 @@ function M.to_path(v, type_filter, must_exist)
   return s
 end
 
-
-
 --- Validate that a value is an integer meeting a minimum bound, with optional nil allowance.
 --- Contract:
 ---   * If v == nil and allow_nil == true  → ok=true, val=nil,  err=nil (caller can keep default)

@@ -11,8 +11,7 @@ M.identity = meta.identity
 M.always_true = meta.always_true
 M.always_false = meta.always_false
 M.const = meta.const
-M.raise  = meta.raise
+M.raise = meta.raise
 
 ---@type Lib.Functions
 return M
-

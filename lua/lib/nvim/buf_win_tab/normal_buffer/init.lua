@@ -106,11 +106,7 @@ function M.prompt_save(bufnr)
   local name = api.nvim_buf_get_name(bufnr)
   local label = name ~= "" and fn.fnamemodify(name, ":t") or ("buffer " .. bufnr)
 
-  local choice = fn.confirm(
-    string.format("Save changes to %s?", label),
-    "&Yes\n&No\n&Cancel",
-    1
-  )
+  local choice = fn.confirm(string.format("Save changes to %s?", label), "&Yes\n&No\n&Cancel", 1)
 
   if choice == 1 then
     -- Save in the buffer's own context without changing focus.

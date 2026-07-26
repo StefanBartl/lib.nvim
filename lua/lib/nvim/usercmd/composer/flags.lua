@@ -83,7 +83,11 @@ local function consume_flag(route, spec, label, inline_val, tokens, i, stopped, 
   local raw = inline_val
   if raw == nil then
     local nxt = tokens[i + 1]
-    if nxt == nil or nxt == "--" or (not stopped and (is_flag_token(nxt) or find_short_spec(route, nxt))) then
+    if
+      nxt == nil
+      or nxt == "--"
+      or (not stopped and (is_flag_token(nxt) or find_short_spec(route, nxt)))
+    then
       return i, ("flag '%s' requires a value"):format(label)
     end
     raw = nxt
@@ -129,7 +133,9 @@ function M.split(route, tokens)
       stopped = true
     elseif not stopped and short_spec then
       local next_i, err = consume_flag(route, short_spec, tok, nil, tokens, i, stopped, flags)
-      if err then return nil, nil, err end
+      if err then
+        return nil, nil, err
+      end
       i = next_i
     elseif not stopped and is_flag_token(tok) then
       local body = tok:sub(3)
@@ -141,8 +147,11 @@ function M.split(route, tokens)
       if not spec then
         return nil, nil, ("unknown flag '--%s'"):format(name)
       end
-      local next_i, err = consume_flag(route, spec, "--" .. name, inline_val, tokens, i, stopped, flags)
-      if err then return nil, nil, err end
+      local next_i, err =
+        consume_flag(route, spec, "--" .. name, inline_val, tokens, i, stopped, flags)
+      if err then
+        return nil, nil, err
+      end
       i = next_i
     else
       positionals[#positionals + 1] = tok

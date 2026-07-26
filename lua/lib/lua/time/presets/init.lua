@@ -73,7 +73,8 @@ function M.this_quarter(now)
   now = now or os.time()
   local t = to_date_table(now)
   local quarter_start_month = (math.floor((t.month - 1) / 3) * 3) + 1
-  local from = os.time({ year = t.year, month = quarter_start_month, day = 1, hour = 0, min = 0, sec = 0 })
+  local from =
+    os.time({ year = t.year, month = quarter_start_month, day = 1, hour = 0, min = 0, sec = 0 })
   return { from = from, to = now }
 end
 

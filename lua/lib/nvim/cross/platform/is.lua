@@ -39,4 +39,3 @@ return function(platform)
 
   return platform == current
 end
-

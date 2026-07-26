@@ -26,7 +26,7 @@ end
 ---@param calls? string|string[]|"" Functions to call on loaded modules
 ---@return nil
 function M.dir(dir, calls)
---[[
+  --[[
 This utility loads all Lua modules located directly inside a given directory
 under `lua/<dir>` and optionally invokes well-defined lifecycle functions
 on each loaded module.
@@ -63,7 +63,8 @@ Key features:
 
 The function itself is exported directly (not wrapped in a table) to allow
 simple re-export patterns.
-]]--
+]]
+  --
 
   -- Normalize `dir` (strip leading/trailing slashes and trailing dots)
   dir = tostring(dir):gsub("^/*", ""):gsub("/*$", ""):gsub("%.+$", "")
@@ -118,7 +119,9 @@ simple re-export patterns.
       if module_name ~= caller_module then
         local ok, mod = pcall(require, module_name)
         if not ok then
-          notify.error("[lib.require_dir] Failed to require " .. module_name .. ": " .. tostring(mod))
+          notify.error(
+            "[lib.require_dir] Failed to require " .. module_name .. ": " .. tostring(mod)
+          )
         else
           -- Function dispatch logic.
           if type(mod) == "table" then
@@ -127,7 +130,9 @@ simple re-export patterns.
               if type(mod.setup) == "function" then
                 local ok_setup, err = pcall(mod.setup, {})
                 if not ok_setup then
-                  notify.error("[lib.require_dir] Setup error in " .. module_name .. ": " .. tostring(err))
+                  notify.error(
+                    "[lib.require_dir] Setup error in " .. module_name .. ": " .. tostring(err)
+                  )
                 end
               end
             else
@@ -136,7 +141,14 @@ simple re-export patterns.
                 if type(mod[fn]) == "function" then
                   local ok_call, err = pcall(mod[fn], mod)
                   if not ok_call then
-                    notify.error("[lib.require_dir] Error calling " .. fn .. " in " .. module_name .. ": " .. tostring(err))
+                    notify.error(
+                      "[lib.require_dir] Error calling "
+                        .. fn
+                        .. " in "
+                        .. module_name
+                        .. ": "
+                        .. tostring(err)
+                    )
                   end
                 end
               end

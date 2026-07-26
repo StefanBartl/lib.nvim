@@ -9,12 +9,12 @@ local fn = vim.fn
 
 --- Moves the current buffer to the next tab or creates a new one
 ---@type Lib.BufWinTab.MoveBufToTab
-return function ()
+return function()
   -- Get current buffer info
   local bufnr = api.nvim_get_current_buf()
   local cursor_pos = api.nvim_win_get_cursor(0)
   local original_tab = fn.tabpagenr()
-  local total_tabs = fn.tabpagenr('$')
+  local total_tabs = fn.tabpagenr("$")
   local target_tab = original_tab + 1
 
   -- Find an alternate buffer to show in the original tab
@@ -23,7 +23,7 @@ return function ()
     alternate_bufnr = fn.bufnr("#")
   else
     -- Find any other listed buffer
-    local buffers = fn.getbufinfo({buflisted = 1})
+    local buffers = fn.getbufinfo({ buflisted = 1 })
     for _, buf in ipairs(buffers) do
       if buf.bufnr ~= bufnr and buf.loaded == 1 then
         alternate_bufnr = buf.bufnr
@@ -68,10 +68,10 @@ return function ()
         local lines = api.nvim_buf_get_lines(buf, 0, -1, false)
         local is_empty = #lines == 1 and lines[1] == ""
         local is_noname = name == ""
-        local is_modified_buf = api.nvim_get_option_value('modified', { buf = buf })
+        local is_modified_buf = api.nvim_get_option_value("modified", { buf = buf })
 
         if is_noname and is_empty and not is_modified_buf then
-          pcall(api.nvim_buf_delete, buf, {force = false})
+          pcall(api.nvim_buf_delete, buf, { force = false })
         end
       end
     end

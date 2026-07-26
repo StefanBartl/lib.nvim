@@ -105,7 +105,9 @@ local function finish(state, spec)
     return
   end
   set_line(state, render_line(spec))
-  vim.defer_fn(function() close(state) end, 800)
+  vim.defer_fn(function()
+    close(state)
+  end, 800)
 end
 
 ---@param state any|nil
@@ -116,7 +118,9 @@ local function cancel(state, spec)
   end
   local text = spec.text and spec.text ~= "" and spec.text or "cancelled"
   set_line(state, spec.title .. text)
-  vim.defer_fn(function() close(state) end, 800)
+  vim.defer_fn(function()
+    close(state)
+  end, 800)
 end
 
 ---@type Lib.Progress.StyleImpl

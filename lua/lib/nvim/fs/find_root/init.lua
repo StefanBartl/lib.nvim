@@ -31,7 +31,7 @@ local lru = require("lib.lua.memo.lru")
 ---@return Lib.Fs.FindRoot
 return function(opts)
   opts = opts or {}
-  local markers  = opts.markers or { ".git" }
+  local markers = opts.markers or { ".git" }
   local cache_chain = opts.cache_chain == true
   -- A chain walk inserts one entry per visited directory, so the same LRU
   -- would evict far sooner. Give it more headroom by default.
@@ -48,7 +48,9 @@ return function(opts)
   ---@param path string
   ---@return string
   local function dir_of(path)
-    if vim.fn.isdirectory(path) == 1 then return path end
+    if vim.fn.isdirectory(path) == 1 then
+      return path
+    end
     return vim.fn.fnamemodify(path, ":h")
   end
 
@@ -115,7 +117,9 @@ return function(opts)
   ---@param path string
   ---@return string|nil
   local function find(path)
-    if type(path) ~= "string" or path == "" then return nil end
+    if type(path) ~= "string" or path == "" then
+      return nil
+    end
     local dir = dir_of(path)
 
     if cache_chain then
@@ -139,7 +143,9 @@ return function(opts)
   end
 
   local function clear()
-    if cache then cache = lru.new(capacity) end
+    if cache then
+      cache = lru.new(capacity)
+    end
   end
 
   return { find = find, clear = clear }

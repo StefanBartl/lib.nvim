@@ -4,7 +4,6 @@ local expand_path = require("lib.nvim.cross.fs.expand_path")
 
 local M = {}
 
-
 --- Trim leading/trailing ASCII whitespace.
 ---@param s any
 ---@return string

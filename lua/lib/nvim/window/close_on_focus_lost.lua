@@ -33,7 +33,8 @@ local function close_on_focus_lost(winid, opts)
   local events = opts.events or DEFAULT_EVENTS
   local force = opts.force ~= false
 
-  local augroup = api.nvim_create_augroup(string.format("LibNvimWindowFocusClose_%d", winid), { clear = true })
+  local augroup =
+    api.nvim_create_augroup(string.format("LibNvimWindowFocusClose_%d", winid), { clear = true })
 
   api.nvim_create_autocmd(events, {
     group = augroup,

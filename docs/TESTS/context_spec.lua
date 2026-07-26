@@ -30,8 +30,16 @@ return function(H)
   eq(snap:has_filetype({ "python", "lua" }), true, "buffer.context: has_filetype (list)")
   eq(snap:has_filetype("python"), false, "buffer.context: has_filetype negative")
   eq(snap:is_normal(), false, "buffer.context: scratch buffer is not 'normal' (buftype=nofile)")
-  eq(snap:is_processable({ "nofile" }), false, "buffer.context: is_processable respects ignore_buftypes")
-  eq(snap:is_processable({ "help" }), true, "buffer.context: is_processable allows non-ignored buftype")
+  eq(
+    snap:is_processable({ "nofile" }),
+    false,
+    "buffer.context: is_processable respects ignore_buftypes"
+  )
+  eq(
+    snap:is_processable({ "help" }),
+    true,
+    "buffer.context: is_processable allows non-ignored buftype"
+  )
 
   eq(snap.lines[1], "one", "buffer.context: lazy .lines loads content")
   eq(#snap.lines, 3, "buffer.context: lazy .lines has all lines")
@@ -42,12 +50,20 @@ return function(H)
   local snap3 = buffer_ctx.get(bufnr)
   ok(snap3 ~= snap, "buffer.context: edited buffer rebuilds the snapshot")
   eq(snap3.line_count, 4, "buffer.context: rebuilt snapshot reflects the edit")
-  eq(buffer_ctx.get_stats().misses, misses_before2 + 1, "buffer.context: edit invalidates the cache")
+  eq(
+    buffer_ctx.get_stats().misses,
+    misses_before2 + 1,
+    "buffer.context: edit invalidates the cache"
+  )
 
   buffer_ctx.invalidate(bufnr)
   local misses_before3 = buffer_ctx.get_stats().misses
   buffer_ctx.get(bufnr)
-  eq(buffer_ctx.get_stats().misses, misses_before3 + 1, "buffer.context: invalidate forces a rebuild")
+  eq(
+    buffer_ctx.get_stats().misses,
+    misses_before3 + 1,
+    "buffer.context: invalidate forces a rebuild"
+  )
 
   local invalid_snap = buffer_ctx.get(999999)
   eq(invalid_snap.is_valid, false, "buffer.context: invalid bufnr -> is_valid = false")
@@ -76,7 +92,11 @@ return function(H)
   ok(wsnap3 ~= wsnap, "window.context: clear_cache() forces a rebuild")
 
   eq(wsnap3:is_cursor_in_range(1, 1000000), true, "window.context: is_cursor_in_range positive")
-  eq(wsnap3:is_cursor_in_range(1000000, 2000000), false, "window.context: is_cursor_in_range negative")
+  eq(
+    wsnap3:is_cursor_in_range(1000000, 2000000),
+    false,
+    "window.context: is_cursor_in_range negative"
+  )
   eq(
     wsnap3:get_visible_lines(),
     wsnap3.botline - wsnap3.topline + 1,

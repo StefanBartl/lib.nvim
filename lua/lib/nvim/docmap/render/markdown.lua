@@ -41,12 +41,21 @@ function M.render(ir, findings, opts)
 
   local c = ir.meta.counts
   put("# " .. ir.meta.title .. " — module map\n")
-  put("> **Generated** by `lib.nvim.docmap`. Do not edit by hand — run `:LibMap`\n"
-    .. "> (or `nvim --headless -l scripts/gen_map.lua`) to regenerate.\n")
-  put(("**%d modules** · %d namespaces · %d helper files\n")
-    :format(c.module or 0, c.namespace or 0, c.file or 0))
-  put("The [interactive map](index.html) has filtering, full descriptions and\n"
-    .. "source links; this page is the version the code host renders directly.\n")
+  put(
+    "> **Generated** by `lib.nvim.docmap`. Do not edit by hand — run `:LibMap`\n"
+      .. "> (or `nvim --headless -l scripts/gen_map.lua`) to regenerate.\n"
+  )
+  put(
+    ("**%d modules** · %d namespaces · %d helper files\n"):format(
+      c.module or 0,
+      c.namespace or 0,
+      c.file or 0
+    )
+  )
+  put(
+    "The [interactive map](index.html) has filtering, full descriptions and\n"
+      .. "source links; this page is the version the code host renders directly.\n"
+  )
 
   put("\n## Namespaces\n")
   put(mermaid.render(ir, findings, { max_depth = 2 }))
@@ -72,8 +81,15 @@ function M.render(ir, findings, opts)
       -- "there's documented API surface" without ~250 rows turning into
       -- thousands once every function's signature is spelled out.
       local fn_count = #(n.functions or {})
-      put(("| %s%s | %s | %s | %s |"):format(
-        indent, name, cell(n.summary), fn_count > 0 and tostring(fn_count) or "", table.concat(links, " · ")))
+      put(
+        ("| %s%s | %s | %s | %s |"):format(
+          indent,
+          name,
+          cell(n.summary),
+          fn_count > 0 and tostring(fn_count) or "",
+          table.concat(links, " · ")
+        )
+      )
     end
   end
 

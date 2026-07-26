@@ -5,9 +5,9 @@
 --- Get the alternate buffer (like :e #)
 ---@return integer|nil bufnr Buffer number of alternate buffer
 ---@return string|nil filepath Full path of the alternate buffer
-return function ()
+return function()
   -- vim.fn.bufnr('#') gibt die alternate buffer number zurück
-  local alt_bufnr = vim.fn.bufnr('#')
+  local alt_bufnr = vim.fn.bufnr("#")
 
   -- Prüfen ob gültig
   if alt_bufnr == -1 or not vim.api.nvim_buf_is_valid(alt_bufnr) then
@@ -28,4 +28,3 @@ return function ()
 
   return alt_bufnr, filepath
 end
-

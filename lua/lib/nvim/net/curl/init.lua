@@ -33,9 +33,11 @@ local M = {}
 ---@param s string
 ---@return string
 local function url_encode(s)
-  return (s:gsub("([^%w%-%.%_%~])", function(c)
-    return string.format("%%%02X", string.byte(c))
-  end))
+  return (
+    s:gsub("([^%w%-%.%_%~])", function(c)
+      return string.format("%%%02X", string.byte(c))
+    end)
+  )
 end
 
 ---Build the `?k=v&...` query string (with leading `?`) for `query`, or `""`.

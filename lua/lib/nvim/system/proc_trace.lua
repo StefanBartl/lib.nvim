@@ -69,8 +69,12 @@ end
 ---@param dur_ms number
 ---@param threshold_ms number
 local function log_entry(fd, kind, cmd_str, dur_ms, threshold_ms)
-  local line =
-    ("[+%8.0fms] %-14s %7.0fms  %s"):format(since_start_ms(), kind, dur_ms, cmd_str:sub(1, 200))
+  local line = ("[+%8.0fms] %-14s %7.0fms  %s"):format(
+    since_start_ms(),
+    kind,
+    dur_ms,
+    cmd_str:sub(1, 200)
+  )
   fd:write(line .. "\n")
 
   if dur_ms >= threshold_ms then

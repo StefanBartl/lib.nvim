@@ -7,5 +7,3 @@
 ---@field find_upward_dir fun(names: string[], from: string): string|nil
 
 return {}
-
-

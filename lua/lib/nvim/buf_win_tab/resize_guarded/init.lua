@@ -112,7 +112,10 @@ function M.create(cmd, exclude_filetypes, exclude_names, lhs)
 
   -- Warn if lhs was provided but fallback derivation failed
   if lhs and not fallback_seq then
-    notify.warn(string.format("[resize_guarded] Warning: Could not derive fallback for lhs '%s'", lhs), { title = "resize_guarded" })
+    notify.warn(
+      string.format("[resize_guarded] Warning: Could not derive fallback for lhs '%s'", lhs),
+      { title = "resize_guarded" }
+    )
   end
 
   -- Return the callback function that will be executed on keypress
@@ -146,9 +149,14 @@ function M.create(cmd, exclude_filetypes, exclude_names, lhs)
 
     -- Buffer is not excluded: execute the resize command
     -- Use pcall to catch any errors from vim.cmd
-    local ok, err = pcall(function() vim.cmd(cmd) end)
+    local ok, err = pcall(function()
+      vim.cmd(cmd)
+    end)
     if not ok then
-      notify.error(string.format("[resize_guarded] Resize command failed: %s", err), { title = "resize_guarded" })
+      notify.error(
+        string.format("[resize_guarded] Resize command failed: %s", err),
+        { title = "resize_guarded" }
+      )
     end
   end
 end

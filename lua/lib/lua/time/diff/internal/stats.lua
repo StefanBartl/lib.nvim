@@ -44,8 +44,12 @@ local function calculate_min_max_sum(deltas)
 
   for i = 1, #deltas do
     local d = deltas[i]
-    if d < min_val then min_val = d end
-    if d > max_val then max_val = d end
+    if d < min_val then
+      min_val = d
+    end
+    if d > max_val then
+      max_val = d
+    end
     sum_val = sum_val + d
   end
 

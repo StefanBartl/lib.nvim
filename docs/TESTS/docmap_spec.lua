@@ -24,7 +24,7 @@ return function(H)
     "---@see nowhere.at.all",
     "---@since v1.2.0",
     "---@example",
-    "--- local ok = M.old_thing(\"x\")",
+    '--- local ok = M.old_thing("x")',
     "--- assert(ok)",
     "function M.old_thing(x, opts)",
     "  return true",
@@ -51,13 +51,23 @@ return function(H)
 
   local old_thing, new_thing, bare
   for _, f in ipairs(fns) do
-    if f.name == "M.old_thing" then old_thing = f end
-    if f.name == "M.new_thing" then new_thing = f end
-    if f.name == "bare_helper" then bare = f end
+    if f.name == "M.old_thing" then
+      old_thing = f
+    end
+    if f.name == "M.new_thing" then
+      new_thing = f
+    end
+    if f.name == "bare_helper" then
+      bare = f
+    end
   end
 
   ok(old_thing, "docmap.functions: M.old_thing found")
-  eq(old_thing.signature, "M.old_thing(x, opts)", "docmap.functions: signature is the qualified name plus params")
+  eq(
+    old_thing.signature,
+    "M.old_thing(x, opts)",
+    "docmap.functions: signature is the qualified name plus params"
+  )
   eq(#old_thing.params, 2, "docmap.functions: 2 @param entries")
   eq(old_thing.params[1].name, "x", "docmap.functions: first param name")
   eq(old_thing.params[1].type, "string", "docmap.functions: first param type")
@@ -73,8 +83,10 @@ return function(H)
   eq(old_thing.see[1], "M.new_thing", "docmap.functions: first @see target")
   eq(old_thing.since, "v1.2.0", "docmap.functions: @since text")
   eq(old_thing.generic[1], "T", "docmap.functions: @generic name")
-  ok(old_thing.example and old_thing.example:match("assert%(ok%)"),
-    "docmap.functions: @example block captured across multiple lines")
+  ok(
+    old_thing.example and old_thing.example:match("assert%(ok%)"),
+    "docmap.functions: @example block captured across multiple lines"
+  )
   eq(old_thing.summary, "Does the old thing.", "docmap.functions: leading prose becomes summary")
 
   ok(new_thing, "docmap.functions: M.new_thing found")
@@ -102,30 +114,78 @@ return function(H)
     local nodes, order = {}, {}
     for id, fns_ in pairs(functions_by_node) do
       nodes[id] = {
-        id = id, kind = "module", name = id, path = id, source = id .. "/init.lua",
-        module = id:gsub("/", "."), summary = "x", body = "", readme = "x.md", types = {},
-        export = "table", parent = nil, depth = 0, children = {}, functions = fns_,
+        id = id,
+        kind = "module",
+        name = id,
+        path = id,
+        source = id .. "/init.lua",
+        module = id:gsub("/", "."),
+        summary = "x",
+        body = "",
+        readme = "x.md",
+        types = {},
+        export = "table",
+        parent = nil,
+        depth = 0,
+        children = {},
+        functions = fns_,
       }
       order[#order + 1] = id
     end
     table.sort(order)
-    return { meta = { title = "t", source = "lua", types_dir = "@types", branch = "main", schema = 1,
-      counts = { module = #order, namespace = 0, file = 0 } },
-      root = order[1], order = order, nodes = nodes, edges = {} }
+    return {
+      meta = {
+        title = "t",
+        source = "lua",
+        types_dir = "@types",
+        branch = "main",
+        schema = 1,
+        counts = { module = #order, namespace = 0, file = 0 },
+      },
+      root = order[1],
+      order = order,
+      nodes = nodes,
+      edges = {},
+    }
   end
 
   local ir = make_ir({
-    ["a"] = { {
-      name = "M.foo", signature = "foo(x, y)", summary = "", line = 1,
-      params = { { name = "x", type = "string", optional = false, desc = "" } },
-      returns = {}, generic = {}, deprecated = nil, async = false, nodiscard = false,
-      see = { "b.bar", "nowhere.real" }, overload = {}, example = nil, since = nil,
-    } },
-    ["b"] = { {
-      name = "M.bar", signature = "bar()", summary = "", line = 1,
-      params = {}, returns = {}, generic = {}, deprecated = nil, async = false, nodiscard = false,
-      see = {}, overload = {}, example = nil, since = nil,
-    } },
+    ["a"] = {
+      {
+        name = "M.foo",
+        signature = "foo(x, y)",
+        summary = "",
+        line = 1,
+        params = { { name = "x", type = "string", optional = false, desc = "" } },
+        returns = {},
+        generic = {},
+        deprecated = nil,
+        async = false,
+        nodiscard = false,
+        see = { "b.bar", "nowhere.real" },
+        overload = {},
+        example = nil,
+        since = nil,
+      },
+    },
+    ["b"] = {
+      {
+        name = "M.bar",
+        signature = "bar()",
+        summary = "",
+        line = 1,
+        params = {},
+        returns = {},
+        generic = {},
+        deprecated = nil,
+        async = false,
+        nodiscard = false,
+        see = {},
+        overload = {},
+        example = nil,
+        since = nil,
+      },
+    },
   })
 
   local opts = { root = "/fake", lua_root = "lua", extra_checks = {} }
@@ -143,11 +203,19 @@ return function(H)
     end
   end
   ok(has_dead_see, "docmap.check: dead-see-target fires for an unresolvable @see target")
-  ok(not (function()
-    for _, f in ipairs(findings) do
-      if f.check == "dead-see-target" and f.message:match("b%.bar") then return true end
-    end
-    return false
-  end)(), "docmap.check: dead-see-target does NOT fire for 'b.bar', which resolves via module+bare-name")
-  ok(has_undoc_param, "docmap.check: undocumented-param fires when signature has more params than @param lines")
+  ok(
+    not (function()
+        for _, f in ipairs(findings) do
+          if f.check == "dead-see-target" and f.message:match("b%.bar") then
+            return true
+          end
+        end
+        return false
+      end)(),
+    "docmap.check: dead-see-target does NOT fire for 'b.bar', which resolves via module+bare-name"
+  )
+  ok(
+    has_undoc_param,
+    "docmap.check: undocumented-param fires when signature has more params than @param lines"
+  )
 end
