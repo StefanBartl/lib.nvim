@@ -1,7 +1,16 @@
 # `lib.nvim.store.project` — persistent, project-scoped state
 
-> **Status:** proposal, not implemented. Surfaced while designing a
-> renumbering-anchor feature for `cascade.nvim`
+> **Status: implemented.** `lib.nvim.store.project` ships at
+> `lua/lib/nvim/store/project/init.lua`, matching the shape proposed below
+> (with one deliberate deviation: root resolution reuses
+> `lib.nvim.fs.project_key` — cached, marker-based, no `git` subprocess per
+> call — instead of calling `lib.nvim.git.repo_root` directly, since
+> `project_key` already implements "git root, else the given path"). Docs:
+> `lua/lib/nvim/store/project/README.md`, `doc/lib.nvim-store.txt`. Tests:
+> `docs/TESTS/project_store_spec.lua`. The rest of this document is the
+> original proposal, kept for context.
+>
+> Surfaced while designing a renumbering-anchor feature for `cascade.nvim`
 > ([concept doc](../../../cascade.nvim/docs/ROADMAP/renumbering_markers.md));
 > a cross-repo scan afterwards showed the *storage* half of that concept is
 > independently useful and already duplicated several times over.
