@@ -2,7 +2,8 @@
 -- Phase 1 (theme, surface, note), Phase 2 (toast, input, prompt),
 -- Phase 3 (layout + picker, native chooser + hover_select shim, interactive picker),
 -- Phase 4 (button-confirm), Phase 5 (viewer: read-only info panel),
--- Phase 6 (form: sequential multi-field prompt).
+-- Phase 6 (form: sequential multi-field prompt),
+-- Phase 7 (live_input: debounced on_change as you type).
 
 return function(H)
   local eq, ok = H.eq, H.ok
@@ -146,6 +147,104 @@ return function(H)
   eq(vim.api.nvim_buf_get_lines(inp.bufnr, 0, 1, false)[1], "sb", "input seeded with default")
   vim.cmd("stopinsert")
   inp:close()
+
+  -- --------------------------------------------------------------- live_input
+  -- `TextChangedI`/`TextChanged` don't fire for API-driven buffer edits in
+  -- this headless runner (no real insert-mode session), so tests fire them
+  -- explicitly via nvim_exec_autocmds after editing the buffer -- exactly
+  -- the event live_input's own debounce timer listens for.
+  local li_changes = {}
+  local li = assert(
+    kit.live_input({
+      prompt = "Search",
+      debounce = 20,
+      on_change = function(q)
+        table.insert(li_changes, q)
+      end,
+    }),
+    "live_input opens"
+  )
+  ok(li:is_valid(), "live_input float valid")
+  vim.api.nvim_buf_set_lines(li.bufnr, 0, 1, false, { "h" })
+  vim.api.nvim_exec_autocmds("TextChangedI", { buffer = li.bufnr })
+  vim.wait(60)
+  vim.api.nvim_buf_set_lines(li.bufnr, 0, 1, false, { "he" })
+  vim.api.nvim_exec_autocmds("TextChangedI", { buffer = li.bufnr })
+  vim.wait(60)
+  eq(table.concat(li_changes, ","), "h,he", "on_change fires once per debounce window, in order")
+  li:close()
+
+  -- rapid edits within one debounce window coalesce into a single on_change
+  -- call carrying only the final value.
+  local li_coalesced = {}
+  local li2 = assert(
+    kit.live_input({
+      debounce = 50,
+      on_change = function(q)
+        table.insert(li_coalesced, q)
+      end,
+    }),
+    "live_input (coalescing) opens"
+  )
+  vim.api.nvim_buf_set_lines(li2.bufnr, 0, 1, false, { "h" })
+  vim.api.nvim_exec_autocmds("TextChangedI", { buffer = li2.bufnr })
+  vim.api.nvim_buf_set_lines(li2.bufnr, 0, 1, false, { "he" })
+  vim.api.nvim_exec_autocmds("TextChangedI", { buffer = li2.bufnr })
+  vim.api.nvim_buf_set_lines(li2.bufnr, 0, 1, false, { "hel" })
+  vim.api.nvim_exec_autocmds("TextChangedI", { buffer = li2.bufnr })
+  vim.wait(120)
+  eq(#li_coalesced, 1, "rapid edits within the debounce window fire on_change only once")
+  eq(li_coalesced[1], "hel", "the coalesced on_change carries the final value")
+  li2:close()
+
+  -- <CR> submits the current query and closes
+  local li_submitted
+  kit.live_input({
+    default = "seed",
+    on_change = function() end,
+    on_submit = function(q)
+      li_submitted = q
+    end,
+  })
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "x", false)
+  eq(li_submitted, "seed", "<CR> submits the current query")
+
+  -- <Esc> cancels without submitting
+  local li_cancelled, li_wrongly_submitted
+  local li3 = assert(
+    kit.live_input({
+      on_change = function() end,
+      on_submit = function()
+        li_wrongly_submitted = true
+      end,
+      on_cancel = function()
+        li_cancelled = true
+      end,
+    }),
+    "live_input (cancel) opens"
+  )
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "x", false)
+  ok(li_cancelled, "<Esc> fires on_cancel")
+  ok(not li_wrongly_submitted, "<Esc> never fires on_submit")
+  ok(not li3:is_valid(), "<Esc> closes the float")
+
+  -- routed via kit.popup({ type = "live_input" })
+  local li_popup_changes = {}
+  local li4 = assert(
+    kit.popup({
+      type = "live_input",
+      debounce = 20,
+      on_change = function(q)
+        table.insert(li_popup_changes, q)
+      end,
+    }),
+    'kit.popup({ type = "live_input" }) opens'
+  )
+  vim.api.nvim_buf_set_lines(li4.bufnr, 0, 1, false, { "x" })
+  vim.api.nvim_exec_autocmds("TextChangedI", { buffer = li4.bufnr })
+  vim.wait(60)
+  eq(li_popup_changes[1], "x", 'kit.popup({ type = "live_input" }) routes to live_input')
+  li4:close()
 
   -- --------------------------------------------------------------- form
   -- Buffer edits + <CR>/<Esc> feedkeys stand in for typing: this headless

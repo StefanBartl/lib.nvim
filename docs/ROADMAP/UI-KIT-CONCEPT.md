@@ -441,17 +441,19 @@ surfaces the library already uses:
 
 ## 13. Phased roadmap
 
-> Status: **Phases 1–6 shipped — the originally scoped roadmap is complete,
+> Status: **Phases 1–7 shipped — the originally scoped roadmap, plus every
+> follow-on primitive the migration audit called for, is complete;
 > hover_select fully absorbed.** Theme engine, surface, and every component
-> (`note`/`viewer`/`toast`/`input`/`form`/`select`/`prompt`/`picker`/`confirm`/`menu`/`progress`),
+> (`note`/`viewer`/`toast`/`input`/`live_input`/`form`/`select`/`prompt`/`picker`/`confirm`/`menu`/`progress`),
 > the layout engine + `picker` template. `menu` is a cursor-anchored action
 > list; `viewer` is a read-only info panel (auto-sized, closes on focus loss);
-> `form` chains `input` prompts into one multi-field result; `progress` passes
-> through to the dedicated `lib.nvim.progress`. All hover_select call sites
-> were migrated to `kit.select` and the standalone `lib.nvim.ui.hover_select`
-> module has been **removed** (§10 step 4 done). The migration audit's
-> live-incremental-input primitive (`kit.live_input`) remains open as a
-> future addition beyond this roadmap's original scope.
+> `form` chains `input` prompts into one multi-field result; `live_input` adds
+> a debounced `on_change` on top of `input`; `progress` passes through to the
+> dedicated `lib.nvim.progress`. All hover_select call sites were migrated to
+> `kit.select` and the standalone `lib.nvim.ui.hover_select` module has been
+> **removed** (§10 step 4 done). What remains is migrating consumer plugins'
+> existing call sites onto `kit.viewer`/`kit.form`/`kit.live_input` — tracked
+> in docs/ROADMAP/personal/lib_nvim/ui_kit_migration.md, not here.
 
 | Phase | Deliverable | Notes |
 | ----- | ----------- | ----- |
@@ -461,6 +463,7 @@ surfaces the library already uses:
 | **4** ✅ | Button-confirm (§9) — horizontal buttons, h/l navigation, `KitSelection` focus; routed via `kit.confirm` and `prompt(answer_type="confirm", layout="buttons")` | The highest-effort component |
 | **5** ✅ | `viewer` — read-only info panel: auto-sized to content, `q`/`<Esc>` closes, closes on `WinLeave`/`BufLeave` too (`close_on_focus_lost` opt-out) | Motivated by 6+ independent hand-rolled implementations across consumer plugins (§ui_kit_migration audit) |
 | **6** ✅ | `form` — sequential multi-field prompt: chains `kit.input` per field into one keyed result table; `<Esc>` skips an optional field, aborts on a `required` one | Motivated by hand-rolled prompt chains (sandbox.nvim's `container_commands.lua`, buffer_ctx.nvim's own `process_prompts` helper — §ui_kit_migration audit §6.2) |
+| **7** ✅ | `live_input` — `kit.input` plus a debounced `on_change(query)`, fired as the user types | Motivated by filetree.nvim's `live_search`/`filter` features, each independently hand-rolling a floating prompt + `TextChangedI`-debounce (§ui_kit_migration audit §5.3) |
 
 ## 14. Open decisions
 

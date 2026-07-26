@@ -108,6 +108,19 @@
 ---@field on_submit fun(values: table<string, string>)
 ---@field on_cancel? fun()
 
+--- Options for `kit.live_input` / `kit.popup({ type = "live_input" })`.
+---@class Lib.UI.Kit.LiveInputOpts
+---@field title? string                   # alias: prompt
+---@field prompt? string
+---@field default? string
+---@field theme? Lib.UI.Kit.ThemeArg
+---@field width? integer
+---@field relative? "editor"|"cursor"|"win"
+---@field debounce? integer                # ms between the last keystroke and on_change (default 80)
+---@field on_change fun(query: string)      # fired debounced as the user types
+---@field on_submit? fun(query: string)     # <CR>
+---@field on_cancel? fun()                  # <Esc>
+
 --- Options for `kit.setup`.
 ---@class Lib.UI.Kit.SetupOpts
 ---@field default? string                       # active preset name
@@ -121,6 +134,7 @@
 ---@field viewer fun(opts: Lib.UI.Kit.ViewerOpts): Lib.UI.Kit.Surface|nil  # read-only info panel, closes on focus loss
 ---@field toast fun(opts: table): Lib.UI.Kit.Surface|nil    # ephemeral corner message
 ---@field input fun(opts: table): Lib.UI.Kit.Surface|nil    # single-line insert-mode prompt
+---@field live_input fun(opts: Lib.UI.Kit.LiveInputOpts): Lib.UI.Kit.Surface|nil  # debounced on_change as you type
 ---@field form fun(opts: Lib.UI.Kit.FormOpts): Lib.UI.Kit.Surface|nil  # sequential multi-field prompt
 ---@field select fun(opts: table): any                       # native themed list chooser (single/multi)
 ---@field prompt fun(opts: table): any                       # ask: confirm (yes/no) or text

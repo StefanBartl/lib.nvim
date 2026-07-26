@@ -9,8 +9,9 @@ coordinated, or override colors/borders per call. Built in layers on top of
 > (with layout sketches), run **`:KitPreview`** for a live theme playground,
 > or see [docs/EXAMPLES](../../../../../docs/EXAMPLES) for one scenario per
 > component (`kit-note.lua`, `kit-viewer.lua`, `kit-toast.lua`,
-> `kit-input.lua`, `kit-form.lua`, `kit-select.lua`, `kit-prompt.lua`,
-> `kit-confirm.lua`, `kit-menu.lua`, `kit-picker.lua`, `kit-layout.lua`).
+> `kit-input.lua`, `kit-live-input.lua`, `kit-form.lua`, `kit-select.lua`,
+> `kit-prompt.lua`, `kit-confirm.lua`, `kit-menu.lua`, `kit-picker.lua`,
+> `kit-layout.lua`).
 
 > **Phases 1–2** (this release): theme/preset engine + `surface` primitive +
 > components `note`, `toast`, `input`, `select` (delegates to hover_select) and
@@ -76,6 +77,7 @@ kit.popup({ type = "note",  title = "Saved", message = "Wrote 3 files", timeout 
 kit.popup({ type = "viewer", title = "Node Info", lines = { "name: foo.lua", "size: 128 B" } })
 kit.popup({ type = "toast", message = "background job done" })
 kit.popup({ type = "input", prompt = "New name", default = "x", on_submit = function(t) end })
+kit.popup({ type = "live_input", prompt = "Filter", on_change = function(query) end })
 kit.popup({ type = "form", fields = { { name = "image", label = "Image", required = true } },
             on_submit = function(values) end })
 kit.popup({ type = "select", message = "Pick", selection = { "a", "b" }, on_select = function(c, i) end })
@@ -88,6 +90,7 @@ kit.popup({ type = "prompt", question = "Delete?", answer_type = "confirm", on_a
 | `viewer` | read-only info panel; auto-sized to content; closes on q/`<Esc>` OR the moment focus leaves it — the "show some info, dismiss it" float duplicated 6+ times across consumer plugins before this existed |
 | `toast`  | ephemeral top-right message; stacks; never steals focus; auto-dismiss |
 | `input`  | single-line insert-mode prompt; `<CR>` submits, `<Esc>` cancels |
+| `live_input` | like `input`, but also debounces keystrokes into `on_change(query)` as you type — for filter/search boxes |
 | `form`   | sequential multi-field prompt — chained `input`s collected into one keyed table; `<Esc>` skips an optional field, aborts on a `required` one |
 | `select` | native themed list chooser (single/multi; `j`/`k`, `<CR>`, `<Tab>` mark) |
 | `prompt` | ask: `answer_type = "confirm"` (yes/no → boolean) or `"text"` |
@@ -174,3 +177,20 @@ kit.form({
 Each field accepts the same options as `kit.input` (`default`, `theme`,
 `width`, `relative`, `expand_env`), falling back to `opts.theme`/`opts.width`/
 `opts.relative` when omitted.
+
+### Live input (debounced on_change)
+
+`kit.live_input(opts)` is `kit.input` plus a debounced `on_change(query)` —
+for filter/search boxes that need to refresh a results list or preview on
+every keystroke, not just on submit (`kit.picker`'s prompt slot uses the same
+debounce timer internally).
+
+```lua
+kit.live_input({
+  prompt = "Filter",
+  debounce = 80,  -- ms after the last keystroke before on_change fires (default 80)
+  on_change = function(query) end,   -- fired repeatedly as the user types
+  on_submit = function(query) end,   -- <CR>
+  on_cancel = function() end,        -- <Esc>
+})
+```
