@@ -20,6 +20,7 @@ local confirm = require("lib.nvim.ui.kit.confirm")
 local menu = require("lib.nvim.ui.kit.menu")
 local preview = require("lib.nvim.ui.kit.preview")
 local note = require("lib.nvim.ui.kit.note")
+local viewer = require("lib.nvim.ui.kit.viewer")
 local toast = require("lib.nvim.ui.kit.toast")
 local input = require("lib.nvim.ui.kit.input")
 local select = require("lib.nvim.ui.kit.select")
@@ -48,6 +49,13 @@ end
 ---@return Lib.UI.Kit.Surface|nil
 function M.note(opts)
   return note.open(opts)
+end
+
+--- Open a read-only info panel (auto-sized, q/<Esc> closes, closes on focus loss).
+---@param opts Lib.UI.Kit.ViewerOpts
+---@return Lib.UI.Kit.Surface|nil
+function M.viewer(opts)
+  return viewer.open(opts)
 end
 
 --- Show an ephemeral corner toast.
@@ -109,6 +117,7 @@ end
 --- Component dispatch table.
 local COMPONENTS = {
   note = note.open,
+  viewer = viewer.open,
   toast = toast.open,
   input = input.open,
   select = select.open,
