@@ -33,7 +33,11 @@ watch.with_release(path, fn)  -- release → fn() → release again
   *unstarted* `fs_event` afterward, so a later `updated_watched()`/`:start()`
   operates on a live handle instead of crashing on a closed one — and a fresh
   event holds nothing open until started, so the lock stays released for the
-  mutation window.
+  mutation window. The watcher stays in the registry (only `stop_watching`
+  forgets one for good) — neo-tree can restart the very same Watcher object on
+  the same path without ever calling `watch_folder` again, and a `release`
+  that forgot it there would leave a later mutation on that path with nothing
+  to release, reopening the same lock.
 
 libuv closes handles asynchronously (next loop tick), so a caller that needs the
 lock gone *now* must let the event loop run before retrying — which is exactly

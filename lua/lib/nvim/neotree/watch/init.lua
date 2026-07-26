@@ -150,6 +150,16 @@ end
 ---Close the file-watcher handle(s) on `paths` and every watched subpath,
 ---releasing the OS lock so a mutation on those paths can proceed. Safe to call
 ---when nothing is installed/tracked — it simply releases nothing.
+---
+---Deliberately does NOT drop the released watcher from the registry: `w` is
+---neo-tree's own Watcher object, and neo-tree can `:start()` it again on the
+---same path later (e.g. `updated_watched()`) without ever going back through
+---the wrapped `watch_folder` — the only place a NEW registry entry gets
+---created. Forgetting it here would mean a second mutation on the same path
+---finds nothing to release, silently reintroducing the exact lock this
+---module exists to prevent. Contrast with the `stop_watching` wrap in
+---`install()`, which correctly does forget every entry — that path is
+---neo-tree discarding the watchers for good, not restarting them.
 ---@param paths string|string[]
 ---@return integer released  How many watchers were released.
 function M.release(paths)
@@ -167,7 +177,6 @@ function M.release(paths)
     end
     if match then
       release_watcher(w, true)
-      registry[key] = nil
       released = released + 1
     end
   end
