@@ -1,11 +1,15 @@
-# Concept: subcommand user commands — `:Verb [option] [option] …`
+# `lib.nvim.usercmd.composer` — subcommand user commands: `:Verb [option] [option] …`
 
-> Status: **concept / design proposal** (no code yet). Module name is decided:
-> **`composer`** (deliberately not `verb` — it *composes* a verb's routes into
-> a command; it isn't itself a verb, see [§11](#11-decisions)). Default docs
-> path is decided: **`docs/BINDINGS/Usercmds.md`**. Everything here is pure
-> `vim.api` / `vim.fn` (completion + `nargs="*"` parsing); no shell-outs,
-> cross-platform.
+> **Status: implemented.** Phases 1–8 shipped — see [§12](#12-phased-roadmap)
+> for the phase-by-phase breakdown. Module: `lib.nvim.usercmd.composer`
+> (`lua/lib/nvim/usercmd/composer/`), docs at
+> `lua/lib/nvim/usercmd/composer/README.md` and `:h lib.nvim-composer`, tests
+> at `docs/TESTS/composer_spec.lua`. Dogfooded by lib.nvim itself: the `:Lib`
+> verb ([§9](#9-dogfooding-nvim_usrcmds)), whose generated reference lives at
+> `docs/BINDINGS/Usercmds.md`. The rest of this document is the original
+> design proposal, kept for context — sections below describing something as
+> "decided" or a "sketch" reflect the state before implementation, not an
+> open question.
 
 ## 1. Purpose
 
@@ -444,7 +448,6 @@ as every other repo surveyed.
 | --- | --- | --- |
 | **sandbox.nvim** | ~24 (`Container*`, `Image*`, `Wsl*`, `*Buffer` variants) | `:Container`, `:Image`, `:Wsl` — biggest win by command count |
 | **github_stats.nvim** | 10, registered in *two* places (`commands.lua` **and** `bindings/usrcmds/init.lua` — likely duplicate registration, worth a separate bug-check) | `:GithubStats show\|summary\|referrers\|paths\|chart\|export\|diff\|debug\|dashboard` |
-| **mdview.nvim** | 10, one file each, each already wrapped in `lib.nvim.usercmd.create` | Cheapest technical migration — registration layer is already `composer`-compatible, only the 10 files collapse into one spec |
 | **dap.nvim** | 10, all zero-arg | Lowest-risk migration (no arg-shape complexity): `:Dap continue\|step-over\|step-into\|...` |
 | **cascade.nvim** | 6 (`Rotate/Sort/Reverse/Strip/Indent/Dedent`) | `:Cascade rotate\|sort\|...` — but uses `range`/`bang` per-command (bang-as-direction), so `composer`'s `Ctx` **must** carry `range`/`bang`/`count`, not just parsed args (already modeled in [§4](#4-the-spec-model)'s `Ctx` — confirmed necessary, not speculative) |
 | **color_my_ascii.nvim** | 7 (`ColorMyAscii*`) | `:ColorMyAscii highlight\|toggle\|stats\|inspect char\|group\|inline\|highlight` |

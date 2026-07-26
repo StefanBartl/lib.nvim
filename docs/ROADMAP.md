@@ -43,6 +43,12 @@ lib.nvim was audited against the project checklists. Full per-rule status:
    ships, combining `lib.nvim.cache.disk` + `lib.nvim.fs.project_key`. See
    [project-store.md](ROADMAP/project-store.md) (updated with its
    implementation status) and `doc/lib.nvim-store.txt`.
+7. ~~Subcommand user-command composer~~ Done — `lib.nvim.usercmd.composer`
+   (`:Verb sub sub ARG` + derived `<Tab>` completion + Markdown docgen)
+   ships all 8 planned phases (typed args, flags, bare `key=value`,
+   buffer-local commands, count prefix). Dogfooded as lib.nvim's own `:Lib`
+   verb, generated reference at `docs/BINDINGS/Usercmds.md`. See
+   [usrcmd_builder.md](ROADMAP/usrcmd_builder.md) and `doc/lib.nvim-composer.txt`.
 
 ---
 
