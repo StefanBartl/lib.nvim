@@ -509,12 +509,14 @@ return function(H)
     -- must still reach run(), not just routes with an optional arg slot.
     local fired = false
     composer.verb("ComposerSpecBareRootNoArgs", {
-      routes = { {
-        path = {},
-        run = function()
-          fired = true
-        end,
-      } },
+      routes = {
+        {
+          path = {},
+          run = function()
+            fired = true
+          end,
+        },
+      },
     })
     vim.cmd("ComposerSpecBareRootNoArgs")
     ok(fired, "bare invocation of a path={} root route with NO declared args still dispatches")
@@ -529,12 +531,14 @@ return function(H)
       default = function()
         which = "default"
       end,
-      routes = { {
-        path = {},
-        run = function()
-          which = "root"
-        end,
-      } },
+      routes = {
+        {
+          path = {},
+          run = function()
+            which = "root"
+          end,
+        },
+      },
     })
     vim.cmd("ComposerSpecDefaultWins")
     eq(which, "default", "spec.default still wins over a root route on bare invocation")
@@ -566,13 +570,15 @@ return function(H)
   do
     local captured
     local spec_range = {
-      routes = { {
-        path = { "go" },
-        range = true,
-        run = function(ctx)
-          captured = ctx.range
-        end,
-      } },
+      routes = {
+        {
+          path = { "go" },
+          range = true,
+          run = function(ctx)
+            captured = ctx.range
+          end,
+        },
+      },
     }
     local root2 = tree.build(spec_range.routes)
     parse.dispatch(
@@ -594,12 +600,14 @@ return function(H)
     local captured_count
     composer.verb("ComposerSpecCount", {
       count = 0,
-      routes = { {
-        path = { "go" },
-        run = function(ctx)
-          captured_count = ctx.range.count
-        end,
-      } },
+      routes = {
+        {
+          path = { "go" },
+          run = function(ctx)
+            captured_count = ctx.range.count
+          end,
+        },
+      },
     })
     vim.cmd("5ComposerSpecCount go")
     eq(captured_count, 5, "count=0 registers a :N Verb prefix that reaches ctx.range.count")
