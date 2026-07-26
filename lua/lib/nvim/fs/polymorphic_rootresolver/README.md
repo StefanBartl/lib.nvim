@@ -42,10 +42,10 @@ Without a proper root resolver, LSPs may treat every file individually, leading 
 ## Usage
 
 ```lua
-local resolver_module = require("lib.nvim.fs.polymorphic_root_resolver")
+local make_root_dir_resolver = require("lib.nvim.fs.polymorphic_rootresolver")
 
 -- Create a resolver with default configuration
-local resolve_root = resolver_module.make_root_dir_resolver()
+local resolve_root = make_root_dir_resolver()
 
 -- Resolve root from a filename
 local root = resolve_root("/home/user/project/src/main.lua")
@@ -64,7 +64,7 @@ end)
 You can customize the resolver when creating it:
 
 ```lua
-local resolve_root = resolver_module.make_root_dir_resolver({
+local resolve_root = make_root_dir_resolver({
   markers = { ".git", ".luarc.json", "pyproject.toml" },
   include_stdpath_config = false,
 })
