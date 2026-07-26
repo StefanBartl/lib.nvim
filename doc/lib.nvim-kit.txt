@@ -76,7 +76,7 @@ returns the handle, or nil on failure.
 4. COMPONENTS                                        *lib.nvim-kit-components*
 
 `kit.popup(opts)` dispatches on `opts.type`. Implemented: note, viewer, toast,
-input, form, select, prompt, confirm, menu, picker, progress. >lua
+input, live_input, form, select, prompt, confirm, menu, picker, progress. >lua
 
     kit.popup({ type = "note",  title = "Saved", message = "Wrote 3 files", timeout = 2000 })
     kit.popup({ type = "viewer", title = "Node Info",
@@ -84,6 +84,8 @@ input, form, select, prompt, confirm, menu, picker, progress. >lua
     kit.popup({ type = "toast", message = "background job done" })
     kit.popup({ type = "input", prompt = "New name", default = "x",
                 on_submit = function(text) end })
+    kit.popup({ type = "live_input", prompt = "Filter",
+                on_change = function(query) end })
     kit.popup({ type = "form", fields = {
                   { name = "image", label = "Image", required = true },
                   { name = "name", label = "Name" },
@@ -93,7 +95,8 @@ input, form, select, prompt, confirm, menu, picker, progress. >lua
     kit.popup({ type = "prompt", question = "Delete?", answer_type = "confirm",
                 on_answer = function(yes) end })
     -- convenience aliases: kit.note / kit.viewer / kit.toast / kit.input /
-    -- kit.form / kit.select / kit.prompt / kit.confirm / kit.menu / kit.picker
+    -- kit.live_input / kit.form / kit.select / kit.prompt / kit.confirm /
+    -- kit.menu / kit.picker
 <
   note    centered title + message float; optional `timeout` (ms) auto-dismiss.
   viewer  read-only info panel; auto-sized to content; q/<Esc> closes, and
@@ -101,6 +104,9 @@ input, form, select, prompt, confirm, menu, picker, progress. >lua
           `opts.close_on_focus_lost = false` opts out of the focus-loss close.
   toast   ephemeral top-right message; stacks; never steals focus; auto-dismiss.
   input   single-line insert-mode prompt; <CR> submits, <Esc> cancels.
+  live_input  like input, but also debounces keystrokes into `on_change(query)`
+          as the user types (`debounce` ms, default 80) — for filter/search
+          boxes that refresh a results list or preview on every keystroke.
   form    sequential multi-field prompt: chained `input`s collected into one
           keyed result table (`{ fields = { { name, label, default?,
           required? }, ... }, on_submit(values), on_cancel? }`). <Esc> skips
@@ -129,11 +135,14 @@ Phase 4: button-confirm (`kit.confirm` / `prompt` with `layout = "buttons"`).
 Phase 5: `kit.viewer`, a read-only info panel — the "show some info, dismiss
 it" float that was hand-rolled independently across consumer plugins (6+
 times in filetree.nvim alone).
-Phase 6 (this release): `kit.form`, a sequential multi-field prompt — chained
-`kit.input` calls collected into one keyed result table, replacing the
-hand-rolled "several vim.fn.input calls in a row" pattern (sandbox.nvim's
-container_commands.lua, buffer_ctx.nvim's own process_prompts helper). See
-docs/ROADMAP/UI-KIT-CONCEPT.md.
+Phase 6: `kit.form`, a sequential multi-field prompt — chained `kit.input`
+calls collected into one keyed result table, replacing the hand-rolled
+"several vim.fn.input calls in a row" pattern (sandbox.nvim's
+container_commands.lua, buffer_ctx.nvim's own process_prompts helper).
+Phase 7 (this release): `kit.live_input`, `kit.input` plus a debounced
+`on_change(query)` — replacing the hand-rolled floating prompt-buffer +
+TextChangedI-debounce pattern duplicated in filetree.nvim's live_search and
+filter features. See docs/ROADMAP/UI-KIT-CONCEPT.md.
 
 The layout engine turns a declarative region spec into aligned nvim_open_win
 geometry for several coordinated floats: >lua

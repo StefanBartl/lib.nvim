@@ -23,6 +23,7 @@ local note = require("lib.nvim.ui.kit.note")
 local viewer = require("lib.nvim.ui.kit.viewer")
 local toast = require("lib.nvim.ui.kit.toast")
 local input = require("lib.nvim.ui.kit.input")
+local live_input = require("lib.nvim.ui.kit.live_input")
 local select = require("lib.nvim.ui.kit.select")
 local prompt = require("lib.nvim.ui.kit.prompt")
 local form = require("lib.nvim.ui.kit.form")
@@ -81,6 +82,14 @@ function M.form(opts)
   return form.open(opts)
 end
 
+--- Open a live-incremental input: like `kit.input`, but also debounces
+--- keystrokes into `opts.on_change(query)` as the user types.
+---@param opts table
+---@return Lib.UI.Kit.Surface|nil
+function M.live_input(opts)
+  return live_input.open(opts)
+end
+
 --- Open a native themed list chooser (single/multi-select).
 ---@param opts table
 function M.select(opts)
@@ -129,6 +138,7 @@ local COMPONENTS = {
   viewer = viewer.open,
   toast = toast.open,
   input = input.open,
+  live_input = live_input.open,
   form = form.open,
   select = select.open,
   prompt = prompt.open,
