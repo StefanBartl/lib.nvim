@@ -68,6 +68,19 @@
 ---@field height? integer
 ---@field relative? "editor"|"cursor"|"win"
 
+--- Options for the `viewer` component / `kit.popup({ type = "viewer" })`.
+---@class Lib.UI.Kit.ViewerOpts
+---@field title? string
+---@field lines? string[]                                # alias: message
+---@field message? string|string[]
+---@field theme? Lib.UI.Kit.ThemeArg
+---@field width? integer
+---@field height? integer
+---@field relative? "editor"|"cursor"|"win"
+---@field enter? boolean                                  # focus + allow scrolling (default true)
+---@field filetype? string
+---@field close_on_focus_lost? boolean                    # dismiss on WinLeave/BufLeave (default true)
+
 --- One entry of a `kit.menu`.
 ---@class Lib.UI.Kit.MenuItem
 ---@field label string       # display text
@@ -83,6 +96,7 @@
 ---@field setup fun(opts?: Lib.UI.Kit.SetupOpts)
 ---@field popup fun(opts: table): any            # dispatch on opts.type
 ---@field note fun(opts: Lib.UI.Kit.NoteOpts): Lib.UI.Kit.Surface|nil
+---@field viewer fun(opts: Lib.UI.Kit.ViewerOpts): Lib.UI.Kit.Surface|nil  # read-only info panel, closes on focus loss
 ---@field toast fun(opts: table): Lib.UI.Kit.Surface|nil    # ephemeral corner message
 ---@field input fun(opts: table): Lib.UI.Kit.Surface|nil    # single-line insert-mode prompt
 ---@field select fun(opts: table): any                       # native themed list chooser (single/multi)

@@ -33,6 +33,8 @@ that is meant to run headless at require-time).
 
 - [kit-note.lua](kit-note.lua) — centered title + message float, optional
   auto-dismiss timeout.
+- [kit-viewer.lua](kit-viewer.lua) — read-only info panel, auto-sized,
+  dismisses on q/`<Esc>` or the moment focus leaves it.
 - [kit-toast.lua](kit-toast.lua) — ephemeral, stacking, non-focus-stealing
   corner notifications.
 - [kit-input.lua](kit-input.lua) — themed single-line prompt, a `vim.ui.input`

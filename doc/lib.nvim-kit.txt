@@ -75,10 +75,12 @@ returns the handle, or nil on failure.
 ==============================================================================
 4. COMPONENTS                                        *lib.nvim-kit-components*
 
-`kit.popup(opts)` dispatches on `opts.type`. Implemented: note, toast, input,
-select, prompt. Not-yet-built types warn with their planned phase. >lua
+`kit.popup(opts)` dispatches on `opts.type`. Implemented: note, viewer, toast,
+input, select, prompt, confirm, menu, picker, progress. >lua
 
     kit.popup({ type = "note",  title = "Saved", message = "Wrote 3 files", timeout = 2000 })
+    kit.popup({ type = "viewer", title = "Node Info",
+                lines = { "name: foo.lua", "size: 128 B" } })
     kit.popup({ type = "toast", message = "background job done" })
     kit.popup({ type = "input", prompt = "New name", default = "x",
                 on_submit = function(text) end })
@@ -86,9 +88,13 @@ select, prompt. Not-yet-built types warn with their planned phase. >lua
                 on_select = function(choice, idx) end })
     kit.popup({ type = "prompt", question = "Delete?", answer_type = "confirm",
                 on_answer = function(yes) end })
-    -- convenience aliases: kit.note / kit.toast / kit.input / kit.select / kit.prompt
+    -- convenience aliases: kit.note / kit.viewer / kit.toast / kit.input /
+    -- kit.select / kit.prompt / kit.confirm / kit.menu / kit.picker
 <
   note    centered title + message float; optional `timeout` (ms) auto-dismiss.
+  viewer  read-only info panel; auto-sized to content; q/<Esc> closes, and
+          (unlike note) closes the moment focus leaves it too. No timeout —
+          `opts.close_on_focus_lost = false` opts out of the focus-loss close.
   toast   ephemeral top-right message; stacks; never steals focus; auto-dismiss.
   input   single-line insert-mode prompt; <CR> submits, <Esc> cancels.
   select  native themed list chooser (single/multi-select). This absorbed the
@@ -110,8 +116,10 @@ Phase 1: theme/preset engine, `surface` primitive, `note`.
 Phase 2: `toast`, `input`, `select`, `prompt`.
 Phase 3: layout engine (`kit.layout`) + template registry + native `select`
 chooser (which absorbed and replaced the removed hover_select) + `kit.picker`.
-Phase 4 (this release): button-confirm (`kit.confirm` / `prompt` with
-`layout = "buttons"`). The roadmap is complete; see docs/ROADMAP/UI-KIT-CONCEPT.md.
+Phase 4: button-confirm (`kit.confirm` / `prompt` with `layout = "buttons"`).
+Phase 5 (this release): `kit.viewer`, a read-only info panel — the "show some
+info, dismiss it" float that was hand-rolled independently across consumer
+plugins (6+ times in filetree.nvim alone). See docs/ROADMAP/UI-KIT-CONCEPT.md.
 
 The layout engine turns a declarative region spec into aligned nvim_open_win
 geometry for several coordinated floats: >lua
