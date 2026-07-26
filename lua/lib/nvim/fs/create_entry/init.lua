@@ -75,9 +75,9 @@ return function(parent_dir, name)
     return false, nil, "mkdir failed: " .. tostring(err)
   end
 
-  local file, err = io.open(full_path, "w")
+  local file, open_err = io.open(full_path, "w")
   if not file then
-    return false, nil, "open failed: " .. (err or full_path)
+    return false, nil, "open failed: " .. (open_err or full_path)
   end
   file:close()
 

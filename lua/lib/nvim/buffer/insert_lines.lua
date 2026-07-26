@@ -18,8 +18,7 @@ local api = vim.api
 ---@param pos? Lib.Buf.InsertLinesPos
 local function insert_lines(lines, pos)
   local buf = 0
-  local row = 0
-  local col = 0
+  local row, col
 
   if pos == nil then
     -- Default: insert at start of file

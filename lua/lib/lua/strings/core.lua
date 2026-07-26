@@ -97,8 +97,9 @@ end
 ---@param s string
 ---@return string|nil
 function S.normalize_ws(s)
-  local r, _
-  (s:gsub("%s+", " ")):gsub("^%s+", ""):gsub("%s+$", "")
+  local r = s:gsub("%s+", " ")
+  r = r:gsub("^%s+", "")
+  r = r:gsub("%s+$", "")
   return r
 end
 
