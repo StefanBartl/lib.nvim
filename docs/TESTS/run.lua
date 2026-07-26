@@ -22,6 +22,7 @@ local specs = {
   "window_spec.lua",
   "context_spec.lua",
   "cache_spec.lua",
+  "project_store_spec.lua",
   "composer_spec.lua",
   "docmap_spec.lua",
 }
