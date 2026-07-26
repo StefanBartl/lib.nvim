@@ -72,14 +72,23 @@ function M.create(event, callback, opts)
     end
   end
 
-  vim.api.nvim_create_autocmd(event, {
+  local native_opts = {
     group = group,
-    pattern = opts.pattern,
     desc = opts.desc,
     once = opts.once == true,
     nested = opts.nested == true,
     callback = callback,
-  })
+  }
+  -- `pattern` and `buffer` are mutually exclusive in nvim_create_autocmd;
+  -- a buffer-scoped request must win outright, or every buffer-local autocmd
+  -- silently downgrades to a global `pattern = "*"` (opts.pattern is nil).
+  if opts.buffer ~= nil then
+    native_opts.buffer = opts.buffer
+  else
+    native_opts.pattern = opts.pattern
+  end
+
+  vim.api.nvim_create_autocmd(event, native_opts)
 end
 
 -- Normalize event configuration to a non-empty list.
