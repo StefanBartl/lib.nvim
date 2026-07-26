@@ -25,6 +25,7 @@ local toast = require("lib.nvim.ui.kit.toast")
 local input = require("lib.nvim.ui.kit.input")
 local select = require("lib.nvim.ui.kit.select")
 local prompt = require("lib.nvim.ui.kit.prompt")
+local form = require("lib.nvim.ui.kit.form")
 
 local M = {}
 
@@ -70,6 +71,14 @@ end
 ---@return Lib.UI.Kit.Surface|nil
 function M.input(opts)
   return input.open(opts)
+end
+
+--- Open a sequential multi-field form (chained `kit.input` prompts, one
+--- keyed result table). See lib.nvim.ui.kit.form for the field contract.
+---@param opts Lib.UI.Kit.FormOpts
+---@return Lib.UI.Kit.Surface|nil
+function M.form(opts)
+  return form.open(opts)
 end
 
 --- Open a native themed list chooser (single/multi-select).
@@ -120,6 +129,7 @@ local COMPONENTS = {
   viewer = viewer.open,
   toast = toast.open,
   input = input.open,
+  form = form.open,
   select = select.open,
   prompt = prompt.open,
   picker = picker.open,

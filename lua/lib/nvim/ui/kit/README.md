@@ -9,8 +9,8 @@ coordinated, or override colors/borders per call. Built in layers on top of
 > (with layout sketches), run **`:KitPreview`** for a live theme playground,
 > or see [docs/EXAMPLES](../../../../../docs/EXAMPLES) for one scenario per
 > component (`kit-note.lua`, `kit-viewer.lua`, `kit-toast.lua`,
-> `kit-input.lua`, `kit-select.lua`, `kit-prompt.lua`, `kit-confirm.lua`,
-> `kit-menu.lua`, `kit-picker.lua`, `kit-layout.lua`).
+> `kit-input.lua`, `kit-form.lua`, `kit-select.lua`, `kit-prompt.lua`,
+> `kit-confirm.lua`, `kit-menu.lua`, `kit-picker.lua`, `kit-layout.lua`).
 
 > **Phases 1–2** (this release): theme/preset engine + `surface` primitive +
 > components `note`, `toast`, `input`, `select` (delegates to hover_select) and
@@ -76,6 +76,8 @@ kit.popup({ type = "note",  title = "Saved", message = "Wrote 3 files", timeout 
 kit.popup({ type = "viewer", title = "Node Info", lines = { "name: foo.lua", "size: 128 B" } })
 kit.popup({ type = "toast", message = "background job done" })
 kit.popup({ type = "input", prompt = "New name", default = "x", on_submit = function(t) end })
+kit.popup({ type = "form", fields = { { name = "image", label = "Image", required = true } },
+            on_submit = function(values) end })
 kit.popup({ type = "select", message = "Pick", selection = { "a", "b" }, on_select = function(c, i) end })
 kit.popup({ type = "prompt", question = "Delete?", answer_type = "confirm", on_answer = function(yes) end })
 ```
@@ -86,6 +88,7 @@ kit.popup({ type = "prompt", question = "Delete?", answer_type = "confirm", on_a
 | `viewer` | read-only info panel; auto-sized to content; closes on q/`<Esc>` OR the moment focus leaves it — the "show some info, dismiss it" float duplicated 6+ times across consumer plugins before this existed |
 | `toast`  | ephemeral top-right message; stacks; never steals focus; auto-dismiss |
 | `input`  | single-line insert-mode prompt; `<CR>` submits, `<Esc>` cancels |
+| `form`   | sequential multi-field prompt — chained `input`s collected into one keyed table; `<Esc>` skips an optional field, aborts on a `required` one |
 | `select` | native themed list chooser (single/multi; `j`/`k`, `<CR>`, `<Tab>` mark) |
 | `prompt` | ask: `answer_type = "confirm"` (yes/no → boolean) or `"text"` |
 | `confirm` | button dialog — horizontal buttons, `h`/`l`/arrows move, `<CR>` confirm, `<Esc>` cancel |
@@ -149,3 +152,25 @@ kit.confirm({ question = "Pick", choices = { "Keep", "Discard", "Cancel" },
 `h`/`l`/arrows/`<Tab>` move focus (the focused button uses `KitSelection`),
 `<CR>` confirms, `<Esc>`/`q` cancels (default → `false`, custom → `nil`). See
 [assets/ui-kit/confirm-buttons.svg](../../../../../docs/ROADMAP/assets/ui-kit/confirm-buttons.svg).
+
+### Form (multi-field)
+
+`kit.form(opts)` chains `kit.input` prompts field-by-field into one keyed
+result table — the "several `vim.fn.input`/`vim.ui.input` calls in a row"
+pattern (e.g. sandbox.nvim's Image/Name/Ports/Volumes/Env chain).
+
+```lua
+kit.form({
+  fields = {
+    { name = "image", label = "Image", required = true },  -- <Esc> here aborts the form
+    { name = "name", label = "Name" },                       -- <Esc> here skips (keeps default)
+    { name = "ports", label = "Ports" },
+  },
+  on_submit = function(values) end,  -- { image = "...", name = "...", ports = "..." }
+  on_cancel = function() end,        -- fires only if a `required` field was <Esc>-ed
+})
+```
+
+Each field accepts the same options as `kit.input` (`default`, `theme`,
+`width`, `relative`, `expand_env`), falling back to `opts.theme`/`opts.width`/
+`opts.relative` when omitted.
