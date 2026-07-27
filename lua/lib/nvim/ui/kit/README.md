@@ -77,6 +77,7 @@ kit.popup({ type = "note",  title = "Saved", message = "Wrote 3 files", timeout 
 kit.popup({ type = "viewer", title = "Node Info", lines = { "name: foo.lua", "size: 128 B" } })
 kit.popup({ type = "toast", message = "background job done" })
 kit.popup({ type = "input", prompt = "New name", default = "x", on_submit = function(t) end })
+kit.popup({ type = "input", prompt = "Password", secret = true, on_submit = function(pw) end })
 kit.popup({ type = "live_input", prompt = "Filter", on_change = function(query) end })
 kit.popup({ type = "form", fields = { { name = "image", label = "Image", required = true } },
             on_submit = function(values) end })
@@ -89,7 +90,7 @@ kit.popup({ type = "prompt", question = "Delete?", answer_type = "confirm", on_a
 | `note`   | centered title + message float; optional `timeout` (ms) auto-dismiss |
 | `viewer` | read-only info panel; auto-sized to content; closes on q/`<Esc>` OR the moment focus leaves it — the "show some info, dismiss it" float duplicated 6+ times across consumer plugins before this existed |
 | `toast`  | ephemeral top-right message; stacks; never steals focus; auto-dismiss |
-| `input`  | single-line insert-mode prompt; `<CR>` submits, `<Esc>` cancels |
+| `input`  | single-line insert-mode prompt; `<CR>` submits, `<Esc>` cancels; `secret = true` masks it as you type |
 | `live_input` | like `input`, but also debounces keystrokes into `on_change(query)` as you type — for filter/search boxes |
 | `form`   | sequential multi-field prompt — chained `input`s collected into one keyed table; `<Esc>` skips an optional field, aborts on a `required` one |
 | `select` | native themed list chooser (single/multi; `j`/`k`, `<CR>`, `<Tab>` mark) |
@@ -194,6 +195,26 @@ kit.live_input({
   on_cancel = function() end,        -- <Esc>
   -- row/col (relative="editor" only) override the default centered
   -- placement, e.g. to anchor the bar to the bottom edge of a host window.
+})
+```
+
+### Secret input (masked entry)
+
+`kit.input({ secret = true, ... })` masks the input as you type — a
+`vim.fn.inputsecret` replacement. Each typed character is concealed behind
+`opts.mask` (default `"*"`) via `conceal`, re-derived from the buffer's actual
+content on every edit (paste, backspace, mid-line insert all just work). The
+underlying buffer still holds the real text — `on_submit` reads it straight
+off the buffer — but it's never echoed on screen, undo is disabled on that
+buffer (`undolevels = -1`), and (like every kit scratch buffer) it was never
+written to disk in the first place (`swapfile = false`) and is wiped the
+moment the float closes.
+
+```lua
+kit.input({
+  prompt = "Registry password",
+  secret = true,
+  on_submit = function(password) end,
 })
 ```
 

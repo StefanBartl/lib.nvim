@@ -32,6 +32,22 @@ kit.input({
   end,
 })
 
+-- `secret = true` masks the input as you type -- a vim.fn.inputsecret()
+-- replacement. Each character is concealed behind `mask` (default "*"); the
+-- real text still reaches on_submit, it's just never echoed on screen (see
+-- lib.nvim.ui.kit.input's module doc for what this does and doesn't protect
+-- against).
+kit.input({
+  prompt = "Registry password",
+  secret = true,
+  on_submit = function(password)
+    require("myplugin").login(password)
+  end,
+})
+
+-- override the placeholder character:
+kit.input({ prompt = "PIN", secret = true, mask = "•", on_submit = function(pin) end })
+
 -- `lib.nvim.ui.kit.prompt` (see kit-prompt.lua) wraps this same component
 -- for the "ask a free-text question" half of a yes/no-or-text prompt --
 -- reach for `kit.input` directly when you only ever need the text case.

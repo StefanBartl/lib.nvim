@@ -123,6 +123,20 @@
 ---@field on_submit fun(values: table<string, string>)
 ---@field on_cancel? fun()
 
+--- Options for `kit.input` / `kit.popup({ type = "input" })`.
+---@class Lib.UI.Kit.InputOpts
+---@field title? string                   # alias: prompt
+---@field prompt? string
+---@field default? string
+---@field theme? Lib.UI.Kit.ThemeArg
+---@field width? integer
+---@field relative? "editor"|"cursor"|"win"
+---@field expand_env? boolean              # run the submitted line through lib.nvim.cross.fs.expand_path
+---@field secret? boolean                  # mask the input as you type (vim.fn.inputsecret replacement)
+---@field mask? string                     # placeholder char when secret = true (default "*")
+---@field on_submit? fun(line: string)      # <CR>
+---@field on_cancel? fun()                  # <Esc>
+
 --- Options for `kit.live_input` / `kit.popup({ type = "live_input" })`.
 ---@class Lib.UI.Kit.LiveInputOpts
 ---@field title? string                   # alias: prompt
@@ -150,7 +164,7 @@
 ---@field note fun(opts: Lib.UI.Kit.NoteOpts): Lib.UI.Kit.Surface|nil
 ---@field viewer fun(opts: Lib.UI.Kit.ViewerOpts): Lib.UI.Kit.Surface|nil  # read-only info panel, closes on focus loss
 ---@field toast fun(opts: table): Lib.UI.Kit.Surface|nil    # ephemeral corner message
----@field input fun(opts: table): Lib.UI.Kit.Surface|nil    # single-line insert-mode prompt
+---@field input fun(opts: Lib.UI.Kit.InputOpts): Lib.UI.Kit.Surface|nil    # single-line insert-mode prompt (secret = true masks it)
 ---@field live_input fun(opts: Lib.UI.Kit.LiveInputOpts): Lib.UI.Kit.Surface|nil  # debounced on_change as you type
 ---@field form fun(opts: Lib.UI.Kit.FormOpts): Lib.UI.Kit.Surface|nil  # sequential multi-field prompt
 ---@field select fun(opts: table): any                       # native themed list chooser (single/multi)
