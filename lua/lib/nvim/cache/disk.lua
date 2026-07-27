@@ -72,7 +72,14 @@ end
 ---@return string|nil err
 function M.save(namespace, data, opts)
   opts = opts or {}
-  local dir = cache_dir(opts)
+  local path = cache_path(namespace, opts)
+
+  -- The parent of the *file*, not the cache root. A namespace may contain
+  -- slashes to group related entries ("myplugin/anchors" — the form this
+  -- module's own callers document), and that subdirectory has to exist or
+  -- `io.open(…, "w")` fails with ENOENT. Creating only the cache root left
+  -- every nested namespace silently unwritable.
+  local dir = vim.fn.fnamemodify(path, ":h")
 
   local ok_mkdir = pcall(vim.fn.mkdir, dir, "p")
   if not ok_mkdir then
@@ -85,7 +92,6 @@ function M.save(namespace, data, opts)
     return false, "json encode failed"
   end
 
-  local path = cache_path(namespace, opts)
   local file, err = io.open(path, "w")
   if not file then
     return false, "open failed: " .. (err or path)
