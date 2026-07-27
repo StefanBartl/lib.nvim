@@ -78,6 +78,7 @@ kit.popup({ type = "viewer", title = "Node Info", lines = { "name: foo.lua", "si
 kit.popup({ type = "toast", message = "background job done" })
 kit.popup({ type = "input", prompt = "New name", default = "x", on_submit = function(t) end })
 kit.popup({ type = "input", prompt = "Password", secret = true, on_submit = function(pw) end })
+kit.popup({ type = "input", prompt = "Path", completion = "file", on_submit = function(p) end })
 kit.popup({ type = "live_input", prompt = "Filter", on_change = function(query) end })
 kit.popup({ type = "form", fields = { { name = "image", label = "Image", required = true } },
             on_submit = function(values) end })
@@ -90,7 +91,7 @@ kit.popup({ type = "prompt", question = "Delete?", answer_type = "confirm", on_a
 | `note`   | centered title + message float; optional `timeout` (ms) auto-dismiss |
 | `viewer` | read-only info panel; auto-sized to content; closes on q/`<Esc>` OR the moment focus leaves it — the "show some info, dismiss it" float duplicated 6+ times across consumer plugins before this existed |
 | `toast`  | ephemeral top-right message; stacks; never steals focus; auto-dismiss |
-| `input`  | single-line insert-mode prompt; `<CR>` submits, `<Esc>` cancels; `secret = true` masks it as you type |
+| `input`  | single-line insert-mode prompt; `<CR>` submits, `<Esc>` cancels; `secret = true` masks it as you type; `completion = "file"` (or any `getcompletion()` type) wires `<Tab>` to the native completion popup |
 | `live_input` | like `input`, but also debounces keystrokes into `on_change(query)` as you type — for filter/search boxes |
 | `form`   | sequential multi-field prompt — chained `input`s collected into one keyed table; `<Esc>` skips an optional field, aborts on a `required` one |
 | `select` | native themed list chooser (single/multi; `j`/`k`, `<CR>`, `<Tab>` mark) |
@@ -215,6 +216,26 @@ kit.input({
   prompt = "Registry password",
   secret = true,
   on_submit = function(password) end,
+})
+```
+
+### File-path completion
+
+`kit.input({ completion = "file", ... })` — a `vim.fn.input(..., completion =
+"file")` replacement. `<Tab>` completes the last whitespace-delimited
+fragment before the cursor via `vim.fn.getcompletion()` and opens Neovim's
+real completion popup (`vim.fn.complete()`), so `<C-n>`/`<C-p>` cycle it same
+as anywhere else. While the popup is open, `<Tab>`/`<S-Tab>` advance/retreat
+the selection instead of re-triggering, and `<CR>` accepts the highlighted
+candidate rather than submitting the whole prompt (a second `<CR>` — popup
+now closed — submits). `completion` accepts any type name `getcompletion()`
+does (`"dir"`, `"shellcmd"`, `"buffer"`, ...), not just `"file"`.
+
+```lua
+kit.input({
+  prompt = "Path to executable",
+  completion = "file",
+  on_submit = function(path) end,
 })
 ```
 

@@ -14,11 +14,23 @@
 --- out of the undo tree. It was never written to disk in the first place —
 --- every kit scratch buffer already has `swapfile = false` (make_scratch),
 --- and the buffer is wiped when the float closes (`bufhidden = "wipe"`).
+---
+--- `opts.completion = "file"` (or any other `getcompletion()` type: "dir",
+--- "shellcmd", "buffer", ...) is a `completion = "file"` cmdline-input
+--- replacement: `<Tab>` completes the last whitespace-delimited fragment
+--- before the cursor via `vim.fn.getcompletion()` and opens Neovim's native
+--- completion popup (`vim.fn.complete()`) — real ins-completion, so `<C-n>`/
+--- `<C-p>` cycle it same as anywhere else. While the popup is open, `<Tab>`/
+--- `<S-Tab>` advance/retreat the selection instead of re-triggering, and
+--- `<CR>` accepts the highlighted candidate instead of submitting the whole
+--- prompt (a second `<CR>` submits, exactly like confirming a shell
+--- completion then pressing enter again).
 
 local surface = require("lib.nvim.ui.kit.surface")
 local expand_path = require("lib.nvim.cross.fs.expand_path")
 
 local api = vim.api
+local fn = vim.fn
 
 local M = {}
 
@@ -40,8 +52,27 @@ local function apply_mask(bufnr, ns, mask)
   end
 end
 
+---Complete the fragment before the cursor via `vim.fn.getcompletion()` and
+---open the native completion popup at the right start column.
+---@param bufnr integer
+---@param winid integer
+---@param completion string  # a `getcompletion()` type, e.g. "file", "dir"
+local function trigger_completion(bufnr, winid, completion)
+  local line = api.nvim_buf_get_lines(bufnr, 0, 1, false)[1] or ""
+  local col = api.nvim_win_get_cursor(winid)[2]
+  local prefix = line:sub(1, col)
+  local frag = prefix:match("%S*$") or ""
+  local ok, matches = pcall(fn.getcompletion, frag, completion)
+  if not ok or not matches or #matches == 0 then
+    return
+  end
+  -- getcompletion() returns full replacement strings (e.g. "/etc/passwd" for
+  -- fragment "/etc/pas"), so complete()'s start column is where `frag` began.
+  pcall(fn.complete, col - #frag + 1, matches)
+end
+
 --- Open a single-line input.
----@param opts table  # { title|prompt, default, theme, width, relative, on_submit, on_cancel, expand_env, secret, mask }
+---@param opts table  # { title|prompt, default, theme, width, relative, on_submit, on_cancel, expand_env, secret, mask, completion }
 --- `expand_env = true` runs the submitted line through `lib.nvim.cross.fs.expand_path`
 --- (`~`, `$VAR`, `${VAR}`, `%VAR%`) before it reaches `on_submit` — opt-in, for
 --- callers that know they're prompting for a path.
@@ -108,7 +139,35 @@ function M.open(opts)
     end
   end
 
+  if opts.completion then
+    -- <Tab>/<S-Tab> drive the native pum once it's open (advance/retreat);
+    -- otherwise <Tab> triggers completion and <S-Tab> is a no-op literal tab.
+    vim.keymap.set("i", "<Tab>", function()
+      if fn.pumvisible() == 1 then
+        return api.nvim_replace_termcodes("<C-n>", true, false, true)
+      end
+      trigger_completion(bufnr, surf.winid, opts.completion)
+      return ""
+    end, { buffer = bufnr, nowait = true, expr = true })
+    vim.keymap.set("i", "<S-Tab>", function()
+      if fn.pumvisible() == 1 then
+        return api.nvim_replace_termcodes("<C-p>", true, false, true)
+      end
+      return ""
+    end, { buffer = bufnr, nowait = true, expr = true })
+  end
+
   vim.keymap.set({ "i", "n" }, "<CR>", function()
+    -- Accept the highlighted completion candidate instead of submitting the
+    -- whole prompt; a second <CR> (pum now closed) submits as usual. This
+    -- must NOT be an <expr> mapping: finish() closes the window, and Neovim
+    -- silently blocks window/buffer changes while an <expr> mapping is
+    -- still being evaluated (textlock) -- feeding <C-y> for real instead of
+    -- returning it keeps that whole call chain outside of textlock.
+    if opts.completion and fn.pumvisible() == 1 then
+      api.nvim_feedkeys(api.nvim_replace_termcodes("<C-y>", true, false, true), "n", false)
+      return
+    end
     finish(true)
   end, { buffer = bufnr, nowait = true })
   vim.keymap.set({ "i", "n" }, "<Esc>", function()

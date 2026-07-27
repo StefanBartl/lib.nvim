@@ -441,7 +441,7 @@ surfaces the library already uses:
 
 ## 13. Phased roadmap
 
-> Status: **Phases 1–10 shipped — the originally scoped roadmap, plus every
+> Status: **Phases 1–11 shipped — the originally scoped roadmap, plus every
 > follow-on primitive the migration audit called for, is complete;
 > hover_select fully absorbed.** Theme engine, surface, and every component
 > (`note`/`viewer`/`toast`/`input`/`live_input`/`form`/`select`/`prompt`/`picker`/`confirm`/`menu`/`progress`),
@@ -453,12 +453,13 @@ surfaces the library already uses:
 > `on_submit`/`on_cancel`-shaped component and returns its result as a plain
 > value, for callers that can't be recast to callback style (§13a); `select`
 > items can now be plain strings *or* rich multi-line entries with per-span
-> highlights (§13b); `input` gained `secret = true` for masked entry (§13c).
-> All hover_select call sites were migrated to `kit.select` and the standalone
+> highlights (§13b); `input` gained `secret = true` for masked entry (§13c)
+> and `completion = "file"` for real ins-completion on `<Tab>` (§13d). All
+> hover_select call sites were migrated to `kit.select` and the standalone
 > `lib.nvim.ui.hover_select` module has been **removed** (§10 step 4 done).
 > What remains is migrating consumer plugins' existing call sites onto
 > `kit.viewer`/`kit.form`/`kit.live_input`/`kit.sync`/rich `kit.select`
-> items/`kit.input({secret=true})` — tracked in
+> items/`kit.input({completion=...})` — tracked in
 > docs/ROADMAP/personal/lib_nvim/ui_kit_migration.md, not here.
 
 | Phase | Deliverable | Notes |
@@ -473,6 +474,7 @@ surfaces the library already uses:
 | **8** ✅ | `kit.sync` — block on an async kit component via `vim.wait`, return its result as a plain value | See §13a below. Motivated by buffer_ctx.nvim's `guard_interactive()`/`process_prompts` (§ui_kit_migration audit §3), whose synchronous `vim.fn.input()`-based return value is baked into a 4-layer call chain (`boiler.get()`, consumed synchronously at 4 call sites in `commands.lua` and the telescope extension) |
 | **9** ✅ | Rich `kit.select` items — multi-line entries with per-span custom highlights, navigation by logical item instead of raw line | See §13b below. Motivated by recommender.nvim's hand-rolled suggestion float (§ui_kit_migration audit §2/§4), a 3-line-per-item picker with per-column highlight groups that plain-string `kit.select` couldn't represent |
 | **10** ✅ | `kit.input({ secret = true })` — masked entry, each character concealed behind `mask` (default `"*"`), re-derived from the buffer on every edit; real text still reaches `on_submit` | See §13c below. Motivated by sandbox.nvim's `registry_commands.lua:30` (`vim.fn.inputsecret` for a registry password) — the only masked-input call site in the migration audit |
+| **11** ✅ | `kit.input({ completion = "file" })` — `<Tab>` completes via `vim.fn.getcompletion()` into the real ins-completion popup (`vim.fn.complete()`); `<Tab>`/`<S-Tab>` cycle it, `<CR>` accepts before submitting | See §13d below. Motivated by 4 identical `completion="file"`-blocked call sites in the migration audit (diff.nvim `prompt_file`, dap.nvim's `languages/{zig,rust,c,assembly}.lua`, color_my_ascii.nvim's `export.lua`, the nvim-config's `dotnet.lua`) — all four cited the exact same missing capability |
 
 ### 13a. `kit.sync` — bridging kit's async components back to a plain return value — ✅ shipped
 
@@ -704,6 +706,68 @@ kit.input({
 Implemented in `lua/lib/nvim/ui/kit/input.lua`; example at
 `docs/EXAMPLES/kit-input.lua`; tests in `docs/TESTS/ui_kit_spec.lua`
 (§"input(secret = true)").
+
+### 13d. `kit.input({ completion = "file" })` — real ins-completion — ✅ shipped (Phase 11)
+
+**Problem.** Four otherwise-independent migration audit call sites all cited
+the *exact same* blocker for staying on `vim.fn.input`/hand-rolled prompts:
+`diff.nvim`'s `prompt_file`, `dap.nvim`'s `languages/{zig,rust,c,assembly}.lua`
+"Path to executable" prompts, `color_my_ascii.nvim`'s `export.lua` no-path
+prompt, and the nvim-config's `dotnet.lua` DLL-path prompt — every one needs
+`completion = "file"` (cmdline-style Tab completion), and `kit.input` (a
+plain insert-mode buffer) had no equivalent. One root cause, so one fix
+unblocks all four instead of four bespoke workarounds.
+
+**Idea.** `opts.completion = "file"` (or any other `vim.fn.getcompletion()`
+type — `"dir"`, `"shellcmd"`, `"buffer"`, ...) wires `<Tab>` to real
+ins-completion:
+
+```lua
+kit.input({
+  prompt = "Path to executable",
+  completion = "file",
+  on_submit = function(path) end,
+})
+```
+
+- `<Tab>` (only bound when `opts.completion` is set — a plain `kit.input`
+  keeps its default `<Tab>` behavior untouched) takes the whitespace-
+  delimited fragment before the cursor (`prefix:match("%S*$")`), resolves
+  candidates via `vim.fn.getcompletion(frag, opts.completion)`, and opens
+  Neovim's **native** completion popup via `vim.fn.complete(startcol,
+  matches)` — not a custom picker float. This means `<C-n>`/`<C-p>`,
+  fuzzy-narrowing-as-you-type, and every other pum behavior a user already
+  knows just works, for free.
+- Once the popup is open, `<Tab>`/`<S-Tab>` feed `<C-n>`/`<C-p>` to
+  advance/retreat the selection instead of re-triggering completion, and
+  `<CR>` feeds `<C-y>` to accept the highlighted candidate instead of
+  submitting the whole prompt — a second `<CR>` (popup now closed) submits,
+  matching the "confirm the shell completion, then press enter to run it"
+  muscle memory this is replacing.
+- **The `<CR>` handler must not be an `<expr>` mapping.** The first
+  implementation made it one (so it could `return` `<C-y>`/`<C-n>` conditionally)
+  and broke `kit.input` outright: `finish()` closes the surface's window, and
+  Neovim silently blocks window/buffer changes while an `<expr>` mapping is
+  still being evaluated (textlock) — `nvim_win_close` failed silently inside
+  `pcall`, so the float never actually closed on submit, for *every*
+  `kit.input` call, not just completion ones. Fixed by feeding `<C-y>` for
+  real via `vim.api.nvim_feedkeys(..., "n", false)` as a side effect and
+  returning nothing, keeping `finish()`'s window-closing call chain outside
+  of any expr-evaluation context. (`<Tab>`/`<S-Tab>` stayed `<expr>` — they
+  never close anything.)
+- **Testing caveat.** `vim.fn.complete()` only works in genuine Insert mode,
+  and this repo's headless `-l`-script test runner never actually enters it
+  (confirmed: `vim.api.nvim_get_mode().mode` stays `"n"` even after
+  `startinsert!`/feeding `"A"` — there's no live redraw loop to carry a mode
+  transition through outside of an attached UI). So `docs/TESTS/ui_kit_spec.lua`
+  covers what's reachable headlessly — `getcompletion()` itself, and that the
+  buffer-local `<Tab>`/`<S-Tab>` mappings exist only when `opts.completion`
+  is set — but not the actual popup interaction; that needs a real
+  interactive smoke test.
+
+Implemented in `lua/lib/nvim/ui/kit/input.lua`; example at
+`docs/EXAMPLES/kit-input.lua`; tests in `docs/TESTS/ui_kit_spec.lua`
+(§"input(completion = \"file\")").
 
 ## 14. Open decisions
 

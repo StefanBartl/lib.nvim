@@ -86,6 +86,8 @@ input, live_input, form, select, prompt, confirm, menu, picker, progress. >lua
                 on_submit = function(text) end })
     kit.popup({ type = "input", prompt = "Password", secret = true,
                 on_submit = function(pw) end })
+    kit.popup({ type = "input", prompt = "Path", completion = "file",
+                on_submit = function(path) end })
     kit.popup({ type = "live_input", prompt = "Filter",
                 on_change = function(query) end })
     kit.popup({ type = "form", fields = {
@@ -108,6 +110,10 @@ input, live_input, form, select, prompt, confirm, menu, picker, progress. >lua
   input   single-line insert-mode prompt; <CR> submits, <Esc> cancels.
           `secret = true` masks it as you type (a vim.fn.inputsecret
           replacement); `mask` overrides the placeholder char (default "*").
+          `completion = "file"` (or any getcompletion() type) wires <Tab> to
+          the native completion popup (a vim.fn.input completion="file"
+          replacement); <Tab>/<S-Tab> cycle it once open, <CR> accepts the
+          highlighted candidate instead of submitting.
   live_input  like input, but also debounces keystrokes into `on_change(query)`
           as the user types (`debounce` ms, default 80) — for filter/search
           boxes that refresh a results list or preview on every keystroke.
@@ -152,10 +158,14 @@ chains built around a blocking vim.fn.input() that can't easily be recast to
 callback style.
 Phase 9: rich `kit.select` items — multi-line entries with per-span custom
 highlights, navigation by logical item instead of raw line.
-Phase 10 (this release): `kit.input({ secret = true })` — masked entry, a
-vim.fn.inputsecret replacement. Each character is concealed behind `mask`
-(default "*"), re-derived from the buffer on every edit; the real text still
-reaches on_submit. See docs/ROADMAP/UI-KIT-CONCEPT.md.
+Phase 10: `kit.input({ secret = true })` — masked entry, a vim.fn.inputsecret
+replacement. Each character is concealed behind `mask` (default "*"),
+re-derived from the buffer on every edit; the real text still reaches
+on_submit.
+Phase 11 (this release): `kit.input({ completion = "file" })` — file-path
+(or any getcompletion() type) completion via <Tab>, a vim.fn.input
+completion="file" replacement built on real ins-completion
+(vim.fn.complete()), not a custom picker. See docs/ROADMAP/UI-KIT-CONCEPT.md.
 
 The layout engine turns a declarative region spec into aligned nvim_open_win
 geometry for several coordinated floats: >lua
