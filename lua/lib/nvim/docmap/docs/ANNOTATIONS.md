@@ -72,9 +72,12 @@ New in this change, recognized by [`functions.lua`](../functions.lua):
 ## `@internal`
 
 Marks a function as implementation rather than published surface. Recognised
-by `docmap.functions` and used in three places: `undocumented-param` skips it,
+by `docmap.functions` and used in four places: `undocumented-param` skips it,
 `docmap.diff` counts it among helpers instead of listing it as an API change,
-and the HTML map badges it.
+the HTML map badges it, and `dead-function` checks it unconditionally for a
+missing caller (an ordinary exported function only gets that scrutiny under
+`opts.dead_code`, since a library's whole point is functions with no
+*internal* caller).
 
 It exists because every "is this used" question otherwise has to guess from
 the shape of the declared name — `M.compare` looks public, `node_set` looks
