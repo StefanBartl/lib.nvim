@@ -412,6 +412,62 @@ return function(H)
     ok(first.lnum >= 1, "browse: and carry a line number")
     vim.cmd("cclose")
 
+    -- `gI` reports the blast radius of whatever the DETAIL PANE is showing,
+    -- not of the centered node. Those differ as soon as the cursor moves, and
+    -- a number that disagrees with the one two panes over is worse than none.
+    browse.open({ root = root, center = "lib.nvim.notify" })
+    local i_win, i_buf = slot("lib-docmap-browse-list")
+    local _, i_detail = slot("lib-docmap-browse-detail")
+    vim.api.nvim_set_current_win(i_win)
+
+    local checked = 0
+    for row = 1, math.min(3, vim.api.nvim_buf_line_count(i_buf)) do
+      vim.api.nvim_win_set_cursor(i_win, { row, 0 })
+      vim.cmd("doautocmd CursorMoved")
+      local shown = table
+        .concat(vim.api.nvim_buf_get_lines(i_detail, 0, -1, false), "\n")
+        :match("impact%s+(%d+) module")
+      if shown then
+        vim.fn.setqflist({}, "r")
+        press("gI")
+        eq(
+          #vim.fn.getqflist(),
+          tonumber(shown),
+          "browse: gI matches the impact the detail pane just reported"
+        )
+        checked = checked + 1
+        vim.cmd("cclose")
+        browse.open({ root = root, center = "lib.nvim.notify" })
+        i_win = slot("lib-docmap-browse-list")
+        _, i_detail = slot("lib-docmap-browse-detail")
+        vim.api.nvim_set_current_win(i_win)
+      end
+    end
+    ok(checked > 0, "browse: at least one row carried an impact figure to check")
+    browse.close()
+
+    -- `gO` hands the current position to the page: the fragment must carry
+    -- the mode, the centered node and the direction that are on screen.
+    local handed = nil
+    package.loaded["lib.nvim.fs.open.url.system_opener"] = {
+      open = function(url)
+        handed = url
+        return true
+      end,
+    }
+    browse.open({ root = root, center = "lib.nvim.docmap" })
+    vim.api.nvim_set_current_win((slot("lib-docmap-browse-list")))
+    press("2") -- deps
+    press("h") -- incoming
+    press("gO")
+    ok(handed ~= nil, "browse: gO handed a URL to the opener")
+    ok((handed or ""):find("view=deps", 1, true) ~= nil, "browse: carrying the current mode")
+    ok((handed or ""):find("dir=in", 1, true) ~= nil, "browse: and the current direction")
+    ok((handed or ""):find("docmap", 1, true) ~= nil, "browse: and the centered node")
+    ok((handed or ""):sub(1, 5) == "file:", "browse: as a file:// URL, so the fragment survives")
+    browse.close()
+    package.loaded["lib.nvim.fs.open.url.system_opener"] = nil
+
     -- `gd` on a function entry lands in its file at its declaration line.
     browse.open({ root = root, center = "lib.nvim.docmap.deps" })
     local gd_list_win, gd_list_buf = slot("lib-docmap-browse-list")

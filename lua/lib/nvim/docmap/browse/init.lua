@@ -20,8 +20,8 @@
 ---   :LibBrowse lib.nvim.fs   open centered on a module
 ---
 --- Keys: 1..4 modes · j/k move · <CR> descend · -/<BS> up · <C-o>/<C-i>
---- history · h/l direction · +/_ depth · gd source · gq quickfix · / search
---- · q close.
+--- history · h/l direction · +/_ depth · gd source · gq quickfix · gI impact
+--- · gO open the page here · / search · q close.
 
 require("lib.nvim.docmap.browse.@types")
 
@@ -278,6 +278,82 @@ local function to_quickfix(st)
   vim.cmd("copen")
 end
 
+---`gI` — the blast radius of the centered node into the quickfix list.
+---
+---The counterpart to `gq`: `gq` sends what is *on screen*, this sends what
+---would break. Transitive, so it answers the question actually being asked
+---before a refactor rather than only naming the immediate dependents.
+---Acts on whatever the **detail pane** is describing, not on the centered
+---node. Those differ the moment the cursor moves off the first row, and a
+---`gI` that reported a different number from the one just read two panes over
+---would be worse than no number at all.
+---@param st table
+local function impact_to_quickfix(st)
+  local entry = selected(st)
+  local target = (entry and entry.id) or st.id
+  local hull, direct = require("lib.nvim.docmap.deps").impact(st.ir, target)
+  if #hull == 0 then
+    notify.info("nothing depends on this — safe to change")
+    return
+  end
+
+  local items = {}
+  for _, id in ipairs(hull) do
+    local node = st.ir.nodes[id]
+    if node and node.source then
+      items[#items + 1] = {
+        filename = abs(st, node.source),
+        lnum = 1,
+        col = 1,
+        text = node.module or node.path or id,
+      }
+    end
+  end
+
+  vim.fn.setqflist({}, " ", {
+    title = ("docmap impact: %s (%d, %d direct)"):format(
+      view.breadcrumb(st.ir, target),
+      #hull,
+      direct
+    ),
+    items = items,
+  })
+  M.close()
+  vim.cmd("copen")
+end
+
+---`gO` — hand the current position over to the generated HTML page.
+---
+---The navigator knows mode, center, direction, depth and function; the page's
+---whole state lives in its URL fragment. So this is a `format()` and the
+---existing opener — and it answers "actually, I want to see that as a
+---picture" without hunting for the place again.
+---@param st table
+local function open_in_browser(st)
+  local target = source.norm_root(st.opts.root)
+    .. "/"
+    .. (st.opts.out_dir or "docs/map")
+    .. "/index.html"
+  if not (vim.uv or vim.loop).fs_stat(target) then
+    notify.warn("no generated page yet — run :LibMap first")
+    return
+  end
+
+  -- The page has no Structure mode; its equivalent is the Modules hierarchy.
+  local view_name = st.mode == "structure" and "modules" or st.mode
+  local hash = ("#tab=hierarchy&center=%s&view=%s&dir=%s&depth=%d"):format(
+    vim.uri_encode(st.id, "rfc2396"),
+    view_name,
+    st.dir or "out",
+    st.depth or 2
+  )
+  if st.mode == "calls" and st.fn then
+    hash = hash .. "&fn=" .. vim.uri_encode(st.id .. "#" .. st.fn, "rfc2396")
+  end
+
+  require("lib.nvim.fs.open.url.system_opener").open(vim.uri_from_fname(target) .. hash)
+end
+
 ---`/` — fuzzy jump across every module and function in the map.
 ---@param st table
 local function search(st)
@@ -418,6 +494,12 @@ local function bind(st)
   end, mo)
   map("n", "gq", function()
     to_quickfix(st)
+  end, mo)
+  map("n", "gI", function()
+    impact_to_quickfix(st)
+  end, mo)
+  map("n", "gO", function()
+    open_in_browser(st)
   end, mo)
   map("n", "/", function()
     search(st)

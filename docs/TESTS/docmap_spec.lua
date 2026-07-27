@@ -501,6 +501,75 @@ return function(H)
   )
   ok(meta_names.state, "docmap.symbols: other module-scope tables survive that filter")
 
+  -- ------------------------------------------------ deps.path / deps.impact
+  -- A four-module chain plus a shortcut, so "shortest" is a real claim:
+  --   one -> two -> three -> four,  and  one -> four directly (lazy)
+  local gr = H.tmpfile("_graph")
+  local function gwrite(rel, lines)
+    local abs = gr .. "/" .. rel
+    vim.fn.mkdir(vim.fn.fnamemodify(abs, ":h"), "p")
+    local fd = assert(io.open(abs, "w"), "docmap spec: graph fixture must be writable")
+    fd:write(table.concat(lines, "\n"))
+    fd:close()
+  end
+  local function mod(name, requires, lazy)
+    local lines = { ("---@module 'g.%s'"):format(name), "--- M.", "local M = {}" }
+    for _, r in ipairs(requires) do
+      if lazy then
+        lines[#lines + 1] = "---Lazy."
+        lines[#lines + 1] = ("function M.get_%s()"):format(r)
+        lines[#lines + 1] = ('  return require("g.%s")'):format(r)
+        lines[#lines + 1] = "end"
+      else
+        table.insert(lines, 3, ('local _%s = require("g.%s")'):format(r, r))
+      end
+    end
+    lines[#lines + 1] = "return M"
+    gwrite(("lua/g/%s/init.lua"):format(name), lines)
+  end
+  mod("two", { "three" })
+  mod("three", { "four" })
+  mod("four", {})
+  -- `one` reaches `four` in three load-time hops or one lazy hop.
+  gwrite("lua/g/one/init.lua", {
+    "---@module 'g.one'",
+    "--- One.",
+    'local _two = require("g.two")',
+    "local M = {}",
+    "---Lazy.",
+    "function M.late()",
+    '  return require("g.four")',
+    "end",
+    "return M",
+  })
+
+  local gir = scan.scan({ root = gr, source = "lua/g", lua_root = "lua" })
+  local chain = deps.path(gir, "lua/g/one", "lua/g/four")
+  ok(chain, "deps.path: finds a path")
+  eq(#chain, 1, "deps.path: takes the one-hop lazy shortcut over the three-hop chain")
+  eq(chain[1].deferred, true, "deps.path: and reports that the hop is lazy")
+
+  -- Without the shortcut the long way is the answer, and the chain must be
+  -- contiguous — a reconstruction bug shows up here and nowhere else.
+  local long = deps.path(gir, "lua/g/two", "lua/g/four")
+  eq(#long, 2, "deps.path: the multi-hop route when there is no shortcut")
+  eq(long[1].from, "lua/g/two", "deps.path: the chain starts at the source")
+  eq(long[1].to, long[2].from, "deps.path: and is contiguous")
+  eq(long[2].to, "lua/g/four", "deps.path: and ends at the target")
+
+  eq(#deps.path(gir, "lua/g/one", "lua/g/one"), 0, "deps.path: a node reaches itself in zero hops")
+  eq(deps.path(gir, "lua/g/four", "lua/g/one"), nil, "deps.path: nil when unreachable")
+  eq(deps.path(gir, "lua/g/one", "nope"), nil, "deps.path: nil for an unknown node")
+
+  local hull, direct = deps.impact(gir, "lua/g/four")
+  eq(#hull, 3, "deps.impact: the transitive closure of required_by")
+  eq(direct, 2, "deps.impact: and the direct count alongside it")
+  eq(hull[1] < hull[2], true, "deps.impact: sorted")
+  eq(#(deps.impact(gir, "lua/g/one")), 0, "deps.impact: nothing depends on the top of the chain")
+  eq(#(deps.impact(gir, "nope")), 0, "deps.impact: an unknown node has no dependents")
+
+  vim.fn.delete(gr, "rf")
+
   -- --------------------------------------- layers, heuristic, handle queries
   -- Three features that shipped with no coverage at all. The heuristic one in
   -- particular is only worth having if it stays *silent* on an ambiguous name,

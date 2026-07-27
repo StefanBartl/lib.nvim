@@ -84,6 +84,8 @@ place, keeping its subscribers.
 | `+` / `_` | Depth ±1 (Deps) |
 | `gd` | Open the source at the line, closing the browser |
 | `gq` | Current list into the quickfix list |
+| `gI` | Blast radius of the selected node into the quickfix list |
+| `gO` | Open the generated page at this exact position |
 | `/` | Fuzzy jump across every module and function |
 | `q` `<Esc>` | Close |
 
@@ -107,6 +109,20 @@ direction is already what was asked for. Otherwise the trail fills with
 positions identical to their neighbours, and a `<C-o>` that visibly does
 nothing reads as the history being broken rather than as the key having been a
 no-op.
+
+`gI` is the counterpart to `gq`: `gq` sends what is *on screen*, `gI` sends
+what would **break**. It reports the transitive closure of `required_by`, and
+it acts on whatever the detail pane is describing rather than on the centered
+node — those differ the moment the cursor moves, and a figure that disagreed
+with the one two panes over would be worse than no figure. On a *function*
+entry the answer is its module's radius, which is the only honest one: the
+require graph has no finer grain than a module.
+
+`gO` hands the current position to the generated page. The navigator knows
+mode, center, direction, depth and function; the page's whole state lives in
+its URL fragment. So it is a `format()` and the existing opener, and it
+answers "actually, I want to see that as a picture" without having to find the
+place again.
 
 ## Layout
 

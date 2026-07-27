@@ -357,6 +357,14 @@ local function node_detail(node, ir)
     #(node.requires_external or {})
   )
 
+  -- Blast radius. Stated even at zero, because "nothing depends on this" is
+  -- itself the answer to "is this safe to change".
+  local hull = require("lib.nvim.docmap.deps").impact(ir, node.id)
+  out[#out + 1] = ("impact   %d module%s would be affected  (gI for the list)"):format(
+    #hull,
+    #hull == 1 and "" or "s"
+  )
+
   if node.body and node.body ~= "" then
     out[#out + 1] = ""
     for _, l in ipairs(vim.split(node.body, "\n", { plain = true })) do
@@ -373,7 +381,6 @@ local function node_detail(node, ir)
     end
   end
 
-  local _ = ir
   return out
 end
 

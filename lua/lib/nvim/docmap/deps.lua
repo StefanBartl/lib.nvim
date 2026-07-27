@@ -135,6 +135,105 @@ function M.mark_deferred(root, src, requires)
   end
 end
 
+---Shortest require path from one node to another, as the chain of edges that
+---makes it.
+---
+---Answers the question the Deps view can only be walked by hand to answer:
+---"why does A end up pulling in B?" Breadth-first, so the chain is the
+---shortest by hop count — and because the edges come back rather than just
+---the node ids, the caller keeps `deferred` and `line` for every hop. That
+---distinction is the useful half of the answer: a path that goes through a
+---lazy require does not run at load time, which is usually the difference
+---between "has to go" and "is fine".
+---@param ir Lib.Docmap.IR
+---@param from_id string
+---@param to_id string
+---@return Lib.Docmap.Edge[]|nil chain Empty when `from_id == to_id`, nil when unreachable.
+function M.path(ir, from_id, to_id)
+  if not ir.nodes[from_id] or not ir.nodes[to_id] then
+    return nil
+  end
+  if from_id == to_id then
+    return {}
+  end
+
+  local outgoing = {}
+  for _, e in ipairs(ir.edges or {}) do
+    if e.kind == "require" then
+      local list = outgoing[e.from]
+      if not list then
+        list = {}
+        outgoing[e.from] = list
+      end
+      list[#list + 1] = e
+    end
+  end
+
+  local came_from = {}
+  local seen = { [from_id] = true }
+  local queue, qi = { from_id }, 1
+
+  while qi <= #queue do
+    local cur = queue[qi]
+    qi = qi + 1
+    for _, e in ipairs(outgoing[cur] or {}) do
+      if not seen[e.to] then
+        seen[e.to] = true
+        came_from[e.to] = e
+        if e.to == to_id then
+          local chain, node = {}, to_id
+          while node ~= from_id do
+            local edge = came_from[node]
+            table.insert(chain, 1, edge)
+            node = edge.from
+          end
+          return chain
+        end
+        queue[#queue + 1] = e.to
+      end
+    end
+  end
+
+  return nil
+end
+
+---Every node that would be affected by changing this one: the transitive
+---closure of `required_by`.
+---
+---The blast radius of an edit, which is already implied by the edges and was
+---visible nowhere. Its value is partly that it is a *number* — the same
+---measurement before and after a refactor says whether the refactor actually
+---decoupled anything.
+---@param ir Lib.Docmap.IR
+---@param id string
+---@return string[] ids Sorted, excluding `id` itself.
+---@return integer direct Count of immediate dependents, a subset of the above.
+function M.impact(ir, id)
+  local node = ir.nodes[id]
+  if not node then
+    return {}, 0
+  end
+
+  local seen = { [id] = true }
+  local queue, qi = { id }, 1
+  local out = {}
+
+  while qi <= #queue do
+    local cur = queue[qi]
+    qi = qi + 1
+    for _, dependent in ipairs((ir.nodes[cur] or {}).required_by or {}) do
+      if not seen[dependent] then
+        seen[dependent] = true
+        out[#out + 1] = dependent
+        queue[#queue + 1] = dependent
+      end
+    end
+  end
+
+  table.sort(out)
+  return out, #(node.required_by or {})
+end
+
 ---Map every declared `@module` path to the node that declares it.
 ---
 ---Shared with `calls.lua`, which needs exactly the same index to turn a

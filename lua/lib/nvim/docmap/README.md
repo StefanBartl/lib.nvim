@@ -19,6 +19,7 @@ on GitHub).
 :LibMap open               " open the generated HTML in the system browser
 :LibMap graph deps         " open the HTML on the dependency graph
 :LibMap graph calls lib.nvim.fs   " …or on one module's call graph
+:LibMap why lib.nvim.ui.kit lib.nvim.fs   " shortest require path between two
 
 :LibBrowse                 " navigate the same map inside the editor
 :LibBrowse live            " …re-scanning on every write
@@ -30,6 +31,14 @@ drill-down navigator over the same edges rather than a diagram, because a
 terminal cannot draw one better than the browser already does. What it can do
 instead is jump to the source (`gd`), fill the quickfix list (`gq`) and stay
 live. See [browse/README.md](browse/README.md).
+
+`why` answers the question the Deps view can only be walked by hand to
+answer. The chain goes to the **quickfix list**, not to a message, because
+every hop *is* a location: the edge carries the line its `require` is written
+on, so each entry jumps straight to the line that creates that link. The
+summary says up front whether the path is load-time throughout or goes through
+a lazy require somewhere — usually the difference between "has to go" and "is
+fine".
 
 `graph` completes both the kind and, after it, the names the map knows — it is
 the same page as `open`, opened at a state instead of at the root, since the
