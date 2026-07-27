@@ -28,11 +28,20 @@ local select = require("lib.nvim.ui.kit.select")
 local prompt = require("lib.nvim.ui.kit.prompt")
 local form = require("lib.nvim.ui.kit.form")
 local sync = require("lib.nvim.ui.kit.sync")
+local chooser = require("lib.nvim.ui.kit.chooser")
 
 local M = {}
 
 M.theme = theme
 M.surface = surface
+--- The native chooser `kit.select` delegates to, exposed directly for a
+--- consumer building a persistent multi-action list on top of a picker (e.g.
+--- extra keymaps that read the highlighted item without submitting/closing)
+--- rather than a one-shot pick-and-close flow. `kit.select` covers the
+--- common case; reach for this only when you need `current_item()`/
+--- `current_index()`/`move()` outside of `on_select`. Single active
+--- instance, same as `kit.select` itself (they share one chooser).
+M.chooser = chooser
 M.layout = layout
 
 --- Register user presets / set the active default preset.

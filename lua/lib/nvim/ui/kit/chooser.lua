@@ -201,6 +201,19 @@ function M.current_index()
   return item_at_row(row0)
 end
 
+--- The original value (string or rich table) of the item at the cursor, or
+--- nil when closed. For a consumer building extra actions on top of the
+--- picker (keymaps that read the highlighted item without submitting/
+--- closing, e.g. "yank without closing") -- `on_select`'s callback only
+--- fires on an actual selection, this is the same lookup available anytime
+--- the chooser is open.
+---@return any
+function M.current_item()
+  local idx = M.current_index()
+  local e = idx and state.entries[idx]
+  return e and e.value
+end
+
 --- Toggle the current item's mark (multi-select). Also drivable by the picker.
 function M.toggle()
   if not M.is_open() then
@@ -252,7 +265,7 @@ function M.submit()
 end
 
 --- Open a chooser.
----@param opts table  # { items, on_select, multi_select?, title?, relative?, width?, height?, theme? }
+---@param opts table  # { items, on_select, multi_select?, title?, relative?, width?, height?, theme?, initial_index? }
 ---@return Lib.UI.Kit.Surface|nil
 function M.open(opts)
   if not opts or type(opts.items) ~= "table" or #opts.items == 0 then
@@ -319,7 +332,12 @@ function M.open(opts)
   end
 
   if surf:is_valid() and entries[1] then
-    api.nvim_win_set_cursor(surf.winid, { entries[1].start_row + entries[1].anchor_row + 1, 0 })
+    -- opts.initial_index: land on a specific item (e.g. restoring cursor
+    -- position across a close+reopen refresh) instead of always item 1.
+    -- Out-of-range/absent falls back to item 1.
+    local initial = entries[opts.initial_index] and opts.initial_index or 1
+    local e = entries[initial]
+    api.nvim_win_set_cursor(surf.winid, { e.start_row + e.anchor_row + 1, 0 })
   end
 
   return surf

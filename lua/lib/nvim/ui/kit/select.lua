@@ -78,7 +78,7 @@ local function display_line(item, format_item)
 end
 
 --- Open a list chooser.
----@param opts table  # { selection|items, on_select, on_cancel?, message|title, format_item?, multi, relative, theme, width, height, respect_override? }
+---@param opts table  # { selection|items, on_select, on_cancel?, message|title, format_item?, multi, relative, theme, width, height, respect_override?, initial_index? }
 ---@return Lib.UI.Kit.Surface|nil  # nil when delegating, cancelled up-front, or the float could not open
 function M.open(opts)
   opts = opts or {}
@@ -166,6 +166,7 @@ function M.open(opts)
     theme = opts.theme,
     width = opts.width,
     height = opts.height,
+    initial_index = opts.initial_index,
   })
 
   if not surf then
