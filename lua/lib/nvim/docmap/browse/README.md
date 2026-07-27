@@ -91,6 +91,16 @@ The history stack is the counterpart to the browser's Back/Forward, and it
 matters *more* here: without an address bar there is no other answer to "where
 am I".
 
+`history` holds the whole trail **including the current position**, with
+`hindex` pointing at it — the model the HTML renderer and every browser use.
+Worth stating because the alternative is tempting and does not work: recording
+only *past* positions leaves `hindex` addressing the entry before the current
+one, so the first `<C-o>` falls off the front of the list and the second lands
+one stop too far back. Both directions are a plain bounds check now, and the
+cursor row of the position being left is synced into its entry before moving,
+so coming back restores the row the user was on rather than the row they
+arrived at.
+
 ## Layout
 
 Three [`ui.kit.layout`](../../ui/kit/README.md) slots:
