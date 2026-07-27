@@ -18,11 +18,17 @@ local M = {}
 function M.open(opts)
   opts = opts or {}
 
+  local title = opts.title or opts.prompt
+  -- A float's title is drawn within its content width; a title longer than
+  -- the default 40 cols gets silently truncated by Neovim (with a leading
+  -- ellipsis) instead of wrapping, so widen the box to fit it.
+  local title_width = title and vim.fn.strdisplaywidth(title) or 0
+
   local surf = surface.open({
     lines = { opts.default or "" },
     theme = opts.theme,
-    title = opts.title or opts.prompt,
-    width = opts.width or 40,
+    title = title,
+    width = opts.width or math.max(40, title_width),
     height = 1,
     relative = opts.relative or "cursor",
     enter = true,
