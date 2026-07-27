@@ -21,9 +21,16 @@ on GitHub).
 :LibMap graph calls lib.nvim.fs   " …or on one module's call graph
 ```
 
-`graph` completes both the kind and, after it, the module paths the map knows
-— it is the same page as `open`, opened at a state instead of at the root,
-since the whole navigable state of the HTML lives in its URL fragment.
+`graph` completes both the kind and, after it, the names the map knows — it is
+the same page as `open`, opened at a state instead of at the root, since the
+whole navigable state of the HTML lives in its URL fragment. Two things that
+had to be right for that to work at all: the target is handed over as a
+`file://` **URL**, because a fragment appended to a bare filesystem path just
+becomes part of the filename and every opener then fails silently; and a name
+resolves against a declared `@module`, a raw node id, *or* the module path a
+**namespace**'s location implies — `lua/lib/nvim/fs` has no `init.lua` and so
+declares no module, yet `lib.nvim.fs` is exactly what someone types, and
+namespaces are the aggregation points a dependency graph is most useful at.
 
 ```bash
 nvim --headless -l scripts/gen_map.lua               # regenerate

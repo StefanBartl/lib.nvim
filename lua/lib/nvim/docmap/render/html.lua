@@ -745,6 +745,14 @@ local JS = [[
   document.getElementById("collapse").addEventListener("click", function(){
     treeEl.querySelectorAll(".kids").forEach(function(k, i){ if(i) k.classList.add("hide"); });
     treeEl.querySelectorAll(".row").forEach(function(r){
+      // The function-group header carries no node id, so the depth test below
+      // skipped it and left a ▾ twisty over a collapsed group. It is always
+      // collapsed by this button, so its arrow is unconditional.
+      if(r.classList.contains("fnhead")){
+        var ft = r.querySelector(".tw");
+        if(ft) ft.textContent = "▸";
+        return;
+      }
       var n = byId[r.dataset.id];
       if(n && n.depth >= 1){ var t = r.querySelector(".tw"); if(t && t.textContent) t.textContent = "▸"; }
     });
@@ -1278,6 +1286,14 @@ local JS = [[
       (center.module || center.path) + suffix +
       (isGraphView(view) ? "  ·  " + (state.dir || "out") + ", depth " + (depth === 0 ? "∞" : depth) : "");
 
+    // The empty branch above writes its explanation straight into #hgraph;
+    // nothing else removes it, because reconcile() only ever adds and removes
+    // boxes it knows about. Without this, going Calls-on-a-namespace (empty)
+    // → Modules left "lib.nvim declares no functions." sitting above a
+    // ninety-box diagram.
+    var stale = hgraph.querySelector(".hmsg");
+    if(stale) stale.remove();
+
     var laid = layerPositions(built.layers);
     var positions = laid.positions;
 
@@ -1409,9 +1425,15 @@ local JS = [[
   // under the cursor. Pure class toggling — on a dense require graph this is
   // the difference between a readable diagram and a spider's web, and it
   // costs no relayout.
+  function clearFocus(){ hgraph.classList.remove("focusing"); }
+
   hgraph.addEventListener("mouseover", function(ev){
     var box = boxOf(ev.target);
-    if(!box) return;
+    // Moving off a box onto the graph's own background has to un-focus:
+    // mouseleave only fires when the pointer leaves #hgraph entirely, so
+    // without this the last box hovered stayed lit while the cursor sat in
+    // empty space next to it.
+    if(!box){ clearFocus(); return; }
     var key = box.dataset.key;
     var near = hgraphNeighbours[key] || {};
     hgraph.classList.add("focusing");
@@ -1424,9 +1446,7 @@ local JS = [[
     });
   });
 
-  hgraph.addEventListener("mouseleave", function(){
-    hgraph.classList.remove("focusing");
-  });
+  hgraph.addEventListener("mouseleave", clearFocus);
 
   // =====================================================================
   // Graph toolbar. Direction and depth only apply to the directed views, so
