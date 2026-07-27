@@ -441,7 +441,7 @@ surfaces the library already uses:
 
 ## 13. Phased roadmap
 
-> Status: **Phases 1–8 shipped — the originally scoped roadmap, plus every
+> Status: **Phases 1–9 shipped — the originally scoped roadmap, plus every
 > follow-on primitive the migration audit called for, is complete;
 > hover_select fully absorbed.** Theme engine, surface, and every component
 > (`note`/`viewer`/`toast`/`input`/`live_input`/`form`/`select`/`prompt`/`picker`/`confirm`/`menu`/`progress`),
@@ -451,11 +451,13 @@ surfaces the library already uses:
 > a debounced `on_change` on top of `input`; `progress` passes through to the
 > dedicated `lib.nvim.progress`; `sync` blocks (via `vim.wait`) on an
 > `on_submit`/`on_cancel`-shaped component and returns its result as a plain
-> value, for callers that can't be recast to callback style (§13a). All
-> hover_select call sites were migrated to `kit.select` and the standalone
-> `lib.nvim.ui.hover_select` module has been **removed** (§10 step 4 done).
-> What remains is migrating consumer plugins' existing call sites onto
-> `kit.viewer`/`kit.form`/`kit.live_input`/`kit.sync` — tracked in
+> value, for callers that can't be recast to callback style (§13a); `select`
+> items can now be plain strings *or* rich multi-line entries with per-span
+> highlights (§13b). All hover_select call sites were migrated to
+> `kit.select` and the standalone `lib.nvim.ui.hover_select` module has been
+> **removed** (§10 step 4 done). What remains is migrating consumer plugins'
+> existing call sites onto `kit.viewer`/`kit.form`/`kit.live_input`/
+> `kit.sync`/rich `kit.select` items — tracked in
 > docs/ROADMAP/personal/lib_nvim/ui_kit_migration.md, not here.
 
 | Phase | Deliverable | Notes |
@@ -468,6 +470,7 @@ surfaces the library already uses:
 | **6** ✅ | `form` — sequential multi-field prompt: chains `kit.input` per field into one keyed result table; `<Esc>` skips an optional field, aborts on a `required` one | Motivated by hand-rolled prompt chains (sandbox.nvim's `container_commands.lua`, buffer_ctx.nvim's own `process_prompts` helper — §ui_kit_migration audit §6.2) |
 | **7** ✅ | `live_input` — `kit.input` plus a debounced `on_change(query)`, fired as the user types | Motivated by filetree.nvim's `live_search`/`filter` features, each independently hand-rolling a floating prompt + `TextChangedI`-debounce (§ui_kit_migration audit §5.3) |
 | **8** ✅ | `kit.sync` — block on an async kit component via `vim.wait`, return its result as a plain value | See §13a below. Motivated by buffer_ctx.nvim's `guard_interactive()`/`process_prompts` (§ui_kit_migration audit §3), whose synchronous `vim.fn.input()`-based return value is baked into a 4-layer call chain (`boiler.get()`, consumed synchronously at 4 call sites in `commands.lua` and the telescope extension) |
+| **9** ✅ | Rich `kit.select` items — multi-line entries with per-span custom highlights, navigation by logical item instead of raw line | See §13b below. Motivated by recommender.nvim's hand-rolled suggestion float (§ui_kit_migration audit §2/§4), a 3-line-per-item picker with per-column highlight groups that plain-string `kit.select` couldn't represent |
 
 ### 13a. `kit.sync` — bridging kit's async components back to a plain return value — ✅ shipped
 
@@ -556,6 +559,99 @@ end
 Implemented at `lua/lib/nvim/ui/kit/sync.lua`, exposed as `kit.sync`;
 example at `docs/EXAMPLES/kit-sync.lua`; tests in `docs/TESTS/ui_kit_spec.lua`
 (§"sync (vim.wait bridge)").
+
+### 13b. Rich list items — custom highlight per item — ✅ shipped (Phase 9)
+
+**Problem.** `kit.select`'s items are plain strings: one buffer line each,
+selection shown via a window-level `CursorLine → KitSelection` remap, marks
+via a `KitAccent` line highlight. That covers most pickers, but
+recommender.nvim's suggestion float (`lua/recommender/float/rendering.lua`,
+flagged low-priority in the migration audit) needs more: each suggestion
+renders as **3 buffer lines** ("→ chain (N hits)" / "  local alias = chain"
+/ blank separator — or 1 line in "compact" mode) with **multiple highlight
+groups within a single line** (the "→" arrow gets `Special`, the chain name
+`Identifier`, the hit count `Comment`, the alias `Statement` — all on the
+same row, different column ranges). It hand-rolls its own float, its own
+`stride`-based navigation (`is_selectable(line)` checks `(line - 2) %
+rendering.stride == 0`), and its own `vim.hl.range` calls — functionally a
+`kit.select`, but with a per-item shape and highlighting `kit.select`
+couldn't represent.
+
+**Idea.** Let a `kit.select`/`kit.popup({type="select"})` item be either a
+plain string (today's behavior, unchanged) *or* a table:
+
+```lua
+---@class Lib.UI.Kit.RichItem
+---@field lines string[]                    # ≥1 line; buffer content for this item
+---@field highlights? Lib.UI.Kit.ItemHighlight[]
+---@field anchor? integer                   # 0-based line (within `lines`) the cursor lands on; default 0
+
+---@class Lib.UI.Kit.ItemHighlight
+---@field line integer        # 0-based, within this item's `lines`
+---@field col_start? integer  # default 0
+---@field col_end? integer    # default: end of that line
+---@field hl_group string
+```
+
+`on_select(item, idx)` gets back the exact same value the caller put in
+(string or table) plus its **logical** item index — not a raw buffer line
+number, since items no longer map 1:1 to lines.
+
+```lua
+kit.select({
+  items = {
+    "plain string item",  -- unchanged: one line, no custom highlight
+    {
+      lines = { "→ my_chain (12 hits)", "  local alias = my_chain", "" },
+      highlights = {
+        { line = 0, col_start = 0, col_end = 3, hl_group = "Special" },
+        { line = 0, col_start = 4, col_end = 14, hl_group = "Identifier" },
+        { line = 1, hl_group = "Statement" },  -- col_end omitted -> whole line
+      },
+    },
+  },
+  on_select = function(item, idx) end,
+})
+```
+
+**Design decisions:**
+
+- **Extend `chooser.lua`, not a new component.** This is a capability of the
+  existing list/select model (variable-height items + column-range
+  highlights), not a new interaction pattern — no new top-level `kit.xxx`
+  entry point, `kit.select`'s signature is unchanged and 100% backward
+  compatible (every existing string-list caller is unaffected).
+- **Navigation moves by logical item, not raw line.** `chooser.lua`
+  normalizes every item (string or table) into an internal entry with
+  `{ value, lines, highlights, start_row, end_row, anchor_row }` at open
+  time, and a `item_at_row(row0)` lookup resolves the logical item from
+  *any* row the cursor is actually on — so a mouse click landing on an
+  item's second or third line still resolves correctly, rather than only
+  the anchor row. `M.move(delta)` moves by `delta` items (wrapping),
+  landing the cursor on the target item's anchor row. For a plain-string
+  list every item is exactly 1 line with anchor 0, so this is
+  behaviorally identical to the old raw-line navigation — no regression.
+- **Selection highlight stays row-based, now per-item-span.** Multi-select
+  marks (`KitAccent`) now highlight every row of a marked item, not just
+  its anchor row — the old single-line mark was a side effect of items
+  always being 1 line, not a deliberate design choice worth preserving.
+  The `CursorLine → KitSelection` window-level remap is untouched: since
+  the cursor always sits on an item's anchor row, "current item" still
+  reads as one highlighted line, matching recommender.nvim's existing look
+  (only the chain-name line highlights, not the alias/blank lines below).
+- **Content highlights live in their own namespace**, separate from the
+  selection-mark namespace, so toggling a mark (which clears and
+  redraws `state.ns`) never touches the item's own custom highlighting.
+- **What stays out of scope.** recommender.nvim's per-item *actions*
+  (`y` yank, `A` insert-all, `<BS>` ignore-and-refresh, `U` un-ignore) are
+  business logic bound to the picker's buffer via its own keymaps, not
+  something `kit.select` should know about — chooser only needed to solve
+  the rendering/navigation primitive; the caller still owns its own extra
+  keymaps on `surf.bufnr`, exactly as before.
+
+Implemented in `lua/lib/nvim/ui/kit/chooser.lua`; example at
+`docs/EXAMPLES/kit-select.lua`; tests in `docs/TESTS/ui_kit_spec.lua`
+(§"chooser (native select)").
 
 ## 14. Open decisions
 

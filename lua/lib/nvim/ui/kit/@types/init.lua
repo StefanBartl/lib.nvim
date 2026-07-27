@@ -86,6 +86,21 @@
 ---@field label string       # display text
 ---@field action? fun()      # callback run when the item is picked (alias: cb)
 
+--- One `kit.select`/`kit.popup({type="select"})` item, for a multi-line entry
+--- with per-column custom highlight groups (see UI-KIT-CONCEPT.md §13b). A
+--- plain string item still works unchanged -- this is opt-in per item.
+---@class Lib.UI.Kit.RichItem
+---@field lines string[]                       # >=1 line; buffer content for this item
+---@field highlights? Lib.UI.Kit.ItemHighlight[]
+---@field anchor? integer                      # 0-based line (within `lines`) the cursor lands on; default 0
+
+--- One highlight span within a `Lib.UI.Kit.RichItem`.
+---@class Lib.UI.Kit.ItemHighlight
+---@field line integer        # 0-based, within this item's `lines`
+---@field col_start? integer  # default 0
+---@field col_end? integer    # default: end of that line
+---@field hl_group string
+
 --- One field of a `kit.form`. `name` is the key its answer is stored under
 --- in the result table handed to `on_submit`.
 ---@class Lib.UI.Kit.FormField
@@ -144,7 +159,7 @@
 ---@field confirm fun(opts: table): Lib.UI.Kit.Surface|nil    # button-confirm dialog (horizontal buttons)
 ---@field menu fun(opts: table): Lib.UI.Kit.Surface|nil        # cursor-anchored action list (label → callback)
 ---@field progress fun(opts: table): table                     # passthrough to lib.nvim.progress.create
----@field sync fun(open_fn: fun(opts: table): any, opts: table, timeout_ms?: integer): (any, boolean, boolean)  # vim.wait bridge for on_submit/on_cancel components
+---@field sync fun(open_fn: fun(opts: table): any, opts: table, timeout_ms: integer|nil): any  # vim.wait bridge for on_submit/on_cancel components; full signature (incl. the two boolean returns) is on lua/lib/nvim/ui/kit/init.lua's M.sync
 ---@field preview fun(): integer, integer                       # open the live theme playground (also :KitPreview)
 ---@field surface Lib.UI.Kit.SurfaceModule
 ---@field theme Lib.UI.Kit.ThemeModule
