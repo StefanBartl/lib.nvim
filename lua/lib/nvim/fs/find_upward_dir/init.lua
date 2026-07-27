@@ -12,10 +12,15 @@ local matcher = require("lib.nvim.fs.find_upward_dir.matcher")
 
 ---@param names string[] Marker basenames; `*` and `?` globs are supported
 ---@param from string Directory to start the upward walk at
+---@param opts { stop?: string }? `stop` is an ancestor at which to give up; it is not itself searched (`vim.fs.find`'s own `stop` semantics).
 ---@return string|nil
-return function(names, from)
+return function(names, from, opts)
   local query = matcher.has_glob(names) and matcher.build(names) or names
-  local found = vim.fs.find(query, { path = from, upward = true })
+  local found = vim.fs.find(query, {
+    path = from,
+    upward = true,
+    stop = opts and opts.stop or nil,
+  })
   if found and found[1] then
     return vim.fs.dirname(found[1])
   end
