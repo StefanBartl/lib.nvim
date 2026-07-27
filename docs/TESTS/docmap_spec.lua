@@ -235,6 +235,17 @@ return function(H)
 
   eq(#extracted, 4, "docmap.deps: comment lines are not requires")
 
+  -- A dynamic require puts a string literal exactly where the pattern looks,
+  -- and yields a dangling prefix that is not a module path at all.
+  local dynamic = deps.extract_source(table.concat({
+    'local mod = require("demo.lua." .. key)',
+    'return require("demo." .. name)',
+    'require("..weird")',
+    'local ok = require("demo.real")',
+  }, "\n"))
+  eq(#dynamic, 1, "docmap.deps: dynamic require concatenations are not module paths")
+  eq(dynamic[1].module, "demo.real", "docmap.deps: the one real require on those lines survives")
+
   eq(extracted[1].alias, "fs", "docmap.deps: local binding is captured as an alias")
   eq(extracted[1].module, "demo.fs", "docmap.deps: alias form resolves the module path")
   eq(extracted[2].member, "read", "docmap.deps: trailing field access is captured")
@@ -278,6 +289,7 @@ return function(H)
     "---@module 'demo.app'",
     "--- The app.",
     'local util = require("demo.util")',
+    'local outside = require("plenary.async")',
     "local M = {}",
     "---Run it.",
     "function M.run(s)",
@@ -314,6 +326,33 @@ return function(H)
   end
 
   ok(req_edge, "docmap.deps: a require edge exists between the two modules")
+  -- Unresolvable requires are kept as plain module strings rather than
+  -- dropped or turned into invented nodes, so the Deps view can draw them.
+  eq(
+    #tree.nodes[app].requires_external,
+    1,
+    "docmap.deps: a require outside the tree is recorded, not discarded"
+  )
+  eq(
+    tree.nodes[app].requires_external[1],
+    "plenary.async",
+    "docmap.deps: it is kept as the module path as written"
+  )
+  eq(
+    #tree.nodes[util].requires_external,
+    0,
+    "docmap.deps: a module with only in-tree requires has none"
+  )
+  local invented = false
+  for _, e in ipairs(tree.edges) do
+    if e.kind == "require" and e.to_module == "plenary.async" then
+      invented = true
+    end
+  end
+  ok(
+    not invented,
+    "docmap.deps: an external require produces no edge to a node that does not exist"
+  )
   eq(req_edge.deferred, nil, "docmap.deps: a top-level require is not marked deferred")
   ok(call_cross, "docmap.calls: a call through a require alias resolves across modules")
   eq(call_cross.to_fn, "M.trim", "docmap.calls: resolves to the declared name in the target")

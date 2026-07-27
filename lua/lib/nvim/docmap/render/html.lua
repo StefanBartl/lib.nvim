@@ -179,6 +179,11 @@ details>summary{cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0}
 /* --- Graph: edge kinds, arrowheads, legend ------------------------------ */
 .hedge-dep{stroke:var(--dep);opacity:.8}
 .hedge-dep.deferred{stroke-dasharray:2 4;opacity:.55}
+.hedge-dep.external{stroke-dasharray:6 3;opacity:.5}
+.hnode.k-external{border-style:dashed;background:none}
+.hnode.k-external .hnm{color:var(--muted)}
+.hlegend .sw.dep.external{border-top-style:dashed}
+#hext.active button{background:var(--accent-soft);color:var(--accent);font-weight:600}
 .hedge-call{stroke:var(--call);opacity:.8}
 .hedge-call.weak{stroke-dasharray:3 4;opacity:.5}
 #hsvg marker path{stroke:none}
@@ -356,7 +361,7 @@ local JS = [[
   // =====================================================================
   var DEFAULT_STATE = {
     tab: "tree", id: null, center: null, view: "modules",
-    dir: "out", depth: 2, fn: null
+    dir: "out", depth: 2, fn: null, ext: false
   };
   function freshState(){ return Object.assign({}, DEFAULT_STATE); }
 
@@ -388,6 +393,9 @@ local JS = [[
         parts.push("dir=" + encodeURIComponent(s.dir || "out"));
         parts.push("depth=" + encodeURIComponent(String(s.depth === 0 ? 0 : (s.depth || 2))));
       }
+      // Only when on, and only where it applies: an "ext=0" in every Deps
+      // link would be noise in the common case.
+      if(s.view === "deps" && s.ext) parts.push("ext=1");
       if(s.view === "calls" && s.fn) parts.push("fn=" + encodeURIComponent(s.fn));
     }
     return "#" + parts.join("&");
@@ -418,6 +426,7 @@ local JS = [[
       // empty diagram for a URL that merely had a typo in it.
       else if(k === "depth"){ var d = parseInt(v, 10); s.depth = isNaN(d) ? 2 : d; }
       else if(k === "fn") s.fn = v;
+      else if(k === "ext") s.ext = (v === "1" || v === "true");
     });
     return s;
   }
@@ -982,7 +991,49 @@ local JS = [[
     return { layers: layers, included: included, count: count, truncated: truncated };
   }
 
-  function layoutDeps(startId, dir, maxDepth){
+  // Requires that resolve to nothing in the scanned tree, materialized into
+  // boxes on demand. One box per module however many nodes reach for it —
+  // "these four all pull in plenary" is the thing worth seeing, and four
+  // separate boxes would hide exactly that. Keyed "ext:<module>" so they can
+  // never collide with a node id, and given no `nodeId`, which is what stops
+  // click, double-click and the context menu from offering to navigate into
+  // something the map knows nothing about.
+  function addExternals(built, maxDepth){
+    var depthOf = {};
+    Object.keys(built.included).forEach(function(id){
+      ((byId[id] || {}).requires_external || []).forEach(function(mod){
+        var key = "ext:" + mod;
+        var d = built.included[id] + 1;
+        if(maxDepth > 0 && d > maxDepth) return;
+        if(depthOf[key] === undefined || d > depthOf[key]) depthOf[key] = d;
+      });
+    });
+
+    Object.keys(depthOf).sort().forEach(function(key){
+      if(built.count >= MAX_HNODES){ built.truncated = true; return; }
+      var d = depthOf[key];
+      while(built.layers.length <= d) built.layers.push([]);
+      built.layers[d].push(key);
+      built.included[key] = d;
+      built.count++;
+    });
+
+    Object.keys(built.included).forEach(function(id){
+      if(id.indexOf("ext:") === 0) return;
+      ((byId[id] || {}).requires_external || []).forEach(function(mod){
+        var key = "ext:" + mod;
+        if(built.included[key] === undefined) return;
+        built.edges.push({
+          from: id, to: key,
+          cls: "hedge hedge-dep external",
+          marker: "dep",
+          label: "requires " + mod + " (outside this map)"
+        });
+      });
+    });
+  }
+
+  function layoutDeps(startId, dir, maxDepth, showExternal){
     var keyOf = { from: function(e){ return e.from; }, to: function(e){ return e.to; } };
     var built = walk([startId], { out: depOut, in: depIn }, keyOf, dir, maxDepth,
       function(k){ return !!byId[k]; });
@@ -999,6 +1050,7 @@ local JS = [[
       });
     });
     built.edges = edges;
+    if(showExternal) addExternals(built, maxDepth);
     return built;
   }
 
@@ -1063,6 +1115,16 @@ local JS = [[
   // what click-to-select and the context menu act on).
   // =====================================================================
   function boxSpec(key, view){
+    if(key.indexOf("ext:") === 0){
+      var mod = key.slice(4);
+      return {
+        cls: "hnode k-external",
+        title: mod + " — required here but not part of this map",
+        html: '<div class="hnm">' + esc(mod) + '</div>' +
+              '<div class="hkind">external</div>',
+        nodeId: null, recenter: null
+      };
+    }
     if(view === "types"){
       var cls = classByName[key];
       if(!cls) return null;
@@ -1208,12 +1270,15 @@ local JS = [[
     types:   [ sw("type", "field references class") ],
     deps:    [ sw("dep", "requires at load time"),
                sw("dep deferred", "lazy require (inside a function)") ],
+    depsExt: [ sw("dep external", "requires something outside this map") ],
     calls:   [ sw("call", "calls"),
                sw("call weak", "guessed call (--calls-heuristic)") ]
   };
 
   function drawLegend(view){
-    var items = (LEGEND[view] || []).map(function(it){
+    var entries = (LEGEND[view] || []).slice();
+    if(view === "deps" && state.ext) entries = entries.concat(LEGEND.depsExt);
+    var items = entries.map(function(it){
       return '<span class="lg"><span class="sw ' + it.sw + '"></span>' + esc(it.text) + '</span>';
     });
     if(isGraphView(view)){
@@ -1268,7 +1333,7 @@ local JS = [[
 
     var built;
     if(view === "types") built = layoutTypes(hcenter);
-    else if(view === "deps") built = layoutDeps(hcenter, state.dir || "out", depth);
+    else if(view === "deps") built = layoutDeps(hcenter, state.dir || "out", depth, !!state.ext);
     else if(view === "calls") built = layoutCalls(hcenter, wantFn, state.dir || "out", depth);
     else built = layoutModules(hcenter);
 
@@ -1406,13 +1471,15 @@ local JS = [[
 
   hgraph.addEventListener("click", function(ev){
     var box = boxOf(ev.target);
-    if(!box || !box._spec) return;
+    // An external box has no node behind it — no id to select, nothing to
+    // re-center on. Inert rather than navigating somewhere arbitrary.
+    if(!box || !box._spec || !box._spec.nodeId) return;
     navigate({ tab: "tree", id: box._spec.nodeId });
   });
 
   hgraph.addEventListener("dblclick", function(ev){
     var box = boxOf(ev.target);
-    if(!box || !box._spec) return;
+    if(!box || !box._spec || !box._spec.recenter) return;
     ev.stopPropagation();
     // In the Calls view a double-click re-centers on the function itself,
     // which is the whole point of the view; elsewhere there is no finer
@@ -1465,6 +1532,12 @@ local JS = [[
     var show = isGraphView(s.view) ? "" : "none";
     document.getElementById("hdir").style.display = show;
     document.getElementById("hdepth").style.display = show;
+    // External requires exist only in the Deps view; the Calls view has no
+    // equivalent, since a call into a module the map never scanned leaves no
+    // resolvable name behind to draw.
+    var hext = document.getElementById("hext");
+    hext.style.display = s.view === "deps" ? "" : "none";
+    hext.classList.toggle("active", !!s.ext);
   }
 
   document.getElementById("hup").addEventListener("click", function(){
@@ -1482,6 +1555,9 @@ local JS = [[
   });
   document.querySelectorAll(".hdepth-btn").forEach(function(b){
     b.addEventListener("click", function(){ navigate({ depth: parseInt(b.dataset.depth, 10) }); });
+  });
+  document.getElementById("hext").addEventListener("click", function(){
+    navigate({ ext: !state.ext });
   });
 
   // =====================================================================
@@ -1951,6 +2027,9 @@ function M.render(ir, findings, opts)
     '<button class="hdepth-btn active" data-depth="2">2</button>',
     '<button class="hdepth-btn" data-depth="3">3</button>',
     '<button class="hdepth-btn" data-depth="0" title="Unbounded, still capped at 90 boxes">∞</button>',
+    "</div>",
+    '<div class="hview-toggle" id="hext">',
+    '<button class="hext-btn" title="Also draw requires that resolve outside this map">+ external</button>',
     "</div>",
     '<button id="hexport" title="Download the current diagram as a standalone SVG">↓ SVG</button>',
     '<span class="hpath" id="hpath"></span>',

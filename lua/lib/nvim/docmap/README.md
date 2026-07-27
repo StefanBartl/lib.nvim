@@ -318,6 +318,24 @@ to the center. Doxygen makes the same choice.
 Depth defaults to 2. A require graph's neighbourhood grows far faster than a
 tree's, and `MAX_HNODES` alone would fill every diagram to the cap.
 
+**`+ external`** (Deps only) also draws the requires that resolve to nothing in
+the scanned tree — other plugins, or anything outside `source`. They live in
+the IR as plain module strings on `node.requires_external`, never as invented
+nodes: the map only claims to describe what it scanned, and a box with no
+source, no summary and no functions behind it would break that. One box per
+module however many nodes reach for it, since "these four all pull in plenary"
+is the thing worth seeing. The boxes are inert — no navigation, no context
+menu, because there is nothing to navigate to.
+
+A prerequisite fell out of building it: `require("lib.lua." .. key)`, which is
+how this tree's aggregators dispatch, puts a string literal exactly where the
+extraction pattern looks and yields the dangling prefix `lib.lua.`. That
+resolved to nothing and so cost nothing while unresolved requires were
+discarded — and would have become four confident boxes for modules that do not
+exist the moment they became visible. A module path has no empty segment, which
+is what a leading, trailing or doubled dot means, so those are now rejected at
+extraction. Verified: the resolved edge set is unchanged by the fix.
+
 **Backedges.** The tree views never had them; a require or call graph is
 cyclic, so a target keeps its first-seen BFS depth and later edges into it
 point sideways or up. Drawn with the ordinary S-curve those run straight

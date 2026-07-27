@@ -30,6 +30,22 @@ local MODULE_CHARS = "[%w%._%-]+"
 local REQUIRE = "require%s*%(?%s*['\"](" .. MODULE_CHARS .. ")['\"]"
 local ALIAS = "^%s*local%s+([%w_]+)%s*=%s*" .. REQUIRE .. "%s*%)?(.*)$"
 
+---Reject what is not a module path at all.
+---
+---A dynamic require — `require("lib.lua." .. key)`, which is how this tree's
+---aggregators dispatch — puts a string literal in exactly the place the
+---pattern above looks, and yields the dangling prefix `lib.lua.`. That never
+---resolved to a node, so it cost nothing while unresolved requires were
+---simply discarded; the moment they became visible it would have been four
+---confident boxes for modules that do not exist. A real module path has no
+---empty segment, which is precisely what a leading, trailing or doubled dot
+---means.
+---@param path string
+---@return boolean
+local function is_module_path(path)
+  return not (path:match("^%.") or path:match("%.$") or path:find("%.%.", 1, false))
+end
+
 ---Extract every `require` occurrence from already-read source text.
 ---
 ---Called from `docmap.functions.scan_file`, which has the file's contents in
@@ -60,7 +76,7 @@ function M.extract_source(src)
     if not commented then
       alias, mod, tail = line:match(ALIAS)
     end
-    if alias then
+    if alias and is_module_path(mod) then
       out[#out + 1] = {
         module = mod,
         alias = alias,
@@ -69,7 +85,9 @@ function M.extract_source(src)
       }
     elseif not commented then
       for m in line:gmatch(REQUIRE) do
-        out[#out + 1] = { module = m, alias = nil, member = nil, line = lnum }
+        if is_module_path(m) then
+          out[#out + 1] = { module = m, alias = nil, member = nil, line = lnum }
+        end
       end
     end
   end
@@ -153,10 +171,24 @@ function M.build(ir)
     local node = ir.nodes[id]
     node.requires = {}
     node.required_by = {}
+    node.requires_external = {}
 
+    local seen_external = {}
     local seen = {}
     for _, req in ipairs(node.requires_raw or {}) do
       local target = by_module[req.module]
+
+      -- Requires that resolve to nothing in this tree are still facts about
+      -- the module: `fidget.progress` is a real dependency, it just is not
+      -- one this map can draw a documented box for. Kept as plain module
+      -- strings rather than invented nodes — the map's promise is "what is in
+      -- this tree", and a node with no source, no summary and no functions
+      -- behind it would break that. The Deps view materializes them into
+      -- boxes on request; nothing else has to know they exist.
+      if not target and req.module ~= node.module and not seen_external[req.module] then
+        seen_external[req.module] = true
+        node.requires_external[#node.requires_external + 1] = req.module
+      end
       -- A file requiring its own module is legal (re-entrant lazy loading)
       -- but is a self-loop no layout draws usefully.
       if target and target ~= id then
@@ -188,6 +220,7 @@ function M.build(ir)
     end
 
     table.sort(node.requires)
+    table.sort(node.requires_external)
   end
 
   for target, sources in pairs(incoming) do
