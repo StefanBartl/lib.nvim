@@ -663,6 +663,83 @@ return function(H)
   handle.uninstall()
   eq(watching(), false, "docmap.registry: uninstall tears the watch down again")
 
+  -- --------------------------------------------------- the watch, end to end
+  -- Assumed untestable headlessly at first, which was wrong: `vim.wait` pumps
+  -- the event loop, so a real `:write` reaches BufWritePost and the debounced
+  -- rescan completes inside the test.
+  local live_root = H.tmpfile("_live")
+  local function lwrite(rel, lines)
+    local abs = live_root .. "/" .. rel
+    vim.fn.mkdir(vim.fn.fnamemodify(abs, ":h"), "p")
+    local fd = assert(io.open(abs, "w"), "docmap spec: live fixture must be writable")
+    fd:write(table.concat(lines, "\n"))
+    fd:close()
+    return abs
+  end
+
+  local watched_file = lwrite("lua/demo/a/init.lua", {
+    "---@module 'demo.a'",
+    "--- A.",
+    "local M = {}",
+    "---One.",
+    "function M.one()",
+    "  return 1",
+    "end",
+    "return M",
+  })
+  -- Deliberately outside `source`: writing here must not trigger anything.
+  local outsider = lwrite("notes/scratch.lua", { "-- not part of the scanned tree" })
+
+  local live = require("lib.nvim.docmap").install({
+    root = live_root,
+    source = "lua/demo",
+    lua_root = "lua",
+    watch = true,
+    watch_ms = 40,
+  })
+  local rescans = 0
+  live.on_change(function()
+    rescans = rescans + 1
+  end)
+
+  eq(#live.ir().nodes["lua/demo/a"].functions, 1, "docmap.watch: one function before the edit")
+
+  vim.cmd.edit(vim.fn.fnameescape(watched_file))
+  vim.api.nvim_buf_set_lines(0, 7, 7, false, {
+    "---Two.",
+    "function M.two()",
+    "  return 2",
+    "end",
+  })
+  vim.cmd("silent write")
+  local settled = vim.wait(5000, function()
+    return rescans > 0
+  end, 25)
+
+  ok(settled, "docmap.watch: writing a file under source triggers a rescan")
+  eq(
+    #live.ir().nodes["lua/demo/a"].functions,
+    2,
+    "docmap.watch: and the handle's IR reflects the edit afterwards"
+  )
+
+  -- The scope check is the fragile half: an autocmd *glob* over the source
+  -- directory silently never fires on Windows, because Vim matches the raw
+  -- OS-native buffer path against a forward-slash pattern. This asserts the
+  -- other direction — that the explicit subpath check does not over-match.
+  local before_outside = rescans
+  vim.cmd.edit(vim.fn.fnameescape(outsider))
+  vim.api.nvim_buf_set_lines(0, -1, -1, false, { "-- touched" })
+  vim.cmd("silent write")
+  vim.wait(300, function()
+    return false
+  end, 25)
+  eq(rescans, before_outside, "docmap.watch: a write outside source does not rescan")
+
+  live.uninstall()
+  vim.cmd("silent! %bwipeout!")
+  vim.fn.delete(live_root, "rf")
+
   vim.fn.delete(heur_root, "rf")
   vim.fn.delete(root, "rf")
 end
