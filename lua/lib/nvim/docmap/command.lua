@@ -144,6 +144,66 @@ function M.setup(opts)
       return
     end
 
+    -- :LibMap dot [deps|calls] [module]
+    --
+    -- Opens the DOT source in a scratch buffer rather than writing a file or
+    -- shelling out to `dot`. Shelling out would add an external dependency
+    -- and a "dot not found" failure mode to a feature whose entire output is
+    -- text; a buffer is something to yank, `:w`, or pipe through
+    -- `:%!dot -Tsvg` — all of which the user can already do better than a
+    -- flag could.
+    local dot_kind, dot_target = action:match("^dot%s*(%a*)%s*(.-)$")
+    if action == "dot" or action:match("^dot%s") then
+      dot_kind = (dot_kind == "" or dot_kind == "deps") and "require" or dot_kind
+      if dot_kind ~= "require" and dot_kind ~= "calls" then
+        notify.warn("Unknown graph: " .. dot_kind .. " (expected deps or calls)")
+        return
+      end
+      local ir = handle.ir()
+      local scope
+      if dot_target ~= "" then
+        scope = M.find_node(ir, dot_target, cfg.lua_root or "lua")
+        if not scope then
+          notify.warn("No module matching '" .. dot_target .. "' in the map.")
+          return
+        end
+      end
+
+      local src = docmap.render.dot(ir, {
+        kind = dot_kind == "calls" and "call" or "require",
+        scope = scope,
+      })
+
+      -- A name identifies the query, so asking the same one twice should
+      -- reuse it rather than fail. `nvim_buf_set_name` *raises* on a
+      -- collision, and the error was swallowed by the command wrapper: the
+      -- second `:LibMap dot` produced an unnamed buffer and no message at
+      -- all. Wiping the previous one first is both the fix and the behaviour
+      -- one would want — this is a regenerated scratch view, not a document.
+      local name = ("docmap-%s%s.dot"):format(
+        dot_kind,
+        scope and ("-" .. scope:gsub("[^%w]+", "_")) or ""
+      )
+      for _, b in ipairs(vim.api.nvim_list_bufs()) do
+        if
+          vim.api.nvim_buf_is_valid(b) and vim.fs.basename(vim.api.nvim_buf_get_name(b)) == name
+        then
+          pcall(vim.api.nvim_buf_delete, b, { force = true })
+        end
+      end
+
+      vim.cmd("enew")
+      local buf = vim.api.nvim_get_current_buf()
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(src, "\n", { plain = true }))
+      vim.bo[buf].filetype = "dot"
+      vim.bo[buf].buftype = "nofile"
+      vim.bo[buf].bufhidden = "hide"
+      vim.bo[buf].swapfile = false
+      pcall(vim.api.nvim_buf_set_name, buf, name)
+      notify.info("Pipe it: :%!dot -Tsvg > graph.svg")
+      return
+    end
+
     -- :LibMap why <a> <b>
     --
     -- "Why does A end up pulling in B?" — the question the Deps view can only
@@ -273,14 +333,14 @@ function M.setup(opts)
     nargs = "*",
     desc = "Regenerate the module map (:"
       .. command_name
-      .. " [check|full|open|graph deps|graph calls|why <a> <b>])",
+      .. " [check|full|open|graph|why <a> <b>|dot deps|dot calls])",
     complete = function(lead, line)
       -- Two completion levels: the action, then — once "graph" is typed — the
       -- module paths the map actually knows, which is the argument nobody
       -- wants to type by hand.
-      local candidates = { "check", "full", "open", "graph", "why" }
+      local candidates = { "check", "full", "open", "graph", "why", "dot" }
       local after_graph = line:match("graph%s+%a*%s+(.*)$") or line:match("graph%s+(%a*)$")
-      if line:match("graph%s+%a+%s") or line:match("why%s") then
+      if line:match("graph%s+%a+%s") or line:match("why%s") or line:match("dot%s+%a+%s") then
         -- Offers exactly what `find_node` resolves, namespaces included —
         -- completing a name the command then rejects is worse than no
         -- completion at all.
@@ -295,7 +355,7 @@ function M.setup(opts)
           end
         end
         table.sort(candidates)
-      elseif after_graph then
+      elseif after_graph or line:match("dot%s+%a*$") then
         candidates = { "deps", "calls" }
       end
       return vim.tbl_filter(function(c)

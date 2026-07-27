@@ -107,6 +107,9 @@ M.render = {
   markdown = function(...)
     return require("lib.nvim.docmap.render.markdown")(...)
   end,
+  dot = function(...)
+    return require("lib.nvim.docmap.render.dot")(...)
+  end,
 }
 
 ---Serialize the IR deterministically: nodes in `ir.order`, object keys in a
