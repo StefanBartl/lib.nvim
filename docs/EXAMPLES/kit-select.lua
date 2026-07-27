@@ -49,3 +49,33 @@ kit.select({
     vim.notify("picked: " .. branches[idx].name)
   end,
 })
+
+-- Rich items: a multi-line entry with per-column highlight groups (see
+-- UI-KIT-CONCEPT.md §13b). Mix freely with plain strings in the same list --
+-- on_select still hands back exactly what you put in. Navigation (j/k/<CR>)
+-- moves by logical item, landing on `anchor` (default: the item's first
+-- line), so a 3-line item is still one up/down step, not three.
+kit.select({
+  title = "Chain suggestions",
+  items = {
+    {
+      lines = { "-> my_chain (12 hits)", "  local alias = my_chain", "" },
+      highlights = {
+        { line = 0, col_start = 0, col_end = 2, hl_group = "Special" }, -- the "->" arrow
+        { line = 0, col_start = 3, col_end = 12, hl_group = "Identifier" }, -- chain name
+        { line = 1, hl_group = "Statement" }, -- whole line (col_end omitted)
+      },
+    },
+    {
+      lines = { "-> other_chain (4 hits)", "  local other = other_chain", "" },
+      highlights = {
+        { line = 0, col_start = 0, col_end = 2, hl_group = "Special" },
+        { line = 0, col_start = 3, col_end = 15, hl_group = "Identifier" },
+        { line = 1, hl_group = "Statement" },
+      },
+    },
+  },
+  on_select = function(item)
+    vim.notify("picked: " .. item.lines[1])
+  end,
+})

@@ -125,12 +125,21 @@ function M.open(opts)
     return nil
   end
 
-  -- The chooser only ever displays the plain strings it is handed, so
-  -- pre-render here and map the chosen row back to the original item by
-  -- index -- callers keep passing raw items, as with vim.ui.select.
+  -- The chooser displays plain strings, pre-rendered here so the chosen row
+  -- maps back to the original item by index -- callers keep passing raw
+  -- items, as with vim.ui.select. A "rich" item (table with `.lines`, for
+  -- per-span custom highlights -- see UI-KIT-CONCEPT.md §13b) passes straight
+  -- through unrendered instead: the chooser already knows how to lay those
+  -- out itself. (Rich items are incompatible with `respect_override`'s
+  -- foreign-picker delegation above, which only understands plain values --
+  -- not a concern for any current caller, none of which combine the two.)
   local display = {}
   for i, item in ipairs(items) do
-    display[i] = display_line(item, opts.format_item)
+    if type(item) == "table" and type(item.lines) == "table" then
+      display[i] = item
+    else
+      display[i] = display_line(item, opts.format_item)
+    end
   end
 
   local chose = false

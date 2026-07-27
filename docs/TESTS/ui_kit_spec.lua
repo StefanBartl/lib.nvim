@@ -463,6 +463,90 @@ return function(H)
   -- theme selection highlight is wired
   ok(vim.fn.hlexists("KitSelection") == 1, "KitSelection group defined for the chooser")
 
+  -- --------------------------------------------------------------- chooser: rich items (§13b)
+  -- Multi-line entries with per-span highlights (recommender.nvim's
+  -- motivating use case: a 3-line suggestion with per-column highlight
+  -- groups) mixed with a plain string, exercising navigation-by-item,
+  -- click-anywhere-in-an-item resolution, and highlight placement.
+  do
+    local rich = {
+      lines = { "-> my_chain (3 hits)", "  local alias = my_chain", "" },
+      highlights = {
+        { line = 0, col_start = 0, col_end = 2, hl_group = "Special" },
+        { line = 1, hl_group = "Statement" }, -- col_end omitted -> whole line
+      },
+    }
+    local plain = "plain item"
+
+    local picked, picked_at
+    local surf = kit.select({
+      items = { rich, plain },
+      on_select = function(it, i)
+        picked, picked_at = it, i
+      end,
+    })
+    ok(surf ~= nil, "chooser opens with a rich item mixed in")
+    eq(
+      vim.api.nvim_buf_line_count(surf.bufnr),
+      4,
+      "buffer has rich item's 3 lines + plain item's 1 line"
+    )
+    eq(chooser.current_index(), 1, "opens with logical item 1 (the rich item) current")
+
+    -- Move the raw cursor to the rich item's 2nd line (not its anchor row) --
+    -- current_index() must still resolve to item 1, the way a mouse click
+    -- landing anywhere in a multi-line item should.
+    vim.api.nvim_win_set_cursor(surf.winid, { 2, 0 })
+    eq(chooser.current_index(), 1, "cursor on a non-anchor row still resolves to its item")
+
+    chooser.move(1) -- item 1 (rich, 3 lines) -> item 2 (plain, 1 line)
+    eq(chooser.current_index(), 2, "move(1) advances by logical item, not raw line")
+    eq(vim.api.nvim_win_get_cursor(surf.winid)[1], 4, "cursor lands on item 2's buffer row (4)")
+
+    chooser.move(-1) -- back to item 1
+    eq(vim.api.nvim_win_get_cursor(surf.winid)[1], 1, "move(-1) lands back on item 1's anchor row")
+
+    chooser.submit()
+    eq(picked, rich, "submit() returns the original rich item table, not a stringified copy")
+    eq(picked_at, 1, "submit() returns the logical item index")
+  end
+
+  do
+    -- Highlight extmarks land on the right row/columns.
+    local rich = {
+      lines = { "abcdef" },
+      highlights = { { line = 0, col_start = 1, col_end = 3, hl_group = "Special" } },
+    }
+    local surf = kit.select({ items = { rich }, on_select = function() end })
+    local marks = vim.api.nvim_buf_get_extmarks(
+      surf.bufnr, -1, 0, -1, { details = true }
+    )
+    local found = false
+    for _, m in ipairs(marks) do
+      local row, col, details = m[2], m[3], m[4]
+      if row == 0 and col == 1 and details.end_col == 3 and details.hl_group == "Special" then
+        found = true
+      end
+    end
+    ok(found, "rich item's highlight extmark placed at the declared row/col span")
+    chooser.close()
+  end
+
+  do
+    -- Multi-select marks a rich item's whole row span, not just its anchor row.
+    local rich = { lines = { "line one", "line two" } }
+    local chosen
+    kit.select({
+      items = { rich, "b" },
+      multi = true,
+      on_select = function(items) chosen = items end,
+    })
+    chooser.toggle() -- mark the rich item (currently item 1)
+    chooser.submit()
+    eq(#chosen, 1, "multi-select: one item marked")
+    eq(chosen[1], rich, "multi-select: the marked rich item is returned whole")
+  end
+
   -- --------------------------------------------------------------- layout (pure)
   local geo = kit.layout.compute(kit.layout.templates.picker.spec)
   ok(geo.slots.prompt ~= nil, "picker layout has a prompt slot")
