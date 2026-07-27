@@ -134,6 +134,7 @@
 ---@field expand_env? boolean              # run the submitted line through lib.nvim.cross.fs.expand_path
 ---@field secret? boolean                  # mask the input as you type (vim.fn.inputsecret replacement)
 ---@field mask? string                     # placeholder char when secret = true (default "*")
+---@field completion? string               # a getcompletion() type ("file", "dir", ...); <Tab> completes (vim.fn.input's completion="file" replacement)
 ---@field on_submit? fun(line: string)      # <CR>
 ---@field on_cancel? fun()                  # <Esc>
 

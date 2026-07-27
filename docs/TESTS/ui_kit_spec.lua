@@ -213,6 +213,58 @@ return function(H)
   vim.cmd("stopinsert")
   plain_sec:close()
 
+  -- input(completion = "file"): file-path completion (vim.fn.inputsecret's
+  -- cousin, `completion = "file"` on the old vim.fn.input). `vim.fn.complete()`
+  -- itself only works in real Insert mode, which this headless -l runner
+  -- never actually enters (confirmed: even after startinsert!/feedkeys("A"),
+  -- `vim.api.nvim_get_mode().mode` stays "n" -- there's no live redraw loop
+  -- to carry the mode transition through), so the pum-interaction half of
+  -- this feature isn't exercisable here. What IS tested: the buffer-local
+  -- <Tab>/<S-Tab> mappings only exist when opts.completion is set, and the
+  -- <CR>/<Esc> submit/cancel paths are unaffected by having it set.
+  do
+    local dir = vim.fn.tempname()
+    vim.fn.mkdir(dir, "p")
+    for _, name in ipairs({ "file_alpha.txt", "file_beta.txt" }) do
+      local f = io.open(dir .. "/" .. name, "w")
+      f:write("")
+      f:close()
+    end
+
+    -- getcompletion() itself (the piece trigger_completion drives) works
+    -- headless -- no Insert mode needed for this call.
+    local matches = vim.fn.getcompletion(dir .. "/fi", "file")
+    eq(#matches, 2, "getcompletion(file) finds both real files under the prefix")
+
+    local comp =
+      assert(kit.input({ prompt = "Path", completion = "file" }), "completion input opens")
+    local tab_map = vim.fn.maparg("<Tab>", "i", false, true)
+    eq(tab_map.buffer, 1, "opts.completion registers a buffer-local <Tab> mapping")
+    local stab_map = vim.fn.maparg("<S-Tab>", "i", false, true)
+    eq(stab_map.buffer, 1, "opts.completion registers a buffer-local <S-Tab> mapping")
+
+    -- <CR>/<Esc> still submit/cancel normally (pum never opens here, so this
+    -- exercises the same finish() path as plain kit.input).
+    local comp_submitted
+    kit.input({
+      prompt = "Path",
+      completion = "file",
+      default = "seed",
+      on_submit = function(v)
+        comp_submitted = v
+      end,
+    })
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "x", false)
+    eq(comp_submitted, "seed", "<CR> still submits normally when completion is set (pum closed)")
+
+    local plain_no_completion = assert(kit.input({ prompt = "x" }), "no-completion input opens")
+    local plain_tab_map = vim.fn.maparg("<Tab>", "i", false, true)
+    eq(plain_tab_map.buffer, 0, "a plain input registers no buffer-local <Tab> mapping")
+    vim.cmd("stopinsert")
+    plain_no_completion:close()
+    comp:close()
+  end
+
   -- --------------------------------------------------------------- live_input
   -- `TextChangedI`/`TextChanged` don't fire for API-driven buffer edits in
   -- this headless runner (no real insert-mode session), so tests fire them

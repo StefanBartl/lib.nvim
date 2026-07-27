@@ -48,6 +48,19 @@ kit.input({
 -- override the placeholder character:
 kit.input({ prompt = "PIN", secret = true, mask = "•", on_submit = function(pin) end })
 
+-- `completion = "file"` wires <Tab> to real ins-completion (vim.fn.complete())
+-- over vim.fn.getcompletion() candidates -- a `vim.fn.input(..., completion =
+-- "file")` replacement. <Tab>/<S-Tab> cycle the popup once it's open; <CR>
+-- accepts the highlighted candidate first, then submits on a second <CR>.
+-- Accepts any getcompletion() type, not just "file" (e.g. "dir", "buffer").
+kit.input({
+  prompt = "Path to executable",
+  completion = "file",
+  on_submit = function(path)
+    require("myplugin").set_executable(path)
+  end,
+})
+
 -- `lib.nvim.ui.kit.prompt` (see kit-prompt.lua) wraps this same component
 -- for the "ask a free-text question" half of a yes/no-or-text prompt --
 -- reach for `kit.input` directly when you only ever need the text case.

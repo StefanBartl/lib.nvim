@@ -78,7 +78,10 @@ function M.toast(opts)
 end
 
 --- Open a single-line input. `opts.secret = true` masks it as you type (a
---- `vim.fn.inputsecret` replacement) — see lib.nvim.ui.kit.input.
+--- `vim.fn.inputsecret` replacement); `opts.completion = "file"` (or any
+--- other `getcompletion()` type) wires `<Tab>` up to the native completion
+--- popup (a `vim.fn.input`-with-`completion="file"` replacement) — see
+--- lib.nvim.ui.kit.input.
 ---@param opts Lib.UI.Kit.InputOpts
 ---@return Lib.UI.Kit.Surface|nil
 function M.input(opts)
