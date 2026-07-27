@@ -87,6 +87,27 @@ handle.uninstall()  -- or: require("lib.nvim.docmap").uninstall(handle)
 installed, is a no-op, not an error, matching this repo's own
 `usercmd.create`'s tolerance for repeated setup under hot-reload configs.
 
+`registry.ensure_watch(root)` starts watching a root that is already
+installed, without replacing its handle. That distinction is the point:
+`install()` treats a collision as replace, which drops every `on_change`
+subscriber — so upgrading by re-installing would silently unsubscribe
+everyone. The case that needed it: `command.setup()` installs with the plain
+config, which sets no `watch`, so a `:LibMap` earlier in the session left
+exactly the handle `:LibBrowse live` then reused, and "live" meant a view that
+never re-scanned.
+
+The watch itself is covered end to end in
+[`docs/TESTS/docmap_spec.lua`](../../../../docs/TESTS/docmap_spec.lua) — a
+real `:write` through a real buffer, with `vim.wait` pumping the event loop
+until the debounced rescan lands. Both directions are asserted: a write under
+`source` rescans, and a write outside it does **not**. The second matters more
+than it looks. Scoping this with an autocmd glob pattern is the obvious
+approach and silently never fires on Windows, because Vim matches the raw
+OS-native buffer path against a forward-slash pattern; the explicit
+`is_subpath` check replaced it, and the test guards the opposite failure of
+over-matching (verified by removing the check and watching the assertion
+fail).
+
 `:LibMap`/`docmap.command.setup()` is itself built on `install()`: it reuses
 (or creates) a handle for `opts.root` rather than scanning separately, so a
 plugin that calls `install()` first and later also calls `command.setup()`
