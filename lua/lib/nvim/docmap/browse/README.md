@@ -101,6 +101,13 @@ cursor row of the position being left is synced into its entry before moving,
 so coming back restores the row the user was on rather than the row they
 arrived at.
 
+A key that cannot change anything does not become a stop either — `+`/`_`
+outside Deps (depth is the only axis `walk_requires` reads), `h`/`l` when the
+direction is already what was asked for. Otherwise the trail fills with
+positions identical to their neighbours, and a `<C-o>` that visibly does
+nothing reads as the history being broken rather than as the key having been a
+no-op.
+
 ## Layout
 
 Three [`ui.kit.layout`](../../ui/kit/README.md) slots:
