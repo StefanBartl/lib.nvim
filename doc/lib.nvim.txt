@@ -183,21 +183,29 @@ Neovim adapters.
                            vim.treesitter (signatures, @param/@return/
                            @generic/@deprecated/@see/@async/@nodiscard/
                            @overload, and the custom @example/@since),
-                           optional lua-language-server --doc enrichment
-                           (class/alias detail, type-reference edges), checks
-                           it for documentation drift (incl. dead @see
-                           targets and under-documented params), renders a
-                           self-contained HTML page (Tree + Hierarchy tabs —
-                           Hierarchy toggles Modules/Types views, search
-                           re-centers it, findings and real browser
-                           Back/Forward are wired up) plus Markdown/
-                           Mermaid. :LibMap
+                           builds a require graph and a call graph out of the
+                           same read and parse, optional lua-language-server
+                           --doc enrichment (class/alias detail,
+                           type-reference edges), checks it for documentation
+                           drift (incl. dead @see targets, under-documented
+                           params, load-time require cycles and opt-in
+                           module-layering rules), renders a self-contained
+                           HTML page (Tree + Hierarchy tabs — Hierarchy has
+                           Modules/Deps/Calls/Types views with direction and
+                           depth controls, right-click on any module,
+                           function, type or box, animated re-centering and
+                           SVG export; search re-centers it, findings and
+                           real browser Back/Forward are wired up) plus
+                           Markdown/Mermaid (incl. a dependency graph the
+                           code host renders itself). :LibMap
                            regenerates, :LibMap check sends drift to the
                            quickfix list, :LibMap full adds the LuaLS
-                           enrichment; a pre-commit hook (git config
-                           core.hooksPath scripts/hooks) blocks commits on a
-                           stale map. install()/uninstall() give a live,
-                           in-memory Handle (ir/node/on_change/rescan) other
+                           enrichment, :LibMap graph deps|calls [module]
+                           opens the page on that graph; a pre-commit hook
+                           (git config core.hooksPath scripts/hooks) blocks
+                           commits on a stale map. install()/uninstall() give
+                           a live, in-memory Handle (ir/node/on_change/rescan,
+                           plus requires/required_by/callees/callers) other
                            plugin code can subscribe to instead of parsing
                            module_map.json off disk. Reusable by other
                            plugins: docmap.generate{ root = ..., source = ... }
