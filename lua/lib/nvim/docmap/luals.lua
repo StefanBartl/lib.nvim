@@ -210,7 +210,15 @@ function M.merge(ir, doc_json, source)
   -- its own file) are kept here, unlike the earlier node-only version: at
   -- class granularity they are real edges, even though the Modules view
   -- still filters them out client-side as node-level self-loops.
+  --
+  -- Collected into a local list and appended at the end rather than pushed
+  -- straight onto `ir.edges`: that array now also holds require and call
+  -- edges, whose optional fields are disjoint from these, so the sort below
+  -- would compare `from_class` against nil the moment it saw one. Each
+  -- producer sorting and appending its own block keeps the whole array
+  -- deterministic without a comparator that has to know every edge kind.
   ir.edges = ir.edges or {}
+  local type_edges = {}
   local seen_edge = {}
 
   for _, id in ipairs(ir.order) do
@@ -224,7 +232,8 @@ function M.merge(ir, doc_json, source)
               local key = ty.name .. "|" .. ref_name .. "|" .. field.name
               if not seen_edge[key] then
                 seen_edge[key] = true
-                ir.edges[#ir.edges + 1] = {
+                type_edges[#type_edges + 1] = {
+                  kind = "type",
                   from = node.id,
                   to = target.id,
                   from_class = ty.name,
@@ -245,7 +254,7 @@ function M.merge(ir, doc_json, source)
   -- stability guarantee, so leaving those as ties would make output order —
   -- and therefore --full's byte-for-byte output — nondeterministic between
   -- runs on unchanged input.
-  table.sort(ir.edges, function(a, b)
+  table.sort(type_edges, function(a, b)
     if a.from ~= b.from then
       return a.from < b.from
     end
@@ -260,6 +269,10 @@ function M.merge(ir, doc_json, source)
     end
     return a.via < b.via
   end)
+
+  for _, e in ipairs(type_edges) do
+    ir.edges[#ir.edges + 1] = e
+  end
 end
 
 return M

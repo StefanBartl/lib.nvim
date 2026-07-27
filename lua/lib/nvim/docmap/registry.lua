@@ -114,11 +114,67 @@ function M.install(opts)
     entry.debounce = debounce
   end
 
+  ---Filter the current IR's edges. The graph queries below all reduce to
+  ---"edges of kind K whose near end is X", so the walk exists once.
+  ---@param kind Lib.Docmap.EdgeKind
+  ---@param field string Edge field to match against `value`.
+  ---@param value string
+  ---@return Lib.Docmap.Edge[]
+  local function edges_where(kind, field, value)
+    local out = {}
+    for _, e in ipairs(entry.ir.edges or {}) do
+      if e.kind == kind and e[field] == value then
+        out[#out + 1] = e
+      end
+    end
+    return out
+  end
+
+  ---Split a `"<node id>#<function name>"` key. The same id scheme the HTML
+  ---uses, so a link copied out of the map is a valid argument here.
+  ---@param key string
+  ---@return string node_id
+  ---@return string fn_name
+  local function split_fn(key)
+    local node_id, fn_name = key:match("^(.*)#([^#]+)$")
+    return node_id or key, fn_name or ""
+  end
+
   ---@type Lib.Docmap.Handle
   local handle = {
     root = root,
     ir = function()
       return entry.ir
+    end,
+    -- The graph queries a consumer would otherwise reimplement by filtering
+    -- `ir.edges` themselves. Kept on the handle rather than as free functions
+    -- so they always answer against *this* handle's current IR, including
+    -- after a watch-triggered rescan.
+    requires = function(id)
+      return edges_where("require", "from", id)
+    end,
+    required_by = function(id)
+      return edges_where("require", "to", id)
+    end,
+    callees = function(key)
+      local node_id, fn_name = split_fn(key)
+      local out = {}
+      for _, e in ipairs(entry.ir.edges or {}) do
+        if e.kind == "call" and e.from == node_id and e.from_fn == fn_name then
+          out[#out + 1] = e
+        end
+      end
+      return out
+    end,
+    callers = function(key)
+      local node_id, fn_name = split_fn(key)
+      local out = {}
+      for _, e in ipairs(entry.ir.edges or {}) do
+        if e.kind == "call" and e.to == node_id and e.to_fn == fn_name then
+          out[#out + 1] = e
+        end
+      end
+      return out
     end,
     findings = function()
       return entry.findings

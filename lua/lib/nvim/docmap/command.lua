@@ -51,16 +51,67 @@ function M.setup(opts)
 
   local handle = registry.get(cfg.root) or registry.install(cfg)
 
+  ---Open the generated HTML, optionally at a specific state.
+  ---
+  ---The page's whole navigable state is already in its URL fragment, so
+  ---"open the deps graph for module X" needs no new rendering path — it is
+  ---the existing `open` action with a hash appended.
+  ---@param hash string? Fragment including the leading "#", or nil for the default view.
+  ---@return boolean opened
+  local function open_map(hash)
+    local target = cfg.root .. "/" .. (cfg.out_dir or "docs/map") .. "/index.html"
+    if vim.uv.fs_stat(target) == nil then
+      notify.warn("No map generated yet — run :" .. command_name .. " first.")
+      return false
+    end
+    require("lib.nvim.fs.open.url.system_opener").open(target .. (hash or ""))
+    return true
+  end
+
   usercmd.create(command_name, function(args)
     local action = vim.trim(args.args or "")
 
     if action == "open" then
-      local target = cfg.root .. "/" .. (cfg.out_dir or "docs/map") .. "/index.html"
-      if vim.uv.fs_stat(target) == nil then
-        notify.warn("No map generated yet — run :" .. command_name .. " first.")
+      open_map()
+      return
+    end
+
+    -- :LibMap graph {deps|calls} [module]
+    --
+    -- The CLI-side counterpart to right-clicking a box: it answers the same
+    -- question from where the code is being read, without hunting for the
+    -- module in the tree once the page is open. `module` is matched against
+    -- the declared `@module` path first and the node id second, so both
+    -- "lib.nvim.fs" and "lua/lib/nvim/fs" work.
+    local graph_kind, graph_target = action:match("^graph%s+(%a+)%s*(.-)$")
+    if graph_kind then
+      if graph_kind ~= "deps" and graph_kind ~= "calls" then
+        notify.warn("Unknown graph: " .. graph_kind .. " (expected deps or calls)")
         return
       end
-      require("lib.nvim.fs.open.url.system_opener").open(target)
+      local ir = handle.ir()
+      local center = ir.root
+      if graph_target ~= "" then
+        local found
+        for _, id in ipairs(ir.order) do
+          local node = ir.nodes[id]
+          if node.module == graph_target or id == graph_target then
+            found = id
+            break
+          end
+        end
+        if not found then
+          notify.warn("No module matching '" .. graph_target .. "' in the map.")
+          return
+        end
+        center = found
+      end
+      open_map(
+        ("#tab=hierarchy&center=%s&view=%s&dir=out&depth=2"):format(
+          vim.uri_encode(center, "rfc2396"),
+          graph_kind
+        )
+      )
       return
     end
 
@@ -122,12 +173,30 @@ function M.setup(opts)
       )
     )
   end, {
-    nargs = "?",
-    desc = "Regenerate the module map (:" .. command_name .. " [check|full|open])",
-    complete = function(lead)
+    nargs = "*",
+    desc = "Regenerate the module map (:"
+      .. command_name
+      .. " [check|full|open|graph deps|graph calls])",
+    complete = function(lead, line)
+      -- Two completion levels: the action, then — once "graph" is typed — the
+      -- module paths the map actually knows, which is the argument nobody
+      -- wants to type by hand.
+      local candidates = { "check", "full", "open", "graph" }
+      local after_graph = line:match("graph%s+%a*%s+(.*)$") or line:match("graph%s+(%a*)$")
+      if line:match("graph%s+%a+%s") then
+        candidates = {}
+        for _, id in ipairs(handle.ir().order) do
+          local node = handle.ir().nodes[id]
+          if node.module then
+            candidates[#candidates + 1] = node.module
+          end
+        end
+      elseif after_graph then
+        candidates = { "deps", "calls" }
+      end
       return vim.tbl_filter(function(c)
         return c:find(lead, 1, true) == 1
-      end, { "check", "full", "open" })
+      end, candidates)
     end,
   })
 

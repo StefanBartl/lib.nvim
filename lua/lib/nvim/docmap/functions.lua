@@ -205,26 +205,47 @@ local function parse_doc_block(raw_lines)
   }
 end
 
----Scan `path` for documented top-level functions.
+---Scan `path` for documented top-level functions, and — from the same read
+---and the same parse — the raw call sites and `require` occurrences the graph
+---stages need.
+---
+---The three come back together rather than from three entry points because
+---they share the two expensive steps: reading the file and parsing it. An
+---earlier shape had `deps` and `calls` each open the file themselves, which
+---tripled the scan's I/O and doubled its treesitter work for data that was
+---already sitting in scope here.
+---
+---Both extra returns are *unresolved*: a call site's callee is raw text and a
+---require is a raw module path, because neither can be turned into a node id
+---without the whole IR. `docmap.deps.build` and `docmap.calls.build` do that
+---afterwards.
 ---@param path string Absolute path to a `.lua` file.
----@return Lib.Docmap.FunctionInfo[]
+---@return Lib.Docmap.FunctionInfo[] functions
+---@return Lib.Docmap.RawCall[] calls
+---@return Lib.Docmap.RawRequire[] requires
 function M.scan_file(path)
   local fd = io.open(path, "rb")
   if not fd then
-    return {}
+    return {}, {}, {}
   end
   local src = fd:read("*a")
   fd:close()
 
+  -- `require` extraction is pure text and does not depend on the parse, so it
+  -- happens before the early-outs below: a file treesitter cannot parse still
+  -- has readable dependencies, and dropping them would silently punch a hole
+  -- in the require graph rather than in just the function list.
+  local requires = require("lib.nvim.docmap.deps").extract_source(src)
+
   local ok, parser = pcall(vim.treesitter.get_string_parser, src, "lua")
   if not ok then
-    return {}
+    return {}, {}, requires
   end
   local ok_parse, trees = pcall(function()
     return parser:parse()
   end)
   if not ok_parse or not trees or not trees[1] then
-    return {}
+    return {}, {}, requires
   end
   local root = trees[1]:root()
 
@@ -286,12 +307,19 @@ function M.scan_file(path)
   end
 
   local out = {}
+  ---@type { name: string, srow: integer, erow: integer }[]
+  local ranges = {}
   for _, def in ipairs(defs) do
     if def.name_node and def.params_node then
       local name = vim.treesitter.get_node_text(def.name_node, src)
       local params_text = vim.treesitter.get_node_text(def.params_node, src)
-      local frow = def.def_node:range()
+      local frow, _, feorow = def.def_node:range()
       local raw_lines = doc_block_above(frow)
+
+      -- Kept alongside the doc info, not derived later: this is the only place
+      -- the definition's node — and therefore its end row — is in scope, and
+      -- `docmap.calls` needs the span to attribute a call site to its caller.
+      ranges[#ranges + 1] = { name = name, srow = frow, erow = feorow }
 
       -- Undocumented functions (no ---@param/---@return/prose above them)
       -- are real parts of the surface too, just with an empty doc block —
@@ -322,7 +350,12 @@ function M.scan_file(path)
     return a.line < b.line
   end)
 
-  return out
+  -- Deferred-load classification needs the parse, so it happens here rather
+  -- than in `extract_source`; `deps` still owns the rule itself.
+  require("lib.nvim.docmap.deps").mark_deferred(root, src, requires)
+
+  local calls = require("lib.nvim.docmap.calls").extract(root, src, ranges)
+  return out, calls, requires
 end
 
 return M

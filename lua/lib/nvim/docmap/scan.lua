@@ -257,6 +257,11 @@ function M.scan(opts)
     local kind = has_init and "module" or "namespace"
     counts[kind] = counts[kind] + 1
 
+    local fns, calls, requires = {}, {}, {}
+    if has_init then
+      fns, calls, requires = require("lib.nvim.docmap.functions").scan_file(init)
+    end
+
     ---@type Lib.Docmap.Node
     local node = {
       id = id,
@@ -273,7 +278,11 @@ function M.scan(opts)
       parent = parent_id,
       depth = depth,
       children = {},
-      functions = has_init and require("lib.nvim.docmap.functions").scan_file(init) or {},
+      functions = fns,
+      requires = {},
+      required_by = {},
+      requires_raw = requires,
+      calls_raw = calls,
     }
 
     index[id] = node
@@ -292,6 +301,8 @@ function M.scan(opts)
         -- rather than being folded into the parent's detail pane.
         local h = M.parse_header(child_abs)
         counts.file = counts.file + 1
+        local leaf_fns, leaf_calls, leaf_requires =
+          require("lib.nvim.docmap.functions").scan_file(child_abs)
         ---@type Lib.Docmap.Node
         local leaf = {
           id = child_rel,
@@ -308,7 +319,11 @@ function M.scan(opts)
           parent = id,
           depth = depth + 1,
           children = {},
-          functions = require("lib.nvim.docmap.functions").scan_file(child_abs),
+          functions = leaf_fns,
+          requires = {},
+          required_by = {},
+          requires_raw = leaf_requires,
+          calls_raw = leaf_calls,
         }
         index[child_rel] = leaf
         order[#order + 1] = child_rel
@@ -323,20 +338,32 @@ function M.scan(opts)
   index[root_id].name = opts.title or index[root_id].name
 
   ---@type Lib.Docmap.IR
-  return {
+  local ir = {
     meta = {
       title = opts.title or source,
       source = source,
       types_dir = types_dir,
       repo_url = opts.repo_url,
       branch = opts.branch or "main",
-      schema = 1,
+      schema = 2,
       counts = counts,
     },
     root = root_id,
     order = order,
     nodes = index,
+    edges = {},
   }
+
+  -- Both graph stages run here rather than in `scan_full`, unlike the LuaLS
+  -- merge: they need no external tool, they cost only in-memory resolution
+  -- over data the walk already collected, and running them here means every
+  -- caller of `scan()` — checks, renderers, a live handle — sees the same
+  -- fully-formed IR instead of some seeing a half-built one. Order matters:
+  -- call resolution reads the require aliases `deps` indexes.
+  require("lib.nvim.docmap.deps").build(ir)
+  require("lib.nvim.docmap.calls").build(ir, opts)
+
+  return ir
 end
 
 return M

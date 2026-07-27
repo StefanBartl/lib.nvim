@@ -60,6 +60,19 @@ function M.render(ir, findings, opts)
   put("\n## Namespaces\n")
   put(mermaid.render(ir, findings, { max_depth = 2 }))
 
+  -- Empty when nothing in the tree requires anything else in it, which is a
+  -- real state for a small plugin — better no section than an empty diagram.
+  local deps_graph = mermaid.render_deps(ir, { depth = 2 })
+  if deps_graph ~= "" then
+    put("\n\n## Dependencies\n")
+    put(
+      "Which parts of the tree require which, rolled up to the second level.\n"
+        .. "The [interactive map](index.html)'s **Deps** view has this per module,\n"
+        .. "in both directions, with load-time and lazy requires told apart.\n"
+    )
+    put(deps_graph)
+  end
+
   put("\n\n## Modules\n")
   put("| Module | Description | Fns | Docs |")
   put("|---|---|---|---|")

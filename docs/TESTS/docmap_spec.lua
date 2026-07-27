@@ -218,4 +218,140 @@ return function(H)
     has_undoc_param,
     "docmap.check: undocumented-param fires when signature has more params than @param lines"
   )
+
+  -- ------------------------------------------------------------- docmap.deps
+  local deps = require("lib.nvim.docmap.deps")
+
+  local extracted = deps.extract_source(table.concat({
+    'local fs = require("demo.fs")',
+    'local read = require("demo.io").read',
+    'require("demo.side_effect")',
+    '---   local x = require("demo.docs_only")', -- a usage example, not a require
+    '-- require("demo.commented_out")',
+    "function M.lazy()",
+    '  return require("demo.deferred")',
+    "end",
+  }, "\n"))
+
+  eq(#extracted, 4, "docmap.deps: comment lines are not requires")
+
+  eq(extracted[1].alias, "fs", "docmap.deps: local binding is captured as an alias")
+  eq(extracted[1].module, "demo.fs", "docmap.deps: alias form resolves the module path")
+  eq(extracted[2].member, "read", "docmap.deps: trailing field access is captured")
+  eq(extracted[3].alias, nil, "docmap.deps: a bare require has no alias")
+  eq(extracted[3].module, "demo.side_effect", "docmap.deps: bare require module path")
+  eq(extracted[4].module, "demo.deferred", "docmap.deps: requires inside functions are found")
+
+  local no_comment_modules = true
+  for _, req in ipairs(extracted) do
+    if req.module:match("docs_only") or req.module:match("commented_out") then
+      no_comment_modules = false
+    end
+  end
+  ok(no_comment_modules, "docmap.deps: no require is taken from a comment line")
+
+  -- ----------------------------------------------- deps + calls over a tree
+  -- A real scan, not a hand-built IR: resolution is the whole point of these
+  -- two stages, and it only exists once a module index and require aliases
+  -- are in play. Two modules, one requiring and calling into the other.
+  local scan = require("lib.nvim.docmap.scan")
+  local root = H.tmpfile("_tree")
+  local function write(rel, lines)
+    local abs = root .. "/" .. rel
+    vim.fn.mkdir(vim.fn.fnamemodify(abs, ":h"), "p")
+    local fd = assert(io.open(abs, "w"), "docmap spec: fixture tree must be writable")
+    fd:write(table.concat(lines, "\n"))
+    fd:close()
+  end
+
+  write("lua/demo/util/init.lua", {
+    "---@module 'demo.util'",
+    "--- Utilities.",
+    "local M = {}",
+    "---Trim it.",
+    "function M.trim(s)",
+    "  return s",
+    "end",
+    "return M",
+  })
+  write("lua/demo/app/init.lua", {
+    "---@module 'demo.app'",
+    "--- The app.",
+    'local util = require("demo.util")',
+    "local M = {}",
+    "---Run it.",
+    "function M.run(s)",
+    "  return util.trim(helper(s))",
+    "end",
+    "---Helper.",
+    "function helper(s)",
+    '  return require("demo.util").trim(s)',
+    "end",
+    "return M",
+  })
+
+  local tree = scan.scan({ root = root, source = "lua/demo", lua_root = "lua" })
+
+  local app, util = "lua/demo/app", "lua/demo/util"
+  eq(#tree.nodes[app].requires, 1, "docmap.deps: app requires exactly one in-tree module")
+  eq(tree.nodes[app].requires[1], util, "docmap.deps: the require resolves to the util node")
+  eq(tree.nodes[util].required_by[1], app, "docmap.deps: required_by is the reverse index")
+
+  local req_edge, lazy_edge, call_cross, call_local
+  for _, e in ipairs(tree.edges) do
+    if e.kind == "require" and e.from == app then
+      req_edge = e
+    end
+    if e.kind == "call" and e.from_fn == "M.run" and e.to == util then
+      call_cross = e
+    end
+    if e.kind == "call" and e.from_fn == "M.run" and e.to_fn == "helper" then
+      call_local = e
+    end
+    if e.kind == "call" and e.from_fn == "helper" then
+      lazy_edge = e
+    end
+  end
+
+  ok(req_edge, "docmap.deps: a require edge exists between the two modules")
+  eq(req_edge.deferred, nil, "docmap.deps: a top-level require is not marked deferred")
+  ok(call_cross, "docmap.calls: a call through a require alias resolves across modules")
+  eq(call_cross.to_fn, "M.trim", "docmap.calls: resolves to the declared name in the target")
+  eq(call_cross.confidence, "exact", "docmap.calls: alias-resolved calls are exact")
+  ok(call_local, "docmap.calls: a bare call to a same-file function resolves locally")
+  ok(lazy_edge, "docmap.calls: calls inside a lazily-requiring function still resolve")
+
+  -- Deduped to one edge per (from, to), and the load-time occurrence wins the
+  -- `deferred` flag over the lazy one inside `helper`.
+  local req_count = 0
+  for _, e in ipairs(tree.edges) do
+    if e.kind == "require" and e.from == app and e.to == util then
+      req_count = req_count + 1
+    end
+  end
+  eq(req_count, 1, "docmap.deps: repeated requires of one module collapse to a single edge")
+
+  -- A cycle among *deferred* requires must not be reported: that is the
+  -- deliberate lazy-load pattern, and reporting it drowns the real ones.
+  write("lua/demo/util/init.lua", {
+    "---@module 'demo.util'",
+    "--- Utilities.",
+    "local M = {}",
+    "---Trim it.",
+    "function M.trim(s)",
+    '  return require("demo.app") and s',
+    "end",
+    "return M",
+  })
+  local cyc = scan.scan({ root = root, source = "lua/demo", lua_root = "lua" })
+  local cyc_findings = check.run(cyc, { root = root, source = "lua/demo", lua_root = "lua" })
+  local reported_cycle = false
+  for _, f in ipairs(cyc_findings) do
+    if f.check == "require-cycle" then
+      reported_cycle = true
+    end
+  end
+  ok(not reported_cycle, "docmap.check: a cycle closed by a deferred require is not reported")
+
+  vim.fn.delete(root, "rf")
 end
