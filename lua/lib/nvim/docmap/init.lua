@@ -145,6 +145,8 @@ function M.to_json(ir)
       -- the file to say the same thing twice.
       '"requires": ' .. (#n.requires > 0 and json.encode(n.requires) or "[]"),
       '"required_by": ' .. (#n.required_by > 0 and json.encode(n.required_by) or "[]"),
+      '"requires_external": '
+        .. (#n.requires_external > 0 and json.encode(n.requires_external) or "[]"),
     }
     put("    {" .. table.concat(fields, ", ") .. "}")
     put(i < #ir.order and ",\n" or "\n")

@@ -281,6 +281,7 @@ function M.scan(opts)
       functions = fns,
       requires = {},
       required_by = {},
+      requires_external = {},
       requires_raw = requires,
       calls_raw = calls,
     }
@@ -322,6 +323,7 @@ function M.scan(opts)
           functions = leaf_fns,
           requires = {},
           required_by = {},
+          requires_external = {},
           requires_raw = leaf_requires,
           calls_raw = leaf_calls,
         }
