@@ -278,6 +278,17 @@ above it, tracked by row-contiguity, not indentation guessing) is parsed for:
   multi-line) and `@since` (deliberately not `@version`, which LuaLS defines
   as a required-Lua-runtime declaration — a different question from "since
   when has this existed in this project")
+- `@internal`, which marks a function as implementation rather than published
+  surface
+
+`@internal` earns its place by sharpening every question of the form "is this
+used". `undocumented-param` skips it, because an internal function's
+documentation bar is the author's own and nagging is how a heuristic check
+earns a spot on someone's ignore list; the structural diff counts it as a
+helper rather than listing it as an API change; and the map badges it. Without
+the tag those all have to guess from the *shape* of the declared name —
+`M.compare` looks public, `node_set` looks private — which is a decent guess
+and only a guess.
 
 See [`docs/ANNOTATIONS.md`](docs/ANNOTATIONS.md) for the full survey of which
 tags this repo already uses heavily, which real ones it doesn't (and why

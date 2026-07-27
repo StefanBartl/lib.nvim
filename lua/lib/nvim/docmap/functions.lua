@@ -141,12 +141,12 @@ end
 ---Parse a function's assembled doc-comment block (top-to-bottom, `---`
 ---prefix already stripped by the caller) into the tagged fields.
 ---@param raw_lines string[] Full comment lines, `---` prefix intact.
----@return { summary: string, params: Lib.Docmap.ParamInfo[], returns: Lib.Docmap.ReturnInfo[], generic: string[], deprecated: string?, async: boolean, nodiscard: boolean, see: string[], overload: string[], example: string?, since: string? }
+---@return { summary: string, params: Lib.Docmap.ParamInfo[], returns: Lib.Docmap.ReturnInfo[], generic: string[], deprecated: string?, async: boolean, nodiscard: boolean, internal: boolean, see: string[], overload: string[], example: string?, since: string? }
 local function parse_doc_block(raw_lines)
   local prose = {}
   local params, returns, generic, see, overload = {}, {}, {}, {}, {}
   local deprecated, since, example
-  local async, nodiscard = false, false
+  local async, nodiscard, internal = false, false, false
   local in_example = false
   local seen_tag = false
 
@@ -169,6 +169,8 @@ local function parse_doc_block(raw_lines)
         async = true
       elseif tag == "nodiscard" then
         nodiscard = true
+      elseif tag == "internal" then
+        internal = true
       elseif tag == "see" then
         for target in rest:gmatch("[^,]+") do
           see[#see + 1] = vim.trim(target)
@@ -198,6 +200,7 @@ local function parse_doc_block(raw_lines)
     deprecated = deprecated,
     async = async,
     nodiscard = nodiscard,
+    internal = internal,
     see = see,
     overload = overload,
     example = example,
@@ -348,6 +351,7 @@ function M.scan_file(path)
         deprecated = parsed.deprecated,
         async = parsed.async,
         nodiscard = parsed.nodiscard,
+        internal = parsed.internal,
         see = parsed.see,
         overload = parsed.overload,
         example = parsed.example,

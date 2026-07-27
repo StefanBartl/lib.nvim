@@ -431,6 +431,9 @@ local function function_detail(node, fn_name, ir, node_id)
   if fn.nodiscard then
     flags[#flags + 1] = "nodiscard"
   end
+  if fn.internal then
+    flags[#flags + 1] = "internal"
+  end
   if #(fn.generic or {}) > 0 then
     flags[#flags + 1] = "generic<" .. table.concat(fn.generic, ", ") .. ">"
   end

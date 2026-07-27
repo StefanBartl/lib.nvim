@@ -427,7 +427,10 @@ local function check_undocumented_params(ir, findings)
   for _, id in ipairs(ir.order) do
     local node = ir.nodes[id]
     for _, fn in ipairs(node.functions) do
-      local inside = fn.signature:match("%((.-)%)")
+      -- `@internal` says this is implementation, not published surface, so
+      -- the documentation bar is the author's own. Nagging about it is how a
+      -- heuristic check earns its way onto someone's ignore list.
+      local inside = not fn.internal and fn.signature:match("%((.-)%)") or nil
       if inside and inside ~= "" then
         local declared = 0
         for token in inside:gmatch("[^,]+") do
