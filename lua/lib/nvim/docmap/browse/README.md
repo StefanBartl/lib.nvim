@@ -52,6 +52,16 @@ and the live scan is opt-in. The cost of that choice is staleness, so the
 status line says so when the artifact is older than the newest source file
 rather than showing wrong data silently.
 
+`live` reuses an already-installed handle rather than installing a second one,
+because `install()` treats a collision as replace — which tears down a watch
+another caller may rely on *and* drops every `on_change` subscriber with it.
+Reusing alone was not enough, though: `docmap.command.setup()` installs with
+the plain config, which sets no `watch`, so a `:LibMap` earlier in the session
+left exactly the handle this finds, and "live" meant a view that never
+re-scanned on write — the mode's whole promise, broken by nothing more than
+which command ran first. `registry.ensure_watch()` upgrades such a handle in
+place, keeping its subscribers.
+
 > The artifact and the in-memory IR are not the same document: `module_map.json`
 > writes `nodes` as an **array** in walk order (that is what makes the file
 > byte-deterministic — a JSON object's key order would not be) and carries no

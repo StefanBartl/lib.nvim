@@ -19,7 +19,7 @@ local autocmd = require("lib.nvim.autocmd")
 
 local M = {}
 
----@type table<string, { opts: Lib.Docmap.Opts, ir: Lib.Docmap.IR, findings: Lib.Docmap.Finding[], watchers: fun(ir: Lib.Docmap.IR, findings: Lib.Docmap.Finding[])[], augroup: integer?, debounce: Lib.Debounce.Handle?, handle: Lib.Docmap.Handle }>
+---@type table<string, { opts: Lib.Docmap.Opts, ir: Lib.Docmap.IR, findings: Lib.Docmap.Finding[], watchers: fun(ir: Lib.Docmap.IR, findings: Lib.Docmap.Finding[])[], augroup: integer?, debounce: Lib.Debounce.Handle?, handle: Lib.Docmap.Handle, rescan_fn: fun(opts?: table): Lib.Docmap.IR, Lib.Docmap.Finding[] }>
 local registry = {}
 
 ---@param root string
@@ -40,6 +40,71 @@ local function notify_watchers(entry)
       end)
     end
   end
+end
+
+---Start watching an already-installed root, if it is not watching already.
+---
+---Split out of `install()` so a handle can be *upgraded* to watching without
+---being replaced. That distinction is the whole point: `install()` treats a
+---collision as "replace, don't stack", which tears down `entry.watchers` —
+---so upgrading by re-installing would silently unsubscribe everyone who had
+---registered an `on_change`.
+---
+---The case that made this necessary: `docmap.command.setup()` installs with
+---the plain config, which sets no `watch`. Any later `:LibBrowse live` then
+---found that non-watching handle, reused it as designed, and produced a
+---"live" view that never re-scanned on write. The mode's entire promise,
+---broken by nothing more than which command ran first.
+---
+---Idempotent: called on a root that is already watching, or one that was
+---never installed, it does nothing.
+---@param root string
+---@return boolean watching True if the root is watching when this returns.
+function M.ensure_watch(root)
+  root = norm_root(root)
+  local entry = registry[root]
+  if not entry then
+    return false
+  end
+  if entry.augroup then
+    return true
+  end
+
+  local opts = entry.opts
+  local source_dir = root .. "/" .. (opts.source or "lua")
+  local is_subpath = require("lib.nvim.fs.is_subpath")
+  -- Raw nvim_create_augroup on purpose, not autocmd.group(): uninstall()
+  -- below deletes this group by numeric id (nvim_del_augroup_by_id), which
+  -- autocmd.group()'s name -> id cache has no visibility into — a second
+  -- install() for the same root would hand back the now-stale cached id
+  -- instead of creating a fresh group.
+  local group = vim.api.nvim_create_augroup("LibDocmapWatch:" .. root, { clear = true })
+  local debounce = require("lib.nvim.debounce").new(function()
+    entry.rescan_fn()
+  end, opts.watch_ms or 500)
+
+  -- Scoping via an autocmd *glob pattern* (e.g. "<root>/<source>/**/*.lua")
+  -- is the obvious approach and the wrong one: Vim's pattern matcher compares
+  -- against the raw buffer path, which is OS-native (backslashes on
+  -- Windows), while any path built here is forward-slash — verified this
+  -- mismatches and the autocmd silently never fires. `is_subpath` already
+  -- exists for exactly this normalize-both-sides comparison (its own
+  -- history has the same backslash bug on record), so scope with a cheap
+  -- extension-only pattern and an explicit subpath check in the callback
+  -- instead of trusting the glob engine with directory structure.
+  autocmd.create({ "BufWritePost" }, function(args)
+    local buf_path = vim.api.nvim_buf_get_name(args.buf)
+    if buf_path ~= "" and is_subpath(buf_path, source_dir) then
+      debounce.call()
+    end
+  end, {
+    group = group,
+    pattern = "*.lua",
+  })
+
+  entry.augroup = group
+  entry.debounce = debounce
+  return true
 end
 
 ---Install a live handle for `opts.root`. Runs an initial scan immediately
@@ -79,39 +144,7 @@ function M.install(opts)
   rescan() -- initial scan; handle.ir() must never observe an unset IR
 
   if opts.watch then
-    local source_dir = root .. "/" .. (opts.source or "lua")
-    local is_subpath = require("lib.nvim.fs.is_subpath")
-    -- Raw nvim_create_augroup on purpose, not autocmd.group(): uninstall()
-    -- below deletes this group by numeric id (nvim_del_augroup_by_id), which
-    -- autocmd.group()'s name -> id cache has no visibility into — a second
-    -- install() for the same root would hand back the now-stale cached id
-    -- instead of creating a fresh group.
-    local group = vim.api.nvim_create_augroup("LibDocmapWatch:" .. root, { clear = true })
-    local debounce = require("lib.nvim.debounce").new(function()
-      rescan()
-    end, opts.watch_ms or 500)
-
-    -- Scoping via an autocmd *glob pattern* (e.g. "<root>/<source>/**/*.lua")
-    -- is the obvious approach and the wrong one: Vim's pattern matcher compares
-    -- against the raw buffer path, which is OS-native (backslashes on
-    -- Windows), while any path built here is forward-slash — verified this
-    -- mismatches and the autocmd silently never fires. `is_subpath` already
-    -- exists for exactly this normalize-both-sides comparison (its own
-    -- history has the same backslash bug on record), so scope with a cheap
-    -- extension-only pattern and an explicit subpath check in the callback
-    -- instead of trusting the glob engine with directory structure.
-    autocmd.create({ "BufWritePost" }, function(args)
-      local buf_path = vim.api.nvim_buf_get_name(args.buf)
-      if buf_path ~= "" and is_subpath(buf_path, source_dir) then
-        debounce.call()
-      end
-    end, {
-      group = group,
-      pattern = "*.lua",
-    })
-
-    entry.augroup = group
-    entry.debounce = debounce
+    M.ensure_watch(root)
   end
 
   ---Filter the current IR's edges. The graph queries below all reduce to
