@@ -313,6 +313,28 @@ local JS = [[
     });
   });
 
+  // Blast radius: the transitive closure of `required_by`. Already implied
+  // by the edges and visible nowhere, and it is the number that says how
+  // risky a change to a module is — the same measurement before and after a
+  // refactor is evidence that the refactor decoupled something.
+  var impactCache = {};
+  function impactOf(id){
+    if(impactCache[id]) return impactCache[id];
+    var seen = {}, queue = [id], qi = 0, out = [];
+    seen[id] = true;
+    while(qi < queue.length){
+      var cur = queue[qi++];
+      ((byId[cur] || {}).required_by || []).forEach(function(dep){
+        if(seen[dep]) return;
+        seen[dep] = true;
+        out.push(dep);
+        queue.push(dep);
+      });
+    }
+    impactCache[id] = out;
+    return out;
+  }
+
   // Edges arrive as one array with a `kind` discriminator; every consumer
   // wants one kind at a time, and both directions of it. Built once here
   // rather than filtered per redraw — a re-center at depth 3 would otherwise
@@ -675,6 +697,16 @@ local JS = [[
     }
     depList("Requires", n.requires);
     depList("Required by", n.required_by);
+
+    // Stated even when it is zero: "nothing depends on this" is itself the
+    // answer to "is this safe to change".
+    if((n.requires || []).length || (n.required_by || []).length){
+      var hull = impactOf(n.id);
+      h.push('<div class="sec">Impact</div><ul class="lst"><li>' +
+        '<b>' + hull.length + '</b> module' + (hull.length === 1 ? '' : 's') +
+        ' would be affected by changing this — ' + (n.required_by || []).length +
+        ' directly.</li></ul>');
+    }
 
     if(n.types_detail && n.types_detail.length){
       h.push('<div class="sec">Types ('+n.types_detail.length+')</div><ul class="lst">');

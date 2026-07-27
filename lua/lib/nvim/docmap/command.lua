@@ -144,6 +144,74 @@ function M.setup(opts)
       return
     end
 
+    -- :LibMap why <a> <b>
+    --
+    -- "Why does A end up pulling in B?" — the question the Deps view can only
+    -- be walked by hand to answer. The chain goes to the quickfix list rather
+    -- than to a message, because every hop *is* a location: the edge carries
+    -- the line the `require` is written on, so each entry jumps straight to
+    -- the line that creates that link. A message would have been something to
+    -- read; this is something to act on.
+    local why_a, why_b = action:match("^why%s+(%S+)%s+(%S+)%s*$")
+    if action == "why" or action:match("^why%s") then
+      if not why_a then
+        notify.warn("Usage: :" .. command_name .. " why <from> <to>")
+        return
+      end
+      local ir = handle.ir()
+      local lua_root = cfg.lua_root or "lua"
+      local from_id = M.find_node(ir, why_a, lua_root)
+      local to_id = M.find_node(ir, why_b, lua_root)
+      if not from_id or not to_id then
+        notify.warn(("No module matching '%s' in the map."):format(from_id and why_b or why_a))
+        return
+      end
+
+      local chain = require("lib.nvim.docmap.deps").path(ir, from_id, to_id)
+      if not chain then
+        notify.info(("%s does not reach %s at all."):format(why_a, why_b))
+        return
+      end
+      if #chain == 0 then
+        notify.info("Those are the same module.")
+        return
+      end
+
+      local items, names = {}, { ir.nodes[from_id].module or from_id }
+      local lazy = false
+      for _, e in ipairs(chain) do
+        local target = ir.nodes[e.to]
+        names[#names + 1] = (target.module or e.to) .. (e.deferred and " (lazy)" or "")
+        lazy = lazy or e.deferred == true
+        items[#items + 1] = {
+          filename = cfg.root .. "/" .. ((ir.nodes[e.from] or {}).source or e.from),
+          lnum = e.line or 1,
+          col = 1,
+          text = ("%s → %s%s"):format(
+            (ir.nodes[e.from] or {}).module or e.from,
+            target.module or e.to,
+            e.deferred and "  (lazy)" or ""
+          ),
+        }
+      end
+
+      vim.fn.setqflist({}, " ", {
+        title = ("docmap why: %s → %s"):format(why_a, why_b),
+        items = items,
+      })
+      notify.info(("%d hop%s%s:  %s"):format(
+        #chain,
+        #chain == 1 and "" or "s",
+        -- A path that only exists through a deferred require does not run
+        -- at load time, which is usually the difference between "has to go"
+        -- and "is fine" — so it is said up front, not buried in the list.
+        lazy and ", lazy somewhere" or ", all at load time",
+        table.concat(names, " → ")
+      ))
+      vim.cmd("copen")
+      return
+    end
+
     if action == "check" then
       local _, findings = handle.rescan()
       local tally = docmap.tally(findings)
@@ -205,14 +273,14 @@ function M.setup(opts)
     nargs = "*",
     desc = "Regenerate the module map (:"
       .. command_name
-      .. " [check|full|open|graph deps|graph calls])",
+      .. " [check|full|open|graph deps|graph calls|why <a> <b>])",
     complete = function(lead, line)
       -- Two completion levels: the action, then — once "graph" is typed — the
       -- module paths the map actually knows, which is the argument nobody
       -- wants to type by hand.
-      local candidates = { "check", "full", "open", "graph" }
+      local candidates = { "check", "full", "open", "graph", "why" }
       local after_graph = line:match("graph%s+%a*%s+(.*)$") or line:match("graph%s+(%a*)$")
-      if line:match("graph%s+%a+%s") then
+      if line:match("graph%s+%a+%s") or line:match("why%s") then
         -- Offers exactly what `find_node` resolves, namespaces included —
         -- completing a name the command then rejects is worse than no
         -- completion at all.
