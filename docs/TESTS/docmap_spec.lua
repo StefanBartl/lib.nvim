@@ -380,5 +380,134 @@ return function(H)
     "docmap.command: an unknown name resolves to nil rather than a wrong node"
   )
 
+  -- --------------------------------------- layers, heuristic, handle queries
+  -- Three features that shipped with no coverage at all. The heuristic one in
+  -- particular is only worth having if it stays *silent* on an ambiguous name,
+  -- which is precisely the case a happy-path test would miss.
+  local heur_root = H.tmpfile("_heur")
+  local function hwrite(rel, lines)
+    local abs = heur_root .. "/" .. rel
+    vim.fn.mkdir(vim.fn.fnamemodify(abs, ":h"), "p")
+    local fd = assert(io.open(abs, "w"), "docmap spec: heuristic fixture must be writable")
+    fd:write(table.concat(lines, "\n"))
+    fd:close()
+  end
+
+  -- `only_here` is declared once in the tree; `ambiguous` is declared twice.
+  hwrite("lua/demo/a/init.lua", {
+    "---@module 'demo.a'",
+    "--- A.",
+    "local M = {}",
+    "---U.",
+    "function M.only_here()",
+    "  return 1",
+    "end",
+    "---S.",
+    "function M.ambiguous()",
+    "  return 1",
+    "end",
+    "return M",
+  })
+  hwrite("lua/demo/b/init.lua", {
+    "---@module 'demo.b'",
+    "--- B.",
+    "local M = {}",
+    "---S.",
+    "function M.ambiguous()",
+    "  return 2",
+    "end",
+    "return M",
+  })
+  -- Calls both by bare name, with no require anywhere to resolve them.
+  hwrite("lua/demo/c/init.lua", {
+    "---@module 'demo.c'",
+    "--- C.",
+    "local M = {}",
+    "---Go.",
+    "function M.go()",
+    "  return only_here() + ambiguous()",
+    "end",
+    "return M",
+  })
+
+  local base = { root = heur_root, source = "lua/demo", lua_root = "lua" }
+  local function guessed_edges(o)
+    local out = {}
+    for _, e in ipairs(scan.scan(o).edges) do
+      if e.kind == "call" and e.from == "lua/demo/c" then
+        out[#out + 1] = e
+      end
+    end
+    return out
+  end
+
+  eq(#guessed_edges(base), 0, "docmap.calls: unresolvable bare calls are dropped by default")
+
+  local guessed = guessed_edges(vim.tbl_extend("force", base, { calls_heuristic = true }))
+  eq(#guessed, 1, "docmap.calls: the heuristic guesses only the tree-unique name")
+  eq(guessed[1].to_fn, "M.only_here", "docmap.calls: it guesses the right one")
+  eq(guessed[1].confidence, "heuristic", "docmap.calls: guessed edges are marked as such")
+
+  -- The important half: a name owned by two modules must produce no edge at
+  -- all rather than an arbitrary winner.
+  local guessed_ambiguous = false
+  for _, e in ipairs(guessed) do
+    if e.to_fn == "M.ambiguous" then
+      guessed_ambiguous = true
+    end
+  end
+  ok(not guessed_ambiguous, "docmap.calls: an ambiguous name is left unresolved, not picked")
+
+  -- layer-violation: the rule direction has to matter, and the prefix has to
+  -- respect module-path segments rather than being a raw string prefix.
+  local layered = vim.tbl_extend("force", base, {
+    layers = { { from = "demo.a", to = "demo.b" } },
+  })
+  local function layer_hits(o)
+    local n = 0
+    for _, f in ipairs(check.run(scan.scan(o), o)) do
+      if f.check == "layer-violation" then
+        n = n + 1
+      end
+    end
+    return n
+  end
+  eq(layer_hits(layered), 0, "docmap.check: layer-violation is silent when no edge breaks the rule")
+
+  hwrite("lua/demo/a/init.lua", {
+    "---@module 'demo.a'",
+    "--- A.",
+    'local b = require("demo.b")',
+    "local M = {}",
+    "---U.",
+    "function M.only_here()",
+    "  return b",
+    "end",
+    "return M",
+  })
+  eq(layer_hits(layered), 1, "docmap.check: layer-violation fires on a rule-breaking require")
+  eq(
+    layer_hits(vim.tbl_extend("force", base, { layers = { { from = "demo.b", to = "demo.a" } } })),
+    0,
+    "docmap.check: the rule is directional — the reverse does not fire"
+  )
+  eq(
+    layer_hits(vim.tbl_extend("force", base, { layers = { { from = "demo.", to = "demo.b" } } })),
+    0,
+    "docmap.check: prefixes match whole path segments, so 'demo.' matches nothing"
+  )
+
+  -- Handle graph queries, against a live install().
+  local handle = require("lib.nvim.docmap").install(base)
+  eq(#handle.requires("lua/demo/a"), 1, "docmap.handle: requires() returns the outgoing edge")
+  eq(#handle.required_by("lua/demo/b"), 1, "docmap.handle: required_by() is the reverse")
+  eq(
+    #handle.callers("lua/demo/a#M.only_here"),
+    0,
+    "docmap.handle: callers() of an uncalled function is empty, not nil"
+  )
+  handle.uninstall()
+
+  vim.fn.delete(heur_root, "rf")
   vim.fn.delete(root, "rf")
 end
