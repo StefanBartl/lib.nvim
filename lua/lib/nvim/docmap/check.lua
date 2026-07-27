@@ -457,6 +457,49 @@ local function check_undocumented_params(ir, findings)
   end
 end
 
+--- A function with no `kind="call"` edge pointing at it in the whole tree
+--- *is* a dead-code candidate — but a library is made of functions with no
+--- *internal* caller by design (that is what "public API" means), so
+--- reporting every one of them would flag half the exported surface and get
+--- switched off immediately. Only two categories are checked unconditionally,
+--- because both are dead by construction if uncalled: a `local function` at
+--- module scope (never part of any export table, so nothing outside the file
+--- could reach it either) and anything tagged `@internal` (the author's own
+--- claim that it is implementation, not surface). Everything else — an
+--- ordinary exported, non-`@internal` function — is only checked when
+--- `opts.dead_code = true`. Always "info", never "warn"/"error": dynamic
+--- dispatch (`M[name]()`, callbacks stashed in a table, `vim.schedule(fn)`,
+--- the lazy/metatable strategies in `lib.nvim.require`) is invisible to the
+--- call graph, the same reasoning `calls.lua`'s own header gives for never
+--- letting a call edge back an `error`-severity check.
+---@param ir Lib.Docmap.IR
+---@param findings Lib.Docmap.Finding[]
+---@param opts Lib.Docmap.Opts
+local function check_dead_functions(ir, findings, opts)
+  local called = {}
+  for _, edge in ipairs(ir.edges or {}) do
+    if edge.kind == "call" and edge.to and edge.to_fn then
+      called[edge.to .. "#" .. edge.to_fn] = true
+    end
+  end
+
+  for _, id in ipairs(ir.order) do
+    local node = ir.nodes[id]
+    for _, fn in ipairs(node.functions) do
+      -- This repo's universal convention (also relied on by
+      -- check_see_targets/check_undocumented_params): a name qualified on a
+      -- capitalized local table, `M.foo`, is exported; a bare name,
+      -- `bare_helper`, is a top-level `local function` and reaches nothing
+      -- outside its own file.
+      local exported = fn.name:match("^%u[%w_]*%.") ~= nil
+      local always_checked = fn.internal or not exported
+      if (always_checked or opts.dead_code) and not called[id .. "#" .. fn.name] then
+        add(findings, "info", "dead-function", id, ("%s has no caller in the tree"):format(fn.name))
+      end
+    end
+  end
+end
+
 ---Run every check and return findings sorted by severity.
 ---@param ir Lib.Docmap.IR
 ---@param opts Lib.Docmap.Opts
@@ -473,6 +516,7 @@ function M.run(ir, opts)
   check_layers(ir, findings, opts)
   check_see_targets(ir, findings)
   check_undocumented_params(ir, findings)
+  check_dead_functions(ir, findings, opts)
 
   for _, extra in ipairs(opts.extra_checks or {}) do
     for _, f in ipairs(extra(ir, opts) or {}) do

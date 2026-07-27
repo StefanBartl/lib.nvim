@@ -22,6 +22,7 @@
 ---@field browse_command_name? string Passed to `docmap.command.setup`: register the editor-side map browser under this name. Default "LibBrowse".
 ---@field watch? boolean `install()` only: rescan on `BufWritePost` under `source/**.lua`, debounced. Default false.
 ---@field watch_ms? integer `install()` only: debounce interval for `watch`. Default 500.
+---@field dead_code? boolean Also run `dead-function` against exported, non-`@internal` functions with no caller in the tree. Off by default: a library's exported surface is *meant* to have no internal caller, so this would flag half the public API. Local module-scope functions and `@internal`-tagged ones are always checked regardless of this flag — those two categories are dead by construction if nothing calls them. Default false.
 
 ---A repo-specific drift check.
 ---@alias Lib.Docmap.Check fun(ir: Lib.Docmap.IR, opts: Lib.Docmap.Opts): Lib.Docmap.Finding[]

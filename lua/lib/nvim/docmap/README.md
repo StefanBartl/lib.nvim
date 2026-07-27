@@ -668,6 +668,7 @@ bugs. Generic checks (any annotated Lua tree):
 | `undocumented-param` | info | A function has more parameters than `@param` lines (text-based heuristic, can be wrong on complex signatures — never fails `--check`). |
 | `require-cycle` | warn | A cycle among **load-time** requires. |
 | `layer-violation` | warn | Opt-in via `opts.layers`: a module reaching into a layer it must not. |
+| `dead-function` | info | No `kind="call"` edge points at this function. Always checked for a top-level `local function` (unreachable outside its own file by construction) and anything tagged `@internal`; an ordinary exported function is only checked when `opts.dead_code = true` — a library's exported surface is *meant* to have no internal caller, so on by default it would flag half the public API. Never anything stronger than `info`: dynamic dispatch (`M[name]()`, callbacks in a table, the lazy/metatable strategies in `lib.nvim.require`) is invisible to the call graph. |
 
 `require-cycle` excludes deferred requires — `require(...)` inside a function
 body, the standard way this tree breaks initialisation order on purpose. Run

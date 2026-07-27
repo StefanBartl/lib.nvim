@@ -130,7 +130,7 @@ return function(H)
   -- ------------------------------------------------------------- docmap.check
   local check = require("lib.nvim.docmap.check")
 
-  local function make_ir(functions_by_node)
+  local function make_ir(functions_by_node, edges)
     local nodes, order = {}, {}
     for id, fns_ in pairs(functions_by_node) do
       nodes[id] = {
@@ -165,7 +165,7 @@ return function(H)
       root = order[1],
       order = order,
       nodes = nodes,
-      edges = {},
+      edges = edges or {},
     }
   end
 
@@ -250,6 +250,100 @@ return function(H)
     end
   end
   eq(internal_nagged, false, "docmap.check: undocumented-param skips an @internal function")
+
+  -- dead-function: local functions and @internal ones are checked
+  -- unconditionally; an ordinary exported function only under opts.dead_code.
+  local function fn_info(name, over)
+    over = over or {}
+    return vim.tbl_extend("force", {
+      name = name,
+      signature = name .. "()",
+      summary = "",
+      line = 1,
+      params = {},
+      returns = {},
+      generic = {},
+      deprecated = nil,
+      async = false,
+      nodiscard = false,
+      internal = false,
+      see = {},
+      overload = {},
+      example = nil,
+      since = nil,
+    }, over)
+  end
+
+  local function has_dead_function(findings, name)
+    for _, f in ipairs(findings) do
+      if f.check == "dead-function" and f.message:match("^" .. name:gsub("%.", "%%.")) then
+        return true
+      end
+    end
+    return false
+  end
+
+  local dead_ir = make_ir({
+    ["a"] = {
+      fn_info("bare_dead"), -- local function, no caller -> dead
+      fn_info("bare_called"), -- local function, has a caller -> not dead
+      fn_info("M.internal_dead", { internal = true }), -- @internal, no caller -> dead
+      fn_info("M.internal_called", { internal = true }), -- @internal, has a caller -> not dead
+      fn_info("M.public_uncalled"), -- ordinary export, no caller -> only under dead_code
+      fn_info("M.public_called"), -- ordinary export, has a caller -> never dead
+    },
+  }, {
+    { kind = "call", from = "a", to = "a", from_fn = "M.public_called", to_fn = "bare_called" },
+    {
+      kind = "call",
+      from = "a",
+      to = "a",
+      from_fn = "M.public_called",
+      to_fn = "M.internal_called",
+    },
+    { kind = "call", from = "a", to = "a", from_fn = "bare_called", to_fn = "M.public_called" },
+  })
+
+  local default_findings = check.run(dead_ir, opts)
+  ok(
+    has_dead_function(default_findings, "bare_dead"),
+    "docmap.check: dead-function fires for an uncalled local function"
+  )
+  ok(
+    not has_dead_function(default_findings, "bare_called"),
+    "docmap.check: dead-function does not fire for a called local function"
+  )
+  ok(
+    has_dead_function(default_findings, "M.internal_dead"),
+    "docmap.check: dead-function fires for an uncalled @internal function"
+  )
+  ok(
+    not has_dead_function(default_findings, "M.internal_called"),
+    "docmap.check: dead-function does not fire for a called @internal function"
+  )
+  ok(
+    not has_dead_function(default_findings, "M.public_uncalled"),
+    "docmap.check: dead-function does NOT fire for an uncalled exported function by default"
+  )
+  ok(
+    not has_dead_function(default_findings, "M.public_called"),
+    "docmap.check: dead-function never fires for a called exported function"
+  )
+  for _, f in ipairs(default_findings) do
+    if f.check == "dead-function" then
+      eq(f.severity, "info", "docmap.check: dead-function is always info-severity")
+    end
+  end
+
+  local dead_code_findings = check.run(dead_ir, vim.tbl_extend("force", opts, { dead_code = true }))
+  ok(
+    has_dead_function(dead_code_findings, "M.public_uncalled"),
+    "docmap.check: opts.dead_code = true also fires for an uncalled exported function"
+  )
+  ok(
+    not has_dead_function(dead_code_findings, "M.public_called"),
+    "docmap.check: opts.dead_code = true still skips a called exported function"
+  )
 
   -- ------------------------------------------------------------- docmap.deps
   local deps = require("lib.nvim.docmap.deps")
