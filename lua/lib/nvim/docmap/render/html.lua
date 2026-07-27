@@ -30,6 +30,7 @@ local CSS = [[
   --accent:#3b6ea8; --accent-soft:#eaf1f9;
   --error:#b3261e; --warn:#8a5a00; --info:#4a4a48;
   --mod:#3b6ea8; --ns:#7a7a76; --file:#5c8a5c;
+  --dep:#a35a2a; --call:#6b4c9a; --fn:#8a5a00;
   --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
 }
 @media (prefers-color-scheme:dark){
@@ -38,6 +39,7 @@ local CSS = [[
     --accent:#7aa9dd; --accent-soft:#22303f;
     --error:#f2837b; --warn:#e0b060; --info:#a8a8a3;
     --mod:#7aa9dd; --ns:#9a9a95; --file:#8fbf8f;
+    --dep:#d99b6a; --call:#b09ada; --fn:#e0b060;
   }
 }
 :root[data-theme="light"]{
@@ -45,12 +47,14 @@ local CSS = [[
   --accent:#3b6ea8; --accent-soft:#eaf1f9;
   --error:#b3261e; --warn:#8a5a00; --info:#4a4a48;
   --mod:#3b6ea8; --ns:#7a7a76; --file:#5c8a5c;
+  --dep:#a35a2a; --call:#6b4c9a; --fn:#8a5a00;
 }
 :root[data-theme="dark"]{
   --bg:#16171a; --panel:#1d1f23; --ink:#e6e6e3; --muted:#9a9a95; --line:#2e3136;
   --accent:#7aa9dd; --accent-soft:#22303f;
   --error:#f2837b; --warn:#e0b060; --info:#a8a8a3;
   --mod:#7aa9dd; --ns:#9a9a95; --file:#8fbf8f;
+  --dep:#d99b6a; --call:#b09ada; --fn:#e0b060;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);
@@ -166,6 +170,79 @@ details>summary{cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0}
 .hnode .hkind{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-top:1px}
 #findings tbody tr[data-node]{cursor:pointer}
 #findings tbody tr[data-node]:hover{background:var(--accent-soft)}
+
+/* --- Function rows in the tree ------------------------------------------ */
+.row.k-fn .nm{color:var(--fn)}
+.row.fnhead .nm{color:var(--muted);font-style:italic}
+.fnkids.hide{display:none}
+
+/* --- Graph: edge kinds, arrowheads, legend ------------------------------ */
+.hedge-dep{stroke:var(--dep);opacity:.8}
+.hedge-dep.deferred{stroke-dasharray:2 4;opacity:.55}
+.hedge-call{stroke:var(--call);opacity:.8}
+.hedge-call.weak{stroke-dasharray:3 4;opacity:.5}
+#hsvg marker path{stroke:none}
+#m-tree path{fill:var(--muted)}
+#m-type path{fill:var(--accent)}
+#m-dep path{fill:var(--dep)}
+#m-call path{fill:var(--call)}
+.hlegend{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:10px 0 0;
+  font-size:11.5px;color:var(--muted)}
+.hlegend .lg{display:inline-flex;align-items:center;gap:5px}
+.hlegend .sw{width:20px;height:0;border-top:2px solid var(--muted)}
+.hlegend .sw.type{border-top-style:dashed;border-top-color:var(--accent)}
+.hlegend .sw.dep{border-top-color:var(--dep)}
+.hlegend .sw.dep.deferred{border-top-style:dotted}
+.hlegend .sw.call{border-top-color:var(--call)}
+.hlegend .sw.call.weak{border-top-style:dashed}
+.hlegend .bx{width:11px;height:11px;border-radius:3px;border:1px solid currentColor}
+.hnode.k-fn .hnm{color:var(--fn)}
+.hnode.center{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.hnode .hline{font-size:9.5px;color:var(--muted);margin-top:1px;font-family:var(--mono)}
+
+/* --- Graph: movement ---------------------------------------------------
+   Boxes keep their identity across redraws (see reconcile() in the JS), so a
+   re-center animates the boxes that survive from their old position to their
+   new one instead of the whole diagram cutting. left/top are transitioned
+   rather than transform, because positions are already absolute pixels
+   computed from the IR — a transform would need a second coordinate system
+   for no gain. */
+.hnode{transition:left .34s cubic-bezier(.2,.7,.2,1),top .34s cubic-bezier(.2,.7,.2,1),
+  opacity .22s ease,border-color .15s ease}
+.hnode.entering{opacity:0;transform:scale(.94)}
+.hnode.leaving{opacity:0;pointer-events:none}
+#hsvg{transition:opacity .18s ease}
+#hsvg.settling{opacity:0}
+.hnode.pulse{animation:hpulse .7s ease-out}
+@keyframes hpulse{
+  0%{box-shadow:0 0 0 0 var(--accent)}
+  100%{box-shadow:0 0 0 12px transparent}
+}
+/* Hover focus: dim everything that is not a direct neighbour. Class-driven so
+   it costs no layout recomputation on a graph that can hold 90 boxes. */
+#hgraph.focusing .hnode{opacity:.22}
+#hgraph.focusing .hnode.near{opacity:1}
+#hgraph.focusing .hedge{opacity:.08}
+#hgraph.focusing .hedge.near{opacity:1;stroke-width:2}
+.hedge{transition:opacity .15s ease}
+@media (prefers-reduced-motion:reduce){
+  .hnode,#hsvg,.hedge{transition:none}
+  .hnode.pulse{animation:none}
+}
+
+/* --- Context menu ------------------------------------------------------- */
+#ctx{position:fixed;z-index:50;min-width:210px;padding:5px;border:1px solid var(--line);
+  border-radius:9px;background:var(--panel);box-shadow:0 8px 28px rgba(0,0,0,.18);display:none}
+#ctx.open{display:block}
+#ctx .ci{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;
+  font-size:12.5px;cursor:pointer;white-space:nowrap;color:var(--ink)}
+#ctx .ci:hover,#ctx .ci.hi{background:var(--accent-soft);color:var(--accent)}
+#ctx .ci.disabled{color:var(--muted);cursor:default;opacity:.6}
+#ctx .ci.disabled:hover{background:none;color:var(--muted)}
+#ctx .ci .hint{margin-left:auto;font-size:10.5px;color:var(--muted)}
+#ctx .sep{height:1px;background:var(--line);margin:4px 6px}
+#ctx .hdr{padding:5px 10px 6px;font-family:var(--mono);font-size:11px;color:var(--muted);
+  max-width:280px;overflow:hidden;text-overflow:ellipsis}
 ]]
 
 local JS = [[
@@ -184,6 +261,42 @@ local JS = [[
   var classByName = {};
   IR.nodes.forEach(function(n){
     (n.types_detail || []).forEach(function(t){ classByName[t.name] = { info: t, nodeId: n.id }; });
+  });
+
+  // ---------------------------------------------------------------------
+  // Functions as first-class, addressable objects.
+  //
+  // "<node id>#<declared name>" — derivable from data already in the IR, so
+  // no id has to be generated and serialized, and stable across regenerations
+  // as long as the function keeps its name. This is what makes a function
+  // something the URL can point at, the Calls view can center on, and the
+  // context menu can act on; before it, a function existed only as a block of
+  // text inside one node's detail pane.
+  // ---------------------------------------------------------------------
+  function fnKey(nodeId, name){ return nodeId + "#" + name; }
+
+  var fnByKey = {};
+  IR.nodes.forEach(function(n){
+    (n.functions || []).forEach(function(fn){
+      fnByKey[fnKey(n.id, fn.name)] = { node: n, fn: fn, key: fnKey(n.id, fn.name) };
+    });
+  });
+
+  // Edges arrive as one array with a `kind` discriminator; every consumer
+  // wants one kind at a time, and both directions of it. Built once here
+  // rather than filtered per redraw — a re-center at depth 3 would otherwise
+  // walk all ~1300 edges once per layer.
+  var depOut = {}, depIn = {}, callOut = {}, callIn = {}, typeEdges = [];
+  function push(map, key, val){ (map[key] = map[key] || []).push(val); }
+  (IR.edges || []).forEach(function(e){
+    if(e.kind === "require"){
+      push(depOut, e.from, e); push(depIn, e.to, e);
+    } else if(e.kind === "call"){
+      push(callOut, fnKey(e.from, e.from_fn), e);
+      push(callIn, fnKey(e.to, e.to_fn), e);
+    } else if(e.kind === "type"){
+      typeEdges.push(e);
+    }
   });
 
   // @see target -> owning node id. Same three resolution shapes as
@@ -217,17 +330,37 @@ local JS = [[
   //
   // One object describes everything the page can be showing:
   //   { tab: "tree"|"hierarchy", id: <selected tree node>,
-  //     center: <hierarchy centered node>, view: "modules"|"types" }
+  //     center: <hierarchy centered node>,
+  //     view: "modules"|"types"|"deps"|"calls",
+  //     dir: "out"|"in"|"both",   — deps/calls only: follow edges forwards
+  //                                 (what this needs), backwards (what needs
+  //                                 this), or both around the center
+  //     depth: 1|2|3|0,           — 0 means unbounded, still capped by MAX_HNODES
+  //     fn: "<node id>#<name>" }  — calls view centered on one function
+  //
+  // Direction is an axis rather than two more views on purpose: "callers of X"
+  // and "callees of X" are the same diagram walked the other way, and making
+  // them separate views would have doubled the view list to four buttons
+  // saying almost the same thing.
+  //
   // navigate(patch) is the single entry point every discrete click handler
   // calls; it merges the patch into current state, updates the DOM, and
   // pushes a real history entry so the browser Back/Forward buttons step
   // through actual states instead of only reacting to a directly-edited
-  // hash. Live preview while typing in the Hierarchy search box does not go
-  // through navigate() at all — see the "input" listener below for why
-  // going through history.replaceState there was a real bug, not just an
+  // hash. Every axis above goes through it — a control that set `dir` or
+  // `depth` behind its back would produce a diagram the Back button cannot
+  // return from. Live preview while typing in the Hierarchy search box is the
+  // one deliberate exception — see the "input" listener below for why going
+  // through history.replaceState there was a real bug, not just an
   // unnecessary one.
   // =====================================================================
-  var state = { tab: "tree", id: null, center: null, view: "modules" };
+  var DEFAULT_STATE = {
+    tab: "tree", id: null, center: null, view: "modules",
+    dir: "out", depth: 2, fn: null
+  };
+  function freshState(){ return Object.assign({}, DEFAULT_STATE); }
+
+  var state = freshState();
   // Tracks only the hash of the last *pushed* entry — deliberately never
   // touched by a replace. Search-as-you-type replaces the current entry on
   // every keystroke; without this separation, typing to a match and then
@@ -238,6 +371,12 @@ local JS = [[
   // unless the *previous push* (not the previous replace) had that hash.
   var lastPushedHash = null;
 
+  // Only axes that matter for the current view are serialized: a Tree-tab URL
+  // carrying dir/depth/view would be three pieces of noise in every link
+  // anyone shares, and a Modules-view URL carrying `dir` would suggest a
+  // control that view does not have.
+  function isGraphView(v){ return v === "deps" || v === "calls"; }
+
   function serializeState(s){
     var parts = ["tab=" + encodeURIComponent(s.tab)];
     if(s.tab === "tree"){
@@ -245,12 +384,17 @@ local JS = [[
     } else {
       if(s.center) parts.push("center=" + encodeURIComponent(s.center));
       parts.push("view=" + encodeURIComponent(s.view || "modules"));
+      if(isGraphView(s.view)){
+        parts.push("dir=" + encodeURIComponent(s.dir || "out"));
+        parts.push("depth=" + encodeURIComponent(String(s.depth === 0 ? 0 : (s.depth || 2))));
+      }
+      if(s.view === "calls" && s.fn) parts.push("fn=" + encodeURIComponent(s.fn));
     }
     return "#" + parts.join("&");
   }
 
   function parseState(hash){
-    var s = { tab: "tree", id: null, center: null, view: "modules" };
+    var s = freshState();
     var raw = (hash || "").replace(/^#/, "");
     if(!raw) return s;
     // A bare node id with no "=" is the pre-existing #<id> scheme (also what
@@ -268,6 +412,12 @@ local JS = [[
       else if(k === "id") s.id = v;
       else if(k === "center") s.center = v;
       else if(k === "view") s.view = v;
+      else if(k === "dir") s.dir = (v === "in" || v === "both") ? v : "out";
+      // Anything unparseable falls back to the default rather than to NaN,
+      // which would make every BFS below terminate immediately and draw an
+      // empty diagram for a URL that merely had a typo in it.
+      else if(k === "depth"){ var d = parseInt(v, 10); s.depth = isNaN(d) ? 2 : d; }
+      else if(k === "fn") s.fn = v;
     });
     return s;
   }
@@ -289,6 +439,7 @@ local JS = [[
 
     if(s.tab === "tree" && s.id && byId[s.id]) selectRow(s.id);
     if(s.tab === "hierarchy") drawHierarchy(s.center || IR.root, s.view || "modules");
+    syncGraphControls(s);
 
     var hash = serializeState(s);
     if(push){
@@ -325,9 +476,54 @@ local JS = [[
     return b.length ? '<span class="badges">'+b.join("")+'</span>' : "";
   }
 
+  // Functions hang under their node behind their own collapsed group rather
+  // than being mixed into `children`. Two reasons: `children` is IR structure
+  // and functions are not part of it, and this tree renders eagerly — folding
+  // ~1500 function rows into the always-expanded default would bury the
+  // module structure the tree exists to show. One extra row per node, opened
+  // on demand, costs nothing until asked for.
+  function renderFunctionGroup(n){
+    var group = document.createElement("div");
+
+    var head = document.createElement("div");
+    head.className = "row fnhead";
+    head.innerHTML = '<span class="tw">▸</span>' +
+      '<span class="nm">ƒ ' + n.functions.length + ' function' +
+      (n.functions.length === 1 ? '' : 's') + '</span>';
+
+    var list = document.createElement("div");
+    list.className = "kids fnkids hide";
+
+    n.functions.forEach(function(fn){
+      var key = fnKey(n.id, fn.name);
+      var r = document.createElement("div");
+      r.className = "row k-fn";
+      r.dataset.fn = key;
+      r.dataset.id = n.id;
+      r.innerHTML = '<span class="tw"></span>' +
+        '<span class="nm">' + esc(fn.signature) + '</span>' +
+        '<span class="sm">' + esc(fn.summary || "") + '</span>';
+      r.addEventListener("click", function(){
+        navigate({ tab: "tree", id: n.id });
+      });
+      list.appendChild(r);
+    });
+
+    head.addEventListener("click", function(ev){
+      ev.stopPropagation();
+      list.classList.toggle("hide");
+      head.querySelector(".tw").textContent = list.classList.contains("hide") ? "▸" : "▾";
+    });
+
+    group.appendChild(head);
+    group.appendChild(list);
+    return group;
+  }
+
   function renderNode(n){
     var kids = (n.children||[]).map(function(id){ return byId[id]; }).filter(Boolean);
-    var hasKids = kids.length > 0;
+    var hasFns = (n.functions || []).length > 0;
+    var hasKids = kids.length > 0 || hasFns;
     var row = document.createElement("div");
     row.className = "row k-" + n.kind;
     row.dataset.id = n.id;
@@ -344,6 +540,7 @@ local JS = [[
       var kidsEl = document.createElement("div");
       kidsEl.className = "kids";
       kids.forEach(function(k){ kidsEl.appendChild(renderNode(k)); });
+      if(hasFns) kidsEl.appendChild(renderFunctionGroup(n));
       box.appendChild(kidsEl);
       row.querySelector(".tw").addEventListener("click", function(ev){
         ev.stopPropagation();
@@ -382,7 +579,13 @@ local JS = [[
       links.push(u2 ? '<a href="'+esc(u2)+'">types ↗</a>' : '<a href="'+esc(rel(t))+'">types</a>');
     });
     if(n.kind !== "file"){
-      links.push('<a href="#" id="hlink">Hierarchy ↳</a>');
+      links.push('<a href="#" data-goto="hierarchy">Hierarchy ↳</a>');
+    }
+    if((n.requires||[]).length || (n.required_by||[]).length){
+      links.push('<a href="#" data-goto="deps">Dependencies ↳</a>');
+    }
+    if((n.functions||[]).length){
+      links.push('<a href="#" data-goto="calls">Calls ↳</a>');
     }
     if(links.length) h.push('<div class="links">'+links.join("")+'</div>');
 
@@ -399,6 +602,22 @@ local JS = [[
       h.push('</ul>');
     }
 
+    // Dependencies as text, next to the diagram that draws the same thing:
+    // the graph answers "what does this sit in the middle of", a list answers
+    // "is X in there", and the second question is the more common one.
+    function depList(title, ids){
+      if(!ids || !ids.length) return;
+      h.push('<div class="sec">'+title+' ('+ids.length+')</div><ul class="lst">');
+      ids.forEach(function(id){
+        var t = byId[id];
+        if(!t) return;
+        h.push('<li><a href="#" data-node-link="'+esc(id)+'">'+esc(t.module || t.path)+'</a></li>');
+      });
+      h.push('</ul>');
+    }
+    depList("Requires", n.requires);
+    depList("Required by", n.required_by);
+
     if(n.types_detail && n.types_detail.length){
       h.push('<div class="sec">Types ('+n.types_detail.length+')</div><ul class="lst">');
       n.types_detail.forEach(function(t){
@@ -410,7 +629,8 @@ local JS = [[
     if(n.functions && n.functions.length){
       h.push('<div class="sec">Functions ('+n.functions.length+')</div>');
       n.functions.forEach(function(fn){
-        h.push('<div class="fn">');
+        var key = fnKey(n.id, fn.name);
+        h.push('<div class="fn" data-fn="'+esc(key)+'">');
         var badges = [];
         if(fn.deprecated !== undefined) badges.push('<span class="bd dep">deprecated</span>');
         if(fn.async) badges.push('<span class="bd">async</span>');
@@ -446,6 +666,19 @@ local JS = [[
           h.push('<div class="fn-desc fn-see">See also: '+seeLinks.join(", ")+'</div>');
         }
         if(fn.example){ h.push('<div class="fn-ex">'+esc(fn.example)+'</div>'); }
+
+        // The per-function entry into the Calls view. Counts are shown up
+        // front so a function with no edges either way does not offer a link
+        // to an empty diagram — with no call data in the map at all (the
+        // common case before `:LibMap` is re-run), this section simply is not
+        // rendered, rather than every function sprouting two dead links.
+        var outN = (callOut[key] || []).length, inN = (callIn[key] || []).length;
+        if(outN || inN){
+          var cl = [];
+          if(outN) cl.push('<a href="#" data-calls="'+esc(key)+'" data-dir="out">calls '+outN+' ↓</a>');
+          if(inN) cl.push('<a href="#" data-calls="'+esc(key)+'" data-dir="in">callers '+inN+' ↑</a>');
+          h.push('<div class="fn-desc fn-see">'+cl.join(" · ")+'</div>');
+        }
         h.push('</div>');
       });
     }
@@ -466,13 +699,34 @@ local JS = [[
 
     detailEl.innerHTML = h.join("");
 
-    var hlink = document.getElementById("hlink");
-    if(hlink){
-      hlink.addEventListener("click", function(ev){
+    // One handler per link family. `fn: null` on the Deps/Hierarchy hops is
+    // not redundant: leaving a stale function centered would make a later
+    // switch back to Calls open on whatever function was last looked at
+    // several nodes ago, rather than on this node.
+    detailEl.querySelectorAll("a[data-goto]").forEach(function(a){
+      a.addEventListener("click", function(ev){
         ev.preventDefault();
-        navigate({ tab: "hierarchy", center: n.id });
+        var to = a.dataset.goto;
+        if(to === "hierarchy") navigate({ tab: "hierarchy", view: "modules", center: n.id, fn: null });
+        else if(to === "deps") navigate({ tab: "hierarchy", view: "deps", center: n.id, fn: null });
+        else navigate({ tab: "hierarchy", view: "calls", center: n.id, fn: null });
       });
-    }
+    });
+
+    detailEl.querySelectorAll("a[data-calls]").forEach(function(a){
+      a.addEventListener("click", function(ev){
+        ev.preventDefault();
+        navigate({ tab: "hierarchy", view: "calls", center: n.id,
+                   fn: a.dataset.calls, dir: a.dataset.dir });
+      });
+    });
+
+    detailEl.querySelectorAll("a[data-node-link]").forEach(function(a){
+      a.addEventListener("click", function(ev){
+        ev.preventDefault();
+        navigate({ tab: "tree", id: a.dataset.nodeLink });
+      });
+    });
 
     detailEl.querySelectorAll("a[data-see-target]").forEach(function(a){
       a.addEventListener("click", function(ev){
@@ -534,15 +788,32 @@ local JS = [[
   var hgraphWrap = document.getElementById("hgraph-wrap");
   var hgraph = document.getElementById("hgraph");
   var hpathEl = document.getElementById("hpath");
+  var hlegendEl = document.getElementById("hlegend");
   var hcenter = null;
   var MAX_HNODES = 90;
   var BOX_W = 168, BOX_H = 52, GAP_X = 16, GAP_Y = 44, PAD = 20;
 
+  // Downward edges keep the original S-curve between the boxes' facing sides.
+  // Backedges — an edge to a box on the same layer or above — are a new
+  // problem the tree views never had: a require or call graph has cycles, so
+  // the BFS assigns a target its *first-seen* depth and any later edge into it
+  // points sideways or up. Drawn with the same curve, those run straight
+  // through every box in between; routed out of the side and back in, they
+  // read as the loop they are.
   function edgePath(a, b){
-    var x1 = a.x + BOX_W/2, y1 = a.y + BOX_H;
-    var x2 = b.x + BOX_W/2, y2 = b.y;
-    var midY = (y1 + y2) / 2;
-    return "M" + x1 + "," + y1 + " C" + x1 + "," + midY + " " + x2 + "," + midY + " " + x2 + "," + y2;
+    var x1 = a.x + BOX_W/2, x2 = b.x + BOX_W/2;
+    if(b.y > a.y){
+      var y1 = a.y + BOX_H, y2 = b.y;
+      var midY = (y1 + y2) / 2;
+      return "M" + x1 + "," + y1 + " C" + x1 + "," + midY + " " + x2 + "," + midY + " " + x2 + "," + y2;
+    }
+    var leftward = x2 <= x1;
+    var sx = leftward ? a.x : a.x + BOX_W;
+    var ex = leftward ? b.x + BOX_W : b.x;
+    var sy = a.y + BOX_H/2, ey = b.y + BOX_H/2;
+    var bulge = (leftward ? -1 : 1) * Math.max(38, Math.abs(sy - ey) * 0.45);
+    return "M" + sx + "," + sy + " C" + (sx + bulge) + "," + sy + " " +
+      (ex + bulge) + "," + ey + " " + ex + "," + ey;
   }
 
   // BFS over node.children from `startId`. Files count the same as modules/
@@ -550,6 +821,13 @@ local JS = [[
   // wrong in practice: centering on a module implemented as flat files with
   // no further subdirectories then drew almost nothing. MAX_HNODES already
   // bounds noise at any scope.
+  // Every layout below returns the same shape, so drawHierarchy never asks
+  // which view it is drawing:
+  //   { layers: [[key,…],…], included: {key: layerIndex}, count, truncated,
+  //     edges: [{from, to, cls, label}] }
+  // Producing the edges here rather than in the drawing code is what keeps
+  // four structurally different graphs — a tree, a class graph, a require
+  // graph and a call graph — behind one renderer.
   function layoutModules(startId){
     var layers = [], included = {}, count = 0, truncated = false;
     var queue = [ { id: startId, d: 0 } ];
@@ -567,7 +845,25 @@ local JS = [[
         if(byId[c]) queue.push({ id: c, d: item.d + 1 });
       });
     }
-    return { layers: layers, included: included, count: count, truncated: truncated };
+
+    var edges = [];
+    Object.keys(included).forEach(function(id){
+      (byId[id].children || []).forEach(function(c){
+        if(included[c] !== undefined) edges.push({ from: id, to: c, cls: "hedge", marker: "tree" });
+      });
+    });
+    // Type-reference edges layered on top (dashed), node-granularity,
+    // self-loops skipped — a field can reference a class anywhere in the whole
+    // map, and pulling in out-of-view targets would break "scoped to one
+    // subtree".
+    typeEdges.forEach(function(e){
+      if(e.from !== e.to && included[e.from] !== undefined && included[e.to] !== undefined){
+        edges.push({ from: e.from, to: e.to, cls: "hedge hedge-type",
+                     marker: "type", label: "." + e.via });
+      }
+    });
+
+    return { layers: layers, included: included, count: count, truncated: truncated, edges: edges };
   }
 
   // BFS over ir.edges' from_class/to_class, seeded from the centered node's
@@ -578,10 +874,13 @@ local JS = [[
   function layoutTypes(startId){
     var center = byId[startId];
     var seeds = (center.types_detail || []).map(function(t){ return t.name; });
-    if(seeds.length === 0) return { layers: [], included: {}, count: 0, truncated: false };
+    if(seeds.length === 0) return { layers: [], included: {}, count: 0, truncated: false, edges: [] };
 
+    // `typeEdges`, not `IR.edges`: that array now also carries require and
+    // call edges, whose `from_class` is undefined — keying an adjacency map on
+    // it would file every one of them under the same bogus key.
     var adj = {};
-    (IR.edges || []).forEach(function(e){
+    typeEdges.forEach(function(e){
       (adj[e.from_class] = adj[e.from_class] || []).push(e);
     });
 
@@ -600,7 +899,135 @@ local JS = [[
         if(classByName[e.to_class]) queue.push({ name: e.to_class, d: item.d + 1 });
       });
     }
-    return { layers: layers, included: included, count: count, truncated: truncated, adj: adj };
+
+    var edges = [];
+    Object.keys(included).forEach(function(name){
+      (adj[name] || []).forEach(function(e){
+        if(included[e.to_class] !== undefined){
+          edges.push({ from: name, to: e.to_class, cls: "hedge hedge-type",
+                       marker: "type", label: "." + e.via });
+        }
+      });
+    });
+
+    return { layers: layers, included: included, count: count, truncated: truncated, edges: edges };
+  }
+
+  // =====================================================================
+  // Deps and Calls: the two directed views.
+  //
+  // Both are the same walk over different adjacency, so it is written once.
+  // `dir` decides which way the walk runs: "out" follows edges forwards
+  // (what this needs / calls), "in" follows them backwards (what needs /
+  // calls this), "both" runs each independently from the same seeds and
+  // places the results above and below the center.
+  //
+  // Running the two sides separately for "both" is not an optimisation, it is
+  // the correct semantics: once a walk has gone *up* into callers, continuing
+  // it downwards through those callers' other callees would fill the diagram
+  // with functions that have nothing to do with the center. Doxygen's caller
+  // graph makes the same choice.
+  // =====================================================================
+  function walk(seeds, adj, keyOf, dir, maxDepth, exists){
+    var depth = {}, count = 0, truncated = false;
+
+    seeds.forEach(function(k){
+      if(exists(k) && depth[k] === undefined && count < MAX_HNODES){
+        depth[k] = 0; count++;
+      }
+    });
+
+    function side(sign, adjMap, pick){
+      var queue = Object.keys(depth).filter(function(k){ return depth[k] === 0; })
+        .map(function(k){ return { key: k, d: 0 }; });
+      while(queue.length){
+        var it = queue.shift();
+        if(maxDepth > 0 && Math.abs(it.d) >= maxDepth) continue;
+        var list = adjMap[it.key] || [];
+        for(var i = 0; i < list.length; i++){
+          var nxt = pick(list[i]);
+          if(!exists(nxt) || depth[nxt] !== undefined) continue;
+          if(count >= MAX_HNODES){ truncated = true; return; }
+          depth[nxt] = it.d + sign;
+          count++;
+          queue.push({ key: nxt, d: it.d + sign });
+        }
+      }
+    }
+
+    if(dir === "out" || dir === "both") side(1, adj.out, keyOf.to);
+    if(dir === "in" || dir === "both") side(-1, adj.in, keyOf.from);
+
+    // Depths can be negative in "both" mode; layers is a dense array, so the
+    // whole thing is shifted down by the deepest caller level.
+    var min = 0;
+    Object.keys(depth).forEach(function(k){ if(depth[k] < min) min = depth[k]; });
+
+    var layers = [], included = {};
+    Object.keys(depth).sort().forEach(function(k){
+      var idx = depth[k] - min;
+      included[k] = idx;
+      (layers[idx] = layers[idx] || []).push(k);
+    });
+    for(var i = 0; i < layers.length; i++){ layers[i] = layers[i] || []; }
+
+    return { layers: layers, included: included, count: count, truncated: truncated };
+  }
+
+  function layoutDeps(startId, dir, maxDepth){
+    var keyOf = { from: function(e){ return e.from; }, to: function(e){ return e.to; } };
+    var built = walk([startId], { out: depOut, in: depIn }, keyOf, dir, maxDepth,
+      function(k){ return !!byId[k]; });
+
+    var edges = [];
+    (IR.edges || []).forEach(function(e){
+      if(e.kind !== "require") return;
+      if(built.included[e.from] === undefined || built.included[e.to] === undefined) return;
+      edges.push({
+        from: e.from, to: e.to,
+        cls: "hedge hedge-dep" + (e.deferred ? " deferred" : ""),
+        marker: "dep",
+        label: (e.deferred ? "lazy require " : "require ") + e.to_module + ":" + e.line
+      });
+    });
+    built.edges = edges;
+    return built;
+  }
+
+  function layoutCalls(startId, startFn, dir, maxDepth){
+    var keyOf = {
+      from: function(e){ return fnKey(e.from, e.from_fn); },
+      to: function(e){ return fnKey(e.to, e.to_fn); }
+    };
+    // Centering on a node rather than a single function seeds every function
+    // it declares: "what does this module call" is the question asked from
+    // the node's own detail pane, and answering it one function at a time
+    // would mean opening the view once per function.
+    var seeds;
+    if(startFn && fnByKey[startFn]){
+      seeds = [startFn];
+    } else {
+      var n = byId[startId];
+      seeds = ((n && n.functions) || []).map(function(fn){ return fnKey(startId, fn.name); });
+    }
+
+    var built = walk(seeds, { out: callOut, in: callIn }, keyOf, dir, maxDepth,
+      function(k){ return !!fnByKey[k]; });
+
+    var edges = [];
+    (IR.edges || []).forEach(function(e){
+      if(e.kind !== "call") return;
+      var a = keyOf.from(e), b = keyOf.to(e);
+      if(built.included[a] === undefined || built.included[b] === undefined) return;
+      edges.push({
+        from: a, to: b,
+        cls: "hedge hedge-call" + (e.confidence === "heuristic" ? " weak" : ""),
+        marker: "call",
+        label: (e.confidence === "heuristic" ? "guessed call, line " : "call, line ") + e.line
+      });
+    });
+    built.edges = edges;
+    return built;
   }
 
   function layerPositions(layers){
@@ -621,162 +1048,504 @@ local JS = [[
     return { positions: positions, maxRowWidth: maxRowWidth };
   }
 
+  // =====================================================================
+  // Box specs: one place that knows what a box in each view says. Returns a
+  // class, its markup, a tooltip and the node the box ultimately belongs to
+  // (a class box and a function box both resolve back to a node, which is
+  // what click-to-select and the context menu act on).
+  // =====================================================================
+  function boxSpec(key, view){
+    if(view === "types"){
+      var cls = classByName[key];
+      if(!cls) return null;
+      return {
+        cls: "hnode t-" + cls.info.kind,
+        title: cls.info.desc || key,
+        html: '<div class="hnm">' + esc(key) + '</div>' +
+              '<div class="hkind">' + cls.info.kind + '</div>',
+        nodeId: cls.nodeId, recenter: cls.nodeId
+      };
+    }
+    if(view === "calls"){
+      var entry = fnByKey[key];
+      if(!entry) return null;
+      return {
+        cls: "hnode k-fn",
+        title: (entry.fn.summary || entry.fn.signature) + "\n" +
+               (entry.node.module || entry.node.path),
+        html: '<div class="hnm">' + esc(entry.fn.signature) + '</div>' +
+              '<div class="hline">' + esc(entry.node.name) + ':' + entry.fn.line + '</div>',
+        nodeId: entry.node.id, recenter: entry.node.id, fnKey: key
+      };
+    }
+    var n = byId[key];
+    if(!n) return null;
+    // The Deps view labels boxes by module path rather than directory name:
+    // a require graph is read in module terms, and half this tree's
+    // directories are called `init`-shaped things that are ambiguous alone.
+    var label = view === "deps" ? (n.module || n.name) : n.name;
+    return {
+      cls: "hnode k-" + n.kind,
+      title: n.summary || n.name,
+      html: '<div class="hnm">' + esc(label) + '</div>' +
+            (n.summary ? '<div class="hsm">' + esc(n.summary) + '</div>' : ''),
+      nodeId: n.id, recenter: n.id
+    };
+  }
+
+  // =====================================================================
+  // Keyed reconcile — the reason re-centering moves instead of cutting.
+  //
+  // Boxes are held in `hboxes` by key and reused across redraws, so a box
+  // present before and after a re-center is the *same element* at a new
+  // left/top, and the CSS transition on .hnode animates it there. Rebuilding
+  // the subtree with innerHTML = "" (what this used to do) threw that
+  // identity away every time, which is why every navigation was a hard cut
+  // even though the two layouts often shared most of their boxes.
+  //
+  // Positions are still computed analytically from the IR, never measured off
+  // the DOM — that is what lets the diagram be correct while the pane is
+  // display:none, and animating does not change it.
+  // =====================================================================
+  var hboxes = {};
+  var hpending = {};
+  var ANIM_MS = 340;
+
+  function reconcile(positions, view, centerKey){
+    var moved = false;
+
+    Object.keys(positions).forEach(function(key){
+      var spec = boxSpec(key, view);
+      if(!spec) return;
+      var pos = positions[key];
+      var el = hboxes[key];
+
+      if(el){
+        // A box that was mid-exit and is wanted again: cancel the removal
+        // rather than let the timer delete a live element out from under us.
+        if(hpending[key]){ clearTimeout(hpending[key]); delete hpending[key]; }
+        if(parseFloat(el.style.left) !== pos.x || parseFloat(el.style.top) !== pos.y) moved = true;
+      } else {
+        el = document.createElement("div");
+        el.dataset.key = key;
+        el.style.left = pos.x + "px";
+        el.style.top = pos.y + "px";
+        el.classList.add("entering");
+        hgraph.appendChild(el);
+        hboxes[key] = el;
+      }
+
+      var entering = el.classList.contains("entering");
+      el.className = spec.cls + (key === centerKey ? " center" : "") + (entering ? " entering" : "");
+      el.style.left = pos.x + "px";
+      el.style.top = pos.y + "px";
+      el.style.width = BOX_W + "px";
+      el.title = spec.title;
+      el.innerHTML = spec.html;
+      el._spec = spec;
+    });
+
+    Object.keys(hboxes).forEach(function(key){
+      if(positions[key] !== undefined || hpending[key]) return;
+      var el = hboxes[key];
+      el.classList.add("leaving");
+      hpending[key] = setTimeout(function(){
+        delete hpending[key];
+        if(hboxes[key] === el){ delete hboxes[key]; }
+        if(el.parentNode) el.parentNode.removeChild(el);
+      }, ANIM_MS);
+    });
+
+    // Entering boxes need one frame at opacity 0 before the class comes off,
+    // or the browser coalesces both styles into the final one and there is no
+    // transition to run.
+    requestAnimationFrame(function(){
+      Object.keys(hboxes).forEach(function(key){
+        hboxes[key].classList.remove("entering");
+      });
+    });
+
+    return moved;
+  }
+
+  // Arrowheads: a tree needs none (the layout says which way is down), a
+  // directed graph does — an edge between two boxes on the same layer, or a
+  // backedge, is otherwise unreadable. One marker per edge colour, coloured
+  // from CSS so the dark-mode palette applies to them too.
+  function buildDefs(svgNS){
+    var defs = document.createElementNS(svgNS, "defs");
+    ["tree", "type", "dep", "call"].forEach(function(name){
+      var m = document.createElementNS(svgNS, "marker");
+      m.id = "m-" + name;
+      m.setAttribute("viewBox", "0 0 8 8");
+      m.setAttribute("refX", "7"); m.setAttribute("refY", "4");
+      m.setAttribute("markerWidth", "7"); m.setAttribute("markerHeight", "7");
+      m.setAttribute("orient", "auto-start-reverse");
+      var p = document.createElementNS(svgNS, "path");
+      p.setAttribute("d", "M0,0 L8,4 L0,8 z");
+      m.appendChild(p);
+      defs.appendChild(m);
+    });
+    return defs;
+  }
+
+  // Written as objects rather than nested arrays for a mundane reason worth
+  // knowing before editing this file: the whole script lives inside a Lua
+  // long string, and two adjacent closing square brackets terminate it —
+  // which is exactly what an array of arrays ends with. The rest of the
+  // script then parses as Lua source. Avoid that pair anywhere in here.
+  function sw(mod, text){ return { sw: mod, text: text }; }
+  var LEGEND = {
+    modules: [ sw("", "contains"), sw("type", "type reference") ],
+    types:   [ sw("type", "field references class") ],
+    deps:    [ sw("dep", "requires at load time"),
+               sw("dep deferred", "lazy require (inside a function)") ],
+    calls:   [ sw("call", "calls"),
+               sw("call weak", "guessed call (--calls-heuristic)") ]
+  };
+
+  function drawLegend(view){
+    var items = (LEGEND[view] || []).map(function(it){
+      return '<span class="lg"><span class="sw ' + it.sw + '"></span>' + esc(it.text) + '</span>';
+    });
+    if(isGraphView(view)){
+      items.push('<span class="lg">double-click a box to re-center · right-click for more</span>');
+    }
+    hlegendEl.innerHTML = items.join("");
+  }
+
+  function emptyMessage(view, center){
+    if(view === "types"){
+      return typeEdges.length
+        ? '<p class="hmsg">' + esc(center.name) + ' has no <code>@class</code>/<code>@alias</code> of its own — pick a module with type definitions, or switch back to Modules.</p>'
+        : '<p class="hmsg">No type data in this map — regenerate with <code>:LibMap full</code> (or <code>--full</code>) to include lua-language-server class/alias detail.</p>';
+    }
+    if(view === "deps"){
+      return '<p class="hmsg">' + esc(center.name) + ' neither requires nor is required by anything in this map.</p>';
+    }
+    if(view === "calls"){
+      return (center.functions || []).length
+        ? '<p class="hmsg">None of ' + esc(center.name) + '’s functions call — or are called by — anything the scanner could resolve. Dynamic dispatch is invisible to it; see the module README.</p>'
+        : '<p class="hmsg">' + esc(center.name) + ' declares no functions.</p>';
+    }
+    return '<p class="hmsg">Nothing to draw here.</p>';
+  }
+
+  function clearGraph(){
+    Object.keys(hpending).forEach(function(k){ clearTimeout(hpending[k]); });
+    hpending = {};
+    hboxes = {};
+    hgraph.innerHTML = "";
+  }
+
+  var VIEWS = { modules: 1, types: 1, deps: 1, calls: 1 };
+
   function drawHierarchy(centerId, view){
-    view = view === "types" ? "types" : "modules";
+    view = VIEWS[view] ? view : "modules";
     hcenter = (centerId && byId[centerId]) ? centerId : (hcenter && byId[hcenter] ? hcenter : IR.root);
     var center = byId[hcenter];
 
-    document.querySelectorAll(".hview-btn").forEach(function(b){
-      b.classList.toggle("active", b.dataset.view === view);
-    });
-
-    hgraph.innerHTML = "";
     var oldNote = hgraphWrap.parentNode.querySelector(".htrunc");
     if(oldNote) oldNote.remove();
+    drawLegend(view);
 
-    var built = view === "types" ? layoutTypes(hcenter) : layoutModules(hcenter);
+    var depth = state.depth === 0 ? 0 : (state.depth || 2);
+
+    // A centered function only applies while the center is still its own
+    // node. The search box re-centers live as you type without touching the
+    // rest of the state, so without this the Calls view would keep drawing
+    // the previously focused function and quietly ignore what was typed.
+    var wantFn = (state.fn && fnByKey[state.fn] && fnByKey[state.fn].node.id === hcenter)
+      ? state.fn : null;
+
+    var built;
+    if(view === "types") built = layoutTypes(hcenter);
+    else if(view === "deps") built = layoutDeps(hcenter, state.dir || "out", depth);
+    else if(view === "calls") built = layoutCalls(hcenter, wantFn, state.dir || "out", depth);
+    else built = layoutModules(hcenter);
 
     if(built.count === 0){
+      clearGraph();
       hpathEl.textContent = center.module || center.path;
-      if(view === "types"){
-        hgraph.innerHTML = IR.edges && IR.edges.length
-          ? '<p class="hmsg">'+esc(center.name)+' has no <code>@class</code>/<code>@alias</code> of its own — pick a module with type definitions, or switch back to Modules.</p>'
-          : '<p class="hmsg">No type data in this map — regenerate with <code>:LibMap full</code> (or <code>--full</code>) to include lua-language-server class/alias detail.</p>';
-      } else {
-        hgraph.innerHTML = '<p class="hmsg">Nothing to draw here.</p>';
-      }
+      hgraph.style.width = ""; hgraph.style.height = "";
+      hgraph.innerHTML = emptyMessage(view, center);
       return;
     }
 
-    hpathEl.textContent = (center.module || center.path) + (view === "types" ? " · types" : "");
+    var suffix = { types: " · types", deps: " · deps", calls: " · calls" }[view] || "";
+    var focusFn = view === "calls" && wantFn;
+    hpathEl.textContent = (focusFn ? wantFn.split("#")[1] + "  in  " : "") +
+      (center.module || center.path) + suffix +
+      (isGraphView(view) ? "  ·  " + (state.dir || "out") + ", depth " + (depth === 0 ? "∞" : depth) : "");
 
     var laid = layerPositions(built.layers);
     var positions = laid.positions;
-    var frag = document.createDocumentFragment();
 
-    if(view === "modules"){
-      Object.keys(positions).forEach(function(id){
-        var pos = positions[id], n = byId[id];
-        var box = document.createElement("div");
-        box.className = "hnode k-" + n.kind;
-        box.style.left = pos.x + "px"; box.style.top = pos.y + "px"; box.style.width = BOX_W + "px";
-        box.title = n.summary || n.name;
-        box.innerHTML = '<div class="hnm">' + esc(n.name) + '</div>' +
-          (n.summary ? '<div class="hsm">' + esc(n.summary) + '</div>' : '');
-        box.addEventListener("click", function(){ navigate({ tab: "tree", id: id }); });
-        box.addEventListener("dblclick", function(ev){ ev.stopPropagation(); navigate({ center: id }); });
-        frag.appendChild(box);
-      });
-    } else {
-      Object.keys(positions).forEach(function(name){
-        var pos = positions[name], cls = classByName[name];
-        var box = document.createElement("div");
-        box.className = "hnode t-" + cls.info.kind;
-        box.style.left = pos.x + "px"; box.style.top = pos.y + "px"; box.style.width = BOX_W + "px";
-        box.title = cls.info.desc || name;
-        box.innerHTML = '<div class="hnm">' + esc(name) + '</div>' +
-          '<div class="hkind">' + cls.info.kind + '</div>';
-        box.addEventListener("click", function(){ navigate({ tab: "tree", id: cls.nodeId }); });
-        box.addEventListener("dblclick", function(ev){ ev.stopPropagation(); navigate({ center: cls.nodeId }); });
-        frag.appendChild(box);
-      });
-    }
+    // The key the view considers "the middle": a node id in three views, a
+    // function id in Calls. Used for the highlight ring and the scroll
+    // target, so both follow whatever the view is actually about.
+    var centerKey = hcenter;
+    if(view === "types") centerKey = built.layers[0] && built.layers[0][0];
+    else if(view === "calls") centerKey = wantFn || (built.layers[0] && built.layers[0][0]);
+
+    var moved = reconcile(positions, view, centerKey);
 
     var totalW = laid.maxRowWidth + PAD * 2;
     var totalH = PAD * 2 + built.layers.length * BOX_H + Math.max(0, built.layers.length - 1) * GAP_Y;
 
     var svgNS = "http://www.w3.org/2000/svg";
+    var old = document.getElementById("hsvg");
+    if(old) old.remove();
     var svg = document.createElementNS(svgNS, "svg");
     svg.id = "hsvg";
     svg.setAttribute("width", totalW);
     svg.setAttribute("height", totalH);
+    svg.appendChild(buildDefs(svgNS));
 
-    if(view === "modules"){
-      Object.keys(built.included).forEach(function(id){
-        (byId[id].children || []).forEach(function(c){
-          if(positions[id] && positions[c]){
-            var p = document.createElementNS(svgNS, "path");
-            p.setAttribute("d", edgePath(positions[id], positions[c]));
-            p.setAttribute("class", "hedge");
-            svg.appendChild(p);
-          }
-        });
-      });
-      // Type-reference edges layered on top (dashed), node-granularity,
-      // self-loops skipped — only meaningful when both endpoints are
-      // laid-out nodes; a field can reference a class anywhere in the whole
-      // map, and pulling in out-of-view targets would break "scoped to one
-      // subtree".
-      (IR.edges || []).forEach(function(e){
-        if(e.from !== e.to && positions[e.from] && positions[e.to]){
-          var p = document.createElementNS(svgNS, "path");
-          p.setAttribute("d", edgePath(positions[e.from], positions[e.to]));
-          p.setAttribute("class", "hedge hedge-type");
-          var title = document.createElementNS(svgNS, "title");
-          title.textContent = "." + e.via;
-          p.appendChild(title);
-          svg.appendChild(p);
-        }
-      });
-    } else {
-      Object.keys(built.included).forEach(function(name){
-        (built.adj[name] || []).forEach(function(e){
-          if(positions[name] && positions[e.to_class]){
-            var p = document.createElementNS(svgNS, "path");
-            p.setAttribute("d", edgePath(positions[name], positions[e.to_class]));
-            p.setAttribute("class", "hedge hedge-type");
-            var title = document.createElementNS(svgNS, "title");
-            title.textContent = "." + e.via;
-            p.appendChild(title);
-            svg.appendChild(p);
-          }
-        });
-      });
-    }
+    // Edge geometry cannot be interpolated the way a box position can — `d`
+    // is not an animatable CSS property, and a per-frame path interpolator
+    // for up to 90 edges buys very little over simply not drawing lines that
+    // would be pointing at boxes still in motion. So: hidden while the boxes
+    // move, faded in once they have arrived.
+    var neighbours = {};
+    built.edges.forEach(function(e){
+      var a = positions[e.from], b = positions[e.to];
+      if(!a || !b || e.from === e.to) return;
+      var p = document.createElementNS(svgNS, "path");
+      p.setAttribute("d", edgePath(a, b));
+      p.setAttribute("class", e.cls);
+      p.setAttribute("marker-end", "url(#m-" + (e.marker || "tree") + ")");
+      p.dataset.from = e.from;
+      p.dataset.to = e.to;
+      if(e.label){
+        var title = document.createElementNS(svgNS, "title");
+        title.textContent = e.label;
+        p.appendChild(title);
+      }
+      svg.appendChild(p);
+      (neighbours[e.from] = neighbours[e.from] || {})[e.to] = true;
+      (neighbours[e.to] = neighbours[e.to] || {})[e.from] = true;
+    });
 
     hgraph.style.width = totalW + "px";
     hgraph.style.height = totalH + "px";
-    hgraph.appendChild(svg);
-    hgraph.appendChild(frag);
+    hgraph.insertBefore(svg, hgraph.firstChild);
+
+    if(moved){
+      svg.classList.add("settling");
+      setTimeout(function(){ svg.classList.remove("settling"); }, ANIM_MS);
+    }
+
+    hgraphNeighbours = neighbours;
 
     // Rows are centered on the widest layer, so the centered box can sit
     // thousands of pixels from the left edge on a wide map — without this,
     // opening the tab scrolls to (0,0) and shows an arbitrary fragment of
-    // whichever layer is widest, not the node/class actually centered on.
-    var selfPos = view === "modules" ? positions[hcenter] : null;
+    // whichever layer is widest, not the node the view is actually about.
+    var selfPos = centerKey ? positions[centerKey] : null;
     if(selfPos){
-      hgraphWrap.scrollLeft = Math.max(0, selfPos.x + BOX_W / 2 - hgraphWrap.clientWidth / 2);
-      hgraphWrap.scrollTop = 0;
-    } else {
-      // Types view centers on a set of seed classes, not a single box —
-      // scroll to the first seed instead of (0,0).
-      var firstLayer = built.layers[0];
-      var firstSeedKey = firstLayer ? firstLayer[0] : null;
-      var firstSeedPos = firstSeedKey ? positions[firstSeedKey] : null;
-      if(firstSeedPos){
-        hgraphWrap.scrollLeft = Math.max(0, firstSeedPos.x + BOX_W / 2 - hgraphWrap.clientWidth / 2);
+      var targetLeft = Math.max(0, selfPos.x + BOX_W / 2 - hgraphWrap.clientWidth / 2);
+      var targetTop = Math.max(0, selfPos.y - hgraphWrap.clientHeight / 2 + BOX_H);
+      if(moved && !reducedMotion()){
+        hgraphWrap.scrollTo({ left: targetLeft, top: targetTop, behavior: "smooth" });
+      } else {
+        hgraphWrap.scrollLeft = targetLeft;
+        hgraphWrap.scrollTop = targetTop;
       }
-      hgraphWrap.scrollTop = 0;
+      var centerEl = hboxes[centerKey];
+      if(centerEl && !reducedMotion()){
+        centerEl.classList.remove("pulse");
+        void centerEl.offsetWidth;
+        centerEl.classList.add("pulse");
+      }
     }
 
     if(built.truncated){
       var note = document.createElement("div");
       note.className = "htrunc";
-      note.textContent = "Showing the first " + MAX_HNODES + " nodes — double-click a box to re-center on a smaller subtree.";
+      note.textContent = "Showing the first " + MAX_HNODES + " boxes — narrow the depth, or double-click a box to re-center on a smaller neighbourhood.";
       hgraphWrap.parentNode.insertBefore(note, hgraphWrap.nextSibling);
     }
   }
 
+  function reducedMotion(){
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  // =====================================================================
+  // Graph interaction. Delegated from #hgraph rather than bound per box:
+  // reconcile() reuses boxes across redraws, and re-adding listeners on every
+  // draw would stack duplicates on exactly the boxes that survive longest.
+  // =====================================================================
+  var hgraphNeighbours = {};
+
+  function boxOf(target){
+    var el = target;
+    while(el && el !== hgraph){
+      if(el.classList && el.classList.contains("hnode")) return el;
+      el = el.parentNode;
+    }
+    return null;
+  }
+
+  hgraph.addEventListener("click", function(ev){
+    var box = boxOf(ev.target);
+    if(!box || !box._spec) return;
+    navigate({ tab: "tree", id: box._spec.nodeId });
+  });
+
+  hgraph.addEventListener("dblclick", function(ev){
+    var box = boxOf(ev.target);
+    if(!box || !box._spec) return;
+    ev.stopPropagation();
+    // In the Calls view a double-click re-centers on the function itself,
+    // which is the whole point of the view; elsewhere there is no finer
+    // object than the node.
+    if(box._spec.fnKey) navigate({ center: box._spec.recenter, fn: box._spec.fnKey });
+    else navigate({ center: box._spec.recenter, fn: null });
+  });
+
+  // Hover focus: dim everything that is not a direct neighbour of the box
+  // under the cursor. Pure class toggling — on a dense require graph this is
+  // the difference between a readable diagram and a spider's web, and it
+  // costs no relayout.
+  hgraph.addEventListener("mouseover", function(ev){
+    var box = boxOf(ev.target);
+    if(!box) return;
+    var key = box.dataset.key;
+    var near = hgraphNeighbours[key] || {};
+    hgraph.classList.add("focusing");
+    Object.keys(hboxes).forEach(function(k){
+      hboxes[k].classList.toggle("near", k === key || near[k]);
+    });
+    var svg = document.getElementById("hsvg");
+    if(svg) svg.querySelectorAll(".hedge").forEach(function(p){
+      p.classList.toggle("near", p.dataset.from === key || p.dataset.to === key);
+    });
+  });
+
+  hgraph.addEventListener("mouseleave", function(){
+    hgraph.classList.remove("focusing");
+  });
+
+  // =====================================================================
+  // Graph toolbar. Direction and depth only apply to the directed views, so
+  // their controls are hidden elsewhere rather than sitting there inert.
+  // =====================================================================
+  function syncGraphControls(s){
+    document.querySelectorAll(".hview-btn").forEach(function(b){
+      b.classList.toggle("active", b.dataset.view === (s.view || "modules"));
+    });
+    document.querySelectorAll(".hdir-btn").forEach(function(b){
+      b.classList.toggle("active", b.dataset.dir === (s.dir || "out"));
+    });
+    document.querySelectorAll(".hdepth-btn").forEach(function(b){
+      b.classList.toggle("active", parseInt(b.dataset.depth, 10) === (s.depth === 0 ? 0 : (s.depth || 2)));
+    });
+    var show = isGraphView(s.view) ? "" : "none";
+    document.getElementById("hdir").style.display = show;
+    document.getElementById("hdepth").style.display = show;
+  }
+
   document.getElementById("hup").addEventListener("click", function(){
     var center = byId[hcenter || IR.root];
-    if(center && center.parent) navigate({ center: center.parent });
+    if(center && center.parent) navigate({ center: center.parent, fn: null });
   });
   document.getElementById("hroot").addEventListener("click", function(){
-    navigate({ center: IR.root });
+    navigate({ center: IR.root, fn: null });
   });
   document.querySelectorAll(".hview-btn").forEach(function(b){
     b.addEventListener("click", function(){ navigate({ view: b.dataset.view }); });
   });
+  document.querySelectorAll(".hdir-btn").forEach(function(b){
+    b.addEventListener("click", function(){ navigate({ dir: b.dataset.dir }); });
+  });
+  document.querySelectorAll(".hdepth-btn").forEach(function(b){
+    b.addEventListener("click", function(){ navigate({ depth: parseInt(b.dataset.depth, 10) }); });
+  });
+
+  // =====================================================================
+  // SVG export
+  //
+  // The diagram on screen is half SVG (the edges) and half absolutely
+  // positioned HTML (the boxes), which is the right trade for an interactive
+  // page and useless as a file. Rather than wrapping the boxes in
+  // <foreignObject> — which Inkscape and most converters do not render — the
+  // export redraws them as plain <rect>/<text>, so the result opens anywhere.
+  //
+  // Colours are read back off the live DOM instead of being hardcoded, so the
+  // exported file matches the theme it was exported from rather than always
+  // being the light one.
+  // =====================================================================
+  function exportSvg(){
+    var svg = document.getElementById("hsvg");
+    if(!svg) return;
+    var w = svg.getAttribute("width"), h = svg.getAttribute("height");
+    var cs = getComputedStyle(document.body);
+    var parts = ['<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'" height="'+h+'" '+
+      'viewBox="0 0 '+w+' '+h+'" font-family="monospace">'];
+    parts.push('<rect width="100%" height="100%" fill="'+cs.backgroundColor+'"/>');
+
+    // Markers first: the paths below reference them by id.
+    parts.push('<defs>');
+    ["tree","type","dep","call"].forEach(function(name){
+      var probe = document.querySelector("#m-" + name + " path");
+      var fill = probe ? getComputedStyle(probe).fill : cs.color;
+      parts.push('<marker id="x-'+name+'" viewBox="0 0 8 8" refX="7" refY="4" '+
+        'markerWidth="7" markerHeight="7" orient="auto-start-reverse">'+
+        '<path d="M0,0 L8,4 L0,8 z" fill="'+fill+'"/></marker>');
+    });
+    parts.push('</defs>');
+
+    svg.querySelectorAll(".hedge").forEach(function(p){
+      var st = getComputedStyle(p);
+      var marker = (p.getAttribute("marker-end") || "").replace("url(#m-", "").replace(")", "");
+      parts.push('<path d="'+esc(p.getAttribute("d"))+'" fill="none" stroke="'+st.stroke+'" '+
+        'stroke-width="'+st.strokeWidth+'" stroke-dasharray="'+
+        (st.strokeDasharray === "none" ? "" : st.strokeDasharray)+'" opacity="'+st.opacity+'" '+
+        'marker-end="url(#x-'+marker+')"/>');
+    });
+
+    Object.keys(hboxes).forEach(function(key){
+      var el = hboxes[key];
+      if(el.classList.contains("leaving")) return;
+      var x = parseFloat(el.style.left), y = parseFloat(el.style.top);
+      var st = getComputedStyle(el);
+      parts.push('<rect x="'+x+'" y="'+y+'" width="'+BOX_W+'" height="'+BOX_H+'" rx="7" '+
+        'fill="'+st.backgroundColor+'" stroke="'+st.borderTopColor+'"/>');
+      var nm = el.querySelector(".hnm"), sub = el.querySelector(".hsm, .hkind, .hline");
+      if(nm){
+        parts.push('<text x="'+(x+9)+'" y="'+(y+19)+'" font-size="11" font-weight="600" '+
+          'fill="'+getComputedStyle(nm).color+'">'+esc(clip(nm.textContent, 22))+'</text>');
+      }
+      if(sub){
+        parts.push('<text x="'+(x+9)+'" y="'+(y+35)+'" font-size="9.5" '+
+          'fill="'+getComputedStyle(sub).color+'">'+esc(clip(sub.textContent, 26))+'</text>');
+      }
+    });
+
+    parts.push('</svg>');
+
+    var blob = new Blob([parts.join("\n")], { type: "image/svg+xml" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = (state.view || "modules") + "-" +
+      (hcenter || "map").replace(/[^\w.-]+/g, "_") + ".svg";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+  }
+
+  // SVG <text> does not wrap or ellipsize; the HTML boxes rely on CSS
+  // overflow for that, so the export has to truncate itself.
+  function clip(s, n){
+    s = (s || "").trim();
+    return s.length > n ? s.slice(0, n - 1) + "…" : s;
+  }
+
+  document.getElementById("hexport").addEventListener("click", exportSvg);
+
 
   // =====================================================================
   // Search — one input, two behaviors depending on the active tab: filters
@@ -823,8 +1592,22 @@ local JS = [[
       return;
     }
     treeEl.querySelectorAll(".row").forEach(function(r){
-      var n = byId[r.dataset.id];
-      var hit = !v || (n.name+" "+(n.module||"")+" "+(n.summary||"")).toLowerCase().indexOf(v) >= 0;
+      // Three row shapes now share this list: node rows, function rows (which
+      // carry data-fn and match on their own signature, not their module's
+      // summary), and the function-group header, which has no data at all and
+      // would have thrown on `n.name` before this branch existed.
+      var hit;
+      if(r.dataset.fn){
+        var entry = fnByKey[r.dataset.fn];
+        hit = !v || !entry ||
+          (entry.fn.signature + " " + (entry.fn.summary || "")).toLowerCase().indexOf(v) >= 0;
+      } else if(r.classList.contains("fnhead")){
+        hit = !v;
+      } else {
+        var n = byId[r.dataset.id];
+        hit = !v || !n ||
+          (n.name+" "+(n.module||"")+" "+(n.summary||"")).toLowerCase().indexOf(v) >= 0;
+      }
       r.style.display = hit ? "" : "none";
     });
     if(v) treeEl.querySelectorAll(".kids").forEach(function(k){ k.classList.remove("hide"); });
@@ -834,6 +1617,190 @@ local JS = [[
       var match = findBestMatch(this.value);
       if(match) navigate({ center: match });
     }
+  });
+
+  // =====================================================================
+  // Context menu
+  //
+  // Every clickable object in the page — a tree row, a function row, a graph
+  // box, a type or function entry in the detail pane — resolves through one
+  // describeTarget() into { kind, nodeId, fnKey, className, label }, and the
+  // menu is built from that. One resolver instead of four menus is what keeps
+  // "right-click anything, get the same verbs" true as views are added.
+  //
+  // preventDefault only fires when the target actually resolves: selecting a
+  // paragraph of documentation and reaching for the browser's own Copy has to
+  // keep working, so unrecognised targets are left entirely alone.
+  // =====================================================================
+  var ctx = document.getElementById("ctx");
+  var ctxItems = [];
+  var ctxHi = -1;
+
+  function describeTarget(el){
+    while(el && el !== document.body){
+      if(el.dataset){
+        if(el.classList.contains("hnode") && el._spec){
+          return { kind: el._spec.fnKey ? "function" : (classByName[el.dataset.key] ? "class" : "node"),
+                   nodeId: el._spec.nodeId, fnKey: el._spec.fnKey,
+                   className: classByName[el.dataset.key] ? el.dataset.key : null,
+                   label: el.dataset.key };
+        }
+        if(el.dataset.fn && fnByKey[el.dataset.fn]){
+          var e = fnByKey[el.dataset.fn];
+          return { kind: "function", nodeId: e.node.id, fnKey: el.dataset.fn, label: e.fn.signature };
+        }
+        if(el.dataset.id && byId[el.dataset.id]){
+          var n = byId[el.dataset.id];
+          return { kind: "node", nodeId: n.id, label: n.module || n.path };
+        }
+      }
+      el = el.parentNode;
+    }
+    return null;
+  }
+
+  function ctxClose(){ ctx.classList.remove("open"); ctxItems = []; ctxHi = -1; }
+
+  function buildMenu(t){
+    var n = byId[t.nodeId];
+    var items = [];
+    var fnEntry = t.fnKey ? fnByKey[t.fnKey] : null;
+
+    items.push({ label: "Show in tree", run: function(){ navigate({ tab: "tree", id: t.nodeId }); } });
+    items.push({ sep: true });
+
+    items.push({ label: "Hierarchy", hint: "structure",
+      run: function(){ navigate({ tab: "hierarchy", view: "modules", center: t.nodeId, fn: null }); } });
+
+    var hasDeps = ((n.requires || []).length + (n.required_by || []).length) > 0;
+    items.push({ label: "Dependencies — needs", hint: (n.requires || []).length || "0",
+      disabled: !(n.requires || []).length,
+      run: function(){ navigate({ tab: "hierarchy", view: "deps", center: t.nodeId, dir: "out", fn: null }); } });
+    items.push({ label: "Dependencies — needed by", hint: (n.required_by || []).length || "0",
+      disabled: !(n.required_by || []).length,
+      run: function(){ navigate({ tab: "hierarchy", view: "deps", center: t.nodeId, dir: "in", fn: null }); } });
+    items.push({ label: "Dependencies — both ways", disabled: !hasDeps,
+      run: function(){ navigate({ tab: "hierarchy", view: "deps", center: t.nodeId, dir: "both", fn: null }); } });
+
+    // Counts come from the same adjacency the view walks, so a menu entry is
+    // only offered when it leads somewhere — an enabled item that opens an
+    // empty diagram teaches people to distrust the menu.
+    var outN = fnEntry ? (callOut[t.fnKey] || []).length
+      : (n.functions || []).reduce(function(a, f){ return a + (callOut[fnKey(n.id, f.name)] || []).length; }, 0);
+    var inN = fnEntry ? (callIn[t.fnKey] || []).length
+      : (n.functions || []).reduce(function(a, f){ return a + (callIn[fnKey(n.id, f.name)] || []).length; }, 0);
+
+    items.push({ sep: true });
+    items.push({ label: fnEntry ? "Calls — callees" : "Calls — what it calls", hint: outN || "0",
+      disabled: !outN,
+      run: function(){ navigate({ tab: "hierarchy", view: "calls", center: t.nodeId, fn: t.fnKey || null, dir: "out" }); } });
+    items.push({ label: fnEntry ? "Calls — callers" : "Calls — what calls it", hint: inN || "0",
+      disabled: !inN,
+      run: function(){ navigate({ tab: "hierarchy", view: "calls", center: t.nodeId, fn: t.fnKey || null, dir: "in" }); } });
+    items.push({ label: "Calls — both ways", disabled: !(outN || inN),
+      run: function(){ navigate({ tab: "hierarchy", view: "calls", center: t.nodeId, fn: t.fnKey || null, dir: "both" }); } });
+
+    items.push({ label: "Types", disabled: !(n.types_detail || []).length,
+      run: function(){ navigate({ tab: "hierarchy", view: "types", center: t.nodeId, fn: null }); } });
+
+    items.push({ sep: true });
+    if(n.source){
+      var u = srcUrl(n.source);
+      var frag = fnEntry ? "#L" + fnEntry.fn.line : "";
+      items.push({ label: u ? "Open source ↗" : "Open source",
+        run: function(){ window.open(u ? u + frag : rel(n.source), u ? "_blank" : "_self"); } });
+    }
+    if(n.readme){
+      items.push({ label: "Open README", run: function(){ window.open(rel(n.readme), "_self"); } });
+    }
+
+    items.push({ sep: true });
+    items.push({ label: "Copy module path", run: function(){ copy(n.module || n.path); } });
+    items.push({ label: "Copy link to this view", run: function(){
+      copy(location.origin + location.pathname + serializeState(state));
+    } });
+
+    return items;
+  }
+
+  // clipboard.writeText is unavailable on a file:// page in some browsers,
+  // which is exactly how this artifact is most often opened. The textarea
+  // fallback is not legacy cruft here, it is the primary path.
+  function copy(text){
+    if(navigator.clipboard && window.isSecureContext){
+      navigator.clipboard.writeText(text);
+      return;
+    }
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); } catch(e) {}
+    document.body.removeChild(ta);
+  }
+
+  function openMenu(x, y, t){
+    var items = buildMenu(t);
+    var html = ['<div class="hdr">' + esc(t.label || "") + '</div>'];
+    items.forEach(function(it, i){
+      if(it.sep){ html.push('<div class="sep"></div>'); return; }
+      html.push('<div class="ci' + (it.disabled ? " disabled" : "") + '" data-i="' + i + '">' +
+        esc(it.label) + (it.hint !== undefined ? '<span class="hint">' + esc(String(it.hint)) + '</span>' : '') +
+        '</div>');
+    });
+    ctx.innerHTML = html.join("");
+    ctxItems = items;
+    ctxHi = -1;
+    ctx.classList.add("open");
+
+    // Positioned after the menu is measurable, clamped so a right-click near
+    // the bottom or right edge does not open a menu that runs off-screen.
+    var r = ctx.getBoundingClientRect();
+    ctx.style.left = Math.min(x, window.innerWidth - r.width - 8) + "px";
+    ctx.style.top = Math.min(y, window.innerHeight - r.height - 8) + "px";
+
+    ctx.querySelectorAll(".ci").forEach(function(el){
+      el.addEventListener("click", function(){
+        var it = ctxItems[parseInt(el.dataset.i, 10)];
+        if(!it || it.disabled) return;
+        ctxClose();
+        it.run();
+      });
+    });
+  }
+
+  document.addEventListener("contextmenu", function(ev){
+    var t = describeTarget(ev.target);
+    if(!t || !byId[t.nodeId]) return;
+    ev.preventDefault();
+    openMenu(ev.clientX, ev.clientY, t);
+  });
+
+  document.addEventListener("click", function(ev){
+    if(ctx.classList.contains("open") && !ctx.contains(ev.target)) ctxClose();
+  });
+  window.addEventListener("blur", ctxClose);
+  window.addEventListener("resize", ctxClose);
+  document.addEventListener("scroll", ctxClose, true);
+
+  document.addEventListener("keydown", function(ev){
+    if(!ctx.classList.contains("open")) return;
+    if(ev.key === "Escape"){ ctxClose(); return; }
+    if(ev.key !== "ArrowDown" && ev.key !== "ArrowUp" && ev.key !== "Enter") return;
+    ev.preventDefault();
+    var els = Array.prototype.slice.call(ctx.querySelectorAll(".ci:not(.disabled)"));
+    if(!els.length) return;
+    if(ev.key === "Enter"){
+      if(ctxHi >= 0) els[ctxHi].click();
+      return;
+    }
+    els.forEach(function(e){ e.classList.remove("hi"); });
+    ctxHi = ev.key === "ArrowDown"
+      ? (ctxHi + 1) % els.length
+      : (ctxHi <= 0 ? els.length - 1 : ctxHi - 1);
+    els[ctxHi].classList.add("hi");
   });
 
   // =====================================================================
@@ -947,11 +1914,29 @@ function M.render(ir, findings, opts)
     '<button id="hup">▲ Up</button><button id="hroot">⌂ Root</button>',
     '<div class="hview-toggle">',
     '<button class="hview-btn active" data-view="modules">Modules</button>',
+    '<button class="hview-btn" data-view="deps">Deps</button>',
+    '<button class="hview-btn" data-view="calls">Calls</button>',
     '<button class="hview-btn" data-view="types">Types</button>',
     "</div>",
+    -- Direction and depth belong to the directed views only; `syncGraphControls`
+    -- hides them in Modules/Types rather than leaving two control groups that
+    -- do nothing.
+    '<div class="hview-toggle" id="hdir">',
+    '<button class="hdir-btn" data-dir="in" title="What depends on / calls this">← In</button>',
+    '<button class="hdir-btn" data-dir="both" title="Both directions around the center">⇄ Both</button>',
+    '<button class="hdir-btn active" data-dir="out" title="What this depends on / calls">Out →</button>',
+    "</div>",
+    '<div class="hview-toggle" id="hdepth">',
+    '<button class="hdepth-btn" data-depth="1">1</button>',
+    '<button class="hdepth-btn active" data-depth="2">2</button>',
+    '<button class="hdepth-btn" data-depth="3">3</button>',
+    '<button class="hdepth-btn" data-depth="0" title="Unbounded, still capped at 90 boxes">∞</button>',
+    "</div>",
+    '<button id="hexport" title="Download the current diagram as a standalone SVG">↓ SVG</button>',
     '<span class="hpath" id="hpath"></span>',
     "</div>",
     '<div id="hgraph-wrap"><div id="hgraph"></div></div>',
+    '<div class="hlegend" id="hlegend"></div>',
     "</div>",
 
     '<div id="findings"><details><summary>Drift findings (',
@@ -960,6 +1945,8 @@ function M.render(ir, findings, opts)
     "<thead><tr><th>Severity</th><th>Check</th><th>Message</th></tr></thead><tbody>",
     table.concat(rows),
     "</tbody></table></div></details></div>",
+
+    '<div id="ctx" role="menu"></div>',
 
     '<script type="application/json" id="ir">',
     payload,

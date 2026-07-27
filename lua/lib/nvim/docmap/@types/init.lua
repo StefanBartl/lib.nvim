@@ -14,6 +14,8 @@
 ---@field repo_url? string Base URL used to build source links (e.g. "https://github.com/user/repo").
 ---@field branch? string Branch used in source links. Default "main".
 ---@field extra_checks? Lib.Docmap.Check[] Repo-specific drift checks appended to the generic ones.
+---@field calls_heuristic? boolean Also emit call edges whose target was guessed by unique-name match rather than resolved through a require alias. Off by default — a wrong call graph is worse than an incomplete one. Default false.
+---@field layers? Lib.Docmap.LayerRule[] Module-prefix layering rules for the `layer-violation` check. Empty/absent disables the check.
 ---@field luals? boolean Merge `lua-language-server --doc` output into the IR (class/alias/field detail, type-reference edges). Off by default — a full-tree run costs real seconds. Default false.
 ---@field luals_timeout_ms? integer Kill the `lua-language-server --doc` run after this long. Default 60000.
 ---@field command_name? string Passed to `docmap.command.setup`: register a user command under this name. Default "LibMap".
@@ -22,6 +24,14 @@
 
 ---A repo-specific drift check.
 ---@alias Lib.Docmap.Check fun(ir: Lib.Docmap.IR, opts: Lib.Docmap.Opts): Lib.Docmap.Finding[]
+
+---One layering rule: modules whose `@module` starts with `from` may not
+---require modules whose `@module` starts with `to`. Both are plain prefixes,
+---not patterns — `lib.vim` matches `lib.vim.buffer` but never `lib.vimx`.
+---@class Lib.Docmap.LayerRule
+---@field from string Module prefix of the requiring side.
+---@field to string Module prefix that side must not reach into.
+---@field why string? Appended to the finding message.
 
 ---@alias Lib.Docmap.Severity "error"|"warn"|"info"
 
@@ -48,6 +58,10 @@
 ---@field children string[] Child node ids, directories first, then files.
 ---@field types_detail Lib.Docmap.TypeInfo[]? `@class`/`@alias` detail for this node's `types` files, from `lua-language-server --doc`. `nil` when LuaLS enrichment did not run; `{}` is a real "ran, found nothing here" result.
 ---@field functions Lib.Docmap.FunctionInfo[] Documented functions found in this node's own source file (not its `@types/` files). Always an array, never nil — unlike `types_detail`, this runs unconditionally as part of `scan()`, no LuaLS required.
+---@field requires string[] Node ids this node requires, sorted. Derived from `ir.edges`; an index for convenience, not a second source of truth.
+---@field required_by string[] Node ids that require this node, sorted. Same derivation.
+---@field requires_raw Lib.Docmap.RawRequire[] Unresolved `require` occurrences. Internal to the scan pipeline (`deps`/`calls` consume it); deliberately not serialized into `module_map.json`.
+---@field calls_raw Lib.Docmap.RawCall[] Unresolved call sites. Internal, same as `requires_raw`.
 
 ---A single `@class`/`@alias` parsed from `lua-language-server --doc` output,
 ---attached to whichever node owns the file it's defined in.
@@ -97,16 +111,55 @@
 ---@field example string? `@example` block text, if any.
 ---@field since string? `@since` text, if any.
 
----A directed type-reference edge: `via` field on the class at `from` has a
----declared type that names the class at `to`. Only present when `opts.luals`
----ran; `ir.edges` is `{}` otherwise (never `nil`, so renderers don't need a
----presence check to iterate it).
+---What kind of relationship an edge in `ir.edges` records. One array with a
+---discriminator rather than three parallel arrays, so layout, filtering and
+---drawing exist once each instead of once per relationship.
+---@alias Lib.Docmap.EdgeKind
+---| "type"    # A `---@field` on one class names another class.
+---| "require" # One file calls `require` on another module in the tree.
+---| "call"    # One function calls another.
+
+---A directed edge between two nodes. Which of the optional fields are set is
+---determined by `kind` — see each field. `ir.edges` is always an array, empty
+---when nothing produced edges, so renderers never need a presence check.
 ---@class Lib.Docmap.Edge
----@field from string Node id owning the referencing class.
----@field to string Node id owning the referenced class.
----@field from_class string Fully-qualified name of the referencing class.
----@field to_class string Fully-qualified name of the referenced class.
----@field via string Field name that carries the reference.
+---@field kind Lib.Docmap.EdgeKind
+---@field from string Node id of the referencing/requiring/calling side.
+---@field to string Node id of the referenced/required/called side.
+---@field from_class string? `kind="type"`: fully-qualified name of the referencing class.
+---@field to_class string? `kind="type"`: fully-qualified name of the referenced class.
+---@field via string? `kind="type"`: field name that carries the reference.
+---@field to_module string? `kind="require"`: the module path as written in the `require` call.
+---@field deferred boolean? `kind="require"`: every occurrence sits inside a function body, so this is a lazy load rather than a load-time dependency. Absent means at least one load-time require.
+---@field from_fn string? `kind="call"`: declared name of the calling function, e.g. "M.generate".
+---@field to_fn string? `kind="call"`: declared name of the called function.
+---@field line integer? `kind="require"|"call"`: 1-based line of the call site.
+---@field confidence Lib.Docmap.Confidence? `kind="call"`: how the target was determined.
+
+---How a call edge's target was determined. `"exact"` means the callee was
+---resolved through a `require` alias, the module's own export table, or a
+---file-local function — a syntactic fact. `"heuristic"` means the name matched
+---exactly one function in the whole tree and nothing else pinned it down; only
+---produced when `opts.calls_heuristic` is set, and drawn differently.
+---@alias Lib.Docmap.Confidence "exact"|"heuristic"
+
+---One `require(...)` occurrence as found in a source file, before it is
+---resolved against the map. `alias` is set for the `local x = require("y")`
+---form, which is what makes call resolution possible at all.
+---@class Lib.Docmap.RawRequire
+---@field module string The module path as written.
+---@field alias string? Local name it was bound to, if any.
+---@field member string? Trailing field access, as in `local x = require("y").z`.
+---@field deferred boolean? The call sits inside a function body — a lazy load, not a load-time dependency.
+---@field line integer
+
+---One call site as found in a source file, before it is resolved against the
+---map. `callee` is the raw text of the called expression (`fs.read`, `M.foo`,
+---`helper`), `from_fn` the declared name of the top-level function it sits in.
+---@class Lib.Docmap.RawCall
+---@field callee string
+---@field from_fn string?
+---@field line integer
 
 ---A drift finding.
 ---@class Lib.Docmap.Finding
@@ -143,6 +196,10 @@
 ---@field ir fun(): Lib.Docmap.IR Current IR (already scanned; never triggers a scan itself).
 ---@field findings fun(): Lib.Docmap.Finding[] Current drift findings.
 ---@field node fun(id: string): Lib.Docmap.Node? Single node lookup on the current IR.
+---@field requires fun(id: string): Lib.Docmap.Edge[] Require edges out of this node.
+---@field required_by fun(id: string): Lib.Docmap.Edge[] Require edges into this node.
+---@field callees fun(fn_key: string): Lib.Docmap.Edge[] Call edges out of a function, keyed `"<node id>#<declared name>"` — the same id scheme the HTML map uses.
+---@field callers fun(fn_key: string): Lib.Docmap.Edge[] Call edges into a function, same key scheme.
 ---@field rescan fun(opts?: { luals?: boolean }): Lib.Docmap.IR, Lib.Docmap.Finding[] Force a rescan now; notifies `on_change` subscribers same as a watch-triggered one.
 ---@field on_change fun(cb: fun(ir: Lib.Docmap.IR, findings: Lib.Docmap.Finding[])): fun() Subscribe; returns an unsubscribe function.
 ---@field uninstall fun() Equivalent to `docmap.uninstall(handle)`.

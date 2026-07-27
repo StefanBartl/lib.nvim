@@ -162,35 +162,22 @@ end
 
 --- A module that exists on disk but is required by nothing above it was
 --- either written and never wired up, or orphaned by a refactor.
+---
+--- Reads `node.required_by`, which `docmap.deps` fills during the scan. An
+--- earlier version re-read every source file here to collect `require` strings
+--- into one flat set — which answered this one question and discarded the
+--- thing that made a dependency graph possible, namely *which* file each
+--- require came from. Same answer now, from data that also draws the Deps
+--- view, at no I/O.
 ---@param ir Lib.Docmap.IR
 ---@param findings Lib.Docmap.Finding[]
----@param opts Lib.Docmap.Opts
-local function check_orphans(ir, findings, opts)
-  local root = opts.root:gsub("\\", "/"):gsub("/+$", "")
-
-  -- Collect every `require("...")` string anywhere in the tree once.
-  local required = {}
-  for _, id in ipairs(ir.order) do
-    local node = ir.nodes[id]
-    if node.source then
-      local fd = io.open(root .. "/" .. node.source, "r")
-      if fd then
-        for line in fd:lines() do
-          for mod in line:gmatch("require%s*%(?%s*['\"]([%w%._%-]+)['\"]") do
-            required[mod] = true
-          end
-        end
-        fd:close()
-      end
-    end
-  end
-
+local function check_orphans(ir, findings)
   for _, id in ipairs(ir.order) do
     local node = ir.nodes[id]
     if node.module and node.kind ~= "namespace" and id ~= ir.root then
       -- A module may legitimately be reached only through the aggregator's
       -- string map rather than a literal require, so this stays at `info`.
-      if not required[node.module] then
+      if #(node.required_by or {}) == 0 then
         add(
           findings,
           "info",
@@ -198,6 +185,159 @@ local function check_orphans(ir, findings, opts)
           id,
           ("%s is required by no other file in the tree"):format(node.module)
         )
+      end
+    end
+  end
+end
+
+--- A cycle among *load-time* requires is the one that actually breaks: two
+--- modules that require each other at the top of the file get a
+--- half-initialised table on the second one in, and the failure reads as
+--- anything but a cycle.
+---
+--- Deferred requires — `require(...)` inside a function body, the standard way
+--- this tree breaks initialisation order on purpose — are excluded, which is
+--- why this needs its own adjacency instead of reusing `node.requires`. Run
+--- against lib.nvim without that exclusion, every cycle it reported was a
+--- deliberate lazy load: a check that only ever fires on intentional code is
+--- one people learn to skim past, so it would have cost the real ones too.
+---
+--- Tarjan's SCC, iterative rather than recursive: the graph is as deep as the
+--- tree is wide and Lua's default C stack is not something to spend here.
+---@param ir Lib.Docmap.IR
+---@param findings Lib.Docmap.Finding[]
+local function check_require_cycles(ir, findings)
+  local adj = {}
+  for _, id in ipairs(ir.order) do
+    adj[id] = {}
+  end
+  for _, edge in ipairs(ir.edges or {}) do
+    if edge.kind == "require" and not edge.deferred and adj[edge.from] then
+      adj[edge.from][#adj[edge.from] + 1] = edge.to
+    end
+  end
+
+  local index, low, on_stack, idx = {}, {}, {}, 0
+  local stack = {}
+
+  for _, start in ipairs(ir.order) do
+    if index[start] == nil then
+      -- Each frame carries its own child cursor, which is what turns the
+      -- recursive formulation into a loop without changing the algorithm.
+      local frames = { { id = start, child = 1 } }
+
+      while #frames > 0 do
+        local frame = frames[#frames]
+        local id = frame.id
+
+        if frame.child == 1 then
+          index[id], low[id] = idx, idx
+          idx = idx + 1
+          stack[#stack + 1] = id
+          on_stack[id] = true
+        end
+
+        local children = adj[id] or {}
+        local advanced = false
+
+        while frame.child <= #children do
+          local child = children[frame.child]
+          frame.child = frame.child + 1
+          if index[child] == nil then
+            frames[#frames + 1] = { id = child, child = 1 }
+            advanced = true
+            break
+          elseif on_stack[child] then
+            low[id] = math.min(low[id], index[child])
+          end
+        end
+
+        if not advanced then
+          if low[id] == index[id] then
+            local component = {}
+            repeat
+              local popped = table.remove(stack)
+              on_stack[popped] = false
+              component[#component + 1] = popped
+            until popped == id
+
+            if #component > 1 then
+              table.sort(component)
+              -- Reported once per member, not once per cycle: findings attach
+              -- to a node, and a cycle with no node attached is unclickable in
+              -- the HTML findings table and unjumpable in the quickfix list.
+              local names = {}
+              for _, member in ipairs(component) do
+                names[#names + 1] = ir.nodes[member].module or member
+              end
+              local joined = table.concat(names, " → ")
+              for _, member in ipairs(component) do
+                add(
+                  findings,
+                  "warn",
+                  "require-cycle",
+                  member,
+                  ("require cycle across %d modules: %s"):format(#component, joined)
+                )
+              end
+            end
+          end
+
+          table.remove(frames)
+          local parent = frames[#frames]
+          if parent then
+            low[parent.id] = math.min(low[parent.id], low[id])
+          end
+        end
+      end
+    end
+  end
+end
+
+--- Architectural layering, expressed as module-path prefixes: modules under
+--- `rule.from` may not require modules under `rule.to`. Opt-in via
+--- `opts.layers`, because a layering that is not declared cannot be violated —
+--- there is no generic default that would be true of an arbitrary tree.
+---@param ir Lib.Docmap.IR
+---@param findings Lib.Docmap.Finding[]
+---@param opts Lib.Docmap.Opts
+local function check_layers(ir, findings, opts)
+  local rules = opts.layers or {}
+  if #rules == 0 then
+    return
+  end
+
+  ---Prefix match on module-path segments, not raw string prefix: `lib.vim`
+  ---must match `lib.vim.buffer` and never `lib.vimx`.
+  ---@param module string
+  ---@param prefix string
+  ---@return boolean
+  local function under(module, prefix)
+    return module == prefix or module:sub(1, #prefix + 1) == prefix .. "."
+  end
+
+  for _, edge in ipairs(ir.edges or {}) do
+    if edge.kind == "require" then
+      local from = ir.nodes[edge.from]
+      local to = ir.nodes[edge.to]
+      if from.module and to.module then
+        for _, rule in ipairs(rules) do
+          if under(from.module, rule.from) and under(to.module, rule.to) then
+            add(
+              findings,
+              "warn",
+              "layer-violation",
+              edge.from,
+              ("%s requires %s, but %s must not reach into %s%s"):format(
+                from.module,
+                to.module,
+                rule.from,
+                rule.to,
+                rule.why and (" — " .. rule.why) or ""
+              )
+            )
+          end
+        end
       end
     end
   end
@@ -299,7 +439,9 @@ function M.run(ir, opts)
   check_module_paths(ir, findings, opts)
   check_readmes(ir, findings)
   check_readme_links(ir, findings, opts)
-  check_orphans(ir, findings, opts)
+  check_orphans(ir, findings)
+  check_require_cycles(ir, findings)
+  check_layers(ir, findings, opts)
   check_see_targets(ir, findings)
   check_undocumented_params(ir, findings)
 

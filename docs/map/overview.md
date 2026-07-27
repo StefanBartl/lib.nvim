@@ -3,7 +3,7 @@
 > **Generated** by `lib.nvim.docmap`. Do not edit by hand — run `:LibMap`
 > (or `nvim --headless -l scripts/gen_map.lua`) to regenerate.
 
-**127 modules** · 25 namespaces · 124 helper files
+**129 modules** · 25 namespaces · 128 helper files
 
 The [interactive map](index.html) has filtering, full descriptions and
 source links; this page is the version the code host renders directly.
@@ -53,6 +53,7 @@ flowchart LR
   nlua_lib_nvim_require["requirebr/smallSafe and extended require utilities/small"]
   nlua_lib_nvim_safe_api["safe_apibr/smallValidated, pcall-wrapped `vim.api`…/small"]
   nlua_lib_nvim_selection["selectionbr/smallReselect a Visual-mode line/char range…/small"]
+  nlua_lib_nvim_store["storebr/smallPersistent-storage namespace./small"]
   nlua_lib_nvim_system["systembr/smallHost-environment namespace: OS/shell/path…/small"]
   nlua_lib_nvim_terminal["terminalbr/smallTerminal helper functions/small"]
   nlua_lib_nvim_token["tokenbr/smallEphemeral session-nonce / token generator,…/small"]
@@ -118,6 +119,7 @@ flowchart LR
   nlua_lib_nvim --> nlua_lib_nvim_require
   nlua_lib_nvim --> nlua_lib_nvim_safe_api
   nlua_lib_nvim --> nlua_lib_nvim_selection
+  nlua_lib_nvim --> nlua_lib_nvim_store
   nlua_lib_nvim --> nlua_lib_nvim_system
   nlua_lib_nvim --> nlua_lib_nvim_terminal
   nlua_lib_nvim --> nlua_lib_nvim_token
@@ -144,6 +146,167 @@ flowchart LR
   nlua_lib_vim --> nlua_lib_vim_ui
   nlua_lib_vim --> nlua_lib_vim_usercmd
   nlua_lib_vim --> nlua_lib_vim_window
+```
+
+
+## Dependencies
+
+Which parts of the tree require which, rolled up to the second level.
+The [interactive map](index.html)'s **Deps** view has this per module,
+in both directions, with load-time and lazy requires told apart.
+
+```mermaid
+flowchart LR
+  nlua_lib_lua_functions["lib.lua.functions"]
+  nlua_lib_lua_json["lib.lua.json"]
+  nlua_lib_lua_lazy["lib.lua.lazy"]
+  nlua_lib_lua_memo["lib.lua.memo"]
+  nlua_lib_lua_strings["lib.lua.strings"]
+  nlua_lib_lua_tables["lib.lua.tables"]
+  nlua_lib_lua_time["time"]
+  nlua_lib_nvim_autocmd["lib.nvim.autocmd"]
+  nlua_lib_nvim_buf_win_tab["buf_win_tab"]
+  nlua_lib_nvim_buffer["buffer"]
+  nlua_lib_nvim_cache["lib.nvim.cache"]
+  nlua_lib_nvim_core["lib.nvim.core"]
+  nlua_lib_nvim_cross["lib.nvim.cross"]
+  nlua_lib_nvim_debounce["lib.nvim.debounce"]
+  nlua_lib_nvim_docmap["lib.nvim.docmap"]
+  nlua_lib_nvim_fs["fs"]
+  nlua_lib_nvim_git["lib.nvim.git"]
+  nlua_lib_nvim_harvest["lib.nvim.harvest"]
+  nlua_lib_nvim_logger["lib.nvim.logger"]
+  nlua_lib_nvim_lua_ls["lua_ls"]
+  nlua_lib_nvim_map["lib.nvim.map"]
+  nlua_lib_nvim_normalize["lib.nvim.normalize"]
+  nlua_lib_nvim_notify["lib.nvim.notify"]
+  nlua_lib_nvim_progress["lib.nvim.progress"]
+  nlua_lib_nvim_require["lib.nvim.require"]
+  nlua_lib_nvim_store["lib.nvim.store"]
+  nlua_lib_nvim_system["lib.nvim.system"]
+  nlua_lib_nvim_terminal["lib.nvim.terminal"]
+  nlua_lib_nvim_ui["ui"]
+  nlua_lib_nvim_usercmd["lib.nvim.usercmd"]
+  nlua_lib_nvim_window["lib.nvim.window"]
+  nlua_lib_strategies_eager_lua["lib.strategies.eager"]
+  nlua_lib_strategies_lazy_lua["lib.strategies.lazy"]
+  nlua_lib_vim__stub_lua["lib.vim._stub"]
+  nlua_lib_vim_autocmd["lib.vim.autocmd"]
+  nlua_lib_vim_buf_win_tab["lib.vim.buf_win_tab"]
+  nlua_lib_vim_buffer["lib.vim.buffer"]
+  nlua_lib_vim_core["lib.vim.core"]
+  nlua_lib_vim_cross["lib.vim.cross"]
+  nlua_lib_vim_fs["lib.vim.fs"]
+  nlua_lib_vim_git["lib.vim.git"]
+  nlua_lib_vim_lua_ls["lib.vim.lua_ls"]
+  nlua_lib_vim_map["lib.vim.map"]
+  nlua_lib_vim_normalize["lib.vim.normalize"]
+  nlua_lib_vim_notify["lib.vim.notify"]
+  nlua_lib_vim_require["lib.vim.require"]
+  nlua_lib_vim_terminal["lib.vim.terminal"]
+  nlua_lib_vim_ui["lib.vim.ui"]
+  nlua_lib_vim_usercmd["lib.vim.usercmd"]
+  nlua_lib_vim_window["lib.vim.window"]
+  nlua_lib_lua_functions --> nlua_lib_lua_lazy
+  nlua_lib_lua_json --> nlua_lib_lua_lazy
+  nlua_lib_lua_tables --> nlua_lib_lua_lazy
+  nlua_lib_lua_time --> nlua_lib_lua_memo
+  nlua_lib_nvim_autocmd --> nlua_lib_lua_lazy
+  nlua_lib_nvim_autocmd --> nlua_lib_nvim_notify
+  nlua_lib_nvim_buf_win_tab --> nlua_lib_nvim_notify
+  nlua_lib_nvim_cache --> nlua_lib_nvim_autocmd
+  nlua_lib_nvim_core --> nlua_lib_lua_lazy
+  nlua_lib_nvim_cross --> nlua_lib_nvim_core
+  nlua_lib_nvim_docmap --> nlua_lib_nvim_autocmd
+  nlua_lib_nvim_docmap --> nlua_lib_nvim_cross
+  nlua_lib_nvim_docmap --> nlua_lib_nvim_debounce
+  nlua_lib_nvim_docmap --> nlua_lib_nvim_fs
+  nlua_lib_nvim_docmap --> nlua_lib_nvim_notify
+  nlua_lib_nvim_docmap --> nlua_lib_nvim_usercmd
+  nlua_lib_nvim_fs --> nlua_lib_lua_json
+  nlua_lib_nvim_fs --> nlua_lib_lua_memo
+  nlua_lib_nvim_fs --> nlua_lib_nvim_cache
+  nlua_lib_nvim_fs --> nlua_lib_nvim_cross
+  nlua_lib_nvim_fs --> nlua_lib_nvim_git
+  nlua_lib_nvim_git --> nlua_lib_nvim_cross
+  nlua_lib_nvim_harvest --> nlua_lib_nvim_fs
+  nlua_lib_nvim_logger --> nlua_lib_nvim_autocmd
+  nlua_lib_nvim_logger --> nlua_lib_nvim_fs
+  nlua_lib_nvim_logger --> nlua_lib_nvim_notify
+  nlua_lib_nvim_logger --> nlua_lib_nvim_usercmd
+  nlua_lib_nvim_logger --> nlua_lib_nvim_window
+  nlua_lib_nvim_lua_ls --> nlua_lib_nvim_notify
+  nlua_lib_nvim_map --> nlua_lib_nvim_notify
+  nlua_lib_nvim_normalize --> nlua_lib_lua_lazy
+  nlua_lib_nvim_normalize --> nlua_lib_nvim_cross
+  nlua_lib_nvim_progress --> nlua_lib_nvim_notify
+  nlua_lib_nvim_progress --> nlua_lib_nvim_window
+  nlua_lib_nvim_require --> nlua_lib_nvim_notify
+  nlua_lib_nvim_store --> nlua_lib_nvim_cache
+  nlua_lib_nvim_store --> nlua_lib_nvim_fs
+  nlua_lib_nvim_system --> nlua_lib_nvim_cross
+  nlua_lib_nvim_system --> nlua_lib_nvim_notify
+  nlua_lib_nvim_system --> nlua_lib_nvim_usercmd
+  nlua_lib_nvim_system --> nlua_lib_nvim_window
+  nlua_lib_nvim_ui --> nlua_lib_nvim_autocmd
+  nlua_lib_nvim_ui --> nlua_lib_nvim_cross
+  nlua_lib_nvim_ui --> nlua_lib_nvim_map
+  nlua_lib_nvim_ui --> nlua_lib_nvim_notify
+  nlua_lib_nvim_ui --> nlua_lib_nvim_progress
+  nlua_lib_nvim_ui --> nlua_lib_nvim_usercmd
+  nlua_lib_nvim_ui --> nlua_lib_nvim_window
+  nlua_lib_nvim_usercmd --> nlua_lib_nvim_cross
+  nlua_lib_nvim_usercmd --> nlua_lib_nvim_fs
+  nlua_lib_nvim_usercmd --> nlua_lib_nvim_normalize
+  nlua_lib_nvim_usercmd --> nlua_lib_nvim_notify
+  nlua_lib_nvim_window --> nlua_lib_nvim_notify
+  nlua_lib_strategies_eager_lua --> nlua_lib_lua_functions
+  nlua_lib_strategies_eager_lua --> nlua_lib_lua_json
+  nlua_lib_strategies_eager_lua --> nlua_lib_lua_lazy
+  nlua_lib_strategies_eager_lua --> nlua_lib_lua_memo
+  nlua_lib_strategies_eager_lua --> nlua_lib_lua_strings
+  nlua_lib_strategies_eager_lua --> nlua_lib_lua_tables
+  nlua_lib_strategies_eager_lua --> nlua_lib_lua_time
+  nlua_lib_strategies_eager_lua --> nlua_lib_nvim_autocmd
+  nlua_lib_strategies_eager_lua --> nlua_lib_nvim_buffer
+  nlua_lib_strategies_eager_lua --> nlua_lib_nvim_cache
+  nlua_lib_strategies_eager_lua --> nlua_lib_nvim_core
+  nlua_lib_strategies_eager_lua --> nlua_lib_nvim_cross
+  nlua_lib_strategies_eager_lua --> nlua_lib_nvim_fs
+  nlua_lib_strategies_eager_lua --> nlua_lib_nvim_logger
+  nlua_lib_strategies_eager_lua --> nlua_lib_nvim_map
+  nlua_lib_strategies_eager_lua --> nlua_lib_nvim_normalize
+  nlua_lib_strategies_eager_lua --> nlua_lib_nvim_notify
+  nlua_lib_strategies_eager_lua --> nlua_lib_nvim_require
+  nlua_lib_strategies_eager_lua --> nlua_lib_nvim_system
+  nlua_lib_strategies_eager_lua --> nlua_lib_nvim_terminal
+  nlua_lib_strategies_eager_lua --> nlua_lib_nvim_ui
+  nlua_lib_strategies_eager_lua --> nlua_lib_nvim_usercmd
+  nlua_lib_strategies_eager_lua --> nlua_lib_nvim_window
+  nlua_lib_strategies_lazy_lua --> nlua_lib_lua_lazy
+  nlua_lib_strategies_lazy_lua --> nlua_lib_lua_memo
+  nlua_lib_strategies_lazy_lua --> nlua_lib_lua_strings
+  nlua_lib_strategies_lazy_lua --> nlua_lib_nvim_core
+  nlua_lib_strategies_lazy_lua --> nlua_lib_nvim_cross
+  nlua_lib_strategies_lazy_lua --> nlua_lib_nvim_fs
+  nlua_lib_strategies_lazy_lua --> nlua_lib_nvim_require
+  nlua_lib_strategies_lazy_lua --> nlua_lib_nvim_terminal
+  nlua_lib_vim_autocmd --> nlua_lib_vim__stub_lua
+  nlua_lib_vim_buf_win_tab --> nlua_lib_vim__stub_lua
+  nlua_lib_vim_buffer --> nlua_lib_vim__stub_lua
+  nlua_lib_vim_core --> nlua_lib_vim__stub_lua
+  nlua_lib_vim_cross --> nlua_lib_vim__stub_lua
+  nlua_lib_vim_fs --> nlua_lib_vim__stub_lua
+  nlua_lib_vim_git --> nlua_lib_vim__stub_lua
+  nlua_lib_vim_lua_ls --> nlua_lib_vim__stub_lua
+  nlua_lib_vim_map --> nlua_lib_vim__stub_lua
+  nlua_lib_vim_normalize --> nlua_lib_vim__stub_lua
+  nlua_lib_vim_notify --> nlua_lib_vim__stub_lua
+  nlua_lib_vim_require --> nlua_lib_vim__stub_lua
+  nlua_lib_vim_terminal --> nlua_lib_vim__stub_lua
+  nlua_lib_vim_ui --> nlua_lib_vim__stub_lua
+  nlua_lib_vim_usercmd --> nlua_lib_vim__stub_lua
+  nlua_lib_vim_window --> nlua_lib_vim__stub_lua
 ```
 
 
@@ -271,6 +434,8 @@ flowchart LR
 | &nbsp;&nbsp;`lib.nvim.require` | Safe and extended require utilities | 3 | [src](../../lua/lib/nvim/require/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.safe_api` | Validated, pcall-wrapped `vim.api` accessors for buffers/windows. | 18 | [README](../../lua/lib/nvim/safe_api/README.md) · [src](../../lua/lib/nvim/safe_api/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.selection` | Reselect a Visual-mode line/char range after a mapping mutates the buffer. | 7 | [README](../../lua/lib/nvim/selection/README.md) · [src](../../lua/lib/nvim/selection/init.lua) |
+| &nbsp;&nbsp;`lib.nvim.store` | Persistent-storage namespace. |  | [src](../../lua/lib/nvim/store/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.store.project` | Persistent state keyed by project, so reopening the same project (even on a different machine, via synced dotfiles/config) finds the same state again — as… | 7 | [README](../../lua/lib/nvim/store/project/README.md) · [src](../../lua/lib/nvim/store/project/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.system` | Host-environment namespace: OS/shell/path snapshot plus the Windows RPC-pipe helper. | 1 | [README](../../lua/lib/nvim/system/README.md) · [src](../../lua/lib/nvim/system/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.terminal` | Terminal helper functions | 4 | [src](../../lua/lib/nvim/terminal/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.token` | Ephemeral session-nonce / token generator, for handshake IDs, temp-window IDs, correlation IDs, and similar internal bookkeeping. | 3 | [README](../../lua/lib/nvim/token/README.md) · [src](../../lua/lib/nvim/token/init.lua) |
@@ -278,7 +443,7 @@ flowchart LR
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.treesitter.guard` | Filetype allowlist gate for treesitter-dependent features (highlighting, foldexpr, indentexpr). | 1 | [README](../../lua/lib/nvim/treesitter/guard/README.md) · [src](../../lua/lib/nvim/treesitter/guard/init.lua) |
 | &nbsp;&nbsp;`ui` |  |  |  |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.ui.hl` | ========================================================= Highlight helper utilities. | 2 | [src](../../lua/lib/nvim/ui/hl/init.lua) |
-| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.ui.kit` | Themed, composable UI toolkit for lib.nvim. | 12 | [README](../../lua/lib/nvim/ui/kit/README.md) · [src](../../lua/lib/nvim/ui/kit/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.ui.kit` | Themed, composable UI toolkit for lib.nvim. | 15 | [README](../../lua/lib/nvim/ui/kit/README.md) · [src](../../lua/lib/nvim/ui/kit/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.usercmd` | ========================================================= User command helper utilities. | 1 | [src](../../lua/lib/nvim/usercmd/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.usercmd.composer` | Compose a route spec into ONE Neovim user command with subcommands, `<Tab>` completion, and Markdown docs — all read from the same tree. | 11 | [README](../../lua/lib/nvim/usercmd/composer/README.md) · [src](../../lua/lib/nvim/usercmd/composer/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.window` | Window-control helpers for overlay / floating windows. | 1 | [README](../../lua/lib/nvim/window/README.md) · [src](../../lua/lib/nvim/window/init.lua) |
@@ -305,10 +470,11 @@ flowchart LR
 
 ## Drift
 
-0 errors · 10 warnings · 147 info
+0 errors · 11 warnings · 159 info
 
 | Severity | Check | Message |
 |---|---|---|
+| warn | `dead-readme-link` | lua/lib/nvim/store/project/README.md links to '../../../../docs/ROADMAP/project-store.md' which does not exist |
 | warn | `missing-summary` | lua/lib/lua/functions/init.lua has ---@module but no description line |
 | warn | `missing-summary` | lua/lib/lua/json/init.lua has ---@module but no description line |
 | warn | `missing-summary` | lua/lib/lua/strings/init.lua has ---@module but no description line |
@@ -321,7 +487,7 @@ flowchart LR
 | warn | `missing-summary` | lua/lib/nvim/normalize/validators.lua has ---@module but no description line |
 
 <details>
-<summary>147 informational findings</summary>
+<summary>159 informational findings</summary>
 
 
 | Check | Message |
@@ -376,6 +542,7 @@ flowchart LR
 | `missing-readme` | lua/lib/nvim/notify/resolve_log_level has no README.md |
 | `missing-readme` | lua/lib/nvim/notify/safe has no README.md |
 | `missing-readme` | lua/lib/nvim/require has no README.md |
+| `missing-readme` | lua/lib/nvim/store has no README.md |
 | `missing-readme` | lua/lib/nvim/terminal has no README.md |
 | `missing-readme` | lua/lib/nvim/ui/hl has no README.md |
 | `missing-readme` | lua/lib/nvim/usercmd has no README.md |
@@ -400,15 +567,9 @@ flowchart LR
 | `undocumented-param` | escape_lua_pattern has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | invalid_ctx has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | M.normalize has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | is_subpath has 2 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | M.norm has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | join has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | split has 2 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | norm has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | M.is_subpath has 2 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | join has 2 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | split has 2 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | strlen has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | join has 2 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | notify_caller has 5 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | bind_cancel_on_escape has 3 parameter(s) but only 2 @param line(s) |
 | `undocumented-param` | bind_cancel_on_escape has 3 parameter(s) but only 2 @param line(s) |
@@ -417,21 +578,27 @@ flowchart LR
 | `undocumented-param` | new_node has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | invalid_ctx has 1 parameter(s) but only 0 @param line(s) |
 | `unreferenced-module` | lib.health is required by no other file in the tree |
+| `unreferenced-module` | lib.lua is required by no other file in the tree |
 | `unreferenced-module` | lib.lua.diff is required by no other file in the tree |
+| `unreferenced-module` | lib.lua.dump is required by no other file in the tree |
 | `unreferenced-module` | lib.lua.error is required by no other file in the tree |
 | `unreferenced-module` | lib.lua.functions is required by no other file in the tree |
 | `unreferenced-module` | lib.lua.json.decode is required by no other file in the tree |
 | `unreferenced-module` | lib.lua.memo.memo is required by no other file in the tree |
 | `unreferenced-module` | lib.lua.numeral is required by no other file in the tree |
 | `unreferenced-module` | lib.lua.strings.transform is required by no other file in the tree |
+| `unreferenced-module` | lib.lua.tables is required by no other file in the tree |
 | `unreferenced-module` | lib.lua.time.format is required by no other file in the tree |
 | `unreferenced-module` | lib.lua.time.presets is required by no other file in the tree |
 | `unreferenced-module` | lib.lua.uuid is required by no other file in the tree |
 | `unreferenced-module` | lib.lua.yaml is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.buf_win_tab.buffer_utils is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.buf_win_tab.capture is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim.buf_win_tab.get_option is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.buf_win_tab.move_buffer_to_tab is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.buf_win_tab.normal_buffer is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim.buf_win_tab.resize_guarded is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.buf_win_tab.safe_adjacent_buffer is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.buf_win_tab.selection is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.buf_win_tab.tabs_utils is required by no other file in the tree |
@@ -441,23 +608,33 @@ flowchart LR
 | `unreferenced-module` | lib.nvim.buffer.open_background is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.cross is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.cross.uv.fs is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim.debounce.buffer is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.docmap.command is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim.dotrepeat is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.fs.create_entry is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.fs.ignore.list is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.fs.is_readable_file is required by no other file in the tree |
-| `unreferenced-module` | lib.nvim.fs.is_subpath.alternative is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.fs.polymorphic_rootresolver is required by no other file in the tree |
-| `unreferenced-module` | lib.nvim.fs.project_key is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim.fs.scan_cached is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim.fs.scan_roots is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim.fs.trash is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim.fs.write.batch is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim.harvest is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.lua_ls.insert.module_annnotation is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.neotree.node is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.neotree.watch is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim.net.curl is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim.safe_api is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.selection is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim.store is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim.token is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.treesitter.guard is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.window.find_by_filetype is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim_usrcmds is required by no other file in the tree |
 | `unreferenced-module` | lib.strategies.eager is required by no other file in the tree |
 | `unreferenced-module` | lib.strategies.lazy is required by no other file in the tree |
 | `unreferenced-module` | lib.strategies.metatable is required by no other file in the tree |
+| `unreferenced-module` | lib.vim is required by no other file in the tree |
 | `unreferenced-module` | lib.vim.autocmd is required by no other file in the tree |
 | `unreferenced-module` | lib.vim.buf_win_tab is required by no other file in the tree |
 | `unreferenced-module` | lib.vim.buffer is required by no other file in the tree |
@@ -468,6 +645,7 @@ flowchart LR
 | `unreferenced-module` | lib.vim.lua_ls is required by no other file in the tree |
 | `unreferenced-module` | lib.vim.map is required by no other file in the tree |
 | `unreferenced-module` | lib.vim.normalize is required by no other file in the tree |
+| `unreferenced-module` | lib.vim.notify is required by no other file in the tree |
 | `unreferenced-module` | lib.vim.require is required by no other file in the tree |
 | `unreferenced-module` | lib.vim.terminal is required by no other file in the tree |
 | `unreferenced-module` | lib.vim.ui is required by no other file in the tree |

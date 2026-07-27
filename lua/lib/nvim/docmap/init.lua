@@ -93,6 +93,9 @@ M.render = {
   mermaid = function(...)
     return require("lib.nvim.docmap.render.mermaid")(...)
   end,
+  mermaid_deps = function(...)
+    return require("lib.nvim.docmap.render.mermaid").render_deps(...)
+  end,
   markdown = function(...)
     return require("lib.nvim.docmap.render.markdown")(...)
   end,
@@ -136,6 +139,12 @@ function M.to_json(ir)
       '"parent": ' .. (n.parent and str(n.parent) or "null"),
       '"depth": ' .. tostring(n.depth),
       '"children": ' .. (#n.children > 0 and json.encode(n.children) or "[]"),
+      -- The unresolved `requires_raw`/`calls_raw` stay out of the artifact on
+      -- purpose: they are scratch input to the graph stages, already fully
+      -- represented by `ir.edges`, and serializing them would roughly double
+      -- the file to say the same thing twice.
+      '"requires": ' .. (#n.requires > 0 and json.encode(n.requires) or "[]"),
+      '"required_by": ' .. (#n.required_by > 0 and json.encode(n.required_by) or "[]"),
     }
     put("    {" .. table.concat(fields, ", ") .. "}")
     put(i < #ir.order and ",\n" or "\n")

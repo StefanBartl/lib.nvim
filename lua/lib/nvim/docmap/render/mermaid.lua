@@ -62,6 +62,91 @@ function M.render(ir, _findings, opts)
   return table.concat(out, "\n")
 end
 
+---Render the require graph between top-level module groups as a Mermaid
+---flowchart.
+---
+---Aggregated to `opts.depth` (default 1) rather than drawn per module: the
+---full graph is ~390 edges over ~250 nodes, which Mermaid will happily emit
+---and nobody can read. Rolled up to the second level it says the thing a
+---dependency diagram on a README should say — which parts of the library lean
+---on which other parts — and the HTML map stays the place to go finer.
+---
+---Exists at all because `index.html` needs JavaScript and GitHub does not run
+---it: without this, the dependency graph is invisible to anyone reading the
+---repo on the code host rather than checking out the artifact.
+---@param ir Lib.Docmap.IR
+---@param opts { depth?: integer, direction?: string }?
+---@return string
+function M.render_deps(ir, opts)
+  opts = opts or {}
+  local depth = opts.depth or 1
+  local direction = opts.direction or "LR"
+
+  ---Walk up to the ancestor at `depth`, so `lua/lib/nvim/fs/read` and
+  ---`lua/lib/nvim/fs` both collapse onto `lua/lib/nvim`.
+  ---@param id string
+  ---@return string?
+  local function group_of(id)
+    local node = ir.nodes[id]
+    while node and node.depth > depth and node.parent do
+      node = ir.nodes[node.parent]
+    end
+    if node and node.depth == depth then
+      return node.id
+    end
+    return nil
+  end
+
+  local seen, pairs_seen = {}, {}
+  local groups, links = {}, {}
+
+  for _, edge in ipairs(ir.edges or {}) do
+    if edge.kind == "require" then
+      local a, b = group_of(edge.from), group_of(edge.to)
+      -- Self-links are what a group's internal wiring collapses to; they say
+      -- nothing about the shape between groups, which is the whole question.
+      if a and b and a ~= b then
+        local key = a .. "|" .. b
+        if not pairs_seen[key] then
+          pairs_seen[key] = true
+          links[#links + 1] = { from = a, to = b }
+        end
+        for _, g in ipairs({ a, b }) do
+          if not seen[g] then
+            seen[g] = true
+            groups[#groups + 1] = g
+          end
+        end
+      end
+    end
+  end
+
+  if #links == 0 then
+    return ""
+  end
+
+  table.sort(groups)
+  table.sort(links, function(x, y)
+    if x.from ~= y.from then
+      return x.from < y.from
+    end
+    return x.to < y.to
+  end)
+
+  local lines = { "```mermaid", "flowchart " .. direction }
+  for _, g in ipairs(groups) do
+    lines[#lines + 1] = ('  %s["%s"]'):format(
+      safe_id(g),
+      label(ir.nodes[g].module or ir.nodes[g].name)
+    )
+  end
+  for _, l in ipairs(links) do
+    lines[#lines + 1] = ("  %s --> %s"):format(safe_id(l.from), safe_id(l.to))
+  end
+  lines[#lines + 1] = "```"
+  return table.concat(lines, "\n")
+end
+
 return setmetatable(M, {
   __call = function(_, ...)
     return M.render(...)

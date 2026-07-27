@@ -13,11 +13,17 @@ on GitHub).
 ## Usage
 
 ```vim
-:LibMap              " regenerate the artifacts
-:LibMap check        " verify without writing; findings go to the quickfix list
-:LibMap full         " regenerate WITH LuaLS enrichment (class/alias detail, type edges)
-:LibMap open         " open the generated HTML in the system browser
+:LibMap                    " regenerate the artifacts
+:LibMap check              " verify without writing; findings go to the quickfix list
+:LibMap full               " regenerate WITH LuaLS enrichment (class/alias detail, type edges)
+:LibMap open               " open the generated HTML in the system browser
+:LibMap graph deps         " open the HTML on the dependency graph
+:LibMap graph calls lib.nvim.fs   " …or on one module's call graph
 ```
+
+`graph` completes both the kind and, after it, the module paths the map knows
+— it is the same page as `open`, opened at a state instead of at the root,
+since the whole navigable state of the HTML lives in its URL fragment.
 
 ```bash
 nvim --headless -l scripts/gen_map.lua               # regenerate
@@ -44,6 +50,15 @@ local handle = require("lib.nvim.docmap").install({
 
 handle.ir()                          -- current Lib.Docmap.IR, in memory
 handle.node("lua/myplugin/init.lua") -- single node lookup
+
+-- Graph queries, against whatever the handle currently holds — including
+-- after a watch-triggered rescan, which is the reason they live on the handle
+-- rather than as free functions over an IR someone captured earlier.
+handle.requires("lua/myplugin/fs")   -- require edges out
+handle.required_by("lua/myplugin/fs")
+handle.callees("lua/myplugin/fs#M.read")   -- "<node id>#<declared name>",
+handle.callers("lua/myplugin/fs#M.read")   -- the same ids the HTML map uses
+
 local unsub = handle.on_change(function(ir, findings)
   -- runs after the initial scan and after every rescan (manual or watched)
 end)
@@ -108,11 +123,28 @@ else — module prefix, directory layout, types directory name — is an option.
 |---|---|---|
 | Scan | [`scan.lua`](scan.lua) | `Lib.Docmap.IR` — hierarchy, summaries, links |
 | Scan | [`functions.lua`](functions.lua) | `node.functions` — per-function docs via `vim.treesitter`, unconditional (no LuaLS needed) |
-| LuaLS (opt-in) | [`luals.lua`](luals.lua) | class/alias detail + type-reference edges merged into the IR |
+| Graph | [`deps.lua`](deps.lua) | `kind="require"` edges + `node.requires`/`required_by` |
+| Graph | [`calls.lua`](calls.lua) | `kind="call"` edges — which function calls which |
+| LuaLS (opt-in) | [`luals.lua`](luals.lua) | class/alias detail + `kind="type"` edges merged into the IR |
 | Check | [`check.lua`](check.lua) | `Lib.Docmap.Finding[]` — documentation drift |
 | Render | [`render/`](render/) | HTML (Tree + Hierarchy tabs), Markdown, Mermaid |
 | Encode | [`json.lua`](json.lua) | deterministic JSON |
 | Live | [`registry.lua`](registry.lua) | `install()`/`uninstall()` — an in-memory `Handle` instead of files |
+
+`deps` and `calls` run inside `scan()` itself, unlike the LuaLS merge: they
+need no external tool and cost only in-memory resolution over data the walk
+already read, so every caller of `scan()` — checks, renderers, a live handle —
+sees the same fully-formed IR rather than some seeing a half-built one.
+
+### One edge array, three kinds
+
+`ir.edges` carries a `kind` discriminator (`"type"`, `"require"`, `"call"`)
+rather than living in three parallel arrays, so layout, filtering and drawing
+exist once each instead of once per relationship. Each producer sorts its own
+block and appends it; there is deliberately **no** shared comparator over the
+merged array, because the optional fields are disjoint per kind and one sort
+would have to special-case all three (an early version did, and compared
+`from_class` against `nil` the first time a require edge appeared).
 
 `scan_full()` in [`init.lua`](init.lua) is `scan` + optional `luals` + `check`
 in one call — the step `generate()` and `install()`'s rescan both build on, so
@@ -174,6 +206,45 @@ target that resolves to nothing, same idea as `dead-readme-link`) and
 signature's parameter count to the number of `@param` lines; deliberately
 `info`-only since the heuristic can be wrong on complex signatures).
 
+## Call-graph scanning (`kind="call"` edges)
+
+[`calls.lua`](calls.lua) reuses the tree [`functions.lua`](functions.lua)
+already parsed — extraction and resolution are split, because resolution is
+not a per-file question. `fs.read()` only means something once you know this
+file bound `fs` to `lib.nvim.fs` and that some node declares that module,
+which is why require-alias collection in [`deps.lua`](deps.lua) is a
+prerequisite rather than a coincidence.
+
+Four shapes resolve **exactly**, each a syntactic fact rather than a guess:
+
+| Written | Resolved because |
+|---|---|
+| `fs.read(x)` | `fs` is bound by `local fs = require("lib.nvim.fs")` |
+| `require("lib.nvim.fs").read(x)` | the module path is in the call itself |
+| `M.helper(x)` | `M` is a prefix this file's own functions are declared on |
+| `helper(x)` | a bare name matching a file-local `local function` |
+
+The inline-require form is checked before the alias form, because its callee
+text starts with the identifier `require`, which the alias branch would
+otherwise try to look up as a local binding. It is worth its own branch rather
+than being written off as rare: it is how this tree calls a lazily-required
+dependency without a top-level binding, and supporting it added 25 real edges.
+
+Everything else is dropped: `obj:method()` on an unknown receiver,
+`vim.fs.dirname()` (outside the tree), `M[name]()` (not a name at all).
+`opts.calls_heuristic` adds one guessed shape back — an unresolved bare name
+matching exactly one function in the whole tree — marked
+`confidence = "heuristic"` and drawn dashed. Off by default: a call graph that
+confidently draws a wrong edge is worse than one that draws fewer.
+
+Genuinely invisible to this is dynamic dispatch. `lib.nvim.require`'s lazy and
+metatable strategies produce calls that appear nowhere in the source, and a
+callback handed to `vim.schedule` or stored in a table is a call whose target
+is a value, not a name. Doxygen has the same blind spot in C++ for the same
+reason — which is why **no call-derived check is ever `error` severity**, and
+why the Calls view's empty state says so rather than implying the function
+calls nothing.
+
 On reusing `lib.nvim.logger`'s pattern: it was considered and rejected as
 direct code reuse — `logger.record` is built for runtime events (timestamps,
 levels, redaction, ring-buffer flush-on-crash), while this scans static
@@ -216,6 +287,95 @@ measure-after-show step to get right. The view auto-scrolls to center the
 node it was centered on, since a shallow layer (the root has one box) sharing
 a horizontal axis with a much wider deeper layer means the centered node can
 sit thousands of pixels from the left edge on a large map.
+
+### The four views
+
+Toggled from the Hierarchy toolbar. Two of them are undirected structure, two
+are directed graphs with a direction control of their own:
+
+| View | Boxes are | Edges are | Doxygen equivalent |
+|---|---|---|---|
+| **Modules** | IR nodes | `children`, plus type edges dashed on top | Directory / class hierarchy |
+| **Types** | `@class`/`@alias` definitions | `kind="type"` | Collaboration diagram |
+| **Deps** | IR nodes | `kind="require"` | Include dependency graph |
+| **Calls** | individual **functions** | `kind="call"` | Caller / callee graph |
+
+Direction (`← In` / `⇄ Both` / `Out →`) is an axis of the state, not two more
+views: "callers of X" and "callees of X" are the same diagram walked the other
+way, and splitting them would have doubled the view list with buttons saying
+nearly the same thing. `Both` runs the two walks *independently* from the same
+seeds — once a walk has gone up into callers, continuing downwards through
+those callers' other callees would fill the diagram with functions unrelated
+to the center. Doxygen makes the same choice.
+
+Depth defaults to 2. A require graph's neighbourhood grows far faster than a
+tree's, and `MAX_HNODES` alone would fill every diagram to the cap.
+
+**Backedges.** The tree views never had them; a require or call graph is
+cyclic, so a target keeps its first-seen BFS depth and later edges into it
+point sideways or up. Drawn with the ordinary S-curve those run straight
+through every box in between, so an edge whose target is not strictly below
+its source is routed out of the box's side and back in — and every directed
+view gets arrowheads, without which a same-layer edge says nothing about which
+way it points.
+
+### Functions are addressable
+
+A function's id is `"<node id>#<declared name>"` — derived from data already in
+the IR, so nothing extra is generated or serialized, and stable across
+regenerations as long as the name is. That id is what the URL can point at,
+what the Calls view centers on, and what the context menu acts on. Before it, a
+function existed only as a block of text inside one node's detail pane.
+
+They also appear in the Tree tab, behind a per-node collapsed `ƒ N functions`
+group rather than mixed into `children`: `children` is IR structure and
+functions are not part of it, and this tree renders eagerly — folding ~1500
+function rows into the always-expanded default would bury the module structure
+the tree exists to show.
+
+### Right-click
+
+Every clickable object — a tree row, a function row, a graph box, a type or
+function entry in the detail pane — resolves through one `describeTarget()`
+into `{kind, nodeId, fnKey, className, label}`, and the menu is built from
+that. One resolver instead of four menus is what keeps "right-click anything,
+get the same verbs" true as views are added.
+
+Entries that lead nowhere are **disabled with their count shown**, not hidden:
+an enabled item that opens an empty diagram teaches people to distrust the
+menu. `preventDefault` fires only when the target actually resolves, so
+selecting a paragraph of prose and reaching for the browser's own Copy still
+works.
+
+### Movement
+
+Boxes are held in a keyed map and **reused across redraws**, so a box present
+before and after a re-center is the same element at a new `left`/`top` and the
+CSS transition animates it there. The previous `hgraph.innerHTML = ""` threw
+that identity away every time, which is why every navigation was a hard cut
+even when the two layouts shared most of their boxes.
+
+Positions are still computed analytically from the IR, never measured off the
+DOM — that is what lets the diagram be correct while the pane is `display:none`
+— and animating did not change it: the movement is interpolation *between* two
+deterministic layouts, not a simulation. No force-directed layout, no physics.
+
+Edges are the exception: `d` is not an animatable CSS property, and a per-frame
+path interpolator for up to 90 edges buys very little over simply not drawing
+lines that would point at boxes still in motion. They are hidden while the
+boxes move and faded in once they arrive.
+
+Hovering a box dims everything that is not a direct neighbour — pure class
+toggling, no relayout, and on a dense require graph the difference between a
+readable diagram and a spider's web. Every transition is disabled under
+`prefers-reduced-motion: reduce`.
+
+### SVG export
+
+`↓ SVG` writes the current diagram as a standalone file. The boxes are redrawn
+as plain `<rect>`/`<text>` rather than wrapped in `<foreignObject>`, which
+Inkscape and most converters do not render, and colours are read back off the
+live DOM so the export matches the theme it was taken from.
 
 ### Modules vs Types
 
@@ -260,7 +420,11 @@ browser's own Back/Forward buttons step through the app's actual states —
 not just react to a directly-edited URL hash, which is all the original
 single-node `#<id>` scheme supported.
 
-The state serialized into the hash is `{tab, id, center, view}` — see
+The state serialized into the hash is `{tab, id, center, view, dir, depth, fn}`
+— every axis goes through `navigate()`, including the direction and depth
+controls; a control that set one behind its back would produce a diagram the
+Back button cannot return from. Only the axes the current view actually uses
+are serialized, so a Tree-tab link is not three pieces of noise long. See
 `serializeState`/`parseState`/`applyState`/`navigate` in
 [`render/html.lua`](render/html.lua). One non-obvious rule worth knowing if
 you touch this: **live-preview updates (the Hierarchy search box while
@@ -290,6 +454,18 @@ bugs. Generic checks (any annotated Lua tree):
 | `unreferenced-module` | info | Required by no other file in the tree. |
 | `dead-see-target` | warn | A function's `@see` target resolves to no known module or function. |
 | `undocumented-param` | info | A function has more parameters than `@param` lines (text-based heuristic, can be wrong on complex signatures — never fails `--check`). |
+| `require-cycle` | warn | A cycle among **load-time** requires. |
+| `layer-violation` | warn | Opt-in via `opts.layers`: a module reaching into a layer it must not. |
+
+`require-cycle` excludes deferred requires — `require(...)` inside a function
+body, the standard way this tree breaks initialisation order on purpose. Run
+without that exclusion against lib.nvim, every cycle it reported was a
+deliberate lazy load; a check that only ever fires on intentional code is one
+people learn to skim past, so it would have cost the real ones too. The
+distinction is made from the parse (any function body, not just top-level
+declarations — a lazy require hides inside an anonymous
+`__index = function(_, k)` just as often as inside a named function), and both
+kinds remain real edges in the Deps view, drawn dotted when lazy.
 
 Repo-specific checks are passed in via `opts.extra_checks`. lib.nvim adds one:
 
