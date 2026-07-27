@@ -68,6 +68,6 @@ store.stats("cascade/anchors")
 Several plugins hand-roll project-keyed JSON persistence today (window/buffer
 layout, tree scroll state, spell-ignore lists, command favorites, API
 metrics, filesystem-scan caches, picker history — see
-[project-store.md](../../../../docs/ROADMAP/project-store.md) for the full
+[project-store.md](../../../../../docs/ROADMAP/project-store.md) for the full
 list). None need to change; this is a "when convenient" simplification, not
 a required migration.

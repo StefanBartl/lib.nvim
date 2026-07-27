@@ -86,6 +86,14 @@ function M.scan_full(opts)
   return ir, findings
 end
 
+--- The editor-side map navigator (`:LibBrowse`). Lazily required: it pulls in
+--- `lib.nvim.ui.kit`, which nothing on the generate/check path needs.
+M.browse = setmetatable({}, {
+  __index = function(_, k)
+    return require("lib.nvim.docmap.browse")[k]
+  end,
+})
+
 M.render = {
   html = function(...)
     return require("lib.nvim.docmap.render.html")(...)

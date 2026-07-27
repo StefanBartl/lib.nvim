@@ -19,7 +19,17 @@ on GitHub).
 :LibMap open               " open the generated HTML in the system browser
 :LibMap graph deps         " open the HTML on the dependency graph
 :LibMap graph calls lib.nvim.fs   " …or on one module's call graph
+
+:LibBrowse                 " navigate the same map inside the editor
+:LibBrowse live            " …re-scanning on every write
+:LibBrowse lib.nvim.fs     " …opened on one module
 ```
+
+`:LibBrowse` is the editor-side counterpart to the generated page — a
+drill-down navigator over the same edges rather than a diagram, because a
+terminal cannot draw one better than the browser already does. What it can do
+instead is jump to the source (`gd`), fill the quickfix list (`gq`) and stay
+live. See [browse/README.md](browse/README.md).
 
 `graph` completes both the kind and, after it, the names the map knows — it is
 the same page as `open`, opened at a state instead of at the root, since the

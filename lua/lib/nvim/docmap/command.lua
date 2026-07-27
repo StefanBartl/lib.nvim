@@ -236,6 +236,64 @@ function M.setup(opts)
     end,
   })
 
+  -- :LibBrowse [live] [module] — the same map, navigated inside the editor.
+  --
+  -- Its own command rather than a `:LibMap browse` subcommand: `:LibMap` is a
+  -- *generator* (every action of it writes or verifies artifacts), while this
+  -- only ever reads. Folding a read-only viewer into a command whose bare form
+  -- rewrites files on disk is the kind of surprise that gets a command bound
+  -- to a key and then regretted.
+  local browse_command_name = cfg.browse_command_name or "LibBrowse"
+
+  usercmd.create(browse_command_name, function(args)
+    local browse = require("lib.nvim.docmap.browse")
+    local rest = vim.trim(args.args or "")
+
+    local live = false
+    local target = rest
+    local head, tail = rest:match("^(%S+)%s*(.-)$")
+    if head == "live" then
+      live = true
+      target = tail
+    end
+
+    browse.open({
+      root = cfg.root,
+      source = cfg.source,
+      out_dir = cfg.out_dir,
+      lua_root = cfg.lua_root,
+      live = live,
+      center = target ~= "" and target or nil,
+    })
+  end, {
+    nargs = "*",
+    desc = ("Browse the module map in the editor (:%s [live] [module])"):format(
+      browse_command_name
+    ),
+    complete = function(lead, line)
+      -- `live` only makes sense as the first token; after it (or after any
+      -- module name) the only useful completion is a module path.
+      local candidates = {}
+      if not line:match("%s%S+%s") then
+        candidates[#candidates + 1] = "live"
+      end
+      local check = require("lib.nvim.docmap.check")
+      local lua_root = cfg.lua_root or "lua"
+      local ir = handle.ir()
+      for _, id in ipairs(ir.order) do
+        local node = ir.nodes[id]
+        local name = node.module or check.expected_module(node.path .. "/init.lua", lua_root)
+        if name then
+          candidates[#candidates + 1] = name
+        end
+      end
+      table.sort(candidates)
+      return vim.tbl_filter(function(c)
+        return c:find(lead, 1, true) == 1
+      end, candidates)
+    end,
+  })
+
   return handle
 end
 
