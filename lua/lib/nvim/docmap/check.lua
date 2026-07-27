@@ -30,10 +30,16 @@ local function add(list, severity, check, node_id, message)
 end
 
 ---Derive the module path a file *should* declare from where it lives.
+---
+---Exported because it is also the only sane way to name a **namespace**: a
+---directory without `init.lua` declares no `@module` at all, but
+---`lua/lib/nvim/fs` is still "lib.nvim.fs" to anyone typing it — and those
+---directories are exactly the aggregation points a dependency graph is asked
+---about. Deriving it in a second place would be a drift risk.
 ---@param path string Repo-relative, forward slashes
 ---@param lua_root string
 ---@return string|nil
-local function expected_module(path, lua_root)
+function M.expected_module(path, lua_root)
   local prefix = lua_root .. "/"
   if path:sub(1, #prefix) ~= prefix then
     return nil
@@ -82,7 +88,7 @@ local function check_module_paths(ir, findings, opts)
   for _, id in ipairs(ir.order) do
     local node = ir.nodes[id]
     if node.module and node.source then
-      local want = expected_module(node.source, lua_root)
+      local want = M.expected_module(node.source, lua_root)
       if want and want ~= node.module then
         add(
           findings,

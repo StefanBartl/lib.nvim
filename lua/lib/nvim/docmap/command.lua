@@ -25,6 +25,36 @@
 
 local M = {}
 
+---Resolve a user-typed name to a node id.
+---
+---Three ways, in order of how specific they are: a declared `@module` path, a
+---raw node id, and — for a **namespace**, a directory with no `init.lua` and
+---therefore no `@module` at all — the module path its location implies. That
+---last one is not a nicety: `lua/lib/nvim/fs` is a namespace, so
+---`:LibMap graph deps lib.nvim.fs` found nothing until it was added, and
+---namespaces are precisely the aggregation points a dependency graph is
+---interesting at.
+---@param ir Lib.Docmap.IR
+---@param name string
+---@param lua_root string
+---@return string? node_id
+function M.find_node(ir, name, lua_root)
+  local check = require("lib.nvim.docmap.check")
+  local fallback
+  for _, id in ipairs(ir.order) do
+    local node = ir.nodes[id]
+    if node.module == name or id == name then
+      return id
+    end
+    if not fallback and not node.module then
+      if check.expected_module(node.path .. "/init.lua", lua_root) == name then
+        fallback = id
+      end
+    end
+  end
+  return fallback
+end
+
 ---Resolve the repository root the map should be generated for.
 ---
 ---`vim.fn.getcwd()` is wrong when the user is editing lib.nvim from somewhere
@@ -64,7 +94,13 @@ function M.setup(opts)
       notify.warn("No map generated yet — run :" .. command_name .. " first.")
       return false
     end
-    require("lib.nvim.fs.open.url.system_opener").open(target .. (hash or ""))
+    -- A fragment is only meaningful on a URL. Appended to a bare filesystem
+    -- path it becomes part of the filename, and every opener this dispatches
+    -- to (`explorer.exe`, `open`, `xdg-open`) then looks for a file called
+    -- `index.html#tab=…` and fails silently. The plain no-fragment path stays
+    -- a filesystem path, which is what it has always been.
+    local url = hash and (vim.uri_from_fname(target) .. hash) or target
+    require("lib.nvim.fs.open.url.system_opener").open(url)
     return true
   end
 
@@ -92,14 +128,7 @@ function M.setup(opts)
       local ir = handle.ir()
       local center = ir.root
       if graph_target ~= "" then
-        local found
-        for _, id in ipairs(ir.order) do
-          local node = ir.nodes[id]
-          if node.module == graph_target or id == graph_target then
-            found = id
-            break
-          end
-        end
+        local found = M.find_node(ir, graph_target, cfg.lua_root or "lua")
         if not found then
           notify.warn("No module matching '" .. graph_target .. "' in the map.")
           return
@@ -184,13 +213,20 @@ function M.setup(opts)
       local candidates = { "check", "full", "open", "graph" }
       local after_graph = line:match("graph%s+%a*%s+(.*)$") or line:match("graph%s+(%a*)$")
       if line:match("graph%s+%a+%s") then
+        -- Offers exactly what `find_node` resolves, namespaces included —
+        -- completing a name the command then rejects is worse than no
+        -- completion at all.
+        local check = require("lib.nvim.docmap.check")
+        local lua_root = cfg.lua_root or "lua"
         candidates = {}
         for _, id in ipairs(handle.ir().order) do
           local node = handle.ir().nodes[id]
-          if node.module then
-            candidates[#candidates + 1] = node.module
+          local name = node.module or check.expected_module(node.path .. "/init.lua", lua_root)
+          if name then
+            candidates[#candidates + 1] = name
           end
         end
+        table.sort(candidates)
       elseif after_graph then
         candidates = { "deps", "calls" }
       end

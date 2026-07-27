@@ -353,5 +353,32 @@ return function(H)
   end
   ok(not reported_cycle, "docmap.check: a cycle closed by a deferred require is not reported")
 
+  -- ---------------------------------------------------- command.find_node
+  -- `:LibMap graph <name>` has to resolve the names people actually type.
+  -- A namespace declares no @module at all, so matching on that alone missed
+  -- exactly the directories a dependency graph is most interesting at.
+  local command = require("lib.nvim.docmap.command")
+
+  eq(
+    command.find_node(cyc, "demo.app", "lua"),
+    "lua/demo/app",
+    "docmap.command: resolves a declared @module path"
+  )
+  eq(
+    command.find_node(cyc, "lua/demo/util", "lua"),
+    "lua/demo/util",
+    "docmap.command: resolves a raw node id"
+  )
+  eq(
+    command.find_node(cyc, "demo", "lua"),
+    "lua/demo",
+    "docmap.command: resolves a namespace by its path-implied module name"
+  )
+  eq(
+    command.find_node(cyc, "nope.nope", "lua"),
+    nil,
+    "docmap.command: an unknown name resolves to nil rather than a wrong node"
+  )
+
   vim.fn.delete(root, "rf")
 end
