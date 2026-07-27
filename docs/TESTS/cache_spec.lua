@@ -50,6 +50,18 @@ return function(H)
     "cache.disk: clear on an already-absent namespace is still ok"
   )
 
+  -- A namespace may contain slashes to group related entries — the form
+  -- store.project's own documentation uses. Only the cache *root* used to be
+  -- created, so every nested namespace failed to write with ENOENT, reporting
+  -- it just through save()'s ignorable second return value.
+  local nested_ok, nested_err = disk.save("plugin/section/entry", { n = 7 }, opts)
+  eq(nested_ok, true, "cache.disk: nested namespace saves: " .. tostring(nested_err))
+  local nested = disk.load("plugin/section/entry", opts)
+  ok(nested ~= nil and nested.n == 7, "cache.disk: nested namespace roundtrips")
+  eq(disk.stats("plugin/section/entry", opts).exists, true, "cache.disk: nested stats")
+  eq(disk.clear("plugin/section/entry", opts), true, "cache.disk: nested clear")
+  eq(disk.load("plugin/section/entry", opts), nil, "cache.disk: nested load after clear")
+
   -- ------------------------------------------------------------ cache.memory
   local memory = require("lib.nvim.cache.memory")
 
