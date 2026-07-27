@@ -304,6 +304,55 @@ return function(H)
       ok(browse.is_open(), "browse: still open after switching to mode " .. key)
     end
 
+    -- History. Untested until now, and it did not work: the trail recorded
+    -- only *past* positions while `hindex` was left addressing the entry
+    -- before the current one, so the first <C-o> fell off the front and the
+    -- second landed one stop too far back. The status line is the cheapest
+    -- observable proof of "where am I".
+    local function press(k)
+      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(k, true, false, true), "x", false)
+    end
+    local function status_now()
+      local _, b = slot("lib-docmap-browse-status")
+      return vim.api.nvim_buf_get_lines(b, 0, 1, false)[1]
+    end
+
+    -- A fresh instance, so the trail has a known beginning: the moves above
+    -- are still in the old one, and "stays put at the start" only means
+    -- something when the start is where we think it is.
+    browse.close()
+    browse.open({ root = root })
+    vim.api.nvim_set_current_win((slot("lib-docmap-browse-list")))
+
+    local at_start = status_now()
+    press("2") -- deps
+    local at_deps = status_now()
+    press("3") -- calls
+    local at_calls = status_now()
+    ok(at_deps ~= at_start and at_calls ~= at_deps, "browse: three distinct positions to walk")
+
+    press("<C-o>")
+    eq(status_now(), at_deps, "browse: <C-o> steps back exactly one position")
+    press("<C-o>")
+    eq(status_now(), at_start, "browse: a second <C-o> reaches the one before that")
+    press("<C-o>")
+    eq(status_now(), at_start, "browse: <C-o> at the start of the trail stays put")
+
+    press("<C-i>")
+    eq(status_now(), at_deps, "browse: <C-i> steps forward again")
+    press("<C-i>")
+    eq(status_now(), at_calls, "browse: forward reaches the newest position")
+    press("<C-i>")
+    eq(status_now(), at_calls, "browse: <C-i> at the end of the trail stays put")
+
+    -- A fresh move from the middle of the trail truncates the forward half,
+    -- exactly like a browser.
+    press("<C-o>")
+    press("4") -- types, from the middle
+    local at_types = status_now()
+    press("<C-i>")
+    eq(status_now(), at_types, "browse: a new move drops the forward history")
+
     -- Centering on a NAMESPACE: `lua/lib/nvim/fs` has no init.lua and so
     -- declares no @module, but `lib.nvim.fs` is what a user types. Resolving
     -- only on a declared module silently lands on the root instead.
