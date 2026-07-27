@@ -325,6 +325,18 @@ return function(H)
     end
   end
 
+  -- Stats aggregate over the subtree, not just the node's own directory.
+  local root_stats = tree.nodes[tree.root].stats
+  eq(root_stats.modules, 2, "docmap.stats: both modules are counted at the root")
+  eq(root_stats.files_lua, 2, "docmap.stats: lua files roll up")
+  ok(root_stats.lines > 0, "docmap.stats: lines of Lua are counted")
+  eq(
+    root_stats.functions,
+    tree.nodes[app].stats.functions + tree.nodes[util].stats.functions,
+    "docmap.stats: the root's function count is the sum of its children's"
+  )
+  eq(tree.nodes[util].stats.modules, 1, "docmap.stats: a leaf module counts itself")
+
   ok(req_edge, "docmap.deps: a require edge exists between the two modules")
   -- Unresolvable requires are kept as plain module strings rather than
   -- dropped or turned into invented nodes, so the Deps view can draw them.
@@ -418,6 +430,52 @@ return function(H)
     nil,
     "docmap.command: an unknown name resolves to nil rather than a wrong node"
   )
+
+  -- ---------------------------------------------- symbols and subtree stats
+  local sym_fixture = H.tmpfile(".lua")
+  local sfw = assert(io.open(sym_fixture, "w"), "docmap spec: symbol fixture must be writable")
+  sfw:write(table.concat({
+    "local M = {}",
+    "---Cache of resolved roots.",
+    "local CACHE = { a = 1, b = 2, c = 3 }",
+    "local MAX = 42",
+    'local fs = require("demo.fs")', -- a dependency, not a symbol
+    "local uv = vim.uv or vim.loop",
+    "M.defaults = { x = 1 }",
+    "M.handler = function() return 1 end", -- a function, not a symbol
+    "function M.go()",
+    "  local inner = {}", -- nested: not module scope
+    "  return inner",
+    "end",
+    "return M",
+  }, "\n"))
+  sfw:close()
+
+  local _, _, _, syms, loc = functions.scan_file(sym_fixture)
+  local by_sym = {}
+  for _, s in ipairs(syms) do
+    by_sym[s.name] = s
+  end
+
+  eq(loc, 13, "docmap.functions: reports the file's line count")
+  ok(by_sym.CACHE, "docmap.symbols: a module-scope table is reported")
+  eq(by_sym.CACHE.kind, "table", "docmap.symbols: a table constructor is a table")
+  eq(by_sym.CACHE.detail, "3 fields", "docmap.symbols: a table's detail is its field count")
+  eq(
+    by_sym.CACHE.summary,
+    "Cache of resolved roots.",
+    "docmap.symbols: the doc comment above it becomes the summary"
+  )
+  eq(by_sym.MAX.kind, "constant", "docmap.symbols: a literal is a constant")
+  eq(by_sym.MAX.detail, "42", "docmap.symbols: a constant's detail is the literal")
+  eq(by_sym.uv.kind, "binding", "docmap.symbols: anything else is a binding")
+  eq(by_sym["M.defaults"].kind, "table", "docmap.symbols: M.x = {} is reported too")
+
+  -- The two exclusions are the point: another stage owns each of them, and
+  -- reporting them twice would be two places to keep in sync.
+  eq(by_sym.fs, nil, "docmap.symbols: a require binding is left to docmap.deps")
+  eq(by_sym["M.handler"], nil, "docmap.symbols: a function value is left to docmap.functions")
+  eq(by_sym.inner, nil, "docmap.symbols: a local inside a function body is not module scope")
 
   -- --------------------------------------- layers, heuristic, handle queries
   -- Three features that shipped with no coverage at all. The heuristic one in

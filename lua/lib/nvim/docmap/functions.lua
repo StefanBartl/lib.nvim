@@ -223,10 +223,12 @@ end
 ---@return Lib.Docmap.FunctionInfo[] functions
 ---@return Lib.Docmap.RawCall[] calls
 ---@return Lib.Docmap.RawRequire[] requires
+---@return Lib.Docmap.SymbolInfo[] symbols
+---@return integer lines
 function M.scan_file(path)
   local fd = io.open(path, "rb")
   if not fd then
-    return {}, {}, {}
+    return {}, {}, {}, {}, 0
   end
   local src = fd:read("*a")
   fd:close()
@@ -237,15 +239,21 @@ function M.scan_file(path)
   -- in the require graph rather than in just the function list.
   local requires = require("lib.nvim.docmap.deps").extract_source(src)
 
+  -- Counted here rather than by a separate read: this is the one place the
+  -- whole file is already in memory, and `stats.lines` is otherwise a second
+  -- full pass over every file in the tree.
+  local _, newlines = src:gsub("\n", "")
+  local lines = newlines + (src:sub(-1) == "\n" and 0 or 1)
+
   local ok, parser = pcall(vim.treesitter.get_string_parser, src, "lua")
   if not ok then
-    return {}, {}, requires
+    return {}, {}, requires, {}, lines
   end
   local ok_parse, trees = pcall(function()
     return parser:parse()
   end)
   if not ok_parse or not trees or not trees[1] then
-    return {}, {}, requires
+    return {}, {}, requires, {}, lines
   end
   local root = trees[1]:root()
 
@@ -355,7 +363,8 @@ function M.scan_file(path)
   require("lib.nvim.docmap.deps").mark_deferred(root, src, requires)
 
   local calls = require("lib.nvim.docmap.calls").extract(root, src, ranges)
-  return out, calls, requires
+  local symbols = require("lib.nvim.docmap.symbols").extract(root, src, doc_block_above)
+  return out, calls, requires, symbols, lines
 end
 
 return M

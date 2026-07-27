@@ -273,6 +273,20 @@ function M.merge(ir, doc_json, source)
   for _, e in ipairs(type_edges) do
     ir.edges[#ir.edges + 1] = e
   end
+
+  -- `stats.types` is the one tally the scan cannot fill: the class/alias count
+  -- only exists once this ran. Rolled up the same way `scan` rolls up the
+  -- rest, so a directory's count still covers its whole subtree.
+  for _, id in ipairs(ir.order) do
+    ir.nodes[id].stats.types = #(ir.nodes[id].types_detail or {})
+  end
+  for i = #ir.order, 1, -1 do
+    local node = ir.nodes[ir.order[i]]
+    local parent = node.parent and ir.nodes[node.parent]
+    if parent then
+      parent.stats.types = parent.stats.types + node.stats.types
+    end
+  end
 end
 
 return M

@@ -182,6 +182,18 @@ details>summary{cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0}
 .hnode.t-class .hnm{color:var(--mod)}
 .hnode.t-alias .hnm{color:var(--ns)}
 .hnode .hkind{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-top:1px}
+/* --- Stats grid + module-scope symbols in the detail pane --------------- */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:7px;
+  margin-bottom:6px}
+.stat{border:1px solid var(--line);border-radius:7px;padding:6px 9px;background:var(--panel)}
+.stat b{display:block;font-size:15px;font-weight:650;font-family:var(--mono)}
+.stat span{font-size:10.5px;color:var(--muted)}
+.sec .sub{text-transform:none;letter-spacing:0;font-weight:400;font-size:10.5px}
+.lst.syms li{padding:4px 0;color:var(--ink)}
+.sdet{color:var(--muted);font-size:11.5px;font-family:var(--mono)}
+.bd.sk-table{color:var(--mod);border-color:var(--mod)}
+.bd.sk-constant{color:var(--file);border-color:var(--file)}
+.bd.sk-binding{color:var(--ns)}
 #findings tbody tr[data-node]{cursor:pointer}
 #findings tbody tr[data-node]:hover{background:var(--accent-soft)}
 
@@ -625,6 +637,29 @@ local JS = [[
       h.push('</ul>');
     }
 
+    // Stats before anything else in the body: "how big is this and what is in
+    // it" is the question asked on arrival, and it is the one thing that was
+    // impossible to answer from the map at all. Zero-valued entries are
+    // dropped rather than shown as "0 markdown", which would be five sixths
+    // noise on a leaf file.
+    var st = n.stats || {};
+    var cells = [
+      ["modules", st.modules], ["namespaces", st.namespaces],
+      ["lua files", st.files_lua], ["markdown", st.files_md],
+      ["other files", st.files_other], ["lines of lua", st.lines],
+      ["functions", st.functions], ["tables & values", st.symbols],
+      ["types", st.types]
+    ].filter(function(c){ return c[1]; });
+    if(cells.length){
+      h.push('<div class="sec">Stats' +
+        (n.kind === "file" ? '' : ' <span class="sub">(this and everything below)</span>') +
+        '</div><div class="stat-grid">');
+      cells.forEach(function(c){
+        h.push('<div class="stat"><b>' + c[1].toLocaleString() + '</b><span>' + esc(c[0]) + '</span></div>');
+      });
+      h.push('</div>');
+    }
+
     // Dependencies as text, next to the diagram that draws the same thing:
     // the graph answers "what does this sit in the middle of", a list answers
     // "is X in there", and the second question is the more common one.
@@ -704,6 +739,22 @@ local JS = [[
         }
         h.push('</div>');
       });
+    }
+
+    // The half of a module's surface that is not callable: the lookup tables
+    // it dispatches through, the constants that encode its thresholds, the
+    // things it computes once at load time. Reading a module's source these
+    // are usually the first thing you go looking for, and nothing generated
+    // showed them before.
+    if(n.symbols && n.symbols.length){
+      h.push('<div class="sec">Tables &amp; values ('+n.symbols.length+')</div><ul class="lst syms">');
+      n.symbols.forEach(function(sy){
+        h.push('<li><span class="bd sk-'+sy.kind+'">'+sy.kind+'</span> <code>'+esc(sy.name)+'</code>'
+          + (sy.detail ? ' <span class="sdet">'+esc(sy.detail)+'</span>' : '')
+          + (sy.summary ? '<div class="fn-desc">'+esc(sy.summary)+'</div>' : '')
+          + '</li>');
+      });
+      h.push('</ul>');
     }
 
     var kids = (n.children||[]).map(function(i){return byId[i];}).filter(Boolean);

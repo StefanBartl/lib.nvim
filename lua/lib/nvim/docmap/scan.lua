@@ -211,6 +211,42 @@ local function entries(dir)
   return out
 end
 
+---Cheap line count for a file the walk does not otherwise read — currently
+---only `@types/` members, which carry no functions and so never go through
+---`docmap.functions` (which counts its own lines from the source it already
+---has in memory).
+---@param path string
+---@return integer
+local function count_lines(path)
+  local n = 0
+  local fd = io.open(path, "r")
+  if not fd then
+    return 0
+  end
+  for _ in fd:lines() do
+    n = n + 1
+  end
+  fd:close()
+  return n
+end
+
+---An empty tally, so every node starts from the same shape and the
+---aggregation below can add without presence checks.
+---@return Lib.Docmap.Stats
+local function zero_stats()
+  return {
+    modules = 0,
+    namespaces = 0,
+    files_lua = 0,
+    files_md = 0,
+    files_other = 0,
+    lines = 0,
+    functions = 0,
+    symbols = 0,
+    types = 0,
+  }
+end
+
 ---@param opts Lib.Docmap.Opts
 ---@return Lib.Docmap.IR
 function M.scan(opts)
@@ -257,9 +293,34 @@ function M.scan(opts)
     local kind = has_init and "module" or "namespace"
     counts[kind] = counts[kind] + 1
 
-    local fns, calls, requires = {}, {}, {}
+    local fns, calls, requires, syms, loc = {}, {}, {}, {}, 0
     if has_init then
-      fns, calls, requires = require("lib.nvim.docmap.functions").scan_file(init)
+      fns, calls, requires, syms, loc = require("lib.nvim.docmap.functions").scan_file(init)
+    end
+
+    -- Own tally for this directory: what sits directly in it, plus its
+    -- `@types/` members, which are files of this module rather than nodes of
+    -- their own and would otherwise be counted nowhere.
+    local own = zero_stats()
+    own[kind == "module" and "modules" or "namespaces"] = 1
+    own.functions = #fns
+    own.symbols = #syms
+    if has_init then
+      own.files_lua = 1
+      own.lines = loc
+    end
+    for _, t in ipairs(type_files) do
+      own.files_lua = own.files_lua + 1
+      own.lines = own.lines + count_lines(root .. "/" .. t)
+    end
+    for _, e in ipairs(entries(abs)) do
+      if e.type ~= "directory" and not e.name:match("%.lua$") then
+        if e.name:lower():match("%.md$") then
+          own.files_md = own.files_md + 1
+        else
+          own.files_other = own.files_other + 1
+        end
+      end
     end
 
     ---@type Lib.Docmap.Node
@@ -279,6 +340,8 @@ function M.scan(opts)
       depth = depth,
       children = {},
       functions = fns,
+      symbols = syms,
+      stats = own,
       requires = {},
       required_by = {},
       requires_external = {},
@@ -302,8 +365,13 @@ function M.scan(opts)
         -- rather than being folded into the parent's detail pane.
         local h = M.parse_header(child_abs)
         counts.file = counts.file + 1
-        local leaf_fns, leaf_calls, leaf_requires =
+        local leaf_fns, leaf_calls, leaf_requires, leaf_syms, leaf_loc =
           require("lib.nvim.docmap.functions").scan_file(child_abs)
+        local leaf_stats = zero_stats()
+        leaf_stats.files_lua = 1
+        leaf_stats.lines = leaf_loc
+        leaf_stats.functions = #leaf_fns
+        leaf_stats.symbols = #leaf_syms
         ---@type Lib.Docmap.Node
         local leaf = {
           id = child_rel,
@@ -321,6 +389,8 @@ function M.scan(opts)
           depth = depth + 1,
           children = {},
           functions = leaf_fns,
+          symbols = leaf_syms,
+          stats = leaf_stats,
           requires = {},
           required_by = {},
           requires_external = {},
@@ -364,6 +434,20 @@ function M.scan(opts)
   -- call resolution reads the require aliases `deps` indexes.
   require("lib.nvim.docmap.deps").build(ir)
   require("lib.nvim.docmap.calls").build(ir, opts)
+
+  -- Roll the per-directory tallies up the tree. Reverse `order` is a valid
+  -- post-order here because `walk_dir` appends a node before descending into
+  -- it, so every child sits after its parent — walking backwards means a node
+  -- is only ever added to its parent once its own subtree is complete.
+  for i = #order, 1, -1 do
+    local node = index[order[i]]
+    local parent = node.parent and index[node.parent]
+    if parent then
+      for key, value in pairs(node.stats) do
+        parent.stats[key] = parent.stats[key] + value
+      end
+    end
+  end
 
   return ir
 end
