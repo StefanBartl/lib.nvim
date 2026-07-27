@@ -26,12 +26,17 @@ end
 -- kit.form, blocking: a synchronous multi-field prompt with no callback.
 local values, form_cancelled = kit.sync(kit.form, {
   fields = {
-    { name = "condition", label = "Condition to check (empty for 'condition')", default = "condition" },
+    {
+      name = "condition",
+      label = "Condition to check (empty for 'condition')",
+      default = "condition",
+    },
     { name = "negation", label = "Use 'not' prefix? (y/n)", default = "n" },
   },
 })
 if not form_cancelled and values then
-  local check = (values.negation:lower() == "y") and ("not " .. values.condition) or values.condition
+  local check = (values.negation:lower() == "y") and ("not " .. values.condition)
+    or values.condition
   vim.notify(("if %s then ... end"):format(check))
 end
 

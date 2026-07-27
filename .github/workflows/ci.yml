@@ -41,3 +41,17 @@ jobs:
           neovim: true
           version: stable
       - run: nvim --headless -u NONE -l docs/TESTS/run.lua
+
+  # The drift check docmap is built around ran nowhere automatic: the
+  # pre-commit hook is opt-in per clone (`git config core.hooksPath`), so the
+  # committed map went stale on main without anything noticing. `--check`
+  # regenerates in memory and compares; it writes nothing.
+  map:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+      - run: nvim --headless -l scripts/gen_map.lua --check

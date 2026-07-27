@@ -110,7 +110,8 @@ function M.attach(winid, opts)
   -- setting it back to nil would throw.
   local previous = nil
   if mode == "statusline" then
-    local ok, value = pcall(vim.api.nvim_get_option_value, "statusline", { win = winid, scope = "local" })
+    local ok, value =
+      pcall(vim.api.nvim_get_option_value, "statusline", { win = winid, scope = "local" })
     previous = ok and value or ""
   end
 
@@ -207,7 +208,8 @@ function M.attach(winid, opts)
   local render = mode == "float" and render_float or render_statusline
 
   _seq = _seq + 1
-  local group = vim.api.nvim_create_augroup(("lib.nvim.ui.statusline.%d"):format(_seq), { clear = true })
+  local group =
+    vim.api.nvim_create_augroup(("lib.nvim.ui.statusline.%d"):format(_seq), { clear = true })
 
   local segment
 
@@ -215,19 +217,23 @@ function M.attach(winid, opts)
   -- change invalidates it. There is no "window moved" event — resize and
   -- tab/window switches are the observable proxies.
   if mode == "float" then
-    au.create({ "WinResized", "VimResized", "WinScrolled", "WinEnter", "TabEnter", "WinNew", "WinClosed" }, function()
-      if detached then
-        return
-      end
-      if not vim.api.nvim_win_is_valid(winid) then
-        segment.detach()
-        return
-      end
-      render_float()
-    end, {
-      group = group,
-      desc = "lib.nvim.ui.statusline: reposition badge",
-    })
+    au.create(
+      { "WinResized", "VimResized", "WinScrolled", "WinEnter", "TabEnter", "WinNew", "WinClosed" },
+      function()
+        if detached then
+          return
+        end
+        if not vim.api.nvim_win_is_valid(winid) then
+          segment.detach()
+          return
+        end
+        render_float()
+      end,
+      {
+        group = group,
+        desc = "lib.nvim.ui.statusline: reposition badge",
+      }
+    )
   else
     au.create("WinClosed", function(args)
       if not detached and tonumber(args.match) == winid then
@@ -286,7 +292,12 @@ function M.attach(winid, opts)
       end
       float_buf = nil
       if mode == "statusline" and vim.api.nvim_win_is_valid(winid) then
-        pcall(vim.api.nvim_set_option_value, "statusline", previous or "", { win = winid, scope = "local" })
+        pcall(
+          vim.api.nvim_set_option_value,
+          "statusline",
+          previous or "",
+          { win = winid, scope = "local" }
+        )
       end
     end,
   }
