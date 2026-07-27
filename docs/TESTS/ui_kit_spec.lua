@@ -148,6 +148,71 @@ return function(H)
   vim.cmd("stopinsert")
   inp:close()
 
+  -- input(secret = true): masked entry (vim.fn.inputsecret replacement)
+  local sec_submitted
+  local sec = assert(
+    kit.input({
+      prompt = "Password",
+      secret = true,
+      on_submit = function(v)
+        sec_submitted = v
+      end,
+    }),
+    "secret input opens"
+  )
+  eq(
+    vim.api.nvim_get_option_value("conceallevel", { win = sec.winid }),
+    2,
+    "secret input sets conceallevel=2"
+  )
+  ok(
+    vim.api.nvim_get_option_value("concealcursor", { win = sec.winid }):find("i") ~= nil,
+    "secret input's concealcursor covers insert mode"
+  )
+  eq(
+    vim.api.nvim_get_option_value("undolevels", { buf = sec.bufnr }),
+    -1,
+    "secret input disables undo on its buffer"
+  )
+  vim.api.nvim_buf_set_lines(sec.bufnr, 0, 1, false, { "hunter2" })
+  vim.api.nvim_exec_autocmds("TextChangedI", { buffer = sec.bufnr })
+  eq(
+    vim.api.nvim_buf_get_lines(sec.bufnr, 0, 1, false)[1],
+    "hunter2",
+    "secret input's real buffer content is untouched -- only the rendering is masked"
+  )
+  local sec_ns = vim.api.nvim_get_namespaces()["lib_kit_input_secret_" .. sec.bufnr]
+  local sec_marks = vim.api.nvim_buf_get_extmarks(sec.bufnr, sec_ns, 0, -1, { details = true })
+  eq(#sec_marks, 7, "one conceal extmark per character of the typed secret")
+  for _, m in ipairs(sec_marks) do
+    eq(m[4].conceal, "*", "each character is concealed behind the default mask")
+  end
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "x", false)
+  eq(sec_submitted, "hunter2", "on_submit still receives the real (unmasked) text")
+
+  -- custom mask character
+  local mask_surf = assert(
+    kit.input({ secret = true, mask = "•", on_submit = function() end }),
+    "secret input with custom mask opens"
+  )
+  vim.api.nvim_buf_set_lines(mask_surf.bufnr, 0, 1, false, { "ab" })
+  vim.api.nvim_exec_autocmds("TextChangedI", { buffer = mask_surf.bufnr })
+  local mask_ns = vim.api.nvim_get_namespaces()["lib_kit_input_secret_" .. mask_surf.bufnr]
+  local mask_marks =
+    vim.api.nvim_buf_get_extmarks(mask_surf.bufnr, mask_ns, 0, -1, { details = true })
+  eq(mask_marks[1][4].conceal, "•", "opts.mask overrides the default '*' placeholder")
+  mask_surf:close()
+
+  -- plain (non-secret) input never sets conceallevel
+  local plain_sec = assert(kit.input({ prompt = "x" }), "plain input opens")
+  eq(
+    vim.api.nvim_get_option_value("conceallevel", { win = plain_sec.winid }),
+    0,
+    "a plain input leaves conceallevel untouched"
+  )
+  vim.cmd("stopinsert")
+  plain_sec:close()
+
   -- --------------------------------------------------------------- live_input
   -- `TextChangedI`/`TextChanged` don't fire for API-driven buffer edits in
   -- this headless runner (no real insert-mode session), so tests fire them

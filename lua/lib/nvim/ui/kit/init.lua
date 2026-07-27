@@ -77,8 +77,9 @@ function M.toast(opts)
   return toast.open(opts)
 end
 
---- Open a single-line input.
----@param opts table
+--- Open a single-line input. `opts.secret = true` masks it as you type (a
+--- `vim.fn.inputsecret` replacement) — see lib.nvim.ui.kit.input.
+---@param opts Lib.UI.Kit.InputOpts
 ---@return Lib.UI.Kit.Surface|nil
 function M.input(opts)
   return input.open(opts)

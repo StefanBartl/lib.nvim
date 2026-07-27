@@ -84,6 +84,8 @@ input, live_input, form, select, prompt, confirm, menu, picker, progress. >lua
     kit.popup({ type = "toast", message = "background job done" })
     kit.popup({ type = "input", prompt = "New name", default = "x",
                 on_submit = function(text) end })
+    kit.popup({ type = "input", prompt = "Password", secret = true,
+                on_submit = function(pw) end })
     kit.popup({ type = "live_input", prompt = "Filter",
                 on_change = function(query) end })
     kit.popup({ type = "form", fields = {
@@ -104,6 +106,8 @@ input, live_input, form, select, prompt, confirm, menu, picker, progress. >lua
           `opts.close_on_focus_lost = false` opts out of the focus-loss close.
   toast   ephemeral top-right message; stacks; never steals focus; auto-dismiss.
   input   single-line insert-mode prompt; <CR> submits, <Esc> cancels.
+          `secret = true` masks it as you type (a vim.fn.inputsecret
+          replacement); `mask` overrides the placeholder char (default "*").
   live_input  like input, but also debounces keystrokes into `on_change(query)`
           as the user types (`debounce` ms, default 80) — for filter/search
           boxes that refresh a results list or preview on every keystroke.
@@ -139,10 +143,19 @@ Phase 6: `kit.form`, a sequential multi-field prompt — chained `kit.input`
 calls collected into one keyed result table, replacing the hand-rolled
 "several vim.fn.input calls in a row" pattern (sandbox.nvim's
 container_commands.lua, buffer_ctx.nvim's own process_prompts helper).
-Phase 7 (this release): `kit.live_input`, `kit.input` plus a debounced
-`on_change(query)` — replacing the hand-rolled floating prompt-buffer +
-TextChangedI-debounce pattern duplicated in filetree.nvim's live_search and
-filter features. See docs/ROADMAP/UI-KIT-CONCEPT.md.
+Phase 7: `kit.live_input`, `kit.input` plus a debounced `on_change(query)` —
+replacing the hand-rolled floating prompt-buffer + TextChangedI-debounce
+pattern duplicated in filetree.nvim's live_search and filter features.
+Phase 8: `kit.sync`, a `vim.wait` bridge that blocks on an async
+input/form/live_input and returns its result as a plain value, for call
+chains built around a blocking vim.fn.input() that can't easily be recast to
+callback style.
+Phase 9: rich `kit.select` items — multi-line entries with per-span custom
+highlights, navigation by logical item instead of raw line.
+Phase 10 (this release): `kit.input({ secret = true })` — masked entry, a
+vim.fn.inputsecret replacement. Each character is concealed behind `mask`
+(default "*"), re-derived from the buffer on every edit; the real text still
+reaches on_submit. See docs/ROADMAP/UI-KIT-CONCEPT.md.
 
 The layout engine turns a declarative region spec into aligned nvim_open_win
 geometry for several coordinated floats: >lua

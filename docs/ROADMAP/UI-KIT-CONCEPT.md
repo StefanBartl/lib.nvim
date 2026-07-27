@@ -441,7 +441,7 @@ surfaces the library already uses:
 
 ## 13. Phased roadmap
 
-> Status: **Phases 1–9 shipped — the originally scoped roadmap, plus every
+> Status: **Phases 1–10 shipped — the originally scoped roadmap, plus every
 > follow-on primitive the migration audit called for, is complete;
 > hover_select fully absorbed.** Theme engine, surface, and every component
 > (`note`/`viewer`/`toast`/`input`/`live_input`/`form`/`select`/`prompt`/`picker`/`confirm`/`menu`/`progress`),
@@ -453,11 +453,12 @@ surfaces the library already uses:
 > `on_submit`/`on_cancel`-shaped component and returns its result as a plain
 > value, for callers that can't be recast to callback style (§13a); `select`
 > items can now be plain strings *or* rich multi-line entries with per-span
-> highlights (§13b). All hover_select call sites were migrated to
-> `kit.select` and the standalone `lib.nvim.ui.hover_select` module has been
-> **removed** (§10 step 4 done). What remains is migrating consumer plugins'
-> existing call sites onto `kit.viewer`/`kit.form`/`kit.live_input`/
-> `kit.sync`/rich `kit.select` items — tracked in
+> highlights (§13b); `input` gained `secret = true` for masked entry (§13c).
+> All hover_select call sites were migrated to `kit.select` and the standalone
+> `lib.nvim.ui.hover_select` module has been **removed** (§10 step 4 done).
+> What remains is migrating consumer plugins' existing call sites onto
+> `kit.viewer`/`kit.form`/`kit.live_input`/`kit.sync`/rich `kit.select`
+> items/`kit.input({secret=true})` — tracked in
 > docs/ROADMAP/personal/lib_nvim/ui_kit_migration.md, not here.
 
 | Phase | Deliverable | Notes |
@@ -471,6 +472,7 @@ surfaces the library already uses:
 | **7** ✅ | `live_input` — `kit.input` plus a debounced `on_change(query)`, fired as the user types | Motivated by filetree.nvim's `live_search`/`filter` features, each independently hand-rolling a floating prompt + `TextChangedI`-debounce (§ui_kit_migration audit §5.3) |
 | **8** ✅ | `kit.sync` — block on an async kit component via `vim.wait`, return its result as a plain value | See §13a below. Motivated by buffer_ctx.nvim's `guard_interactive()`/`process_prompts` (§ui_kit_migration audit §3), whose synchronous `vim.fn.input()`-based return value is baked into a 4-layer call chain (`boiler.get()`, consumed synchronously at 4 call sites in `commands.lua` and the telescope extension) |
 | **9** ✅ | Rich `kit.select` items — multi-line entries with per-span custom highlights, navigation by logical item instead of raw line | See §13b below. Motivated by recommender.nvim's hand-rolled suggestion float (§ui_kit_migration audit §2/§4), a 3-line-per-item picker with per-column highlight groups that plain-string `kit.select` couldn't represent |
+| **10** ✅ | `kit.input({ secret = true })` — masked entry, each character concealed behind `mask` (default `"*"`), re-derived from the buffer on every edit; real text still reaches `on_submit` | See §13c below. Motivated by sandbox.nvim's `registry_commands.lua:30` (`vim.fn.inputsecret` for a registry password) — the only masked-input call site in the migration audit |
 
 ### 13a. `kit.sync` — bridging kit's async components back to a plain return value — ✅ shipped
 
@@ -652,6 +654,56 @@ kit.select({
 Implemented in `lua/lib/nvim/ui/kit/chooser.lua`; example at
 `docs/EXAMPLES/kit-select.lua`; tests in `docs/TESTS/ui_kit_spec.lua`
 (§"chooser (native select)").
+
+### 13c. `kit.input({ secret = true })` — masked entry — ✅ shipped (Phase 10)
+
+**Problem.** `vim.fn.inputsecret()` is the last native prompt primitive
+`kit.input` had no answer for: sandbox.nvim's `registry_commands.lua:30`
+prompts for a Docker registry password and needs the typed text hidden as
+it's entered. `kit.input` is an editable insert-mode buffer, so the naive
+approach — let the user type into it, then swap the visible text for
+asterisks afterwards — still lets the real characters flash on screen for a
+frame each keystroke, or worse, requires diffing the previous masked buffer
+against the new one to recover what was actually typed (breaks on paste, a
+mid-line edit, anything but pure append/backspace).
+
+**Idea.** Don't touch the buffer's real content at all — mask the
+*rendering* with `conceal`, one single-character extmark per character:
+
+```lua
+kit.input({
+  prompt = "Registry password",
+  secret = true,       -- mask = "*" by default; opts.mask overrides it
+  on_submit = function(password) end,
+})
+```
+
+- `opts.secret = true` sets `conceallevel = 2` / `concealcursor = "nvic"`
+  on the window (masking stays active in every mode, including with the
+  cursor sitting on the character — the whole point) and buffer-local
+  `undolevels = -1` (defense in depth: the plaintext can't be recovered via
+  `u`/the undo tree while the float is open).
+- On open, and again on every `TextChangedI`/`TextChanged`, the mask is
+  **recomputed from scratch** from the buffer's actual current line: clear
+  the namespace, then walk the line character-by-character (`vim.fn.strchars`
+  + `vim.fn.byteidx` for multibyte safety) and lay down one
+  `conceal = opts.mask` extmark per character. Because the mask is always
+  re-derived from ground truth rather than incrementally patched, arbitrary
+  edits — paste, backspace, a delete in the middle of the string, an entire
+  line replaced — all just work with no special-casing.
+- `on_submit`/`expand_env` read the buffer's real content exactly like plain
+  `kit.input` — no shadow-value bookkeeping, no second code path.
+- **Why this matches (and doesn't exceed) `inputsecret`'s own guarantees:**
+  every kit scratch buffer already has `swapfile = false` and
+  `bufhidden = "wipe"` (`make_scratch`), so the plaintext was never at risk
+  of touching disk or outliving the float either way — `secret = true` closes
+  the two gaps a real editable buffer opens beyond that (on-screen echo, and
+  the undo tree) without inventing a parallel blocking `getchar()`-loop input
+  path that would break `kit.input`'s async, callback-based contract.
+
+Implemented in `lua/lib/nvim/ui/kit/input.lua`; example at
+`docs/EXAMPLES/kit-input.lua`; tests in `docs/TESTS/ui_kit_spec.lua`
+(§"input(secret = true)").
 
 ## 14. Open decisions
 
