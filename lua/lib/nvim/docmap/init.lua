@@ -147,6 +147,8 @@ function M.to_json(ir)
       '"required_by": ' .. (#n.required_by > 0 and json.encode(n.required_by) or "[]"),
       '"requires_external": '
         .. (#n.requires_external > 0 and json.encode(n.requires_external) or "[]"),
+      '"symbols": ' .. json.encode(n.symbols),
+      '"stats": ' .. json.encode(n.stats),
     }
     put("    {" .. table.concat(fields, ", ") .. "}")
     put(i < #ir.order and ",\n" or "\n")

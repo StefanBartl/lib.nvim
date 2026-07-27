@@ -130,6 +130,7 @@ else — module prefix, directory layout, types directory name — is an option.
 |---|---|---|
 | Scan | [`scan.lua`](scan.lua) | `Lib.Docmap.IR` — hierarchy, summaries, links |
 | Scan | [`functions.lua`](functions.lua) | `node.functions` — per-function docs via `vim.treesitter`, unconditional (no LuaLS needed) |
+| Scan | [`symbols.lua`](symbols.lua) | `node.symbols` — module-scope tables, constants and bindings |
 | Graph | [`deps.lua`](deps.lua) | `kind="require"` edges + `node.requires`/`required_by` |
 | Graph | [`calls.lua`](calls.lua) | `kind="call"` edges — which function calls which |
 | LuaLS (opt-in) | [`luals.lua`](luals.lua) | class/alias detail + `kind="type"` edges merged into the IR |
@@ -212,6 +213,42 @@ target that resolves to nothing, same idea as `dead-readme-link`) and
 `undocumented-param` (info — a text-based heuristic comparing the raw
 signature's parameter count to the number of `@param` lines; deliberately
 `info`-only since the heuristic can be wrong on complex signatures).
+
+## What a module *is*, not just what it exports
+
+Two things the detail pane could not answer before, both filled during the
+same scan and the same parse:
+
+**Module-scope tables, constants and bindings** ([`symbols.lua`](symbols.lua)).
+`functions.lua` answers "what can I call"; this answers the rest of "what is in
+here" — the lookup tables a module dispatches through, the constants that
+encode its thresholds, the singletons it holds at load time. Reading a module's
+source those are usually the first thing you look for, and no generated
+documentation showed them.
+
+Top level only, anchored on `(chunk …)` in the query rather than by walking
+ancestors: a `local seen = {}` inside a function body is an implementation
+detail, exactly as a nested `local function` is. Two shapes are deliberately
+*not* reported, because another stage already owns them and reporting them
+twice would be two places to keep in sync:
+
+| Not reported | Owned by |
+|---|---|
+| `local fs = require("…")` | `deps.lua` — it is a dependency, and the alias is what makes call resolution work |
+| `M.foo = function(…)` | `functions.lua` — it is a function |
+
+**Subtree stats** (`node.stats`). Modules, namespaces, `.lua`/`.md`/other
+files, lines of Lua, functions, symbols and types, aggregated over the node
+*and everything below it* — the question a directory answers is "how big is
+this part of the tree". The roll-up walks `ir.order` backwards, which is a
+valid post-order because `scan` appends a node before descending into it, so
+every child sits after its parent.
+
+Line counting happens in `functions.scan_file`, the one place the whole file is
+already in memory; only `@types/` members — which carry no functions and so
+never go through it — get their own cheap read. `stats.types` is the exception
+that `scan` cannot fill, since the class/alias count only exists once LuaLS
+enrichment ran, so `luals.merge` fills and rolls it up the same way.
 
 ## Call-graph scanning (`kind="call"` edges)
 

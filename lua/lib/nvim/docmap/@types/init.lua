@@ -63,6 +63,8 @@
 ---@field requires_external string[] Module paths this node requires that resolve to nothing in the scanned tree — other plugins, or anything outside `source`. Plain strings, not invented nodes: the map only claims to describe what it scanned. The Deps view can draw them on request.
 ---@field requires_raw Lib.Docmap.RawRequire[] Unresolved `require` occurrences. Internal to the scan pipeline (`deps`/`calls` consume it); deliberately not serialized into `module_map.json`.
 ---@field calls_raw Lib.Docmap.RawCall[] Unresolved call sites. Internal, same as `requires_raw`.
+---@field symbols Lib.Docmap.SymbolInfo[] Module-scope tables, constants and bindings in this node's own source. Always an array; runs unconditionally as part of `scan()`.
+---@field stats Lib.Docmap.Stats Counts over this node and everything below it.
 
 ---A single `@class`/`@alias` parsed from `lua-language-server --doc` output,
 ---attached to whichever node owns the file it's defined in.
@@ -119,6 +121,37 @@
 ---| "type"    # A `---@field` on one class names another class.
 ---| "require" # One file calls `require` on another module in the tree.
 ---| "call"    # One function calls another.
+
+---What a module-scope binding turned out to be. Deliberately coarse: the
+---distinction that matters when reading a module is "lookup table" vs "tuned
+---number" vs "something computed at load time", not a type.
+---@alias Lib.Docmap.SymbolKind
+---| "table"    # Bound to a table constructor.
+---| "constant" # Bound to a literal number, string or boolean.
+---| "binding"  # Anything else evaluated at load time.
+
+---One module-scope table, constant or binding, from `lib.nvim.docmap.symbols`.
+---Functions and `require` bindings are excluded — `docmap.functions` and
+---`docmap.deps` own those.
+---@class Lib.Docmap.SymbolInfo
+---@field name string As written, e.g. "CACHE" or "M.defaults".
+---@field kind Lib.Docmap.SymbolKind
+---@field detail string Short right-hand-side summary: "12 fields" for a table, the literal for a constant, a condensed expression otherwise.
+---@field summary string One-line prose from the doc block above it, if any.
+---@field line integer 1-based line the binding starts on.
+
+---Counts over a node and everything below it. Aggregated rather than own-only:
+---the question a directory answers is "how big is this part of the tree".
+---@class Lib.Docmap.Stats
+---@field modules integer Directories with an `init.lua`.
+---@field namespaces integer Directories without one.
+---@field files_lua integer `.lua` files, including `init.lua` and `@types/`.
+---@field files_md integer Markdown files, including READMEs.
+---@field files_other integer Everything else that is not a directory.
+---@field lines integer Lines of Lua.
+---@field functions integer Documented top-level functions.
+---@field symbols integer Module-scope tables, constants and bindings.
+---@field types integer `@class`/`@alias` definitions — only non-zero once LuaLS enrichment ran.
 
 ---A directed edge between two nodes. Which of the optional fields are set is
 ---determined by `kind` — see each field. `ir.edges` is always an array, empty
