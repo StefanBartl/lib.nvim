@@ -36,21 +36,34 @@ local specs = {
   "docmap_browse_spec.lua",
 }
 
+--- Straight to stdout rather than through `print`.
+---
+--- `print` in a headless Neovim goes through the message area, and a spec that
+--- opens a window forces a redraw that swallows the pending newline — two spec
+--- results then run together on one line, which is exactly as confusing as it
+--- sounds when a run is being read for a failure. `docmap_browse_spec` mounts
+--- real floats, so this stopped being hypothetical. A headless runner's output
+--- is meant to be read by a person or a log, not rendered in a UI.
+---@param s string
+local function say(s)
+  io.stdout:write(s, "\n")
+end
+
 local failed = 0
 for _, name in ipairs(specs) do
   local run = dofile(dir .. name)
   local ok, err = pcall(run, H)
   if ok then
-    print(("ok    %s"):format(name))
+    say(("ok    %s"):format(name))
   else
     failed = failed + 1
-    print(("FAIL  %s\n      %s"):format(name, tostring(err)))
+    say(("FAIL  %s\n      %s"):format(name, tostring(err)))
   end
 end
 
 if failed > 0 then
-  print(("\n%d spec(s) failed"):format(failed))
+  say(("\n%d spec(s) failed"):format(failed))
   os.exit(1)
 end
 
-print("\nLIB_TESTS_OK")
+say("\nLIB_TESTS_OK")

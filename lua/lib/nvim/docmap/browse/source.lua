@@ -135,9 +135,18 @@ function M.acquire(opts)
 
     -- Reuse an already-installed handle rather than installing a second one:
     -- `install()` replaces on collision, which would tear down a watch some
-    -- other caller (a plugin's own setup) is still relying on.
+    -- other caller (a plugin's own setup) is still relying on — and, worse,
+    -- drop every `on_change` subscriber with it.
+    --
+    -- Reusing alone is not enough though. `docmap.command.setup()` installs
+    -- with the plain config, which sets no `watch`, so a `:LibMap` earlier in
+    -- the session left exactly the handle this finds — and "live" then meant
+    -- a view that never re-scanned on write. `ensure_watch` upgrades it in
+    -- place instead, keeping the subscribers.
     local handle = registry.get(root)
-    if not handle then
+    if handle then
+      registry.ensure_watch(root)
+    else
       handle = docmap.install(vim.tbl_extend("force", opts, { root = root, watch = true }))
     end
     return handle.ir(), handle, nil

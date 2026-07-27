@@ -627,7 +627,41 @@ return function(H)
     0,
     "docmap.handle: callers() of an uncalled function is empty, not nil"
   )
+  -- `ensure_watch` upgrades an installed handle in place. The case it exists
+  -- for: `command.setup()` installs with the plain config, which sets no
+  -- `watch`, so a `:LibMap` earlier in the session left a non-watching handle
+  -- that `:LibBrowse live` then reused — a "live" view that never re-scanned.
+  -- Upgrading rather than re-installing is what keeps the subscribers, since
+  -- `install()` treats a collision as replace and drops them.
+  local registry = require("lib.nvim.docmap.registry")
+  -- The group name is keyed on the *normalized* root, the same way the
+  -- registry keys its entries — a raw tempname carries backslashes on Windows.
+  local watch_group = "LibDocmapWatch:"
+    .. require("lib.nvim.docmap.browse.source").norm_root(heur_root)
+  local function watching()
+    local got, aus = pcall(vim.api.nvim_get_autocmds, { group = watch_group })
+    return got and #aus > 0
+  end
+
+  local notified = 0
+  handle.on_change(function()
+    notified = notified + 1
+  end)
+
+  eq(watching(), false, "docmap.registry: install() without watch does not watch")
+  eq(registry.ensure_watch(heur_root), true, "docmap.registry: ensure_watch upgrades it")
+  eq(watching(), true, "docmap.registry: the watch is live afterwards")
+  handle.rescan()
+  ok(notified > 0, "docmap.registry: the on_change subscriber survives the upgrade")
+  eq(registry.ensure_watch(heur_root), true, "docmap.registry: ensure_watch is idempotent")
+  eq(
+    registry.ensure_watch(heur_root .. "/nowhere"),
+    false,
+    "docmap.registry: ensure_watch on an uninstalled root is a no-op, not an error"
+  )
+
   handle.uninstall()
+  eq(watching(), false, "docmap.registry: uninstall tears the watch down again")
 
   vim.fn.delete(heur_root, "rf")
   vim.fn.delete(root, "rf")
