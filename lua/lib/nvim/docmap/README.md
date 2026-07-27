@@ -20,6 +20,8 @@ on GitHub).
 :LibMap graph deps         " open the HTML on the dependency graph
 :LibMap graph calls lib.nvim.fs   " …or on one module's call graph
 :LibMap why lib.nvim.ui.kit lib.nvim.fs   " shortest require path between two
+:LibMap dot deps           " the require graph as Graphviz DOT, in a buffer
+:LibMap dot calls lib.nvim.fs   " …scoped to one module's neighbourhood
 
 :LibBrowse                 " navigate the same map inside the editor
 :LibBrowse live            " …re-scanning on every write
@@ -39,6 +41,21 @@ on, so each entry jumps straight to the line that creates that link. The
 summary says up front whether the path is load-time throughout or goes through
 a lazy require somewhere — usually the difference between "has to go" and "is
 fine".
+
+`dot` is the third renderer for the same edges, and it exists because the
+other two cannot do what Graphviz does: the HTML page lays boxes out in BFS
+layers and cannot route an edge around anything, and Mermaid is rendered by the
+code host, which is worth a lot and costs all control over the result. It is
+deliberately **not** wired to a `dot` binary — that would add an external
+dependency and a "dot not found" failure mode to a feature whose whole output
+is text. The buffer is something to yank, `:w`, or pipe through
+`:%!dot -Tsvg`.
+
+Its `scope` is a bounded neighbourhood, not unbounded reachability. That
+sounds like the right answer and is not: measured over this tree, unbounded
+scope kept 750 of 872 lines, because in a connected dependency graph almost
+everything reaches almost everything. A scope that excludes nothing is not a
+scope.
 
 `graph` completes both the kind and, after it, the names the map knows — it is
 the same page as `open`, opened at a state instead of at the root, since the
@@ -175,7 +192,7 @@ else — module prefix, directory layout, types directory name — is an option.
 | Graph | [`calls.lua`](calls.lua) | `kind="call"` edges — which function calls which |
 | LuaLS (opt-in) | [`luals.lua`](luals.lua) | class/alias detail + `kind="type"` edges merged into the IR |
 | Check | [`check.lua`](check.lua) | `Lib.Docmap.Finding[]` — documentation drift |
-| Render | [`render/`](render/) | HTML (Tree + Hierarchy tabs), Markdown, Mermaid |
+| Render | [`render/`](render/) | HTML (Tree + Hierarchy tabs), Markdown, Mermaid, DOT |
 | Encode | [`json.lua`](json.lua) | deterministic JSON |
 | Live | [`registry.lua`](registry.lua) | `install()`/`uninstall()` — an in-memory `Handle` instead of files |
 

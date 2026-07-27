@@ -568,6 +568,32 @@ return function(H)
   eq(#(deps.impact(gir, "lua/g/one")), 0, "deps.impact: nothing depends on the top of the chain")
   eq(#(deps.impact(gir, "nope")), 0, "deps.impact: an unknown node has no dependents")
 
+  -- ---------------------------------------------------------- render.dot
+  local dot = require("lib.nvim.docmap.render.dot")
+  local whole = dot.render(gir, { kind = "require" })
+  ok(whole:match("^// require graph"), "render.dot: leads with a comment naming the graph")
+  ok(whole:find("digraph docmap {", 1, true), "render.dot: emits a digraph")
+  ok(whole:find('"lua/g/one" -> "lua/g/two"', 1, true), "render.dot: quotes node ids and edges")
+  ok(whole:find('label="lazy"', 1, true), "render.dot: marks deferred requires")
+  eq(whole, dot.render(gir, { kind = "require" }), "render.dot: byte-stable for the same IR")
+
+  -- Scope is bounded. Unbounded reachability sounds right and is not: in a
+  -- connected dependency graph almost everything reaches almost everything,
+  -- and a scope that excludes nothing is not a scope.
+  local near = dot.render(gir, { kind = "require", scope = "lua/g/four", hops = 1 })
+  local far = dot.render(gir, { kind = "require", scope = "lua/g/four", hops = 3 })
+  local function node_count(s)
+    return select(2, s:gsub("%[label=", ""))
+  end
+  ok(node_count(near) < node_count(far), "render.dot: a smaller hop budget yields a smaller graph")
+  ok(node_count(near) > 0, "render.dot: and still contains the neighbourhood")
+
+  local calls_dot = dot.render(gir, { kind = "call" })
+  ok(
+    calls_dot:match("^// call graph"),
+    "render.dot: the call graph is a different graph, not a relabelled one"
+  )
+
   vim.fn.delete(gr, "rf")
 
   -- --------------------------------------- layers, heuristic, handle queries
