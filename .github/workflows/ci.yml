@@ -20,9 +20,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # PUC Lua, not "luajit-2.1": that value made the setup step fail with a
+      # 404 on every run for weeks (LuaJIT stopped publishing the 2.1 tarball
+      # this action downloads), so luacheck was never actually reached. Which
+      # interpreter runs luacheck is independent of what it checks against —
+      # `std = "luajit"` in .luacheckrc is what pins that, and it stays.
       - uses: leafo/gh-actions-lua@v10
         with:
-          luaVersion: "luajit-2.1"
+          luaVersion: "5.4"
       - uses: leafo/gh-actions-luarocks@v4
       - run: luarocks install luacheck
       - run: luacheck lua docs/TESTS
