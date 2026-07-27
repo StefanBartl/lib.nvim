@@ -377,22 +377,40 @@ local function bind(st)
     history_step(st, 1)
   end, mo)
 
-  map("n", "h", function()
-    if st.mode == "deps" or st.mode == "calls" then
-      go(st, { dir = "in" })
+  -- Same reasoning as the mode keys above: a move that changes nothing must
+  -- not become a history stop, or Back appears to stall on it.
+  local function set_dir(dir)
+    if (st.mode == "deps" or st.mode == "calls") and st.dir ~= dir then
+      go(st, { dir = dir })
     end
+  end
+
+  map("n", "h", function()
+    set_dir("in")
   end, mo)
   map("n", "l", function()
-    if st.mode == "deps" or st.mode == "calls" then
-      go(st, { dir = "out" })
-    end
+    set_dir("out")
   end, mo)
 
+  -- Depth is a Deps-only axis: `walk_requires` is the only thing that reads
+  -- it. Ungated, `+` in Structure or Types pushed a history stop that changed
+  -- nothing on screen — and a `<C-o>` that visibly does nothing reads as the
+  -- history being broken rather than as the depth key having been a no-op.
+  local function set_depth(delta)
+    if st.mode ~= "deps" then
+      return
+    end
+    local want = math.max(1, math.min(9, st.depth + delta))
+    if want ~= st.depth then
+      go(st, { depth = want })
+    end
+  end
+
   map("n", "+", function()
-    go(st, { depth = math.min(9, st.depth + 1) })
+    set_depth(1)
   end, mo)
   map("n", "_", function()
-    go(st, { depth = math.max(1, st.depth - 1) })
+    set_depth(-1)
   end, mo)
 
   map("n", "gd", function()

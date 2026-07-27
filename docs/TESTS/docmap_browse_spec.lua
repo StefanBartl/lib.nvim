@@ -353,6 +353,28 @@ return function(H)
     press("<C-i>")
     eq(status_now(), at_types, "browse: a new move drops the forward history")
 
+    -- Keys that cannot change anything must not become history stops: a
+    -- `<C-o>` that visibly does nothing reads as broken history rather than
+    -- as the key having been a no-op.
+    -- Each check records the position it is standing on *before* the move, so
+    -- the assertion never depends on counting entries in the trail.
+    local prev = status_now()
+    press("1") -- structure, where depth does not apply
+    local at_structure = status_now()
+    press("+")
+    press("+")
+    eq(status_now(), at_structure, "browse: depth keys do nothing outside deps")
+    press("<C-o>")
+    eq(status_now(), prev, "browse: and leave no dead stop behind them")
+
+    prev = status_now()
+    press("2") -- deps, dir starts at "out"
+    local at_deps_out = status_now()
+    press("l") -- already outgoing
+    eq(status_now(), at_deps_out, "browse: setting the direction it already has is a no-op")
+    press("<C-o>")
+    eq(status_now(), prev, "browse: which also leaves no dead stop")
+
     -- Centering on a NAMESPACE: `lua/lib/nvim/fs` has no init.lua and so
     -- declares no @module, but `lib.nvim.fs` is what a user types. Resolving
     -- only on a declared module silently lands on the root instead.
@@ -368,6 +390,50 @@ return function(H)
       line:find("fs", 1, true) ~= nil,
       "browse: a namespace module path resolves to its node, not the root"
     )
+
+    -- `gq` and `gd` are the two things that justify an editor-side view at
+    -- all, and neither was exercised. Both are destructive to the browser
+    -- (they close it), so they come last.
+    browse.close()
+    vim.fn.setqflist({}, "r")
+    browse.open({ root = root, center = "lib.nvim.docmap" })
+    vim.api.nvim_set_current_win((slot("lib-docmap-browse-list")))
+    press("gq")
+
+    eq(browse.is_open(), false, "browse: gq closes the browser")
+    local qf = vim.fn.getqflist({ items = 0, title = 0 })
+    ok(#qf.items > 0, "browse: gq fills the quickfix list")
+    ok(
+      (qf.title or ""):find("docmap", 1, true) ~= nil,
+      "browse: the quickfix list is titled with the mode and breadcrumb"
+    )
+    local first = qf.items[1]
+    ok(first.bufnr and first.bufnr > 0, "browse: quickfix entries point at a real file")
+    ok(first.lnum >= 1, "browse: and carry a line number")
+    vim.cmd("cclose")
+
+    -- `gd` on a function entry lands in its file at its declaration line.
+    browse.open({ root = root, center = "lib.nvim.docmap.deps" })
+    local gd_list_win, gd_list_buf = slot("lib-docmap-browse-list")
+    vim.api.nvim_set_current_win(gd_list_win)
+    local target_row
+    for i, row in ipairs(vim.api.nvim_buf_get_lines(gd_list_buf, 0, -1, false)) do
+      if row:find("ƒ", 1, true) then
+        target_row = i
+        break
+      end
+    end
+    if target_row then
+      vim.api.nvim_win_set_cursor(gd_list_win, { target_row, 0 })
+      press("gd")
+      eq(browse.is_open(), false, "browse: gd closes the browser — the floats covered the file")
+      local opened = vim.api.nvim_buf_get_name(0):gsub("\\", "/")
+      ok(
+        opened:find("docmap/deps.lua", 1, true) ~= nil,
+        "browse: gd opened the file the entry pointed at"
+      )
+      ok(vim.api.nvim_win_get_cursor(0)[1] > 1, "browse: at the declaration line, not line 1")
+    end
 
     browse.close()
     eq(browse.is_open(), false, "browse: close() shuts it down")
