@@ -1408,6 +1408,10 @@ local JS = [[
       hpathEl.textContent = center.module || center.path;
       hgraph.style.width = ""; hgraph.style.height = "";
       hstage.style.width = ""; hstage.style.height = "";
+      // Cleared, not just left behind: applyZoom() multiplies this by the
+      // scale, so a stale extent would give an empty message a scroll area
+      // thousands of pixels wide the moment the wheel is touched.
+      stageExtent = { w: 0, h: 0 };
       hstage.innerHTML = emptyMessage(view, center);
       return;
     }
