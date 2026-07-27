@@ -26,6 +26,7 @@
 ---@field rpc_pipe Lib.System.RpcPipe
 ---@field info Lib.System.Info
 ---@field proc_trace Lib.System.ProcTrace
+---@field job Lib.System.Job
 ---@field setup fun(opts?: Lib.System.SetupOptions): Lib.System.Env
 
 --- `lib.nvim.system.env` module surface.
@@ -72,5 +73,17 @@
 ---@field stop fun(): Lib.System.ProcTrace.Result # Restore the original functions.
 ---@field is_active fun(): boolean
 ---@field log_path fun(): string|nil # Path of the active (or last) log file.
+
+--- Options accepted by `lib.nvim.system.job.start`.
+---@class Lib.System.Job.Opts
+---@field command string # Executable name/path.
+---@field args? string[] # Argv, excluding `command` itself.
+---@field on_stdout? fun(err: nil, line: string) # Called once per stdout line, already vim.schedule-wrapped.
+---@field on_stderr? fun(err: nil, line: string) # Called once per stderr line, already vim.schedule-wrapped.
+
+--- `lib.nvim.system.job` module surface: a `vim.system` wrapper with
+--- plenary.job-style line-buffered, schedule-safe callbacks.
+---@class Lib.System.Job
+---@field start fun(opts: Lib.System.Job.Opts): vim.SystemObj
 
 return {}

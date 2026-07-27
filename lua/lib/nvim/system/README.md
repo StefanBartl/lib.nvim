@@ -20,11 +20,12 @@ Guiding ideas:
 
 ```
 lib.nvim.system/
-├── init.lua        -- aggregator: env, rpc_pipe, info, proc_trace, and opt-in setup()
+├── init.lua        -- aggregator: env, rpc_pipe, info, proc_trace, job, and opt-in setup()
 ├── env.lua         -- computed, memoized host-environment snapshot
 ├── rpc_pipe.lua    -- predictable Windows named-pipe RPC server
 ├── info.lua        -- cross-platform system information (float + clipboard)
 ├── proc_trace.lua  -- instrumentation for system()/jobstart/vim.system calls
+├── job.lua         -- vim.system wrapper with line-buffered, schedule-safe callbacks
 └── @types/         -- LuaLS types (Lib.System.*)
 ```
 
@@ -244,6 +245,31 @@ Log format — one line per call, with a traceback appended for slow ones:
 
 Pure by default: nothing happens until `start()` is called, and `stop()`
 fully restores the original functions.
+
+---
+
+## `lib.nvim.system.job`
+
+A thin wrapper around `vim.system` that restores plenary.job's ergonomics —
+line-buffered, `vim.schedule`-wrapped callbacks — without pulling in
+plenary.nvim. Added specifically so consumers streaming a shell command's
+output line-by-line (e.g. into a preview buffer) don't need plenary just for
+that.
+
+### `job.start(opts) -> vim.SystemObj`
+
+```lua
+require("lib.nvim.system.job").start({
+  command = "head",
+  args = { "-n", "50", file },
+  on_stdout = function(_, line) ... end,  -- one call per line, already scheduled
+  on_stderr = function(_, line) ... end,
+})
+```
+
+`opts.args` defaults to `{}`. `on_stdout`/`on_stderr` are optional; each fires
+once per complete line (trailing `\r` stripped), already inside
+`vim.schedule` — safe to touch buffers/windows directly.
 
 ---
 
