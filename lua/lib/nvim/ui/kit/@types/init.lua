@@ -164,9 +164,22 @@
 ---@field surface Lib.UI.Kit.SurfaceModule
 ---@field theme Lib.UI.Kit.ThemeModule
 ---@field layout Lib.UI.Kit.LayoutModule
+---@field chooser Lib.UI.Kit.ChooserModule  # low-level escape hatch behind kit.select -- see its own doc comment
 
 ---@class Lib.UI.Kit.SurfaceModule
 ---@field open fun(opts?: Lib.UI.Kit.SurfaceOpts): Lib.UI.Kit.Surface|nil
+
+--- The chooser `kit.select` delegates to; see `kit.chooser`'s doc comment
+--- in lua/lib/nvim/ui/kit/init.lua for when to reach for this directly.
+---@class Lib.UI.Kit.ChooserModule
+---@field open fun(opts: table): Lib.UI.Kit.Surface|nil
+---@field close fun()
+---@field is_open fun(): boolean
+---@field move fun(delta: integer)
+---@field toggle fun()
+---@field submit fun()
+---@field current_index fun(): integer|nil
+---@field current_item fun(): any
 
 --- Geometry for one slot (an nvim_open_win config).
 ---@class Lib.UI.Kit.Slot

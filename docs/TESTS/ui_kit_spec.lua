@@ -463,6 +463,37 @@ return function(H)
   -- theme selection highlight is wired
   ok(vim.fn.hlexists("KitSelection") == 1, "KitSelection group defined for the chooser")
 
+  -- initial_index: lands the cursor on a specific item at open time (e.g.
+  -- restoring position across a close+reopen refresh), instead of item 1.
+  kit.select({
+    selection = { "a", "b", "c" },
+    initial_index = 3,
+    on_select = function() end,
+  })
+  eq(chooser.current_index(), 3, "initial_index lands the cursor on the requested item")
+  chooser.close()
+
+  -- out-of-range initial_index falls back to item 1 rather than erroring.
+  kit.select({
+    selection = { "a", "b" },
+    initial_index = 99,
+    on_select = function() end,
+  })
+  eq(chooser.current_index(), 1, "out-of-range initial_index falls back to item 1")
+  chooser.close()
+
+  -- kit.chooser is exposed directly, and current_item() reads the
+  -- highlighted item's original value without submitting/closing -- for a
+  -- consumer building extra actions on top of the picker (e.g.
+  -- recommender.nvim's yank-without-closing).
+  ok(kit.chooser ~= nil, "kit.chooser is exposed publicly")
+  kit.select({ selection = { "x", "y" }, on_select = function() end })
+  eq(kit.chooser.current_item(), "x", "current_item() reads the highlighted item")
+  kit.chooser.move(1)
+  eq(kit.chooser.current_item(), "y", "current_item() follows navigation")
+  kit.chooser.close()
+  eq(kit.chooser.current_item(), nil, "current_item() is nil once closed")
+
   -- --------------------------------------------------------------- chooser: rich items (§13b)
   -- Multi-line entries with per-span highlights (recommender.nvim's
   -- motivating use case: a 3-line suggestion with per-column highlight
