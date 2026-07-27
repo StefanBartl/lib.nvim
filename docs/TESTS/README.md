@@ -30,6 +30,8 @@ The runner prints one line per spec and exits non-zero on the first failure
 | `nvim_helpers_spec.lua` | New `lib.nvim.*` adapters: module loading, aggregator wiring (`cross`/`window`), `core.first_available`, `normalize` validators, `cross.fs.expand_path`/`mutate`, `buf_win_tab.get_option`/`word_under_cursor`, and `fs` round-trips (`read`, `json`, `collect_recursive`, `scan_roots`). |
 | `context_spec.lua` | `lib.nvim.buffer.context` / `lib.nvim.window.context`: changedtick/same-event caching, hit/miss stats, `is_normal`/`has_filetype`/`is_processable`, lazy `.lines`, invalidation, invalid-handle fallback. |
 | `cache_spec.lua`  | `lib.nvim.cache.disk`: save/load/clear/stats, TTL expiry. `lib.nvim.cache.memory`: namespaces, TTL eviction, changedtick-bound entries, invalidate/clear, and the opt-in/idempotent/toggleable `setup_auto_invalidation`/`disable_auto_invalidation`. |
+| `cwd_spec.lua`    | `lib.nvim.fs.chdir` (scopes, normalization, rejection), `lib.nvim.fs.dir_guard` (revert/bypass/update/release, `on_violation`), and `find_root`'s `skip_dirs` / `max_depth` bounds on both the plain and chain-caching paths. |
+| `statusline_spec.lua` | `lib.nvim.ui.statusline`: mode resolution against `laststatus`, both drawing strategies, `%` escaping, alignment, detach/restore. |
 | `run.lua`         | Runner: loads every spec, reports results, sets the exit code.  |
 
 ## Adding a spec
