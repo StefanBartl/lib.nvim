@@ -11,7 +11,7 @@ coordinated, or override colors/borders per call. Built in layers on top of
 > component (`kit-note.lua`, `kit-viewer.lua`, `kit-toast.lua`,
 > `kit-input.lua`, `kit-live-input.lua`, `kit-form.lua`, `kit-select.lua`,
 > `kit-prompt.lua`, `kit-confirm.lua`, `kit-menu.lua`, `kit-picker.lua`,
-> `kit-layout.lua`).
+> `kit-layout.lua`, `kit-sync.lua`).
 
 > **Phases 1–2** (this release): theme/preset engine + `surface` primitive +
 > components `note`, `toast`, `input`, `select` (delegates to hover_select) and
@@ -195,4 +195,27 @@ kit.live_input({
   -- row/col (relative="editor" only) override the default centered
   -- placement, e.g. to anchor the bar to the bottom edge of a host window.
 })
+```
+
+### Sync bridge (blocking wrapper)
+
+`kit.input`/`kit.form`/`kit.live_input` are async — `on_submit`/`on_cancel`
+fire later, once the user responds. `kit.sync(open_fn, opts, timeout_ms?)`
+bridges one of them back to a plain return value via `vim.wait()`, for call
+chains built around a blocking `vim.fn.input()` that can't easily be recast
+to callback style. Only safe to call from a normal call stack (a command
+handler, keymap callback, ...) — never from a fast-event/libuv callback
+context, the same restriction `vim.wait()` itself has. See
+[UI-KIT-CONCEPT.md §13a](../../../../../docs/ROADMAP/UI-KIT-CONCEPT.md) for
+the design rationale.
+
+```lua
+local values, cancelled, timed_out = kit.sync(kit.form, {
+  fields = {
+    { name = "condition", label = "Condition", default = "condition" },
+  },
+}) -- default timeout: 10 minutes (a safety net, not the expected path)
+if not cancelled and values then
+  vim.notify(values.condition)
+end
 ```
