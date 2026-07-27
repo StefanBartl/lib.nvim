@@ -313,7 +313,12 @@ function M.scan(opts)
       own.files_lua = own.files_lua + 1
       own.lines = own.lines + count_lines(root .. "/" .. t)
     end
-    for _, e in ipairs(entries(abs)) do
+
+    -- Listed once and reused by both the tally and the child walk below: an
+    -- earlier version called `entries(abs)` twice per directory, which is a
+    -- second full directory read for every one of ~150 directories.
+    local dir_entries = entries(abs)
+    for _, e in ipairs(dir_entries) do
       if e.type ~= "directory" and not e.name:match("%.lua$") then
         if e.name:lower():match("%.md$") then
           own.files_md = own.files_md + 1
@@ -352,7 +357,7 @@ function M.scan(opts)
     index[id] = node
     order[#order + 1] = id
 
-    for _, e in ipairs(entries(abs)) do
+    for _, e in ipairs(dir_entries) do
       local child_abs = abs .. "/" .. e.name
       local child_rel = rel .. "/" .. e.name
 

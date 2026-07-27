@@ -477,6 +477,30 @@ return function(H)
   eq(by_sym["M.handler"], nil, "docmap.symbols: a function value is left to docmap.functions")
   eq(by_sym.inner, nil, "docmap.symbols: a local inside a function body is not module scope")
 
+  -- The export table is the module, not state it holds. Filtering it matters
+  -- at scale: over lib.nvim it was 188 of 600 entries before this.
+  eq(by_sym.M, nil, "docmap.symbols: the returned export table is not listed as a symbol")
+
+  local meta_fixture = H.tmpfile(".lua")
+  local mfw = assert(io.open(meta_fixture, "w"))
+  mfw:write(table.concat({
+    "local M = {}",
+    "local state = {}",
+    "return setmetatable(M, { __call = function() return 1 end })",
+  }, "\n"))
+  mfw:close()
+  local _, _, _, meta_syms = functions.scan_file(meta_fixture)
+  local meta_names = {}
+  for _, s in ipairs(meta_syms) do
+    meta_names[s.name] = true
+  end
+  eq(
+    meta_names.M,
+    nil,
+    "docmap.symbols: `return setmetatable(M, …)` also identifies the export table"
+  )
+  ok(meta_names.state, "docmap.symbols: other module-scope tables survive that filter")
+
   -- --------------------------------------- layers, heuristic, handle queries
   -- Three features that shipped with no coverage at all. The heuristic one in
   -- particular is only worth having if it stays *silent* on an ambiguous name,

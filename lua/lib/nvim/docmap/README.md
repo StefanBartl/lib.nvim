@@ -237,6 +237,15 @@ twice would be two places to keep in sync:
 | `local fs = require("…")` | `deps.lua` — it is a dependency, and the alias is what makes call resolution work |
 | `M.foo = function(…)` | `functions.lua` — it is a function |
 
+A third exclusion is the module's own export table. It is not state a reader
+wants listed — it *is* the module, already represented by the node and by
+`node.export` — and it appears in essentially every file: measured over
+lib.nvim, 188 of 600 entries, 159 of them literally named `M`. It is
+identified by the chunk's `return`, covering both `return M` and
+`return setmetatable(M, {…})`, rather than by "empty table", which would have
+been wrong in the other direction: `local cache = {}` is real module state
+that happens to start empty.
+
 **Subtree stats** (`node.stats`). Modules, namespaces, `.lua`/`.md`/other
 files, lines of Lua, functions, symbols and types, aggregated over the node
 *and everything below it* — the question a directory answers is "how big is

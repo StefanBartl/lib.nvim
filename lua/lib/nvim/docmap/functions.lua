@@ -242,8 +242,10 @@ function M.scan_file(path)
   -- Counted here rather than by a separate read: this is the one place the
   -- whole file is already in memory, and `stats.lines` is otherwise a second
   -- full pass over every file in the tree.
+  -- An empty file has no lines; the trailing-newline term would otherwise
+  -- report 1 for a file with nothing in it.
   local _, newlines = src:gsub("\n", "")
-  local lines = newlines + (src:sub(-1) == "\n" and 0 or 1)
+  local lines = #src == 0 and 0 or (newlines + (src:sub(-1) == "\n" and 0 or 1))
 
   local ok, parser = pcall(vim.treesitter.get_string_parser, src, "lua")
   if not ok then
