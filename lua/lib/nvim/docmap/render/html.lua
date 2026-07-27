@@ -149,6 +149,20 @@ details>summary{cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0}
 .hctl button{padding:4px 9px;font-size:12px}
 #hgraph-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
 #hgraph{position:relative}
+/* The zoom lives on its own layer. #hstage carries the transform and keeps the
+   analytic pixel layout; #hgraph is sized to the *scaled* extent, because a
+   transform does not change layout size and the scroll area would otherwise
+   not grow when zooming in. */
+#hstage{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform}
+#hstage.zooming{transition:none}
+#hstage.jumping{transition:transform .34s cubic-bezier(.2,.7,.2,1)}
+/* Level of detail: below ~0.65 the secondary line is unreadable grey noise,
+   so it goes away rather than being rendered illegibly. Pure CSS — no redraw. */
+#hstage.lod-min .hsm,#hstage.lod-min .hline,#hstage.lod-min .hkind{display:none}
+#hstage.lod-min .hnode{padding:4px 8px}
+.hzoom{font-family:var(--mono);font-size:11.5px;color:var(--muted);min-width:44px;
+  text-align:right}
+@media (prefers-reduced-motion:reduce){#hstage.jumping{transition:none}}
 .hnode{position:absolute;box-sizing:border-box;padding:7px 10px;border:1px solid var(--line);
   border-radius:7px;background:var(--panel);cursor:pointer;overflow:hidden}
 .hnode:hover{border-color:var(--accent);z-index:1}
@@ -804,6 +818,7 @@ local JS = [[
   // =====================================================================
   var hgraphWrap = document.getElementById("hgraph-wrap");
   var hgraph = document.getElementById("hgraph");
+  var hstage = document.getElementById("hstage");
   var hpathEl = document.getElementById("hpath");
   var hlegendEl = document.getElementById("hlegend");
   var hcenter = null;
@@ -1201,7 +1216,7 @@ local JS = [[
         el.style.left = pos.x + "px";
         el.style.top = pos.y + "px";
         el.classList.add("entering");
-        hgraph.appendChild(el);
+        hstage.appendChild(el);
         hboxes[key] = el;
       }
 
@@ -1281,9 +1296,9 @@ local JS = [[
     var items = entries.map(function(it){
       return '<span class="lg"><span class="sw ' + it.sw + '"></span>' + esc(it.text) + '</span>';
     });
-    if(isGraphView(view)){
-      items.push('<span class="lg">double-click a box to re-center · right-click for more</span>');
-    }
+    items.push('<span class="lg">wheel zooms · shift+wheel pans · ' +
+      (isGraphView(view) ? 'zoom past the edge changes depth' : 'zoom right in to open a module') +
+      ' · right-click for more</span>');
     hlegendEl.innerHTML = items.join("");
   }
 
@@ -1308,7 +1323,7 @@ local JS = [[
     Object.keys(hpending).forEach(function(k){ clearTimeout(hpending[k]); });
     hpending = {};
     hboxes = {};
-    hgraph.innerHTML = "";
+    hstage.innerHTML = "";
   }
 
   var VIEWS = { modules: 1, types: 1, deps: 1, calls: 1 };
@@ -1341,7 +1356,8 @@ local JS = [[
       clearGraph();
       hpathEl.textContent = center.module || center.path;
       hgraph.style.width = ""; hgraph.style.height = "";
-      hgraph.innerHTML = emptyMessage(view, center);
+      hstage.style.width = ""; hstage.style.height = "";
+      hstage.innerHTML = emptyMessage(view, center);
       return;
     }
 
@@ -1356,7 +1372,7 @@ local JS = [[
     // boxes it knows about. Without this, going Calls-on-a-namespace (empty)
     // → Modules left "lib.nvim declares no functions." sitting above a
     // ninety-box diagram.
-    var stale = hgraph.querySelector(".hmsg");
+    var stale = hstage.querySelector(".hmsg");
     if(stale) stale.remove();
 
     var laid = layerPositions(built.layers);
@@ -1408,9 +1424,11 @@ local JS = [[
       (neighbours[e.to] = neighbours[e.to] || {})[e.from] = true;
     });
 
-    hgraph.style.width = totalW + "px";
-    hgraph.style.height = totalH + "px";
-    hgraph.insertBefore(svg, hgraph.firstChild);
+    hstage.style.width = totalW + "px";
+    hstage.style.height = totalH + "px";
+    hstage.insertBefore(svg, hstage.firstChild);
+    stageExtent = { w: totalW, h: totalH };
+    applyZoom();
 
     if(moved){
       svg.classList.add("settling");
@@ -1423,7 +1441,12 @@ local JS = [[
     // thousands of pixels from the left edge on a wide map — without this,
     // opening the tab scrolls to (0,0) and shows an arbitrary fragment of
     // whichever layer is widest, not the node the view is actually about.
-    var selfPos = centerKey ? positions[centerKey] : null;
+    // After a zoom-driven jump the cursor is the anchor: re-centering the
+    // view here would yank the diagram out from under the pointer the gesture
+    // is still on. The flag is consumed once, so ordinary navigation keeps
+    // its centering.
+    var selfPos = (centerKey && !suppressAutoScroll) ? positions[centerKey] : null;
+    if(suppressAutoScroll){ suppressAutoScroll = false; }
     if(selfPos){
       var targetLeft = Math.max(0, selfPos.x + BOX_W / 2 - hgraphWrap.clientWidth / 2);
       var targetTop = Math.max(0, selfPos.y - hgraphWrap.clientHeight / 2 + BOX_H);
@@ -1452,6 +1475,194 @@ local JS = [[
   function reducedMotion(){
     return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
+
+  // =====================================================================
+  // Zoom — two mechanisms that must stay separate in the code, or both end
+  // up half-done:
+  //
+  //   geometric  the same diagram, larger. A CSS transform on #hstage.
+  //              No relayout, no redraw, nothing in the URL — it is comfort,
+  //              not state.
+  //   semantic   past a threshold, a *different* excerpt: one level down into
+  //              the module under the cursor, or one level up. That is
+  //              exactly the navigate({center}) double-click already does.
+  //
+  // The geometric zoom is the feel between two levels; the semantic one is
+  // the jump. Only the jump touches history — the same rule the search
+  // preview had to learn, for the same reason.
+  //
+  // Positions stay analytic. The transform sits on a layer *above* the
+  // computed pixel coordinates, so `positions`, reconcile() and the SVG paths
+  // are all unaware a zoom exists.
+  // =====================================================================
+  var Z_MIN = 0.35, Z_MAX = 2.40;
+  var DRILL_IN = 1.80, DRILL_OUT = 0.55;
+  var AFTER_IN = 0.90, AFTER_OUT = 1.15;
+  var COOLDOWN_MS = 260;
+  var LOD_MIN = 0.65;
+
+  var hzoom = 1;
+  var stageExtent = { w: 0, h: 0 };
+  var lastJump = 0;
+  var suppressAutoScroll = false;
+  var zoomLabel;
+
+  function clampZoom(z){ return Math.min(Z_MAX, Math.max(Z_MIN, z)); }
+
+  // #hgraph is sized to the scaled extent because a transform leaves layout
+  // size alone; without this the scroll area would not grow on zoom-in and
+  // half the diagram would be unreachable.
+  function applyZoom(){
+    hstage.style.transform = "scale(" + hzoom + ")";
+    hgraph.style.width = Math.round(stageExtent.w * hzoom) + "px";
+    hgraph.style.height = Math.round(stageExtent.h * hzoom) + "px";
+    hstage.classList.toggle("lod-min", hzoom < LOD_MIN);
+    if(zoomLabel) zoomLabel.textContent = Math.round(hzoom * 100) + "%";
+  }
+
+  // Keeps the graph point under the cursor fixed while scaling around it —
+  // without this the diagram slides out from under the pointer and zooming
+  // feels like it is fighting you.
+  function zoomAt(clientX, clientY, factor){
+    var r = hgraphWrap.getBoundingClientRect();
+    var gx = (hgraphWrap.scrollLeft + clientX - r.left) / hzoom;
+    var gy = (hgraphWrap.scrollTop + clientY - r.top) / hzoom;
+    var before = hzoom;
+    hzoom = clampZoom(hzoom * factor);
+    if(hzoom === before) return false;
+    applyZoom();
+    hgraphWrap.scrollLeft = gx * hzoom - (clientX - r.left);
+    hgraphWrap.scrollTop = gy * hzoom - (clientY - r.top);
+    return true;
+  }
+
+  function setZoom(z){
+    hzoom = clampZoom(z);
+    applyZoom();
+  }
+
+  // The box under the cursor, or — when the pointer sits in empty space —
+  // the nearest one, measured from `positions` rather than from the DOM, so
+  // this keeps working at any scale and never triggers a layout read.
+  function boxNear(clientX, clientY){
+    var direct = boxOf(document.elementFromPoint(clientX, clientY));
+    if(direct) return direct;
+
+    var r = hgraphWrap.getBoundingClientRect();
+    var gx = (hgraphWrap.scrollLeft + clientX - r.left) / hzoom;
+    var gy = (hgraphWrap.scrollTop + clientY - r.top) / hzoom;
+    var best = null, bestD = Infinity;
+    Object.keys(hboxes).forEach(function(k){
+      var el = hboxes[k];
+      if(el.classList.contains("leaving")) return;
+      var dx = parseFloat(el.style.left) + BOX_W / 2 - gx;
+      var dy = parseFloat(el.style.top) + BOX_H / 2 - gy;
+      var d = dx * dx + dy * dy;
+      if(d < bestD){ bestD = d; best = el; }
+    });
+    return best;
+  }
+
+  // A jump that cannot happen — a leaf with no children, the root on the way
+  // out, an external box that stands for nothing — pulses the box instead of
+  // silently doing nothing, which reads as a bug. The zoom is deliberately
+  // left where it is: on a leaf, zooming further in to read the box is a
+  // reasonable thing to want, and crossing-based triggering means it will not
+  // re-fire on every further notch.
+  function refuseJump(box){
+    if(box && !reducedMotion()){
+      box.classList.remove("pulse");
+      void box.offsetWidth;
+      box.classList.add("pulse");
+    }
+  }
+
+  // In Deps and Calls "one level deeper" is not defined — a require graph is
+  // not a containment hierarchy. Depth is the axis that means "show more"
+  // there, and it already exists as state and as a toolbar control, so the
+  // threshold binds to it instead.
+  function drill(dir, clientX, clientY){
+    var now = Date.now();
+    // One flick of the wheel must not fall three levels. Blocked by the
+    // cooldown, the zoom is pulled back just inside the threshold so the next
+    // notch crosses it again — left where it was, the gesture would have to
+    // be wound all the way back before it could retry.
+    if(now - lastJump < COOLDOWN_MS){
+      setZoom(dir > 0 ? DRILL_IN - 0.02 : DRILL_OUT + 0.02);
+      return;
+    }
+
+    if(isGraphView(state.view)){
+      var d = state.depth === 0 ? 0 : (state.depth || 2);
+      var next = dir > 0 ? (d === 0 ? 0 : d + 1) : (d <= 1 ? 1 : d - 1);
+      if(next === d){ refuseJump(null); return; }
+      lastJump = now;
+      suppressAutoScroll = true;
+      setZoom(dir > 0 ? AFTER_IN : AFTER_OUT);
+      navigate({ depth: next });
+      return;
+    }
+
+    if(dir > 0){
+      var box = boxNear(clientX, clientY);
+      var target = box && box._spec && box._spec.recenter;
+      // Three refusals, all of which would otherwise reset the zoom for no
+      // visible reason: nothing under the cursor, a leaf with no level below
+      // it, and — the easy one to miss — the box that is *already* the
+      // center, whose children are what the view is showing right now.
+      if(!target || target === hcenter || !((byId[target] || {}).children || []).length){
+        refuseJump(box);
+        return;
+      }
+      lastJump = now;
+      suppressAutoScroll = true;
+      setZoom(AFTER_IN);
+      navigate({ center: target, fn: null });
+    } else {
+      var parent = (byId[hcenter] || {}).parent;
+      if(!parent){ refuseJump(null); return; }
+      lastJump = now;
+      suppressAutoScroll = true;
+      setZoom(AFTER_OUT);
+      navigate({ center: parent, fn: null });
+    }
+  }
+
+  hgraphWrap.addEventListener("wheel", function(ev){
+    // Shift keeps a way to pan horizontally, which is what the wheel would
+    // otherwise have done here.
+    if(ev.shiftKey){
+      ev.preventDefault();
+      hgraphWrap.scrollLeft += ev.deltaY;
+      return;
+    }
+    ev.preventDefault();
+
+    // Exponential so each notch feels the same at any scale, and so a
+    // trackpad's small deltas do not crawl. ctrl+wheel is what a pinch
+    // gesture arrives as, and it means the same thing here.
+    var before = hzoom;
+    var factor = Math.exp(-ev.deltaY * 0.0015);
+    zoomAt(ev.clientX, ev.clientY, factor);
+
+    // Fires on *crossing* the threshold, not on being past it. Two things
+    // depend on that: a refused jump (a leaf, the root) leaves the zoom above
+    // the line without re-firing on every further notch, and — the bug this
+    // replaced — a zoom that came to rest above DRILL_IN no longer drills
+    // *in* when the next notch is a zoom-*out*.
+    if(before < DRILL_IN && hzoom >= DRILL_IN) drill(1, ev.clientX, ev.clientY);
+    else if(before > DRILL_OUT && hzoom <= DRILL_OUT) drill(-1, ev.clientX, ev.clientY);
+  }, { passive: false });
+
+  // Keyboard equivalents, so the view is not mouse-only.
+  document.addEventListener("keydown", function(ev){
+    if(state.tab !== "hierarchy") return;
+    if(ev.target && /^(INPUT|TEXTAREA)$/.test(ev.target.tagName)) return;
+    if(ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    if(ev.key === "+" || ev.key === "="){ ev.preventDefault(); setZoom(hzoom * 1.2); }
+    else if(ev.key === "-"){ ev.preventDefault(); setZoom(hzoom / 1.2); }
+    else if(ev.key === "0"){ ev.preventDefault(); setZoom(1); }
+  });
 
   // =====================================================================
   // Graph interaction. Delegated from #hgraph rather than bound per box:
@@ -1641,6 +1852,10 @@ local JS = [[
   }
 
   document.getElementById("hexport").addEventListener("click", exportSvg);
+
+  zoomLabel = document.getElementById("hzoomlabel");
+  document.getElementById("hzoomreset").addEventListener("click", function(){ setZoom(1); });
+  applyZoom();
 
 
   // =====================================================================
@@ -2031,10 +2246,12 @@ function M.render(ir, findings, opts)
     '<div class="hview-toggle" id="hext">',
     '<button class="hext-btn" title="Also draw requires that resolve outside this map">+ external</button>',
     "</div>",
+    '<button id="hzoomreset" title="Reset zoom to 100% (or press 0)">⌕ 100%</button>',
+    '<span class="hzoom" id="hzoomlabel">100%</span>',
     '<button id="hexport" title="Download the current diagram as a standalone SVG">↓ SVG</button>',
     '<span class="hpath" id="hpath"></span>',
     "</div>",
-    '<div id="hgraph-wrap"><div id="hgraph"></div></div>',
+    '<div id="hgraph-wrap"><div id="hgraph"><div id="hstage"></div></div></div>',
     '<div class="hlegend" id="hlegend"></div>',
     "</div>",
 

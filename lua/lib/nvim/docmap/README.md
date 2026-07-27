@@ -395,6 +395,61 @@ toggling, no relayout, and on a dense require graph the difference between a
 readable diagram and a spider's web. Every transition is disabled under
 `prefers-reduced-motion: reduce`.
 
+### Zoom
+
+Two mechanisms that are kept apart in the code, because conflating them makes
+both half-work:
+
+- **Geometric** — the same diagram, larger. A CSS transform on `#hstage`. No
+  relayout, no redraw, and deliberately **not** in the URL: it is comfort, not
+  state.
+- **Semantic** — past a threshold, a *different excerpt*: one level down into
+  the module under the cursor, or one level up. That is the
+  `navigate({center})` a double-click already does.
+
+The geometric zoom is the feel between two levels; the semantic one is the
+jump. Only the jump touches history — the same rule the search preview had to
+learn, for the same reason.
+
+Positions stay analytic. The transform sits on a layer *above* the computed
+pixel coordinates, so `positions`, `reconcile()` and the SVG paths never learn
+that a zoom exists. `#hgraph` is sized to the *scaled* extent, because a
+transform leaves layout size alone and the scroll area would otherwise not
+grow on zoom-in, putting half the diagram out of reach.
+
+| Gesture | Effect |
+|---|---|
+| wheel | scale, anchored on the cursor |
+| shift+wheel | pan horizontally |
+| `+` / `-` / `0` | zoom in / out / reset |
+
+**Thresholds fire on *crossing*, not on being past.** That distinction is the
+whole design, and getting it wrong was a real bug: a zoom that came to rest
+above `DRILL_IN` drilled *in* on the next notch even when that notch was a
+zoom-*out*. Crossing semantics also mean a refused jump can leave the zoom
+above the line without re-firing on every further notch — which is what makes
+"zoom further in to read a leaf box" work.
+
+Asymmetric thresholds plus a cooldown, or it flaps: committing at 1.80 and
+resetting to exactly 1.80 would re-trigger on the smallest wobble, so a
+successful jump lands at 0.90 (in) or 1.15 (out), well inside the band, and a
+jump blocked by the cooldown pulls the zoom back just inside the threshold so
+the next notch can cross again rather than having to be wound all the way
+back.
+
+A jump that cannot happen — a leaf with no children, the root on the way out,
+an external box, or the box that is *already* the center — pulses the box
+instead of silently doing nothing, which reads as a bug.
+
+In **Deps and Calls** the threshold binds to `depth ± 1` instead. "One level
+deeper" is not defined in a require graph, which is not a containment
+hierarchy; depth is the axis that means "show more" there, and it already
+exists as state and as a control.
+
+Below ~0.65 scale the secondary line in each box is unreadable grey noise, so
+`#hstage.lod-min` hides it — pure CSS, no redraw, and the second sense in
+which this zoom is semantic.
+
 ### SVG export
 
 `↓ SVG` writes the current diagram as a standalone file. The boxes are redrawn
