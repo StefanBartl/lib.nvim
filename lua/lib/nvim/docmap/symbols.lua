@@ -92,6 +92,34 @@ local function classify(value, text)
   return "binding", condense(text)
 end
 
+---Name of the identifier the chunk returns, if it returns a bare one.
+---
+---This is how `local M = {}` gets filtered out. It is not state a reader
+---wants listed — it *is* the module, already represented by the node itself
+---and by `node.export` — and it appears in essentially every file: measured
+---over lib.nvim it was 188 of 600 symbols, 159 of them literally named `M`.
+---Filtering on "empty table" instead would have been wrong in the other
+---direction, since `local cache = {}` is real module state that happens to
+---start empty.
+---@param root TSNode
+---@param src string
+---@return string?
+local function returned_name(root, src)
+  for i = root:named_child_count() - 1, 0, -1 do
+    local child = root:named_child(i)
+    if child:type() == "return_statement" then
+      local text = vim.treesitter.get_node_text(child, src)
+      -- `return M` and `return setmetatable(M, {...})` are the same statement
+      -- about which table is the module; the second form is how this tree
+      -- adds a `__call` or a lazy `__index`, and missing it left the export
+      -- table listed for exactly those files.
+      return text:match("^return%s+([%a_][%w_]*)%s*$")
+        or text:match("^return%s+setmetatable%s*%(%s*([%a_][%w_]*)")
+    end
+  end
+  return nil
+end
+
 ---Extract module-scope symbols from an already-parsed tree.
 ---@param root TSNode Root of the parsed Lua tree.
 ---@param src string Source text the tree was parsed from.
@@ -105,6 +133,7 @@ function M.extract(root, src, doc_above)
 
   local out = {}
   local seen = {}
+  local exported = returned_name(root, src)
 
   for _, match in SYMBOL_QUERY:iter_matches(root, src) do
     local name_nodes = match[id_by_name.name]
@@ -120,7 +149,7 @@ function M.extract(root, src, doc_above)
 
       -- A name assigned twice at module scope (a forward declaration filled
       -- in later) is one symbol, reported at its first appearance.
-      if kind and not seen[name] then
+      if kind and name ~= exported and not seen[name] then
         seen[name] = true
         local block = doc_above and doc_above(srow) or {}
         local prose = {}
