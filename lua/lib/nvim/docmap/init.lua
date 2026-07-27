@@ -94,6 +94,14 @@ M.browse = setmetatable({}, {
   end,
 })
 
+--- Structural diff between two maps. Lazily required: pure, and nothing on
+--- the generate/check path needs it.
+M.diff = setmetatable({}, {
+  __index = function(_, k)
+    return require("lib.nvim.docmap.diff")[k]
+  end,
+})
+
 M.render = {
   html = function(...)
     return require("lib.nvim.docmap.render.html")(...)

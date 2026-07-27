@@ -196,6 +196,26 @@
 ---@field from_fn string?
 ---@field line integer
 
+---One added or removed require edge in a `Lib.Docmap.Diff`.
+---@class Lib.Docmap.DiffEdge
+---@field edge string `"<from id> -> <to id>"`.
+---@field deferred boolean? The edge is a lazy require.
+---@field changed boolean? The edge existed before but stopped being lazy — a load-time dependency that did not exist previously, which is how initialisation cycles get introduced.
+
+---What one revision changed about the *shape* of the tree, from
+---`lib.nvim.docmap.diff`.
+---@class Lib.Docmap.Diff
+---@field nodes_added string[] Node ids, sorted.
+---@field nodes_removed string[]
+---@field functions_added string[] `"<node id>#<declared name>"`, sorted.
+---@field functions_removed string[]
+---@field deps_added Lib.Docmap.DiffEdge[]
+---@field deps_removed Lib.Docmap.DiffEdge[]
+---@field deps_comparable boolean False when the older map predates the dependency graph, in which case the dependency, cycle and impact sections are empty because they are unknowable, not because nothing changed.
+---@field cycles_added string[] Load-time cycles introduced.
+---@field cycles_removed string[]
+---@field impact_changed { id: string, before: integer, after: integer }[] Sorted by how much the blast radius moved.
+
 ---A drift finding.
 ---@class Lib.Docmap.Finding
 ---@field severity Lib.Docmap.Severity

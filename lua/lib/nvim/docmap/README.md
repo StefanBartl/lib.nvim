@@ -21,6 +21,7 @@ on GitHub).
 :LibMap graph calls lib.nvim.fs   " …or on one module's call graph
 :LibMap why lib.nvim.ui.kit lib.nvim.fs   " shortest require path between two
 :LibMap dot deps           " the require graph as Graphviz DOT, in a buffer
+:LibMap diff HEAD~5        " what this branch changed about the tree's shape
 :LibMap dot calls lib.nvim.fs   " …scoped to one module's neighbourhood
 
 :LibBrowse                 " navigate the same map inside the editor
@@ -41,6 +42,22 @@ on, so each entry jumps straight to the line that creates that link. The
 summary says up front whether the path is load-time throughout or goes through
 a lazy require somewhere — usually the difference between "has to go" and "is
 fine".
+
+`diff` is where the committed artifact stops being a picture and becomes a
+*comparison point*: it is already in every commit, so `git show
+<ref>:docs/map/module_map.json` is the whole retrieval and any two revisions
+compare without generating anything. What comes out — modules and functions
+added or removed, dependencies gained or lost, load-time cycles introduced,
+blast radii that moved — is a review summary nobody writes by hand.
+
+Two decisions worth knowing. Functions are split by whether the declared name
+is qualified (`M.compare`, the module's surface) or bare (`node_set`, a
+file-local helper); listing both equally buried the six entries that mattered
+under eleven that did not, so the helpers are counted rather than listed. And
+comparing against an **older schema** suppresses the dependency, cycle and
+impact sections with the reason stated: schema 1 predates the require graph
+entirely, so reporting every dependency in the tree as "added" would be
+technically true and completely useless.
 
 `dot` is the third renderer for the same edges, and it exists because the
 other two cannot do what Graphviz does: the HTML page lays boxes out in BFS
@@ -194,6 +211,7 @@ else — module prefix, directory layout, types directory name — is an option.
 | Check | [`check.lua`](check.lua) | `Lib.Docmap.Finding[]` — documentation drift |
 | Render | [`render/`](render/) | HTML (Tree + Hierarchy tabs), Markdown, Mermaid, DOT |
 | Encode | [`json.lua`](json.lua) | deterministic JSON |
+| Diff | [`diff.lua`](diff.lua) | `Lib.Docmap.Diff` — what one revision changed about the shape |
 | Live | [`registry.lua`](registry.lua) | `install()`/`uninstall()` — an in-memory `Handle` instead of files |
 
 `deps` and `calls` run inside `scan()` itself, unlike the LuaLS merge: they

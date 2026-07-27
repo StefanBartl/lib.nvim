@@ -524,6 +524,12 @@ return function(H)
         table.insert(lines, 3, ('local _%s = require("g.%s")'):format(r, r))
       end
     end
+    -- Every fixture module declares one function, so the diff below has
+    -- something to lose when a module is deleted.
+    lines[#lines + 1] = "---Runs."
+    lines[#lines + 1] = "function M.run()"
+    lines[#lines + 1] = "  return 1"
+    lines[#lines + 1] = "end"
     lines[#lines + 1] = "return M"
     gwrite(("lua/g/%s/init.lua"):format(name), lines)
   end
@@ -593,6 +599,72 @@ return function(H)
     calls_dot:match("^// call graph"),
     "render.dot: the call graph is a different graph, not a relabelled one"
   )
+
+  -- --------------------------------------------------------------- diff
+  -- The same tree with one module gone, one function gone and one dependency
+  -- made load-time instead of lazy — every section exercised at once.
+  local diff = require("lib.nvim.docmap.diff")
+  local nothing = diff.compare(gir, gir)
+  eq(diff.is_empty(nothing), true, "diff: a map against itself is empty")
+
+  gwrite("lua/g/five/init.lua", {
+    "---@module 'g.five'",
+    "--- Five.",
+    'local _four = require("g.four")',
+    "local M = {}",
+    "---New.",
+    "function M.fresh()",
+    "  return 1",
+    "end",
+    "return M",
+  })
+  vim.fn.delete(gr .. "/lua/g/two", "rf")
+  local after = scan.scan({ root = gr, source = "lua/g", lua_root = "lua" })
+  local d = diff.compare(gir, after)
+
+  eq(diff.is_empty(d), false, "diff: a changed tree is not empty")
+  eq(d.nodes_added[1], "lua/g/five", "diff: the new module is reported")
+  eq(d.nodes_removed[1], "lua/g/two", "diff: and the deleted one")
+  eq(d.functions_added[1], "lua/g/five#M.fresh", "diff: functions are keyed like everywhere else")
+  eq(d.functions_removed[1], "lua/g/two#M.run", "diff: the deleted module's functions are gone too")
+  eq(d.deps_comparable, true, "diff: two current maps are comparable")
+
+  local added_edges, removed_edges = {}, {}
+  for _, e in ipairs(d.deps_added) do
+    added_edges[e.edge] = true
+  end
+  for _, e in ipairs(d.deps_removed) do
+    removed_edges[e.edge] = true
+  end
+  ok(added_edges["lua/g/five -> lua/g/four"], "diff: the new dependency is reported")
+  ok(removed_edges["lua/g/one -> lua/g/two"], "diff: and the one that vanished with the module")
+
+  -- `three` lost its only dependent when `two` was deleted, so its blast
+  -- radius drops. `four` deliberately is *not* asserted on: it gained `five`
+  -- and lost `two` in the same change, and the two cancel out exactly — a
+  -- reminder that "I changed something near it" is not the same as "its
+  -- radius moved".
+  local moved = {}
+  for _, c in ipairs(d.impact_changed) do
+    moved[c.id] = { c.before, c.after }
+  end
+  ok(moved["lua/g/three"], "diff: a module whose blast radius changed is reported")
+  ok(
+    moved["lua/g/three"][1] > moved["lua/g/three"][2],
+    "diff: with both figures, and this one shrank"
+  )
+
+  -- An older artifact is missing this data rather than merely shaped
+  -- differently; saying "every dependency in the tree was added" would be
+  -- true and useless.
+  local ancient = vim.deepcopy(gir)
+  ancient.meta.schema = 1
+  ancient.edges = {}
+  local old_diff = diff.compare(ancient, after)
+  eq(old_diff.deps_comparable, false, "diff: a schema-1 map is not comparable on dependencies")
+  eq(#old_diff.deps_added, 0, "diff: so no dependency is claimed to be new")
+  local rendered = table.concat(diff.render(old_diff, ancient, after, "old"), "\n")
+  ok(rendered:find("predates the dependency graph", 1, true), "diff: and the reason is stated")
 
   vim.fn.delete(gr, "rf")
 

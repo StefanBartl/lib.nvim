@@ -205,7 +205,9 @@ Neovim adapters.
                            sends the shortest require path between two
                            modules to the quickfix list, :LibMap dot
                            deps|calls [module] opens the graph as Graphviz
-                           DOT in a scratch buffer; a pre-commit hook
+                           DOT in a scratch buffer, :LibMap diff <ref>
+                           reports what changed about the tree's shape
+                           since that revision; a pre-commit hook
                            (git config core.hooksPath scripts/hooks) blocks
                            commits on a stale map. install()/uninstall() give
                            a live, in-memory Handle (ir/node/on_change/rescan,
