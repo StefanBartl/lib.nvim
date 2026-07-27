@@ -32,6 +32,7 @@ local specs = {
   "neotree_watch_spec.lua",
   "composer_spec.lua",
   "docmap_spec.lua",
+  "docmap_browse_spec.lua",
 }
 
 local failed = 0

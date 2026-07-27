@@ -3,7 +3,7 @@
 > **Generated** by `lib.nvim.docmap`. Do not edit by hand — run `:LibMap`
 > (or `nvim --headless -l scripts/gen_map.lua`) to regenerate.
 
-**129 modules** · 25 namespaces · 129 helper files
+**133 modules** · 25 namespaces · 132 helper files
 
 The [interactive map](index.html) has filtering, full descriptions and
 source links; this page is the version the code host renders directly.
@@ -221,10 +221,13 @@ flowchart LR
   nlua_lib_nvim_docmap --> nlua_lib_nvim_cross
   nlua_lib_nvim_docmap --> nlua_lib_nvim_debounce
   nlua_lib_nvim_docmap --> nlua_lib_nvim_fs
+  nlua_lib_nvim_docmap --> nlua_lib_nvim_map
   nlua_lib_nvim_docmap --> nlua_lib_nvim_notify
+  nlua_lib_nvim_docmap --> nlua_lib_nvim_ui
   nlua_lib_nvim_docmap --> nlua_lib_nvim_usercmd
   nlua_lib_nvim_fs --> nlua_lib_lua_json
   nlua_lib_nvim_fs --> nlua_lib_lua_memo
+  nlua_lib_nvim_fs --> nlua_lib_nvim_autocmd
   nlua_lib_nvim_fs --> nlua_lib_nvim_cache
   nlua_lib_nvim_fs --> nlua_lib_nvim_cross
   nlua_lib_nvim_fs --> nlua_lib_nvim_git
@@ -377,12 +380,15 @@ flowchart LR
 | &nbsp;&nbsp;`lib.nvim.debounce` | Generic debounce primitive for callbacks. | 2 | [README](../../lua/lib/nvim/debounce/README.md) · [src](../../lua/lib/nvim/debounce/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.debounce.buffer` | Buffer-scoped debounce: one independent timer per `bufnr`. | 1 | [src](../../lua/lib/nvim/debounce/buffer/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.docmap` | Generated module map: scans an annotated Lua tree, builds an intermediate representation, checks it for documentation drift, and renders it. | 7 | [README](../../lua/lib/nvim/docmap/README.md) · [src](../../lua/lib/nvim/docmap/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.docmap.browse` | `:LibBrowse` — the module map inside the editor. | 17 | [README](../../lua/lib/nvim/docmap/browse/README.md) · [src](../../lua/lib/nvim/docmap/browse/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`docs` |  |  |  |
 | &nbsp;&nbsp;&nbsp;&nbsp;`render` |  |  |  |
 | &nbsp;&nbsp;`lib.nvim.dotrepeat` | Wire native Vim `.`-repeat through the `operatorfunc` mechanism, without depending on `vim-repeat` or any other plugin. | 3 | [README](../../lua/lib/nvim/dotrepeat/README.md) · [src](../../lua/lib/nvim/dotrepeat/init.lua) |
 | &nbsp;&nbsp;`fs` |  |  |  |
+| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.chdir` | Scope-aware working-directory change: global (`:cd`), tab-local (`:tcd`) or window-local (`:lcd`), with normalization, validation and no throwing. | 2 | [README](../../lua/lib/nvim/fs/chdir/README.md) · [src](../../lua/lib/nvim/fs/chdir/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.collect_recursive` | Recursive directory walker built on `fs_scandir`/`fs_scandir_next`. | 4 | [README](../../lua/lib/nvim/fs/collect_recursive/README.md) · [src](../../lua/lib/nvim/fs/collect_recursive/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.create_entry` | Create a file or directory relative to a parent directory. | 2 | [README](../../lua/lib/nvim/fs/create_entry/README.md) · [src](../../lua/lib/nvim/fs/create_entry/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.dir_guard` | Hold the working directory on a path until released. | 3 | [README](../../lua/lib/nvim/fs/dir_guard/README.md) · [src](../../lua/lib/nvim/fs/dir_guard/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.find_root` | Cached, marker-based project-root finder. |  | [README](../../lua/lib/nvim/fs/find_root/README.md) · [src](../../lua/lib/nvim/fs/find_root/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.find_upward_dir` | Walk upward from `from` and return the nearest ancestor directory holding one of `names`. |  | [src](../../lua/lib/nvim/fs/find_upward_dir/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`ignore` |  |  |  |
@@ -443,7 +449,8 @@ flowchart LR
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.treesitter.guard` | Filetype allowlist gate for treesitter-dependent features (highlighting, foldexpr, indentexpr). | 1 | [README](../../lua/lib/nvim/treesitter/guard/README.md) · [src](../../lua/lib/nvim/treesitter/guard/init.lua) |
 | &nbsp;&nbsp;`ui` |  |  |  |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.ui.hl` | ========================================================= Highlight helper utilities. | 2 | [src](../../lua/lib/nvim/ui/hl/init.lua) |
-| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.ui.kit` | Themed, composable UI toolkit for lib.nvim. | 15 | [README](../../lua/lib/nvim/ui/kit/README.md) · [src](../../lua/lib/nvim/ui/kit/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.ui.kit` | Themed, composable UI toolkit for lib.nvim. | 16 | [README](../../lua/lib/nvim/ui/kit/README.md) · [src](../../lua/lib/nvim/ui/kit/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.ui.statusline` | A short status badge pinned to the bottom line of one window. | 5 | [README](../../lua/lib/nvim/ui/statusline/README.md) · [src](../../lua/lib/nvim/ui/statusline/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.usercmd` | ========================================================= User command helper utilities. | 1 | [src](../../lua/lib/nvim/usercmd/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.usercmd.composer` | Compose a route spec into ONE Neovim user command with subcommands, `<Tab>` completion, and Markdown docs — all read from the same tree. | 11 | [README](../../lua/lib/nvim/usercmd/composer/README.md) · [src](../../lua/lib/nvim/usercmd/composer/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.window` | Window-control helpers for overlay / floating windows. | 1 | [README](../../lua/lib/nvim/window/README.md) · [src](../../lua/lib/nvim/window/init.lua) |
@@ -470,11 +477,10 @@ flowchart LR
 
 ## Drift
 
-0 errors · 11 warnings · 159 info
+0 errors · 10 warnings · 160 info
 
 | Severity | Check | Message |
 |---|---|---|
-| warn | `dead-readme-link` | lua/lib/nvim/store/project/README.md links to '../../../../docs/ROADMAP/project-store.md' which does not exist |
 | warn | `missing-summary` | lua/lib/lua/functions/init.lua has ---@module but no description line |
 | warn | `missing-summary` | lua/lib/lua/json/init.lua has ---@module but no description line |
 | warn | `missing-summary` | lua/lib/lua/strings/init.lua has ---@module but no description line |
@@ -487,7 +493,7 @@ flowchart LR
 | warn | `missing-summary` | lua/lib/nvim/normalize/validators.lua has ---@module but no description line |
 
 <details>
-<summary>159 informational findings</summary>
+<summary>160 informational findings</summary>
 
 
 | Check | Message |
@@ -567,9 +573,9 @@ flowchart LR
 | `undocumented-param` | escape_lua_pattern has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | invalid_ctx has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | M.normalize has 1 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | strlen has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | join has 2 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | split has 2 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | strlen has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | notify_caller has 5 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | bind_cancel_on_escape has 3 parameter(s) but only 2 @param line(s) |
 | `undocumented-param` | bind_cancel_on_escape has 3 parameter(s) but only 2 @param line(s) |
@@ -609,9 +615,9 @@ flowchart LR
 | `unreferenced-module` | lib.nvim.cross is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.cross.uv.fs is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.debounce.buffer is required by no other file in the tree |
-| `unreferenced-module` | lib.nvim.docmap.command is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.dotrepeat is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.fs.create_entry is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim.fs.dir_guard is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.fs.ignore.list is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.fs.is_readable_file is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.fs.polymorphic_rootresolver is required by no other file in the tree |
@@ -629,6 +635,7 @@ flowchart LR
 | `unreferenced-module` | lib.nvim.store is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.token is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.treesitter.guard is required by no other file in the tree |
+| `unreferenced-module` | lib.nvim.ui.statusline is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim.window.find_by_filetype is required by no other file in the tree |
 | `unreferenced-module` | lib.nvim_usrcmds is required by no other file in the tree |
 | `unreferenced-module` | lib.strategies.eager is required by no other file in the tree |

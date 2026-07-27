@@ -88,15 +88,15 @@ return function(H)
   n2:close()
 
   -- -------------------------------------------------------------- viewer
-  local v = assert(kit.viewer({ title = "Info", lines = { "line 1", "line 2" } }), "viewer opens")
-  ok(v:is_valid(), "viewer float is valid")
-  eq(#vim.api.nvim_buf_get_lines(v.bufnr, 0, -1, false), 2, "viewer shows every line")
+  local vw = assert(kit.viewer({ title = "Info", lines = { "line 1", "line 2" } }), "viewer opens")
+  ok(vw:is_valid(), "viewer float is valid")
+  eq(#vim.api.nvim_buf_get_lines(vw.bufnr, 0, -1, false), 2, "viewer shows every line")
   eq(
-    vim.api.nvim_get_option_value("modifiable", { buf = v.bufnr }),
+    vim.api.nvim_get_option_value("modifiable", { buf = vw.bufnr }),
     false,
     "viewer buffer is read-only"
   )
-  v:close()
+  vw:close()
 
   -- viewer accepts `message` as an alias for `lines` (single string, split on \n)
   local v2 = assert(kit.viewer({ message = "a\nb\nc" }), "viewer (message alias) opens")
@@ -666,9 +666,7 @@ return function(H)
       highlights = { { line = 0, col_start = 1, col_end = 3, hl_group = "Special" } },
     }
     local surf = kit.select({ items = { rich }, on_select = function() end })
-    local marks = vim.api.nvim_buf_get_extmarks(
-      surf.bufnr, -1, 0, -1, { details = true }
-    )
+    local marks = vim.api.nvim_buf_get_extmarks(surf.bufnr, -1, 0, -1, { details = true })
     local found = false
     for _, m in ipairs(marks) do
       local row, col, details = m[2], m[3], m[4]
@@ -687,7 +685,9 @@ return function(H)
     kit.select({
       items = { rich, "b" },
       multi = true,
-      on_select = function(items) chosen = items end,
+      on_select = function(items)
+        chosen = items
+      end,
     })
     chooser.toggle() -- mark the rich item (currently item 1)
     chooser.submit()

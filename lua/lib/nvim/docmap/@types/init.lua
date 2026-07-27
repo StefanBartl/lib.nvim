@@ -19,6 +19,7 @@
 ---@field luals? boolean Merge `lua-language-server --doc` output into the IR (class/alias/field detail, type-reference edges). Off by default — a full-tree run costs real seconds. Default false.
 ---@field luals_timeout_ms? integer Kill the `lua-language-server --doc` run after this long. Default 60000.
 ---@field command_name? string Passed to `docmap.command.setup`: register a user command under this name. Default "LibMap".
+---@field browse_command_name? string Passed to `docmap.command.setup`: register the editor-side map browser under this name. Default "LibBrowse".
 ---@field watch? boolean `install()` only: rescan on `BufWritePost` under `source/**.lua`, debounced. Default false.
 ---@field watch_ms? integer `install()` only: debounce interval for `watch`. Default 500.
 
