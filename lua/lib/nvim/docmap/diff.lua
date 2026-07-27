@@ -223,6 +223,27 @@ end
 ---
 ---`after` is passed so ids can be shown as module paths where one exists;
 ---removed nodes fall back to their id, which is the only name left for them.
+---True when a function key names implementation rather than surface.
+---
+---`@internal` when the map has it, and the shape of the declared name when it
+---does not — an older artifact carries no such field, and a diff against one
+---should still sort its entries sensibly rather than give up.
+---@param ir Lib.Docmap.IR
+---@param key string
+---@return boolean
+local function is_helper(ir, key)
+  local id, fn_name = key:match("^(.*)#([^#]*)$")
+  for _, fn in ipairs(((ir.nodes or {})[id or ""] or {}).functions or {}) do
+    if fn.name == fn_name then
+      if fn.internal ~= nil then
+        return fn.internal
+      end
+      break
+    end
+  end
+  return not (fn_name or ""):find(".", 1, true)
+end
+
 ---@param diff Lib.Docmap.Diff
 ---@param before Lib.Docmap.IR
 ---@param after Lib.Docmap.IR
@@ -273,21 +294,20 @@ function M.render(diff, before, after, label)
   -- file-local helper, and a diff that lists both equally buries the six
   -- entries that matter under eleven that do not. The count is still shown,
   -- because "this change added eleven helpers" is itself information.
-  local function split_surface(keys)
+  local function split_surface(keys, ir)
     local public, private = {}, {}
     for _, key in ipairs(keys) do
-      local fn = key:match("#(.*)$") or ""
-      if fn:find(".", 1, true) then
-        public[#public + 1] = fn_name(key)
-      else
+      if is_helper(ir, key) then
         private[#private + 1] = fn_name(key)
+      else
+        public[#public + 1] = fn_name(key)
       end
     end
     return public, private
   end
 
-  local pub_add, priv_add = split_surface(diff.functions_added)
-  local pub_del, priv_del = split_surface(diff.functions_removed)
+  local pub_add, priv_add = split_surface(diff.functions_added, after)
+  local pub_del, priv_del = split_surface(diff.functions_removed, before)
   section("Functions added", pub_add, "+")
   section("Functions removed", pub_del, "-")
   if #priv_add > 0 or #priv_del > 0 then

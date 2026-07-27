@@ -95,6 +95,26 @@ return function(H)
 
   ok(bare, "docmap.functions: top-level 'local function bare_helper' is scanned")
   eq(bare.signature, "bare_helper(a, b)", "docmap.functions: bare local function signature")
+  eq(old_thing.internal, false, "docmap.functions: @internal defaults to false")
+
+  -- `@internal` marks implementation rather than published surface. It is
+  -- what lets every "is this used" question stop guessing from the shape of
+  -- a name.
+  local fixture3 = H.tmpfile(".lua")
+  local fw3 = assert(io.open(fixture3, "w"))
+  fw3:write(table.concat({
+    "local M = {}",
+    "---Plumbing.",
+    "---@internal",
+    "---@param a string",
+    "function M.plumbing(a, b)",
+    "  return a, b",
+    "end",
+    "return M",
+  }, "\n"))
+  fw3:close()
+  local fns3 = functions.scan_file(fixture3)
+  eq(fns3[1].internal, true, "docmap.functions: @internal is parsed")
 
   -- Undocumented function (no doc comment at all) still gets a FunctionInfo
   -- with empty fields, not skipped — dead-see-target/undocumented-param need
@@ -218,6 +238,18 @@ return function(H)
     has_undoc_param,
     "docmap.check: undocumented-param fires when signature has more params than @param lines"
   )
+
+  -- The same function marked `@internal` must not be nagged about: its
+  -- documentation bar is the author's own, and nagging is how a heuristic
+  -- check earns a place on someone's ignore list.
+  local internal_ir = make_ir({ ["a"] = fns3 })
+  local internal_nagged = false
+  for _, f in ipairs(check.run(internal_ir, opts)) do
+    if f.check == "undocumented-param" then
+      internal_nagged = true
+    end
+  end
+  eq(internal_nagged, false, "docmap.check: undocumented-param skips an @internal function")
 
   -- ------------------------------------------------------------- docmap.deps
   local deps = require("lib.nvim.docmap.deps")

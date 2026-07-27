@@ -725,6 +725,7 @@ local JS = [[
         if(fn.deprecated !== undefined) badges.push('<span class="bd dep">deprecated</span>');
         if(fn.async) badges.push('<span class="bd">async</span>');
         if(fn.nodiscard) badges.push('<span class="bd">nodiscard</span>');
+        if(fn.internal) badges.push('<span class="bd sk-binding">internal</span>');
         if(fn.since) badges.push('<span class="bd">since '+esc(fn.since)+'</span>');
         h.push('<div class="fn-sig">'+esc(fn.signature)
           +(badges.length?'<span class="fn-badges">'+badges.join("")+'</span>':'')+'</div>');

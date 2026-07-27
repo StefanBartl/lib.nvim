@@ -68,3 +68,15 @@ New in this change, recognized by [`functions.lua`](../functions.lua):
 - **`@since`** — deliberately *not* `@version`: LuaLS's `@version` declares which Lua runtime a symbol
   requires (5.1/5.3/JIT/...), a different question from "since when has this function existed in this
   project." A separate tag avoids colliding those two meanings.
+
+## `@internal`
+
+Marks a function as implementation rather than published surface. Recognised
+by `docmap.functions` and used in three places: `undocumented-param` skips it,
+`docmap.diff` counts it among helpers instead of listing it as an API change,
+and the HTML map badges it.
+
+It exists because every "is this used" question otherwise has to guess from
+the shape of the declared name — `M.compare` looks public, `node_set` looks
+private. That guess is decent and it is still a guess; the tag makes it a
+fact.

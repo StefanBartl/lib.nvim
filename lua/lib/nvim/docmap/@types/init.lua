@@ -110,6 +110,7 @@
 ---@field deprecated string? `@deprecated` text; nil when not deprecated.
 ---@field async boolean
 ---@field nodiscard boolean
+---@field internal boolean Declared `---@internal`: part of the implementation, not of the module's published surface. Sharpens every question of the form "is this used" — `undocumented-param` skips it, the diff counts it as a helper, and a dead-function report can trust it.
 ---@field see string[] Raw `@see` targets, unresolved — `docmap.check` validates them.
 ---@field overload string[] Raw `@overload` signatures, unparsed (rendered as-is).
 ---@field example string? `@example` block text, if any.
