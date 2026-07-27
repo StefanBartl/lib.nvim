@@ -27,6 +27,7 @@ local live_input = require("lib.nvim.ui.kit.live_input")
 local select = require("lib.nvim.ui.kit.select")
 local prompt = require("lib.nvim.ui.kit.prompt")
 local form = require("lib.nvim.ui.kit.form")
+local sync = require("lib.nvim.ui.kit.sync")
 
 local M = {}
 
@@ -130,6 +131,20 @@ end
 ---@return table
 function M.progress(opts)
   return require("lib.nvim.progress").create(opts)
+end
+
+--- Block (via vim.wait) until an on_submit/on_cancel-shaped async component
+--- (input/form/live_input) resolves, returning its result as a plain value
+--- instead of via callback. See docs/ROADMAP/UI-KIT-CONCEPT.md §13a. Only
+--- safe to call from a normal call stack, never a fast-event context.
+---@param open_fn fun(opts: table): any
+---@param opts table
+---@param timeout_ms? integer
+---@return any result
+---@return boolean cancelled
+---@return boolean timed_out
+function M.sync(open_fn, opts, timeout_ms)
+  return sync.open(open_fn, opts, timeout_ms)
 end
 
 --- Component dispatch table.

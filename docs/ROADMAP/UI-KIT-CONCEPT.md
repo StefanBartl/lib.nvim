@@ -441,7 +441,7 @@ surfaces the library already uses:
 
 ## 13. Phased roadmap
 
-> Status: **Phases 1–7 shipped — the originally scoped roadmap, plus every
+> Status: **Phases 1–8 shipped — the originally scoped roadmap, plus every
 > follow-on primitive the migration audit called for, is complete;
 > hover_select fully absorbed.** Theme engine, surface, and every component
 > (`note`/`viewer`/`toast`/`input`/`live_input`/`form`/`select`/`prompt`/`picker`/`confirm`/`menu`/`progress`),
@@ -449,11 +449,14 @@ surfaces the library already uses:
 > list; `viewer` is a read-only info panel (auto-sized, closes on focus loss);
 > `form` chains `input` prompts into one multi-field result; `live_input` adds
 > a debounced `on_change` on top of `input`; `progress` passes through to the
-> dedicated `lib.nvim.progress`. All hover_select call sites were migrated to
-> `kit.select` and the standalone `lib.nvim.ui.hover_select` module has been
-> **removed** (§10 step 4 done). What remains is migrating consumer plugins'
-> existing call sites onto `kit.viewer`/`kit.form`/`kit.live_input` — tracked
-> in docs/ROADMAP/personal/lib_nvim/ui_kit_migration.md, not here.
+> dedicated `lib.nvim.progress`; `sync` blocks (via `vim.wait`) on an
+> `on_submit`/`on_cancel`-shaped component and returns its result as a plain
+> value, for callers that can't be recast to callback style (§13a). All
+> hover_select call sites were migrated to `kit.select` and the standalone
+> `lib.nvim.ui.hover_select` module has been **removed** (§10 step 4 done).
+> What remains is migrating consumer plugins' existing call sites onto
+> `kit.viewer`/`kit.form`/`kit.live_input`/`kit.sync` — tracked in
+> docs/ROADMAP/personal/lib_nvim/ui_kit_migration.md, not here.
 
 | Phase | Deliverable | Notes |
 | ----- | ----------- | ----- |
@@ -464,9 +467,9 @@ surfaces the library already uses:
 | **5** ✅ | `viewer` — read-only info panel: auto-sized to content, `q`/`<Esc>` closes, closes on `WinLeave`/`BufLeave` too (`close_on_focus_lost` opt-out) | Motivated by 6+ independent hand-rolled implementations across consumer plugins (§ui_kit_migration audit) |
 | **6** ✅ | `form` — sequential multi-field prompt: chains `kit.input` per field into one keyed result table; `<Esc>` skips an optional field, aborts on a `required` one | Motivated by hand-rolled prompt chains (sandbox.nvim's `container_commands.lua`, buffer_ctx.nvim's own `process_prompts` helper — §ui_kit_migration audit §6.2) |
 | **7** ✅ | `live_input` — `kit.input` plus a debounced `on_change(query)`, fired as the user types | Motivated by filetree.nvim's `live_search`/`filter` features, each independently hand-rolling a floating prompt + `TextChangedI`-debounce (§ui_kit_migration audit §5.3) |
-| **8** 💡 proposed | `kit.sync` — block on an async kit component via `vim.wait`, return its result as a plain value | See §13a below. Motivated by buffer_ctx.nvim's `guard_interactive()`/`process_prompts` (§ui_kit_migration audit §3), whose synchronous `vim.fn.input()`-based return value is baked into a 4-layer call chain (`boiler.get()`, consumed synchronously at 4 call sites in `commands.lua` and the telescope extension) |
+| **8** ✅ | `kit.sync` — block on an async kit component via `vim.wait`, return its result as a plain value | See §13a below. Motivated by buffer_ctx.nvim's `guard_interactive()`/`process_prompts` (§ui_kit_migration audit §3), whose synchronous `vim.fn.input()`-based return value is baked into a 4-layer call chain (`boiler.get()`, consumed synchronously at 4 call sites in `commands.lua` and the telescope extension) |
 
-### 13a. `kit.sync` — bridging kit's async components back to a plain return value (proposed, not decided)
+### 13a. `kit.sync` — bridging kit's async components back to a plain return value — ✅ shipped
 
 **Problem.** `kit.input`/`kit.confirm`/`kit.select`/`kit.form`/`kit.live_input`
 are all async/callback-based (`on_submit`/`on_answer`/`on_select` fire later,
@@ -527,38 +530,32 @@ function M.guard_interactive()
 end
 ```
 
-**Caveats to resolve before implementing:**
+**How the caveats were resolved:**
 
-- **Fast-context restriction.** `vim.wait` errors if called from a fast
-  event context (`vim.in_fast_event()`); `kit.sync` must check and either
-  error clearly or refuse to open the float at all, rather than hang.
-- **Nested/re-entrant calls.** Calling `kit.sync` from inside a callback
-  that's itself running inside another `kit.sync`'s `vim.wait` loop works
-  (the inner wait just nests), but calling it from an `autocmd` callback
-  that fires *during* an outer `vim.wait` needs a moment's thought — likely
-  fine in practice since every kit float already closes deterministically
-  via `q`/`<Esc>`/focus-loss, but worth a dedicated test.
-- **Timeout is a safety net, not the UX.** The float's own `nice_quit`/
-  `close_on_focus_lost` guarantee the flag eventually flips one way or the
-  other; the timeout only guards against an unforeseen bug (e.g. the float
-  silently failing to open) hanging Neovim indefinitely. Needs to be long
-  enough never to fire during normal use (the `container_commands.lua`
-  precedent this is analogous to has no timeout at all, since `vim.fn.input`
-  can't have one either) but the risk profile is different enough
-  (`kit.sync` adds a layer that could plausibly get stuck) that a generous
-  bound feels safer than none.
-- **One generic bridge vs. one per component.** A single `kit.sync(open_fn,
-  opts)` that works for any of `input`/`confirm`/`select`/`form`/`live_input`
-  is more reusable than a bespoke `form_sync`, but the different components
-  use different callback field names (`on_submit` vs. `on_answer` vs.
-  `on_select` vs. `on_change`+`on_submit`) and different cancel semantics
-  (`confirm`'s cancel value depends on custom vs. default choices) — the
-  generic wrapper needs to normalize that, or `kit.sync` needs to know which
-  callback field each `open_fn` uses.
+- **Fast-context restriction.** Resolved as designed: `kit.sync` calls
+  `vim.in_fast_event()` up front and `error()`s immediately rather than
+  attempting to open the float or hang.
+- **Nested/re-entrant calls.** Not specially handled — left as "works in
+  practice, same as any nested `vim.wait`," per the original note. No
+  dedicated test was added for the autocmd-fires-during-an-outer-wait case;
+  revisit if it ever surfaces a real bug.
+- **Timeout is a safety net, not the UX.** Shipped with a 10-minute default
+  (`DEFAULT_TIMEOUT_MS`), overridable per call via the third argument. The
+  `vim.wait` poll interval is 10ms (not the default 200ms) so the
+  return-to-caller lag after the user answers stays imperceptible, since
+  `done` flips synchronously inside a keymap-dispatched callback.
+- **One generic bridge vs. one per component — decided: scope it down,
+  don't normalize.** Shipped as a single `kit.sync(open_fn, opts,
+  timeout_ms?)` that only supports the `on_submit`/`on_cancel` contract
+  (`input`/`form`/`live_input`). `confirm` (`on_answer`) and `select`
+  (no callback at all on Esc/q — see `chooser.lua`'s `M.close()`) are
+  explicitly out of scope rather than papered over with a normalization
+  layer for callers that don't exist yet; `sync.lua`'s own module doc says
+  so. Revisit if a real caller needs `kit.sync` over `confirm`/`select`.
 
-Not implemented; this section exists so the idea has a fixed reference point
-before any code is written, per the 2026-07-26 migration-audit follow-up
-(docs/ROADMAP/personal/lib_nvim/ui_kit_migration.md).
+Implemented at `lua/lib/nvim/ui/kit/sync.lua`, exposed as `kit.sync`;
+example at `docs/EXAMPLES/kit-sync.lua`; tests in `docs/TESTS/ui_kit_spec.lua`
+(§"sync (vim.wait bridge)").
 
 ## 14. Open decisions
 

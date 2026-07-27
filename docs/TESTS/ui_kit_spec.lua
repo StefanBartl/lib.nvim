@@ -348,6 +348,77 @@ return function(H)
   submit_field("via-popup")
   eq(popup_values.only, "via-popup", 'kit.popup({ type = "form" }) routes to the form component')
 
+  -- --------------------------------------------------------------- sync (vim.wait bridge)
+  -- Headless nvim's `:startinsert` doesn't actually put the fake UI into
+  -- Insert mode the way a real terminal would, so typed-text feedkeys are
+  -- unreliable here (same reason live_input's own tests above edit the
+  -- buffer directly rather than "typing"). Set the float's buffer content
+  -- directly, then feed just <CR>/<Esc> — both are mapped in "i"+"n" mode,
+  -- so which mode nvim thinks it's in doesn't matter.
+  local function submit_current_float(text)
+    local buf = vim.api.nvim_get_current_buf()
+    vim.api.nvim_buf_set_lines(buf, 0, 1, false, { text })
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "x", false)
+  end
+  local function cancel_current_float()
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "x", false)
+  end
+
+  do
+    -- <CR> submits -> kit.sync returns the value synchronously, no callback needed.
+    vim.defer_fn(function()
+      submit_current_float("hi")
+    end, 10)
+    local result, cancelled, timed_out = kit.sync(kit.input, { default = "" }, 2000)
+    eq(result, "hi", "kit.sync returns kit.input's submitted value synchronously")
+    ok(not cancelled, "kit.sync: not cancelled on submit")
+    ok(not timed_out, "kit.sync: not timed out on submit")
+  end
+
+  do
+    -- <Esc> -> cancelled=true, result=nil.
+    vim.defer_fn(function()
+      cancel_current_float()
+    end, 10)
+    local result, cancelled = kit.sync(kit.input, {}, 2000)
+    eq(result, nil, "kit.sync: result is nil on cancel")
+    ok(cancelled, "kit.sync: cancelled=true on <Esc>")
+  end
+
+  do
+    -- Nothing resolves it -> times out (short custom timeout so the spec stays fast).
+    local result, cancelled, timed_out = kit.sync(kit.input, {}, 30)
+    eq(result, nil, "kit.sync: result is nil on timeout")
+    ok(not cancelled, "kit.sync: cancelled stays false on timeout")
+    ok(timed_out, "kit.sync: timed_out=true when the timeout elapses with no resolution")
+    -- The float never got submitted/cancelled — close it so it doesn't leak into later specs.
+    pcall(vim.cmd, "stopinsert")
+    for _, w in ipairs(vim.api.nvim_list_wins()) do
+      if vim.api.nvim_win_get_config(w).relative ~= "" then
+        pcall(vim.api.nvim_win_close, w, true)
+      end
+    end
+  end
+
+  do
+    -- Works with kit.form too — buffer_ctx.nvim's motivating use case (§13a):
+    -- a multi-field prompt whose caller wants a plain return value, not a callback.
+    -- Both fields' floats open synchronously within this one deferred callback
+    -- (the second field's kit.input opens inside the first field's on_submit).
+    vim.defer_fn(function()
+      submit_current_float("a")
+      submit_current_float("b")
+    end, 10)
+    local values = kit.sync(kit.form, {
+      fields = {
+        { name = "one", label = "One" },
+        { name = "two", label = "Two" },
+      },
+    }, 2000)
+    eq(values.one, "a", "kit.sync + kit.form: first field captured")
+    eq(values.two, "b", "kit.sync + kit.form: second field captured")
+  end
+
   -- --------------------------------------------------------------- chooser (native select)
   local chooser = require("lib.nvim.ui.kit.chooser")
 
