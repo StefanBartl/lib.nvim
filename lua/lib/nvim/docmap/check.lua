@@ -196,23 +196,25 @@ local function check_orphans(ir, findings)
   end
 end
 
---- A cycle among *load-time* requires is the one that actually breaks: two
---- modules that require each other at the top of the file get a
---- half-initialised table on the second one in, and the failure reads as
---- anything but a cycle.
+--- Strongly connected components of the **load-time** require graph.
+---
+--- Exported because two callers need exactly this: the drift check below, and
+--- `docmap.diff`, which reports cycles a change introduced. Duplicating
+--- Tarjan for the second one would have been two implementations of the one
+--- thing in this module most likely to be subtly wrong.
 ---
 --- Deferred requires — `require(...)` inside a function body, the standard way
 --- this tree breaks initialisation order on purpose — are excluded, which is
---- why this needs its own adjacency instead of reusing `node.requires`. Run
---- against lib.nvim without that exclusion, every cycle it reported was a
+--- why this builds its own adjacency instead of reusing `node.requires`. Run
+--- against lib.nvim without that exclusion, every cycle reported was a
 --- deliberate lazy load: a check that only ever fires on intentional code is
 --- one people learn to skim past, so it would have cost the real ones too.
 ---
---- Tarjan's SCC, iterative rather than recursive: the graph is as deep as the
---- tree is wide and Lua's default C stack is not something to spend here.
+--- Iterative rather than recursive: the graph is as deep as the tree is wide
+--- and Lua's default C stack is not something to spend here.
 ---@param ir Lib.Docmap.IR
----@param findings Lib.Docmap.Finding[]
-local function check_require_cycles(ir, findings)
+---@return string[][] components Each sorted, each with at least two members.
+function M.require_cycles(ir)
   local adj = {}
   for _, id in ipairs(ir.order) do
     adj[id] = {}
@@ -223,6 +225,7 @@ local function check_require_cycles(ir, findings)
     end
   end
 
+  local components = {}
   local index, low, on_stack, idx = {}, {}, {}, 0
   local stack = {}
 
@@ -266,26 +269,9 @@ local function check_require_cycles(ir, findings)
               on_stack[popped] = false
               component[#component + 1] = popped
             until popped == id
-
             if #component > 1 then
               table.sort(component)
-              -- Reported once per member, not once per cycle: findings attach
-              -- to a node, and a cycle with no node attached is unclickable in
-              -- the HTML findings table and unjumpable in the quickfix list.
-              local names = {}
-              for _, member in ipairs(component) do
-                names[#names + 1] = ir.nodes[member].module or member
-              end
-              local joined = table.concat(names, " → ")
-              for _, member in ipairs(component) do
-                add(
-                  findings,
-                  "warn",
-                  "require-cycle",
-                  member,
-                  ("require cycle across %d modules: %s"):format(#component, joined)
-                )
-              end
+              components[#components + 1] = component
             end
           end
 
@@ -296,6 +282,40 @@ local function check_require_cycles(ir, findings)
           end
         end
       end
+    end
+  end
+
+  table.sort(components, function(a, b)
+    return a[1] < b[1]
+  end)
+  return components
+end
+
+--- A cycle among load-time requires is the one that actually breaks: two
+--- modules that require each other at the top of the file get a
+--- half-initialised table on the second one in, and the failure reads as
+--- anything but a cycle. Reported at `warn`, so `--check` does not go red over
+--- a deliberate one.
+---@param ir Lib.Docmap.IR
+---@param findings Lib.Docmap.Finding[]
+local function check_require_cycles(ir, findings)
+  for _, component in ipairs(M.require_cycles(ir)) do
+    local names = {}
+    for _, member in ipairs(component) do
+      names[#names + 1] = ir.nodes[member].module or member
+    end
+    local joined = table.concat(names, " → ")
+    -- Reported once per member, not once per cycle: findings attach to a
+    -- node, and a cycle with no node attached is unclickable in the HTML
+    -- findings table and unjumpable in the quickfix list.
+    for _, member in ipairs(component) do
+      add(
+        findings,
+        "warn",
+        "require-cycle",
+        member,
+        ("require cycle across %d modules: %s"):format(#component, joined)
+      )
     end
   end
 end

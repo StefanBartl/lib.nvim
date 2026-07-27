@@ -144,6 +144,68 @@ function M.setup(opts)
       return
     end
 
+    -- :LibMap diff [ref]
+    --
+    -- The committed artifact is in every commit, so any revision can be
+    -- compared without generating anything. `git show <ref>:<artifact>` is the
+    -- whole retrieval; the comparison itself is `docmap.diff`, which is pure
+    -- and therefore also usable from a CI job with no editor involved.
+    local diff_ref = action:match("^diff%s*(.-)$")
+    if action == "diff" or action:match("^diff%s") then
+      local ref = (diff_ref ~= "" and diff_ref) or "HEAD"
+      local rel = (cfg.out_dir or "docs/map") .. "/module_map.json"
+
+      local proc = vim
+        .system({ "git", "show", ("%s:%s"):format(ref, rel) }, {
+          cwd = cfg.root,
+          text = true,
+        })
+        :wait()
+      if proc.code ~= 0 then
+        notify.warn(("Cannot read %s at %s: %s"):format(rel, ref, vim.trim(proc.stderr or "")))
+        return
+      end
+
+      -- `luanil` for the same reason `browse.source` needs it: the artifact
+      -- writes a literal `null` for absent optional fields, and `vim.NIL` is
+      -- truthy — without it every one of them reads as present.
+      local ok_decode, doc = pcall(vim.json.decode, proc.stdout, {
+        luanil = { object = true, array = true },
+      })
+      if not ok_decode or type(doc) ~= "table" or type(doc.nodes) ~= "table" then
+        notify.warn(("The map at %s is not a readable docmap artifact."):format(ref))
+        return
+      end
+
+      local before = require("lib.nvim.docmap.browse.source").rehydrate(doc)
+      local diff_mod = require("lib.nvim.docmap.diff")
+      local result = diff_mod.compare(before, handle.ir())
+      local lines = diff_mod.render(result, before, handle.ir(), ref)
+
+      vim.cmd("enew")
+      local buf = vim.api.nvim_get_current_buf()
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+      vim.bo[buf].filetype = "markdown"
+      vim.bo[buf].buftype = "nofile"
+      vim.bo[buf].bufhidden = "hide"
+      vim.bo[buf].swapfile = false
+      vim.bo[buf].modifiable = false
+
+      if diff_mod.is_empty(result) then
+        notify.info(("Nothing structural changed since %s."):format(ref))
+      else
+        notify.info(
+          ("%d module(s), %d function(s), %d dependency change(s) since %s"):format(
+            #result.nodes_added + #result.nodes_removed,
+            #result.functions_added + #result.functions_removed,
+            #result.deps_added + #result.deps_removed,
+            ref
+          )
+        )
+      end
+      return
+    end
+
     -- :LibMap dot [deps|calls] [module]
     --
     -- Opens the DOT source in a scratch buffer rather than writing a file or
@@ -333,12 +395,12 @@ function M.setup(opts)
     nargs = "*",
     desc = "Regenerate the module map (:"
       .. command_name
-      .. " [check|full|open|graph|why <a> <b>|dot deps|dot calls])",
+      .. " [check|full|open|graph|why <a> <b>|dot|diff <ref>])",
     complete = function(lead, line)
       -- Two completion levels: the action, then — once "graph" is typed — the
       -- module paths the map actually knows, which is the argument nobody
       -- wants to type by hand.
-      local candidates = { "check", "full", "open", "graph", "why", "dot" }
+      local candidates = { "check", "full", "open", "graph", "why", "dot", "diff" }
       local after_graph = line:match("graph%s+%a*%s+(.*)$") or line:match("graph%s+(%a*)$")
       if line:match("graph%s+%a+%s") or line:match("why%s") or line:match("dot%s+%a+%s") then
         -- Offers exactly what `find_node` resolves, namespaces included —
