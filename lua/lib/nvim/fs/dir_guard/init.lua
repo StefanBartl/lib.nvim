@@ -101,7 +101,8 @@ function M.hold(path, opts)
   end
 
   _seq = _seq + 1
-  local group = vim.api.nvim_create_augroup(("lib.nvim.fs.dir_guard.%d"):format(_seq), { clear = true })
+  local group =
+    vim.api.nvim_create_augroup(("lib.nvim.fs.dir_guard.%d"):format(_seq), { clear = true })
 
   local released = false
   -- Set while the guard itself is changing directory. The re-assert below

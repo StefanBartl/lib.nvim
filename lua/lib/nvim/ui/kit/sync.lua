@@ -31,7 +31,10 @@ local DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
 ---@return boolean timed_out
 function M.open(open_fn, opts, timeout_ms)
   if vim.in_fast_event() then
-    error("lib.nvim.ui.kit.sync: cannot be called from a fast event context (vim.in_fast_event())", 2)
+    error(
+      "lib.nvim.ui.kit.sync: cannot be called from a fast event context (vim.in_fast_event())",
+      2
+    )
   end
 
   opts = vim.tbl_extend("force", {}, opts or {})
