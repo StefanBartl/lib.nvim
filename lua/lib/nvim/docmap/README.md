@@ -59,6 +59,60 @@ impact sections with the reason stated: schema 1 predates the require graph
 entirely, so reporting every dependency in the tree as "added" would be
 technically true and completely useless.
 
+## Where a diff radiates to (`history.lua`)
+
+`diff` answers what a revision changed about the *shape* of the tree.
+[`history.lua`](history.lua) answers the other question a reviewer has:
+these concrete lines changed — **who calls the code that changed**. Pure in
+the same sense `diff.lua` is (text and IRs in, a structure out; no git, no
+filesystem), so the same retrieval trick applies — every commit carries its
+own artifact, so `git show <ref>:docs/map/module_map.json` needs no
+generation step.
+
+`git diff --unified=0` is what makes it tractable: with no context lines
+every hunk header's ranges *are* the changed lines. The two sides index
+different files — `-` numbers lines in the parent, `+` in the revision — so
+they resolve against two IRs and merge, rather than misattributing every
+removal in a file that shifted.
+
+A function counts as touched when a changed line falls within
+`[line, line_end]` — its body, deliberately not its doc comment: a
+doc-comment edit is real but does not radiate to callers, and the drift
+checks above already cover that half. `fn.line_end` was added for exactly
+this and is the only new IR field the feature needed; the span was already
+computed at scan time for `calls.lua`.
+
+Two answers come out, one precise and one coarse: `calling_modules` (the
+nodes holding an actual call site into a touched function) and
+`impacted_modules` (the transitive `required_by` closure via
+`deps.impact` — the same walk `:LibBrowse gI` uses, so the two agree by
+construction).
+
+**Degradation is explicit, because it had to be.** `line_end` only exists
+in artifacts generated after it was added, so older revisions carry only
+`line`. Falling back to `line` alone means "a change counts only if it lands
+exactly on the `function` keyword" — measured against `1ce752e`, whose hunks
+sit at lines 235-239 and 249-254 of `S.dedent`'s body, that found **zero** of
+the two functions the commit demonstrably changed. So a missing `line_end` is
+approximated as the next function's start minus one, which over-attributes
+the gap between functions rather than under-attributing the bodies, and sets
+`Impact.approximate` so a caller can say so instead of implying precision it
+does not have. With that fallback the same commit correctly reports
+`S.dedent` and `M.is_array`.
+
+Three cases yield a changed file with no function attribution, all
+legitimate rather than errors, collected in `unattributed` rather than
+dropped: the path is not a scanned node, the IR predates function scanning,
+or the lines sit outside every function (module-level code — which is why a
+commit editing only the `local JS = [[…]]` block in `render/html.lua`
+correctly attributes nothing).
+
+Nothing here excludes the generated artifacts, and it should not — that is a
+pathspec decision for whoever invokes git. It matters though: measured on
+one commit, the full diff is 4.8 MB of which all but ~16 KB is the
+regenerated `docs/map/`, so callers pass `:(exclude)<out_dir>` or they
+analyse mostly generated noise.
+
 `dot` is the third renderer for the same edges, and it exists because the
 other two cannot do what Graphviz does: the HTML page lays boxes out in BFS
 layers and cannot route an edge around anything, and Mermaid is rendered by the
@@ -226,6 +280,7 @@ else — module prefix, directory layout, types directory name — is an option.
 | Render | [`render/`](render/) | HTML (Tree + Hierarchy + Notes + Index tabs), Markdown, Mermaid, DOT |
 | Encode | [`json.lua`](json.lua) | deterministic JSON |
 | Diff | [`diff.lua`](diff.lua) | `Lib.Docmap.Diff` — what one revision changed about the shape |
+| History | [`history.lua`](history.lua) | `Lib.Docmap.History.Impact` — which functions a diff's changed lines touch, and who calls them |
 | Live | [`registry.lua`](registry.lua) | `install()`/`uninstall()` — an in-memory `Handle` instead of files |
 | CLI | [`cli.lua`](cli.lua) | `--check`/`--full` entry point, reused verbatim by `scripts/gen_map.lua` and any consuming plugin's equivalent |
 | Tag files | [`tagfiles.lua`](tagfiles.lua) | `ir.tag_links` — `requires_external` modules resolved against another project's own committed artifact (`opts.tag_files`) |
