@@ -398,6 +398,12 @@ function M.scan_file(path)
         signature = name .. params_text,
         summary = parsed.summary,
         line = frow + 1,
+        -- The same span `ranges` above keeps for `calls.lua`, but published
+        -- on the FunctionInfo too: `docmap.history` maps a diff hunk's
+        -- changed lines onto whichever function contains them, which needs
+        -- the end and not just the start. Derived here rather than later
+        -- because this is the only place the definition node is in scope.
+        line_end = feorow + 1,
         params = parsed.params,
         returns = parsed.returns,
         generic = parsed.generic,

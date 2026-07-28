@@ -109,6 +109,7 @@
 ---@field signature string Name + parameter list, e.g. "scan_full(opts)".
 ---@field summary string One-line prose from the doc block, if any.
 ---@field line integer 1-based line the function definition starts on.
+---@field line_end integer 1-based line the function definition ends on (the `end` keyword). With `line`, the span `docmap.history` maps a diff hunk's changed lines onto.
 ---@field params Lib.Docmap.ParamInfo[]
 ---@field returns Lib.Docmap.ReturnInfo[]
 ---@field generic string[] `@generic` type names, if any.
@@ -256,6 +257,38 @@
 ---@class Lib.Docmap.TagLink
 ---@field title string The resolved node's `module` (or `name` if declared none).
 ---@field html string Path to the external project's `index.html`, with a `#<node id>` fragment.
+
+---One file's changed line ranges, parsed out of `git diff --unified=0` by
+---`docmap.history`. `old_path`/`new_path` are nil on the `/dev/null` side of
+---an added or deleted file, and differ from each other on a rename.
+---@class Lib.Docmap.History.FileDiff
+---@field old_path string? Path in the parent revision.
+---@field new_path string? Path in the revision itself.
+---@field old { first: integer, last: integer }[] Changed line ranges, parent side.
+---@field new { first: integer, last: integer }[] Changed line ranges, this side.
+
+---A function a diff's changed lines fall inside.
+---@class Lib.Docmap.History.Touched
+---@field node string Node id owning the function.
+---@field fn string Declared function name.
+---@field line integer 1-based line the function starts on.
+---@field signature string
+
+---One call site targeting a touched function.
+---@class Lib.Docmap.History.Caller
+---@field node string Node id the call is written in.
+---@field fn string Declared name of the calling function.
+---@field line integer? 1-based line of the call site.
+
+---What one diff radiates to — see `docmap.history`.
+---@class Lib.Docmap.History.Impact
+---@field files string[] Every changed path the diff named, sorted.
+---@field touched Lib.Docmap.History.Touched[] Functions whose span the changed lines fall inside.
+---@field callers table<string, Lib.Docmap.History.Caller[]> Keyed `"<node>#<fn>"`: direct callers of each touched function.
+---@field calling_modules string[] Distinct nodes containing at least one of those call sites — the precise answer.
+---@field impacted_modules string[] Transitive `required_by` closure of the touched nodes (`deps.impact`) — the coarser answer.
+---@field unattributed string[] Changed paths that produced no function attribution: not a scanned node, an IR without functions, or lines outside every function.
+---@field approximate boolean True when at least one attribution came from an artifact without `line_end`, so function spans had to be approximated from the next function's start. Over-attributes rather than under-attributes; a UI should say so.
 
 ---The intermediate representation every renderer and check reads.
 ---@class Lib.Docmap.IR

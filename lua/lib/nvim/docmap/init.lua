@@ -131,6 +131,15 @@ M.cli = setmetatable({}, {
   end,
 })
 
+--- Where a diff radiates to: changed lines -> functions -> callers. Lazily
+--- required for the same reason as `diff`: pure, and nothing on the
+--- generate/check path needs it.
+M.history = setmetatable({}, {
+  __index = function(_, k)
+    return require("lib.nvim.docmap.history")[k]
+  end,
+})
+
 M.render = {
   html = function(...)
     return require("lib.nvim.docmap.render.html")(...)

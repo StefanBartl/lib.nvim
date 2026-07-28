@@ -1055,6 +1055,132 @@ return function(H)
     "docmap.doccoverage: an @internal function is always documented = false, never true"
   )
 
+  -- ------------------------------------------------------- history (R11 P1)
+  local history = require("lib.nvim.docmap.history")
+
+  ---@param name string
+  ---@param line integer
+  ---@param line_end integer?
+  local function hfn(name, line, line_end)
+    return {
+      name = name,
+      signature = name .. "()",
+      summary = "s",
+      line = line,
+      line_end = line_end,
+      params = {},
+      returns = {},
+      generic = {},
+      async = false,
+      nodiscard = false,
+      see = {},
+      overload = {},
+    }
+  end
+
+  -- parse_diff: the four hunk shapes git actually emits at --unified=0.
+  local parsed = history.parse_diff(table.concat({
+    "diff --git a/a/init.lua b/a/init.lua",
+    "index 1111111..2222222 100644",
+    "--- a/a/init.lua",
+    "+++ b/a/init.lua",
+    "@@ -12,3 +12,4 @@ function M.alpha()",
+    "@@ -20 +21 @@ function M.alpha()",
+    "@@ -30,0 +32,2 @@ function M.beta()",
+    "diff --git a/b/init.lua b/b/init.lua",
+    "new file mode 100644",
+    "--- /dev/null",
+    "+++ b/b/init.lua",
+    "@@ -0,0 +1,5 @@",
+  }, "\n"))
+
+  eq(#parsed, 2, "docmap.history: parse_diff finds both files")
+  eq(parsed[1].new_path, "a/init.lua", "docmap.history: strips git's b/ prefix")
+  eq(#parsed[1].old, 2, "docmap.history: a -N,0 hunk contributes no old range")
+  eq(parsed[1].old[1].first, 12, "docmap.history: old range start")
+  eq(parsed[1].old[1].last, 14, "docmap.history: old range end (start + count - 1)")
+  eq(parsed[1].old[2].first, 20, "docmap.history: a missing count means exactly one line")
+  eq(parsed[1].old[2].last, 20, "docmap.history: …so first == last")
+  eq(parsed[1].new[3].first, 32, "docmap.history: pure insertion keeps its new range")
+  eq(parsed[1].new[3].last, 33, "docmap.history: …spanning `count` lines")
+  eq(parsed[2].old_path, nil, "docmap.history: /dev/null on the old side means added file")
+  eq(parsed[2].new_path, "b/init.lua", "docmap.history: added file still has a new path")
+
+  -- analyze, exact spans: alpha 10-20, beta 30-40, with a real gap between.
+  local hist_ir = make_ir({
+    ["a"] = { hfn("M.alpha", 10, 20), hfn("M.beta", 30, 40) },
+    ["b"] = { hfn("M.caller", 5, 8) },
+  }, {
+    { kind = "call", from = "b", from_fn = "M.caller", to = "a", to_fn = "M.alpha", line = 6 },
+  })
+
+  ---@param hunk string
+  ---@param path string?
+  local function diff_for(hunk, path)
+    path = path or "a/init.lua"
+    return table.concat({
+      "diff --git a/" .. path .. " b/" .. path,
+      "--- a/" .. path,
+      "+++ b/" .. path,
+      hunk,
+    }, "\n")
+  end
+
+  local mid = history.analyze(diff_for("@@ -15,2 +15,2 @@"), hist_ir, hist_ir)
+  eq(#mid.touched, 1, "docmap.history: a change inside one function touches exactly it")
+  eq(mid.touched[1].fn, "M.alpha", "docmap.history: …and names that function")
+  eq(mid.approximate, false, "docmap.history: exact line_end needs no approximation")
+
+  -- Both boundaries are inclusive: the `function` line and the `end` line are
+  -- part of the function, and an off-by-one either way would silently drop
+  -- exactly the single-line signature changes most worth catching.
+  eq(
+    #history.analyze(diff_for("@@ -10 +10 @@"), hist_ir, hist_ir).touched,
+    1,
+    "docmap.history: a change on the declaration line counts"
+  )
+  eq(
+    #history.analyze(diff_for("@@ -20 +20 @@"), hist_ir, hist_ir).touched,
+    1,
+    "docmap.history: a change on the closing `end` line counts"
+  )
+
+  local gap = history.analyze(diff_for("@@ -25 +25 @@"), hist_ir, hist_ir)
+  eq(#gap.touched, 0, "docmap.history: a change between two functions touches neither")
+  eq(gap.unattributed[1], "a/init.lua", "docmap.history: …and is reported as unattributed")
+
+  -- Callers, and the two answers they feed.
+  local cs = mid.callers["a#M.alpha"]
+  eq(#cs, 1, "docmap.history: the call edge into a touched function is found")
+  eq(cs[1].fn, "M.caller", "docmap.history: caller is named by its declared function")
+  eq(cs[1].node, "b", "docmap.history: …and by the node it lives in")
+  eq(mid.calling_modules[1], "b", "docmap.history: calling_modules is the precise answer")
+
+  -- Degradation: an artifact without line_end (every revision older than the
+  -- field itself). Spans fall back to the next function's start, which
+  -- over-attributes the gap — and must say so.
+  local old_ir = make_ir({ ["a"] = { hfn("M.alpha", 10), hfn("M.beta", 30) } })
+  local approx = history.analyze(diff_for("@@ -25 +25 @@"), old_ir, old_ir)
+  eq(approx.approximate, true, "docmap.history: a missing line_end is flagged as approximate")
+  eq(#approx.touched, 1, "docmap.history: the fallback still attributes the change")
+  eq(
+    approx.touched[1].fn,
+    "M.alpha",
+    "docmap.history: …to the preceding function, erring toward over-attribution"
+  )
+
+  -- A path the map does not know is reported, not silently dropped.
+  local unknown = history.analyze(diff_for("@@ -1 +1 @@", "README.md"), hist_ir, hist_ir)
+  eq(#unknown.touched, 0, "docmap.history: an unscanned path touches no function")
+  eq(unknown.unattributed[1], "README.md", "docmap.history: …and is listed as unattributed")
+  eq(unknown.files[1], "README.md", "docmap.history: every changed path is reported in files")
+
+  -- Missing IRs (a first commit has no parent) degrade to files-only rather
+  -- than erroring.
+  local no_ir = history.analyze(diff_for("@@ -15 +15 @@"), nil, nil)
+  eq(#no_ir.touched, 0, "docmap.history: no IR means no attribution, not a crash")
+  eq(#no_ir.files, 1, "docmap.history: …but the changed file is still reported")
+
   -- ---------------------------------------------- symbols and subtree stats
   local sym_fixture = H.tmpfile(".lua")
   local sfw = assert(io.open(sym_fixture, "w"), "docmap spec: symbol fixture must be writable")
