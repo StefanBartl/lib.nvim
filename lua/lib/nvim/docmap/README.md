@@ -800,19 +800,44 @@ list into the exit code CI fails on.
 ## Index tab
 
 Doxygen's "File Members": every documented function in the tree, A–Z, with a
-letter jump bar — 976 of them for lib.nvim. Clicking one opens its module in
-the Tree tab; `@internal` and `@deprecated` entries are tagged inline.
+letter jump bar — 997 of them for lib.nvim. Clicking one opens its module in
+the Tree tab; `@internal`, `@deprecated` and (R2) `tested` entries are tagged
+inline.
 
 Sorted on the **bare** name, so `M.read` files under **R**. The `M.` is this
 repo's local-table convention rather than part of what the function is called,
-and filing 555 of 976 functions under a single "M" would be an index in name
-only. `calls.lua` needed the same reduction for call resolution; its `bare()`
-is the model. A name that starts with something non-alphabetic (`_evict`)
-collects under `#` rather than being dropped.
+and filing most functions under a single "M" would be an index in name only.
+`calls.lua` needed the same reduction for call resolution; its `bare()` is the
+model. A name that starts with something non-alphabetic (`_evict`) collects
+under `#` rather than being dropped.
 
 It earns a tab next to the Tree's filter and the picker's fuzzy match because
 neither of those gives you the flat alphabet — which is the one way to find a
 function whose module you do not already know.
+
+### Functions / Modules toggle (R3)
+
+The same flat-alphabet idea, one level up — a **Functions / Modules** toggle
+(`state.iview`, mirroring the Hierarchy tab's view buttons) switches between
+the function index above and a second one over every `module`/`namespace`
+node, deliberately excluding `file` nodes: a file is reached through its
+module in the Tree tab already, and this index exists for "I know the name,
+not where it lives", which a leaf file rarely is. Doxygen keeps a separate
+File Index and Class Index for the same reason — two different "I know the
+name" questions, not one.
+
+Sorted the same way as the function index — bare last segment of the module
+path (`lib.nvim.fs` files under **F**) — for the same reason: `calls.lua`'s
+`bare()` reduction is the model both indexes share. Each entry shows its kind
+(`module`/`namespace`) and function count, and clicking one opens it in the
+Tree tab, same as the function index.
+
+Both halves of the toggle render lazily and cache their HTML in module scope
+(`indexFnHTML`/`indexModHTML`) rather than recomputing on every switch — the
+IR is static for the page's lifetime, so there is nothing to invalidate.
+`iview=modules` is the only URL state this tab carries (omitted when it is
+the default), the same "only the axes a view actually uses" rule
+`serializeState` already applies to Hierarchy's `dir`/`depth`/`ext`.
 
 ## Drift checks
 

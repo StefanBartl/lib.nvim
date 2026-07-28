@@ -159,6 +159,7 @@ details>summary{cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0}
 .nlist .ntext{font-size:12.5px;color:var(--ink);margin-top:2px}
 .nlist .ntext.none{color:var(--muted);font-style:italic}
 #view-index{padding:22px 26px 60px}
+#ixtoggle{margin-bottom:14px}
 #view-index h3{margin:22px 0 6px;font-size:15px;font-weight:700;color:var(--accent);
   font-family:var(--mono);border-bottom:1px solid var(--line);padding-bottom:3px}
 .ixjump{display:flex;flex-wrap:wrap;gap:3px;margin:0 0 6px;position:sticky;top:0;
@@ -463,7 +464,7 @@ local JS = [[
   // =====================================================================
   var DEFAULT_STATE = {
     tab: "tree", id: null, center: null, view: "modules",
-    dir: "out", depth: 2, fn: null, ext: false
+    dir: "out", depth: 2, fn: null, ext: false, iview: "functions"
   };
   function freshState(){ return Object.assign({}, DEFAULT_STATE); }
 
@@ -488,12 +489,17 @@ local JS = [[
     var parts = ["tab=" + encodeURIComponent(s.tab)];
     if(s.tab === "tree"){
       if(s.id) parts.push("id=" + encodeURIComponent(s.id));
-    } else if(s.tab === "notes" || s.tab === "index"){
-      // Nothing else to carry: both are flat aggregates over the whole map,
-      // with no center, view or direction to remember. Falling through to the
+    } else if(s.tab === "notes"){
+      // Nothing else to carry: a flat aggregate over the whole map, with no
+      // center, view or direction to remember. Falling through to the
       // hierarchy branch would put a `view=modules` in every shared link that
       // means nothing there.
       void 0;
+    } else if(s.tab === "index"){
+      // One axis, not the hierarchy branch's whole set: R3's Functions/
+      // Modules toggle, omitted when it is the default so the common case
+      // stays a bare `#tab=index` link.
+      if(s.iview === "modules") parts.push("iview=modules");
     } else {
       if(s.center) parts.push("center=" + encodeURIComponent(s.center));
       parts.push("view=" + encodeURIComponent(s.view || "modules"));
@@ -535,6 +541,7 @@ local JS = [[
       else if(k === "depth"){ var d = parseInt(v, 10); s.depth = isNaN(d) ? 2 : d; }
       else if(k === "fn") s.fn = v;
       else if(k === "ext") s.ext = (v === "1" || v === "true");
+      else if(k === "iview") s.iview = (v === "modules") ? "modules" : "functions";
     });
     return s;
   }
@@ -1690,36 +1697,16 @@ local JS = [[
   // =====================================================================
   function bareName(name){ return (name.match(/[\w]+$/) || [name])[0]; }
 
-  var indexDrawn = false;
-  function drawIndex(){
-    if(indexDrawn) return; // static over one IR
-    indexDrawn = true;
-
-    var entries = [];
-    IR.nodes.forEach(function(n){
-      (n.functions || []).forEach(function(fn){
-        entries.push({ node: n, fn: fn, bare: bareName(fn.name) });
-      });
-    });
+  // Shared by both index views: letter buckets plus a jump bar, filed on
+  // `entry.bare`. Ties broken by `entry.tie` so two entries with the same
+  // bare name (`M.setup` everywhere; two modules named `init`) sort
+  // deterministically instead of leaving it to the engine's discretion.
+  function buildIndexBuckets(entries){
     entries.sort(function(a, b){
       var ab = a.bare.toLowerCase(), bb = b.bare.toLowerCase();
       if(ab !== bb) return ab < bb ? -1 : 1;
-      // Same name in two modules is common (`M.setup` everywhere); the module
-      // is what tells them apart, so it is the tiebreak rather than leaving
-      // the order to table.sort's discretion.
-      var am = a.node.module || a.node.path, bm = b.node.module || b.node.path;
-      return am < bm ? -1 : (am > bm ? 1 : 0);
+      return a.tie < b.tie ? -1 : (a.tie > b.tie ? 1 : 0);
     });
-
-    var host = document.getElementById("view-index");
-    if(entries.length === 0){
-      host.innerHTML = '<p class="ntext none">This map contains no documented functions.</p>';
-      return;
-    }
-
-    // Letter buckets, plus a jump bar. Non-alphabetic leaders (a leading
-    // underscore) collect under "#" rather than being dropped or inventing a
-    // letter for them.
     var buckets = {}, order = [];
     entries.forEach(function(e){
       var c = e.bare.charAt(0).toUpperCase();
@@ -1728,20 +1715,66 @@ local JS = [[
       buckets[c].push(e);
     });
     order.sort();
+    return { buckets: buckets, order: order };
+  }
 
+  function indexJumpBar(order){
+    return '<div class="ixjump">' + order.map(function(c){
+      return '<a data-jump="' + esc(c) + '">' + esc(c) + '</a>';
+    }).join("") + "</div>";
+  }
+
+  function wireIndexBody(host){
+    host.querySelectorAll(".nfn").forEach(function(a){
+      a.addEventListener("click", function(){
+        navigate({ tab: "tree", id: a.dataset.node });
+      });
+    });
+    host.querySelectorAll("[data-jump]").forEach(function(a){
+      a.addEventListener("click", function(){
+        var h = host.querySelector("#ix-" + CSS.escape(a.dataset.jump));
+        if(h) h.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  }
+
+  // Doxygen's "File Members" — every documented function in the tree, A-Z,
+  // without walking the module hierarchy to find it. Sorted on the *bare*
+  // name (`M.read` files under R, not M): the `M.` is this repo's
+  // local-table convention rather than part of what the function is
+  // called, and filing 900 functions under "M" would be an index in name
+  // only — `calls.lua` needed the same reduction and its `bare()` is the
+  // model. The Tree tab already filters and the picker already
+  // fuzzy-matches; what neither gives you is the flat alphabet, the one way
+  // to find something whose module you do not already know.
+  var indexFnHTML = null;
+  function renderIndexFunctions(){
+    if(indexFnHTML !== null) return indexFnHTML;
+
+    var entries = [];
+    IR.nodes.forEach(function(n){
+      (n.functions || []).forEach(function(fn){
+        entries.push({ node: n, fn: fn, bare: bareName(fn.name), tie: n.module || n.path });
+      });
+    });
+
+    if(entries.length === 0){
+      indexFnHTML = '<p class="ntext none">This map contains no documented functions.</p>';
+      return indexFnHTML;
+    }
+
+    var built = buildIndexBuckets(entries);
     var parts = [];
     parts.push('<p class="nsub">' + entries.length +
       ' documented functions, filed under the last segment of the declared name' +
       ' (<code>M.read</code> sorts under R).</p>');
-    parts.push('<div class="ixjump">' + order.map(function(c){
-      return '<a data-jump="' + esc(c) + '">' + esc(c) + '</a>';
-    }).join("") + "</div>");
+    parts.push(indexJumpBar(built.order));
 
-    order.forEach(function(c){
+    built.order.forEach(function(c){
       parts.push('<h3 id="ix-' + esc(c) + '">' + esc(c) +
-        '<span class="ncount">' + buckets[c].length + '</span></h3>');
+        '<span class="ncount">' + built.buckets[c].length + '</span></h3>');
       parts.push('<ul class="nlist ixlist">');
-      buckets[c].forEach(function(e){
+      built.buckets[c].forEach(function(e){
         parts.push('<li><a class="nfn" data-node="' + esc(e.node.id) + '">' +
           esc(e.fn.signature) + '</a>' +
           (e.fn.internal ? '<span class="ixtag">internal</span>' : '') +
@@ -1752,18 +1785,66 @@ local JS = [[
       });
       parts.push("</ul>");
     });
-    host.innerHTML = parts.join("");
+    indexFnHTML = parts.join("");
+    return indexFnHTML;
+  }
 
-    host.querySelectorAll(".nfn").forEach(function(a){
-      a.addEventListener("click", function(){
-        navigate({ tab: "tree", id: a.dataset.node });
-      });
+  // R3: the same flat alphabet, one level up — every *module and namespace*
+  // (not function, and deliberately not `file` nodes: a file is reached
+  // through its module in the Tree, and this index exists for "I know the
+  // module name, not where it lives", which a leaf file rarely is). Doxygen
+  // keeps its File Index and Class Index as separate pages for the same
+  // reason a flat function alphabet and a flat module alphabet answer two
+  // different "I know the name, not the location" questions.
+  var indexModHTML = null;
+  function renderIndexModules(){
+    if(indexModHTML !== null) return indexModHTML;
+
+    var entries = [];
+    IR.nodes.forEach(function(n){
+      if(n.kind !== "module" && n.kind !== "namespace") return;
+      var label = n.module || n.path;
+      entries.push({ node: n, bare: bareName(label), label: label, tie: label });
     });
-    host.querySelectorAll("[data-jump]").forEach(function(a){
-      a.addEventListener("click", function(){
-        var h = document.getElementById("ix-" + a.dataset.jump);
-        if(h) h.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    if(entries.length === 0){
+      indexModHTML = '<p class="ntext none">This map contains no modules.</p>';
+      return indexModHTML;
+    }
+
+    var built = buildIndexBuckets(entries);
+    var parts = [];
+    parts.push('<p class="nsub">' + entries.length +
+      ' modules and namespaces, filed under the last segment of the module path' +
+      ' (<code>lib.nvim.fs</code> sorts under F).</p>');
+    parts.push(indexJumpBar(built.order));
+
+    built.order.forEach(function(c){
+      parts.push('<h3 id="ix-' + esc(c) + '">' + esc(c) +
+        '<span class="ncount">' + built.buckets[c].length + '</span></h3>');
+      parts.push('<ul class="nlist ixlist">');
+      built.buckets[c].forEach(function(e){
+        var fnCount = (e.node.functions || []).length;
+        parts.push('<li><a class="nfn" data-node="' + esc(e.node.id) + '">' +
+          esc(e.label) + '</a>' +
+          '<span class="ixtag">' + esc(e.node.kind) + '</span>' +
+          '<span class="nwhere">' + fnCount + (fnCount === 1 ? " function" : " functions") +
+          '</span></li>');
       });
+      parts.push("</ul>");
+    });
+    indexModHTML = parts.join("");
+    return indexModHTML;
+  }
+
+  function drawIndex(){
+    var host = document.getElementById("ixbody");
+    var iview = state.iview === "modules" ? "modules" : "functions";
+    host.innerHTML = iview === "modules" ? renderIndexModules() : renderIndexFunctions();
+    wireIndexBody(host);
+
+    document.querySelectorAll("#ixtoggle .hview-btn").forEach(function(b){
+      b.classList.toggle("active", b.dataset.iview === iview);
     });
   }
 
@@ -2220,6 +2301,9 @@ local JS = [[
   });
   document.querySelectorAll(".hview-btn").forEach(function(b){
     b.addEventListener("click", function(){ navigate({ view: b.dataset.view }); });
+  });
+  document.querySelectorAll(".ixview-btn").forEach(function(b){
+    b.addEventListener("click", function(){ navigate({ tab: "index", iview: b.dataset.iview }); });
   });
   document.querySelectorAll(".hdir-btn").forEach(function(b){
     b.addEventListener("click", function(){ navigate({ dir: b.dataset.dir }); });
@@ -2731,7 +2815,14 @@ function M.render(ir, findings, opts)
     "</div>",
 
     '<div id="view-notes" class="view"></div>',
-    '<div id="view-index" class="view"></div>',
+
+    '<div id="view-index" class="view">',
+    '<div class="hview-toggle" id="ixtoggle">',
+    '<button class="ixview-btn active" data-iview="functions">Functions</button>',
+    '<button class="ixview-btn" data-iview="modules">Modules</button>',
+    "</div>",
+    '<div id="ixbody"></div>',
+    "</div>",
 
     '<div id="findings"><details><summary>Drift findings (',
     tostring(#findings),
