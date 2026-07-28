@@ -839,6 +839,42 @@ IR is static for the page's lifetime, so there is nothing to invalidate.
 the default), the same "only the axes a view actually uses" rule
 `serializeState` already applies to Hierarchy's `dir`/`depth`/`ext`.
 
+## Analysis tab
+
+A tool palette, not a diagram — a fifth tab (`atool` state axis, same
+`iview=`-shaped URL rule as the Index tab) whose toolbar switches between
+panels the way Hierarchy's view buttons switch between graphs, applied to
+aggregate numbers instead of boxes. Two tools today, both per-module
+breakdowns over data `scan_full()` already stamped into the IR:
+
+- **Test coverage** — `fn.tested` (R2, [`coverage.lua`](coverage.lua))
+- **Documentation** — `fn.documented` (R4, [`doccoverage.lua`](doccoverage.lua))
+
+Each panel is a table, one row per module/namespace/file that owns at least
+one function: hit/total, a percentage, and a bar. Sorted **worst-first** —
+lowest percentage at the top, ties broken by functions-affected (a 0%
+module with 20 functions needs attention before one with 1) — because a
+panel meant to answer "where should I look" should not bury that answer
+alphabetically the way the Index tab correctly does for "I know the name."
+Clicking a row opens that module in the Tree tab, same as every other
+cross-reference in the page.
+
+Deliberately reads `fn.tested`/`fn.documented` rather than recomputing
+either in JS: `doccoverage.is_documented`'s parameter-name comparison in
+particular has real logic (the colon-method `self` exception) that must
+never exist in two places that could quietly drift apart. The Documentation
+panel excludes `@internal` functions from its totals — matching
+`doccoverage.summary`'s own definition exactly, so the panel's percentage
+can never disagree with the number `:LibMap`/the CLI prints for the same
+tree; the Test-coverage panel does not, since `coverage.resolve` stamps
+`fn.tested` on every function regardless of `@internal`.
+
+Two tools only, deliberately: R6 (fan-in/fan-out hotspots) and beyond are
+real candidates (see the roadmap) but have no data stamped into the IR
+yet — a third button that opened an empty panel would be exactly what the
+context menu's "disabled with a count shown" rule exists to avoid
+elsewhere in this page.
+
 ## Drift checks
 
 The rendered map is the visible half; the checks are the half that catches

@@ -31,7 +31,7 @@ local M = {}
 ---`undocumented-param` and `param-name-mismatch` each check one half of.
 ---@param fn Lib.Docmap.FunctionInfo
 ---@return boolean
-local function params_documented(fn)
+function M.params_documented(fn)
   local check = require("lib.nvim.docmap.check")
   local declared = check.declared_param_names(fn)
 
@@ -65,6 +65,33 @@ local function params_documented(fn)
   return true
 end
 
+---True when `fn` has both a non-empty summary and fully, correctly
+---documented parameters — the whole definition of "documented" this module
+---uses, in one place, so `M.resolve` (which stamps `fn.documented` into the
+---IR for the Analysis tab) and `M.summary` (the aggregate CLI/badge number)
+---can never quietly disagree about a single function.
+---@param fn Lib.Docmap.FunctionInfo
+---@return boolean
+function M.is_documented(fn)
+  local has_summary = fn.summary ~= nil and fn.summary ~= ""
+  return has_summary and M.params_documented(fn)
+end
+
+---Stamp `fn.documented` onto every non-`@internal` function in `ir` —
+---`@internal` functions are left `false` rather than skipped, the same
+---"always a real boolean, never a nil a reader has to guard" reasoning
+---`fn.tested`'s default already follows. What the Analysis tab's
+---Documentation panel reads to build a per-module breakdown without
+---duplicating `M.is_documented`'s logic in JS.
+---@param ir Lib.Docmap.IR
+function M.resolve(ir)
+  for _, id in ipairs(ir.order) do
+    for _, fn in ipairs(ir.nodes[id].functions) do
+      fn.documented = (not fn.internal) and M.is_documented(fn) or false
+    end
+  end
+end
+
 ---Aggregate documentation coverage over `ir`: how many published (non-
 ---`@internal`) functions have both a summary and fully, correctly
 ---documented parameters.
@@ -77,8 +104,7 @@ function M.summary(ir)
     for _, fn in ipairs(ir.nodes[id].functions) do
       if not fn.internal then
         total = total + 1
-        local has_summary = fn.summary ~= nil and fn.summary ~= ""
-        if has_summary and params_documented(fn) then
+        if M.is_documented(fn) then
           documented = documented + 1
         end
       end

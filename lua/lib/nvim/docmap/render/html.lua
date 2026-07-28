@@ -147,8 +147,10 @@ details>summary{cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0}
 #view-notes{padding:22px 26px 60px}
 #view-notes h3{margin:26px 0 4px;font-size:13px;font-weight:600;color:var(--ink)}
 #view-notes h3:first-child{margin-top:0}
-#view-notes .nsub{font-size:12px;color:var(--muted);margin:0 0 10px}
-#view-notes .ncount{color:var(--muted);font-weight:400;font-size:11.5px;margin-left:6px}
+#view-notes .nsub,#view-index .nsub,#view-analysis .nsub{font-size:12px;color:var(--muted);
+  margin:0 0 10px}
+#view-notes .ncount,#view-index .ncount{color:var(--muted);font-weight:400;font-size:11.5px;
+  margin-left:6px}
 .nlist{list-style:none;margin:0;padding:0}
 .nlist li{padding:7px 0;border-bottom:1px dashed var(--line)}
 .nlist li:last-child{border-bottom:0}
@@ -160,6 +162,16 @@ details>summary{cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0}
 .nlist .ntext.none{color:var(--muted);font-style:italic}
 #view-index{padding:22px 26px 60px}
 #ixtoggle{margin-bottom:14px}
+#view-analysis{padding:22px 26px 60px}
+#antoggle{margin-bottom:14px}
+.antable{width:100%;border-collapse:collapse;font-size:12.5px}
+.antable th{text-align:left;font-weight:600;color:var(--muted);font-size:11px;
+  text-transform:uppercase;letter-spacing:.03em;padding:4px 8px;border-bottom:1px solid var(--line)}
+.antable td{padding:5px 8px;border-bottom:1px dashed var(--line);font-family:var(--mono)}
+.anrow{cursor:pointer}
+.anrow:hover td{background:var(--accent-soft)}
+.anbar{width:120px;height:8px;background:var(--line);border-radius:4px;overflow:hidden}
+.anfill{height:100%;background:var(--accent)}
 #view-index h3{margin:22px 0 6px;font-size:15px;font-weight:700;color:var(--accent);
   font-family:var(--mono);border-bottom:1px solid var(--line);padding-bottom:3px}
 .ixjump{display:flex;flex-wrap:wrap;gap:3px;margin:0 0 6px;position:sticky;top:0;
@@ -464,7 +476,7 @@ local JS = [[
   // =====================================================================
   var DEFAULT_STATE = {
     tab: "tree", id: null, center: null, view: "modules",
-    dir: "out", depth: 2, fn: null, ext: false, iview: "functions"
+    dir: "out", depth: 2, fn: null, ext: false, iview: "functions", atool: "test"
   };
   function freshState(){ return Object.assign({}, DEFAULT_STATE); }
 
@@ -500,6 +512,9 @@ local JS = [[
       // Modules toggle, omitted when it is the default so the common case
       // stays a bare `#tab=index` link.
       if(s.iview === "modules") parts.push("iview=modules");
+    } else if(s.tab === "analysis"){
+      // Same rule, Analysis's own one axis: which tool panel is open.
+      if(s.atool === "doc") parts.push("atool=doc");
     } else {
       if(s.center) parts.push("center=" + encodeURIComponent(s.center));
       parts.push("view=" + encodeURIComponent(s.view || "modules"));
@@ -542,6 +557,7 @@ local JS = [[
       else if(k === "fn") s.fn = v;
       else if(k === "ext") s.ext = (v === "1" || v === "true");
       else if(k === "iview") s.iview = (v === "modules") ? "modules" : "functions";
+      else if(k === "atool") s.atool = (v === "doc") ? "doc" : "test";
     });
     return s;
   }
@@ -562,11 +578,13 @@ local JS = [[
     document.getElementById("view-hierarchy").classList.toggle("active", s.tab === "hierarchy");
     document.getElementById("view-notes").classList.toggle("active", s.tab === "notes");
     document.getElementById("view-index").classList.toggle("active", s.tab === "index");
+    document.getElementById("view-analysis").classList.toggle("active", s.tab === "analysis");
 
     if(s.tab === "tree" && s.id && byId[s.id]) selectRow(s.id);
     if(s.tab === "hierarchy") drawHierarchy(s.center || IR.root, s.view || "modules");
     if(s.tab === "notes") drawNotes();
     if(s.tab === "index") drawIndex();
+    if(s.tab === "analysis") drawAnalysis();
     syncGraphControls(s);
 
     var hash = serializeState(s);
@@ -1843,8 +1861,127 @@ local JS = [[
     host.innerHTML = iview === "modules" ? renderIndexModules() : renderIndexFunctions();
     wireIndexBody(host);
 
-    document.querySelectorAll("#ixtoggle .hview-btn").forEach(function(b){
+    document.querySelectorAll("#ixtoggle .ixview-btn").forEach(function(b){
       b.classList.toggle("active", b.dataset.iview === iview);
+    });
+  }
+
+  // =====================================================================
+  // Analysis tab: a tool palette, not a diagram — the same "toolbar
+  // switches what a shared panel shows" shape the Hierarchy view buttons
+  // and the Index Functions/Modules toggle already use, applied to
+  // aggregate numbers instead of boxes or a flat alphabet.
+  //
+  // Each tool reads a boolean docmap already stamped onto every function
+  // during scan_full() (`fn.tested`, R2; `fn.documented`, R4) rather than
+  // recomputing anything here — `doccoverage.is_documented`'s param-name
+  // comparison in particular is not something this file should ever
+  // reimplement in JS, where it would inevitably drift from check.lua's
+  // own logic the moment either side changed.
+  //
+  // First two tools only, deliberately: R6 (fan-in/fan-out hotspots) and
+  // beyond are real candidates but have no data stamped into the IR yet —
+  // adding their buttons here before their data exists would be a menu
+  // entry that opens an empty panel, exactly what the context menu's
+  // "disabled with count shown" rule exists to avoid elsewhere.
+  // =====================================================================
+
+  // `excludeInternal` matters for the Documentation panel specifically:
+  // `doccoverage.summary`'s own definition of "total" already excludes
+  // `@internal` functions (an internal function's documentation bar is the
+  // author's own, not part of a "published API" number), and this panel
+  // must count the same way or its 65% would quietly disagree with the
+  // number `:LibMap`/the CLI prints for the same tree. The Test-coverage
+  // panel passes false: `coverage.resolve` stamps `fn.tested` on every
+  // function regardless of `@internal`, so its total is every function.
+  function renderAnalysisPanel(label, sub, pick, excludeInternal){
+    var rows = [];
+    IR.nodes.forEach(function(n){
+      var fns = (n.functions || []).filter(function(fn){
+        return !(excludeInternal && fn.internal);
+      });
+      if(fns.length === 0) return;
+      var hit = 0;
+      fns.forEach(function(fn){ if(pick(fn)) hit++; });
+      rows.push({ node: n, hit: hit, total: fns.length, pct: hit / fns.length });
+    });
+
+    var totalHit = 0, totalAll = 0;
+    rows.forEach(function(r){ totalHit += r.hit; totalAll += r.total; });
+    var overallPct = totalAll > 0 ? Math.round(100 * totalHit / totalAll) : 0;
+
+    if(rows.length === 0){
+      return '<p class="ntext none">This map contains no documented functions.</p>';
+    }
+
+    // Worst-first: the module that needs attention most belongs at the top
+    // of a panel meant to answer "where should I look", not filed
+    // alphabetically where that answer is buried. Fewer functions is not
+    // itself worse, so the tiebreak is functions-affected (a 0% module with
+    // 20 functions matters more than one with 1), then module id for a
+    // stable order once both numbers tie exactly.
+    rows.sort(function(a, b){
+      if(a.pct !== b.pct) return a.pct - b.pct;
+      if(a.total !== b.total) return b.total - a.total;
+      return a.node.id < b.node.id ? -1 : (a.node.id > b.node.id ? 1 : 0);
+    });
+
+    var parts = [];
+    parts.push('<p class="nsub">' + label + ': <strong>' + totalHit + '/' + totalAll +
+      '</strong> functions (' + overallPct + '%). ' + sub + '</p>');
+    parts.push('<table class="antable"><thead><tr><th>Module</th><th>' + label +
+      '</th><th></th></tr></thead><tbody>');
+    rows.forEach(function(r){
+      var pct = Math.round(r.pct * 100);
+      var label2 = r.node.module || r.node.path;
+      parts.push('<tr class="anrow" data-node="' + esc(r.node.id) + '">' +
+        '<td>' + esc(label2) + '</td>' +
+        '<td>' + r.hit + '/' + r.total + ' (' + pct + '%)</td>' +
+        '<td><div class="anbar"><div class="anfill" style="width:' + pct + '%"></div></div></td>' +
+        '</tr>');
+    });
+    parts.push("</tbody></table>");
+    return parts.join("");
+  }
+
+  var analysisTestHTML = null, analysisDocHTML = null;
+  function drawAnalysis(){
+    var host = document.getElementById("anbody");
+    var atool = state.atool === "doc" ? "doc" : "test";
+
+    if(atool === "test"){
+      if(analysisTestHTML === null){
+        analysisTestHTML = renderAnalysisPanel(
+          "Tested",
+          "A function counts as tested when its bare name is found somewhere " +
+          "under the configured tests directory — see docmap's coverage.lua " +
+          "for what that heuristic can and cannot see.",
+          function(fn){ return !!fn.tested; },
+          false
+        );
+      }
+      host.innerHTML = analysisTestHTML;
+    } else {
+      if(analysisDocHTML === null){
+        analysisDocHTML = renderAnalysisPanel(
+          "Documented",
+          "A function counts as documented when it has a summary and its " +
+          "parameters are fully and correctly named — @internal functions " +
+          "are excluded entirely, not counted as undocumented.",
+          function(fn){ return !!fn.documented; },
+          true
+        );
+      }
+      host.innerHTML = analysisDocHTML;
+    }
+
+    host.querySelectorAll(".anrow").forEach(function(tr){
+      tr.addEventListener("click", function(){
+        navigate({ tab: "tree", id: tr.dataset.node });
+      });
+    });
+    document.querySelectorAll("#antoggle .anview-btn").forEach(function(b){
+      b.classList.toggle("active", b.dataset.atool === atool);
     });
   }
 
@@ -2304,6 +2441,9 @@ local JS = [[
   });
   document.querySelectorAll(".ixview-btn").forEach(function(b){
     b.addEventListener("click", function(){ navigate({ tab: "index", iview: b.dataset.iview }); });
+  });
+  document.querySelectorAll(".anview-btn").forEach(function(b){
+    b.addEventListener("click", function(){ navigate({ tab: "analysis", atool: b.dataset.atool }); });
   });
   document.querySelectorAll(".hdir-btn").forEach(function(b){
     b.addEventListener("click", function(){ navigate({ dir: b.dataset.dir }); });
@@ -2769,6 +2909,7 @@ function M.render(ir, findings, opts)
     '<button class="tab-btn" data-tab="hierarchy">Hierarchy</button>',
     '<button class="tab-btn" data-tab="notes">Notes</button>',
     '<button class="tab-btn" data-tab="index">Index</button>',
+    '<button class="tab-btn" data-tab="analysis">Analysis</button>',
     "</div>",
 
     '<div class="toolbar">',
@@ -2822,6 +2963,14 @@ function M.render(ir, findings, opts)
     '<button class="ixview-btn" data-iview="modules">Modules</button>',
     "</div>",
     '<div id="ixbody"></div>',
+    "</div>",
+
+    '<div id="view-analysis" class="view">',
+    '<div class="hview-toggle" id="antoggle">',
+    '<button class="anview-btn active" data-atool="test">Test coverage</button>',
+    '<button class="anview-btn" data-atool="doc">Documentation</button>',
+    "</div>",
+    '<div id="anbody"></div>',
     "</div>",
 
     '<div id="findings"><details><summary>Drift findings (',
