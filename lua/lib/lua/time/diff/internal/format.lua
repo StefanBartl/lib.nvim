@@ -50,6 +50,7 @@ end
 ---@param unit TimeUnit Display unit
 ---@return string summary Compact summary string
 ---@nodiscard
+---@internal
 function M.format_results(checks, start_time, unit)
   if #checks == 0 then
     return "[lib.lua.time.diff] No checkpoints recorded."
@@ -153,6 +154,7 @@ end
 ---@param unit TimeUnit Display unit
 ---@return string table Multi-line formatted table
 ---@nodiscard
+---@internal
 function M.format_pretty(checks, start_time, unit)
   if #checks == 0 then
     return "[lib.lua.time.diff] No checkpoints to display."
@@ -212,6 +214,7 @@ end
 ---@param suffix string Unit suffix
 ---@return string|number formatted Formatted string or raw number
 ---@nodiscard
+---@internal
 function M.format_iterator_output(index, time_val, label, show_index, suffix)
   if not label then
     return time_val

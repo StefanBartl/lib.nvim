@@ -29,6 +29,7 @@ local UNIT_SUFFIXES = {
 ---@param unit TimeUnit Target unit
 ---@return number converted Converted value
 ---@nodiscard
+---@internal
 function M.convert_time(ns, unit)
   local factor = CONVERSION_FACTORS[unit]
   if not factor then
@@ -41,6 +42,7 @@ end
 ---@param unit TimeUnit Unit
 ---@return string suffix Unit suffix
 ---@nodiscard
+---@internal
 function M.unit_suffix(unit)
   return UNIT_SUFFIXES[unit] or "ns"
 end
@@ -50,6 +52,7 @@ end
 ---@param unit TimeUnit Target unit
 ---@return number[] converted Array of converted values
 ---@nodiscard
+---@internal
 function M.convert_batch(values, unit)
   local factor = CONVERSION_FACTORS[unit]
   if not factor then

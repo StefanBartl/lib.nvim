@@ -34,6 +34,7 @@ local STAT_KEYWORDS = {
 ---@return boolean valid
 ---@return TimeUnit|string unit_or_err
 ---@nodiscard
+---@internal
 function M.validate_unit(unit, allow_nil)
   if unit == nil then
     if allow_nil == false then
@@ -60,6 +61,7 @@ end
 ---@return integer|nil index_or_err Valid index or nil
 ---@return string|nil err Error message if invalid
 ---@nodiscard
+---@internal
 function M.validate_index(idx, max_idx)
   if type(idx) ~= "number" then
     return false, nil, "index must be a number"
@@ -84,6 +86,7 @@ end
 ---@return integer|string|number|nil resolved Resolved value
 ---@return string|nil err Error message
 ---@nodiscard
+---@internal
 function M.resolve_interval_spec(spec, max_idx)
   local t = type(spec)
 
@@ -125,6 +128,7 @@ end
 ---@return boolean valid True if valid
 ---@return string|nil label_or_err Normalized label or error message
 ---@nodiscard
+---@internal
 function M.validate_label(label)
   if label == nil then
     return true, nil
@@ -146,6 +150,7 @@ end
 ---@return boolean valid
 ---@return boolean|string value_or_err
 ---@nodiscard
+---@internal
 function M.validate_show_index(show_index)
   if show_index == nil then
     return true, false

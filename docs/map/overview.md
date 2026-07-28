@@ -477,7 +477,7 @@ flowchart LR
 
 ## Drift
 
-0 errors · 10 warnings · 86 info
+0 errors · 10 warnings · 88 info
 
 | Severity | Check | Message |
 |---|---|---|
@@ -493,17 +493,19 @@ flowchart LR
 | warn | `missing-summary` | lua/lib/nvim/normalize/validators.lua has ---@module but no description line |
 
 <details>
-<summary>86 informational findings</summary>
+<summary>88 informational findings</summary>
 
 
 | Check | Message |
 |---|---|
+| `dead-function` | M.convert_batch is marked @internal and nothing in the tree calls it |
+| `dead-function` | M.create_memoized_calculator is marked @internal and nothing in the tree calls it |
 | `undocumented-param` | escape_lua_pattern has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | invalid_ctx has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | M.normalize has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | split has 2 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | strlen has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | join has 2 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | strlen has 1 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | split has 2 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | notify_caller has 5 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | move_in has 3 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | M.build_ctx has 7 parameter(s) but only 0 @param line(s) |
