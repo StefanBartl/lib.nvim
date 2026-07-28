@@ -22,6 +22,8 @@ on GitHub).
 :LibMap why lib.nvim.ui.kit lib.nvim.fs   " shortest require path between two
 :LibMap dot deps           " the require graph as Graphviz DOT, in a buffer
 :LibMap diff HEAD~5        " what this branch changed about the tree's shape
+:LibMap impact             " …and where the changed lines radiate to -> quickfix
+:LibMap impact HEAD~5      " …measured against an older revision instead of HEAD
 :LibMap dot calls lib.nvim.fs   " …scoped to one module's neighbourhood
 
 :LibBrowse                 " navigate the same map inside the editor
@@ -112,6 +114,34 @@ pathspec decision for whoever invokes git. It matters though: measured on
 one commit, the full diff is 4.8 MB of which all but ~16 KB is the
 regenerated `docs/map/`, so callers pass `:(exclude)<out_dir>` or they
 analyse mostly generated noise.
+
+### `:LibMap impact [ref]`
+
+The command half: git and a quickfix list around the pure analysis above.
+Semantics match `diff` — everything between `ref` and the **working tree**,
+`HEAD` by default. So a bare `:LibMap impact` answers "what does my
+uncommitted work affect", the pre-commit question, and on a clean tree
+`impact HEAD~1` is exactly "what did the last commit affect". One rule
+rather than two, and it puts the *live* IR on the `+` side, which matters:
+the live IR always carries `line_end`, so the new side is always attributed
+exactly and only the historical side can degrade.
+
+The list interleaves each touched function (at its declaration) with its call
+sites (at the call, indented) — the call sites being the actionable half,
+"these places run the code you changed", and real locations, which is why
+this is a quickfix list rather than a message. Files nothing could be
+attributed to come last: they explain why the count is lower than the diff
+looks, but they are not findings. When any span had to be approximated the
+summary says so out loud instead of implying precision.
+
+Building those entries lives in `history.quickfix_items`, not in
+`command.lua`, for the same reason `diff.render` lives in `diff.lua`: it
+keeps the command a thin git-and-UI shell and leaves the shape of the answer
+testable without a repository.
+
+The parent artifact is fetched but not required — without it the `-` side
+simply contributes nothing, which is the honest result for a revision that
+predates the map, so a failure there is a notice rather than an abort.
 
 `dot` is the third renderer for the same edges, and it exists because the
 other two cannot do what Graphviz does: the HTML page lays boxes out in BFS

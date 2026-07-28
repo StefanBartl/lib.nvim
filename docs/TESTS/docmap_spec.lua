@@ -1181,6 +1181,56 @@ return function(H)
   eq(#no_ir.touched, 0, "docmap.history: no IR means no attribution, not a crash")
   eq(#no_ir.files, 1, "docmap.history: …but the changed file is still reported")
 
+  -- quickfix_items (R11 P2): the shape `:LibMap impact` puts in the list.
+  -- Here rather than in command.lua so it is testable without a repository —
+  -- the same split diff.lua uses for `render`.
+  local qf = history.quickfix_items(mid, hist_ir, "/repo")
+  eq(#qf, 2, "docmap.history: one entry for the touched function, one per call site")
+  eq(
+    qf[1].filename,
+    "/repo/a/init.lua",
+    "docmap.history: the touched entry points at the node's own source"
+  )
+  eq(qf[1].lnum, 10, "docmap.history: …at the function's declaration line")
+  ok(
+    qf[1].text:match("^changed: M%.alpha") and qf[1].text:match("1 caller%)"),
+    "docmap.history: the touched entry names the function and its caller count"
+  )
+  eq(qf[2].filename, "/repo/b/init.lua", "docmap.history: the caller entry points at the caller")
+  eq(qf[2].lnum, 6, "docmap.history: …at the call site line, not the callee's")
+  ok(qf[2].text:match("M%.caller calls it"), "docmap.history: the caller entry says who calls it")
+
+  -- Singular/plural is a detail, but "1 callers" in every review list is the
+  -- kind of wrong that erodes trust in the rest of the output.
+  local zero_qf = history.quickfix_items(
+    history.analyze(diff_for("@@ -35 +35 @@"), hist_ir, hist_ir),
+    hist_ir,
+    "/repo"
+  )
+  ok(
+    zero_qf[1].text:match("%(0 callers%)"),
+    "docmap.history: a function with no caller reads '0 callers', not '0 caller'"
+  )
+
+  -- Unattributed files come last: they explain the count but are not
+  -- findings, so they must never push the actionable entries down.
+  local mixed = history.analyze(
+    diff_for("@@ -15 +15 @@") .. "\n" .. diff_for("@@ -1 +1 @@", "README.md"),
+    hist_ir,
+    hist_ir
+  )
+  local mixed_qf = history.quickfix_items(mixed, hist_ir, "/repo")
+  eq(#mixed_qf, 3, "docmap.history: touched + caller + unattributed all appear")
+  ok(
+    mixed_qf[#mixed_qf].text:match("nothing to trace"),
+    "docmap.history: the unattributed file sorts last"
+  )
+  eq(
+    mixed_qf[#mixed_qf].filename,
+    "/repo/README.md",
+    "docmap.history: an unattributed path is still an openable location"
+  )
+
   -- ---------------------------------------------- symbols and subtree stats
   local sym_fixture = H.tmpfile(".lua")
   local sfw = assert(io.open(sym_fixture, "w"), "docmap spec: symbol fixture must be writable")
