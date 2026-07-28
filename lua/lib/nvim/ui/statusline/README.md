@@ -1,6 +1,7 @@
 # `lib.nvim.ui.statusline`
 
-A short status badge pinned to the bottom line of **one** window.
+A short status badge pinned to one row of **one** window — the last row by
+default (a status line), or the first (`anchor = "top"`, a header/breadcrumb).
 
 ## Why this exists
 
@@ -14,8 +15,16 @@ This module resolves the strategy at attach time instead:
 | Mode           | Drawing                                                                  |
 |----------------|--------------------------------------------------------------------------|
 | `"statusline"` | Window-local `&statusline`, restored on detach.                          |
-| `"float"`      | One-line, unfocusable float laid over the window's last row, repositioned as the layout changes. |
+| `"float"`      | One-line, unfocusable float laid over the window's first or last row (`opts.anchor`), repositioned as the layout changes. |
 | `"auto"`       | *(default)* `"statusline"` while a per-window statusline exists, `"float"` once `laststatus = 3` takes it away. |
+
+`anchor` only affects `"float"` — a window's own `&statusline` is always its
+last row, there is no top equivalent. A badge that must stay pinned to one
+edge regardless of `laststatus` (a breadcrumb trail, always at the top) should
+force `mode = "float"` rather than `"auto"`: `"auto"` would otherwise
+alternate between an always-last-row statusline and a `"top"`-anchored float
+depending on the user's setting, putting the badge in a different place
+depending on config it has no business caring about.
 
 ## Usage
 
@@ -46,10 +55,11 @@ Returns `Lib.UI.Statusline.Segment`, or `nil, err` for an invalid window.
 
 | Option   | Type                              | Default  | Meaning                                        |
 |----------|-----------------------------------|----------|------------------------------------------------|
-| `mode`   | `"auto"\|"statusline"\|"float"`   | `"auto"` | Drawing strategy.                              |
-| `align`  | `"left"\|"center"\|"right"`       | `"left"` | Placement within the line.                     |
-| `hl`     | `string?`                         | —        | Highlight group; overridable per `set`.        |
-| `zindex` | `integer?`                        | `30`     | Float mode only.                               |
+| `mode`   | `"auto"\|"statusline"\|"float"`   | `"auto"`   | Drawing strategy.                              |
+| `align`  | `"left"\|"center"\|"right"`       | `"left"`   | Placement within the line.                     |
+| `anchor` | `"top"\|"bottom"`                 | `"bottom"` | Float mode only: which row it sits on.         |
+| `hl`     | `string?`                         | —          | Highlight group; overridable per `set`.        |
+| `zindex` | `integer?`                        | `30`       | Float mode only.                               |
 
 ## Segment
 

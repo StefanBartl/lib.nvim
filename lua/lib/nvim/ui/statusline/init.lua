@@ -9,9 +9,17 @@
 ---
 ---   * `"statusline"` — window-local `&statusline`, restored on detach.
 ---   * `"float"` — a one-line, unfocusable floating window laid over the
----     target window's last row, repositioned as the layout changes.
+---     target window's first or last row (`opts.anchor`, default last),
+---     repositioned as the layout changes.
 ---   * `"auto"` (default) — `"statusline"` while a per-window statusline
 ---     exists, `"float"` once `laststatus = 3` takes it away.
+---
+--- `opts.anchor` only affects `"float"`: a window's own `&statusline` is
+--- always its last row, there is no top equivalent. A badge that must stay
+--- pinned to one edge regardless of `laststatus` (a breadcrumb trail, say,
+--- always at the top) should therefore force `mode = "float"` rather than
+--- "auto" — "auto" would otherwise alternate between an always-last-row
+--- statusline and a `"top"`-anchored float depending on the user's setting.
 ---
 --- The text is deliberately **plain**, with the highlight passed separately:
 --- statusline `%#Group#` items mean nothing inside a float's buffer, so a
@@ -101,6 +109,7 @@ function M.attach(winid, opts)
 
   local mode = M.resolve_mode(opts.mode)
   local align = opts.align or "left"
+  local anchor = opts.anchor or "bottom"
 
   local detached = false
   local text, hl = "", opts.hl
@@ -146,7 +155,7 @@ function M.attach(winid, opts)
     end
     return {
       relative = "editor",
-      row = pos[1] + height - 1,
+      row = anchor == "top" and pos[1] or (pos[1] + height - 1),
       col = pos[2],
       width = width,
       height = 1,
