@@ -13,16 +13,16 @@ files." Adopt a tag when the concrete case for it comes up, not in bulk.
 
 | Tag | Count | What it's for here |
 |---|---|---|
-| `@field` | 1476 | Class/alias member declarations in `@types/` files |
-| `@param` | 1208 | Function parameters |
-| `@return` | 837 | Function return values |
-| `@module` | 358 | This repo's own "module path" convention — required on every file, checked by `docmap`'s `missing-module-tag` |
-| `@class` | 270 | Structured types in `@types/` files |
-| `@type` | 202 | Standalone variable typing |
+| `@field` | 1725 | Class/alias member declarations in `@types/` files |
+| `@param` | 1459 | Function parameters |
+| `@return` | 994 | Function return values |
+| `@module` | 390 | This repo's own "module path" convention — required on every file, checked by `docmap`'s `missing-module-tag` |
+| `@class` | 311 | Structured types in `@types/` files |
+| `@type` | 223 | Standalone variable typing |
+| `@meta` | 114 | Marks `@types/init.lua` files as pure-definition, non-executable |
 | `@nodiscard` | 112 | Marks a return value that must not be silently dropped |
-| `@meta` | 106 | Marks `@types/init.lua` files as pure-definition, non-executable |
-| `@generic` | 59 | Type-agnostic function signatures |
-| `@alias` | 48 | Named unions / enum-shaped string literals |
+| `@generic` | 60 | Type-agnostic function signatures |
+| `@alias` | 57 | Named unions / enum-shaped string literals |
 | `@diagnostic` | 5 | Suppressing a specific LuaLS diagnostic on one line |
 | `@cast` | 4 | Narrowing a variable's type mid-function |
 | `@overload` | 1 | Technically standard, practically almost unused here |
@@ -59,7 +59,7 @@ Already in informal use, tolerated by `scan.lua`'s header parser as an alternati
 - **`@brief`** (8 hits), **`@description`** (10 hits) — competing convention for a module's leading
   summary line.
 
-New in this change, recognized by [`functions.lua`](../functions.lua):
+Recognized by [`functions.lua`](../functions.lua):
 
 - **`@example`** — a code sample attached to a function's doc block, rendered by `docmap` as its own
   fenced block instead of being flattened into prose. Many modules already informally embed a ` ```lua `
