@@ -47,18 +47,10 @@ camelCase/PascalCase run. `kebab_case("FooBar baz")` is `"foobar-baz"`, not
 *into* a word character, so an uppercase letter preceded by another word
 character (as in the `B` of `FooBar`) never matches.
 
-**`dedent` is currently broken — it raises a Lua error on any input that
-reaches its loop body**, which is any non-empty string. Verified directly
-against the source: `line:find("^[ ]*")` has no capture group, so its second
-return value is the match's *end index* (a number), not the matched
-whitespace substring — but the code assigns it to `spaces` and then computes
-`#spaces`, i.e. the length of a number, which Lua raises
-`attempt to get length of a ... (a number value)` for. It is re-exported
-(`require("lib").dedent`, via [`lib/strategies/lazy.lua`](../../strategies/lazy.lua))
-but nothing in this repo's own source or test suite ever calls it, which is
-presumably how this regression has stayed unnoticed. Do not call
-`lib.lua.strings.dedent` (or `.transform.dedent`) until this is fixed
-upstream in [`strings/core.lua`](core.lua).
+`strings.dedent("  a\n  b")` strips the common leading whitespace shared by
+every non-blank line (`"a\nb"`); `strings.dedent("  a\n    b")` only strips
+the smaller common indent, preserving relative nesting (`"a\n  b"`). A string
+with no common leading whitespace is returned unchanged.
 
 ## Patterns ([`patterns.lua`](patterns.lua))
 

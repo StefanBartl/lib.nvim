@@ -29,12 +29,13 @@ function M.is_array(t)
       return false
     end
   end
-  -- allow mixed tables -> reject when extra non-integer keys exist
+  -- Any key that isn't a contiguous 1..n integer index disqualifies the
+  -- table as an array — including a non-numeric key, where comparing it
+  -- against `n` below would itself raise ("attempt to compare number with
+  -- string") rather than correctly returning false.
   for k, _ in pairs(t) do
-    if type(k) ~= "number" or k < 1 or k % 1 ~= 0 then
-      if k > n then
-        return false
-      end
+    if type(k) ~= "number" or k < 1 or k % 1 ~= 0 or k > n then
+      return false
     end
   end
   return true

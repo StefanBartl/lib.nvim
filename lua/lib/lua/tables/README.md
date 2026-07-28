@@ -33,7 +33,7 @@ Shape checks, copies, key/value helpers, merging, slicing.
 
 ```lua
 tables.is_table(v)              -- type(v) == "table"
-tables.is_array(t)               -- contiguous 1..#t keys, no stray non-int keys beyond #t
+tables.is_array(t)               -- see note below on table-with-holes edge cases
 tables.shallow_copy(t)
 tables.deep_copy(t)              -- cycle-safe (tracks seen tables, preserves shared identity)
 tables.keys(t)                   -- string keys only
@@ -57,6 +57,16 @@ tables.count_by(list, key_fn)    --> table<K, integer>
 merge rule (nested-table-into-nested-table recurses, anything else is
 overwritten right-biased) — kept as two names for call-site clarity, not two
 behaviors.
+
+`is_array(t)` returns `true` for an empty table or a dense, contiguous
+`1..n` array, and `false` for anything else — a non-numeric key, a
+non-contiguous/negative/fractional numeric key, or an integer key past `#t`
+(e.g. `is_array({ 1, 2, [5] = 9 })` is `false`). Like anything built on `#t`,
+it inherits Lua's implementation-defined behavior for tables with holes in
+the middle (`#t` may land on either border of the gap) — for a table
+constructed with an explicit gap, `is_array` reflects whichever border this
+Lua runtime's `#` operator happens to pick, not a guaranteed "true array
+shape" check.
 
 ## Dictionary ops ([`dict.lua`](dict.lua))
 
