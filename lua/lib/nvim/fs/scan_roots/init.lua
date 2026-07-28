@@ -41,6 +41,7 @@ end
 ---@param roots string[]
 ---@param opts? Lib.Fs.ScanRoots.Opts
 ---@return string[]
+---@see lib.nvim.fs.scan_cached.scan
 function M.scan(roots, opts)
   opts = opts or {}
   local ignore_dirs = opts.ignore_dirs or {}

@@ -31,6 +31,7 @@ local DEFAULT_TTL_SECONDS = 5
 ---@param root string
 ---@param opts? Lib.Fs.ScanCached.Opts
 ---@return string[]
+---@see lib.nvim.fs.scan_roots.scan
 function M.scan(root, opts)
   opts = opts or {}
   local kind = opts.kind or "files"

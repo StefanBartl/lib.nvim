@@ -79,6 +79,7 @@ end
 ---@param start_time number Start timestamp (ns)
 ---@return TimeDiffStats|nil stats Statistics object or nil if no checkpoints
 ---@nodiscard
+---@internal
 function M.calculate_stats(checks, start_time)
   if #checks == 0 then
     return nil
@@ -117,6 +118,7 @@ end
 ---@param stats TimeDiffStats Statistics object
 ---@return number|nil stddev Standard deviation or nil if insufficient data
 ---@nodiscard
+---@internal
 function M.calculate_stddev(stats)
   if not stats or stats.count < 2 then
     return nil
@@ -137,6 +139,7 @@ end
 ---@param stddev number Standard deviation
 ---@return number|nil cv Coefficient of variation (%) or nil if avg is zero
 ---@nodiscard
+---@internal
 function M.calculate_cv(stats, stddev)
   if not stats or stats.avg == 0 or not stddev then
     return nil
@@ -149,6 +152,7 @@ end
 --- Caches results based on checkpoint array reference
 ---@return fun(checks: number[], start_time: number): TimeDiffStats|nil
 ---@nodiscard
+---@internal
 function M.create_memoized_calculator()
   return memo.fn(M.calculate_stats, {
     max_size = 100,
