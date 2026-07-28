@@ -6,8 +6,8 @@ actually useful for a Lua utility library — hierarchy, module purpose, links,
 type relationships, and drift detection.
 
 The generated map for this repo lives in [`docs/map/`](../../../../docs/map/):
-[`index.html`](../../../../docs/map/index.html) (interactive — Tree and
-Hierarchy tabs) and [`overview.md`](../../../../docs/map/overview.md) (renders
+[`index.html`](../../../../docs/map/index.html) (interactive — Tree, Hierarchy
+and Notes tabs) and [`overview.md`](../../../../docs/map/overview.md) (renders
 on GitHub).
 
 ## Usage
@@ -223,7 +223,7 @@ else — module prefix, directory layout, types directory name — is an option.
 | Graph | [`calls.lua`](calls.lua) | `kind="call"` edges — which function calls which |
 | LuaLS (opt-in) | [`luals.lua`](luals.lua) | class/alias detail + `kind="type"` and `kind="extends"` edges merged into the IR |
 | Check | [`check.lua`](check.lua) | `Lib.Docmap.Finding[]` — documentation drift |
-| Render | [`render/`](render/) | HTML (Tree + Hierarchy tabs), Markdown, Mermaid, DOT |
+| Render | [`render/`](render/) | HTML (Tree + Hierarchy + Notes tabs), Markdown, Mermaid, DOT |
 | Encode | [`json.lua`](json.lua) | deterministic JSON |
 | Diff | [`diff.lua`](diff.lua) | `Lib.Docmap.Diff` — what one revision changed about the shape |
 | Live | [`registry.lua`](registry.lua) | `install()`/`uninstall()` — an in-memory `Handle` instead of files |
@@ -679,6 +679,26 @@ committed search landed on an indistinguishable copy of itself instead of
 the pre-search tab state. Live preview now calls `drawHierarchy()` directly,
 bypassing history entirely; only Enter (or any other discrete action) calls
 `navigate()`.
+
+## Notes tab
+
+Doxygen's Deprecated / Todo / Bug / Test lists, as a third tab. Four
+aggregates over data the scan already has: `@deprecated` (a single string, the
+migration hint) plus the three repeatable note tags `@todo`/`@bug`/`@test`
+(one list entry per occurrence — see
+[`docs/ANNOTATIONS.md`](docs/ANNOTATIONS.md)). Entries sort by module, then by
+line, and clicking one jumps to that module in the Tree tab.
+
+One tab rather than Doxygen's four pages: in a given tree three of these tags
+are usually unused, and four tabs that are empty most of the time are four
+tabs of noise. Empty sections say so explicitly instead of disappearing, so
+"nothing here is deprecated" stays distinguishable from "this build did not
+collect it" — the same reason the class-based Hierarchy views explain
+themselves rather than rendering blank.
+
+Deliberately **not** modelled as `check` findings. None of these is drift or
+an error, and routing them through findings would fold an author's own to-do
+list into the exit code CI fails on.
 
 ## Drift checks
 

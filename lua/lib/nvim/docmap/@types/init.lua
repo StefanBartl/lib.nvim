@@ -115,6 +115,9 @@
 ---@field internal boolean Declared `---@internal`: part of the implementation, not of the module's published surface. Sharpens every question of the form "is this used" — `undocumented-param` skips it, the diff counts it as a helper, and a dead-function report can trust it.
 ---@field see string[] Raw `@see` targets, unresolved — `docmap.check` validates them.
 ---@field overload string[] Raw `@overload` signatures, unparsed (rendered as-is).
+---@field todo string[] `@todo` entries, one per occurrence. Collected into the Notes tab's aggregate list, the way Doxygen's `\todo` feeds its Todo List.
+---@field bug string[] `@bug` entries, one per occurrence.
+---@field test string[] `@test` entries, one per occurrence.
 ---@field example string? `@example` block text, if any.
 ---@field since string? `@since` text, if any.
 

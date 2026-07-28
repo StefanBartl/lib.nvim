@@ -143,6 +143,20 @@ code{font-family:var(--mono);font-size:.92em;background:var(--accent-soft);
 .sev.error{color:var(--error)} .sev.warn{color:var(--warn)} .sev.info{color:var(--info)}
 details>summary{cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0}
 .wrap{overflow-x:auto}
+#view-notes{padding:22px 26px 60px}
+#view-notes h3{margin:26px 0 4px;font-size:13px;font-weight:600;color:var(--ink)}
+#view-notes h3:first-child{margin-top:0}
+#view-notes .nsub{font-size:12px;color:var(--muted);margin:0 0 10px}
+#view-notes .ncount{color:var(--muted);font-weight:400;font-size:11.5px;margin-left:6px}
+.nlist{list-style:none;margin:0;padding:0}
+.nlist li{padding:7px 0;border-bottom:1px dashed var(--line)}
+.nlist li:last-child{border-bottom:0}
+.nlist .nfn{font-family:var(--mono);font-size:12.5px;color:var(--accent);
+  text-decoration:none;font-weight:600;cursor:pointer}
+.nlist .nfn:hover{text-decoration:underline}
+.nlist .nwhere{font-family:var(--mono);font-size:11px;color:var(--muted);margin-left:8px}
+.nlist .ntext{font-size:12.5px;color:var(--ink);margin-top:2px}
+.nlist .ntext.none{color:var(--muted);font-style:italic}
 #view-hierarchy{padding:16px 24px 60px}
 .hctl{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
 .hctl .hpath{font-family:var(--mono);font-size:12.5px;color:var(--muted);word-break:break-all}
@@ -458,6 +472,12 @@ local JS = [[
     var parts = ["tab=" + encodeURIComponent(s.tab)];
     if(s.tab === "tree"){
       if(s.id) parts.push("id=" + encodeURIComponent(s.id));
+    } else if(s.tab === "notes"){
+      // Nothing else to carry: the Notes tab is one flat aggregate over the
+      // whole map, with no center, view or direction to remember. Falling
+      // through to the hierarchy branch would put a `view=modules` in every
+      // shared Notes link that means nothing there.
+      void 0;
     } else {
       if(s.center) parts.push("center=" + encodeURIComponent(s.center));
       parts.push("view=" + encodeURIComponent(s.view || "modules"));
@@ -517,9 +537,11 @@ local JS = [[
     });
     document.getElementById("view-tree").classList.toggle("active", s.tab === "tree");
     document.getElementById("view-hierarchy").classList.toggle("active", s.tab === "hierarchy");
+    document.getElementById("view-notes").classList.toggle("active", s.tab === "notes");
 
     if(s.tab === "tree" && s.id && byId[s.id]) selectRow(s.id);
     if(s.tab === "hierarchy") drawHierarchy(s.center || IR.root, s.view || "modules");
+    if(s.tab === "notes") drawNotes();
     syncGraphControls(s);
 
     var hash = serializeState(s);
@@ -1540,6 +1562,88 @@ local JS = [[
 
   var VIEWS = { modules: 1, types: 1, inheritance: 1, deps: 1, calls: 1 };
 
+  // =====================================================================
+  // Notes tab: Doxygen's Deprecated / Todo / Bug / Test lists.
+  //
+  // Four aggregates over data the scan already has, in one tab rather than
+  // four pages: three of these tags are usually unused in a given tree, and
+  // four tabs that are empty most of the time would be four tabs of noise.
+  // Sections with no entries say so instead of vanishing, so "nothing is
+  // deprecated" is distinguishable from "this build forgot to collect it".
+  //
+  // Not a `check` finding, deliberately: none of these is drift or an error,
+  // and routing them through findings would put author to-dos into an exit
+  // code that CI fails on.
+  // =====================================================================
+  var NOTE_KINDS = [
+    { key: "deprecated", title: "Deprecated", scalar: true,
+      sub: "Functions marked ---@deprecated. The text is the migration hint the author left." },
+    { key: "todo", title: "Todo",
+      sub: "Open ---@todo entries, one line per occurrence." },
+    { key: "bug", title: "Bug",
+      sub: "Known defects recorded with ---@bug, still present in the code." },
+    { key: "test", title: "Test",
+      sub: "---@test notes: what covers this function, or what still needs covering." }
+  ];
+
+  function collectNotes(kind){
+    var out = [];
+    IR.nodes.forEach(function(n){
+      (n.functions || []).forEach(function(fn){
+        var v = fn[kind.key];
+        if(kind.scalar){
+          if(v) out.push({ node: n, fn: fn, text: v });
+          return;
+        }
+        (v || []).forEach(function(entry){ out.push({ node: n, fn: fn, text: entry }); });
+      });
+    });
+    // By where it lives, then by line: reading a list of todos is reading a
+    // to-do list per module, not an alphabet of function names.
+    out.sort(function(a, b){
+      var am = a.node.module || a.node.path, bm = b.node.module || b.node.path;
+      if(am !== bm) return am < bm ? -1 : 1;
+      return a.fn.line - b.fn.line;
+    });
+    return out;
+  }
+
+  var notesDrawn = false;
+  function drawNotes(){
+    if(notesDrawn) return; // static over one IR; nothing invalidates it
+    notesDrawn = true;
+
+    var host = document.getElementById("view-notes");
+    var parts = [];
+    NOTE_KINDS.forEach(function(kind){
+      var items = collectNotes(kind);
+      parts.push('<h3>' + esc(kind.title) +
+        '<span class="ncount">' + items.length + '</span></h3>');
+      parts.push('<p class="nsub">' + esc(kind.sub) + '</p>');
+      if(items.length === 0){
+        parts.push('<p class="ntext none">Nothing carries <code>---@' +
+          esc(kind.key) + '</code> in this map.</p>');
+        return;
+      }
+      parts.push('<ul class="nlist">');
+      items.forEach(function(it){
+        parts.push('<li><a class="nfn" data-node="' + esc(it.node.id) + '">' +
+          esc(it.fn.signature) + '</a>' +
+          '<span class="nwhere">' + esc(it.node.module || it.node.path) +
+          ':' + it.fn.line + '</span>' +
+          '<div class="ntext">' + (it.text ? esc(it.text) : "&mdash;") + '</div></li>');
+      });
+      parts.push("</ul>");
+    });
+    host.innerHTML = parts.join("");
+
+    host.querySelectorAll(".nfn").forEach(function(a){
+      a.addEventListener("click", function(){
+        navigate({ tab: "tree", id: a.dataset.node });
+      });
+    });
+  }
+
   function drawHierarchy(centerId, view){
     view = VIEWS[view] ? view : "modules";
     hcenter = (centerId && byId[centerId]) ? centerId : (hcenter && byId[hcenter] ? hcenter : IR.root);
@@ -2445,6 +2549,7 @@ function M.render(ir, findings, opts)
     '<div class="tabs">',
     '<button class="tab-btn active" data-tab="tree">Tree</button>',
     '<button class="tab-btn" data-tab="hierarchy">Hierarchy</button>',
+    '<button class="tab-btn" data-tab="notes">Notes</button>',
     "</div>",
 
     '<div class="toolbar">',
@@ -2489,6 +2594,8 @@ function M.render(ir, findings, opts)
     '<div id="hgraph-wrap"><div id="hgraph"><div id="hstage"></div></div></div>',
     '<div class="hlegend" id="hlegend"></div>',
     "</div>",
+
+    '<div id="view-notes" class="view"></div>',
 
     '<div id="findings"><details><summary>Drift findings (',
     tostring(#findings),
