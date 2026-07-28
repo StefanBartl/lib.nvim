@@ -227,6 +227,7 @@ else — module prefix, directory layout, types directory name — is an option.
 | Encode | [`json.lua`](json.lua) | deterministic JSON |
 | Diff | [`diff.lua`](diff.lua) | `Lib.Docmap.Diff` — what one revision changed about the shape |
 | Live | [`registry.lua`](registry.lua) | `install()`/`uninstall()` — an in-memory `Handle` instead of files |
+| CLI | [`cli.lua`](cli.lua) | `--check`/`--full` entry point, reused verbatim by `scripts/gen_map.lua` and any consuming plugin's equivalent |
 
 `deps` and `calls` run inside `scan()` itself, unlike the LuaLS merge: they
 need no external tool and cost only in-memory resolution over data the walk
@@ -825,3 +826,41 @@ git config core.hooksPath scripts/hooks   # once per clone
 `--check` when `lua/`, `docs/map/` or the generator changed, and prints the
 findings plus the one command that fixes them. It never regenerates or stages
 anything itself. Bypass with `git commit --no-verify`.
+
+It stays local (`core.hooksPath`) rather than a versioned tool like `lefthook`
+on purpose: adopting it in another plugin should cost that plugin nothing more
+than copying one file, not a new dependency for every downstream consumer of
+`lib.nvim`. See the next section for exactly what to copy.
+
+## Reusing docmap in another plugin
+
+Three pieces, and only one of them is repo-specific:
+
+1. **`docmap/config.lua`-equivalent** — a small file returning `Lib.Docmap.Opts`
+   pointed at your own tree (see below). The only file in this whole reuse path
+   that says anything about your plugin's layout.
+2. **`scripts/gen_map.lua`-equivalent** — copy
+   [`scripts/gen_map.lua`](../../../../scripts/gen_map.lua) verbatim. It is
+   already generic: it resolves `cwd`, loads your config file, and calls
+   `require("lib.nvim.docmap.cli").run(opts, _G.arg or {})` — the same
+   `--check`/`--full` CLI this repo uses, extracted into
+   [`cli.lua`](cli.lua) for exactly this reason.
+3. **`scripts/hooks/pre-commit`** — copy
+   [`scripts/hooks/pre-commit`](../../../../scripts/hooks/pre-commit)
+   verbatim and edit only the three variables at its top (`SOURCE_DIR`,
+   `OUT_DIR`, `GEN_SCRIPT`) to match your config. Everything below them is
+   generic shell that shells out to your `gen_map.lua`.
+
+```lua
+-- your-plugin/docmap_config.lua
+return {
+  root = "/path/to/your-plugin",
+  source = "lua/yourplugin",
+  title = "yourplugin.nvim",
+  out_dir = "docs/map",
+  repo_url = "https://github.com/you/your-plugin",
+}
+```
+
+Wire your CI the same way: `nvim --headless -l scripts/gen_map.lua --check`
+is the whole check, in this repo or yours.
