@@ -1,4 +1,6 @@
 ---@module 'lib.nvim.normalize.utils'
+--- Small value-normalization helpers: whitespace trimming, numeric
+--- clamping, and path expansion, used by lib.nvim.normalize's validators.
 
 local expand_path = require("lib.nvim.cross.fs.expand_path")
 

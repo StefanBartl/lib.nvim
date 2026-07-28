@@ -1,4 +1,6 @@
 ---@module 'lib.nvim.fs.path'
+--- Path helpers: repo-relative-to-absolute resolution, joining, and
+--- ensuring a directory exists.
 
 ---@diagnostic disable-next-line: deprecated
 local unpack = table.unpack or unpack

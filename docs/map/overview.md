@@ -19,12 +19,12 @@ flowchart LR
   nlua_lib_lua_diff["diffbr/smallAggregated export for line-diff helpers:…/small"]
   nlua_lib_lua_dump["dumpbr/smallRecursive Lua value dumper, pure Lua — an…/small"]
   nlua_lib_lua_error["errorbr/smallStructured-error + safe-call-with-traceback…/small"]
-  nlua_lib_lua_functions["functions"]
-  nlua_lib_lua_json["json"]
+  nlua_lib_lua_functions["functionsbr/smallAggregator for lib.lua's higher-order…/small"]
+  nlua_lib_lua_json["jsonbr/smallAggregator for lib.lua's pure-Lua JSON…/small"]
   nlua_lib_lua_lazy["lazybr/smallProvides reusable helpers for safe and…/small"]
   nlua_lib_lua_memo["memobr/smallAggregated export for cache helpers with…/small"]
   nlua_lib_lua_numeral["numeralbr/smallAggregated export for numeral conversion…/small"]
-  nlua_lib_lua_strings["strings"]
+  nlua_lib_lua_strings["stringsbr/smallAggregator for lib.lua's pure-Lua string…/small"]
   nlua_lib_lua_tables["tablesbr/smallAggregated export for table helpers./small"]
   nlua_lib_lua_time["time"]
   nlua_lib_lua_uuid["uuidbr/smallUUIDv4 generation and formatting helpers,…/small"]
@@ -34,7 +34,7 @@ flowchart LR
   nlua_lib_nvim_buf_win_tab["buf_win_tab"]
   nlua_lib_nvim_buffer["buffer"]
   nlua_lib_nvim_cache["cachebr/smallCaching namespace: a persistent JSON disk…/small"]
-  nlua_lib_nvim_core["core"]
+  nlua_lib_nvim_core["corebr/smallExecutable-on-PATH lookups (memoized) plus…/small"]
   nlua_lib_nvim_cross["crossbr/smallCross-platform utilities for Neovim/Lua…/small"]
   nlua_lib_nvim_debounce["debouncebr/smallGeneric debounce primitive for callbacks./small"]
   nlua_lib_nvim_docmap["docmapbr/smallGenerated module map: scans an annotated…/small"]
@@ -322,14 +322,14 @@ flowchart LR
 | &nbsp;&nbsp;`lib.lua.diff` | Aggregated export for line-diff helpers: `lines` (cheap splice-region diff) and `myers` (full DP LCS-based edit script). |  | [README](../../lua/lib/lua/diff/README.md) · [src](../../lua/lib/lua/diff/init.lua) |
 | &nbsp;&nbsp;`lib.lua.dump` | Recursive Lua value dumper, pure Lua — an alternative/complement to `vim.inspect` for tables/metatables/functions/threads/userdata, with a hard… | 3 | [README](../../lua/lib/lua/dump/README.md) · [src](../../lua/lib/lua/dump/init.lua) |
 | &nbsp;&nbsp;`lib.lua.error` | Structured-error + safe-call-with-traceback convention, pure Lua. | 3 | [README](../../lua/lib/lua/error/README.md) · [src](../../lua/lib/lua/error/init.lua) |
-| &nbsp;&nbsp;`lib.lua.functions` |  |  | [README](../../lua/lib/lua/functions/README.md) · [src](../../lua/lib/lua/functions/init.lua) |
-| &nbsp;&nbsp;`lib.lua.json` |  |  | [README](../../lua/lib/lua/json/README.md) · [src](../../lua/lib/lua/json/init.lua) |
+| &nbsp;&nbsp;`lib.lua.functions` | Aggregator for lib.lua's higher-order function helpers (noop, identity, const, raise, etc.), lazily delegating to lib.lua.functions.meta. |  | [README](../../lua/lib/lua/functions/README.md) · [src](../../lua/lib/lua/functions/init.lua) |
+| &nbsp;&nbsp;`lib.lua.json` | Aggregator for lib.lua's pure-Lua JSON encode/decode helpers. |  | [README](../../lua/lib/lua/json/README.md) · [src](../../lua/lib/lua/json/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.lua.json.decode` | Decode namespace marker. |  | [README](../../lua/lib/lua/json/decode/README.md) · [src](../../lua/lib/lua/json/decode/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.lua.json.encode` | Pure-Lua JSON encoder — the counterpart to `lib.lua.json.decode`. | 7 | [README](../../lua/lib/lua/json/encode/README.md) · [src](../../lua/lib/lua/json/encode/init.lua) |
 | &nbsp;&nbsp;`lib.lua.lazy` | Provides reusable helpers for safe and explicit lazy-loading of Lua modules in Neovim. | 4 | [README](../../lua/lib/lua/lazy/README.md) · [src](../../lua/lib/lua/lazy/init.lua) |
 | &nbsp;&nbsp;`lib.lua.memo` | Aggregated export for cache helpers with enhanced API. | 2 | [README](../../lua/lib/lua/memo/README.md) · [src](../../lua/lib/lua/memo/init.lua) |
 | &nbsp;&nbsp;`lib.lua.numeral` | Aggregated export for numeral conversion helpers: `roman` and `alpha`. |  | [README](../../lua/lib/lua/numeral/README.md) · [src](../../lua/lib/lua/numeral/init.lua) |
-| &nbsp;&nbsp;`lib.lua.strings` |  |  | [README](../../lua/lib/lua/strings/README.md) · [src](../../lua/lib/lua/strings/init.lua) |
+| &nbsp;&nbsp;`lib.lua.strings` | Aggregator for lib.lua's pure-Lua string helpers: case conversion, padding, trimming, splitting/joining, and other string utilities. |  | [README](../../lua/lib/lua/strings/README.md) · [src](../../lua/lib/lua/strings/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`convert` |  |  |  |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.lua.strings.transform` | Aggregated string transformation helpers. |  | [README](../../lua/lib/lua/strings/transform/README.md) · [src](../../lua/lib/lua/strings/transform/init.lua) |
 | &nbsp;&nbsp;`lib.lua.tables` | Aggregated export for table helpers. |  | [README](../../lua/lib/lua/tables/README.md) · [src](../../lua/lib/lua/tables/init.lua) |
@@ -354,7 +354,7 @@ flowchart LR
 | &nbsp;&nbsp;`buffer` |  |  |  |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.buffer.context` | Buffer-metadata accessor cached by `changedtick`. | 7 | [README](../../lua/lib/nvim/buffer/context/README.md) · [src](../../lua/lib/nvim/buffer/context/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.cache` | Caching namespace: a persistent JSON disk cache and a generic in-memory TTL/changedtick namespace cache for event handlers. |  | [README](../../lua/lib/nvim/cache/README.md) · [src](../../lua/lib/nvim/cache/init.lua) |
-| &nbsp;&nbsp;`lib.nvim.core` |  | 2 | [README](../../lua/lib/nvim/core/README.md) · [src](../../lua/lib/nvim/core/init.lua) |
+| &nbsp;&nbsp;`lib.nvim.core` | Executable-on-PATH lookups (memoized) plus lib.nvim.core's own aggregated helpers, e.g. | 2 | [README](../../lua/lib/nvim/core/README.md) · [src](../../lua/lib/nvim/core/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.cross` | Cross-platform utilities for Neovim/Lua Provides platform detection, path normalization, and shell helpers |  | [README](../../lua/lib/nvim/cross/README.md) · [src](../../lua/lib/nvim/cross/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.copy_to_clipboard` | Cross-platform clipboard write. | 1 | [README](../../lua/lib/nvim/cross/copy_to_clipboard/README.md) · [src](../../lua/lib/nvim/cross/copy_to_clipboard/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.executable` | Executable lookup helpers: PATH resolution and Mason-managed binaries. | 4 | [README](../../lua/lib/nvim/cross/executable/README.md) · [src](../../lua/lib/nvim/cross/executable/init.lua) |
@@ -365,7 +365,7 @@ flowchart LR
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`separators` |  |  | [README](../../lua/lib/nvim/cross/fs/separators/README.md) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs.separators.collapse_dots` | Lexically collapse '.'/'..' segments and repeated separators in a path. | 6 | [README](../../lua/lib/nvim/cross/fs/separators/collapse_dots/README.md) · [src](../../lua/lib/nvim/cross/fs/separators/collapse_dots/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs.separators.drive_upper` | Uppercase a Windows drive-letter prefix ("c:/foo" -> "C:/foo"). |  | [README](../../lua/lib/nvim/cross/fs/separators/drive_upper/README.md) · [src](../../lua/lib/nvim/cross/fs/separators/drive_upper/init.lua) |
-| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs.separators.has_win_sep` |  |  | [README](../../lua/lib/nvim/cross/fs/separators/has_win_sep/README.md) · [src](../../lua/lib/nvim/cross/fs/separators/has_win_sep/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs.separators.has_win_sep` | Detects a Windows drive-prefix ("C:\" or "C:/") at the start of a path. |  | [README](../../lua/lib/nvim/cross/fs/separators/has_win_sep/README.md) · [src](../../lua/lib/nvim/cross/fs/separators/has_win_sep/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs.separators.normalize` | Normalizes path separators for the current OS. |  | [README](../../lua/lib/nvim/cross/fs/separators/normalize/README.md) · [src](../../lua/lib/nvim/cross/fs/separators/normalize/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.fs.separators.unify_slashes` | Convert every backslash in `path` to a forward slash — a pure string transform: no expansion, no absolute-path resolution, no collapsing of repeated… |  | [README](../../lua/lib/nvim/cross/fs/separators/unify_slashes/README.md) · [src](../../lua/lib/nvim/cross/fs/separators/unify_slashes/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.cross.open_default` | Open a path or URL with the system's default application — the cross-platform equivalent of double-clicking it in a file manager (extension/URL-scheme… | 2 | [README](../../lua/lib/nvim/cross/open_default/README.md) · [src](../../lua/lib/nvim/cross/open_default/init.lua) |
@@ -393,7 +393,7 @@ flowchart LR
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.find_upward_dir` | Walk upward from `from` and return the nearest ancestor directory holding one of `names`. |  | [README](../../lua/lib/nvim/fs/find_upward_dir/README.md) · [src](../../lua/lib/nvim/fs/find_upward_dir/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`ignore` |  |  |  |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.ignore.list` | Canonical filesystem ignore definitions for developer tooling. | 5 | [README](../../lua/lib/nvim/fs/ignore/list/README.md) · [src](../../lua/lib/nvim/fs/ignore/list/init.lua) |
-| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.is_dir` |  |  | [README](../../lua/lib/nvim/fs/is_dir/README.md) · [src](../../lua/lib/nvim/fs/is_dir/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.is_dir` | True when `p` exists and is a directory. |  | [README](../../lua/lib/nvim/fs/is_dir/README.md) · [src](../../lua/lib/nvim/fs/is_dir/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.is_readable_file` | Ensure the path is valid |  | [README](../../lua/lib/nvim/fs/is_readable_file/README.md) · [src](../../lua/lib/nvim/fs/is_readable_file/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.is_subpath` | `vim.fs.normalize` always returns forward-slash paths (on every OS, including Windows) — so the separator used below must be "/" too. |  | [README](../../lua/lib/nvim/fs/is_subpath/README.md) · [src](../../lua/lib/nvim/fs/is_subpath/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.is_valid_filename` | Validate a bare filename (not a full path) for filesystem safety. |  | [README](../../lua/lib/nvim/fs/is_valid_filename/README.md) · [src](../../lua/lib/nvim/fs/is_valid_filename/init.lua) |
@@ -403,7 +403,7 @@ flowchart LR
 | &nbsp;&nbsp;&nbsp;&nbsp;`open` |  |  |  |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`url` |  |  |  |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.open.url.system_opener` | Open a path/URL with the OS default handler — the shared per-OS dispatch every plugin that shells out to `open`/`xdg-open`/`start` was reimplementing… | 3 | [README](../../lua/lib/nvim/fs/open/url/system_opener/README.md) · [src](../../lua/lib/nvim/fs/open/url/system_opener/init.lua) |
-| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.path` |  | 4 | [README](../../lua/lib/nvim/fs/path/README.md) · [src](../../lua/lib/nvim/fs/path/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.path` | Path helpers: repo-relative-to-absolute resolution, joining, and ensuring a directory exists. | 4 | [README](../../lua/lib/nvim/fs/path/README.md) · [src](../../lua/lib/nvim/fs/path/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.path_shorten` | Utility module to shorten file paths for display. | 11 | [README](../../lua/lib/nvim/fs/path_shorten/README.md) · [src](../../lua/lib/nvim/fs/path_shorten/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.polymorphic_rootresolver` | Generic polymorphic root-directory resolver for Neovim LSPs. |  | [README](../../lua/lib/nvim/fs/polymorphic_rootresolver/README.md) · [src](../../lua/lib/nvim/fs/polymorphic_rootresolver/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.project_key` | Stable per-project cache key: prefers the Git root of `path` (default cwd), falls back to `path`/cwd itself, and runs the result through `lib.nvim.fs.normkey`… |  | [README](../../lua/lib/nvim/fs/project_key/README.md) · [src](../../lua/lib/nvim/fs/project_key/init.lua) |
@@ -416,7 +416,7 @@ flowchart LR
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.write.append` | Append `content` to a file, creating parent directories as needed. |  | [README](../../lua/lib/nvim/fs/write/append/README.md) · [src](../../lua/lib/nvim/fs/write/append/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.write.async` | Asynchronous counterpart to `lib.nvim.fs.write.to_file`: creates the parent directory synchronously, then opens/writes/closes the file via libuv without… |  | [README](../../lua/lib/nvim/fs/write/async/README.md) · [src](../../lua/lib/nvim/fs/write/async/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.write.batch` | Write many files asynchronously and invoke one callback when all of them have finished (success or failure). |  | [README](../../lua/lib/nvim/fs/write/batch/README.md) · [src](../../lua/lib/nvim/fs/write/batch/init.lua) |
-| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.write.to_file` |  |  | [README](../../lua/lib/nvim/fs/write/to_file/README.md) · [src](../../lua/lib/nvim/fs/write/to_file/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.fs.write.to_file` | Synchronous, byte-exact file write: creates parent directories and appends a trailing newline if the content doesn't already end with one. |  | [README](../../lua/lib/nvim/fs/write/to_file/README.md) · [src](../../lua/lib/nvim/fs/write/to_file/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.git` | Git utility helpers for Neovim. | 12 | [README](../../lua/lib/nvim/git/README.md) · [src](../../lua/lib/nvim/git/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.harvest` | Building blocks for "collect something from a scope, then show or export it" features. | 2 | [README](../../lua/lib/nvim/harvest/README.md) · [src](../../lua/lib/nvim/harvest/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.logger` | Structured logging, diagnostics and crash dumps for lib.nvim plugins. | 12 | [README](../../lua/lib/nvim/logger/README.md) · [src](../../lua/lib/nvim/logger/init.lua) |
@@ -477,20 +477,10 @@ flowchart LR
 
 ## Drift
 
-0 errors · 10 warnings · 88 info
+0 errors · 0 warnings · 88 info
 
-| Severity | Check | Message |
-|---|---|---|
-| warn | `missing-summary` | lua/lib/lua/functions/init.lua has ---@module but no description line |
-| warn | `missing-summary` | lua/lib/lua/json/init.lua has ---@module but no description line |
-| warn | `missing-summary` | lua/lib/lua/strings/init.lua has ---@module but no description line |
-| warn | `missing-summary` | lua/lib/nvim/core/init.lua has ---@module but no description line |
-| warn | `missing-summary` | lua/lib/nvim/cross/fs/separators/has_win_sep/init.lua has ---@module but no description line |
-| warn | `missing-summary` | lua/lib/nvim/fs/is_dir/init.lua has ---@module but no description line |
-| warn | `missing-summary` | lua/lib/nvim/fs/path/init.lua has ---@module but no description line |
-| warn | `missing-summary` | lua/lib/nvim/fs/write/to_file/init.lua has ---@module but no description line |
-| warn | `missing-summary` | lua/lib/nvim/normalize/utils.lua has ---@module but no description line |
-| warn | `missing-summary` | lua/lib/nvim/normalize/validators.lua has ---@module but no description line |
+No errors or warnings.
+
 
 <details>
 <summary>88 informational findings</summary>
@@ -503,9 +493,9 @@ flowchart LR
 | `undocumented-param` | escape_lua_pattern has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | invalid_ctx has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | M.normalize has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | join has 2 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | strlen has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | split has 2 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | join has 2 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | notify_caller has 5 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | move_in has 3 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | M.build_ctx has 7 parameter(s) but only 0 @param line(s) |

@@ -1,4 +1,6 @@
 ---@module 'lib.lua.strings'
+--- Aggregator for lib.lua's pure-Lua string helpers: case conversion,
+--- padding, trimming, splitting/joining, and other string utilities.
 
 local M = {}
 
