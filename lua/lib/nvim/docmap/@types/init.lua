@@ -76,6 +76,7 @@
 ---@field desc string
 ---@field file string Repo-relative file the type is defined in.
 ---@field fields Lib.Docmap.TypeField[] Empty for aliases and field-less classes.
+---@field extends string[] Parent class names as written in `---@class Child : A, B`, in source order. Always an array (empty when the class has no parent, and for every alias). Names are kept even when the parent is not declared anywhere in the tree — those simply produce no `"extends"` edge, the same way `requires_external` keeps a require whose target lives outside the map.
 
 ---@class Lib.Docmap.TypeField
 ---@field name string
@@ -122,6 +123,7 @@
 ---drawing exist once each instead of once per relationship.
 ---@alias Lib.Docmap.EdgeKind
 ---| "type"    # A `---@field` on one class names another class.
+---| "extends" # One class inherits from another (`---@class Child : Parent`).
 ---| "require" # One file calls `require` on another module in the tree.
 ---| "call"    # One function calls another.
 
@@ -163,9 +165,9 @@
 ---@field kind Lib.Docmap.EdgeKind
 ---@field from string Node id of the referencing/requiring/calling side.
 ---@field to string Node id of the referenced/required/called side.
----@field from_class string? `kind="type"`: fully-qualified name of the referencing class.
----@field to_class string? `kind="type"`: fully-qualified name of the referenced class.
----@field via string? `kind="type"`: field name that carries the reference.
+---@field from_class string? `kind="type"|"extends"`: fully-qualified name of the referencing/inheriting class.
+---@field to_class string? `kind="type"|"extends"`: fully-qualified name of the referenced/inherited class.
+---@field via string? `kind="type"`: field name that carries the reference. Absent for `"extends"`, where nothing mediates the relationship.
 ---@field to_module string? `kind="require"`: the module path as written in the `require` call.
 ---@field deferred boolean? `kind="require"`: every occurrence sits inside a function body, so this is a lazy load rather than a load-time dependency. Absent means at least one load-time require.
 ---@field from_fn string? `kind="call"`: declared name of the calling function, e.g. "M.generate".

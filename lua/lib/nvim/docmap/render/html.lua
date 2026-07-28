@@ -30,7 +30,7 @@ local CSS = [[
   --accent:#3b6ea8; --accent-soft:#eaf1f9;
   --error:#b3261e; --warn:#8a5a00; --info:#4a4a48;
   --mod:#3b6ea8; --ns:#7a7a76; --file:#5c8a5c;
-  --dep:#a35a2a; --call:#6b4c9a; --fn:#8a5a00;
+  --dep:#a35a2a; --call:#6b4c9a; --fn:#8a5a00; --ext:#2a7a6f;
   --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
 }
 @media (prefers-color-scheme:dark){
@@ -39,7 +39,7 @@ local CSS = [[
     --accent:#7aa9dd; --accent-soft:#22303f;
     --error:#f2837b; --warn:#e0b060; --info:#a8a8a3;
     --mod:#7aa9dd; --ns:#9a9a95; --file:#8fbf8f;
-    --dep:#d99b6a; --call:#b09ada; --fn:#e0b060;
+    --dep:#d99b6a; --call:#b09ada; --fn:#e0b060; --ext:#6fc0b3;
   }
 }
 :root[data-theme="light"]{
@@ -47,14 +47,14 @@ local CSS = [[
   --accent:#3b6ea8; --accent-soft:#eaf1f9;
   --error:#b3261e; --warn:#8a5a00; --info:#4a4a48;
   --mod:#3b6ea8; --ns:#7a7a76; --file:#5c8a5c;
-  --dep:#a35a2a; --call:#6b4c9a; --fn:#8a5a00;
+  --dep:#a35a2a; --call:#6b4c9a; --fn:#8a5a00; --ext:#2a7a6f;
 }
 :root[data-theme="dark"]{
   --bg:#16171a; --panel:#1d1f23; --ink:#e6e6e3; --muted:#9a9a95; --line:#2e3136;
   --accent:#7aa9dd; --accent-soft:#22303f;
   --error:#f2837b; --warn:#e0b060; --info:#a8a8a3;
   --mod:#7aa9dd; --ns:#9a9a95; --file:#8fbf8f;
-  --dep:#d99b6a; --call:#b09ada; --fn:#e0b060;
+  --dep:#d99b6a; --call:#b09ada; --fn:#e0b060; --ext:#6fc0b3;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);
@@ -173,6 +173,7 @@ details>summary{cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0}
 #hsvg{position:absolute;top:0;left:0;pointer-events:none}
 .hedge{fill:none;stroke:var(--muted);stroke-width:1.5;opacity:.6}
 .hedge-type{stroke:var(--accent);stroke-dasharray:4 3;opacity:.75}
+.hedge-ext{stroke:var(--ext);stroke-width:2;opacity:.9}
 .hmsg{color:var(--muted);font-size:13px;padding:20px;text-align:center}
 .htrunc{color:var(--warn);font-size:12px;margin-top:8px}
 .hview-toggle{display:flex;gap:0;border:1px solid var(--line);border-radius:7px;overflow:hidden}
@@ -215,6 +216,7 @@ details>summary{cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0}
 #hsvg marker path{stroke:none}
 #m-tree path{fill:var(--muted)}
 #m-type path{fill:var(--accent)}
+#m-ext path{fill:var(--ext)}
 #m-dep path{fill:var(--dep)}
 #m-call path{fill:var(--call)}
 .hlegend{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:10px 0 0;
@@ -222,6 +224,7 @@ details>summary{cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0}
 .hlegend .lg{display:inline-flex;align-items:center;gap:5px}
 .hlegend .sw{width:20px;height:0;border-top:2px solid var(--muted)}
 .hlegend .sw.type{border-top-style:dashed;border-top-color:var(--accent)}
+.hlegend .sw.ext{border-top-color:var(--ext);border-top-width:3px}
 .hlegend .sw.dep{border-top-color:var(--dep)}
 .hlegend .sw.dep.deferred{border-top-style:dotted}
 .hlegend .sw.call{border-top-color:var(--call)}
@@ -340,6 +343,11 @@ local JS = [[
   // rather than filtered per redraw — a re-center at depth 3 would otherwise
   // walk all ~1300 edges once per layer.
   var depOut = {}, depIn = {}, callOut = {}, callIn = {}, typeEdges = [];
+  // Inheritance, keyed both ways by class name: `extUp` answers "who are my
+  // parents", `extDown` "who inherits me". An edge is stored as written
+  // (from_class = the child, to_class = the parent), so which end is "next"
+  // depends on which map you came in through — see layoutInheritance.
+  var extUp = {}, extDown = {}, extendsEdges = [];
   function push(map, key, val){ (map[key] = map[key] || []).push(val); }
   (IR.edges || []).forEach(function(e){
     if(e.kind === "require"){
@@ -349,7 +357,23 @@ local JS = [[
       push(callIn, fnKey(e.to, e.to_fn), e);
     } else if(e.kind === "type"){
       typeEdges.push(e);
+    } else if(e.kind === "extends"){
+      extendsEdges.push(e);
+      push(extUp, e.from_class, e);
+      push(extDown, e.to_class, e);
     }
+  });
+
+  // Classes that take part in at least one inheritance relation. The
+  // Inheritance view seeds from these rather than from every class the
+  // centered node declares: a class with no parent and no subclass is an
+  // isolated box in a view that exists to show relationships, and most nodes
+  // declare several of those — they would crowd out the handful of boxes that
+  // actually connect.
+  var inInheritance = {};
+  extendsEdges.forEach(function(e){
+    inInheritance[e.from_class] = true;
+    inInheritance[e.to_class] = true;
   });
 
   // @see target -> owning node id. Same three resolution shapes as
@@ -1029,6 +1053,87 @@ local JS = [[
     return { layers: layers, included: included, count: count, truncated: truncated, edges: edges };
   }
 
+  // Inheritance: Doxygen's class-hierarchy diagram, centered the way every
+  // other view here is centered rather than drawn as one global root-to-leaf
+  // tree. Both directions at once, because for a class "what am I" and "who
+  // inherits me" are equally the question.
+  //
+  // Deliberately *not* built on `walk()`, which the two directed views share.
+  // `walk` puts every seed on layer 0 and measures distance from there — but a
+  // module normally declares a base class and its subclasses together, so all
+  // of them are seeds, and the whole hierarchy collapsed onto one row
+  // (observed: Lib.Cache.Opts sat beside its own LoadOpts/SaveOpts). Depth
+  // here has to come from the inheritance relation itself, not from distance
+  // to whatever the reader happened to center on.
+  //
+  // So: take the connected component around the seeds, then layer it by
+  // longest path from a root — depth(c) = 0 when c has no parent in the
+  // component, else 1 + max(depth(parents)). Longest rather than shortest is
+  // what guarantees a class always renders strictly below *every* one of its
+  // parents, including in a diamond where one path is shorter than the other.
+  function layoutInheritance(startId){
+    var center = byId[startId];
+    var seeds = (center.types_detail || [])
+      .filter(function(t){ return inInheritance[t.name]; })
+      .map(function(t){ return t.name; });
+    if(seeds.length === 0) return { layers: [], included: {}, count: 0, truncated: false, edges: [] };
+
+    // Connected component, walking parents and children alike.
+    var inComp = {}, queue = seeds.slice(), qi = 0, truncated = false;
+    seeds.forEach(function(s){ inComp[s] = true; });
+    while(qi < queue.length){
+      var cur = queue[qi++];
+      var step = function(e, other){
+        if(!classByName[other] || inComp[other]) return;
+        if(Object.keys(inComp).length >= MAX_HNODES){ truncated = true; return; }
+        inComp[other] = true;
+        queue.push(other);
+      };
+      (extUp[cur] || []).forEach(function(e){ step(e, e.to_class); });
+      (extDown[cur] || []).forEach(function(e){ step(e, e.from_class); });
+    }
+
+    // Longest-path depth, memoized. `state` also guards against a cycle:
+    // `---@class A : B` plus `---@class B : A` is nonsense LuaLS would still
+    // hand over, and without the guard this recursion would not terminate.
+    var depth = {}, state = {};
+    function depthOf(name){
+      if(state[name] === 2) return depth[name];
+      if(state[name] === 1) return 0; // cycle: stop contributing
+      state[name] = 1;
+      var d = 0;
+      (extUp[name] || []).forEach(function(e){
+        if(inComp[e.to_class]) d = Math.max(d, depthOf(e.to_class) + 1);
+      });
+      depth[name] = d; state[name] = 2;
+      return d;
+    }
+    Object.keys(inComp).forEach(depthOf);
+
+    var layers = [], included = {}, count = 0;
+    Object.keys(inComp).sort().forEach(function(name){
+      var d = depth[name];
+      included[name] = d;
+      (layers[d] = layers[d] || []).push(name);
+      count++;
+    });
+    for(var i = 0; i < layers.length; i++){ layers[i] = layers[i] || []; }
+
+    var edges = [];
+    extendsEdges.forEach(function(e){
+      if(included[e.from_class] !== undefined && included[e.to_class] !== undefined){
+        edges.push({ from: e.from_class, to: e.to_class, cls: "hedge hedge-ext",
+                     marker: "ext", label: "extends " + e.to_class });
+      }
+    });
+
+    // Named explicitly rather than left to "first box of the first layer":
+    // base classes occupy layer 0, so that shortcut (which the Types view can
+    // rely on) would ring a parent instead of the class being looked at.
+    return { layers: layers, included: included, count: count,
+             truncated: truncated, edges: edges, centerKey: seeds[0] };
+  }
+
   // =====================================================================
   // Deps and Calls: the two directed views.
   //
@@ -1224,14 +1329,23 @@ local JS = [[
         nodeId: null, recenter: null
       };
     }
-    if(view === "types"){
+    // Both class-keyed views. Inheritance boxes carry the parent list as the
+    // second line instead of the bare kind: in a diagram *about* inheritance,
+    // "class" on every box says nothing, and the declared `: A, B` is exactly
+    // what the reader is checking the arrows against.
+    if(view === "types" || view === "inheritance"){
       var cls = classByName[key];
       if(!cls) return null;
+      var sub = cls.info.kind;
+      if(view === "inheritance"){
+        var ps = cls.info.extends || [];
+        sub = ps.length ? ": " + ps.join(", ") : "base";
+      }
       return {
         cls: "hnode t-" + cls.info.kind,
         title: cls.info.desc || key,
         html: '<div class="hnm">' + esc(key) + '</div>' +
-              '<div class="hkind">' + cls.info.kind + '</div>',
+              '<div class="hkind">' + esc(sub) + '</div>',
         nodeId: cls.nodeId, recenter: cls.nodeId
       };
     }
@@ -1343,7 +1457,7 @@ local JS = [[
   // from CSS so the dark-mode palette applies to them too.
   function buildDefs(svgNS){
     var defs = document.createElementNS(svgNS, "defs");
-    ["tree", "type", "dep", "call"].forEach(function(name){
+    ["tree", "type", "ext", "dep", "call"].forEach(function(name){
       var m = document.createElementNS(svgNS, "marker");
       m.id = "m-" + name;
       m.setAttribute("viewBox", "0 0 8 8");
@@ -1367,6 +1481,7 @@ local JS = [[
   var LEGEND = {
     modules: [ sw("", "contains"), sw("type", "type reference") ],
     types:   [ sw("type", "field references class") ],
+    inheritance: [ sw("ext", "inherits from (arrow points at the base class)") ],
     deps:    [ sw("dep", "requires at load time"),
                sw("dep deferred", "lazy require (inside a function)") ],
     depsExt: [ sw("dep external", "requires something outside this map") ],
@@ -1392,6 +1507,14 @@ local JS = [[
         ? '<p class="hmsg">' + esc(center.name) + ' has no <code>@class</code>/<code>@alias</code> of its own — pick a module with type definitions, or switch back to Modules.</p>'
         : '<p class="hmsg">No type data in this map — regenerate with <code>:LibMap full</code> (or <code>--full</code>) to include lua-language-server class/alias detail.</p>';
     }
+    if(view === "inheritance"){
+      if(!typeEdges.length && !extendsEdges.length){
+        return '<p class="hmsg">No type data in this map — regenerate with <code>:LibMap full</code> (or <code>--full</code>) to include lua-language-server class detail.</p>';
+      }
+      return extendsEdges.length
+        ? '<p class="hmsg">None of ' + esc(center.name) + '’s classes take part in an inheritance relation (<code>---@class Child : Parent</code>).</p>'
+        : '<p class="hmsg">No class in this map declares a parent — nothing to draw an inheritance tree from.</p>';
+    }
     if(view === "deps"){
       return '<p class="hmsg">' + esc(center.name) + ' neither requires nor is required by anything in this map.</p>';
     }
@@ -1408,9 +1531,14 @@ local JS = [[
     hpending = {};
     hboxes = {};
     hstage.innerHTML = "";
+    // The empty-state message hangs off #hgraph, outside the stage, so
+    // clearing the stage alone would stack a second copy on the next empty
+    // draw instead of replacing the first.
+    var msg = hgraph.querySelector(".hmsg");
+    if(msg) msg.remove();
   }
 
-  var VIEWS = { modules: 1, types: 1, deps: 1, calls: 1 };
+  var VIEWS = { modules: 1, types: 1, inheritance: 1, deps: 1, calls: 1 };
 
   function drawHierarchy(centerId, view){
     view = VIEWS[view] ? view : "modules";
@@ -1432,6 +1560,7 @@ local JS = [[
 
     var built;
     if(view === "types") built = layoutTypes(hcenter);
+    else if(view === "inheritance") built = layoutInheritance(hcenter);
     else if(view === "deps") built = layoutDeps(hcenter, state.dir || "out", depth, !!state.ext);
     else if(view === "calls") built = layoutCalls(hcenter, wantFn, state.dir || "out", depth);
     else built = layoutModules(hcenter);
@@ -1445,11 +1574,20 @@ local JS = [[
       // scale, so a stale extent would give an empty message a scroll area
       // thousands of pixels wide the moment the wheel is touched.
       stageExtent = { w: 0, h: 0 };
-      hstage.innerHTML = emptyMessage(view, center);
+      // Into #hgraph, not #hstage: the stage is position:absolute (it carries
+      // the zoom transform), so it contributes no height to its parent, and
+      // #hgraph's explicit height was just cleared above — a message parented
+      // to the stage therefore renders into a 0px-tall box and is clipped away
+      // by #hgraph-wrap's overflow. Every empty state in this tab was
+      // invisible for that reason; a normal-flow child of the relative #hgraph
+      // gives it height on its own, with nothing measured off the DOM (which
+      // would read 0 anyway while the pane is display:none).
+      hgraph.insertAdjacentHTML("beforeend", emptyMessage(view, center));
       return;
     }
 
-    var suffix = { types: " · types", deps: " · deps", calls: " · calls" }[view] || "";
+    var suffix = { types: " · types", inheritance: " · inheritance",
+                   deps: " · deps", calls: " · calls" }[view] || "";
     var focusFn = view === "calls" && wantFn;
     hpathEl.textContent = (focusFn ? wantFn.split("#")[1] + "  in  " : "") +
       (center.module || center.path) + suffix +
@@ -1460,7 +1598,7 @@ local JS = [[
     // boxes it knows about. Without this, going Calls-on-a-namespace (empty)
     // → Modules left "lib.nvim declares no functions." sitting above a
     // ninety-box diagram.
-    var stale = hstage.querySelector(".hmsg");
+    var stale = hgraph.querySelector(".hmsg");
     if(stale) stale.remove();
 
     var laid = layerPositions(built.layers);
@@ -1471,6 +1609,7 @@ local JS = [[
     // target, so both follow whatever the view is actually about.
     var centerKey = hcenter;
     if(view === "types") centerKey = built.layers[0] && built.layers[0][0];
+    else if(view === "inheritance") centerKey = built.centerKey;
     else if(view === "calls") centerKey = wantFn || (built.layers[0] && built.layers[0][0]);
 
     var moved = reconcile(positions, view, centerKey);
@@ -1883,7 +2022,7 @@ local JS = [[
 
     // Markers first: the paths below reference them by id.
     parts.push('<defs>');
-    ["tree","type","dep","call"].forEach(function(name){
+    ["tree","type","ext","dep","call"].forEach(function(name){
       var probe = document.querySelector("#m-" + name + " path");
       var fill = probe ? getComputedStyle(probe).fill : cs.color;
       parts.push('<marker id="x-'+name+'" viewBox="0 0 8 8" refX="7" refY="4" '+
@@ -2102,6 +2241,13 @@ local JS = [[
     items.push({ label: "Types", disabled: !(n.types_detail || []).length,
       run: function(){ navigate({ tab: "hierarchy", view: "types", center: t.nodeId, fn: null }); } });
 
+    // Enabled only when this node actually owns a class that inherits or is
+    // inherited from — the view would otherwise open on its own empty state,
+    // and "greyed out with a reason" beats "opens and says nothing here".
+    var inhN = (n.types_detail || []).filter(function(ty){ return inInheritance[ty.name]; }).length;
+    items.push({ label: "Inheritance", hint: inhN || "0", disabled: !inhN,
+      run: function(){ navigate({ tab: "hierarchy", view: "inheritance", center: t.nodeId, fn: null }); } });
+
     items.push({ sep: true });
     if(n.source){
       var u = srcUrl(n.source);
@@ -2316,6 +2462,7 @@ function M.render(ir, findings, opts)
     '<button class="hview-btn" data-view="deps">Deps</button>',
     '<button class="hview-btn" data-view="calls">Calls</button>',
     '<button class="hview-btn" data-view="types">Types</button>',
+    '<button class="hview-btn" data-view="inheritance">Inheritance</button>',
     "</div>",
     -- Direction and depth belong to the directed views only; `syncGraphControls`
     -- hides them in Modules/Types rather than leaving two control groups that
