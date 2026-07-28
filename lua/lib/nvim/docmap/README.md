@@ -230,6 +230,7 @@ else — module prefix, directory layout, types directory name — is an option.
 | CLI | [`cli.lua`](cli.lua) | `--check`/`--full` entry point, reused verbatim by `scripts/gen_map.lua` and any consuming plugin's equivalent |
 | Tag files | [`tagfiles.lua`](tagfiles.lua) | `ir.tag_links` — `requires_external` modules resolved against another project's own committed artifact (`opts.tag_files`) |
 | Coverage | [`coverage.lua`](coverage.lua) | `fn.tested` — auto-derived, no manual `@test` tagging required |
+| Doc coverage | [`doccoverage.lua`](doccoverage.lua), [`render/badge.lua`](render/badge.lua) | documented/total function count, optional `coverage.svg` badge (`opts.badge`) |
 
 `deps` and `calls` run inside `scan()` itself, unlike the LuaLS merge: they
 need no external tool and cost only in-memory resolution over data the walk
@@ -680,9 +681,39 @@ would be noise dressed up as a warning, not information.
 
 `docmap.coverage.summary(ir)` returns `tested, total`; `:LibMap`/
 `nvim --headless -l scripts/gen_map.lua` print it as one line after
-regenerating (`388/989 functions found by name in docs/TESTS (39%)`, this
+regenerating (`390/997 functions found by name in docs/TESTS (39%)`, this
 repo's own current number). The natural home for this as a browsable, not
 just a printed, number is the planned "Analysis" tab — see the roadmap.
+
+### Documentation coverage (`opts.badge`, R4)
+
+[`doccoverage.lua`](doccoverage.lua) turns three scattered per-function
+findings — `missing-summary`, `undocumented-param`, `param-name-mismatch` —
+into one number: a function counts as documented when it has a non-empty
+summary *and* its parameters are fully and correctly named, reusing exactly
+the same logic those findings already run rather than a second
+implementation that could quietly disagree. `@return` is deliberately not
+part of the definition — a function's raw signature carries no count of what
+it returns the way it does for parameters, so there is no structural fact to
+check against, only "did the author write a line", which the findings above
+already cover badly enough without a coverage number pretending to be more
+precise than that. `@internal` functions are excluded, same as all three
+findings this builds on.
+
+```lua
+local documented, total = require("lib.nvim.docmap.doccoverage").summary(ir)
+```
+
+`opts.badge = true` additionally writes `coverage.svg` — a hand-rolled,
+shields.io-shaped badge (see [`render/badge.lua`](render/badge.lua)), not one
+fetched from shields.io itself: a network call during `scan_full()` would
+make `--check` depend on availability and timing the same way a `dot`-binary
+call would, which is exactly why `render/dot.lua` is a text export instead.
+Off by default — most consumers of `generate()` do not want an extra
+committed file they never asked for; `:LibMap`/`gen_map.lua` print the same
+number as a plain line regardless
+(`666/997 published functions fully documented (67%)`, this repo's own
+current number, without `opts.badge` set).
 
 ### Modules vs Types
 

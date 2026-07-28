@@ -896,6 +896,83 @@ return function(H)
     "docmap.coverage: a missing tests_dir leaves every function untested, not an error"
   )
 
+  -- --------------------------------------------------- doccoverage (R4)
+  local doccoverage = require("lib.nvim.docmap.doccoverage")
+  local doc_ir = make_ir({
+    ["a"] = {
+      { -- fully documented: summary + matching params
+        name = "M.documented",
+        signature = "documented(x)",
+        summary = "Does the thing.",
+        line = 1,
+        params = { param("x") },
+        returns = {},
+        generic = {},
+        async = false,
+        nodiscard = false,
+        see = {},
+        overload = {},
+      },
+      { -- no summary at all
+        name = "M.no_summary",
+        signature = "no_summary()",
+        summary = "",
+        line = 5,
+        params = {},
+        returns = {},
+        generic = {},
+        async = false,
+        nodiscard = false,
+        see = {},
+        overload = {},
+      },
+      { -- summary present, but a parameter has no matching @param line
+        name = "M.bad_params",
+        signature = "bad_params(x, y)",
+        summary = "Half documented.",
+        line = 9,
+        params = { param("x") },
+        returns = {},
+        generic = {},
+        async = false,
+        nodiscard = false,
+        see = {},
+        overload = {},
+      },
+      { -- @internal: excluded from the total entirely, documented or not
+        name = "M.internal_thing",
+        signature = "internal_thing()",
+        summary = "",
+        line = 13,
+        params = {},
+        returns = {},
+        generic = {},
+        async = false,
+        nodiscard = false,
+        see = {},
+        overload = {},
+        internal = true,
+      },
+    },
+  })
+
+  local doc_documented, doc_total = doccoverage.summary(doc_ir)
+  eq(doc_total, 3, "docmap.doccoverage: @internal functions are excluded from the total")
+  eq(
+    doc_documented,
+    1,
+    "docmap.doccoverage: only the summary+matching-params function counts as documented"
+  )
+
+  local svg = doccoverage.badge_svg(doc_ir)
+  ok(svg:match("^<svg"), "docmap.doccoverage: badge_svg produces an <svg> document")
+  ok(svg:match("33%%"), "docmap.doccoverage: badge_svg's percentage matches the summary (1/3)")
+  ok(svg:match("doc coverage"), "docmap.doccoverage: badge_svg labels itself")
+
+  local empty_documented, empty_total = doccoverage.summary(make_ir({ ["a"] = {} }))
+  eq(empty_documented, 0, "docmap.doccoverage: a tree with no functions documents zero")
+  eq(empty_total, 0, "docmap.doccoverage: a tree with no functions has zero total")
+
   -- ---------------------------------------------- symbols and subtree stats
   local sym_fixture = H.tmpfile(".lua")
   local sfw = assert(io.open(sym_fixture, "w"), "docmap spec: symbol fixture must be writable")

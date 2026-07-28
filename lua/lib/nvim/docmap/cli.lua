@@ -77,6 +77,9 @@ function M.run(opts, argv)
       ["index.html"] = docmap.render.html(ir, findings, opts),
       ["overview.md"] = docmap.render.markdown(ir, findings, opts),
     }
+    if opts.badge then
+      expected["coverage.svg"] = require("lib.nvim.docmap.doccoverage").badge_svg(ir)
+    end
 
     local stale = {}
     for name, content in pairs(expected) do
@@ -124,14 +127,24 @@ function M.run(opts, argv)
       ir.meta.counts.file
     )
   )
-  local tested, total = require("lib.nvim.docmap.coverage").summary(ir)
-  if total > 0 then
+  local tested, tested_total = require("lib.nvim.docmap.coverage").summary(ir)
+  if tested_total > 0 then
     io.stdout:write(
       ("%d/%d functions found by name in %s (%.0f%%)\n"):format(
         tested,
-        total,
+        tested_total,
         opts.tests_dir or "docs/TESTS",
-        100 * tested / total
+        100 * tested / tested_total
+      )
+    )
+  end
+  local documented, doc_total = require("lib.nvim.docmap.doccoverage").summary(ir)
+  if doc_total > 0 then
+    io.stdout:write(
+      ("%d/%d published functions fully documented (%.0f%%)\n"):format(
+        documented,
+        doc_total,
+        100 * documented / doc_total
       )
     )
   end

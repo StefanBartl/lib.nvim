@@ -421,9 +421,14 @@ end
 --- specially rather than dropping it silently) so a caller comparing
 --- positions still sees a real entry there instead of the list quietly
 --- shifting.
+---
+--- Exported (not `local`) because `doccoverage.lua` (R4) needs the same
+--- "how many params does the signature actually declare" question
+--- `undocumented-param` already answers, and duplicating the comma-split
+--- would be a second place for the two to quietly disagree.
 ---@param fn Lib.Docmap.FunctionInfo
 ---@return string[]
-local function declared_param_names(fn)
+function M.declared_param_names(fn)
   local inside = fn.signature:match("%((.-)%)")
   local names = {}
   if not inside or inside == "" then
@@ -454,7 +459,7 @@ local function check_undocumented_params(ir, findings)
       -- heuristic check earns its way onto someone's ignore list.
       if not fn.internal then
         local declared = 0
-        for _, token in ipairs(declared_param_names(fn)) do
+        for _, token in ipairs(M.declared_param_names(fn)) do
           if token ~= "..." then
             declared = declared + 1
           end
@@ -498,7 +503,7 @@ local function check_param_name_mismatch(ir, findings)
     local node = ir.nodes[id]
     for _, fn in ipairs(node.functions) do
       if not fn.internal then
-        local declared = declared_param_names(fn)
+        local declared = M.declared_param_names(fn)
         local doc_params = fn.params
         -- A colon-declared method's own `self` is Lua's implicit sugar, so
         -- `declared_param_names` never sees it — but documenting it
