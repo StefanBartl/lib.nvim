@@ -844,14 +844,15 @@ the default), the same "only the axes a view actually uses" rule
 A tool palette, not a diagram — a fifth tab (`atool` state axis, same
 `iview=`-shaped URL rule as the Index tab) whose toolbar switches between
 panels the way Hierarchy's view buttons switch between graphs, applied to
-aggregate numbers instead of boxes. Two tools today, both per-module
-breakdowns over data `scan_full()` already stamped into the IR:
+aggregate numbers instead of boxes. Three tools today:
 
 - **Test coverage** — `fn.tested` (R2, [`coverage.lua`](coverage.lua))
 - **Documentation** — `fn.documented` (R4, [`doccoverage.lua`](doccoverage.lua))
+- **Dependencies** — `n.requires`/`n.required_by` (R6, fan-in/fan-out)
 
-Each panel is a table, one row per module/namespace/file that owns at least
-one function: hit/total, a percentage, and a bar. Sorted **worst-first** —
+The first two are per-module breakdowns over data `scan_full()` already
+stamped into the IR: a table, one row per module/namespace/file that owns
+at least one function, hit/total/percentage/bar. Sorted **worst-first** —
 lowest percentage at the top, ties broken by functions-affected (a 0%
 module with 20 functions needs attention before one with 1) — because a
 panel meant to answer "where should I look" should not bury that answer
@@ -869,11 +870,26 @@ can never disagree with the number `:LibMap`/the CLI prints for the same
 tree; the Test-coverage panel does not, since `coverage.resolve` stamps
 `fn.tested` on every function regardless of `@internal`.
 
-Two tools only, deliberately: R6 (fan-in/fan-out hotspots) and beyond are
-real candidates (see the roadmap) but have no data stamped into the IR
-yet — a third button that opened an empty panel would be exactly what the
-context menu's "disabled with a count shown" rule exists to avoid
-elsewhere in this page.
+**Dependencies** (R6) is shaped differently on purpose: it counts edges over
+the node itself, not a boolean over its functions, so it reads straight off
+`n.requires.length`/`n.required_by.length` — both already sorted,
+deduplicated indexes into `ir.edges`'s require edges — rather than reusing
+the function-counting panel's `pick` callback bent into a shape it wasn't
+built for. Sorted by **fan-in descending**: the module the most other
+modules depend on is the one whose blast radius matters most if it changes,
+the same "most consequential first" rule the coverage panels' pct sort
+already follows. Fan-out is the tiebreak, not an equal-weight second key —
+a module nothing depends on but that itself pulls in a lot is a different
+smell (a "God module" candidate), worth seeing but not at the cost of
+burying real fan-in leaders. Verified against this repo's own tree: highest
+fan-in is `lib.nvim.notify` (30), exactly the kind of foundational module
+this ranking exists to surface.
+
+Three tools for now, deliberately: further candidates from the roadmap
+(cyclomatic complexity, code duplication, churn hotspots) have no data
+stamped into the IR yet — a button that opened an empty panel would be
+exactly what the context menu's "disabled with a count shown" rule exists
+to avoid elsewhere in this page.
 
 ## Drift checks
 

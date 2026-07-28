@@ -514,7 +514,7 @@ local JS = [[
       if(s.iview === "modules") parts.push("iview=modules");
     } else if(s.tab === "analysis"){
       // Same rule, Analysis's own one axis: which tool panel is open.
-      if(s.atool === "doc") parts.push("atool=doc");
+      if(s.atool !== "test") parts.push("atool=" + encodeURIComponent(s.atool));
     } else {
       if(s.center) parts.push("center=" + encodeURIComponent(s.center));
       parts.push("view=" + encodeURIComponent(s.view || "modules"));
@@ -557,7 +557,7 @@ local JS = [[
       else if(k === "fn") s.fn = v;
       else if(k === "ext") s.ext = (v === "1" || v === "true");
       else if(k === "iview") s.iview = (v === "modules") ? "modules" : "functions";
-      else if(k === "atool") s.atool = (v === "doc") ? "doc" : "test";
+      else if(k === "atool") s.atool = (v === "doc" || v === "deps") ? v : "test";
     });
     return s;
   }
@@ -1944,10 +1944,66 @@ local JS = [[
     return parts.join("");
   }
 
-  var analysisTestHTML = null, analysisDocHTML = null;
+  // R6: fan-in/fan-out per module, read straight off `n.requires`/
+  // `n.required_by` — both already sorted, deduplicated indexes into
+  // `ir.edges`'s require edges (see `Lib.Docmap.Node` in @types/init.lua),
+  // so this is JS-side aggregation only, no new Lua extraction. Distinct
+  // from `renderAnalysisPanel`: that one counts a boolean over a node's
+  // *functions*, this counts edges over the *node itself*, so it is its
+  // own small render function rather than a third `pick` callback bent
+  // into the same shape.
+  function renderAnalysisDeps(){
+    var rows = [];
+    IR.nodes.forEach(function(n){
+      var fanIn = (n.required_by || []).length;
+      var fanOut = (n.requires || []).length;
+      if(fanIn === 0 && fanOut === 0) return;
+      rows.push({ node: n, fanIn: fanIn, fanOut: fanOut });
+    });
+
+    if(rows.length === 0){
+      return '<p class="ntext none">This map contains no require edges.</p>';
+    }
+
+    // Highest fan-in first: the module most other modules depend on is the
+    // one whose blast radius matters most, the same "most consequential
+    // first" rule the coverage panels already follow with their pct sort.
+    // Fan-out is the tiebreak, not an equal-weight second key — a module
+    // nothing depends on but that itself pulls in a lot is a different
+    // smell (the roadmap's "God module" idea), worth seeing but not at the
+    // cost of burying real fan-in leaders under it.
+    rows.sort(function(a, b){
+      if(a.fanIn !== b.fanIn) return b.fanIn - a.fanIn;
+      if(a.fanOut !== b.fanOut) return b.fanOut - a.fanOut;
+      return a.node.id < b.node.id ? -1 : (a.node.id > b.node.id ? 1 : 0);
+    });
+
+    var maxFanIn = rows.reduce(function(m, r){ return Math.max(m, r.fanIn); }, 0);
+
+    var parts = [];
+    parts.push('<p class="nsub">' + rows.length + ' modules with at least one require ' +
+      'edge. Fan-in is how many other modules require this one — the blast radius if it ' +
+      'changes. Fan-out is how many modules it requires itself.</p>');
+    parts.push('<table class="antable"><thead><tr><th>Module</th><th>Fan-in</th>' +
+      '<th>Fan-out</th><th></th></tr></thead><tbody>');
+    rows.forEach(function(r){
+      var barPct = maxFanIn > 0 ? Math.round(100 * r.fanIn / maxFanIn) : 0;
+      var label = r.node.module || r.node.path;
+      parts.push('<tr class="anrow" data-node="' + esc(r.node.id) + '">' +
+        '<td>' + esc(label) + '</td>' +
+        '<td>' + r.fanIn + '</td>' +
+        '<td>' + r.fanOut + '</td>' +
+        '<td><div class="anbar"><div class="anfill" style="width:' + barPct + '%"></div></div></td>' +
+        '</tr>');
+    });
+    parts.push("</tbody></table>");
+    return parts.join("");
+  }
+
+  var analysisTestHTML = null, analysisDocHTML = null, analysisDepsHTML = null;
   function drawAnalysis(){
     var host = document.getElementById("anbody");
-    var atool = state.atool === "doc" ? "doc" : "test";
+    var atool = (state.atool === "doc" || state.atool === "deps") ? state.atool : "test";
 
     if(atool === "test"){
       if(analysisTestHTML === null){
@@ -1961,7 +2017,7 @@ local JS = [[
         );
       }
       host.innerHTML = analysisTestHTML;
-    } else {
+    } else if(atool === "doc"){
       if(analysisDocHTML === null){
         analysisDocHTML = renderAnalysisPanel(
           "Documented",
@@ -1973,6 +2029,9 @@ local JS = [[
         );
       }
       host.innerHTML = analysisDocHTML;
+    } else {
+      if(analysisDepsHTML === null) analysisDepsHTML = renderAnalysisDeps();
+      host.innerHTML = analysisDepsHTML;
     }
 
     host.querySelectorAll(".anrow").forEach(function(tr){
@@ -2969,6 +3028,7 @@ function M.render(ir, findings, opts)
     '<div class="hview-toggle" id="antoggle">',
     '<button class="anview-btn active" data-atool="test">Test coverage</button>',
     '<button class="anview-btn" data-atool="doc">Documentation</button>',
+    '<button class="anview-btn" data-atool="deps">Dependencies</button>',
     "</div>",
     '<div id="anbody"></div>',
     "</div>",
