@@ -160,6 +160,36 @@ details>summary{cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0}
 .nlist .nwhere{font-family:var(--mono);font-size:11px;color:var(--muted);margin-left:8px}
 .nlist .ntext{font-size:12.5px;color:var(--ink);margin-top:2px}
 .nlist .ntext.none{color:var(--muted);font-style:italic}
+#hist-list{padding:12px 8px 60px 16px;border-right:1px solid var(--line);
+  max-height:calc(100vh - 132px);overflow:auto}
+@media (max-width:860px){#hist-list{max-height:none;border-right:0;
+  border-bottom:1px solid var(--line)}}
+#hist-detail{padding:22px 26px 60px;max-height:calc(100vh - 132px);overflow:auto}
+@media (max-width:860px){#hist-detail{max-height:none}}
+.crow{padding:5px 8px;border-radius:6px;cursor:pointer}
+.crow:hover{background:var(--accent-soft)}
+.crow.sel{background:var(--accent-soft);box-shadow:inset 2px 0 0 var(--accent)}
+.crow .csub{font-size:12.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.crow .cmeta{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:1px}
+.hist-approx{color:var(--warn);font-size:11.5px;border:1px solid var(--warn);
+  border-radius:5px;padding:5px 8px;margin:0 0 12px}
+.hist-sec{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
+  margin:18px 0 7px;font-weight:600}
+.hist-fn{font-family:var(--mono);font-size:12.5px;color:var(--ink);font-weight:600}
+.hist-callers{list-style:none;margin:2px 0 8px;padding:0 0 0 14px}
+.hist-callers li{font-family:var(--mono);font-size:11.5px;color:var(--muted);padding:1px 0}
+.hist-mods{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 4px}
+.hist-mods a{font-family:var(--mono);font-size:11.5px;padding:2px 7px;border-radius:5px;
+  border:1px solid var(--line);color:var(--accent);cursor:pointer;text-decoration:none}
+.hist-mods a:hover{border-color:var(--accent);background:var(--accent-soft)}
+.hist-mods span.gone{font-family:var(--mono);font-size:11.5px;padding:2px 7px;
+  border-radius:5px;border:1px dashed var(--line);color:var(--muted)}
+.hist-diff{font-family:var(--mono);font-size:11px;white-space:pre;overflow-x:auto;
+  background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;
+  max-height:460px;overflow-y:auto}
+.hist-diff .da{color:var(--file)} .hist-diff .dd{color:var(--error)}
+.hist-diff .dh{color:var(--accent);font-weight:600} .hist-diff .dm{color:var(--muted)}
 #view-index{padding:22px 26px 60px}
 #ixtoggle{margin-bottom:14px}
 #view-analysis{padding:22px 26px 60px}
@@ -476,7 +506,8 @@ local JS = [[
   // =====================================================================
   var DEFAULT_STATE = {
     tab: "tree", id: null, center: null, view: "modules",
-    dir: "out", depth: 2, fn: null, ext: false, iview: "functions", atool: "test"
+    dir: "out", depth: 2, fn: null, ext: false, iview: "functions", atool: "test",
+    sha: null
   };
   function freshState(){ return Object.assign({}, DEFAULT_STATE); }
 
@@ -515,6 +546,11 @@ local JS = [[
     } else if(s.tab === "analysis"){
       // Same rule, Analysis's own one axis: which tool panel is open.
       if(s.atool !== "test") parts.push("atool=" + encodeURIComponent(s.atool));
+    } else if(s.tab === "history"){
+      // The opened commit, so a link to one is shareable. Validated on the
+      // way back in — the server validates it again before it reaches git,
+      // but a hash is user input and the fetch URL is built from it here.
+      if(s.sha) parts.push("sha=" + encodeURIComponent(s.sha));
     } else {
       if(s.center) parts.push("center=" + encodeURIComponent(s.center));
       parts.push("view=" + encodeURIComponent(s.view || "modules"));
@@ -558,6 +594,11 @@ local JS = [[
       else if(k === "ext") s.ext = (v === "1" || v === "true");
       else if(k === "iview") s.iview = (v === "modules") ? "modules" : "functions";
       else if(k === "atool") s.atool = (v === "doc" || v === "deps" || v === "complexity") ? v : "test";
+      // Validated here, not just at the server: this value is interpolated
+      // into a fetch URL, and the same whitelist the server applies before it
+      // reaches git is the right shape to demand of a hash too. Anything else
+      // is dropped rather than sanitized.
+      else if(k === "sha") s.sha = /^[0-9a-f]{7,40}$/.test(v) ? v : null;
     });
     return s;
   }
@@ -579,12 +620,14 @@ local JS = [[
     document.getElementById("view-notes").classList.toggle("active", s.tab === "notes");
     document.getElementById("view-index").classList.toggle("active", s.tab === "index");
     document.getElementById("view-analysis").classList.toggle("active", s.tab === "analysis");
+    document.getElementById("view-history").classList.toggle("active", s.tab === "history");
 
     if(s.tab === "tree" && s.id && byId[s.id]) selectRow(s.id);
     if(s.tab === "hierarchy") drawHierarchy(s.center || IR.root, s.view || "modules");
     if(s.tab === "notes") drawNotes();
     if(s.tab === "index") drawIndex();
     if(s.tab === "analysis") drawAnalysis();
+    if(s.tab === "history") drawHistory(s.sha || null);
     syncGraphControls(s);
 
     var hash = serializeState(s);
@@ -2094,6 +2137,192 @@ local JS = [[
     });
   }
 
+  // =====================================================================
+  // History tab: where each commit's diff radiates to.
+  //
+  // The only tab that is not computed from the embedded IR, and cannot be.
+  // The analysis needs git and the *historical* artifacts, which means it
+  // needs a server — a page opened as `file://` gets an opaque origin and
+  // `fetch()` refuses the `file:` scheme outright, so "load it when clicked"
+  // is only possible over http. `:LibMap serve` provides that.
+  //
+  // Opened from `file://` the tab must therefore explain itself rather than
+  // fail: the committed map is the common case (it is what is in the repo),
+  // and a tab that silently does nothing there would read as a bug. Same
+  // treatment the class-based Hierarchy views give a map generated without
+  // LuaLS.
+  // =====================================================================
+  var histLoaded = false, histCommits = null, histSelected = null;
+
+  function historyAvailable(){ return location.protocol === "http:" || location.protocol === "https:"; }
+
+  function histOffline(msg){
+    document.getElementById("hist-list").innerHTML = "";
+    document.getElementById("hist-detail").innerHTML = msg;
+  }
+
+  function drawHistory(sha){
+    if(!historyAvailable()){
+      histOffline(
+        '<p class="hmsg">This page was opened from a file, so the History tab has nothing to ask.<br><br>' +
+        'The commit analysis is computed on demand from <code>git</code> and the map committed at each ' +
+        'revision — that needs a server, because a <code>file://</code> page is not allowed to fetch ' +
+        'anything.<br><br>Run <code>:LibMap serve</code> and open the URL it prints ' +
+        '(or <code>:LibMap open</code> while it runs).</p>'
+      );
+      return;
+    }
+    if(!histLoaded){
+      histLoaded = true;
+      document.getElementById("hist-list").innerHTML = '<p class="hmsg">Loading commits…</p>';
+      fetch("/api/commits?n=100")
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          histCommits = d.commits || [];
+          renderHistList();
+          if(state.sha) loadCommit(state.sha);
+        })
+        .catch(function(e){
+          histLoaded = false;
+          histOffline('<p class="hmsg">Could not reach the map server: ' + esc(String(e)) +
+            '<br><br>Is it still running? <code>:LibMap serve</code> starts it.</p>');
+        });
+      return;
+    }
+    renderHistList();
+    if(sha) loadCommit(sha);
+  }
+
+  function renderHistList(){
+    var host = document.getElementById("hist-list");
+    if(!histCommits || histCommits.length === 0){
+      host.innerHTML = '<p class="hmsg">No commits.</p>';
+      return;
+    }
+    host.innerHTML = histCommits.map(function(c){
+      return '<div class="crow' + (c.sha === histSelected ? " sel" : "") +
+        '" data-sha="' + esc(c.sha) + '">' +
+        '<div class="csub">' + esc(c.subject) + "</div>" +
+        '<div class="cmeta">' + esc(c.short) + " · " + esc(c.date) + " · " + esc(c.author) +
+        "</div></div>";
+    }).join("");
+    host.querySelectorAll(".crow").forEach(function(row){
+      row.addEventListener("click", function(){
+        navigate({ tab: "history", sha: row.dataset.sha });
+      });
+    });
+  }
+
+  function loadCommit(sha){
+    if(histSelected === sha && document.getElementById("hist-detail").dataset.sha === sha) return;
+    histSelected = sha;
+    renderHistList();
+    var det = document.getElementById("hist-detail");
+    det.innerHTML = '<p class="hmsg">Analysing ' + esc(sha.slice(0, 8)) + "…</p>";
+    fetch("/api/commit/" + encodeURIComponent(sha))
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(d.error){ det.innerHTML = '<p class="hmsg">' + esc(d.error) + "</p>"; return; }
+        det.dataset.sha = sha;
+        det.innerHTML = renderCommitDetail(d);
+        wireCommitDetail(det);
+      })
+      .catch(function(e){
+        det.innerHTML = '<p class="hmsg">Request failed: ' + esc(String(e)) + "</p>";
+      });
+  }
+
+  // Module chips link into the rest of the page like any other cross-
+  // reference — but only when the node still exists in the *current* map. A
+  // commit can name a module that has since been renamed or deleted, and a
+  // link that navigates nowhere is worse than plain text saying so.
+  function modChips(ids, names){
+    if(!ids || ids.length === 0) return '<p class="ntext none">None.</p>';
+    return '<div class="hist-mods">' + ids.map(function(id){
+      var label = esc((names && names[id]) || id);
+      return byId[id]
+        ? '<a data-node="' + esc(id) + '">' + label + "</a>"
+        : '<span class="gone" title="not in the current map">' + label + "</span>";
+    }).join("") + "</div>";
+  }
+
+  function renderCommitDetail(d){
+    var c = d.commit, im = d.impact, names = d.names || {};
+    var out = [];
+
+    out.push("<h2>" + esc(c.subject) + "</h2>");
+    out.push('<div class="mp">' + esc(c.short) + " · " + esc(c.date) + " · " + esc(c.author) + "</div>");
+    if(c.body) out.push('<div class="prose">' + esc(c.body) + "</div>");
+
+    if(!d.has_map){
+      out.push('<div class="hist-approx">This revision predates the committed map, so nothing ' +
+        "could be attributed to functions — only the changed files are known.</div>");
+    } else if(im.approximate){
+      out.push('<div class="hist-approx">Function spans were <b>approximated</b> for at least one ' +
+        "file: the map at this revision predates <code>line_end</code>, so a function's extent was " +
+        "taken as \"up to the next one\". Attribution errs toward over-reaching into the gaps " +
+        "between functions.</div>");
+    }
+
+    out.push('<div class="sec">Touched functions <span class="sub">' + im.touched.length + "</span></div>");
+    if(im.touched.length === 0){
+      out.push('<p class="ntext none">No scanned function contains any of the changed lines.</p>');
+    } else {
+      im.touched.forEach(function(t){
+        var callers = (im.callers || {})[t.node + "#" + t.fn] || [];
+        out.push('<div class="hist-fn">' + esc(t.signature || t.fn) +
+          '  <span class="cmeta">' + esc(names[t.node] || t.node) + ":" + t.line + "</span></div>");
+        if(callers.length === 0){
+          out.push('<ul class="hist-callers"><li>no resolved caller in the tree</li></ul>');
+        } else {
+          out.push('<ul class="hist-callers">' + callers.map(function(x){
+            return "<li>← " + esc(x.fn || "?") + "  (" + esc(names[x.node] || x.node) + ")</li>";
+          }).join("") + "</ul>");
+        }
+      });
+    }
+
+    out.push('<div class="sec">Calling modules <span class="sub">precise — they hold a call site</span></div>');
+    out.push(modChips(im.calling_modules, names));
+    out.push('<div class="sec">Impacted modules <span class="sub">transitive, via required_by</span></div>');
+    out.push(modChips(im.impacted_modules, names));
+
+    if(im.unattributed && im.unattributed.length){
+      out.push('<div class="sec">Changed, nothing to trace <span class="sub">' +
+        im.unattributed.length + "</span></div>");
+      out.push('<ul class="lst">' + im.unattributed.map(function(p){
+        return "<li>" + esc(p) + "</li>";
+      }).join("") + "</ul>");
+    }
+
+    out.push('<div class="sec">Diff <span class="sub">generated map excluded</span></div>');
+    out.push('<div class="hist-diff">' + colorDiff(d.diff || "") + "</div>");
+    return out.join("");
+  }
+
+  // Minimal diff colouring: enough to read, and done by line prefix rather
+  // than by parsing, because the only thing that matters visually here is
+  // added / removed / hunk header.
+  function colorDiff(text){
+    if(!text) return '<span class="dm">(empty)</span>';
+    return text.split("\n").map(function(l){
+      var cls = "";
+      if(l.charAt(0) === "+") cls = "da";
+      else if(l.charAt(0) === "-") cls = "dd";
+      else if(l.slice(0, 2) === "@@") cls = "dh";
+      else if(l.slice(0, 4) === "diff" || l.slice(0, 5) === "index") cls = "dm";
+      return cls ? '<span class="' + cls + '">' + esc(l) + "</span>" : esc(l);
+    }).join("\n");
+  }
+
+  function wireCommitDetail(det){
+    det.querySelectorAll(".hist-mods a[data-node]").forEach(function(a){
+      a.addEventListener("click", function(){
+        navigate({ tab: "tree", id: a.dataset.node });
+      });
+    });
+  }
+
   function drawHierarchy(centerId, view){
     view = VIEWS[view] ? view : "modules";
     hcenter = (centerId && byId[centerId]) ? centerId : (hcenter && byId[hcenter] ? hcenter : IR.root);
@@ -3018,6 +3247,7 @@ function M.render(ir, findings, opts)
     '<button class="tab-btn" data-tab="hierarchy">Hierarchy</button>',
     '<button class="tab-btn" data-tab="notes">Notes</button>',
     '<button class="tab-btn" data-tab="index">Index</button>',
+    '<button class="tab-btn" data-tab="history">History</button>',
     '<button class="tab-btn" data-tab="analysis">Analysis</button>',
     "</div>",
 
@@ -3073,6 +3303,10 @@ function M.render(ir, findings, opts)
     "</div>",
     '<div id="ixbody"></div>',
     "</div>",
+
+    '<main id="view-history" class="view">',
+    '<div id="hist-list"></div><div id="hist-detail"></div>',
+    "</main>",
 
     '<div id="view-analysis" class="view">',
     '<div class="hview-toggle" id="antoggle">',

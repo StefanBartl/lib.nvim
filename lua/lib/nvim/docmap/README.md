@@ -7,7 +7,7 @@ type relationships, and drift detection.
 
 The generated map for this repo lives in [`docs/map/`](../../../../docs/map/):
 [`index.html`](../../../../docs/map/index.html) (interactive — Tree, Hierarchy,
-Notes and Index tabs) and [`overview.md`](../../../../docs/map/overview.md) (renders
+Notes, Index, History and Analysis tabs) and [`overview.md`](../../../../docs/map/overview.md) (renders
 on GitHub).
 
 ## Usage
@@ -24,6 +24,8 @@ on GitHub).
 :LibMap diff HEAD~5        " what this branch changed about the tree's shape
 :LibMap impact             " …and where the changed lines radiate to -> quickfix
 :LibMap impact HEAD~5      " …measured against an older revision instead of HEAD
+:LibMap serve              " start the local map server (enables the History tab)
+:LibMap serve stop         " …and shut it down again
 :LibMap dot calls lib.nvim.fs   " …scoped to one module's neighbourhood
 
 :LibBrowse                 " navigate the same map inside the editor
@@ -142,6 +144,67 @@ testable without a repository.
 The parent artifact is fetched but not required — without it the `-` side
 simply contributes nothing, which is the honest result for a revision that
 predates the map, so a failure there is a notice rather than an abort.
+
+## The History tab and `:LibMap serve`
+
+The same analysis, per commit, in the browser. It is the only tab not
+computed from the embedded IR, and it *cannot* be: the numbers come from git
+and from the artifact committed at each revision, neither of which is in the
+page.
+
+**Why that forces a server.** A page opened as `file://` gets an opaque
+origin in Chrome and Firefox; `fetch()` refuses the `file:` scheme for CORS
+requests outright, and Firefox isolates file origins additionally
+(`privacy.file_unique_origin`, FF68+). `:LibMap open` opens exactly that way.
+So "load it when the reader clicks" cannot mean "read a neighbouring file" —
+it has to mean an origin, and that means [`serve.lua`](serve.lua). This is a
+deliberate break with docmap's previous "produces files, has no runtime"
+self-image, taken because the alternative is not a worse version of the
+feature but no feature.
+
+What it buys is laziness. One commit costs ~0.3s (two `git show` reads of the
+committed artifact plus the pure analysis, measured); precomputing this
+repo's ~95 commits would cost 25-50s **and** be stale on the next commit. On
+demand it is 0.3s for the commits actually opened, and never stale, because
+git is asked at request time.
+
+```
+GET /                      the map itself
+GET /api/commits?n=100     the commit list
+GET /api/commit/<sha>      touched functions + callers + impacted modules + diff
+```
+
+**Security posture**, enforced rather than documented and hoped for:
+
+- binds `127.0.0.1` on an OS-assigned port, never `0.0.0.0`;
+- every `<sha>` is checked against `^[0-9a-f]{7,40}$` **before** it reaches
+  git — a whitelist, not an escape, because the value becomes a subprocess
+  argument and `--upload-pack=…` is a perfectly valid-looking path segment.
+  `HEAD` is refused too: a whitelist that starts making exceptions stops
+  being one;
+- static serving takes a bare filename, so no request can walk out of
+  `out_dir`;
+- `VimLeavePre` tears the socket down, so quitting cannot leave one
+  listening.
+
+Requests are parsed in the libuv read callback but **handled** on the main
+loop via `vim.schedule`: `vim.system():wait()` is `vim.wait` underneath and
+cannot run in a fast-event context.
+
+**Opened from `file://` the tab explains itself** rather than silently doing
+nothing — the committed map is the common case, since that is what is in the
+repo, and a dead tab there would read as a bug. Same treatment the
+class-based Hierarchy views give a map generated without LuaLS. It also does
+not *attempt* the fetch in that case, so the console stays clean.
+
+Two states the UI distinguishes rather than merging, because they are
+different answers: a revision that **predates the map** (nothing could be
+attributed, only files are known) and one whose map **predates `line_end`**
+(spans approximated, attribution over-reaches into the gaps between
+functions). Module chips link into the Tree like any other cross-reference,
+but only when the node still exists in the *current* map — a commit can name
+something since renamed, and a link that navigates nowhere is worse than
+plain text saying so.
 
 `dot` is the third renderer for the same edges, and it exists because the
 other two cannot do what Graphviz does: the HTML page lays boxes out in BFS
@@ -307,7 +370,7 @@ else — module prefix, directory layout, types directory name — is an option.
 | Graph | [`calls.lua`](calls.lua) | `kind="call"` edges — which function calls which |
 | LuaLS (opt-in) | [`luals.lua`](luals.lua) | class/alias detail + `kind="type"` and `kind="extends"` edges merged into the IR |
 | Check | [`check.lua`](check.lua) | `Lib.Docmap.Finding[]` — documentation drift |
-| Render | [`render/`](render/) | HTML (Tree + Hierarchy + Notes + Index tabs), Markdown, Mermaid, DOT |
+| Render | [`render/`](render/) | HTML (Tree + Hierarchy + Notes + Index + History + Analysis tabs), Markdown, Mermaid, DOT |
 | Encode | [`json.lua`](json.lua) | deterministic JSON |
 | Diff | [`diff.lua`](diff.lua) | `Lib.Docmap.Diff` — what one revision changed about the shape |
 | History | [`history.lua`](history.lua) | `Lib.Docmap.History.Impact` — which functions a diff's changed lines touch, and who calls them |

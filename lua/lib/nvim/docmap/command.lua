@@ -94,6 +94,17 @@ function M.setup(opts)
       notify.warn("No map generated yet — run :" .. command_name .. " first.")
       return false
     end
+
+    -- Prefer the server when one is running: same page, but over an origin
+    -- where `fetch` is allowed, which is the only way the History tab can
+    -- ask anything. Without a server this stays exactly what it always was.
+    local serve = require("lib.nvim.docmap.serve")
+    local info = serve.info()
+    if info then
+      require("lib.nvim.fs.open.url.system_opener").open(info.url .. (hash or ""))
+      return true
+    end
+
     -- A fragment is only meaningful on a URL. Appended to a bare filesystem
     -- path it becomes part of the filename, and every opener this dispatches
     -- to (`explorer.exe`, `open`, `xdg-open`) then looks for a file called
@@ -109,6 +120,44 @@ function M.setup(opts)
 
     if action == "open" then
       open_map()
+      return
+    end
+
+    -- :LibMap serve [stop]
+    --
+    -- The runtime docmap deliberately did without until the History tab
+    -- needed it: a `file://` page cannot fetch, so "compute this commit when
+    -- I click it" requires an origin, and an origin requires a server. See
+    -- `serve.lua` for the security and lifecycle rules that come with it.
+    if action == "serve" or action:match("^serve%s") then
+      local serve = require("lib.nvim.docmap.serve")
+      local sub = vim.trim(action:match("^serve%s*(.-)$") or "")
+
+      if sub == "stop" then
+        if serve.stop() then
+          notify.info("Map server stopped.")
+        else
+          notify.info("No map server was running.")
+        end
+        return
+      end
+      if sub ~= "" then
+        notify.warn(("Unknown serve argument '%s' (expected nothing or 'stop')."):format(sub))
+        return
+      end
+
+      local already = serve.is_running()
+      local url, err = serve.start(cfg)
+      if not url then
+        notify.warn("Could not start the map server: " .. tostring(err))
+        return
+      end
+      notify.info(
+        (already and "Map server already running at %s" or "Map server listening at %s"):format(url)
+          .. "  (:"
+          .. command_name
+          .. " serve stop to close)"
+      )
       return
     end
 
@@ -489,12 +538,13 @@ function M.setup(opts)
     nargs = "*",
     desc = "Regenerate the module map (:"
       .. command_name
-      .. " [check|full|open|graph|why <a> <b>|dot|diff <ref>|impact <ref>])",
+      .. " [check|full|open|graph|why <a> <b>|dot|diff <ref>|impact <ref>|serve [stop]])",
     complete = function(lead, line)
       -- Two completion levels: the action, then — once "graph" is typed — the
       -- module paths the map actually knows, which is the argument nobody
       -- wants to type by hand.
-      local candidates = { "check", "full", "open", "graph", "why", "dot", "diff", "impact" }
+      local candidates =
+        { "check", "full", "open", "graph", "why", "dot", "diff", "impact", "serve" }
       local after_graph = line:match("graph%s+%a*%s+(.*)$") or line:match("graph%s+(%a*)$")
       if line:match("graph%s+%a+%s") or line:match("why%s") or line:match("dot%s+%a+%s") then
         -- Offers exactly what `find_node` resolves, namespaces included —
