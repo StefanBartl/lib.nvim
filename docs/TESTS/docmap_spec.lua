@@ -291,6 +291,81 @@ return function(H)
   end
   eq(internal_nagged, false, "docmap.check: undocumented-param skips an @internal function")
 
+  -- ------------------------------------------------- param-name-mismatch (R5)
+  -- undocumented-param only ever compares counts, so a renamed parameter
+  -- whose @param line was never updated passes silently as long as both
+  -- lists are the same length. This is the case it cannot see.
+  local function param(name)
+    return { name = name, type = "any", optional = false, desc = "" }
+  end
+
+  local mismatch_ir = make_ir({
+    ["a"] = {
+      {
+        name = "M.resize",
+        signature = "resize(width, height)",
+        summary = "",
+        line = 1,
+        params = { param("w"), param("height") }, -- renamed width -> w in code, doc not updated
+        returns = {},
+        generic = {},
+        async = false,
+        nodiscard = false,
+        see = {},
+        overload = {},
+      },
+      -- A colon-declared method whose own `self` is documented explicitly —
+      -- real, legitimate LuaCATS style (verified against this repo's own
+      -- Lru:get/Lru:put) that the implicit-self exclusion must not flag.
+      {
+        name = "M:put",
+        signature = "put(key, value)",
+        summary = "",
+        line = 5,
+        params = { param("self"), param("key"), param("value") },
+        returns = {},
+        generic = {},
+        async = false,
+        nodiscard = false,
+        see = {},
+        overload = {},
+      },
+    },
+  })
+  local mismatch_findings = check.run(mismatch_ir, opts)
+
+  local resize_mismatch, put_mismatch = {}, {}
+  for _, f in ipairs(mismatch_findings) do
+    if f.check == "param-name-mismatch" then
+      if f.message:match("^M%.resize") then
+        resize_mismatch[#resize_mismatch + 1] = f
+      elseif f.message:match("^M:put") then
+        put_mismatch[#put_mismatch + 1] = f
+      end
+    end
+  end
+  eq(
+    #resize_mismatch,
+    1,
+    "docmap.check: param-name-mismatch fires once for the one renamed parameter"
+  )
+  ok(
+    resize_mismatch[1]
+      and resize_mismatch[1].message:match("'w'")
+      and resize_mismatch[1].message:match("'width'"),
+    "docmap.check: param-name-mismatch names both the doc's name and the signature's"
+  )
+  eq(
+    resize_mismatch[1] and resize_mismatch[1].severity,
+    "info",
+    "docmap.check: param-name-mismatch is info-severity, same as undocumented-param"
+  )
+  eq(
+    #put_mismatch,
+    0,
+    "docmap.check: an explicitly-documented 'self' on a colon method is not a mismatch"
+  )
+
   -- dead-function: local functions and @internal ones are checked
   -- unconditionally; an ordinary exported function only under opts.dead_code.
   local function fn_info(name, over)

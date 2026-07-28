@@ -477,7 +477,7 @@ flowchart LR
 
 ## Drift
 
-0 errors · 10 warnings · 88 info
+0 errors · 10 warnings · 86 info
 
 | Severity | Check | Message |
 |---|---|---|
@@ -493,7 +493,7 @@ flowchart LR
 | warn | `missing-summary` | lua/lib/nvim/normalize/validators.lua has ---@module but no description line |
 
 <details>
-<summary>88 informational findings</summary>
+<summary>86 informational findings</summary>
 
 
 | Check | Message |
@@ -501,12 +501,10 @@ flowchart LR
 | `undocumented-param` | escape_lua_pattern has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | invalid_ctx has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | M.normalize has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | strlen has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | split has 2 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | strlen has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | join has 2 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | notify_caller has 5 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | bind_cancel_on_escape has 3 parameter(s) but only 2 @param line(s) |
-| `undocumented-param` | bind_cancel_on_escape has 3 parameter(s) but only 2 @param line(s) |
 | `undocumented-param` | move_in has 3 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | M.build_ctx has 7 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | new_node has 1 parameter(s) but only 0 @param line(s) |

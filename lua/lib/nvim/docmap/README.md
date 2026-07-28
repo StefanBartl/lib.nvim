@@ -798,6 +798,7 @@ bugs. Generic checks (any annotated Lua tree):
 | `unreferenced-module` | info | Required by no other file in the tree. |
 | `dead-see-target` | warn | A function's `@see` target resolves to no known module or function. |
 | `undocumented-param` | info | A function has more parameters than `@param` lines (text-based heuristic, can be wrong on complex signatures — never fails `--check`). |
+| `param-name-mismatch` | info | R5: at a shared position, a `@param` name and the signature's declared name differ — usually a renamed parameter whose doc line was never updated. Same heuristic caveats as `undocumented-param`. |
 | `require-cycle` | warn | A cycle among **load-time** requires. |
 | `layer-violation` | warn | Opt-in via `opts.layers`: a module reaching into a layer it must not. |
 | `dead-function` | info | Nothing in the tree appears to call this function. |
@@ -832,6 +833,21 @@ Never above `info`, and it can never fail `--check`: dynamic dispatch is
 invisible to the scanner (`lib.nvim.require`'s metatable and lazy strategies
 call things that appear nowhere in the source), so a confident verdict is not
 available at any severity.
+
+`param-name-mismatch` (R5) compares positionally, not by set membership —
+Lua has no keyword arguments, so "the doc's third `@param` describes the
+signature's third parameter" is the actual contract, and set membership would
+happily accept two parameters silently swapped. One real edge case, verified
+against this repo's own `Lru:get`/`Lru:put`: a colon-declared method's own
+`self` is Lua's implicit sugar, invisible to the raw signature text, but
+documenting it explicitly (`---@param self Foo`) is legitimate LuaCATS style
+— left uncorrected, every such method would misreport its real parameters
+shifted one position early, so the check drops a documented leading `self`
+before comparing. Caught two real bugs on first run against this tree
+(`lua/lib/nvim/progress/styles/{float,kit}.lua`'s `bind_cancel_on_escape`
+had gained a `bufnr` parameter with no `@param` line for it, silently
+misaligning every doc line after it — `undocumented-param` already flagged
+the count, this named exactly which parameter needed a line).
 
 `require-cycle` excludes deferred requires — `require(...)` inside a function
 body, the standard way this tree breaks initialisation order on purpose. Run
