@@ -286,6 +286,81 @@ local function types_entries(ir, st)
   return out
 end
 
+---History mode, which has two levels: the commit list, and — once one is
+---opened — the functions that commit's diff touches.
+---
+---This is the one mode whose data does not come from the IR. `init.lua` runs
+---git and puts the results on the state (`st.commits`, `st.impact`), so this
+---stays as pure as every other builder here; the alternative would be a
+---`view` that shells out, which would make the whole module untestable
+---headlessly for the sake of one mode.
+---@param ir Lib.Docmap.IR
+---@param st table
+---@return Lib.Docmap.Browse.Entry[]
+local function history_entries(ir, st)
+  if not st.sha then
+    if not st.commits then
+      return { { kind = "message", label = "(loading commits…)" } }
+    end
+    if #st.commits == 0 then
+      return { { kind = "message", label = "(no commits)" } }
+    end
+    local out = {}
+    for _, c in ipairs(st.commits) do
+      out[#out + 1] = {
+        kind = "commit",
+        sha = c.sha,
+        commit = c,
+        label = ("%s  %s"):format(c.short, c.subject),
+        detail = c.date .. "  " .. c.author,
+      }
+    end
+    return out
+  end
+
+  local im = st.impact
+  if not im then
+    return { { kind = "message", label = "(analysing " .. st.sha:sub(1, 8) .. "…)" } }
+  end
+
+  local out = {}
+  for _, t in ipairs(im.touched) do
+    local node = ir.nodes[t.node]
+    local callers = im.callers[t.node .. "#" .. t.fn] or {}
+    out[#out + 1] = {
+      kind = "function",
+      id = t.node,
+      fn = t.fn,
+      callers = callers,
+      -- The declaration in the *current* tree, so `gd` lands somewhere that
+      -- still exists. A commit can name a function since moved or deleted;
+      -- then there is simply no source and `gd` says so, which beats jumping
+      -- to a stale line number.
+      source = node and node.source or nil,
+      line = t.line,
+      label = ("  %s   %d caller%s"):format(
+        t.signature or t.fn,
+        #callers,
+        #callers == 1 and "" or "s"
+      ),
+      detail = node and (node.module or node.path) or t.node,
+    }
+  end
+
+  -- Changed files nothing could be attributed to are still information — they
+  -- are why the list is shorter than the diff looks — but they are not
+  -- navigable, so they sit at the end as messages rather than pretending to
+  -- be entries.
+  for _, path in ipairs(im.unattributed or {}) do
+    out[#out + 1] = { kind = "message", label = "  · " .. path .. "  (nothing to trace)" }
+  end
+
+  if #out == 0 then
+    out[1] = { kind = "message", label = "(no scanned function contains the changed lines)" }
+  end
+  return out
+end
+
 ---Build the list entries for the current state.
 ---@param ir Lib.Docmap.IR
 ---@param st table
@@ -297,6 +372,8 @@ function M.entries(ir, st)
     return calls_entries(ir, st)
   elseif st.mode == "types" then
     return types_entries(ir, st)
+  elseif st.mode == "history" then
+    return history_entries(ir, st)
   end
   return structure_entries(ir, st)
 end
@@ -502,13 +579,147 @@ local function type_detail(node, type_name)
   return { type_name or "?", "", "(not found in this node's types)" }
 end
 
+-- ── History detail ──────────────────────────────────────────────────────────
+
+---The degradation note for an analysis, or nothing when it was exact.
+---
+---Two different states, kept apart on purpose: a revision older than the map
+---has no artifact to resolve against at all, while one older than `line_end`
+---has spans that had to be guessed. Merging them into "approximate" would
+---tell the reader less than either.
+---@param st table
+---@return string[]
+local function history_caveat(st)
+  if st.impact_has_map == false then
+    return {
+      "⚠ This revision predates the committed map, so nothing could be",
+      "  attributed to functions — only the changed files are known.",
+      "",
+    }
+  end
+  if st.impact and st.impact.approximate then
+    return {
+      "⚠ Function spans were approximated: the map at this revision predates",
+      "  `line_end`, so a function's extent was taken as up to the next one.",
+      "  Attribution errs toward over-reaching into the gaps between them.",
+      "",
+    }
+  end
+  return {}
+end
+
+---@param c table|nil A `{ sha, short, author, date, subject, body }` record.
+---@return string[]
+local function commit_detail(c)
+  if not c then
+    return { "(no commit)" }
+  end
+  local out = { c.subject or "", "" }
+  out[#out + 1] = ("commit  %s"):format(c.sha or "?")
+  out[#out + 1] = ("author  %s"):format(c.author or "?")
+  out[#out + 1] = ("date    %s"):format(c.date or "?")
+  out[#out + 1] = ""
+  if c.body and c.body ~= "" then
+    for _, l in ipairs(vim.split(c.body, "\n", { plain = true })) do
+      out[#out + 1] = l
+    end
+    out[#out + 1] = ""
+  end
+  out[#out + 1] = "<CR> analyse this commit · gD show its diff"
+  return out
+end
+
+---Shown when History mode has no selectable row: before the commit list has
+---loaded, and for a commit whose diff touched no scanned function.
+---@param st table
+---@return string[]
+local function history_fallback_detail(st)
+  if not st.sha then
+    return { "History", "", "Commits, newest first.", "", "<CR> opens one." }
+  end
+  local out = { st.sha:sub(1, 10), "" }
+  vim.list_extend(out, history_caveat(st))
+  local im = st.impact
+  if im then
+    out[#out + 1] = ("%d file(s) changed."):format(#(im.files or {}))
+    out[#out + 1] = ""
+    out[#out + 1] = "No scanned function contains any of the changed lines."
+    out[#out + 1] = "(module-level code, docs, or paths outside the scanned tree)"
+    out[#out + 1] = ""
+    out[#out + 1] = "gD shows the diff · - goes back to the commit list"
+  end
+  return out
+end
+
+---A function touched by the opened commit: who calls it, and how far the
+---change radiates.
+---@param ir Lib.Docmap.IR
+---@param st table
+---@param entry Lib.Docmap.Browse.Entry
+---@return string[]
+local function history_function_detail(ir, st, entry)
+  local node = ir.nodes[entry.id]
+  local out = { entry.fn or "?", "" }
+  vim.list_extend(out, history_caveat(st))
+
+  out[#out + 1] = ("in      %s"):format(node and (node.module or node.path) or entry.id)
+  if entry.line then
+    out[#out + 1] = ("line    %d"):format(entry.line)
+  end
+  out[#out + 1] = ""
+
+  local callers = entry.callers or {}
+  if #callers == 0 then
+    out[#out + 1] = "No resolved caller in the tree."
+    out[#out + 1] = "(a public entry point, or reached by dynamic dispatch)"
+  else
+    out[#out + 1] = ("Called by %d:"):format(#callers)
+    for _, c in ipairs(callers) do
+      local cn = ir.nodes[c.node]
+      out[#out + 1] = ("  ← %-26s %s"):format(
+        c.fn or "?",
+        cn and (cn.module or cn.path) or c.node
+      )
+    end
+  end
+
+  local im = st.impact
+  if im then
+    out[#out + 1] = ""
+    out[#out + 1] = ("%d module(s) hold a call site · %d impacted transitively"):format(
+      #(im.calling_modules or {}),
+      #(im.impacted_modules or {})
+    )
+  end
+  out[#out + 1] = ""
+  out[#out + 1] = "<CR> callers · gd source · gq list to quickfix · gD diff"
+  return out
+end
+
 ---Detail lines for the selected entry.
 ---@param ir Lib.Docmap.IR
 ---@param st table
 ---@param entry Lib.Docmap.Browse.Entry|nil
 ---@return string[]
 function M.detail(ir, st, entry)
+  if entry and entry.kind == "commit" then
+    return commit_detail(entry.commit)
+  end
+
+  -- A touched function in History mode is described by the *commit*, not by
+  -- the current tree: its callers come from the analysis, and saying "3
+  -- callers" here while the Calls mode says something else would be a
+  -- contradiction the reader cannot resolve.
+  if st.mode == "history" and st.sha and entry and entry.kind == "function" then
+    return history_function_detail(ir, st, entry)
+  end
+
   if not entry or entry.kind == "message" then
+    -- In History mode the fallback subject is the commit, not the centered
+    -- node — the node has nothing to do with what is on screen there.
+    if st.mode == "history" then
+      return history_fallback_detail(st)
+    end
     -- Fall back to the centered node so the pane is never blank — an empty
     -- list still has a subject.
     local node = ir.nodes[st.id]
@@ -562,6 +773,24 @@ end
 ---@param st table
 ---@return string
 function M.status(ir, st)
+  -- History is not about the centered node, so the breadcrumb would be
+  -- pointing at something unrelated to everything on screen.
+  if st.mode == "history" then
+    local subject = st.sha and (st.sha:sub(1, 8)) or ("%d commits"):format(#(st.commits or {}))
+    local axes = { "history" }
+    if st.impact and st.impact.approximate then
+      axes[#axes + 1] = "approx"
+    end
+    if st.impact_has_map == false then
+      axes[#axes + 1] = "no map at this rev"
+    end
+    local line = ("%s   [%s]"):format(subject, table.concat(axes, " "))
+    if st.hint then
+      line = line .. "   ⚠ " .. st.hint
+    end
+    return line
+  end
+
   local bits = { M.breadcrumb(ir, st.id) }
   if st.fn then
     bits[#bits + 1] = "ƒ " .. st.fn

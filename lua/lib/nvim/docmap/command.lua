@@ -584,11 +584,20 @@ function M.setup(opts)
     local rest = vim.trim(args.args or "")
 
     local live = false
+    local mode = nil
     local target = rest
     local head, tail = rest:match("^(%S+)%s*(.-)$")
     if head == "live" then
       live = true
       target = tail
+      head, tail = target:match("^(%S+)%s*(.-)$")
+    end
+    -- `history` opens straight into the commit list. It takes no module, so
+    -- anything after it would be meaningless — unlike `live`, which is a
+    -- prefix the module name follows.
+    if head == "history" then
+      mode = "history"
+      target = tail or ""
     end
 
     browse.open({
@@ -597,17 +606,20 @@ function M.setup(opts)
       out_dir = cfg.out_dir,
       lua_root = cfg.lua_root,
       live = live,
+      mode = mode,
       center = target ~= "" and target or nil,
     })
   end, {
     nargs = "*",
-    desc = ("Browse the module map in the editor (:%s [live] [module])"):format(
+    desc = ("Browse the module map in the editor (:%s [live] [history|module])"):format(
       browse_command_name
     ),
     complete = function(lead, line)
       -- `live` only makes sense as the first token; after it (or after any
       -- module name) the only useful completion is a module path.
-      local candidates = {}
+      -- `history` stands where a module name would, so it stays on offer for
+      -- as long as module names do.
+      local candidates = { "history" }
       if not line:match("%s%S+%s") then
         candidates[#candidates + 1] = "live"
       end

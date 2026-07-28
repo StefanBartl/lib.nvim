@@ -380,7 +380,7 @@ flowchart LR
 | &nbsp;&nbsp;`lib.nvim.debounce` | Generic debounce primitive for callbacks. | 2 | [README](../../lua/lib/nvim/debounce/README.md) · [src](../../lua/lib/nvim/debounce/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.debounce.buffer` | Buffer-scoped debounce: one independent timer per `bufnr`. | 1 | [README](../../lua/lib/nvim/debounce/buffer/README.md) · [src](../../lua/lib/nvim/debounce/buffer/init.lua) |
 | &nbsp;&nbsp;`lib.nvim.docmap` | Generated module map: scans an annotated Lua tree, builds an intermediate representation, checks it for documentation drift, and renders it. | 7 | [README](../../lua/lib/nvim/docmap/README.md) · [src](../../lua/lib/nvim/docmap/init.lua) |
-| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.docmap.browse` | `:LibBrowse` — the module map inside the editor. | 20 | [README](../../lua/lib/nvim/docmap/browse/README.md) · [src](../../lua/lib/nvim/docmap/browse/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.docmap.browse` | `:LibBrowse` — the module map inside the editor. | 24 | [README](../../lua/lib/nvim/docmap/browse/README.md) · [src](../../lua/lib/nvim/docmap/browse/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`docs` |  |  |  |
 | &nbsp;&nbsp;&nbsp;&nbsp;`render` |  |  |  |
 | &nbsp;&nbsp;`lib.nvim.dotrepeat` | Wire native Vim `.`-repeat through the `operatorfunc` mechanism, without depending on `vim-repeat` or any other plugin. | 3 | [README](../../lua/lib/nvim/dotrepeat/README.md) · [src](../../lua/lib/nvim/dotrepeat/init.lua) |

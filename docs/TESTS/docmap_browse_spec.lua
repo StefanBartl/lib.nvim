@@ -249,6 +249,131 @@ return function(H)
     "entries: an unknown node id reports instead of erroring"
   )
 
+  -- ---------------------------------------------------------- history mode
+  --
+  -- The one mode whose data does not come from the IR: `init.lua` runs git
+  -- and parks the result on the state. So these tests hand `view` exactly
+  -- what git would have produced — which is also the point of the split.
+
+  -- Level 1, before the commit list has arrived.
+  st = { mode = "history", id = "lua/x/alpha", dir = "out", depth = 2, cursor = 1 }
+  entries = view.entries(ir, st)
+  eq(entries[1].kind, "message", "history: says it is loading rather than looking empty")
+
+  st.commits = {}
+  eq(view.entries(ir, st)[1].label, "(no commits)", "history: an empty repo says so")
+
+  st.commits = {
+    {
+      sha = "a1b2c3d4e5f6a7b8c9d0",
+      short = "a1b2c3d",
+      author = "A",
+      date = "2026-01-01",
+      subject = "first",
+    },
+    {
+      sha = "0f1e2d3c4b5a69788796",
+      short = "0f1e2d3",
+      author = "B",
+      date = "2025-12-31",
+      subject = "older",
+    },
+  }
+  entries = view.entries(ir, st)
+  eq(#entries, 2, "history: one row per commit")
+  eq(entries[1].kind, "commit", "history: commit rows are their own kind")
+  eq(
+    entries[1].sha,
+    "a1b2c3d4e5f6a7b8c9d0",
+    "history: the row carries the full sha, not the short one"
+  )
+  ok(entries[1].label:find("first", 1, true) ~= nil, "history: the subject is in the label")
+
+  -- Level 2: a commit is open but its analysis has not landed yet.
+  st.sha = "a1b2c3d4e5f6a7b8c9d0"
+  eq(view.entries(ir, st)[1].kind, "message", "history: an unanalysed commit says it is working")
+
+  st.impact = {
+    files = { "lua/x/alpha/init.lua" },
+    touched = { { node = "lua/x/alpha", fn = "M.run", line = 12, signature = "run(a)" } },
+    callers = { ["lua/x/alpha#M.run"] = { { node = "lua/x/beta", fn = "M.helper", line = 40 } } },
+    calling_modules = { "lua/x/beta" },
+    impacted_modules = { "lua/x/beta" },
+    unattributed = { "README.md" },
+    approximate = false,
+  }
+  entries = view.entries(ir, st)
+  eq(#entries, 2, "history: one touched function plus the unattributed path")
+  eq(entries[1].kind, "function", "history: a touched function is navigable")
+  eq(entries[1].fn, "M.run", "history: named")
+  eq(entries[1].id, "lua/x/alpha", "history: and placed in its node")
+  eq(#entries[1].callers, 1, "history: its callers ride along on the entry")
+  eq(
+    entries[1].source,
+    "lua/x/alpha/init.lua",
+    "history: gd targets the declaration in the current tree, not the revision"
+  )
+  eq(
+    entries[2].kind,
+    "message",
+    "history: a changed path with no attribution is shown but not navigable"
+  )
+
+  -- Nothing attributable at all: still not an empty pane.
+  local saved_impact = st.impact
+  st.impact = { files = { "README.md" }, touched = {}, callers = {}, unattributed = {} }
+  eq(#view.entries(ir, st), 1, "history: a docs-only commit collapses to one message")
+  eq(view.entries(ir, st)[1].kind, "message", "history: ... and it is not selectable")
+  st.impact = saved_impact
+
+  -- Detail panes.
+  detail = view.detail(ir, { mode = "history", commits = st.commits }, nil)
+  ok(
+    table.concat(detail, "\n"):find("Commits", 1, true) ~= nil,
+    "history detail: the commit list explains itself when nothing is selected"
+  )
+
+  detail = view.detail(
+    ir,
+    { mode = "history" },
+    { kind = "commit", sha = st.commits[1].sha, commit = st.commits[1] }
+  )
+  eq(detail[1], "first", "history detail: a commit leads with its subject")
+  ok(
+    table.concat(detail, "\n"):find("a1b2c3d4e5f6a7b8c9d0", 1, true) ~= nil,
+    "history detail: and shows the full hash"
+  )
+
+  detail = view.detail(ir, st, entries[1])
+  local hjoined = table.concat(detail, "\n")
+  eq(detail[1], "M.run", "history detail: a touched function leads with its name")
+  ok(hjoined:find("Called by 1", 1, true) ~= nil, "history detail: counts the direct callers")
+  ok(hjoined:find("M.helper", 1, true) ~= nil, "history detail: and names them")
+  ok(hjoined:find("impacted transitively", 1, true) ~= nil, "history detail: reports the radius")
+
+  -- The approximation caveat is the whole reason `approximate` exists: an
+  -- over-reaching attribution that says nothing would be worse than no
+  -- attribution at all.
+  st.impact.approximate = true
+  ok(
+    table.concat(view.detail(ir, st, entries[1]), "\n"):find("approximated", 1, true) ~= nil,
+    "history detail: an approximate analysis warns about it"
+  )
+  st.impact.approximate = false
+
+  st.impact_has_map = false
+  ok(
+    table.concat(view.detail(ir, st, entries[1]), "\n"):find("predates", 1, true) ~= nil,
+    "history detail: a revision without a committed map warns about it"
+  )
+  st.impact_has_map = nil
+
+  status = view.status(ir, { mode = "history", commits = st.commits })
+  ok(status:find("history", 1, true) ~= nil, "history status: names the mode")
+  ok(status:find("2 commits", 1, true) ~= nil, "history status: counts the list")
+  status = view.status(ir, { mode = "history", sha = st.sha, impact = st.impact })
+  ok(status:find("a1b2c3d4", 1, true) ~= nil, "history status: an open commit becomes the subject")
+
   -- --------------------------------------------------------------- the UI
   --
   -- Mounts the real layout against this repo's own map when one exists. The
@@ -299,7 +424,7 @@ return function(H)
     end
 
     -- Mode switching reaches every mode without erroring.
-    for _, key in ipairs({ "2", "3", "4", "1" }) do
+    for _, key in ipairs({ "2", "3", "4", "5", "1" }) do
       vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(key, true, false, true), "x", false)
       ok(browse.is_open(), "browse: still open after switching to mode " .. key)
     end
@@ -374,6 +499,38 @@ return function(H)
     eq(status_now(), at_deps_out, "browse: setting the direction it already has is a no-op")
     press("<C-o>")
     eq(status_now(), prev, "browse: which also leaves no dead stop")
+
+    -- History mode against this repo's own git history, which is the only
+    -- place the *clearing* half of a move is observable. `go` applies its
+    -- patch with `pairs`, and `pairs` never yields a key whose value is nil —
+    -- so `{ sha = nil }` was the empty patch and `-` out of an opened commit
+    -- redrew the same function list forever. Nothing above catches it: every
+    -- other move only ever *sets* fields.
+    -- `git rev-parse` rather than testing for a `.git` *directory*: in a
+    -- worktree `.git` is a file, and this suite is normally run from one.
+    local in_git = vim.fn.executable("git") == 1
+      and vim.system({ "git", "rev-parse", "HEAD" }, { cwd = root }):wait().code == 0
+    if in_git then
+      browse.close()
+      browse.open({ root = root, mode = "history" })
+      local h_win, h_buf = slot("lib-docmap-browse-list")
+      vim.api.nvim_set_current_win(h_win)
+
+      local commit_list = status_now()
+      ok(commit_list:find("history", 1, true) ~= nil, "browse: mode=history opens on History")
+      ok(
+        commit_list:find("commits", 1, true) ~= nil,
+        "browse: and on the commit list, not inside a commit"
+      )
+      ok(vim.api.nvim_buf_line_count(h_buf) > 1, "browse: git log produced rows")
+
+      press("<CR>")
+      local in_commit = status_now()
+      ok(in_commit ~= commit_list, "browse: <CR> opens a commit")
+
+      press("-")
+      eq(status_now(), commit_list, "browse: - clears the open commit and returns to the list")
+    end
 
     -- Centering on a NAMESPACE: `lua/lib/nvim/fs` has no init.lua and so
     -- declares no @module, but `lib.nvim.fs` is what a user types. Resolving
