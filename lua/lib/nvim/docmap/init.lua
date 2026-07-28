@@ -142,6 +142,9 @@ M.render = {
   dot = function(...)
     return require("lib.nvim.docmap.render.dot")(...)
   end,
+  badge = function(...)
+    return require("lib.nvim.docmap.render.badge").render(...)
+  end,
 }
 
 ---Serialize the IR deterministically: nodes in `ir.order`, object keys in a
@@ -243,6 +246,9 @@ function M.write_artifacts(ir, findings, opts)
     ["index.html"] = M.render.html(ir, findings, opts),
     ["overview.md"] = M.render.markdown(ir, findings, opts),
   }
+  if opts.badge then
+    artifacts["coverage.svg"] = require("lib.nvim.docmap.doccoverage").badge_svg(ir)
+  end
 
   for name, content in pairs(artifacts) do
     local rel = out_dir .. "/" .. name

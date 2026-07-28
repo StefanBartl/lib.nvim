@@ -25,6 +25,7 @@
 ---@field watch_ms? integer `install()` only: debounce interval for `watch`. Default 500.
 ---@field tag_files? table<string, string> Doxygen `TAGFILES` equivalent: module-prefix -> another project's `docs/map`-shaped directory (must contain a committed `module_map.json`). A `requires_external` module matching the prefix resolves against that project's own artifact instead of staying an inert box. Local paths only — read synchronously during `scan_full()`, same as `opts.root` itself, so `--check` stays deterministic and offline. See `tagfiles.lua`.
 ---@field tests_dir? string Directory (relative to `root`) scanned for auto-derived test coverage — see `coverage.lua`. Default "docs/TESTS". A missing directory is not an error: every function is simply left `tested = false`.
+---@field badge? boolean Write `coverage.svg` (a shields.io-shaped doc-coverage badge, see `doccoverage.lua`/`render/badge.lua`) alongside the other artifacts. Off by default — most consumers of `generate()` do not want an extra committed file they never asked for. Default false.
 
 ---A repo-specific drift check.
 ---@alias Lib.Docmap.Check fun(ir: Lib.Docmap.IR, opts: Lib.Docmap.Opts): Lib.Docmap.Finding[]
