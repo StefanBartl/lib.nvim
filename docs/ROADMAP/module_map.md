@@ -1,7 +1,15 @@
 # Module map — generated hierarchy & API documentation
 
-> **Status:** concept, not implemented. Written in response to the question
-> "can we get something Doxygen-like out of the annotations we already have?"
+> **Superseded.** This was the original concept, before `lib.nvim.docmap` was
+> built. For current status (Doxygen-parity graphs, `:LibBrowse`, semantic
+> zoom, the Analysis tab, and everything else — nearly all of it shipped) see
+> [`docmap_roadmap.md`](docmap_roadmap.md) and its continuation
+> [`docmap_roadmap_next.md`](docmap_roadmap_next.md). Kept here as historical
+> record of the original reasoning, not as a task list.
+>
+> **Status (original, now historical):** concept, not implemented. Written in
+> response to the question "can we get something Doxygen-like out of the
+> annotations we already have?"
 >
 > Short answer: yes, and cheaper than expected — the annotation coverage needed
 > for it is already at 100%, and the hard part (parsing the API surface) can be

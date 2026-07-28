@@ -1,6 +1,18 @@
 # docmap: hierarchy tab, LuaLS type graph, `install()`, and mdview.nvim
 
-> **Status:** concept, not implemented. Sequel to
+> **Mostly superseded.** Parts 1–3 (LuaLS enrichment, the Hierarchy tab,
+> `install()`/`uninstall()`) all shipped, in more complete form than sketched
+> here (five Hierarchy views, not one; semantic zoom; a live `:LibBrowse`
+> navigator on top of `install()`, not just the hook itself). See
+> [`docmap_roadmap.md`](docmap_roadmap.md) and
+> [`docmap_roadmap_next.md`](docmap_roadmap_next.md) for what actually got
+> built and its current status. **Part 4 (mdview.nvim integration) was
+> never built** — confirmed by grep: no `mdview` reference anywhere under
+> `lua/lib/nvim/docmap/`, and neither successor doc mentions it. Still open,
+> if anyone wants it. Kept here as the original cross-repo investigation (verified against
+> both repos' actual source at the time), not as a task list.
+>
+> **Status (original, now historical):** concept, not implemented. Sequel to
 > [`module_map.md`](module_map.md), which shipped as `lib.nvim.docmap`. That
 > concept intentionally deferred two things as "planned enrichment, not
 > built": LuaLS `--doc` merging, and any interactive diagram beyond the
