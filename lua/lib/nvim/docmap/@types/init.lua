@@ -24,6 +24,7 @@
 ---@field watch? boolean `install()` only: rescan on `BufWritePost` under `source/**.lua`, debounced. Default false.
 ---@field watch_ms? integer `install()` only: debounce interval for `watch`. Default 500.
 ---@field tag_files? table<string, string> Doxygen `TAGFILES` equivalent: module-prefix -> another project's `docs/map`-shaped directory (must contain a committed `module_map.json`). A `requires_external` module matching the prefix resolves against that project's own artifact instead of staying an inert box. Local paths only — read synchronously during `scan_full()`, same as `opts.root` itself, so `--check` stays deterministic and offline. See `tagfiles.lua`.
+---@field tests_dir? string Directory (relative to `root`) scanned for auto-derived test coverage — see `coverage.lua`. Default "docs/TESTS". A missing directory is not an error: every function is simply left `tested = false`.
 
 ---A repo-specific drift check.
 ---@alias Lib.Docmap.Check fun(ir: Lib.Docmap.IR, opts: Lib.Docmap.Opts): Lib.Docmap.Finding[]
@@ -115,6 +116,7 @@
 ---@field nodiscard boolean
 ---@field local_refs integer How often this function's bare name is mentioned elsewhere in its own file. Answers the one question call edges cannot: a function passed as a *value* (`vim.system(cmd, on_exit)`) is used but never appears at a call site. Deliberately coarse — an unrelated `x.read` counts toward a local `read` — because over-counting errs toward "used", which is the safe direction.
 ---@field internal boolean Declared `---@internal`: part of the implementation, not of the module's published surface. Sharpens every question of the form "is this used" — `undocumented-param` skips it, the diff counts it as a helper, and a dead-function report can trust it.
+---@field tested boolean Set by `coverage.resolve` (R2): this function's bare name is mentioned somewhere under `opts.tests_dir`. `false` until `coverage.resolve` has run, and even then means "not found by name in a spec" rather than "definitely untested" — see that module's header for the blind spot.
 ---@field see string[] Raw `@see` targets, unresolved — `docmap.check` validates them.
 ---@field overload string[] Raw `@overload` signatures, unparsed (rendered as-is).
 ---@field todo string[] `@todo` entries, one per occurrence. Collected into the Notes tab's aggregate list, the way Doxygen's `\todo` feeds its Todo List.

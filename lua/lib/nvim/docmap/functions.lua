@@ -373,6 +373,10 @@ function M.scan_file(path)
         test = parsed.test,
         example = parsed.example,
         since = parsed.since,
+        -- Set for real by `coverage.resolve` (opt-in, like tag_links); false
+        -- here so a caller that never runs it still gets a real boolean
+        -- rather than a nil that would need checking everywhere it's read.
+        tested = false,
       }
     end
   end

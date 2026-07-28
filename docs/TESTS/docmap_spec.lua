@@ -778,6 +778,49 @@ return function(H)
     "docmap.tagfiles: a prefix that matches nothing resolves nothing, not an error"
   )
 
+  -- ------------------------------------------------------ coverage.resolve
+  -- Real spec-file text, not a hand-built name list: the whole point is
+  -- that a bare name mentioned in a test file — the way a spec actually
+  -- calls a function — is what lights `tested` up.
+  local coverage = require("lib.nvim.docmap.coverage")
+  write("docs/TESTS/demo_spec.lua", {
+    "local util = require('demo.util')",
+    "assert(util.trim('x') ~= nil)",
+  })
+
+  local cov_tree = scan.scan({ root = root, source = "lua/demo", lua_root = "lua" })
+  coverage.resolve(cov_tree, { root = root, lua_root = "lua" })
+
+  local trim_fn, run_fn
+  for _, fn in ipairs(cov_tree.nodes[util].functions) do
+    if fn.name == "M.trim" then
+      trim_fn = fn
+    end
+  end
+  for _, fn in ipairs(cov_tree.nodes[app].functions) do
+    if fn.name == "M.run" then
+      run_fn = fn
+    end
+  end
+  ok(trim_fn.tested, "docmap.coverage: a function named in a spec file is tested = true")
+  ok(
+    not run_fn.tested,
+    "docmap.coverage: a function never mentioned in any spec stays tested = false"
+  )
+
+  local tested_n, total_n = coverage.summary(cov_tree)
+  eq(tested_n, 1, "docmap.coverage: summary counts exactly the one tested function")
+  ok(total_n >= 2, "docmap.coverage: summary's total covers every function in the tree")
+
+  local cov_none = scan.scan({ root = root, source = "lua/demo", lua_root = "lua" })
+  coverage.resolve(cov_none, { root = root, lua_root = "lua", tests_dir = "no/such/dir" })
+  local none_tested = coverage.summary(cov_none)
+  eq(
+    none_tested,
+    0,
+    "docmap.coverage: a missing tests_dir leaves every function untested, not an error"
+  )
+
   -- ---------------------------------------------- symbols and subtree stats
   local sym_fixture = H.tmpfile(".lua")
   local sfw = assert(io.open(sym_fixture, "w"), "docmap spec: symbol fixture must be writable")
