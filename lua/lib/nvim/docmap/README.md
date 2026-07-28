@@ -228,6 +228,7 @@ else — module prefix, directory layout, types directory name — is an option.
 | Diff | [`diff.lua`](diff.lua) | `Lib.Docmap.Diff` — what one revision changed about the shape |
 | Live | [`registry.lua`](registry.lua) | `install()`/`uninstall()` — an in-memory `Handle` instead of files |
 | CLI | [`cli.lua`](cli.lua) | `--check`/`--full` entry point, reused verbatim by `scripts/gen_map.lua` and any consuming plugin's equivalent |
+| Tag files | [`tagfiles.lua`](tagfiles.lua) | `ir.tag_links` — `requires_external` modules resolved against another project's own committed artifact (`opts.tag_files`) |
 
 `deps` and `calls` run inside `scan()` itself, unlike the LuaLS merge: they
 need no external tool and cost only in-memory resolution over data the walk
@@ -486,8 +487,9 @@ the IR as plain module strings on `node.requires_external`, never as invented
 nodes: the map only claims to describe what it scanned, and a box with no
 source, no summary and no functions behind it would break that. One box per
 module however many nodes reach for it, since "these four all pull in plenary"
-is the thing worth seeing. The boxes are inert — no navigation, no context
-menu, because there is nothing to navigate to.
+is the thing worth seeing. The boxes are inert by default — no navigation, no
+context menu, because there is nothing to navigate to — unless `opts.tag_files`
+resolves one; see "Cross-project links" below.
 
 A prerequisite fell out of building it: `require("lib.lua." .. key)`, which is
 how this tree's aggregators dispatch, puts a string literal exactly where the
@@ -618,6 +620,40 @@ which this zoom is semantic.
 as plain `<rect>`/`<text>` rather than wrapped in `<foreignObject>`, which
 Inkscape and most converters do not render, and colours are read back off the
 live DOM so the export matches the theme it was taken from.
+
+### Cross-project links (`opts.tag_files`)
+
+Doxygen's `TAGFILES` equivalent: since `docmap.cli`/the pre-commit hook
+template made docmap trivially reusable (see "Reusing docmap in another
+plugin" below), a tree of several small plugins all depending on `lib.nvim`
+and each generating its own map is the normal case, not a hypothetical one.
+Every one of those maps drew `lib.nvim.fs`, `lib.nvim.ui.kit`, etc. as a
+nameless, inert grey box in the Deps view's `+ external` toggle — a require
+that resolves to nothing *in that scan*, even though it resolves perfectly
+well inside `lib.nvim`'s own committed map.
+
+```lua
+require("lib.nvim.docmap").generate({
+  ...,
+  tag_files = { ["lib.nvim"] = "/path/to/lib.nvim/docs/map" },
+})
+```
+
+Every `requires_external` module matching the prefix (`lib.nvim.fs`, not
+`lib.nvimx` — the same whole-segment matching `Lib.Docmap.LayerRule` uses) is
+looked up in that directory's `module_map.json`. What resolves gets a solid,
+accent-coloured box instead of the usual dashed muted one, and clicking it
+opens the other project's `index.html` at that node, in a new tab. What
+doesn't match any prefix, or doesn't resolve to a real node once the other
+artifact is loaded, is left exactly as before — silently inert, never an
+error.
+
+Local paths only, deliberately: the tag file is read synchronously during
+`scan_full()`, the same way `opts.root` itself is — a network fetch here
+would turn a deterministic `--check` into one that depends on network
+availability and timing, the same reasoning that keeps `dot` unwired to a
+`dot` binary. Point it at a sibling checkout's `docs/map/` directory, the
+same one `--check` already compares its own artifacts against.
 
 ### Modules vs Types
 
