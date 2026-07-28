@@ -13,11 +13,25 @@
 # writes into the commit it is validating produces diffs the author did not
 # intend, and misbehaves under `--amend` and rebase. When it fails, the fix is
 # one explicit command.
+#
+# --- Reusing this in another plugin -----------------------------------------
+# Everything below the three variables is generic — copy this file verbatim
+# into your own repo's `scripts/hooks/pre-commit` and only touch the three
+# lines the comment marks. `GEN_SCRIPT` is your own thin wrapper around
+# `lib.nvim.docmap.cli` (see `docmap/README.md` § "Reusing docmap in another
+# plugin" — usually the same handful of lines as this repo's
+# `scripts/gen_map.lua`, pointed at your own `docmap.config`-equivalent).
+
+# --- project-specific: match your docmap opts (source/out_dir) --------------
+SOURCE_DIR="lua/"
+OUT_DIR="docs/map/"
+GEN_SCRIPT="scripts/gen_map.lua"
+# -----------------------------------------------------------------------------
 
 set -e
 
 # Only worth running when Lua sources, docs or the generator itself changed.
-if ! git diff --cached --name-only | grep -qE '^(lua/|docs/map/|scripts/gen_map\.lua)'; then
+if ! git diff --cached --name-only | grep -qE "^(${SOURCE_DIR}|${OUT_DIR}|${GEN_SCRIPT})"; then
   exit 0
 fi
 
@@ -26,16 +40,16 @@ if ! command -v nvim >/dev/null 2>&1; then
   exit 0
 fi
 
-if nvim --headless -l scripts/gen_map.lua --check >/dev/null 2>&1; then
+if nvim --headless -l "$GEN_SCRIPT" --check >/dev/null 2>&1; then
   exit 0
 fi
 
 echo >&2
 echo "pre-commit: the module map is stale or has drift findings." >&2
 echo >&2
-nvim --headless -l scripts/gen_map.lua --check 2>&1 >/dev/null | sed 's/^/  /' >&2
+nvim --headless -l "$GEN_SCRIPT" --check 2>&1 >/dev/null | sed 's/^/  /' >&2
 echo >&2
-echo "  Fix:     :LibMap   (or  nvim --headless -l scripts/gen_map.lua)" >&2
+echo "  Fix:     :LibMap   (or  nvim --headless -l $GEN_SCRIPT)" >&2
 echo "  Bypass:  git commit --no-verify" >&2
 echo >&2
 exit 1

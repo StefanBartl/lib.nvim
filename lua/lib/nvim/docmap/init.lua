@@ -24,6 +24,9 @@
 ---                      plugin's source code reaches for instead of parsing
 ---                      module_map.json off disk.
 ---
+--- `M.cli` is the `--check`/`--full` entry point `scripts/gen_map.lua` and
+--- `scripts/hooks/pre-commit` both call through — see cli.lua.
+---
 --- Usage:
 ---   require("lib.nvim.docmap").generate({
 ---     root = "/path/to/repo",
@@ -99,6 +102,15 @@ M.browse = setmetatable({}, {
 M.diff = setmetatable({}, {
   __index = function(_, k)
     return require("lib.nvim.docmap.diff")[k]
+  end,
+})
+
+--- The `--check`/`--full` CLI entry point, as a callable module rather than a
+--- script — see cli.lua. Lazily required: only the CLI wrapper and hooks need
+--- it, not `:LibMap` or `install()`.
+M.cli = setmetatable({}, {
+  __index = function(_, k)
+    return require("lib.nvim.docmap.cli")[k]
   end,
 })
 
