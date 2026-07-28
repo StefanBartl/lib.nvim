@@ -1,4 +1,6 @@
 ---@module 'lib.nvim.normalize.validators'
+--- Loose-parsing validators/coercers for user-facing config values: bool,
+--- int, float, string, enum, path, argv, buffer/window handles, and more.
 
 local norm_utils = require("lib.lua.lazy").require("lib.nvim.normalize.utils")
 

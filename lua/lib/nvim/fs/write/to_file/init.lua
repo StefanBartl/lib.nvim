@@ -1,4 +1,6 @@
 ---@module 'lib.nvim.fs.write.to_file'
+--- Synchronous, byte-exact file write: creates parent directories and
+--- appends a trailing newline if the content doesn't already end with one.
 
 ---@param path string
 ---@param content string

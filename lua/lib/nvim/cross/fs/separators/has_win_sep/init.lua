@@ -1,4 +1,5 @@
 ---@module 'lib.nvim.cross.fs.separators.has_win_sep'
+--- Detects a Windows drive-prefix ("C:\" or "C:/") at the start of a path.
 
 ---@param s string
 ---@return string|nil # the matched drive-prefix substring, or nil on no match

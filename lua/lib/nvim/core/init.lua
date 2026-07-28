@@ -1,4 +1,6 @@
 ---@module 'lib.nvim.core'
+--- Executable-on-PATH lookups (memoized) plus lib.nvim.core's own aggregated
+--- helpers, e.g. simple_echo.
 
 local lazy = require("lib.lua.lazy")
 

@@ -1,4 +1,5 @@
 ---@module 'lib.lua.json'
+--- Aggregator for lib.lua's pure-Lua JSON encode/decode helpers.
 
 local lazy = require("lib.lua.lazy")
 
