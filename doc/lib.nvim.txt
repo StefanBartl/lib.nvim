@@ -188,10 +188,10 @@ Neovim adapters.
                            scope symbols, optional lua-language-server --doc
                            enrichment (class/alias detail, type-reference and
                            inheritance edges), checks it for documentation
-                           drift (incl. dead @see targets, under-documented
-                           params, load-time require cycles, opt-in module-
-                           layering rules, and unreachable functions — always
-                           for file-local/@internal ones, opt-in via
+                           drift (incl. dead @see targets, under-documented or
+                           misnamed params, load-time require cycles, opt-in
+                           module-layering rules, and unreachable functions —
+                           always for file-local/@internal ones, opt-in via
                            opts.dead_code for any function), renders a self-
                            contained HTML page (Tree + Hierarchy + Notes +
                            Index tabs — Hierarchy has

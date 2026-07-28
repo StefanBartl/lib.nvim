@@ -416,6 +416,28 @@ local function check_see_targets(ir, findings)
   end
 end
 
+--- Comma-split the raw signature parameter list into declared names, in
+--- source order. `...` is kept as its own token (both checks below treat it
+--- specially rather than dropping it silently) so a caller comparing
+--- positions still sees a real entry there instead of the list quietly
+--- shifting.
+---@param fn Lib.Docmap.FunctionInfo
+---@return string[]
+local function declared_param_names(fn)
+  local inside = fn.signature:match("%((.-)%)")
+  local names = {}
+  if not inside or inside == "" then
+    return names
+  end
+  for token in inside:gmatch("[^,]+") do
+    token = vim.trim(token)
+    if token ~= "" then
+      names[#names + 1] = token
+    end
+  end
+  return names
+end
+
 --- Text-based heuristic, not a real arity check: counts comma-separated
 --- names in the raw signature parameter list and compares against the
 --- number of `@param` lines. Deliberately `info`, not `warn`/`error` — a
@@ -430,12 +452,10 @@ local function check_undocumented_params(ir, findings)
       -- `@internal` says this is implementation, not published surface, so
       -- the documentation bar is the author's own. Nagging about it is how a
       -- heuristic check earns its way onto someone's ignore list.
-      local inside = not fn.internal and fn.signature:match("%((.-)%)") or nil
-      if inside and inside ~= "" then
+      if not fn.internal then
         local declared = 0
-        for token in inside:gmatch("[^,]+") do
-          token = vim.trim(token)
-          if token ~= "" and token ~= "..." then
+        for _, token in ipairs(declared_param_names(fn)) do
+          if token ~= "..." then
             declared = declared + 1
           end
         end
@@ -451,6 +471,69 @@ local function check_undocumented_params(ir, findings)
               #fn.params
             )
           )
+        end
+      end
+    end
+  end
+end
+
+--- R5: `undocumented-param` only ever compares *counts*, so a renamed
+--- parameter whose `@param` line was never updated — the signature says
+--- `path`, the doc still says `file` — passes it silently as long as both
+--- lists are the same length. This compares the *names* at each shared
+--- position instead.
+---
+--- Positional, not set-based: Lua has no keyword arguments, so "the doc's
+--- third `@param` describes the signature's third parameter" is the actual
+--- contract a reader relies on, not "every doc name appears somewhere in the
+--- signature" (which would happily accept two params silently swapped).
+---
+--- Deliberately `info`, same reasoning as `undocumented-param`: text-based,
+--- can be wrong on a signature this heuristic does not really understand,
+--- and must never be the thing that fails `--check`.
+---@param ir Lib.Docmap.IR
+---@param findings Lib.Docmap.Finding[]
+local function check_param_name_mismatch(ir, findings)
+  for _, id in ipairs(ir.order) do
+    local node = ir.nodes[id]
+    for _, fn in ipairs(node.functions) do
+      if not fn.internal then
+        local declared = declared_param_names(fn)
+        local doc_params = fn.params
+        -- A colon-declared method's own `self` is Lua's implicit sugar, so
+        -- `declared_param_names` never sees it — but documenting it
+        -- explicitly (`---@param self Foo`) is common and legitimate LuaCATS
+        -- style, verified against this repo's own `Lru:get`/`Lru:put`.
+        -- Left uncorrected, every such function would misreport every real
+        -- parameter shifted one position early. Skipping the doc's leading
+        -- `self` line realigns the comparison instead of guessing it away.
+        if fn.name:find(":") and doc_params[1] and doc_params[1].name == "self" then
+          local shifted = {}
+          for i = 2, #doc_params do
+            shifted[#shifted + 1] = doc_params[i]
+          end
+          doc_params = shifted
+        end
+        local n = math.min(#declared, #doc_params)
+        for i = 1, n do
+          local sig_name = declared[i]
+          local doc_name = doc_params[i].name
+          -- `...` has no name to compare a doc line against; the varargs
+          -- shape is exactly what `@vararg`/a bare `...` @param already
+          -- means, not a mismatch.
+          if sig_name ~= "..." and sig_name ~= doc_name then
+            add(
+              findings,
+              "info",
+              "param-name-mismatch",
+              id,
+              ("%s: @param #%d is documented as '%s' but the signature "):format(
+                fn.name,
+                i,
+                doc_name
+              ) .. ("declares '%s' at that position"):format(sig_name)
+            )
+          end
         end
       end
     end
@@ -576,6 +659,7 @@ function M.run(ir, opts)
   check_layers(ir, findings, opts)
   check_see_targets(ir, findings)
   check_undocumented_params(ir, findings)
+  check_param_name_mismatch(ir, findings)
   check_dead_functions(ir, findings, opts)
 
   for _, extra in ipairs(opts.extra_checks or {}) do

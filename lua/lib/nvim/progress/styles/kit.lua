@@ -45,6 +45,7 @@ local function close(surf)
   end
 end
 
+---@param bufnr integer
 ---@param spec Lib.Progress.Spec
 ---@param request_cancel fun()
 local function bind_cancel_on_escape(bufnr, spec, request_cancel)
