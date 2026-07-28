@@ -844,11 +844,12 @@ the default), the same "only the axes a view actually uses" rule
 A tool palette, not a diagram — a fifth tab (`atool` state axis, same
 `iview=`-shaped URL rule as the Index tab) whose toolbar switches between
 panels the way Hierarchy's view buttons switch between graphs, applied to
-aggregate numbers instead of boxes. Three tools today:
+aggregate numbers instead of boxes. Four tools today:
 
 - **Test coverage** — `fn.tested` (R2, [`coverage.lua`](coverage.lua))
 - **Documentation** — `fn.documented` (R4, [`doccoverage.lua`](doccoverage.lua))
 - **Dependencies** — `n.requires`/`n.required_by` (R6, fan-in/fan-out)
+- **Complexity** — `fn.complexity` (cyclomatic/McCabe, [`functions.lua`](functions.lua))
 
 The first two are per-module breakdowns over data `scan_full()` already
 stamped into the IR: a table, one row per module/namespace/file that owns
@@ -885,11 +886,29 @@ burying real fan-in leaders. Verified against this repo's own tree: highest
 fan-in is `lib.nvim.notify` (30), exactly the kind of foundational module
 this ranking exists to surface.
 
-Three tools for now, deliberately: further candidates from the roadmap
-(cyclomatic complexity, code duplication, churn hotspots) have no data
-stamped into the IR yet — a button that opened an empty panel would be
-exactly what the context menu's "disabled with a count shown" rule exists
-to avoid elsewhere in this page.
+**Complexity** ranks *functions*, not modules — the one panel that is a
+per-function list rather than a per-module breakdown, because "longest/most
+tangled function" is a property of one function, and averaging it into a
+per-module score would bury the one function that actually needs attention
+under a healthy module's mean. Reads `fn.complexity` — cyclomatic
+complexity (McCabe): one point per `if`/`elseif`/`while`/`for`/`repeat`/
+`and`/`or`, plus a base of 1, computed by
+[`functions.lua`](functions.lua)'s `cyclomatic_complexity` over each
+function's own subtree (including nested anonymous closures — a callback's
+branches are still branches the function's reader has to follow, and
+docmap never scans the closure as its own unit). Unlike `tested`/
+`documented`, this is computed unconditionally during the same scan pass
+that already has the treesitter node in hand — there is no later
+IR-only "resolve" step that could derive it afterwards. Verified against
+this repo's own tree: the highest-ranked function is `docmap.command`'s
+`M.setup` (complexity 104) — the `:LibMap` subcommand dispatcher, exactly
+the shape of function this ranking exists to surface.
+
+Four tools for now, deliberately: further candidates from the roadmap
+(code duplication, churn hotspots) have no data stamped into the IR
+yet — a button that opened an empty panel would be exactly what the
+context menu's "disabled with a count shown" rule exists to avoid
+elsewhere in this page.
 
 ## Drift checks
 

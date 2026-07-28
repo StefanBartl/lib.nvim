@@ -557,7 +557,7 @@ local JS = [[
       else if(k === "fn") s.fn = v;
       else if(k === "ext") s.ext = (v === "1" || v === "true");
       else if(k === "iview") s.iview = (v === "modules") ? "modules" : "functions";
-      else if(k === "atool") s.atool = (v === "doc" || v === "deps") ? v : "test";
+      else if(k === "atool") s.atool = (v === "doc" || v === "deps" || v === "complexity") ? v : "test";
     });
     return s;
   }
@@ -2000,10 +2000,57 @@ local JS = [[
     return parts.join("");
   }
 
-  var analysisTestHTML = null, analysisDocHTML = null, analysisDepsHTML = null;
+  // Cyclomatic complexity (McCabe): `fn.complexity`, computed unconditionally
+  // by docmap.functions during the scan itself (unlike tested/documented,
+  // there is no IR-only "resolve" step that could derive it later — it
+  // needs the treesitter node, which only exists during that same pass).
+  // Ranked by function, not rolled up per module: "longest/most tangled
+  // function" is a property of one function, and averaging it into a
+  // per-module score would bury the one function that actually needs
+  // attention under a healthy module's mean.
+  function renderAnalysisComplexity(){
+    var rows = [];
+    IR.nodes.forEach(function(n){
+      (n.functions || []).forEach(function(fn){
+        rows.push({ node: n, fn: fn, complexity: fn.complexity || 1 });
+      });
+    });
+
+    if(rows.length === 0){
+      return '<p class="ntext none">This map contains no documented functions.</p>';
+    }
+
+    rows.sort(function(a, b){
+      if(a.complexity !== b.complexity) return b.complexity - a.complexity;
+      return a.fn.signature < b.fn.signature ? -1 : 1;
+    });
+    var maxC = rows.reduce(function(m, r){ return Math.max(m, r.complexity); }, 1);
+
+    var parts = [];
+    parts.push('<p class="nsub">' + rows.length + ' documented functions, ranked by ' +
+      'cyclomatic complexity (McCabe) — one point per if/elseif/while/for/repeat/and/or, ' +
+      'plus a base of 1. Highest first.</p>');
+    parts.push('<table class="antable"><thead><tr><th>Function</th><th>Module</th>' +
+      '<th>Complexity</th><th></th></tr></thead><tbody>');
+    rows.forEach(function(r){
+      var barPct = Math.round(100 * r.complexity / maxC);
+      parts.push('<tr class="anrow" data-node="' + esc(r.node.id) + '">' +
+        '<td>' + esc(r.fn.signature) + '</td>' +
+        '<td>' + esc(r.node.module || r.node.path) + '</td>' +
+        '<td>' + r.complexity + '</td>' +
+        '<td><div class="anbar"><div class="anfill" style="width:' + barPct + '%"></div></div></td>' +
+        '</tr>');
+    });
+    parts.push("</tbody></table>");
+    return parts.join("");
+  }
+
+  var analysisTestHTML = null, analysisDocHTML = null, analysisDepsHTML = null,
+    analysisComplexityHTML = null;
   function drawAnalysis(){
     var host = document.getElementById("anbody");
-    var atool = (state.atool === "doc" || state.atool === "deps") ? state.atool : "test";
+    var atool = (state.atool === "doc" || state.atool === "deps" || state.atool === "complexity")
+      ? state.atool : "test";
 
     if(atool === "test"){
       if(analysisTestHTML === null){
@@ -2029,9 +2076,12 @@ local JS = [[
         );
       }
       host.innerHTML = analysisDocHTML;
-    } else {
+    } else if(atool === "deps"){
       if(analysisDepsHTML === null) analysisDepsHTML = renderAnalysisDeps();
       host.innerHTML = analysisDepsHTML;
+    } else {
+      if(analysisComplexityHTML === null) analysisComplexityHTML = renderAnalysisComplexity();
+      host.innerHTML = analysisComplexityHTML;
     }
 
     host.querySelectorAll(".anrow").forEach(function(tr){
@@ -3029,6 +3079,7 @@ function M.render(ir, findings, opts)
     '<button class="anview-btn active" data-atool="test">Test coverage</button>',
     '<button class="anview-btn" data-atool="doc">Documentation</button>',
     '<button class="anview-btn" data-atool="deps">Dependencies</button>',
+    '<button class="anview-btn" data-atool="complexity">Complexity</button>',
     "</div>",
     '<div id="anbody"></div>',
     "</div>",

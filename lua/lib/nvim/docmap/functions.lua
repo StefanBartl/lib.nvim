@@ -49,6 +49,45 @@ local FN_QUERY = vim.treesitter.query.parse(
 
 local COMMENT_QUERY = vim.treesitter.query.parse("lua", "(comment) @comment")
 
+--- Cyclomatic complexity (McCabe): one decision point each for
+--- if/elseif/while/for/repeat, plus one for every `and`/`or` (a short-
+--- circuit boolean operator is a branch the same way an `if` is — the
+--- reader has to consider both outcomes). `x and 1 or 2` matches twice
+--- (once for the inner `and`, once for the outer `or`), which is correct:
+--- that is two real decision points, not one, verified against
+--- `vim.treesitter.get_node_text` on a real nested and/or expression.
+--- Complexity itself is `1 + capture count`, computed per function over
+--- `def_node`'s own subtree — including nested anonymous closures inside
+--- it (a callback body's branches are branches the enclosing function's
+--- reader still has to follow, and docmap does not scan the closure as its
+--- own unit in the first place).
+local COMPLEXITY_QUERY = vim.treesitter.query.parse(
+  "lua",
+  [[
+  [
+    (if_statement)
+    (elseif_statement)
+    (while_statement)
+    (for_statement)
+    (repeat_statement)
+  ] @branch
+
+  (binary_expression "and") @branch
+  (binary_expression "or") @branch
+]]
+)
+
+---@param def_node TSNode
+---@param src string
+---@return integer
+local function cyclomatic_complexity(def_node, src)
+  local n = 1
+  for _ in COMPLEXITY_QUERY:iter_captures(def_node, src) do
+    n = n + 1
+  end
+  return n
+end
+
 ---True when `node` is not nested inside another function's body — a query
 ---match alone can't tell `local function put(s) ... end` declared at module
 ---scope from an identically-shaped helper closure nested inside `M.to_json`;
@@ -373,6 +412,12 @@ function M.scan_file(path)
         test = parsed.test,
         example = parsed.example,
         since = parsed.since,
+        -- Computed unconditionally, unlike tested/documented below: this
+        -- needs def.def_node, which only exists during this same scan
+        -- pass — there is no later "resolve" step that could compute it
+        -- from the IR alone the way coverage.resolve/doccoverage.resolve
+        -- do, so it is done here or not at all.
+        complexity = cyclomatic_complexity(def.def_node, src),
         -- Set for real by `coverage.resolve`/`doccoverage.resolve` (opt-in,
         -- like tag_links); false here so a caller that never runs either
         -- still gets a real boolean rather than a nil that would need

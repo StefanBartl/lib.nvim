@@ -156,6 +156,50 @@ return function(H)
   eq(#clean.bug, 0, "docmap.functions: @bug defaults to an empty array, never nil")
   eq(#clean.test, 0, "docmap.functions: @test defaults to an empty array, never nil")
 
+  -- cyclomatic_complexity: one decision point each for if/elseif/while/for/
+  -- repeat, plus one per and/or — verified against the exact shape used to
+  -- design the treesitter query in the first place (real inspection of a
+  -- parsed tree, not a guess at node types).
+  eq(old_thing.complexity, 1, "docmap.functions: a straight-line function has complexity 1")
+  eq(
+    new_thing.complexity,
+    1,
+    "docmap.functions: a nested closure with no branches of its own adds nothing"
+  )
+
+  local fixture5 = H.tmpfile(".lua")
+  local fw5 = assert(io.open(fixture5, "w"))
+  fw5:write(table.concat({
+    "local M = {}",
+    "function M.branchy(x)",
+    "  if x == 1 then",
+    "    return 1",
+    "  elseif x == 2 then",
+    "    return 2",
+    "  end",
+    "  while x > 0 do",
+    "    x = x - 1",
+    "  end",
+    "  for i = 1, 10 do",
+    "    print(i)",
+    "  end",
+    "  repeat",
+    "    x = x + 1",
+    "  until x > 5",
+    "  local y = x and 1 or 2",
+    "  return y",
+    "end",
+    "return M",
+  }, "\n"))
+  fw5:close()
+  local branchy = functions.scan_file(fixture5)[1]
+  -- 1 (base) + if + elseif + while + for + repeat + and + or = 8
+  eq(
+    branchy.complexity,
+    8,
+    "docmap.functions: complexity counts if/elseif/while/for/repeat/and/or, one each"
+  )
+
   -- Undocumented function (no doc comment at all) still gets a FunctionInfo
   -- with empty fields, not skipped — dead-see-target/undocumented-param need
   -- to see it too.
