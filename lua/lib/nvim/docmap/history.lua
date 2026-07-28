@@ -364,4 +364,72 @@ function M.analyze(diff_text, ir_after, ir_before)
   }
 end
 
+---Turn an `Impact` into quickfix entries.
+---
+---Here rather than in `command.lua` for the same reason `diff.render` is in
+---`diff.lua`: the analysis and the shape of its answer belong together, and
+---keeping the command a thin git-and-UI shell means this half stays testable
+---without a repository. A CI job that wants the same list gets it without an
+---editor.
+---
+---Two entry kinds, in the order a reviewer reads them: each touched function
+---at its declaration, then its call sites indented beneath it. The call sites
+---are the actionable half — "these places run the code you changed" — and
+---they are real locations, which is the whole reason this is a quickfix list
+---rather than a message.
+---
+---`unattributed` files come last. They are still information (they explain
+---why the count is lower than the diff looks), but they are not findings, so
+---they must not push the actionable entries down.
+---@param impact Lib.Docmap.History.Impact
+---@param ir Lib.Docmap.IR Resolves node ids to files and module names.
+---@param root string Absolute repo root; quickfix wants absolute paths.
+---@return { filename: string, lnum: integer, col: integer, text: string }[]
+function M.quickfix_items(impact, ir, root)
+  local items = {}
+
+  ---@param id string
+  ---@return string
+  local function node_file(id)
+    local n = ir.nodes[id]
+    return root .. "/" .. ((n and n.source) or id)
+  end
+
+  for _, t in ipairs(impact.touched) do
+    local callers = impact.callers[t.node .. "#" .. t.fn] or {}
+    items[#items + 1] = {
+      filename = node_file(t.node),
+      lnum = t.line or 1,
+      col = 1,
+      text = ("changed: %s   (%d caller%s)"):format(
+        t.signature or t.fn,
+        #callers,
+        #callers == 1 and "" or "s"
+      ),
+    }
+    for _, c in ipairs(callers) do
+      items[#items + 1] = {
+        filename = node_file(c.node),
+        lnum = c.line or 1,
+        col = 1,
+        text = ("  ← %s calls it   (%s)"):format(
+          c.fn or "?",
+          (ir.nodes[c.node] or {}).module or c.node
+        ),
+      }
+    end
+  end
+
+  for _, path in ipairs(impact.unattributed) do
+    items[#items + 1] = {
+      filename = root .. "/" .. path,
+      lnum = 1,
+      col = 1,
+      text = "changed, nothing to trace (not a scanned function)",
+    }
+  end
+
+  return items
+end
+
 return M
