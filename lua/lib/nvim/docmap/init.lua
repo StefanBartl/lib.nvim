@@ -74,6 +74,11 @@ function M.scan_full(opts)
   -- tree with no tag_files leaves every requires_external unresolved.
   require("lib.nvim.docmap.coverage").resolve(ir, opts)
 
+  -- Same reasoning again: `fn.documented` is what the Analysis tab's
+  -- Documentation panel reads to build a per-module breakdown without
+  -- reimplementing `doccoverage.is_documented` in JS.
+  require("lib.nvim.docmap.doccoverage").resolve(ir)
+
   local luals_err
   if opts.luals then
     local luals = require("lib.nvim.docmap.luals")

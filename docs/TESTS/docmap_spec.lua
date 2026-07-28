@@ -973,6 +973,44 @@ return function(H)
   eq(empty_documented, 0, "docmap.doccoverage: a tree with no functions documents zero")
   eq(empty_total, 0, "docmap.doccoverage: a tree with no functions has zero total")
 
+  -- `M.resolve` stamps `fn.documented` in place — what the Analysis tab's
+  -- Documentation panel reads instead of reimplementing is_documented in
+  -- JS. Must agree exactly with M.summary's own count over the same IR, or
+  -- the panel and the CLI/badge number would quietly disagree.
+  doccoverage.resolve(doc_ir)
+  local stamped_documented, stamped_total = 0, 0
+  for _, id in ipairs(doc_ir.order) do
+    for _, fn in ipairs(doc_ir.nodes[id].functions) do
+      if not fn.internal then
+        stamped_total = stamped_total + 1
+      end
+      if fn.documented then
+        stamped_documented = stamped_documented + 1
+      end
+    end
+  end
+  eq(
+    stamped_documented,
+    doc_documented,
+    "docmap.doccoverage: resolve's stamped fn.documented count matches summary's"
+  )
+  eq(
+    stamped_total,
+    doc_total,
+    "docmap.doccoverage: resolve never stamps documented=true on an @internal function"
+  )
+  ok(
+    (function()
+      for _, fn in ipairs(doc_ir.nodes["a"].functions) do
+        if fn.name == "M.internal_thing" then
+          return fn.documented == false
+        end
+      end
+      return false
+    end)(),
+    "docmap.doccoverage: an @internal function is always documented = false, never true"
+  )
+
   -- ---------------------------------------------- symbols and subtree stats
   local sym_fixture = H.tmpfile(".lua")
   local sfw = assert(io.open(sym_fixture, "w"), "docmap spec: symbol fixture must be writable")
