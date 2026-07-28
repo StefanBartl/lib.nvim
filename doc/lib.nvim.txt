@@ -225,8 +225,11 @@ Neovim adapters.
                            quickfix list and :LibBrowse live for a view that
                            re-scans on write. Reusable by other plugins:
                            docmap.generate{ root = ..., source = ... }, its CLI
-                           (docmap.cli.run) and pre-commit hook template; see
-                           lua/lib/nvim/docmap/README.md and
+                           (docmap.cli.run) and pre-commit hook template;
+                           opts.tag_files resolves requires_external against
+                           another project's own committed map (Doxygen
+                           TAGFILES equivalent), turning its inert boxes into
+                           links; see lua/lib/nvim/docmap/README.md and
                            lua/lib/nvim/docmap/browse/README.md
     lib.nvim.normalize     path / value normalization
     lib.nvim.git           git helpers

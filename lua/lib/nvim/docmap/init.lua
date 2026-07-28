@@ -62,6 +62,13 @@ function M.scan_full(opts)
   local ir = M.scan(opts)
   ir.edges = ir.edges or {}
 
+  -- Always runs, even with no opts.tag_files: `tagfiles.resolve` sets
+  -- `ir.tag_links = {}` unconditionally, so the field's presence (vs. the
+  -- LuaLS-enrichment fields, which stay nil when never run) is not itself a
+  -- signal — checking `next(opts.tag_files or {})` is what a caller wanting
+  -- to know "was this configured" should do.
+  require("lib.nvim.docmap.tagfiles").resolve(ir, opts)
+
   local luals_err
   if opts.luals then
     local luals = require("lib.nvim.docmap.luals")
@@ -187,6 +194,8 @@ function M.to_json(ir)
 
   put('  ],\n  "edges": ')
   put(json.encode(ir.edges or {}))
+  put(',\n  "tag_links": ')
+  put(json.encode(ir.tag_links or {}))
   put("\n}\n")
   return table.concat(out)
 end

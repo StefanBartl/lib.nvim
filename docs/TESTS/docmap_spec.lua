@@ -712,6 +712,72 @@ return function(H)
     "docmap.command: an unknown name resolves to nil rather than a wrong node"
   )
 
+  -- ------------------------------------------------------ tagfiles.resolve
+  -- `demo.app` (built above) requires `plenary.async`, which resolves to
+  -- nothing *in this tree* — exactly the requires_external case tag_files
+  -- exists to resolve against another project's own committed artifact,
+  -- instead of leaving the Deps view an inert dead end.
+  local tagfiles = require("lib.nvim.docmap.tagfiles")
+  local docmap = require("lib.nvim.docmap")
+
+  local ext_root = H.tmpfile("_plenary")
+  local function ext_write(rel, lines)
+    local abs = ext_root .. "/" .. rel
+    vim.fn.mkdir(vim.fn.fnamemodify(abs, ":h"), "p")
+    local fd = assert(io.open(abs, "w"), "docmap spec: tag-file fixture must be writable")
+    fd:write(table.concat(lines, "\n"))
+    fd:close()
+  end
+  ext_write("lua/plenary/async/init.lua", {
+    "---@module 'plenary.async'",
+    "--- Fixture standing in for a real external project.",
+    "local M = {}",
+    "return M",
+  })
+  local ext_ir = scan.scan({ root = ext_root, source = "lua/plenary", lua_root = "lua" })
+  vim.fn.mkdir(ext_root .. "/docs/map", "p")
+  local ext_fd =
+    assert(io.open(ext_root .. "/docs/map/module_map.json", "w"), "docmap spec: writable")
+  ext_fd:write(docmap.to_json(ext_ir))
+  ext_fd:close()
+
+  tagfiles.resolve(tree, {
+    root = root,
+    lua_root = "lua",
+    tag_files = { plenary = ext_root .. "/docs/map" },
+  })
+  ok(tree.tag_links["plenary.async"], "docmap.tagfiles: resolves against the external artifact")
+  eq(
+    tree.tag_links["plenary.async"].title,
+    "plenary.async",
+    "docmap.tagfiles: title is the external node's declared @module"
+  )
+  eq(
+    tree.tag_links["plenary.async"].html,
+    (ext_root:gsub("\\", "/")) .. "/docs/map/index.html#lua/plenary/async",
+    "docmap.tagfiles: html is that project's own page, fragment = its node id"
+  )
+
+  local tree_none = scan.scan({ root = root, source = "lua/demo", lua_root = "lua" })
+  tagfiles.resolve(tree_none, { root = root, lua_root = "lua" })
+  eq(
+    next(tree_none.tag_links),
+    nil,
+    "docmap.tagfiles: an empty table, not nil, when opts.tag_files is unset"
+  )
+
+  local tree_miss = scan.scan({ root = root, source = "lua/demo", lua_root = "lua" })
+  tagfiles.resolve(tree_miss, {
+    root = root,
+    lua_root = "lua",
+    tag_files = { ["some.other.project"] = ext_root .. "/docs/map" },
+  })
+  eq(
+    next(tree_miss.tag_links),
+    nil,
+    "docmap.tagfiles: a prefix that matches nothing resolves nothing, not an error"
+  )
+
   -- ---------------------------------------------- symbols and subtree stats
   local sym_fixture = H.tmpfile(".lua")
   local sfw = assert(io.open(sym_fixture, "w"), "docmap spec: symbol fixture must be writable")

@@ -235,6 +235,8 @@ details>summary{cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0}
 .hedge-dep.external{stroke-dasharray:6 3;opacity:.5}
 .hnode.k-external{border-style:dashed;background:none}
 .hnode.k-external .hnm{color:var(--muted)}
+.hnode.k-external.linked{border-style:solid;border-color:var(--accent)}
+.hnode.k-external.linked .hnm{color:var(--accent)}
 .hlegend .sw.dep.external{border-top-style:dashed}
 #hext.active button{background:var(--accent-soft);color:var(--accent);font-weight:600}
 .hedge-call{stroke:var(--call);opacity:.8}
@@ -1357,12 +1359,18 @@ local JS = [[
   function boxSpec(key, view){
     if(key.indexOf("ext:") === 0){
       var mod = key.slice(4);
+      // Resolved through opts.tag_files (Doxygen TAGFILES equivalent): a box
+      // that isn't part of *this* map but is part of another project's own
+      // generated one stops being an inert dead end and opens that page.
+      var link = (IR.tag_links || {})[mod];
       return {
-        cls: "hnode k-external",
-        title: mod + " — required here but not part of this map",
+        cls: "hnode k-external" + (link ? " linked" : ""),
+        title: link
+          ? mod + " — open " + link.title + " in its own map"
+          : mod + " — required here but not part of this map",
         html: '<div class="hnm">' + esc(mod) + '</div>' +
-              '<div class="hkind">external</div>',
-        nodeId: null, recenter: null
+              '<div class="hkind">external' + (link ? " ↗" : "") + '</div>',
+        nodeId: null, recenter: null, externalHtml: link && link.html
       };
     }
     // Both class-keyed views. Inheritance boxes carry the parent list as the
@@ -2119,9 +2127,15 @@ local JS = [[
 
   hgraph.addEventListener("click", function(ev){
     var box = boxOf(ev.target);
-    // An external box has no node behind it — no id to select, nothing to
-    // re-center on. Inert rather than navigating somewhere arbitrary.
-    if(!box || !box._spec || !box._spec.nodeId) return;
+    if(!box || !box._spec) return;
+    // A tag_files-resolved external box has no node in *this* map — nothing
+    // to navigate to here — but does have another project's own generated
+    // page to open, in a new tab so the current map's state is not lost.
+    if(box._spec.externalHtml){ window.open(box._spec.externalHtml, "_blank"); return; }
+    // An unresolved external box has no node behind it at all — no id to
+    // select, nothing to re-center on. Inert rather than navigating
+    // somewhere arbitrary.
+    if(!box._spec.nodeId) return;
     navigate({ tab: "tree", id: box._spec.nodeId });
   });
 
@@ -2588,8 +2602,13 @@ function M.render(ir, findings, opts)
     nodes[#nodes + 1] = ir.nodes[id]
   end
 
-  local payload =
-    json.encode({ meta = meta, root = ir.root, nodes = nodes, edges = ir.edges or {} })
+  local payload = json.encode({
+    meta = meta,
+    root = ir.root,
+    nodes = nodes,
+    edges = ir.edges or {},
+    tag_links = ir.tag_links or {},
+  })
   -- `</script>` inside JSON would terminate the block early.
   payload = payload:gsub("</", "<\\/")
 

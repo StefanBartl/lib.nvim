@@ -23,6 +23,7 @@
 ---@field browse_command_name? string Passed to `docmap.command.setup`: register the editor-side map browser under this name. Default "LibBrowse".
 ---@field watch? boolean `install()` only: rescan on `BufWritePost` under `source/**.lua`, debounced. Default false.
 ---@field watch_ms? integer `install()` only: debounce interval for `watch`. Default 500.
+---@field tag_files? table<string, string> Doxygen `TAGFILES` equivalent: module-prefix -> another project's `docs/map`-shaped directory (must contain a committed `module_map.json`). A `requires_external` module matching the prefix resolves against that project's own artifact instead of staying an inert box. Local paths only — read synchronously during `scan_full()`, same as `opts.root` itself, so `--check` stays deterministic and offline. See `tagfiles.lua`.
 
 ---A repo-specific drift check.
 ---@alias Lib.Docmap.Check fun(ir: Lib.Docmap.IR, opts: Lib.Docmap.Opts): Lib.Docmap.Finding[]
@@ -243,6 +244,14 @@
 ---@field schema integer IR schema version.
 ---@field counts table<string, integer> Node counts per kind.
 
+---A `requires_external` module resolved against another project's own
+---committed docmap artifact (`opts.tag_files`) — Doxygen `TAGFILES`
+---equivalent. `html` is a path to that project's generated page with a bare
+---`#<node id>` fragment, the same shorthand a hand-typed or shared link uses.
+---@class Lib.Docmap.TagLink
+---@field title string The resolved node's `module` (or `name` if declared none).
+---@field html string Path to the external project's `index.html`, with a `#<node id>` fragment.
+
 ---The intermediate representation every renderer and check reads.
 ---@class Lib.Docmap.IR
 ---@field meta Lib.Docmap.Meta
@@ -250,6 +259,7 @@
 ---@field order string[] All node ids in deterministic walk order.
 ---@field nodes table<string, Lib.Docmap.Node>
 ---@field edges Lib.Docmap.Edge[] Type-reference edges from LuaLS enrichment. Always an array, empty when `opts.luals` did not run.
+---@field tag_links table<string, Lib.Docmap.TagLink> `requires_external` modules resolved through `opts.tag_files`. Always a table, empty when `opts.tag_files` is unset or nothing resolved — unlike `types_detail`, resolving is local and cheap, so there is no "did this run" question worth a nil.
 
 ---A live handle returned by `docmap.install()`. Keeps a scanned IR in memory
 ---and, optionally, keeps it fresh — the object-in-source-code counterpart to
