@@ -157,6 +157,18 @@ details>summary{cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0}
 .nlist .nwhere{font-family:var(--mono);font-size:11px;color:var(--muted);margin-left:8px}
 .nlist .ntext{font-size:12.5px;color:var(--ink);margin-top:2px}
 .nlist .ntext.none{color:var(--muted);font-style:italic}
+#view-index{padding:22px 26px 60px}
+#view-index h3{margin:22px 0 6px;font-size:15px;font-weight:700;color:var(--accent);
+  font-family:var(--mono);border-bottom:1px solid var(--line);padding-bottom:3px}
+.ixjump{display:flex;flex-wrap:wrap;gap:3px;margin:0 0 6px;position:sticky;top:0;
+  background:var(--bg);padding:6px 0;z-index:2}
+.ixjump a{font-family:var(--mono);font-size:12px;padding:2px 7px;border-radius:5px;
+  border:1px solid var(--line);color:var(--accent);cursor:pointer;text-decoration:none}
+.ixjump a:hover{border-color:var(--accent);background:var(--accent-soft)}
+.ixlist li{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding:3px 0}
+.ixtag{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+  border:1px solid var(--line);border-radius:4px;padding:0 4px}
+.ixtag.dep{color:var(--error);border-color:var(--error)}
 #view-hierarchy{padding:16px 24px 60px}
 .hctl{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
 .hctl .hpath{font-family:var(--mono);font-size:12.5px;color:var(--muted);word-break:break-all}
@@ -472,11 +484,11 @@ local JS = [[
     var parts = ["tab=" + encodeURIComponent(s.tab)];
     if(s.tab === "tree"){
       if(s.id) parts.push("id=" + encodeURIComponent(s.id));
-    } else if(s.tab === "notes"){
-      // Nothing else to carry: the Notes tab is one flat aggregate over the
-      // whole map, with no center, view or direction to remember. Falling
-      // through to the hierarchy branch would put a `view=modules` in every
-      // shared Notes link that means nothing there.
+    } else if(s.tab === "notes" || s.tab === "index"){
+      // Nothing else to carry: both are flat aggregates over the whole map,
+      // with no center, view or direction to remember. Falling through to the
+      // hierarchy branch would put a `view=modules` in every shared link that
+      // means nothing there.
       void 0;
     } else {
       if(s.center) parts.push("center=" + encodeURIComponent(s.center));
@@ -538,10 +550,12 @@ local JS = [[
     document.getElementById("view-tree").classList.toggle("active", s.tab === "tree");
     document.getElementById("view-hierarchy").classList.toggle("active", s.tab === "hierarchy");
     document.getElementById("view-notes").classList.toggle("active", s.tab === "notes");
+    document.getElementById("view-index").classList.toggle("active", s.tab === "index");
 
     if(s.tab === "tree" && s.id && byId[s.id]) selectRow(s.id);
     if(s.tab === "hierarchy") drawHierarchy(s.center || IR.root, s.view || "modules");
     if(s.tab === "notes") drawNotes();
+    if(s.tab === "index") drawIndex();
     syncGraphControls(s);
 
     var hash = serializeState(s);
@@ -1644,6 +1658,98 @@ local JS = [[
     });
   }
 
+  // =====================================================================
+  // Index tab: Doxygen's "File Members" — every documented function in the
+  // tree, A–Z, without walking the module hierarchy to find it.
+  //
+  // Sorted on the *bare* name (`M.read` files under R, not M), because the
+  // `M.` is this repo's local-table convention rather than part of what the
+  // function is called — filing 900 functions under "M" would be an index in
+  // name only. `calls.lua` needed the same reduction and its `bare()` is the
+  // model here.
+  //
+  // The Tree tab already filters and the picker already fuzzy-matches; what
+  // neither gives you is the flat alphabet, which is the one way to find
+  // something whose module you do not know.
+  // =====================================================================
+  function bareName(name){ return (name.match(/[\w]+$/) || [name])[0]; }
+
+  var indexDrawn = false;
+  function drawIndex(){
+    if(indexDrawn) return; // static over one IR
+    indexDrawn = true;
+
+    var entries = [];
+    IR.nodes.forEach(function(n){
+      (n.functions || []).forEach(function(fn){
+        entries.push({ node: n, fn: fn, bare: bareName(fn.name) });
+      });
+    });
+    entries.sort(function(a, b){
+      var ab = a.bare.toLowerCase(), bb = b.bare.toLowerCase();
+      if(ab !== bb) return ab < bb ? -1 : 1;
+      // Same name in two modules is common (`M.setup` everywhere); the module
+      // is what tells them apart, so it is the tiebreak rather than leaving
+      // the order to table.sort's discretion.
+      var am = a.node.module || a.node.path, bm = b.node.module || b.node.path;
+      return am < bm ? -1 : (am > bm ? 1 : 0);
+    });
+
+    var host = document.getElementById("view-index");
+    if(entries.length === 0){
+      host.innerHTML = '<p class="ntext none">This map contains no documented functions.</p>';
+      return;
+    }
+
+    // Letter buckets, plus a jump bar. Non-alphabetic leaders (a leading
+    // underscore) collect under "#" rather than being dropped or inventing a
+    // letter for them.
+    var buckets = {}, order = [];
+    entries.forEach(function(e){
+      var c = e.bare.charAt(0).toUpperCase();
+      if(!/[A-Z]/.test(c)) c = "#";
+      if(!buckets[c]){ buckets[c] = []; order.push(c); }
+      buckets[c].push(e);
+    });
+    order.sort();
+
+    var parts = [];
+    parts.push('<p class="nsub">' + entries.length +
+      ' documented functions, filed under the last segment of the declared name' +
+      ' (<code>M.read</code> sorts under R).</p>');
+    parts.push('<div class="ixjump">' + order.map(function(c){
+      return '<a data-jump="' + esc(c) + '">' + esc(c) + '</a>';
+    }).join("") + "</div>");
+
+    order.forEach(function(c){
+      parts.push('<h3 id="ix-' + esc(c) + '">' + esc(c) +
+        '<span class="ncount">' + buckets[c].length + '</span></h3>');
+      parts.push('<ul class="nlist ixlist">');
+      buckets[c].forEach(function(e){
+        parts.push('<li><a class="nfn" data-node="' + esc(e.node.id) + '">' +
+          esc(e.fn.signature) + '</a>' +
+          (e.fn.internal ? '<span class="ixtag">internal</span>' : '') +
+          (e.fn.deprecated ? '<span class="ixtag dep">deprecated</span>' : '') +
+          '<span class="nwhere">' + esc(e.node.module || e.node.path) +
+          ':' + e.fn.line + '</span></li>');
+      });
+      parts.push("</ul>");
+    });
+    host.innerHTML = parts.join("");
+
+    host.querySelectorAll(".nfn").forEach(function(a){
+      a.addEventListener("click", function(){
+        navigate({ tab: "tree", id: a.dataset.node });
+      });
+    });
+    host.querySelectorAll("[data-jump]").forEach(function(a){
+      a.addEventListener("click", function(){
+        var h = document.getElementById("ix-" + a.dataset.jump);
+        if(h) h.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  }
+
   function drawHierarchy(centerId, view){
     view = VIEWS[view] ? view : "modules";
     hcenter = (centerId && byId[centerId]) ? centerId : (hcenter && byId[hcenter] ? hcenter : IR.root);
@@ -2550,6 +2656,7 @@ function M.render(ir, findings, opts)
     '<button class="tab-btn active" data-tab="tree">Tree</button>',
     '<button class="tab-btn" data-tab="hierarchy">Hierarchy</button>',
     '<button class="tab-btn" data-tab="notes">Notes</button>',
+    '<button class="tab-btn" data-tab="index">Index</button>',
     "</div>",
 
     '<div class="toolbar">',
@@ -2596,6 +2703,7 @@ function M.render(ir, findings, opts)
     "</div>",
 
     '<div id="view-notes" class="view"></div>',
+    '<div id="view-index" class="view"></div>',
 
     '<div id="findings"><details><summary>Drift findings (',
     tostring(#findings),
