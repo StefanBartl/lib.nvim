@@ -6,8 +6,8 @@ actually useful for a Lua utility library — hierarchy, module purpose, links,
 type relationships, and drift detection.
 
 The generated map for this repo lives in [`docs/map/`](../../../../docs/map/):
-[`index.html`](../../../../docs/map/index.html) (interactive — Tree, Hierarchy
-and Notes tabs) and [`overview.md`](../../../../docs/map/overview.md) (renders
+[`index.html`](../../../../docs/map/index.html) (interactive — Tree, Hierarchy,
+Notes and Index tabs) and [`overview.md`](../../../../docs/map/overview.md) (renders
 on GitHub).
 
 ## Usage
@@ -223,7 +223,7 @@ else — module prefix, directory layout, types directory name — is an option.
 | Graph | [`calls.lua`](calls.lua) | `kind="call"` edges — which function calls which |
 | LuaLS (opt-in) | [`luals.lua`](luals.lua) | class/alias detail + `kind="type"` and `kind="extends"` edges merged into the IR |
 | Check | [`check.lua`](check.lua) | `Lib.Docmap.Finding[]` — documentation drift |
-| Render | [`render/`](render/) | HTML (Tree + Hierarchy + Notes tabs), Markdown, Mermaid, DOT |
+| Render | [`render/`](render/) | HTML (Tree + Hierarchy + Notes + Index tabs), Markdown, Mermaid, DOT |
 | Encode | [`json.lua`](json.lua) | deterministic JSON |
 | Diff | [`diff.lua`](diff.lua) | `Lib.Docmap.Diff` — what one revision changed about the shape |
 | Live | [`registry.lua`](registry.lua) | `install()`/`uninstall()` — an in-memory `Handle` instead of files |
@@ -699,6 +699,23 @@ themselves rather than rendering blank.
 Deliberately **not** modelled as `check` findings. None of these is drift or
 an error, and routing them through findings would fold an author's own to-do
 list into the exit code CI fails on.
+
+## Index tab
+
+Doxygen's "File Members": every documented function in the tree, A–Z, with a
+letter jump bar — 976 of them for lib.nvim. Clicking one opens its module in
+the Tree tab; `@internal` and `@deprecated` entries are tagged inline.
+
+Sorted on the **bare** name, so `M.read` files under **R**. The `M.` is this
+repo's local-table convention rather than part of what the function is called,
+and filing 555 of 976 functions under a single "M" would be an index in name
+only. `calls.lua` needed the same reduction for call resolution; its `bare()`
+is the model. A name that starts with something non-alphabetic (`_evict`)
+collects under `#` rather than being dropped.
+
+It earns a tab next to the Tree's filter and the picker's fuzzy match because
+neither of those gives you the flat alphabet — which is the one way to find a
+function whose module you do not already know.
 
 ## Drift checks
 
