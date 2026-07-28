@@ -11,6 +11,7 @@
 ---@field out_dir? string Where the artifact lives, relative to `root`. Default "docs/map".
 ---@field live? boolean Install a watching `docmap.install()` handle instead of reading the artifact — costs a full scan up front, but the view then updates on write. Default false.
 ---@field center? string Node id or `@module` path to open centered on. Default: the map's root.
+---@field mode? Lib.Docmap.Browse.Mode Which list to open on. Default "structure".
 ---@field depth? integer Initial Deps walk depth. Default 2.
 ---@field theme? Lib.UI.Kit.ThemeArg Passed through to the kit layout.
 ---@field width? number Fraction of the editor the whole layout uses. Default 0.86.
@@ -23,12 +24,16 @@
 ---| "deps"      # Require edges, walked to `depth` in `dir`.
 ---| "calls"     # Call edges touching the centered node/function.
 ---| "types"     # `@class`/`@alias` declared by the centered node.
+---| "history"   # Commits, and the functions each one's diff touches.
 
 ---One row of the list. Everything the row can *do* — navigate, open source,
 ---go into the quickfix list — is a field here rather than something re-derived
 ---from the rendered text, so the label stays purely presentational.
 ---@class Lib.Docmap.Browse.Entry
----@field kind "node"|"function"|"type"|"external"|"message"
+---@field kind "node"|"function"|"type"|"external"|"message"|"commit"
+---@field sha string? Full commit hash, for `kind="commit"`.
+---@field commit table? The `{ sha, short, author, date, subject }` record behind a `kind="commit"` row.
+---@field callers Lib.Docmap.History.Caller[]? Direct callers of a touched function, in History mode — carried on the entry so the detail pane needs no second lookup against an IR that may not describe that revision.
 ---@field label string Rendered text, including any indent/icon.
 ---@field id string? Node id this row refers to.
 ---@field fn string? Declared function name, for `kind="function"`.

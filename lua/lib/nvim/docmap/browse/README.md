@@ -6,6 +6,7 @@
 :LibBrowse                  " read docs/map/module_map.json (~10ms)
 :LibBrowse live             " install a watching handle instead (~0.65s once)
 :LibBrowse lib.nvim.fs      " open centered on a module
+:LibBrowse history          " open on the commit list
 :LibBrowse live lib.nvim.fs
 ```
 
@@ -75,7 +76,7 @@ place, keeping its subscribers.
 
 | Key | Effect |
 | --- | --- |
-| `1` … `4` | Structure / Deps / Calls / Types |
+| `1` … `5` | Structure / Deps / Calls / Types / History |
 | `j` `k` | Move; the detail pane follows |
 | `<CR>` | Descend a level (Structure) or follow the edge (Deps/Calls) |
 | `-` / `<BS>` | Up a level |
@@ -86,6 +87,7 @@ place, keeping its subscribers.
 | `gq` | Current list into the quickfix list |
 | `gI` | Blast radius of the selected node into the quickfix list |
 | `gO` | Open the generated page at this exact position |
+| `gD` | The opened commit's diff in a scratch buffer (History) |
 | `/` | Fuzzy jump across every module and function |
 | `q` `<Esc>` | Close |
 
@@ -123,6 +125,44 @@ mode, center, direction, depth and function; the page's whole state lives in
 its URL fragment. So it is a `format()` and the existing opener, and it
 answers "actually, I want to see that as a picture" without having to find the
 place again.
+
+## History mode
+
+```vim
+:LibBrowse history          " open straight on the commit list
+```
+
+The one mode whose data does not come from the IR. It has two levels:
+
+1. **The commit list** — `git log`, newest first.
+2. **What one commit touched** — `<CR>` on a commit maps its diff hunks onto
+   function spans and lists the functions the changed lines fall inside, each
+   with its direct caller count.
+
+`<CR>` on one of those functions leaves History for **Calls, incoming** — the
+question History is asking is "who is affected by this", and Calls-in is the
+mode that already answers it. `-` goes back to the commit list.
+
+Two warnings can appear in the detail pane, and both are the reason the
+analysis is trustworthy rather than merely plausible:
+
+- *"predates the committed map"* — that revision has no `docs/map` artifact,
+  so nothing could be attributed to functions and only the changed files are
+  known.
+- *"spans were approximated"* — the artifact at that revision has no
+  `line_end`, so a function's extent was taken as reaching to the next one.
+  That over-attributes into the gaps between functions rather than
+  under-attributing, which is the safe direction, but it is a guess and says
+  so.
+
+Changed paths nothing could be attributed to are listed at the end as
+non-navigable rows. They are why the list is shorter than the diff looks, and
+hiding them would make that look like a bug.
+
+Git runs in `init.lua`, never in `view.lua` — the analysis lands on the state
+(`st.commits`, `st.impact`) and `view` renders it like any other mode. That is
+what keeps the mode testable headlessly; see
+[`history.lua`](../history.lua) for the attribution itself.
 
 ## Layout
 

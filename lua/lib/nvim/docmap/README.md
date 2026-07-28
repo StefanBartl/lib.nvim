@@ -31,6 +31,7 @@ on GitHub).
 :LibBrowse                 " navigate the same map inside the editor
 :LibBrowse live            " …re-scanning on every write
 :LibBrowse lib.nvim.fs     " …opened on one module
+:LibBrowse history         " …opened on the commit list
 ```
 
 `:LibBrowse` is the editor-side counterpart to the generated page — a
@@ -205,6 +206,14 @@ functions). Module chips link into the Tree like any other cross-reference,
 but only when the node still exists in the *current* map — a commit can name
 something since renamed, and a link that navigates nowhere is worse than
 plain text saying so.
+
+**The editor gets the same thing without a server.** `:LibBrowse history` is
+the fifth `:LibBrowse` mode and calls git directly, so none of the origin
+problem above applies to it — the server exists to get the browser past a
+restriction the editor never had. Both read the same
+[`history.lua`](history.lua) analysis and show the same two caveats, so their
+answers agree by construction rather than by review. See
+[browse/README.md](browse/README.md).
 
 `dot` is the third renderer for the same edges, and it exists because the
 other two cannot do what Graphviz does: the HTML page lays boxes out in BFS

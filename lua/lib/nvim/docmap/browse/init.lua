@@ -18,10 +18,11 @@
 ---   :LibBrowse            read docs/map/module_map.json (~10ms)
 ---   :LibBrowse live       install a watching handle instead (~0.65s once)
 ---   :LibBrowse lib.nvim.fs   open centered on a module
+---   :LibBrowse history    open on the commit list
 ---
---- Keys: 1..4 modes · j/k move · <CR> descend · -/<BS> up · <C-o>/<C-i>
+--- Keys: 1..5 modes · j/k move · <CR> descend · -/<BS> up · <C-o>/<C-i>
 --- history · h/l direction · +/_ depth · gd source · gq quickfix · gI impact
---- · gO open the page here · / search · q close.
+--- · gO open the page here · gD the opened commit's diff · / search · q close.
 
 require("lib.nvim.docmap.browse.@types")
 
@@ -39,7 +40,109 @@ local M = {}
 ---@type table|nil
 local state = nil
 
-local MODES = { "structure", "deps", "calls", "types" }
+local MODES = { "structure", "deps", "calls", "types", "history" }
+
+-- ── History mode: the git half ──────────────────────────────────────────────
+--
+-- `view.lua` is pure and stays that way, so everything that shells out lives
+-- here and hands the results over on the state. Same split as `history.lua`
+-- (pure) plus `command.lua` (git) — and the same reason: the mode logic is
+-- then testable headlessly without a repository.
+
+---@param st table
+---@param args string[]
+---@return string|nil stdout
+---@return string|nil err
+local function git(st, args)
+  local cmd = { "git" }
+  vim.list_extend(cmd, args)
+  local proc = vim.system(cmd, { cwd = st.opts.root, text = true }):wait()
+  if proc.code ~= 0 then
+    return nil, vim.trim(proc.stderr or "git failed")
+  end
+  return proc.stdout or ""
+end
+
+---Load the commit list once per session. Cached on the state: it is the same
+---list every time the mode is entered, and re-running `git log` on each `5`
+---keypress would make the mode feel slower than it is.
+---@param st table
+local function load_commits(st)
+  if st.commits then
+    return
+  end
+  -- Unit/record separators, not a printable delimiter: a subject can contain
+  -- whatever character looked safe.
+  local out, err =
+    git(st, { "log", "-n", "200", "--date=short", "--format=%H%x1f%h%x1f%an%x1f%ad%x1f%s%x1e" })
+  if not out then
+    st.commits = {}
+    notify.warn("git log failed: " .. tostring(err))
+    return
+  end
+
+  local commits = {}
+  for record in out:gmatch("([^\30]+)") do
+    local rec = vim.trim(record)
+    if rec ~= "" then
+      local f = vim.split(rec, "\31", { plain = true })
+      if #f >= 5 then
+        commits[#commits + 1] =
+          { sha = f[1], short = f[2], author = f[3], date = f[4], subject = f[5] }
+      end
+    end
+  end
+  st.commits = commits
+end
+
+---Analyse one commit: its diff, the artifacts either side of it, and the
+---pure `history.analyze` over both.
+---
+---`git show` rather than `git diff <sha>^ <sha>` because it also handles the
+---root commit, which has no parent to name. Excluding `out_dir` is not
+---cosmetic: measured here, a commit's full diff is 4.8 MB of which all but
+---~16 KB is the regenerated map.
+---@param st table
+---@param sha string
+local function load_impact(st, sha)
+  local out_dir = st.opts.out_dir or "docs/map"
+
+  local diff_text, derr = git(st, {
+    "show",
+    "--unified=0",
+    "--format=",
+    sha,
+    "--",
+    ".",
+    (":(exclude)%s"):format(out_dir),
+  })
+  if not diff_text then
+    notify.warn("git show failed: " .. tostring(derr))
+    st.impact = nil
+    return
+  end
+  st.diff_text = diff_text
+
+  ---@param rev string
+  ---@return Lib.Docmap.IR|nil
+  local function ir_at(rev)
+    local rel = out_dir .. "/module_map.json"
+    local raw = git(st, { "show", ("%s:%s"):format(rev, rel) })
+    if not raw or raw == "" then
+      return nil
+    end
+    local ok, doc = pcall(vim.json.decode, raw, { luanil = { object = true, array = true } })
+    if not ok or type(doc) ~= "table" or type(doc.nodes) ~= "table" then
+      return nil
+    end
+    return require("lib.nvim.docmap.browse.source").rehydrate(doc)
+  end
+
+  local ir_after = ir_at(sha)
+  local ir_before = ir_at(sha .. "^")
+  st.impact_has_map = ir_after ~= nil
+  st.impact = require("lib.nvim.docmap.history").analyze(diff_text, ir_after, ir_before)
+end
 
 ---@return boolean
 function M.is_open()
@@ -65,6 +168,21 @@ end
 
 ---@param st table
 local function render(st)
+  -- History's data comes from git, not the IR, so it is fetched here rather
+  -- than in `go`: `<C-o>` restores a `sha` straight onto the state without
+  -- passing through `go` at all, and the analysis has to follow it. Keyed on
+  -- `impact_sha` so stepping back onto a commit already looked at costs
+  -- nothing.
+  if st.mode == "history" then
+    load_commits(st)
+    if st.sha and st.impact_sha ~= st.sha then
+      load_impact(st, st.sha)
+      st.impact_sha = st.sha
+    elseif not st.sha then
+      st.impact, st.impact_sha, st.impact_has_map, st.diff_text = nil, nil, nil, nil
+    end
+  end
+
   st.entries = view.entries(st.ir, st)
 
   if st.cursor > #st.entries then
@@ -125,10 +243,26 @@ local function snapshot(st)
     dir = st.dir,
     depth = st.depth,
     cursor = st.cursor,
+    sha = st.sha,
   }
 end
 
-local SNAP_KEYS = { "mode", "id", "fn", "dir", "depth", "cursor" }
+-- `sha` travels with the trail so `<C-o>` out of a commit lands back on the
+-- list rather than on the same commit with a different cursor. The analysis
+-- itself is not snapshotted — it is derived, and re-deriving on the way back
+-- is cheaper than carrying a copy of it per history entry.
+local SNAP_KEYS = { "mode", "id", "fn", "dir", "depth", "cursor", "sha" }
+
+--- A patch cannot say "clear this field" with `nil`: `pairs` never yields a
+--- key whose value is nil, so `{ sha = nil }` *is* the empty table and the
+--- move silently keeps the old value. Found the honest way — `-` out of an
+--- opened commit redrew the same function list, because `go` had been handed
+--- nothing at all. Hence a sentinel.
+local CLEAR = setmetatable({}, {
+  __tostring = function()
+    return "<clear>"
+  end,
+})
 
 ---Keep the entry for the position being left in step with the window before
 ---moving off it, so coming back restores the row the user was actually on
@@ -161,7 +295,11 @@ local function go(st, changes)
   end
 
   for k, v in pairs(changes) do
-    st[k] = v
+    if v == CLEAR then
+      st[k] = nil
+    else
+      st[k] = v
+    end
   end
   if changes.cursor == nil then
     st.cursor = 1
@@ -196,10 +334,24 @@ local function enter(st)
     return
   end
 
+  -- History descends within its own mode first: commit → the functions it
+  -- touched. Only from there does `<CR>` leave for the call graph.
+  if e.kind == "commit" and e.sha then
+    go(st, { sha = e.sha })
+    return
+  end
+  if st.mode == "history" and st.sha and e.kind == "function" and e.id and e.fn then
+    -- `dir = "in"` because the question the History mode is asking is "who
+    -- calls the thing that changed" — leaving on `out` would answer a
+    -- question nobody was on this screen to ask.
+    go(st, { mode = "calls", id = e.id, fn = e.fn, dir = "in", sha = CLEAR })
+    return
+  end
+
   if e.kind == "node" and e.id then
     -- In deps/calls, following an edge re-centers on the far node while
     -- keeping the mode — that *is* "follow the edge".
-    go(st, { id = e.id, fn = nil })
+    go(st, { id = e.id, fn = CLEAR })
   elseif e.kind == "function" and e.id and e.fn then
     go(st, { mode = "calls", id = e.id, fn = e.fn, dir = "out" })
   end
@@ -207,8 +359,14 @@ end
 
 ---@param st table
 local function up(st)
+  -- In History, "out" is the commit list, not the parent node — the node
+  -- hierarchy has nothing to do with what this mode is showing.
+  if st.mode == "history" and st.sha then
+    go(st, { sha = CLEAR })
+    return
+  end
   if st.fn then
-    go(st, { fn = nil, mode = st.mode == "calls" and "structure" or st.mode })
+    go(st, { fn = CLEAR, mode = st.mode == "calls" and "structure" or st.mode })
     return
   end
   local node = st.ir.nodes[st.id]
@@ -322,6 +480,41 @@ local function impact_to_quickfix(st)
   vim.cmd("copen")
 end
 
+---`gD` — the opened commit's diff in a scratch buffer.
+---
+---A buffer rather than a pane: the diff is the one part of this that is
+---ordinary text a reader wants to scroll, search and yank, and Neovim already
+---does all three better than a third list column would. `filetype=diff` gets
+---the syntax highlighting for free.
+---
+---The view closes first, for the same reason `gd` and `gq` close it: the
+---floats cover the editor, and putting a buffer *behind* them would be a jump
+---to somewhere the reader cannot see.
+---@param st table
+local function show_diff(st)
+  if st.mode ~= "history" or not st.sha then
+    notify.warn("gD shows a commit's diff — open one in History mode (5) first")
+    return
+  end
+  local text = st.diff_text
+  if not text or vim.trim(text) == "" then
+    notify.info("that commit changed nothing outside the generated map")
+    return
+  end
+
+  local sha = st.sha
+  M.close()
+  vim.cmd("enew")
+  local buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(text, "\n", { plain = true }))
+  vim.bo[buf].filetype = "diff"
+  vim.bo[buf].buftype = "nofile"
+  vim.bo[buf].bufhidden = "hide"
+  vim.bo[buf].swapfile = false
+  vim.bo[buf].modifiable = false
+  pcall(vim.api.nvim_buf_set_name, buf, ("docmap://diff/%s"):format(sha:sub(1, 10)))
+end
+
 ---`gO` — hand the current position over to the generated HTML page.
 ---
 ---The navigator knows mode, center, direction, depth and function; the page's
@@ -397,7 +590,7 @@ local function search(st)
       if hit.fn then
         go(st, { mode = "calls", id = hit.id, fn = hit.fn, dir = "out" })
       else
-        go(st, { mode = "structure", id = hit.id, fn = nil })
+        go(st, { mode = "structure", id = hit.id, fn = CLEAR })
       end
       st.slots.list:focus()
     end,
@@ -420,7 +613,10 @@ local function bind(st)
   for i, mode in ipairs(MODES) do
     map("n", tostring(i), function()
       if st.mode ~= mode then
-        go(st, { mode = mode })
+        -- Leaving History drops the opened commit: coming back should land on
+        -- the list, and a stale `sha` would otherwise make mode `5` reopen a
+        -- commit the reader had already navigated away from.
+        go(st, { mode = mode, sha = CLEAR })
       end
     end, mo)
   end
@@ -500,6 +696,9 @@ local function bind(st)
   end, mo)
   map("n", "gO", function()
     open_in_browser(st)
+  end, mo)
+  map("n", "gD", function()
+    show_diff(st)
   end, mo)
   map("n", "/", function()
     search(st)
@@ -591,7 +790,7 @@ function M.open(opts)
     handle = handle,
     group = group,
     slots = group.slots,
-    mode = "structure",
+    mode = opts.mode or "structure",
     id = center,
     fn = nil,
     dir = "out",
