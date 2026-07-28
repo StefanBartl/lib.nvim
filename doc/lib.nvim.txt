@@ -201,8 +201,9 @@ Neovim adapters.
                            and SVG export; search re-centers it, findings and
                            real browser Back/Forward are wired up; Notes lists
                            @deprecated/@todo/@bug/@test, Index is an A-Z
-                           function list) plus Markdown/Mermaid (incl. a
-                           dependency graph the code host renders itself).
+                           function/module list with a toggle between the
+                           two) plus Markdown/Mermaid (incl. a dependency
+                           graph the code host renders itself).
                            :LibMap regenerates, :LibMap check sends drift to
                            the quickfix list, :LibMap full adds the LuaLS
                            enrichment, :LibMap graph deps|calls [module] opens
