@@ -457,44 +457,104 @@ local function check_undocumented_params(ir, findings)
   end
 end
 
---- A function with no `kind="call"` edge pointing at it in the whole tree
---- *is* a dead-code candidate — but a library is made of functions with no
---- *internal* caller by design (that is what "public API" means), so
---- reporting every one of them would flag half the exported surface and get
---- switched off immediately. Only two categories are checked unconditionally,
---- because both are dead by construction if uncalled: a `local function` at
---- module scope (never part of any export table, so nothing outside the file
---- could reach it either) and anything tagged `@internal` (the author's own
---- claim that it is implementation, not surface). Everything else — an
---- ordinary exported, non-`@internal` function — is only checked when
---- `opts.dead_code = true`. Always "info", never "warn"/"error": dynamic
---- dispatch (`M[name]()`, callbacks stashed in a table, `vim.schedule(fn)`,
---- the lazy/metatable strategies in `lib.nvim.require`) is invisible to the
---- call graph, the same reasoning `calls.lua`'s own header gives for never
---- letting a call edge back an `error`-severity check.
+--- Functions nothing appears to use.
+---
+--- The trap this check is built around, stated plainly: **a library consists
+--- of functions with no internal caller by design.** That is what a library
+--- is. A naive "no callers ⇒ dead" would report most of the published API of
+--- any tree worth mapping, and be switched off the same day. So it fires in
+--- two tiers.
+---
+--- Always on, because there the statement holds:
+---   * a **file-local** function (`local function foo`) that its own file
+---     never mentions again, and that no call edge reaches;
+---   * an `@internal` function no call edge reaches — the tag is the author
+---     saying this is not surface, so "nobody calls it" is a real finding.
+---
+--- Only with `opts.dead_code`, because there it is a question rather than an
+--- answer: any other function with no caller in the tree.
+---
+--- Three things deliberately count as "used", each because it would otherwise
+--- produce a confident wrong answer:
+---   * `local_refs` — a function passed as a *value* (`vim.system(cmd,
+---     on_exit)`) has no call site naming it, and flagging every callback in
+---     the tree is exactly the failure this check must not have;
+---   * a heuristic call edge, even though it is a guess — for *this* question
+---     a guess that something is used is the safe direction;
+---   * being someone's `@see` target, which is a documented relationship.
+---
+--- A colon-declared method (`function Lru:put()`) is qualified on a table
+--- exactly as `M.foo` is, just spelled with `:` — not a private local.
+--- Treating it as file-local would be doubly wrong: not only is it not
+--- private, but `calls.lua`'s callee resolution has no case for method-call
+--- syntax at all (`self:put(...)` never becomes a call edge, colon call
+--- sites are structurally invisible to it), so every colon method in the
+--- tree would be misreported as dead the moment its only callers use `:`.
+--- Verified against this repo's own `Lru:get`/`Lru:put`
+--- (`lua/lib/lua/memo/lru.lua`), which are the public API and are called
+--- only from other files, only via `:` — an earlier name-shape heuristic
+--- here (`"^%u[%w_]*%."`, requiring a literal dot) flagged both as dead by
+--- default; run against this tree it produced 76 findings where checking the
+--- declared name for `:` as well as `.` produces 0.
+---
+--- Never above `info`, and never a reason for `--check` to fail: dynamic
+--- dispatch is invisible to the scanner (`lib.nvim.require`'s metatable and
+--- lazy strategies call things that appear nowhere in the source), so a
+--- confident verdict here is not available at any severity.
 ---@param ir Lib.Docmap.IR
 ---@param findings Lib.Docmap.Finding[]
 ---@param opts Lib.Docmap.Opts
 local function check_dead_functions(ir, findings, opts)
   local called = {}
-  for _, edge in ipairs(ir.edges or {}) do
-    if edge.kind == "call" and edge.to and edge.to_fn then
-      called[edge.to .. "#" .. edge.to_fn] = true
+  for _, e in ipairs(ir.edges or {}) do
+    if e.kind == "call" and e.to and e.to_fn then
+      called[e.to .. "#" .. e.to_fn] = true
+    end
+  end
+
+  -- Anything a `@see` points at is documented as related, which is a use.
+  local seen_by_see = {}
+  for _, id in ipairs(ir.order) do
+    local node = ir.nodes[id]
+    for _, fn in ipairs(node.functions) do
+      for _, target in ipairs(fn.see or {}) do
+        seen_by_see[target] = true
+      end
     end
   end
 
   for _, id in ipairs(ir.order) do
     local node = ir.nodes[id]
     for _, fn in ipairs(node.functions) do
-      -- This repo's universal convention (also relied on by
-      -- check_see_targets/check_undocumented_params): a name qualified on a
-      -- capitalized local table, `M.foo`, is exported; a bare name,
-      -- `bare_helper`, is a top-level `local function` and reaches nothing
-      -- outside its own file.
-      local exported = fn.name:match("^%u[%w_]*%.") ~= nil
-      local always_checked = fn.internal or not exported
-      if (always_checked or opts.dead_code) and not called[id .. "#" .. fn.name] then
-        add(findings, "info", "dead-function", id, ("%s has no caller in the tree"):format(fn.name))
+      local key = id .. "#" .. fn.name
+      local bare = fn.name:match("([%w_]+)$") or fn.name
+      local file_local = not fn.name:find("[.:]")
+      -- `local_refs` has to count as "used" here, not only inside the
+      -- file-local branch below: a function bound as a callback
+      -- (`vim.system(cmd, on_exit)`) never gets a call edge no matter how
+      -- public its name is, and with `opts.dead_code` on, the third tier
+      -- below fires on *any* unused function — it would have reported every
+      -- callback in the tree passed by value, which is precisely the
+      -- confident-wrong-answer this check exists to avoid.
+      local used = called[key]
+        or seen_by_see[fn.name]
+        or seen_by_see[bare]
+        or (node.module and seen_by_see[node.module .. "." .. bare])
+        or (fn.local_refs or 0) > 0
+
+      if not used then
+        local why
+        if file_local then
+          why = "is file-local and nothing in its own file mentions it"
+        elseif fn.internal then
+          why = "is marked @internal and nothing in the tree calls it"
+        elseif opts.dead_code then
+          why = "has no caller anywhere in the tree"
+        end
+
+        if why then
+          add(findings, "info", "dead-function", id, ("%s %s"):format(fn.name, why))
+        end
       end
     end
   end

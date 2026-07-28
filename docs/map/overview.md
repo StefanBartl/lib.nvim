@@ -477,7 +477,7 @@ flowchart LR
 
 ## Drift
 
-0 errors · 10 warnings · 164 info
+0 errors · 10 warnings · 88 info
 
 | Severity | Check | Message |
 |---|---|---|
@@ -493,93 +493,17 @@ flowchart LR
 | warn | `missing-summary` | lua/lib/nvim/normalize/validators.lua has ---@module but no description line |
 
 <details>
-<summary>164 informational findings</summary>
+<summary>88 informational findings</summary>
 
 
 | Check | Message |
 |---|---|
-| `dead-function` | escape_char has no caller in the tree |
-| `dead-function` | lr has no caller in the tree |
-| `dead-function` | new_lru has no caller in the tree |
-| `dead-function` | Lru:put has no caller in the tree |
-| `dead-function` | Lru:_evict has no caller in the tree |
-| `dead-function` | Lru:_move_front has no caller in the tree |
-| `dead-function` | Lru:get has no caller in the tree |
-| `dead-function` | default_keyer has no caller in the tree |
-| `dead-function` | escape_lua_pattern has no caller in the tree |
-| `dead-function` | create_timer has no caller in the tree |
-| `dead-function` | insert_lines has no caller in the tree |
-| `dead-function` | run_with_stdin has no caller in the tree |
-| `dead-function` | is_windows has no caller in the tree |
-| `dead-function` | join has no caller in the tree |
-| `dead-function` | collapse_segments has no caller in the tree |
-| `dead-function` | split_segments has no caller in the tree |
-| `dead-function` | detect_root has no caller in the tree |
-| `dead-function` | validate has no caller in the tree |
-| `dead-function` | looks_like_url has no caller in the tree |
-| `dead-function` | wsl_to_win_path has no caller in the tree |
-| `dead-function` | uv has no caller in the tree |
-| `dead-function` | spawn_project_command has no caller in the tree |
-| `dead-function` | line_splitter has no caller in the tree |
-| `dead-function` | uv has no caller in the tree |
-| `dead-function` | new has no caller in the tree |
-| `dead-function` | in_scope has no caller in the tree |
-| `dead-function` | strip_trailing_slash has no caller in the tree |
-| `dead-function` | ends_with_separator has no caller in the tree |
-| `dead-function` | validate_segments has no caller in the tree |
-| `dead-function` | uv has no caller in the tree |
-| `dead-function` | split_root has no caller in the tree |
-| `dead-function` | strlen has no caller in the tree |
-| `dead-function` | split has no caller in the tree |
-| `dead-function` | join has no caller in the tree |
-| `dead-function` | build_label has no caller in the tree |
-| `dead-function` | Ring:push has no caller in the tree |
-| `dead-function` | Ring:len has no caller in the tree |
-| `dead-function` | Ring:snapshot has no caller in the tree |
-| `dead-function` | Ring:clear has no caller in the tree |
-| `dead-function` | notify_caller has no caller in the tree |
-| `dead-function` | resolve_style has no caller in the tree |
-| `dead-function` | update has no caller in the tree |
-| `dead-function` | finish has no caller in the tree |
-| `dead-function` | cancel has no caller in the tree |
-| `dead-function` | start has no caller in the tree |
-| `dead-function` | update has no caller in the tree |
-| `dead-function` | start has no caller in the tree |
-| `dead-function` | cancel has no caller in the tree |
-| `dead-function` | finish has no caller in the tree |
-| `dead-function` | finish has no caller in the tree |
-| `dead-function` | cancel has no caller in the tree |
-| `dead-function` | start has no caller in the tree |
-| `dead-function` | update has no caller in the tree |
-| `dead-function` | update has no caller in the tree |
-| `dead-function` | start has no caller in the tree |
-| `dead-function` | cancel has no caller in the tree |
-| `dead-function` | finish has no caller in the tree |
-| `dead-function` | cancel has no caller in the tree |
-| `dead-function` | finish has no caller in the tree |
-| `dead-function` | start has no caller in the tree |
-| `dead-function` | update has no caller in the tree |
-| `dead-function` | Surface:is_valid has no caller in the tree |
-| `dead-function` | Surface:fire_close has no caller in the tree |
-| `dead-function` | Surface:on_close has no caller in the tree |
-| `dead-function` | Surface:close has no caller in the tree |
-| `dead-function` | Surface:set_title has no caller in the tree |
-| `dead-function` | Surface:set_lines has no caller in the tree |
-| `dead-function` | Surface:focus has no caller in the tree |
-| `dead-function` | center has no caller in the tree |
-| `dead-function` | close_on_focus_lost has no caller in the tree |
-| `dead-function` | make_scratch has no caller in the tree |
-| `dead-function` | nice_quit has no caller in the tree |
-| `dead-function` | set_title has no caller in the tree |
-| `dead-function` | action_cwd_here has no caller in the tree |
-| `dead-function` | action_powershell_profile has no caller in the tree |
-| `dead-function` | lazy_module has no caller in the tree |
 | `undocumented-param` | escape_lua_pattern has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | invalid_ctx has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | M.normalize has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | join has 2 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | strlen has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | split has 2 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | join has 2 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | notify_caller has 5 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | bind_cancel_on_escape has 3 parameter(s) but only 2 @param line(s) |
 | `undocumented-param` | bind_cancel_on_escape has 3 parameter(s) but only 2 @param line(s) |

@@ -15,6 +15,7 @@
 ---@field branch? string Branch used in source links. Default "main".
 ---@field extra_checks? Lib.Docmap.Check[] Repo-specific drift checks appended to the generic ones.
 ---@field calls_heuristic? boolean Also emit call edges whose target was guessed by unique-name match rather than resolved through a require alias. Off by default — a wrong call graph is worse than an incomplete one. Default false.
+---@field dead_code? boolean Also report *published* functions with no caller in the tree as dead-code candidates. Off by default, and that is not timidity: a library consists of functions with no internal caller by design, so this reports much of the public API on any tree that is a library. The always-on half of the check — file-local and `@internal` functions — needs no flag because there the statement holds. Default false.
 ---@field layers? Lib.Docmap.LayerRule[] Module-prefix layering rules for the `layer-violation` check. Empty/absent disables the check.
 ---@field luals? boolean Merge `lua-language-server --doc` output into the IR (class/alias/field detail, type-reference edges). Off by default — a full-tree run costs real seconds. Default false.
 ---@field luals_timeout_ms? integer Kill the `lua-language-server --doc` run after this long. Default 60000.
@@ -22,7 +23,6 @@
 ---@field browse_command_name? string Passed to `docmap.command.setup`: register the editor-side map browser under this name. Default "LibBrowse".
 ---@field watch? boolean `install()` only: rescan on `BufWritePost` under `source/**.lua`, debounced. Default false.
 ---@field watch_ms? integer `install()` only: debounce interval for `watch`. Default 500.
----@field dead_code? boolean Also run `dead-function` against exported, non-`@internal` functions with no caller in the tree. Off by default: a library's exported surface is *meant* to have no internal caller, so this would flag half the public API. Local module-scope functions and `@internal`-tagged ones are always checked regardless of this flag — those two categories are dead by construction if nothing calls them. Default false.
 
 ---A repo-specific drift check.
 ---@alias Lib.Docmap.Check fun(ir: Lib.Docmap.IR, opts: Lib.Docmap.Opts): Lib.Docmap.Finding[]
@@ -112,6 +112,7 @@
 ---@field deprecated string? `@deprecated` text; nil when not deprecated.
 ---@field async boolean
 ---@field nodiscard boolean
+---@field local_refs integer How often this function's bare name is mentioned elsewhere in its own file. Answers the one question call edges cannot: a function passed as a *value* (`vim.system(cmd, on_exit)`) is used but never appears at a call site. Deliberately coarse — an unrelated `x.read` counts toward a local `read` — because over-counting errs toward "used", which is the safe direction.
 ---@field internal boolean Declared `---@internal`: part of the implementation, not of the module's published surface. Sharpens every question of the form "is this used" — `undocumented-param` skips it, the diff counts it as a helper, and a dead-function report can trust it.
 ---@field see string[] Raw `@see` targets, unresolved — `docmap.check` validates them.
 ---@field overload string[] Raw `@overload` signatures, unparsed (rendered as-is).

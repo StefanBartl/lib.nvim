@@ -734,7 +734,38 @@ bugs. Generic checks (any annotated Lua tree):
 | `undocumented-param` | info | A function has more parameters than `@param` lines (text-based heuristic, can be wrong on complex signatures — never fails `--check`). |
 | `require-cycle` | warn | A cycle among **load-time** requires. |
 | `layer-violation` | warn | Opt-in via `opts.layers`: a module reaching into a layer it must not. |
-| `dead-function` | info | No `kind="call"` edge points at this function. Always checked for a top-level `local function` (unreachable outside its own file by construction) and anything tagged `@internal`; an ordinary exported function is only checked when `opts.dead_code = true` — a library's exported surface is *meant* to have no internal caller, so on by default it would flag half the public API. Never anything stronger than `info`: dynamic dispatch (`M[name]()`, callbacks in a table, the lazy/metatable strategies in `lib.nvim.require`) is invisible to the call graph. |
+| `dead-function` | info | Nothing in the tree appears to call this function. |
+
+`dead-function` is built around a trap stated plainly: **a library consists of
+functions with no internal caller by design** — that is what a library is. A
+naive "no callers ⇒ dead" would flag most of the published API of any tree
+worth mapping and get switched off the same day, so it fires in two tiers.
+
+Always on, because there the statement genuinely holds: a **file-local**
+function (`local function foo`) its own file never mentions again, and an
+`@internal` function no call edge reaches — the tag is the author saying this
+is not surface, so "nobody calls it" is a real finding there. Only with
+`opts.dead_code` does it widen to *any* function with no caller in the tree,
+because for an ordinary public function that is a question, not an answer.
+
+Three things count as "used" so the check does not produce a confident wrong
+answer: `local_refs` (a function passed as a *value* — `vim.system(cmd,
+on_exit)` — has no call site naming it, and flagging every callback in the
+tree is exactly the failure this check must avoid), a heuristic call edge
+(for *this* question a guess that something is used is the safe direction),
+and being someone's `@see` target. A colon-declared method
+(`function Lru:put()`) is treated as qualified surface, not a private local —
+`calls.lua` has no case for method-call syntax at all, so `self:put(...)`
+never becomes a call edge, and every colon method in the tree would otherwise
+be misreported the moment its only callers use `:`. Verified against this
+repo's own `Lru:get`/`Lru:put`
+([`lua/lib/lua/memo/lru.lua`](../../lua/memo/lru.lua)), which are the public
+API and are called only from other files, only via `:`.
+
+Never above `info`, and it can never fail `--check`: dynamic dispatch is
+invisible to the scanner (`lib.nvim.require`'s metatable and lazy strategies
+call things that appear nowhere in the source), so a confident verdict is not
+available at any severity.
 
 `require-cycle` excludes deferred requires — `require(...)` inside a function
 body, the standard way this tree breaks initialisation order on purpose. Run
