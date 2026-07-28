@@ -31,6 +31,8 @@ return function(H)
     "lib.nvim.cross",
     "lib.nvim.cross.fs.expand_path",
     "lib.nvim.cross.fs.mutate",
+    "lib.nvim.cross.fs.separators.normalize",
+    "lib.nvim.cross.fs.separators.unify_slashes",
     "lib.nvim.cross.uv.spawn_capture",
     "lib.nvim.cross.uv.wait_until",
     "lib.nvim.window",
@@ -131,6 +133,23 @@ return function(H)
   eq(expand_path("%LIBNVIM_SPEC_VAR%/a"), "xyz/a", "expand_path: %VAR%")
   eq(expand_path("$NOT_SET_VAR_ABC"), "$NOT_SET_VAR_ABC", "expand_path: unset var left verbatim")
   ok(expand_path("~/x"):match("^~") == nil, "expand_path: tilde expands to a home dir")
+
+  -- unify_slashes always folds backslashes to forward slashes, regardless of OS.
+  local unify_slashes = require("lib.nvim.cross.fs.separators.unify_slashes")
+  eq(unify_slashes([[C:\Users\me]]), "C:/Users/me", "unify_slashes: backslashes -> forward slashes")
+  eq(unify_slashes("a/b/c"), "a/b/c", "unify_slashes: already-forward-slash paths pass through")
+
+  -- normalize converts *to* the current OS's native separator; a single
+  -- escaped backslash ("\\" in the pattern) must match one "\" per call, not two.
+  local normalize_sep = require("lib.nvim.cross.fs.separators.normalize")
+  local osu = uv.os_uname()
+  local is_windows = (osu.version and osu.version:match("Windows"))
+    or (osu.sysname and osu.sysname:match("Windows"))
+  if is_windows then
+    eq(normalize_sep("a/b/c"), "a\\b\\c", "normalize: forward slashes -> backslashes on Windows")
+  else
+    eq(normalize_sep([[a\b\c]]), "a/b/c", "normalize: backslashes -> forward slashes on non-Windows")
+  end
 
   -- ------------------------------------------------------------- lib.nvim.window
   local window = require("lib.nvim.window")
