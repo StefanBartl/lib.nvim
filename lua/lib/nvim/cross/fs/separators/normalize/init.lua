@@ -30,11 +30,9 @@ return function(path)
     return r
   else
     -- Replace backslashes "\" with forward slashes "/".
-    -- Matching a literal backslash in Lua patterns requires escaping the backslash for the pattern.
-    -- The pattern string for a single backslash must be written as "\\\\" in source code:
-    --  - "\\" (Lua literal) -> single backslash in resulting string
-    --  - Pattern to match backslash needs two backslashes ("\\") -> source literal "\\\\"
-    r = path:gsub("\\\\", "/")
+    -- The Lua source literal "\\" is a single escaped backslash character;
+    -- backslash has no magic meaning in Lua patterns, so this matches one "\" per call.
+    r = path:gsub("\\", "/")
     return r
   end
 end
