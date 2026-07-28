@@ -31,8 +31,8 @@ lib.nvim was audited against the project checklists. Full per-rule status:
    (flat walk) and `lib.nvim.fs.scan_cached` (TTL-cached wrapper) both ship.
 4. ~~Automated test suite~~ Done (at least the CI-wiring half) —
    `docs/TESTS/**` now covers most modules (logger, ui.kit, lua helpers, nvim
-   helpers, window, buffer/window context, cache, store.project, composer,
-   docmap) and runs headless in CI (item 5's workflow). Growing coverage for
+   helpers, window, buffer/window context, cache, store.project, composer)
+   and runs headless in CI (item 5's workflow). Growing coverage for
    not-yet-tested modules remains open-ended, ordinary work — no longer a
    structural gap.
 5. ~~Lint/CI pipeline~~ Done — `.luacheckrc` (LuaJIT std, `vim` global,

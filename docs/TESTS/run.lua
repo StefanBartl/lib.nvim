@@ -32,8 +32,6 @@ local specs = {
   "mutate_spec.lua",
   "neotree_watch_spec.lua",
   "composer_spec.lua",
-  "docmap_spec.lua",
-  "docmap_browse_spec.lua",
 }
 
 --- Straight to stdout rather than through `print`.
@@ -41,8 +39,7 @@ local specs = {
 --- `print` in a headless Neovim goes through the message area, and a spec that
 --- opens a window forces a redraw that swallows the pending newline — two spec
 --- results then run together on one line, which is exactly as confusing as it
---- sounds when a run is being read for a failure. `docmap_browse_spec` mounts
---- real floats, so this stopped being hypothetical. A headless runner's output
+--- sounds when a run is being read for a failure. A headless runner's output
 --- is meant to be read by a person or a log, not rendered in a UI.
 ---@param s string
 local function say(s)

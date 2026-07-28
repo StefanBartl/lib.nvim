@@ -29,11 +29,6 @@ that is meant to run headless at require-time).
 - [composer-buffer-local-and-count.lua](composer-buffer-local-and-count.lua)
   — buffer-scoped commands (`spec.buffer`) and a `:N Verb` count prefix.
 
-## `lib.nvim.docmap`
-
-- [docmap-browse.lua](docmap-browse.lua) — open the module map inside the
-  editor (`:LibBrowse`), read from the artifact or a live watching handle.
-
 ## `lib.nvim.ui.kit`
 
 - [kit-note.lua](kit-note.lua) — centered title + message float, optional
