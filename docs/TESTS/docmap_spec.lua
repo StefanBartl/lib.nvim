@@ -274,8 +274,8 @@ return function(H)
     }, over)
   end
 
-  local function has_dead_function(findings, name)
-    for _, f in ipairs(findings) do
+  local function has_dead_function(list, name)
+    for _, f in ipairs(list) do
       if f.check == "dead-function" and f.message:match("^" .. name:gsub("%.", "%%.")) then
         return true
       end
@@ -343,6 +343,121 @@ return function(H)
   ok(
     not has_dead_function(dead_code_findings, "M.public_called"),
     "docmap.check: opts.dead_code = true still skips a called exported function"
+  )
+
+  -- ------------------------------------------------------------ docmap.luals
+  -- `merge` is the half of luals.lua that needs no lua-language-server: IR +
+  -- parsed doc.json in, mutated IR out. The fixture below reproduces the real
+  -- --doc shapes exactly as verified against lua-language-server 3.18.2 —
+  -- notably that a class's parents live on `defines[1].extends` (an array,
+  -- one element per parent) and NOT on the entry, and that each element is
+  -- `{ type = "doc.extends.name", view = "<ParentName>" }`. An alias never
+  -- carries `extends`, even when it aliases a class; that was checked too,
+  -- because the opposite would manufacture inheritance that does not exist.
+  local luals = require("lib.nvim.docmap.luals")
+
+  local function ext(view)
+    return { type = "doc.extends.name", view = view }
+  end
+  local function class_entry(name, extends_list)
+    return {
+      name = name,
+      desc = "",
+      fields = {},
+      defines = { { type = "doc.class", file = "@types/init.lua", extends = extends_list } },
+    }
+  end
+
+  local luals_ir = {
+    order = { "n" },
+    nodes = {
+      n = {
+        id = "n",
+        parent = nil,
+        types = { "lua/@types/init.lua" },
+        stats = { types = 0 },
+      },
+    },
+    edges = {},
+  }
+
+  luals.merge(luals_ir, {
+    class_entry("D.Root", nil), -- no parent: no `extends` key at all
+    class_entry("D.Child", { ext("D.Root") }),
+    class_entry("D.Multi", { ext("D.Root"), ext("D.Other") }),
+    class_entry("D.Other", nil),
+    class_entry("D.Orphan", { ext("D.Missing") }), -- parent not declared anywhere
+    class_entry("D.Self", { ext("D.Self") }), -- degenerate, must not self-loop
+    {
+      name = "D.Alias",
+      desc = "",
+      fields = {},
+      defines = { { type = "doc.alias", file = "@types/init.lua" } },
+    },
+  }, "lua")
+
+  local by_class = {}
+  for _, t in ipairs(luals_ir.nodes.n.types_detail or {}) do
+    by_class[t.name] = t
+  end
+
+  eq(
+    #(by_class["D.Root"].extends or {}),
+    0,
+    "docmap.luals: a class with no parent gets an empty extends"
+  )
+  eq(
+    by_class["D.Child"].extends[1],
+    "D.Root",
+    "docmap.luals: single parent parsed from defines[1].extends"
+  )
+  eq(#by_class["D.Multi"].extends, 2, "docmap.luals: multiple inheritance keeps both parents")
+  eq(by_class["D.Multi"].extends[2], "D.Other", "docmap.luals: parents stay in source order")
+  eq(#(by_class["D.Alias"].extends or {}), 0, "docmap.luals: an alias never carries extends")
+  eq(
+    by_class["D.Orphan"].extends[1],
+    "D.Missing",
+    "docmap.luals: an unresolvable parent is still recorded on the class"
+  )
+
+  local ext_pairs = {}
+  for _, e in ipairs(luals_ir.edges) do
+    if e.kind == "extends" then
+      ext_pairs[e.from_class .. " -> " .. e.to_class] = true
+      eq(e.from, "n", "docmap.luals: extends edge carries the owning node id")
+      eq(e.via, nil, "docmap.luals: extends edges have no `via` — nothing mediates inheritance")
+    end
+  end
+  ok(ext_pairs["D.Child -> D.Root"], "docmap.luals: a resolvable parent produces an extends edge")
+  ok(
+    ext_pairs["D.Multi -> D.Root"],
+    "docmap.luals: multiple inheritance emits an edge per parent (1/2)"
+  )
+  ok(
+    ext_pairs["D.Multi -> D.Other"],
+    "docmap.luals: multiple inheritance emits an edge per parent (2/2)"
+  )
+  ok(
+    not ext_pairs["D.Orphan -> D.Missing"],
+    "docmap.luals: a parent outside the map produces no edge (kept readable on the class instead)"
+  )
+  ok(
+    not ext_pairs["D.Self -> D.Self"],
+    "docmap.luals: a class listing itself never becomes a self-loop"
+  )
+
+  -- Deterministic order: --check compares the artifact byte for byte, so two
+  -- runs over unchanged input must emit these in the same sequence.
+  local ext_seq = {}
+  for _, e in ipairs(luals_ir.edges) do
+    if e.kind == "extends" then
+      ext_seq[#ext_seq + 1] = e.from_class .. ">" .. e.to_class
+    end
+  end
+  eq(
+    table.concat(ext_seq, ","),
+    "D.Child>D.Root,D.Multi>D.Other,D.Multi>D.Root",
+    "docmap.luals: extends edges are emitted sorted by class name pair"
   )
 
   -- ------------------------------------------------------------- docmap.deps

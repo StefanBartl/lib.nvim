@@ -180,6 +180,27 @@ function M.merge(ir, doc_json, source)
           }
         end
 
+        -- Inheritance lives on `defines[1].extends`, not on the entry, and is
+        -- an **array** — `---@class C : A, B` yields two elements (verified
+        -- against real --doc output, along with everything else here). Note
+        -- the name collision with the per-*field* `f.extends` above: that one
+        -- is a single object carrying the field's own type, this one is the
+        -- class's parent list. Filtered on `type == "doc.extends.name"` so
+        -- only a plain parent name is taken; a class with no parent has no
+        -- `extends` key at all, and an alias never has one even when it
+        -- aliases a class (checked explicitly — that shape would otherwise
+        -- manufacture inheritance edges that do not exist).
+        local extends = {}
+        for _, ex in ipairs(define.extends or {}) do
+          if
+            type(ex) == "table"
+            and ex.type == "doc.extends.name"
+            and type(ex.view) == "string"
+          then
+            extends[#extends + 1] = ex.view
+          end
+        end
+
         node.types_detail = node.types_detail or {}
         table.insert(node.types_detail, {
           name = entry.name,
@@ -187,6 +208,7 @@ function M.merge(ir, doc_json, source)
           desc = entry.desc or "",
           file = rel_file,
           fields = fields,
+          extends = extends,
         })
         class_owner[entry.name] = node
       end
@@ -219,11 +241,38 @@ function M.merge(ir, doc_json, source)
   -- deterministic without a comparator that has to know every edge kind.
   ir.edges = ir.edges or {}
   local type_edges = {}
+  local extends_edges = {}
   local seen_edge = {}
+  local seen_extends = {}
 
   for _, id in ipairs(ir.order) do
     local node = ir.nodes[id]
     for _, ty in ipairs(node.types_detail or {}) do
+      -- Inheritance, resolved the same way field references are: a parent
+      -- that nothing in this tree declares produces no edge (it stays
+      -- readable on `ty.extends`), matching how `deps.lua` keeps an
+      -- unresolvable require in `requires_external` rather than inventing a
+      -- node for it. A class listing itself is dropped for the same reason
+      -- the field walk drops `ref_name ~= ty.name`: a self-loop is never
+      -- information, and here it would also be a cycle in a view whose whole
+      -- point is being a tree.
+      for _, parent_name in ipairs(ty.extends or {}) do
+        local parent_owner = class_owner[parent_name]
+        if parent_owner and parent_name ~= ty.name then
+          local key = ty.name .. "|" .. parent_name
+          if not seen_extends[key] then
+            seen_extends[key] = true
+            extends_edges[#extends_edges + 1] = {
+              kind = "extends",
+              from = node.id,
+              to = parent_owner.id,
+              from_class = ty.name,
+              to_class = parent_name,
+            }
+          end
+        end
+      end
+
       for _, field in ipairs(ty.fields) do
         for _, ref_name in ipairs(referenced_classes(field.view, known_classes)) do
           if ref_name ~= ty.name then
@@ -271,6 +320,22 @@ function M.merge(ir, doc_json, source)
   end)
 
   for _, e in ipairs(type_edges) do
+    ir.edges[#ir.edges + 1] = e
+  end
+
+  -- Sorted and appended as its own block, for the reason spelled out above:
+  -- a shared comparator would have to know every edge kind, and `via` (which
+  -- the type comparator reads) does not exist on these. Class names alone are
+  -- a total order here — the dedupe key is exactly `from_class|to_class`, so
+  -- no two surviving edges can tie on both.
+  table.sort(extends_edges, function(a, b)
+    if a.from_class ~= b.from_class then
+      return a.from_class < b.from_class
+    end
+    return a.to_class < b.to_class
+  end)
+
+  for _, e in ipairs(extends_edges) do
     ir.edges[#ir.edges + 1] = e
   end
 

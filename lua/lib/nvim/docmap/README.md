@@ -15,7 +15,7 @@ on GitHub).
 ```vim
 :LibMap                    " regenerate the artifacts
 :LibMap check              " verify without writing; findings go to the quickfix list
-:LibMap full               " regenerate WITH LuaLS enrichment (class/alias detail, type edges)
+:LibMap full               " regenerate WITH LuaLS enrichment (class/alias detail, type + inheritance edges)
 :LibMap open               " open the generated HTML in the system browser
 :LibMap graph deps         " open the HTML on the dependency graph
 :LibMap graph calls lib.nvim.fs   " …or on one module's call graph
@@ -164,11 +164,25 @@ so that collision would silently overwrite one of them, not error).
 
 Off by default — a full-repo `lua-language-server --doc` run costs several
 real seconds (measured: ~4.5s over this repo's ~250 files). Merges parsed
-`@class`/`@alias` definitions onto the node that owns the file, plus directed
-**type-reference edges** extracted from field types (`node.types_detail`,
-`ir.edges`) — see [`luals.lua`](luals.lua). This is what the Hierarchy tab's
-dashed edges draw from; without it, the tab still works off plain parent/child
-structure, just with no dashed edges.
+`@class`/`@alias` definitions onto the node that owns the file, plus two kinds
+of directed edge (`node.types_detail`, `ir.edges`) — see
+[`luals.lua`](luals.lua):
+
+- **type-reference edges** (`kind="type"`) extracted from field types — "this
+  class's field points at that class", what the Hierarchy tab's dashed edges
+  and the Types view draw from;
+- **inheritance edges** (`kind="extends"`) from `---@class Child : Parent`,
+  what the Inheritance view draws from. A class's parents also stay readable
+  on `types_detail[].extends` as written, *including* parents that resolve to
+  nothing in the scanned tree — those produce no edge, the same rule
+  `requires_external` follows for requires that point outside the map.
+
+Without it, the Hierarchy tab still works off plain parent/child structure,
+just with no dashed edges and no Inheritance view — which is why the committed
+artifact under `docs/map/` is generated **without** `--full`: CI's `--check`
+compares it byte for byte and would then need `lua-language-server` installed
+to reproduce it. Both class-based views say so explicitly when opened against
+such an artifact instead of rendering blank.
 
 ```lua
 require("lib.nvim.docmap").generate({ ..., luals = true })
@@ -207,7 +221,7 @@ else — module prefix, directory layout, types directory name — is an option.
 | Scan | [`symbols.lua`](symbols.lua) | `node.symbols` — module-scope tables, constants and bindings |
 | Graph | [`deps.lua`](deps.lua) | `kind="require"` edges + `node.requires`/`required_by` |
 | Graph | [`calls.lua`](calls.lua) | `kind="call"` edges — which function calls which |
-| LuaLS (opt-in) | [`luals.lua`](luals.lua) | class/alias detail + `kind="type"` edges merged into the IR |
+| LuaLS (opt-in) | [`luals.lua`](luals.lua) | class/alias detail + `kind="type"` and `kind="extends"` edges merged into the IR |
 | Check | [`check.lua`](check.lua) | `Lib.Docmap.Finding[]` — documentation drift |
 | Render | [`render/`](render/) | HTML (Tree + Hierarchy tabs), Markdown, Mermaid, DOT |
 | Encode | [`json.lua`](json.lua) | deterministic JSON |
@@ -219,15 +233,17 @@ need no external tool and cost only in-memory resolution over data the walk
 already read, so every caller of `scan()` — checks, renderers, a live handle —
 sees the same fully-formed IR rather than some seeing a half-built one.
 
-### One edge array, three kinds
+### One edge array, four kinds
 
-`ir.edges` carries a `kind` discriminator (`"type"`, `"require"`, `"call"`)
-rather than living in three parallel arrays, so layout, filtering and drawing
-exist once each instead of once per relationship. Each producer sorts its own
-block and appends it; there is deliberately **no** shared comparator over the
-merged array, because the optional fields are disjoint per kind and one sort
-would have to special-case all three (an early version did, and compared
-`from_class` against `nil` the first time a require edge appeared).
+`ir.edges` carries a `kind` discriminator (`"type"`, `"extends"`, `"require"`,
+`"call"`) rather than living in four parallel arrays, so layout, filtering and
+drawing exist once each instead of once per relationship. Each producer sorts
+its own block and appends it; there is deliberately **no** shared comparator
+over the merged array, because the optional fields are disjoint per kind and
+one sort would have to special-case all of them (an early version did, and
+compared `from_class` against `nil` the first time a require edge appeared —
+and `"extends"` would have been the next casualty, since it is the one kind
+with no `via`).
 
 `scan_full()` in [`init.lua`](init.lua) is `scan` + optional `luals` + `check`
 in one call — the step `generate()` and `install()`'s rescan both build on, so
@@ -427,17 +443,30 @@ node it was centered on, since a shallow layer (the root has one box) sharing
 a horizontal axis with a much wider deeper layer means the centered node can
 sit thousands of pixels from the left edge on a large map.
 
-### The four views
+### The five views
 
-Toggled from the Hierarchy toolbar. Two of them are undirected structure, two
+Toggled from the Hierarchy toolbar. Three of them are undirected structure, two
 are directed graphs with a direction control of their own:
 
 | View | Boxes are | Edges are | Doxygen equivalent |
 |---|---|---|---|
 | **Modules** | IR nodes | `children`, plus type edges dashed on top | Directory / class hierarchy |
 | **Types** | `@class`/`@alias` definitions | `kind="type"` | Collaboration diagram |
+| **Inheritance** | `@class` definitions that have a parent or a subclass | `kind="extends"` | Class hierarchy / inheritance diagram |
 | **Deps** | IR nodes | `kind="require"` | Include dependency graph |
 | **Calls** | individual **functions** | `kind="call"` | Caller / callee graph |
+
+**Inheritance** is the one view that does *not* layer by distance from the
+centered object, and cannot: a module normally declares a base class and its
+subclasses side by side, so all of them seed the walk at once and a
+distance-from-seed layout collapses the whole hierarchy onto one row (observed
+on `Lib.Cache.Opts` sitting beside its own `LoadOpts`/`SaveOpts`). Depth comes
+from the relation instead — longest path from a class with no parent, so a
+class always renders strictly below *every* parent, including in a diamond
+where one path is shorter than the other. Both directions are always shown;
+unlike Deps and Calls there is no reason to want one side alone, so it costs no
+state axis. Classes with no inheritance at all are left out rather than drawn as
+isolated boxes in a view that exists to show relationships.
 
 Direction (`← In` / `⇄ Both` / `Out →`) is an axis of the state, not two more
 views: "callers of X" and "callees of X" are the same diagram walked the other
