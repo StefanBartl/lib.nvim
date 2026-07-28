@@ -129,6 +129,35 @@ return function(H)
     H.eq(#floats(), before, "detach closes the float")
   end
 
+  -- ── float strategy: top anchor ─────────────────────────────────────────────
+  do
+    local win = vim.api.nvim_get_current_win()
+    local before = #floats()
+
+    local top = statusline.attach(win, { mode = "float", anchor = "top" })
+    top.set("CRUMBS", "Comment")
+    local open = floats()
+    H.eq(#open, before + 1, "anchor=top opens exactly one float")
+
+    local pos = vim.api.nvim_win_get_position(win)
+    local config = vim.api.nvim_win_get_config(open[#open])
+    H.eq(config.row, pos[1], "anchor=top sits on the first row")
+
+    top.detach()
+    H.eq(#floats(), before, "detach closes the top-anchored float")
+
+    -- Default is unchanged: omitting anchor still means the last row.
+    local bottom = statusline.attach(win, { mode = "float" })
+    bottom.set("STATUS", "Comment")
+    local bottom_config = vim.api.nvim_win_get_config(floats()[#floats()])
+    H.eq(
+      bottom_config.row,
+      pos[1] + vim.api.nvim_win_get_height(win) - 1,
+      "omitted anchor still defaults to the last row"
+    )
+    bottom.detach()
+  end
+
   -- ── Invalid window ─────────────────────────────────────────────────────────
   do
     local seg, err = statusline.attach(999999)

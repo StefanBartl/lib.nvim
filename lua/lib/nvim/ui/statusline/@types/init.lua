@@ -10,11 +10,16 @@
 ---Horizontal placement within the line.
 ---@alias Lib.UI.Statusline.Align "left"|"center"|"right"
 
+---Which row of the window a float sits on. Ignored in `"statusline"` mode — a
+---window's own `&statusline` is always its last row.
+---@alias Lib.UI.Statusline.Anchor "top"|"bottom"
+
 ---@class Lib.UI.Statusline.Opts
----@field mode   Lib.UI.Statusline.Mode?  Drawing strategy. Default "auto".
----@field align  Lib.UI.Statusline.Align? Placement within the line. Default "left".
----@field hl     string?                  Highlight group for the badge text; overridable per `set`.
----@field zindex integer?                 Float mode only: stacking order. Default 30.
+---@field mode   Lib.UI.Statusline.Mode?   Drawing strategy. Default "auto".
+---@field align  Lib.UI.Statusline.Align?  Placement within the line. Default "left".
+---@field anchor Lib.UI.Statusline.Anchor? Float mode only: which row it sits on. Default "bottom".
+---@field hl     string?                   Highlight group for the badge text; overridable per `set`.
+---@field zindex integer?                  Float mode only: stacking order. Default 30.
 
 ---A live badge. Dot syntax — the state lives in a closure, there is no `self`.
 ---@class Lib.UI.Statusline.Segment
