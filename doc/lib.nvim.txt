@@ -178,68 +178,6 @@ Neovim adapters.
                            (-> OS-native), collapse_dots (lexical ./.. collapse),
                            has_win_sep (C:\ drive predicate), drive_upper
                            (uppercase C: prefix)
-    lib.nvim.docmap        generated module map: scans the annotated Lua tree
-                           (---@module headers) plus per-function docs via
-                           vim.treesitter (signatures, @param/@return/@generic/
-                           @deprecated/@see/@async/@nodiscard/@overload,
-                           @internal, @todo/@bug/@test, and the custom
-                           @example/@since), builds a require graph and a call
-                           graph out of the same read and parse, plus module-
-                           scope symbols, optional lua-language-server --doc
-                           enrichment (class/alias detail, type-reference and
-                           inheritance edges), checks it for documentation
-                           drift (incl. dead @see targets, under-documented or
-                           misnamed params, load-time require cycles, opt-in
-                           module-layering rules, and unreachable functions —
-                           always for file-local/@internal ones, opt-in via
-                           opts.dead_code for any function), renders a self-
-                           contained HTML page (Tree + Hierarchy + Notes +
-                           Index tabs — Hierarchy has
-                           Modules/Types/Inheritance/Deps/Calls views with
-                           direction and depth controls, right-click on any
-                           module, function, type or box, animated re-centering
-                           and SVG export; search re-centers it, findings and
-                           real browser Back/Forward are wired up; Notes lists
-                           @deprecated/@todo/@bug/@test, Index is an A-Z
-                           function/module list with a toggle between the
-                           two) plus Markdown/Mermaid (incl. a dependency
-                           graph the code host renders itself).
-                           :LibMap regenerates, :LibMap check sends drift to
-                           the quickfix list, :LibMap full adds the LuaLS
-                           enrichment, :LibMap graph deps|calls [module] opens
-                           the page on that graph, :LibMap why <a> <b> sends
-                           the shortest require path between two modules to the
-                           quickfix list, :LibMap dot deps|calls [module] opens
-                           the graph as Graphviz DOT in a scratch buffer,
-                           :LibMap diff <ref> reports what changed about the
-                           tree's shape since that revision, :LibMap impact
-                           [ref] sends where the changed *lines* radiate to —
-                           touched functions and their call sites — to the
-                           quickfix list, and :LibMap serve [stop] runs a
-                           loopback-only HTTP server powering the page's
-                           History tab (per-commit impact, computed on demand;
-                           the tab explains itself when the page was opened
-                           from a file, where fetch is not permitted);
-                           a pre-commit hook
-                           (git config core.hooksPath scripts/hooks) blocks
-                           commits on a stale map, checking only — never
-                           regenerating or staging — and is a copyable template
-                           for other plugins. install()/uninstall() give a
-                           live, in-memory Handle (ir/node/on_change/rescan,
-                           plus requires/required_by/callees/callers) other
-                           plugin code can subscribe to instead of parsing
-                           module_map.json off disk. :LibBrowse navigates the
-                           same map inside the editor — a drill-down list, not
-                           a diagram — with gd to the source, gq into the
-                           quickfix list and :LibBrowse live for a view that
-                           re-scans on write. Reusable by other plugins:
-                           docmap.generate{ root = ..., source = ... }, its CLI
-                           (docmap.cli.run) and pre-commit hook template;
-                           opts.tag_files resolves requires_external against
-                           another project's own committed map (Doxygen
-                           TAGFILES equivalent), turning its inert boxes into
-                           links; see lua/lib/nvim/docmap/README.md and
-                           lua/lib/nvim/docmap/browse/README.md
     lib.nvim.normalize     path / value normalization
     lib.nvim.git           git helpers
     lib.nvim.terminal      terminal-buffer helpers
