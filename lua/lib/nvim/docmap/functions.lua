@@ -141,10 +141,15 @@ end
 ---Parse a function's assembled doc-comment block (top-to-bottom, `---`
 ---prefix already stripped by the caller) into the tagged fields.
 ---@param raw_lines string[] Full comment lines, `---` prefix intact.
----@return { summary: string, params: Lib.Docmap.ParamInfo[], returns: Lib.Docmap.ReturnInfo[], generic: string[], deprecated: string?, async: boolean, nodiscard: boolean, internal: boolean, see: string[], overload: string[], example: string?, since: string? }
+---@return { summary: string, params: Lib.Docmap.ParamInfo[], returns: Lib.Docmap.ReturnInfo[], generic: string[], deprecated: string?, async: boolean, nodiscard: boolean, internal: boolean, see: string[], overload: string[], todo: string[], bug: string[], test: string[], example: string?, since: string? }
 local function parse_doc_block(raw_lines)
   local prose = {}
   local params, returns, generic, see, overload = {}, {}, {}, {}, {}
+  -- Arrays, not single strings: Doxygen's equivalent commands collect one
+  -- list entry per occurrence, and a function with two open todos has two
+  -- todos — folding them into one string would silently drop the second.
+  -- `@see`/`@overload` already establish the repeatable-tag shape here.
+  local todo, bug, test = {}, {}, {}
   local deprecated, since, example
   local async, nodiscard, internal = false, false, false
   local in_example = false
@@ -177,6 +182,12 @@ local function parse_doc_block(raw_lines)
         end
       elseif tag == "overload" then
         overload[#overload + 1] = rest
+      elseif tag == "todo" then
+        todo[#todo + 1] = rest
+      elseif tag == "bug" then
+        bug[#bug + 1] = rest
+      elseif tag == "test" then
+        test[#test + 1] = rest
       elseif tag == "since" then
         since = rest
       elseif tag == "example" then
@@ -203,6 +214,9 @@ local function parse_doc_block(raw_lines)
     internal = internal,
     see = see,
     overload = overload,
+    todo = todo,
+    bug = bug,
+    test = test,
     example = example,
     since = since,
   }
@@ -354,6 +368,9 @@ function M.scan_file(path)
         internal = parsed.internal,
         see = parsed.see,
         overload = parsed.overload,
+        todo = parsed.todo,
+        bug = parsed.bug,
+        test = parsed.test,
         example = parsed.example,
         since = parsed.since,
       }

@@ -116,6 +116,46 @@ return function(H)
   local fns3 = functions.scan_file(fixture3)
   eq(fns3[1].internal, true, "docmap.functions: @internal is parsed")
 
+  -- `@todo`/`@bug`/`@test` feed the Notes tab's aggregate lists (Doxygen's
+  -- Todo/Bug/Test lists). Arrays rather than single strings on purpose: one
+  -- list entry per occurrence, so a function with two open todos keeps both.
+  -- lua-language-server ignores these tags rather than diagnosing them as
+  -- unknown, which is what makes them safe to introduce (checked against
+  -- 3.18.2 with --check before they were added).
+  local fixture4 = H.tmpfile(".lua")
+  local fw4 = assert(io.open(fixture4, "w"))
+  fw4:write(table.concat({
+    "local M = {}",
+    "---Needs work.",
+    "---@todo make this async",
+    "---@todo and handle cancellation",
+    "---@bug leaks a handle on error",
+    "---@test covered by t_spec.lua",
+    "function M.rough() end",
+    "---Nothing flagged.",
+    "function M.clean() end",
+    "return M",
+  }, "\n"))
+  fw4:close()
+  local fns4 = functions.scan_file(fixture4)
+  local rough, clean
+  for _, f in ipairs(fns4) do
+    if f.name == "M.rough" then
+      rough = f
+    end
+    if f.name == "M.clean" then
+      clean = f
+    end
+  end
+  eq(#rough.todo, 2, "docmap.functions: a repeated @todo keeps every occurrence")
+  eq(rough.todo[1], "make this async", "docmap.functions: @todo text, first occurrence")
+  eq(rough.todo[2], "and handle cancellation", "docmap.functions: @todo entries stay in order")
+  eq(rough.bug[1], "leaks a handle on error", "docmap.functions: @bug is parsed")
+  eq(rough.test[1], "covered by t_spec.lua", "docmap.functions: @test is parsed")
+  eq(#clean.todo, 0, "docmap.functions: an untagged function gets empty todo/bug/test arrays")
+  eq(#clean.bug, 0, "docmap.functions: @bug defaults to an empty array, never nil")
+  eq(#clean.test, 0, "docmap.functions: @test defaults to an empty array, never nil")
+
   -- Undocumented function (no doc comment at all) still gets a FunctionInfo
   -- with empty fields, not skipped — dead-see-target/undocumented-param need
   -- to see it too.

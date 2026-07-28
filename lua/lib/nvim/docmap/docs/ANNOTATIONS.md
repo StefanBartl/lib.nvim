@@ -69,6 +69,35 @@ New in this change, recognized by [`functions.lua`](../functions.lua):
   requires (5.1/5.3/JIT/...), a different question from "since when has this function existed in this
   project." A separate tag avoids colliding those two meanings.
 
+## `@todo` / `@bug` / `@test`
+
+The three repeatable note tags, collected into the map's **Notes** tab the way
+Doxygen's `\todo`, `\bug` and `\test` feed its Todo/Bug/Test lists. Each is
+**repeatable** — one list entry per occurrence, so a function with two open
+todos keeps both rather than having the second silently overwrite the first:
+
+```lua
+---Reads a file.
+---@todo make this async
+---@todo and handle cancellation
+---@bug leaks a handle when the path is missing
+---@test covered by fs_spec.lua
+function M.read(path) end
+```
+
+Each entry is a single line. A continuation line is dropped, the same as it
+already is under `@deprecated` — `@example` is the only multi-line tag here.
+
+Two deliberate non-decisions:
+
+- **Not `check` findings.** None of these is drift or an error, and routing
+  them through findings would put an author's own to-do list into an exit code
+  that CI fails on.
+- **Safe to introduce.** `lua-language-server` does not know these tags, but it
+  ignores unknown annotations rather than diagnosing them — verified with
+  `--check --checklevel=Information` on 3.18.2 before they were added, since a
+  tag that makes everyone's LSP complain would not be worth a list page.
+
 ## `@internal`
 
 Marks a function as implementation rather than published surface. Recognised
