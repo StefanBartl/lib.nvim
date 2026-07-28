@@ -236,7 +236,11 @@ return function(H)
   -- integer) with `>`, raising "attempt to compare number with string"
   -- instead of correctly returning false — i.e. is_array crashed on exactly
   -- the input shape it exists to reject.
-  eq(tables.is_array({ a = 1, b = 2 }), false, "tables.is_array: string keys -> false, not an error")
+  eq(
+    tables.is_array({ a = 1, b = 2 }),
+    false,
+    "tables.is_array: string keys -> false, not an error"
+  )
   eq(tables.is_array({ 1, 2, 3 }), true, "tables.is_array: contiguous array -> true")
   eq(tables.is_array({}), true, "tables.is_array: empty table -> true")
   eq(tables.is_array({ 1, 2, [5] = 9 }), false, "tables.is_array: sparse array -> false")
