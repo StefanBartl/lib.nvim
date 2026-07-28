@@ -212,7 +212,15 @@ Neovim adapters.
                            quickfix list, :LibMap dot deps|calls [module] opens
                            the graph as Graphviz DOT in a scratch buffer,
                            :LibMap diff <ref> reports what changed about the
-                           tree's shape since that revision; a pre-commit hook
+                           tree's shape since that revision, :LibMap impact
+                           [ref] sends where the changed *lines* radiate to —
+                           touched functions and their call sites — to the
+                           quickfix list, and :LibMap serve [stop] runs a
+                           loopback-only HTTP server powering the page's
+                           History tab (per-commit impact, computed on demand;
+                           the tab explains itself when the page was opened
+                           from a file, where fetch is not permitted);
+                           a pre-commit hook
                            (git config core.hooksPath scripts/hooks) blocks
                            commits on a stale map, checking only — never
                            regenerating or staging — and is a copyable template

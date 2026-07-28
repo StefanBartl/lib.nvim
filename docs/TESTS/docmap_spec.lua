@@ -1231,6 +1231,68 @@ return function(H)
     "docmap.history: an unattributed path is still an openable location"
   )
 
+  -- ---------------------------------------------------------- serve (R11 P3)
+  -- The route table and socket handling are verified by running the thing and
+  -- talking to it, which a spec cannot do without an event loop. What *is*
+  -- tested here is the part that must never be wrong: the whitelist standing
+  -- between a URL path and a git subprocess, and the lifecycle, since a
+  -- listening socket left behind is the cost of having a runtime at all.
+  local serve = require("lib.nvim.docmap.serve")
+
+  for _, good in ipairs({
+    "1ce752e",
+    "08b4494",
+    "7bdfb3ab5762e42806c228625ee095d72c18d0b2",
+    "abcdef0123456789",
+  }) do
+    eq(serve.safe_sha(good), good, "docmap.serve: accepts a real hash (" .. good:sub(1, 10) .. ")")
+  end
+
+  -- Every one of these is a value someone could put in a URL path. None may
+  -- reach git: the first is argument injection, the rest are either shell
+  -- metacharacters or simply not hashes.
+  for _, bad in ipairs({
+    "--upload-pack=evil",
+    "--output=/tmp/x",
+    "HEAD",
+    "HEAD~1",
+    "abc;id",
+    "$(id)",
+    "../../etc/passwd",
+    "zzzzzzz",
+    "1234", -- too short: 7 hex digits minimum
+    "0123456789012345678901234567890123456789a", -- 41, one over
+    "",
+  }) do
+    eq(serve.safe_sha(bad), nil, ("docmap.serve: refuses %q"):format(bad))
+  end
+  eq(serve.safe_sha(nil), nil, "docmap.serve: refuses a nil path segment")
+  eq(serve.safe_sha(42), nil, "docmap.serve: refuses a non-string")
+
+  -- Lifecycle. Bound to loopback on an OS-assigned port, idempotent both
+  -- ways: a second start must not orphan the first socket, and stopping what
+  -- never ran is a no-op rather than an error (same tolerance `uninstall`
+  -- has).
+  eq(serve.is_running(), false, "docmap.serve: nothing is running before start")
+  eq(serve.stop(), false, "docmap.serve: stopping when idle is a no-op, not an error")
+
+  local serve_url = serve.start({ root = root, out_dir = "docs/map" })
+  ok(serve_url ~= nil, "docmap.serve: start returns a URL")
+  ok(
+    serve_url and serve_url:match("^http://127%.0%.0%.1:%d+/$") ~= nil,
+    "docmap.serve: binds loopback only, on an OS-assigned port"
+  )
+  eq(serve.is_running(), true, "docmap.serve: reports itself running")
+
+  local first_port = serve.info().port
+  eq(serve.start({ root = root }), serve_url, "docmap.serve: a second start returns the same URL")
+  eq(serve.info().port, first_port, "docmap.serve: …on the same port, not a second socket")
+
+  eq(serve.stop(), true, "docmap.serve: stop reports that it stopped something")
+  eq(serve.is_running(), false, "docmap.serve: …and is no longer running")
+  eq(serve.info(), nil, "docmap.serve: info is nil once stopped")
+  eq(serve.stop(), false, "docmap.serve: stopping twice is a no-op")
+
   -- ---------------------------------------------- symbols and subtree stats
   local sym_fixture = H.tmpfile(".lua")
   local sfw = assert(io.open(sym_fixture, "w"), "docmap spec: symbol fixture must be writable")
