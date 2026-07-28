@@ -69,6 +69,11 @@ function M.scan_full(opts)
   -- to know "was this configured" should do.
   require("lib.nvim.docmap.tagfiles").resolve(ir, opts)
 
+  -- Same reasoning: cheap, local, no reason to gate behind a flag. A
+  -- missing opts.tests_dir just leaves every fn.tested false, same as a
+  -- tree with no tag_files leaves every requires_external unresolved.
+  require("lib.nvim.docmap.coverage").resolve(ir, opts)
+
   local luals_err
   if opts.luals then
     local luals = require("lib.nvim.docmap.luals")

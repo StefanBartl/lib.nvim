@@ -124,6 +124,17 @@ function M.run(opts, argv)
       ir.meta.counts.file
     )
   )
+  local tested, total = require("lib.nvim.docmap.coverage").summary(ir)
+  if total > 0 then
+    io.stdout:write(
+      ("%d/%d functions found by name in %s (%.0f%%)\n"):format(
+        tested,
+        total,
+        opts.tests_dir or "docs/TESTS",
+        100 * tested / total
+      )
+    )
+  end
   local tally = report(findings)
   return (strict and tally.error > 0) and 1 or 0
 end

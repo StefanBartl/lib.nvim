@@ -99,6 +99,7 @@ main{grid-template-columns:minmax(300px,1.1fr) minmax(0,1.4fr);gap:0;align-items
   border-radius:4px;border:1px solid var(--line);color:var(--muted)}
 .bd.rd{color:var(--accent);border-color:var(--accent)}
 .bd.dep{color:var(--error);border-color:var(--error)}
+.bd.tested{color:var(--accent);border-color:var(--accent)}
 .kids{margin-left:15px;border-left:1px solid var(--line);padding-left:3px}
 .kids.hide{display:none}
 #detail{padding:22px 26px 60px;max-height:calc(100vh - 132px);overflow:auto}
@@ -169,6 +170,7 @@ details>summary{cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0}
 .ixtag{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
   border:1px solid var(--line);border-radius:4px;padding:0 4px}
 .ixtag.dep{color:var(--error);border-color:var(--error)}
+.ixtag.tested{color:var(--accent);border-color:var(--accent)}
 #view-hierarchy{padding:16px 24px 60px}
 .hctl{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
 .hctl .hpath{font-family:var(--mono);font-size:12.5px;color:var(--muted);word-break:break-all}
@@ -789,6 +791,12 @@ local JS = [[
         if(fn.nodiscard) badges.push('<span class="bd">nodiscard</span>');
         if(fn.internal) badges.push('<span class="bd sk-binding">internal</span>');
         if(fn.since) badges.push('<span class="bd">since '+esc(fn.since)+'</span>');
+        // R2 — auto-derived, coarse and safe in the "tested" direction (see
+        // coverage.lua). No badge for the false case: this is a "not found
+        // by name in a spec" signal, not "definitely untested", and a
+        // warning-shaped badge on the majority of functions would be noise,
+        // not information.
+        if(fn.tested) badges.push('<span class="bd tested">tested</span>');
         h.push('<div class="fn-sig">'+esc(fn.signature)
           +(badges.length?'<span class="fn-badges">'+badges.join("")+'</span>':'')+'</div>');
         if(fn.deprecated){ h.push('<div class="fn-dep">⚠ Deprecated: '+esc(fn.deprecated)+'</div>'); }
@@ -1738,6 +1746,7 @@ local JS = [[
           esc(e.fn.signature) + '</a>' +
           (e.fn.internal ? '<span class="ixtag">internal</span>' : '') +
           (e.fn.deprecated ? '<span class="ixtag dep">deprecated</span>' : '') +
+          (e.fn.tested ? '<span class="ixtag tested">tested</span>' : '') +
           '<span class="nwhere">' + esc(e.node.module || e.node.path) +
           ':' + e.fn.line + '</span></li>');
       });

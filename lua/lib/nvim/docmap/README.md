@@ -229,6 +229,7 @@ else — module prefix, directory layout, types directory name — is an option.
 | Live | [`registry.lua`](registry.lua) | `install()`/`uninstall()` — an in-memory `Handle` instead of files |
 | CLI | [`cli.lua`](cli.lua) | `--check`/`--full` entry point, reused verbatim by `scripts/gen_map.lua` and any consuming plugin's equivalent |
 | Tag files | [`tagfiles.lua`](tagfiles.lua) | `ir.tag_links` — `requires_external` modules resolved against another project's own committed artifact (`opts.tag_files`) |
+| Coverage | [`coverage.lua`](coverage.lua) | `fn.tested` — auto-derived, no manual `@test` tagging required |
 
 `deps` and `calls` run inside `scan()` itself, unlike the LuaLS merge: they
 need no external tool and cost only in-memory resolution over data the walk
@@ -654,6 +655,34 @@ would turn a deterministic `--check` into one that depends on network
 availability and timing, the same reasoning that keeps `dot` unwired to a
 `dot` binary. Point it at a sibling checkout's `docs/map/` directory, the
 same one `--check` already compares its own artifacts against.
+
+### Auto-derived test coverage (`fn.tested`)
+
+`@test` already existed as a manual tag (see
+[`docs/ANNOTATIONS.md`](docs/ANNOTATIONS.md)) and has exactly zero real hits
+in this tree — a doc-comment that duplicates what the actual spec file
+already says is a second source of truth, and second sources of truth
+drift. [`coverage.lua`](coverage.lua) measures instead: every function's
+bare name is checked against every identifier mentioned anywhere under
+`opts.tests_dir` (default `docs/TESTS`), the same technique
+[`calls.lua`](calls.lua)'s `identifier_counts` uses for "used as a value",
+pointed at the test tree instead of the source tree.
+
+Coarse in the safe direction: `M.read` and an unrelated local `read` both
+count, so `fn.tested` can be `true` on a name collision it did not earn —
+the same trade `local_refs` already makes. The real blind spot runs the
+other way: a function exercised only *indirectly* (called by another
+function a spec does name) never lights up, so `tested = false` means "not
+found by name in a spec", not "definitely untested". That asymmetry is why
+the renderer only ever shows a `tested` badge (Index tab, function detail
+pane) for the `true` case — a badge on most of the tree's ~600 functions
+would be noise dressed up as a warning, not information.
+
+`docmap.coverage.summary(ir)` returns `tested, total`; `:LibMap`/
+`nvim --headless -l scripts/gen_map.lua` print it as one line after
+regenerating (`388/989 functions found by name in docs/TESTS (39%)`, this
+repo's own current number). The natural home for this as a browsable, not
+just a printed, number is the planned "Analysis" tab — see the roadmap.
 
 ### Modules vs Types
 
