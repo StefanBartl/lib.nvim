@@ -44,6 +44,4 @@ transform.pad_start("7", 3)          --> "  7"
 
 Note: `kebab_case`/`snake_case` only insert a separator at an existing word
 boundary, not inside a contiguous camelCase/PascalCase run — see the gotcha
-in [`../README.md`](../README.md). `transform.dedent` is also currently
-broken (raises a Lua error on any input) — see the same file for details; do
-not call it.
+in [`../README.md`](../README.md).

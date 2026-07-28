@@ -232,8 +232,11 @@ function S.dedent(s)
   local min = math.huge
 
   for line in (s .. "\n"):gmatch("(.-)\n") do
-    local _, spaces = line:find("^[ ]*")
-    local count = spaces and #spaces or 0
+    -- `match` (not `find`) so this yields the matched substring itself, not
+    -- a start/end index pair — `find` here previously returned the end
+    -- index as a number, and `#` on that number raised on every call.
+    local spaces = line:match("^ *")
+    local count = #spaces
     if line:find("%S") then
       min = math.min(min, count)
     end
@@ -243,7 +246,12 @@ function S.dedent(s)
     return s
   end
 
-  return (s:gsub("\n[ ]{" .. min .. "}", "\n"):gsub("^[ ]{" .. min .. "}", ""))
+  -- Lua patterns have no `{n}` bounded-repetition quantifier (that's
+  -- regex/PCRE syntax) — "[ ]{2}" previously matched the literal characters
+  -- "{2}", not two spaces, so this gsub was a silent no-op. Build the
+  -- run-of-`min`-spaces pattern by literal repetition instead.
+  local lead = string.rep(" ", min)
+  return (s:gsub("\n" .. lead, "\n"):gsub("^" .. lead, ""))
 end
 
 ---@nodiscard

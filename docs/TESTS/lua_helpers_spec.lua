@@ -214,8 +214,33 @@ return function(H)
   end
   eq(type(strings.trim), "function", "lib.lua.strings: pre-existing trim still exported")
 
+  -- Regression: dedent's line-indent measurement used to call `find` without
+  -- a capture group, so `spaces` was the match's end index (a number), and
+  -- `#spaces` raised on every non-trivial call.
+  eq(
+    strings.dedent("  hello\n  world"),
+    "hello\nworld",
+    "strings.dedent: strips common leading indent"
+  )
+  eq(strings.dedent("hello"), "hello", "strings.dedent: no indent is a no-op")
+  eq(
+    strings.dedent("  a\n    b"),
+    "a\n  b",
+    "strings.dedent: strips only the common (smaller) indent, keeps relative nesting"
+  )
+
   -- ------------------------------------------------------------- lib.lua.tables
   local tables = require("lib.lua.tables")
+
+  -- Regression: a non-numeric key used to be compared against `n` (an
+  -- integer) with `>`, raising "attempt to compare number with string"
+  -- instead of correctly returning false — i.e. is_array crashed on exactly
+  -- the input shape it exists to reject.
+  eq(tables.is_array({ a = 1, b = 2 }), false, "tables.is_array: string keys -> false, not an error")
+  eq(tables.is_array({ 1, 2, 3 }), true, "tables.is_array: contiguous array -> true")
+  eq(tables.is_array({}), true, "tables.is_array: empty table -> true")
+  eq(tables.is_array({ 1, 2, [5] = 9 }), false, "tables.is_array: sparse array -> false")
+  eq(tables.is_array({ 1, 2, x = 1 }), false, "tables.is_array: mixed array+string key -> false")
 
   local dst = { a = 1, nested = { x = 1, y = 2 } }
   tables.deep_merge(dst, { b = 2, nested = { y = 99, z = 3 } })
