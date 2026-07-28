@@ -188,12 +188,15 @@ Neovim adapters.
                            --doc enrichment (class/alias detail,
                            type-reference edges), checks it for documentation
                            drift (incl. dead @see targets, under-documented
-                           params, load-time require cycles and opt-in
-                           module-layering rules), renders a self-contained
-                           HTML page (Tree + Hierarchy tabs — Hierarchy has
-                           Modules/Deps/Calls/Types views with direction and
-                           depth controls, right-click on any module,
-                           function, type or box, animated re-centering and
+                           params, load-time require cycles, opt-in
+                           module-layering rules, and unreachable functions —
+                           always for file-local/@internal ones, opt-in via
+                           opts.dead_code for any function), renders a
+                           self-contained HTML page (Tree + Hierarchy tabs —
+                           Hierarchy has Modules/Deps/Calls/Types views with
+                           direction and depth controls, right-click on any
+                           module, function, type or box, animated
+                           re-centering and
                            SVG export; search re-centers it, findings and
                            real browser Back/Forward are wired up) plus
                            Markdown/Mermaid (incl. a dependency graph the

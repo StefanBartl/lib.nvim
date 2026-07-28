@@ -385,7 +385,18 @@ function M.scan_file(path)
   -- than in `extract_source`; `deps` still owns the rule itself.
   require("lib.nvim.docmap.deps").mark_deferred(root, src, requires)
 
-  local calls = require("lib.nvim.docmap.calls").extract(root, src, ranges)
+  local calls_mod = require("lib.nvim.docmap.calls")
+  local calls = calls_mod.extract(root, src, ranges)
+
+  -- How often each name is mentioned in this file, so a function passed
+  -- around as a value is not mistaken for an unused one. Counted once for
+  -- the whole file rather than per function.
+  local ident_counts = calls_mod.identifier_counts(root, src)
+  for _, fn in ipairs(out) do
+    local bare = fn.name:match("([%w_]+)$") or fn.name
+    -- Minus the declaration itself, which is one of the occurrences.
+    fn.local_refs = math.max(0, (ident_counts[bare] or 1) - 1)
+  end
   local symbols = require("lib.nvim.docmap.symbols").extract(root, src, doc_block_above)
   return out, calls, requires, symbols, lines
 end

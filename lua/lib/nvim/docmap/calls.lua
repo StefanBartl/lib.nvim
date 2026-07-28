@@ -92,6 +92,35 @@ function M.extract(root, src, defs)
   return out
 end
 
+local IDENT_QUERY = vim.treesitter.query.parse("lua", "(identifier) @id")
+
+---How often each identifier appears in the file, by name.
+---
+---Exists for one question the call graph cannot answer: a function passed as
+---a *value* — `vim.system(cmd, on_exit)`, `table.sort(t, by_line)` — is used,
+---but there is no call site naming it, so `extract` above sees nothing. A
+---dead-code report built on call edges alone would flag every callback in the
+---tree, which is precisely the kind of confident wrong answer that gets a
+---check switched off.
+---
+---Counting occurrences is deliberately coarser than resolving them: a
+---file-local `read` and an unrelated `x.read` both count, so the number can
+---be too *high*. That errs toward calling something used, which is the safe
+---direction for this question.
+---@param root TSNode
+---@param src string
+---@return table<string, integer>
+function M.identifier_counts(root, src)
+  local counts = {}
+  for id, node in IDENT_QUERY:iter_captures(root, src) do
+    if IDENT_QUERY.captures[id] == "id" then
+      local text = vim.treesitter.get_node_text(node, src)
+      counts[text] = (counts[text] or 0) + 1
+    end
+  end
+  return counts
+end
+
 ---Last dot-separated segment of a declared function name: `M.scan_full` →
 ---`scan_full`. What a caller writing `docmap.scan_full(...)` actually names,
 ---since the callee's own `M` is a file-local convention the call site cannot

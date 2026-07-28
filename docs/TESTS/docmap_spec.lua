@@ -949,6 +949,135 @@ return function(H)
 
   vim.fn.delete(gr, "rf")
 
+  -- ------------------------------------------------------ dead-function check
+  -- The trap this check is built around, made concrete: a library consists of
+  -- functions with no internal caller by design, so it fires in two tiers —
+  -- always-on where the statement genuinely holds (file-local, @internal),
+  -- opt-in everywhere else.
+  local dr = H.tmpfile("_dead")
+  local function dwrite(rel, lines)
+    local abs = dr .. "/" .. rel
+    vim.fn.mkdir(vim.fn.fnamemodify(abs, ":h"), "p")
+    local fd = assert(io.open(abs, "w"), "docmap spec: dead-function fixture must be writable")
+    fd:write(table.concat(lines, "\n"))
+    fd:close()
+  end
+
+  dwrite("lua/d/a/init.lua", {
+    "---@module 'd.a'",
+    "--- A.",
+    "local M = {}",
+    "---Truly dead: nothing in this file mentions it again.",
+    "local function truly_dead()",
+    "  return 1",
+    "end",
+    "---Passed as a value, never called at a call site.",
+    "local function as_value()",
+    "  return 2",
+    "end",
+    "---Public, uncalled anywhere, but tagged.",
+    "---@internal",
+    "function M.internal_unused()",
+    "  return 3",
+    "end",
+    "---Public and uncalled — the always-on tiers must NOT flag this.",
+    "function M.public_unused()",
+    "  return 4",
+    "end",
+    -- Declared with `:`, exactly the shape lua/lib/lua/memo/lru.lua uses for
+    -- its real public API (Lru:get/Lru:put), which calls.lua cannot resolve
+    -- call sites for at all (method-call syntax is invisible to it).
+    "---Colon-declared method.",
+    "function M:method_dead()",
+    "  return 5",
+    "end",
+    "---Referenced only by another function's @see tag.",
+    "function M.only_seen()",
+    "  return 6",
+    "end",
+    "---Documents a relationship to only_seen; itself has no caller.",
+    "---@see M.only_seen",
+    "function M.seen_by_see()",
+    "  return 7",
+    "end",
+    "---Entry point.",
+    "function M.go()",
+    "  vim.system({}, as_value)",
+    "  return 1",
+    "end",
+    "return M",
+  })
+
+  local dir_ =
+    require("lib.nvim.docmap.scan").scan({ root = dr, source = "lua/d", lua_root = "lua" })
+  local function dead_messages(dead_code)
+    local dopts = { root = dr, source = "lua/d", lua_root = "lua", dead_code = dead_code }
+    local out = {}
+    for _, f in ipairs(check.run(dir_, dopts)) do
+      if f.check == "dead-function" then
+        out[f.message:match("^(%S+)")] = f.message
+      end
+    end
+    return out
+  end
+
+  local default_dead = dead_messages(false)
+  ok(
+    default_dead.truly_dead,
+    "check.dead-function: a genuinely unreferenced local is flagged by default"
+  )
+  ok(
+    default_dead["M.internal_unused"],
+    "check.dead-function: an @internal function with no caller is flagged by default"
+  )
+  eq(
+    default_dead.as_value,
+    nil,
+    "check.dead-function: a function passed by value to another call is not dead"
+  )
+  eq(
+    default_dead["M.public_unused"],
+    nil,
+    "check.dead-function: an ordinary public function is NOT flagged without opts.dead_code — a library is exactly this"
+  )
+  eq(
+    default_dead["M:method_dead"],
+    nil,
+    "check.dead-function: a colon-declared method is not mistaken for a private local"
+  )
+  eq(
+    default_dead.only_seen or default_dead["M.only_seen"],
+    nil,
+    "check.dead-function: a documented @see TARGET counts as used"
+  )
+
+  local opted_in = dead_messages(true)
+  ok(
+    opted_in["M.public_unused"],
+    "check.dead-function: opts.dead_code reaches an ordinary uncalled public function"
+  )
+  ok(
+    opted_in["M:method_dead"],
+    "check.dead-function: opts.dead_code reaches an uncalled colon method too"
+  )
+  eq(
+    opted_in.as_value,
+    nil,
+    "check.dead-function: opts.dead_code still respects local_refs — a callback stays not-dead"
+  )
+  ok(
+    opted_in["M.seen_by_see"],
+    "check.dead-function: the function CARRYING the @see tag is not itself excused by it"
+  )
+
+  for _, f in ipairs(check.run(dir_, { root = dr, source = "lua/d", lua_root = "lua" })) do
+    if f.check == "dead-function" then
+      eq(f.severity, "info", "check.dead-function: never above info severity")
+    end
+  end
+
+  vim.fn.delete(dr, "rf")
+
   -- --------------------------------------- layers, heuristic, handle queries
   -- Three features that shipped with no coverage at all. The heuristic one in
   -- particular is only worth having if it stays *silent* on an ambiguous name,
