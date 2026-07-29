@@ -30,6 +30,7 @@ local specs = {
   "project_store_spec.lua",
   "harvest_spec.lua",
   "mutate_spec.lua",
+  "lock_spec.lua",
   "neotree_watch_spec.lua",
   "composer_spec.lua",
 }
