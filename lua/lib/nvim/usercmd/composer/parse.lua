@@ -14,25 +14,33 @@ local M = {}
 --- Resolve a route's `run` (function, or a module path returning a callable /
 --- `{ run = fn }`) to a callable. Lazy `require` keeps feature modules unloaded
 --- until their subcommand actually fires.
+---
+--- The second return value is nil whenever `run` was already a function (there
+--- is nothing to fail); for a string path it carries the real reason a lookup
+--- failed — a `require` error, or the loaded module having the wrong shape —
+--- so callers that want to report *why* (dispatch's error message, check.lua's
+--- pre-flight validation) don't have to redo the require themselves.
 ---@param run fun(ctx)|string
----@return fun(ctx)|nil
+---@return fun(ctx)|nil fn
+---@return string|nil err
 function M.resolve_run(run)
   if type(run) == "function" then
-    return run
+    return run, nil
   end
   if type(run) == "string" then
     local ok, mod = pcall(require, run)
     if not ok then
-      return nil
+      return nil, tostring(mod)
     end
     if type(mod) == "function" then
-      return mod
+      return mod, nil
     end
     if type(mod) == "table" and type(mod.run) == "function" then
-      return mod.run
+      return mod.run, nil
     end
+    return nil, ("module '%s' loaded but is not callable and has no .run"):format(run)
   end
-  return nil
+  return nil, nil
 end
 
 --- Auto-generated usage block for a verb (all invocations, one per line).
@@ -158,18 +166,48 @@ function M.dispatch(cmd_name, spec, root, opts, notify)
     return
   end
 
-  local run = M.resolve_run(route.run)
+  local run, run_err = M.resolve_run(route.run)
   if not run then
-    notify.error(("route '%s' has no runnable handler"):format(table.concat(route.path, " ")))
+    local msg = ("route '%s' has no runnable handler"):format(table.concat(route.path, " "))
+    if run_err then
+      msg = msg .. ": " .. run_err
+    end
+    notify.error(msg)
     return
   end
 
   return run(M.build_ctx(args, pos, flag_values, kv_values, leftover, route.path, opts))
 end
 
+--- Best-effort Visual-mode/column info for the range that was just given.
+---
+--- `vim.fn.visualmode()`/the `'<`/`'>` marks are NOT proof that the CURRENT
+--- range invocation came from a Visual selection just now — they persist
+--- from whichever Visual selection was last active, so a manually typed
+--- `:5,10Verb` after an unrelated earlier visual selection would still
+--- report that stale mode/columns. There is no reliable way in Neovim's API
+--- to distinguish "this range came from leaving Visual mode" from "this
+--- range happens to share lines with an old Visual selection" — callers
+--- that need certainty should not treat `mode` as a guarantee.
+---@return string|nil mode "v"|"V"|"\22", or nil if Visual mode was never used this session
+---@return integer|nil col1 byte column of the '< mark
+---@return integer|nil col2 byte column of the '> mark
+local function visual_info()
+  local mode = vim.fn.visualmode()
+  if mode == "" then
+    return nil, nil, nil
+  end
+  return mode, vim.fn.getpos("'<")[3], vim.fn.getpos("'>")[3]
+end
+
 --- Assemble the handler context.
 ---@return Lib.UserCmd.Composer.Ctx
 function M.build_ctx(args, pos, flag_values, kv_values, rest, path, opts)
+  local mode, col1, col2
+  if opts.range and opts.range > 0 then
+    mode, col1, col2 = visual_info()
+  end
+
   return {
     args = args,
     pos = pos,
@@ -183,6 +221,9 @@ function M.build_ctx(args, pos, flag_values, kv_values, rest, path, opts)
       line2 = opts.line2 or 0,
       count = opts.count or -1,
       range = opts.range or 0,
+      mode = mode,
+      col1 = col1,
+      col2 = col2,
     },
     raw = opts,
   }
