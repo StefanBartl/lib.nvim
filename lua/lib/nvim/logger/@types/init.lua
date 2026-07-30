@@ -57,6 +57,10 @@
 ---@field once fun(key: string, level: Lib.Logger.LevelInput, msg: string, ctx?: table): boolean # log key at most once
 ---@field timer fun(label: string, level?: Lib.Logger.LevelInput): fun(ctx?: table)  # returns stop() that logs elapsed ms
 ---@field assert fun(cond: any, msg: string, ctx?: table): any  # log+raise (through guard) when falsy
+---@field count fun(key: string): integer                    # increment and return a named tally (no record written)
+---@field counters fun(): table<string, integer>             # snapshot of every tally
+---@field add_sink fun(fn: fun(record: Lib.Logger.Record))   # route records somewhere extra; errors inside are contained
+---@field extra_sinks (fun(record: Lib.Logger.Record))[]     # registered extra sinks (see add_sink)
 
 ---The `lib.nvim.logger` module.
 ---@class Lib.Logger

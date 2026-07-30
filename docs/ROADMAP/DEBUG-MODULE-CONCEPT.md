@@ -1,7 +1,40 @@
-# Concept: `lib.nvim.debug` — structured logging, diagnostics & crash dumps
+# Concept: structured logging, diagnostics & crash dumps
 
-> Status: **concept / design proposal** (no code yet). Working name
-> `lib.nvim.debug` is a placeholder — see [Open decisions](#open-decisions).
+> ## ✅ IMPLEMENTED — shipped as [`lib.nvim.logger`](../../lua/lib/nvim/logger/)
+>
+> **This document is a historical design record, not open work.** The status
+> line below ("concept / design proposal, no code yet") was accurate when
+> written and is now wrong — the module was built under the name
+> **`lib.nvim.logger`**, resolving [Open decision #1](#12-open-decisions) in
+> favour of the `log`-style name over `debug`.
+>
+> Read the module's own [README](../../lua/lib/nvim/logger/README.md) for the
+> current API. What shipped, mapped onto §11's phases:
+>
+> | Phase | Status |
+> | --- | --- |
+> | 1 — factory, levels, notify sink, ring, serialization | ✅ `init.lua`, `ring.lua`, `record.lua`, `serialize.lua`, `sinks.lua` |
+> | 2 — file sink (JSONL), flush-on-error, encoder | ✅ writes are synchronous, so an ERROR is durable immediately |
+> | 3 — crash capture (`guard`/`wrap`, VimLeavePre) + inspector | ✅ plus `command.lua`, the `:LibDebug`-equivalent control command |
+> | 4 — timing, `once`, assertions, redaction | ✅ `timer`, `once`, `assert`, `redact` |
+>
+> Beyond the concept, the shipped module also has a **global kill switch**
+> (`logger.set_enabled(false)`) and **tag-based filtering**, neither of which
+> appear below. Later additions: `count`/`counters` (frequency tallies that
+> write no record) and `add_sink` (route records to a status line, health
+> check or test harness; a throwing sink is contained).
+>
+> Deliberately not built: log rotation, `vim.notify` interception, and an
+> `echo` sink — see the module README for the reasoning on each.
+>
+> **Do not implement this document.** A pass that re-reads it as open work
+> will produce a duplicate of `lib.nvim.logger`.
+
+---
+
+> Status (historical): **concept / design proposal** (no code yet). Working
+> name `lib.nvim.debug` was a placeholder — see
+> [Open decisions](#12-open-decisions); the shipped name is `lib.nvim.logger`.
 > Everything here is **cross-platform** (paths via `stdpath` / `system.env`,
 > writes via `fs.write` / `vim.uv`; no shell-outs, no OS-specific assumptions).
 

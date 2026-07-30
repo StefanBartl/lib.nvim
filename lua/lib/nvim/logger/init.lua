@@ -127,6 +127,7 @@ function M.new(opts)
     ring = Ring.new(opts.history),
     _notify_sink = sinks.notifier(name),
     _once = {},
+    extra_sinks = {},
   }
 
   -- Core dispatch. `src_level = 4`: getinfo(4) from here lands on the user's
@@ -154,6 +155,12 @@ function M.new(opts)
     local target = (call_opts and call_opts.to) or inst.file
     if target then
       pcall(sinks.write_record, target, record)
+    end
+
+    -- caller-registered sinks, last so a slow or broken one cannot delay the
+    -- durable write above
+    for i = 1, #inst.extra_sinks do
+      pcall(inst.extra_sinks[i], record)
     end
   end
 
@@ -263,6 +270,33 @@ function M.new(opts)
       error("lib.nvim.logger assertion failed: " .. tostring(msg), 2)
     end
     return cond
+  end
+
+  -- Frequency tallies. Deliberately not records: the point is to count an
+  -- event that happens too often to log — a cache miss, a retry — and read
+  -- the total once, rather than writing a line every time.
+  local counters = {}
+
+  ---@param key string
+  ---@return integer
+  inst.count = function(key)
+    counters[key] = (counters[key] or 0) + 1
+    return counters[key]
+  end
+
+  ---@return table<string, integer>
+  inst.counters = function()
+    return vim.deepcopy(counters)
+  end
+
+  -- Extra sinks, for routing records somewhere this module does not know
+  -- about (a status line, a health check, a test harness). Each call is
+  -- pcall'd at emit time, so one bad sink cannot break logging for the rest.
+  ---@param fn fun(record: Lib.Logger.Record)
+  inst.add_sink = function(fn)
+    if type(fn) == "function" then
+      inst.extra_sinks[#inst.extra_sinks + 1] = fn
+    end
   end
 
   -- Crash-capture safety net: flush the ring on editor exit.
