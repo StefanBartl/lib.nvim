@@ -28,6 +28,7 @@ M.separators = {
 
 M.fs.expand_path = require("lib.nvim.cross.fs.expand_path")
 M.fs.mutate = require("lib.nvim.cross.fs.mutate")
+M.fs.wslpath = require("lib.nvim.cross.fs.wslpath")
 
 -- UV/Loop compatibility
 M.uv = {

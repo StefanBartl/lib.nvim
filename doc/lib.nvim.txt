@@ -177,7 +177,9 @@ Neovim adapters.
                            path separators: unify_slashes (\ -> /), normalize
                            (-> OS-native), collapse_dots (lexical ./.. collapse),
                            has_win_sep (C:\ drive predicate), drive_upper
-                           (uppercase C: prefix)
+                           (uppercase C: prefix),
+                           fs.wslpath (to_win / to_unix via the wslpath
+                           binary; nil off WSL and for Linux-only paths)
     lib.nvim.normalize     path / value normalization
     lib.nvim.git           git helpers
     lib.nvim.terminal      terminal-buffer helpers

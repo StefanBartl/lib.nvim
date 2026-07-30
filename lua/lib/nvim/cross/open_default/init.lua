@@ -33,13 +33,7 @@ end
 ---@param unix_path string
 ---@return string|nil
 local function wsl_to_win_path(unix_path)
-  local ok, out =
-    require("lib.nvim.cross.run_argv").run_blocking_captured({ "wslpath", "-w", unix_path })
-  if not ok then
-    return nil
-  end
-  out = out:gsub("\n", "")
-  return (out ~= "" and out) or nil
+  return require("lib.nvim.cross.fs.wslpath").to_win(unix_path)
 end
 
 ---Open `target` (a filesystem path or URL) with the system default handler.
