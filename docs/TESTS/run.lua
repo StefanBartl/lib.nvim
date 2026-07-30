@@ -18,6 +18,7 @@ local specs = {
   "logger_spec.lua",
   "autocmd_spec.lua",
   "run_argv_spec.lua",
+  "wslpath_spec.lua",
   "system_job_spec.lua",
   "ui_kit_spec.lua",
   "statusline_spec.lua",
