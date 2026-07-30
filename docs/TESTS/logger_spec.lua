@@ -116,4 +116,46 @@ return function(H)
   ok(flog.flush(), "flush returns true when file sink present")
   flog.clear()
   eq(#flog.snapshot(), 0, "clear empties the ring")
+
+  -- ---------------------------------------------------------------- counters
+  -- Tallies deliberately write no record: the point is to count an event that
+  -- happens too often to log and read the total once.
+  local clog = L.new({ name = "counters", notify_level = "off", file = false, capture = false })
+  eq(clog.count("miss"), 1, "count() starts at 1")
+  eq(clog.count("miss"), 2, "count() increments")
+  eq(clog.count("hit"), 1, "counters are independent per key")
+  eq(clog.counters().miss, 2, "counters() reports the tally")
+  eq(#clog.snapshot(), 0, "counting writes no records")
+
+  -- counters() must hand out a copy, or a caller could corrupt the tallies.
+  local snapshot = clog.counters()
+  snapshot.miss = 999
+  eq(clog.counters().miss, 2, "counters() returns a copy")
+
+  -- -------------------------------------------------------------- add_sink
+  local slog = L.new({ name = "sinks", notify_level = "off", file = false, capture = false })
+  local seen = {}
+  slog.add_sink(function(record)
+    seen[#seen + 1] = record.msg
+  end)
+  slog.info("through the sink")
+  eq(seen[1], "through the sink", "a registered sink receives records")
+
+  -- A sink below the level gate must not fire: gating happens before fan-out.
+  slog.set_level("error")
+  slog.info("gated out")
+  eq(#seen, 1, "extra sinks respect the level gate")
+
+  -- A throwing sink must not break logging for anything else.
+  slog.set_level("trace")
+  slog.add_sink(function()
+    error("bad sink")
+  end)
+  local ok_after_bad = pcall(slog.info, "after a bad sink")
+  eq(ok_after_bad, true, "a failing sink does not break the logger")
+  eq(seen[#seen], "after a bad sink", "the healthy sink still ran")
+
+  -- A non-function is ignored rather than blowing up at emit time.
+  slog.add_sink("not a function")
+  eq(pcall(slog.info, "still fine"), true, "add_sink ignores a non-function")
 end

@@ -109,6 +109,33 @@ function M.check()
     h_error('require("lib") failed: ' .. tostring(lib))
   end
 
+  -- Active loggers --------------------------------------------------------
+  -- Reports what each plugin registered via lib.nvim.logger.new(), so a bug
+  -- report can name the log file to attach without the user having to know
+  -- where it lives.
+  h_start("lib.nvim: loggers")
+  local ok_logger, logger = pcall(require, "lib.nvim.logger")
+  if not ok_logger then
+    h_error("lib.nvim.logger failed to load: " .. tostring(logger))
+  elseif not logger.is_enabled() then
+    h_warn("logging is globally disabled (logger.set_enabled(false))")
+  else
+    local loggers = logger.loggers()
+    if #loggers == 0 then
+      h_info("no loggers created yet (a plugin creates one on its first setup)")
+    else
+      for _, inst in ipairs(loggers) do
+        h_info(
+          ("%s — level %d, file: %s"):format(
+            tostring(inst.name),
+            tonumber(inst.level) or -1,
+            inst.file or "disabled"
+          )
+        )
+      end
+    end
+  end
+
   -- Classic Vim parity ----------------------------------------------------
   h_start("lib.nvim: lib.vim parity")
   h_info("lib.vim.* are API-compatible stubs for classic Vim.")

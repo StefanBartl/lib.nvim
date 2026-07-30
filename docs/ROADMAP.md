@@ -49,6 +49,13 @@ lib.nvim was audited against the project checklists. Full per-rule status:
    buffer-local commands, count prefix). Dogfooded as lib.nvim's own `:Lib`
    verb, generated reference at `docs/BINDINGS/Usercmds.md`. See
    [usrcmd_builder.md](ROADMAP/usrcmd_builder.md) and `doc/lib.nvim-composer.txt`.
+8. ~~Structured logging / diagnostics / crash dumps~~ Done — shipped as
+   `lib.nvim.logger` (not `lib.nvim.debug`; the naming question in the concept
+   doc was resolved in favour of `logger`). All four phases of
+   [DEBUG-MODULE-CONCEPT.md](ROADMAP/DEBUG-MODULE-CONCEPT.md) are in, plus a
+   global kill switch and tag filtering that the concept did not anticipate.
+   **That concept doc is a historical record — implementing it again would
+   duplicate `lib.nvim.logger`;** it now carries a banner saying so.
 
 ---
 
