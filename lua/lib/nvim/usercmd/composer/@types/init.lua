@@ -13,6 +13,13 @@
 ---| "FILE"
 ---| "BUFFER"
 
+--- A Visual submode, as named in a route's `visual` allowlist. Vim's own raw
+--- spellings ("v"/"V"/"\22") are accepted interchangeably.
+---@alias Lib.UserCmd.Composer.VisualMode
+---| "charwise"   # v
+---| "linewise"   # V
+---| "blockwise"  # CTRL-V
+
 --- One positional argument that follows a route's literal path.
 ---@class Lib.UserCmd.Composer.ArgSpec
 ---@field name      string                          # shown in usage/help/docs
@@ -59,6 +66,7 @@
 ---@field range? boolean|integer
 ---@field count? integer                             # accept a :N Verb count prefix, defaulting to this value when omitted (see nvim_create_user_command's `count`)
 ---@field check? fun(): boolean, string|nil          # optional pre-flight dependency check for THIS route (e.g. "is an external CLI on PATH"), surfaced by handle:check()/composer.checkhealth() alongside run's own resolvability
+---@field visual? Lib.UserCmd.Composer.VisualMode[]  # allowlist of Visual submodes this route accepts, e.g. { "charwise", "blockwise" }. Only enforced when the '<'/'> marks span exactly the invoked range — see check_visual
 
 --- The full spec passed to `composer.verb(name, spec)`.
 ---@class Lib.UserCmd.Composer.Spec
@@ -69,6 +77,7 @@
 ---@field range?   boolean|integer                           # allow a range at the command level
 ---@field count?   integer                                   # allow a :N Verb count prefix at the command level, default value when omitted
 ---@field buffer?  boolean|integer                           # register buffer-locally: true = current buffer, or an explicit bufnr. Default: nil (global)
+---@field visual?  Lib.UserCmd.Composer.VisualMode[]         # default `visual` allowlist for routes that declare none of their own
 
 --- Range info handed to a route's handler via `ctx.range`. `mode`/`col1`/`col2`
 --- are best-effort: populated from `vim.fn.visualmode()`/`getpos("'<"/"'>")`

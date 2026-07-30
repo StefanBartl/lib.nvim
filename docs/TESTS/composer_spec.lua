@@ -894,6 +894,111 @@ return function(H)
     pcall(vim.api.nvim_del_user_command, "ComposerSpecKvFlags")
   end
 
+  -- ------------------------------------------------------- route.visual allowlist
+  do
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, { "hello world", "second line" })
+
+    ---Select lines l1..l2 with `keys`, then dispatch a route declaring `allow`.
+    ---@return string|nil err  nil when the invocation was let through
+    local function try(keys, allow, l1, l2)
+      vim.api.nvim_win_set_cursor(0, { 1, 1 })
+      vim.cmd("normal! " .. keys)
+      local ran = false
+      local spec_v = {
+        routes = {
+          { path = { "go" }, range = true, visual = allow, run = function() ran = true end },
+        },
+      }
+      local msgs = {}
+      parse.dispatch(
+        "ComposerSpecVisualGuard",
+        spec_v,
+        tree.build(spec_v.routes),
+        { fargs = { "go" }, range = 2, line1 = l1, line2 = l2 },
+        { error = function(m) msgs[#msgs + 1] = m end, info = function() end }
+      )
+      return (not ran) and (msgs[1] or "rejected") or nil
+    end
+
+    -- Marks span exactly the invoked range -> the allowlist is enforced.
+    eq(try("vlll\27", { "charwise" }, 1, 1), nil, "route.visual: matching charwise passes")
+    ok(
+      try("vlll\27", { "linewise" }, 1, 1) ~= nil,
+      "route.visual: charwise selection is rejected by a linewise-only route"
+    )
+    eq(try("Vj\27", { "linewise" }, 1, 2), nil, "route.visual: matching linewise passes")
+    eq(
+      try("\22jll\27", { "charwise", "blockwise" }, 1, 2),
+      nil,
+      "route.visual: blockwise passes a list naming it"
+    )
+    ok(
+      try("\22jll\27", { "linewise" }, 1, 2) ~= nil,
+      "route.visual: blockwise is rejected by a linewise-only route"
+    )
+    -- Vim's own spellings are accepted interchangeably with the friendly names.
+    eq(try("vlll\27", { "v" }, 1, 1), nil, "route.visual: raw 'v' spelling is accepted")
+
+    do
+      local err = try("vlll\27", { "linewise", "blockwise" }, 1, 1)
+      ok(
+        err and err:match("blockwise or linewise") and err:match("got charwise"),
+        "route.visual: the rejection names both what was wanted and what arrived"
+      )
+    end
+
+    -- The conservative half: marks that do NOT span the invoked range are
+    -- stale evidence, so the guard stays out of the way rather than refusing.
+    vim.api.nvim_win_set_cursor(0, { 1, 1 })
+    vim.cmd("normal! vlll\27") -- charwise marks on line 1
+    do
+      local ran = false
+      local spec_v = {
+        routes = {
+          {
+            path = { "go" },
+            range = true,
+            visual = { "linewise" },
+            run = function() ran = true end,
+          },
+        },
+      }
+      parse.dispatch(
+        "ComposerSpecVisualStale",
+        spec_v,
+        tree.build(spec_v.routes),
+        { fargs = { "go" }, range = 2, line1 = 1, line2 = 2 }, -- != the marks
+        cap
+      )
+      ok(ran, "route.visual: a typed range that the marks don't describe is let through")
+    end
+
+    -- A route with no allowlist is unaffected, and an allowlist of nothing
+    -- recognizable is treated as a spec bug rather than refusing every call.
+    eq(try("vlll\27", nil, 1, 1), nil, "route.visual: absent allowlist never rejects")
+    eq(try("vlll\27", { "nonsense" }, 1, 1), nil, "route.visual: unrecognized entries never reject")
+  end
+
+  do
+    -- spec.visual is the verb-level default for routes declaring none.
+    vim.api.nvim_win_set_cursor(0, { 1, 1 })
+    vim.cmd("normal! vlll\27")
+    local ran = false
+    local spec_v = {
+      visual = { "linewise" },
+      routes = { { path = { "go" }, range = true, run = function() ran = true end } },
+    }
+    local msgs = {}
+    parse.dispatch(
+      "ComposerSpecVisualSpec",
+      spec_v,
+      tree.build(spec_v.routes),
+      { fargs = { "go" }, range = 2, line1 = 1, line2 = 1 },
+      { error = function(m) msgs[#msgs + 1] = m end, info = function() end }
+    )
+    ok(not ran and msgs[1], "spec.visual: applies to a route that declares none of its own")
+  end
+
   -- ------------------------------------------------------------------ check()
   local check = require("lib.nvim.usercmd.composer.check")
 

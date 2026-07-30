@@ -154,6 +154,28 @@ Two caveats that are inherent to Neovim's API, not to this wrapper:
 - **Linewise `col2` is `MAXCOL` (2147483647)**, Vim's "to end of line" sentinel,
   not a real column. Clamp it against the line length before slicing.
 
+### Restricting which selections a route accepts
+
+A route that only makes sense for certain selection shapes can say so, instead
+of hand-rolling the check (and the error message) itself:
+
+```lua
+{ path = { "column" }, range = true,
+  visual = { "charwise", "blockwise" },   -- a linewise selection is refused
+  run = function(ctx) … end }
+```
+
+Vim's own spellings (`"v"`, `"V"`, `"\22"`) are accepted interchangeably with
+the friendly names. `spec.visual` sets a verb-level default for routes that
+declare none, the same precedence `bang`/`range`/`count` already use.
+
+Enforcement is deliberately conservative, because `mode` is a hint and not
+proof: composer only refuses when the `'<`/`'>` marks span **exactly** the lines
+this invocation was given. A hand-typed `:5,10Verb` that merely happens to
+follow some older Visual selection doesn't line up that way and is let through
+rather than refused on stale evidence — a missed rejection is harmless, a wrong
+one blocks real work.
+
 ## Argument types
 
 Each type carries both validation and completion:

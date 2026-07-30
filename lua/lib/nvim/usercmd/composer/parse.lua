@@ -176,7 +176,15 @@ function M.dispatch(cmd_name, spec, root, opts, notify)
     return
   end
 
-  return run(M.build_ctx(args, pos, flag_values, kv_values, leftover, route.path, opts))
+  local ctx = M.build_ctx(args, pos, flag_values, kv_values, leftover, route.path, opts)
+
+  local vok, verr = M.check_visual(route, spec, ctx)
+  if not vok then
+    notify.error(("%s\n  %s"):format(verr, format.invocation(cmd_name, route)))
+    return
+  end
+
+  return run(ctx)
 end
 
 --- Best-effort Visual-mode/column info for the range that was just given.
@@ -198,6 +206,89 @@ local function visual_info()
     return nil, nil, nil
   end
   return mode, vim.fn.getpos("'<")[3], vim.fn.getpos("'>")[3]
+end
+
+--- Vim's raw `visualmode()` results mapped to the names routes declare.
+---@type table<string, string>
+local MODE_NAME = { v = "charwise", V = "linewise", ["\22"] = "blockwise" }
+
+--- Accept either spelling in a `visual` allowlist, so a route can say
+--- `{ "blockwise" }` or `{ "\22" }` — the friendly name is what error
+--- messages use.
+---@param entry string
+---@return string|nil canonical
+local function canon_mode(entry)
+  if MODE_NAME[entry] then
+    return MODE_NAME[entry]
+  end
+  for _, name in pairs(MODE_NAME) do
+    if entry == name then
+      return name
+    end
+  end
+  return nil
+end
+
+--- Enforce a route's `visual` allowlist, if it declares one.
+---
+--- Deliberately conservative, because `ctx.range.mode` is a hint rather than
+--- proof (see `visual_info`): it only rejects when the `'<`/`'>` marks span
+--- exactly the lines this invocation was given. A hand-typed `:5,10Verb` that
+--- merely happens to follow some older Visual selection does not line up that
+--- way, and is let through rather than refused on stale evidence. The trade is
+--- deliberate — a missed rejection is harmless, a wrong one blocks real work.
+---@param route Lib.UserCmd.Composer.Route
+---@param spec Lib.UserCmd.Composer.Spec|nil
+---@param ctx Lib.UserCmd.Composer.Ctx
+---@return boolean ok
+---@return string|nil err
+function M.check_visual(route, spec, ctx)
+  local allow = route.visual or (spec and spec.visual)
+  if not allow or #allow == 0 then
+    return true, nil
+  end
+
+  local r = ctx.range
+  -- No range, or no Visual info to judge by: nothing to enforce.
+  if (r.range or 0) == 0 or not r.mode then
+    return true, nil
+  end
+
+  -- Only enforce when the marks actually describe THIS range.
+  local ok_pos, m1 = pcall(function()
+    return vim.fn.getpos("'<")[2]
+  end)
+  local ok_pos2, m2 = pcall(function()
+    return vim.fn.getpos("'>")[2]
+  end)
+  if not (ok_pos and ok_pos2) or r.line1 ~= m1 or r.line2 ~= m2 then
+    return true, nil
+  end
+
+  local got = MODE_NAME[r.mode]
+  local wanted = {}
+  for _, entry in ipairs(allow) do
+    local c = canon_mode(entry)
+    if c then
+      wanted[#wanted + 1] = c
+      if c == got then
+        return true, nil
+      end
+    end
+  end
+
+  -- An allowlist naming nothing recognizable is a spec bug, not a user error;
+  -- refusing every invocation over it would be the wrong failure mode.
+  if #wanted == 0 then
+    return true, nil
+  end
+
+  table.sort(wanted)
+  return false,
+    ("this route accepts a %s selection, got %s"):format(
+      table.concat(wanted, " or "),
+      got or "none"
+    )
 end
 
 --- Assemble the handler context.
