@@ -136,6 +136,13 @@ local function make_handle(name, spec, root)
     )
   end
 
+  --- Pre-flight check for THIS verb's routes: does every `run` resolve, and
+  --- does each declared `route.check` pass?
+  ---@return Lib.UserCmd.Composer.CheckResult[]
+  function handle:check()
+    return require("lib.nvim.usercmd.composer.check").results(root)
+  end
+
   return handle
 end
 
@@ -280,6 +287,28 @@ end
 ---@return table<string, Lib.UserCmd.Composer.Handle>
 function M.registry()
   return registry.map()
+end
+
+--- Pre-flight check for EVERY verb registered in this process, keyed by name.
+---@return table<string, Lib.UserCmd.Composer.CheckResult[]>
+function M.check_all()
+  return require("lib.nvim.usercmd.composer.check").all()
+end
+
+--- Report one verb's route checks through `vim.health`. Call this from your
+--- plugin's own `health.lua` — composer cannot register a discoverable
+--- `:checkhealth` target on your behalf (Neovim finds those by scanning the
+--- runtimepath for a real `lua/<plugin>/health.lua`).
+---@param name_or_handle string|Lib.UserCmd.Composer.Handle
+function M.checkhealth(name_or_handle)
+  return require("lib.nvim.usercmd.composer.check").checkhealth(name_or_handle)
+end
+
+--- Notification-based alternative to `checkhealth`, for plugins with no
+--- health.lua to hook into.
+---@return boolean ok_overall
+function M.notify_check_all()
+  return require("lib.nvim.usercmd.composer.check").notify_check_all()
 end
 
 ---@type Lib.UserCmd.Composer

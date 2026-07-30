@@ -121,8 +121,38 @@ defaults to `0` when called with no argument.
 | `ctx.rest`  | leftover tokens beyond the declared schema                 |
 | `ctx.path`  | the literal path that matched (e.g. `{ "surround" }`)      |
 | `ctx.bang`  | `true` when invoked as `:Verb!`                            |
-| `ctx.range` | `{ line1, line2, count, range }` (for range/count commands)|
+| `ctx.range` | `{ line1, line2, count, range, mode, col1, col2 }` — see below|
 | `ctx.raw`   | the untouched nvim callback args                           |
+
+### `ctx.range` and Visual selections
+
+`line1`/`line2`/`count`/`range` come straight from `nvim_create_user_command`'s
+callback. `mode`/`col1`/`col2` are additionally filled in whenever a range was
+actually given (`range > 0`), so a handler can tell the three Visual submodes
+apart instead of only seeing line numbers:
+
+```lua
+{ path = { "surround" }, range = true, run = function(ctx)
+    local r = ctx.range
+    if r.mode == "v" then        -- charwise: columns are meaningful
+      -- r.col1 .. r.col2 within r.line1 .. r.line2
+    elseif r.mode == "V" then    -- linewise: whole lines
+    elseif r.mode == "\22" then  -- blockwise (CTRL-V): a column block
+    end
+  end }
+```
+
+Two caveats that are inherent to Neovim's API, not to this wrapper:
+
+- **`mode` is a hint, not proof.** `vim.fn.visualmode()` and the `'<`/`'>` marks
+  report whichever Visual selection was last active in the session — they do not
+  record whether *this* invocation came from Visual mode. A hand-typed
+  `:5,10Verb` after some earlier, unrelated visual selection still reports that
+  selection's mode and columns. Composer only populates the fields when
+  `range > 0` (so a plain `:Verb` never reports stale state), but within a real
+  range invocation there is no way to distinguish the two cases.
+- **Linewise `col2` is `MAXCOL` (2147483647)**, Vim's "to end of line" sentinel,
+  not a real column. Clamp it against the line length before slicing.
 
 ## Argument types
 
@@ -270,6 +300,59 @@ sets the default path and mode. `mode = "section"` updates a delimited
 `<!-- lib.nvim:composer --> … <!-- /lib.nvim:composer -->` block inside a larger
 file so hand-written prose survives regeneration; `"replace"` (default)
 overwrites the whole file.
+
+## Checking routes (`check` / `checkhealth`)
+
+A route's `run` may be a module path string, required lazily on first dispatch —
+so a typo'd or broken module stays invisible until someone runs that exact
+subcommand. `check` resolves every route up front instead:
+
+```lua
+handle:check()          --> { { path = {"cwd"}, ok = false, err = "module '…' not found: …" }, … }
+composer.check_all()    --> { Replace = { … }, Surround = { … } }
+```
+
+A route may also declare its own dependency check, for anything composer can't
+know about (an external CLI, a provider, a config file):
+
+```lua
+{ path = { "container", "start" },
+  check = function()
+    return vim.fn.executable("docker") == 1, "docker not on PATH"
+  end,
+  run = … }
+```
+
+A check that returns `false` (with or without a message) fails the route; one
+that *throws* is caught and reported as `check() errored: …` rather than taking
+down the report. An unresolvable `run` short-circuits — `check` is not consulted
+for a handler that can't be reached anyway.
+
+### Wiring it into `:checkhealth`
+
+```lua
+-- in your plugin's existing lua/<plugin>/health.lua, inside M.check():
+require("lib.nvim.usercmd.composer").checkhealth("Replace")
+```
+
+Composer generates the whole per-route section; you supply the one line that
+runs it. It cannot register itself as a discoverable `:checkhealth <plugin>`
+target — Neovim finds those by scanning the runtimepath for a real
+`lua/<plugin>/health.lua` file, which a library can't create on another plugin's
+behalf at runtime. Calling `checkhealth` for a verb that was never registered
+reports an error in the health output rather than throwing, and a verb with no
+routes reports `no routes declared` rather than rendering an empty section.
+
+For a plugin with no `health.lua` to hook into, the same data is available as a
+notification instead:
+
+```lua
+composer.notify_check_all()   -- "all 12 route(s) OK", or a per-failure list
+```
+
+**Known limitation:** the registry keys verbs by name only, with no buffer
+number — a buffer-local verb (`spec.buffer`) checked from a different buffer is
+indistinguishable from a global one.
 
 ## Access
 

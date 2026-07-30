@@ -202,6 +202,15 @@ return function(H)
     "resolve_run: passes a function through"
   )
   ok(parse.resolve_run("definitely.not.a.module") == nil, "resolve_run: bad module path → nil")
+  do
+    local fn, err = parse.resolve_run("definitely.not.a.module")
+    ok(fn == nil, "resolve_run: bad module path → nil fn (two-value form)")
+    ok(type(err) == "string" and err:match("definitely%.not%.a%.module"), "resolve_run: bad module path → real require error, not swallowed")
+  end
+  do
+    local fn, err = parse.resolve_run(function() end)
+    ok(type(fn) == "function" and err == nil, "resolve_run: a function passes through with nil err")
+  end
 
   -- ---------------------------------------------------------------- custom type
   composer.register_type("SHOUT", {
@@ -593,6 +602,108 @@ return function(H)
     eq(captured.line2, 9, "ctx.range.line2 reaches the handler")
   end
 
+  -- ------------------------------------------- ctx.range: visual mode + columns
+  -- Best-effort: populated from vim.fn.visualmode()/getpos("'<"/"'>") whenever
+  -- opts.range > 0, regardless of whether this exact invocation came from
+  -- Visual mode (that distinction is not knowable — see parse.lua's
+  -- visual_info() doc comment). A real charwise Visual selection is set up
+  -- here so mode/col1/col2 have real, non-nil values to assert against.
+  do
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, { "hello world", "second line" })
+    vim.api.nvim_win_set_cursor(0, { 1, 1 }) -- col 2 (1-based)
+    vim.cmd("normal! v")
+    vim.api.nvim_win_set_cursor(0, { 1, 6 }) -- col 7
+    vim.cmd("normal! \27") -- <Esc>, sets '< '> without leaving a pending op
+
+    local captured
+    local spec_visual = {
+      routes = {
+        {
+          path = { "go" },
+          range = true,
+          run = function(ctx)
+            captured = ctx.range
+          end,
+        },
+      },
+    }
+    local root3 = tree.build(spec_visual.routes)
+    parse.dispatch(
+      "ComposerSpecVisual",
+      spec_visual,
+      root3,
+      { fargs = { "go" }, range = 2, line1 = 1, line2 = 1 },
+      cap
+    )
+    eq(captured.mode, "v", "ctx.range.mode: charwise visual reports 'v'")
+    eq(captured.col1, 2, "ctx.range.col1: '< mark's column reaches the handler")
+    eq(captured.col2, 7, "ctx.range.col2: '> mark's column reaches the handler")
+  end
+
+  do
+    -- Linewise reports MAXCOL as col2 (Vim's "to end of line" sentinel), not a
+    -- real column -- verified against a live selection, and documented on
+    -- RangeInfo, since a caller slicing with it would otherwise be surprised.
+    vim.api.nvim_win_set_cursor(0, { 1, 0 })
+    vim.cmd("normal! Vj\27")
+
+    local captured
+    local spec_lw = {
+      routes = {
+        { path = { "go" }, range = true, run = function(ctx) captured = ctx.range end },
+      },
+    }
+    parse.dispatch(
+      "ComposerSpecLinewise",
+      spec_lw,
+      tree.build(spec_lw.routes),
+      { fargs = { "go" }, range = 2, line1 = 1, line2 = 2 },
+      cap
+    )
+    eq(captured.mode, "V", "ctx.range.mode: linewise visual reports 'V'")
+    ok(captured.col2 >= 2147483647, "ctx.range.col2: linewise reports Vim's MAXCOL sentinel")
+  end
+
+  do
+    -- Blockwise (CTRL-V) is the third submode and must be distinguishable.
+    vim.api.nvim_win_set_cursor(0, { 1, 1 })
+    vim.cmd("normal! \22jll\27")
+
+    local captured
+    local spec_bw = {
+      routes = {
+        { path = { "go" }, range = true, run = function(ctx) captured = ctx.range end },
+      },
+    }
+    parse.dispatch(
+      "ComposerSpecBlockwise",
+      spec_bw,
+      tree.build(spec_bw.routes),
+      { fargs = { "go" }, range = 2, line1 = 1, line2 = 2 },
+      cap
+    )
+    eq(captured.mode, "\22", "ctx.range.mode: blockwise visual reports CTRL-V")
+  end
+
+  do
+    -- opts.range == 0 (no range given) must NOT populate mode/col1/col2, even
+    -- though the marks above are still set from the previous block -- this is
+    -- exactly the "stale marks" case the doc comment warns about, and the
+    -- guard (opts.range > 0) is what keeps a plain `:Verb` call from
+    -- reporting misleading Visual info it never asked for.
+    local captured
+    local spec_no_range = {
+      routes = {
+        { path = { "go" }, run = function(ctx) captured = ctx.range end },
+      },
+    }
+    local root4 = tree.build(spec_no_range.routes)
+    parse.dispatch("ComposerSpecNoRange", spec_no_range, root4, { fargs = { "go" }, range = 0 }, cap)
+    eq(captured.mode, nil, "ctx.range.mode: nil when no range was given, even with stale marks present")
+    eq(captured.col1, nil, "ctx.range.col1: nil when no range was given")
+    eq(captured.col2, nil, "ctx.range.col2: nil when no range was given")
+  end
+
   -- ------------------------------------------------------- count prefix (:N Verb)
   -- Same "route-level opt-in must reach the real registration" shape as
   -- range/bang above (Phase 8, added for fileops.nvim's `:N File next`).
@@ -781,5 +892,155 @@ return function(H)
     table.sort(cc)
     ok(vim.tbl_contains(cc, "view="), "kv+flags+positional: cmdline completion offers the kv key")
     pcall(vim.api.nvim_del_user_command, "ComposerSpecKvFlags")
+  end
+
+  -- ------------------------------------------------------------------ check()
+  local check = require("lib.nvim.usercmd.composer.check")
+
+  do
+    -- A route whose run is a function always resolves; a route whose run is a
+    -- broken module path is exactly the case that used to surface only as
+    -- "no runnable handler" on first dispatch.
+    local root_c = tree.build({
+      { path = { "good" }, run = function() end },
+      { path = { "broken" }, run = "definitely.not.a.module" },
+    })
+    local results = check.results(root_c)
+    eq(#results, 2, "check.results: one entry per route")
+
+    local by_path = {}
+    for _, r in ipairs(results) do
+      by_path[table.concat(r.path, " ")] = r
+    end
+    eq(by_path.good.ok, true, "check.results: a function run resolves")
+    eq(by_path.good.err, nil, "check.results: a passing route carries no err")
+    eq(by_path.broken.ok, false, "check.results: an unloadable module path fails")
+    ok(
+      type(by_path.broken.err) == "string" and by_path.broken.err:match("definitely%.not%.a%.module"),
+      "check.results: reports the REAL require error, not a generic message"
+    )
+  end
+
+  do
+    -- route.check: passing, failing, and throwing.
+    local root_c = tree.build({
+      { path = { "pass" }, run = function() end, check = function() return true end },
+      {
+        path = { "fail" },
+        run = function() end,
+        check = function() return false, "docker not on PATH" end,
+      },
+      {
+        path = { "throws" },
+        run = function() end,
+        check = function() error("boom") end,
+      },
+      {
+        path = { "bare-false" },
+        run = function() end,
+        check = function() return false end, -- no message supplied
+      },
+    })
+    local by_path = {}
+    for _, r in ipairs(check.results(root_c)) do
+      by_path[table.concat(r.path, " ")] = r
+    end
+
+    eq(by_path.pass.ok, true, "route.check: returning true passes")
+    eq(by_path.fail.ok, false, "route.check: returning false fails")
+    eq(by_path.fail.err, "docker not on PATH", "route.check: its own message is surfaced verbatim")
+    eq(by_path.throws.ok, false, "route.check: a throwing check fails instead of propagating")
+    ok(
+      by_path.throws.err:match("^check%(%) errored: "),
+      "route.check: a thrown error is labeled distinctly from an honest false return"
+    )
+    eq(by_path["bare-false"].ok, false, "route.check: bare false (no message) still fails")
+    ok(
+      type(by_path["bare-false"].err) == "string",
+      "route.check: bare false gets a fallback message rather than a nil err"
+    )
+  end
+
+  do
+    -- A broken `run` short-circuits: route.check is not consulted, since the
+    -- handler is unreachable regardless of what its dependency check says.
+    local called = false
+    local root_c = tree.build({
+      {
+        path = { "x" },
+        run = "definitely.not.a.module",
+        check = function()
+          called = true
+          return true
+        end,
+      },
+    })
+    local r = check.results(root_c)[1]
+    eq(r.ok, false, "check.results: unresolvable run fails regardless of route.check")
+    eq(called, false, "check.results: route.check is skipped when run cannot resolve")
+  end
+
+  do
+    eq(#check.results(tree.build({})), 0, "check.results: a verb with no routes yields no entries")
+  end
+
+  do
+    -- handle:check() and composer.check_all() go through the same results().
+    local handle = composer.verb("ComposerSpecCheck", {
+      routes = {
+        { path = { "ok" }, run = function() end },
+        { path = { "bad" }, run = "definitely.not.a.module" },
+      },
+    })
+    local hres = handle:check()
+    eq(#hres, 2, "handle:check(): returns this verb's route results")
+
+    local all = composer.check_all()
+    ok(all.ComposerSpecCheck ~= nil, "composer.check_all(): includes a registered verb by name")
+    eq(#all.ComposerSpecCheck, 2, "composer.check_all(): carries the same per-route entries")
+    pcall(vim.api.nvim_del_user_command, "ComposerSpecCheck")
+  end
+
+  do
+    -- checkhealth must not throw for an unregistered verb name — it reports.
+    -- vim.health's functions are only valid inside a real :checkhealth run, so
+    -- they're stubbed here to capture calls instead.
+    local real = vim.health
+    local calls = {}
+    ---@diagnostic disable-next-line: inject-field
+    vim.health = {
+      start = function(s) calls[#calls + 1] = { "start", s } end,
+      ok = function(s) calls[#calls + 1] = { "ok", s } end,
+      error = function(s) calls[#calls + 1] = { "error", s } end,
+      info = function(s) calls[#calls + 1] = { "info", s } end,
+      warn = function(s) calls[#calls + 1] = { "warn", s } end,
+    }
+    -- check.lua caches the shim at require time, so re-require it fresh.
+    package.loaded["lib.nvim.usercmd.composer.check"] = nil
+    local check_stubbed = require("lib.nvim.usercmd.composer.check")
+
+    check_stubbed.checkhealth("NoSuchVerbRegisteredAnywhere")
+    local kinds = {}
+    for _, c in ipairs(calls) do
+      kinds[#kinds + 1] = c[1]
+    end
+    ok(vim.tbl_contains(kinds, "start"), "checkhealth: opens a section even for an unknown verb")
+    ok(vim.tbl_contains(kinds, "error"), "checkhealth: unregistered verb reports an error, not a crash")
+
+    calls = {}
+    composer.verb("ComposerSpecHealthEmpty", { routes = {} })
+    check_stubbed.checkhealth("ComposerSpecHealthEmpty")
+    local kinds2 = {}
+    for _, c in ipairs(calls) do
+      kinds2[#kinds2 + 1] = c[1]
+    end
+    ok(
+      vim.tbl_contains(kinds2, "info"),
+      "checkhealth: a route-less verb reports info, not an empty (placeholder) section"
+    )
+    pcall(vim.api.nvim_del_user_command, "ComposerSpecHealthEmpty")
+
+    vim.health = real
+    package.loaded["lib.nvim.usercmd.composer.check"] = nil
   end
 end
