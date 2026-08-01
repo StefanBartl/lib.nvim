@@ -147,14 +147,19 @@ require("lib.nvim.telemetry.command").setup()
 ```
 
 ```vim
-:LibTelemetry            " report across every live instance, in a kit float
-:LibTelemetry lsp.nvim   " report for one namespace
-:LibTelemetry start
-:LibTelemetry stop
-:LibTelemetry reset
+:LibTelemetry                 " report across every live instance, in a kit float
+:LibTelemetry lsp.nvim        " report for one namespace
+:LibTelemetry start [ns]      " every instance, or just one
+:LibTelemetry stop [ns]       " every instance, or just one
+:LibTelemetry reset [ns]      " every instance, or just one
 :LibTelemetry coverage
 :LibTelemetry export [path]
 ```
+
+`start`/`stop`/`reset` take an optional namespace — `:LibTelemetry stop
+markdown.nvim` steers just that instance, leaving every other one running.
+Omit it to act on every instance at once. `<Tab>` after `start `/`stop `/
+`reset ` completes namespaces only (not the subcommand list again).
 
 ## Use from another plugin
 

@@ -442,5 +442,45 @@ return function(H)
     H.ok(lines[1]:find("stopped", 1, true) ~= nil, "header reports the stopped state")
   end
 
+  -- -------------------------------------------------------------------------
+  -- :LibTelemetry — per-namespace start/stop/reset leave other instances alone
+  -- -------------------------------------------------------------------------
+  do
+    require("lib.nvim.telemetry.command").setup()
+
+    local ns_a, ns_b = ns("cmd_a"), ns("cmd_b")
+    local mod_a, mod_b = { f = function() end }, { g = function() end }
+    local ta = telemetry.new({ namespace = ns_a, persist = false })
+    local tb = telemetry.new({ namespace = ns_b, persist = false })
+    ta.wrap(mod_a)
+    tb.wrap(mod_b)
+    ta.start()
+    tb.start()
+    mod_a.f()
+    mod_b.g()
+
+    vim.cmd("LibTelemetry stop " .. ns_a)
+    H.eq(ta.is_running(), false, ":LibTelemetry stop <ns> stops only that instance")
+    H.eq(tb.is_running(), true, "the other instance keeps running")
+
+    vim.cmd("LibTelemetry start " .. ns_a)
+    H.eq(ta.is_running(), true, ":LibTelemetry start <ns> restarts only that instance")
+
+    vim.cmd("LibTelemetry reset " .. ns_a)
+    H.eq(ta.report().total_calls, 0, ":LibTelemetry reset <ns> clears only that instance")
+    H.eq(tb.report().total_calls, 1, "the other instance's data is untouched")
+
+    -- Second-argument completion offers namespaces, not the subcommand list.
+    local completions = vim.fn.getcompletion("LibTelemetry stop ", "cmdline")
+    H.ok(vim.tbl_contains(completions, ns_a), "namespace offered after 'stop '")
+    H.eq(vim.tbl_contains(completions, "start"), false, "subcommands not repeated as a 2nd arg")
+
+    local ok = pcall(vim.cmd, "LibTelemetry stop does-not-exist")
+    H.eq(ok, true, "an unknown namespace warns rather than erroring")
+
+    ta.unwrap()
+    tb.unwrap()
+  end
+
   vim.fn.delete(tmpdir, "rf")
 end
