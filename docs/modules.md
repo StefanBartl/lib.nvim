@@ -33,7 +33,7 @@
 | `lib.nvim.lua_ls`      | LuaLS: module path, `@module` annotation            |
 | `lib.nvim.core`        | misc Neovim helpers (`has_exec`, `simple_echo`)     |
 | `lib.nvim.neotree`     | neo-tree helpers: `node` (get_path / collect_nodes / extract_paths) |
-| [`lib.nvim.treesitter`](../lua/lib/nvim/treesitter/guard/README.md) | `guard`: filetype allowlist gate for treesitter activation ([`:help`](../doc/lib.nvim-treesitter.txt)) |
+| [`lib.nvim.treesitter`](../lua/lib/nvim/treesitter/guard/README.md) | `guard`: filetype allowlist gate for treesitter activation; [`parser_policy`](../lua/lib/nvim/treesitter/parser_policy/README.md): prompt-or-auto-install policy for missing-but-available parsers, persisted "never" list ([`:help`](../doc/lib.nvim-treesitter.txt)) |
 | [`lib.nvim.system`](../lua/lib/nvim/system/README.md) | host env snapshot (`is_windows`/`is_wsl`/…, `home`, `pathsep`, `repo_base`) + Windows rpc pipe + `proc_trace` (blocking-call instrumentation for freeze diagnosis); opt-in `setup` |
 | [`lib.nvim.progress`](../lua/lib/nvim/progress/README.md) | style-agnostic progress indicator: `notify`/`statusline`/`fidget`/`float`/`kit` renderers, delay-guard, focus-gated cancel-with-confirm ([`:help`](../doc/lib.nvim-progress.txt)) |
 | [`lib.nvim.selection`](../lua/lib/nvim/selection/README.md) | reselect a Visual line/char range after a mapping mutates it: `keep_lines`/`keep_chars` ([`:help`](../doc/lib.nvim-selection.txt)) |
@@ -61,7 +61,7 @@ and are generated on install by your plugin manager (see [Help docs](help.md)).
 - [`lib.nvim.fs.open.url.system_opener`](../lua/lib/nvim/fs/open/url/system_opener/README.md) · [`lib.nvim.cross.uv.spawn_stream`](../lua/lib/nvim/cross/uv/spawn_stream/README.md)
 - [`lib.nvim.cross.fs.mutate`](../lua/lib/nvim/cross/fs/mutate/README.md) · [`lib.nvim.cross.fs.lock`](../lua/lib/nvim/cross/fs/lock/README.md)
 - [`lib.nvim.lua_ls.insert.module_annotation`](../lua/lib/nvim/lua_ls/insert/module_annnotation/README.md)
-- [`lib.nvim.treesitter.guard`](../lua/lib/nvim/treesitter/guard/README.md)
+- [`lib.nvim.treesitter.guard`](../lua/lib/nvim/treesitter/guard/README.md) · [`lib.nvim.treesitter.parser_policy`](../lua/lib/nvim/treesitter/parser_policy/README.md)
 - [`lib.nvim.usercmd.composer`](../lua/lib/nvim/usercmd/composer/README.md)
 
 **`:help` pages**
