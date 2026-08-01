@@ -3,7 +3,7 @@
 ## Table of content
 
   - [General](#general)
-  - [Checklist audits & implementation plan](#checklist-audits--implementation-plan)
+  - [Checklist audits & implementation plan](#checklist-audits-implementation-plan)
   - [Finish](#finish)
 
 ---
@@ -11,6 +11,7 @@
 ## General
 
 1. Implement [vim-parity](../doc/vim-parity.md)
+2. Bessere Aufteilung in /docs, ausmisten
 
 ---
 
