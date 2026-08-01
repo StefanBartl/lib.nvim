@@ -1,5 +1,19 @@
 # Concept: `lib.nvim.ui.kit` — a themed, composable UI toolkit
 
+> **Status: implemented.** Shipped as `lib.nvim.ui.kit`
+> (`lua/lib/nvim/ui/kit/`) — see [§13](#13-phased-roadmap) for the
+> phase-by-phase status (all 11 originally-scoped-plus-follow-on phases are
+> done). Docs: `lua/lib/nvim/ui/kit/README.md`, `:h lib.nvim-kit`. Tests:
+> `docs/TESTS/ui_kit_spec.lua`. The line below ("no code yet") was accurate
+> when this was written and is now stale — kept here, not corrected, because
+> it's an honest record of where the module started.
+>
+> **This document is a historical design record, not open work.** It stays
+> (rather than being deleted once implemented, unlike some other concept
+> docs) because the module's own source comments point at specific sections
+> here by number (`§7`, `§9`, `§10`, `§13a`, `§13b`, …) as the rationale for
+> non-obvious decisions — deleting it would leave those pointers dead.
+>
 > Status: **concept / design proposal** (no code yet). Working name `ui.kit` is
 > a placeholder — see [Open decisions](#open-decisions).
 > Everything specified here is **cross-platform** (pure `vim.api` / `vim.fn`

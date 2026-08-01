@@ -7,7 +7,7 @@
 --- paths, buffer contents and possibly tokens into `stdpath("cache")` — a
 --- profiler that does that is a security bug wearing a feature's name.
 ---
---- Rules (see docs/ROADMAP/usage-telemetry.md):
+--- Rules (see lua/lib/nvim/telemetry/README.md, "Argument profiling, done honestly"):
 ---   nil/boolean/number/short string -> the value itself
 ---   long string                     -> truncated with an ellipsis marker
 ---   table                           -> "<table:n=3>" (shape, not contents)

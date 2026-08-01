@@ -318,9 +318,9 @@ stop with :LibTelemetry stop.
 ## Not implemented
 
 `wrap_tree(prefix)` — hooking `require` so lazily-loaded submodules are caught
-automatically (phase 6 of [the roadmap](../../../../docs/ROADMAP/usage-telemetry.md)).
-Strictly more powerful and strictly more ways to surprise, notably around
-`package.loaded` identity. Use explicit `wrap()` calls per module.
+automatically. Deliberately last: strictly more powerful and strictly more
+ways to surprise, notably around `package.loaded` identity. Use explicit
+`wrap()` calls per module.
 
 ## Files
 

@@ -9,7 +9,10 @@
 > `docs/BINDINGS/Usercmds.md`. The rest of this document is the original
 > design proposal, kept for context — sections below describing something as
 > "decided" or a "sketch" reflect the state before implementation, not an
-> open question.
+> open question. Kept rather than deleted once implemented (unlike some other
+> concept docs): `composer`'s own source comments point at specific phases
+> here by number (e.g. `flags.lua`'s "Phase 6") — deleting it would leave
+> those pointers dead.
 
 ## 1. Purpose
 

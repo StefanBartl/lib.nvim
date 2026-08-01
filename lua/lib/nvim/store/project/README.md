@@ -65,9 +65,13 @@ store.stats("cascade/anchors")
 
 ## Migration candidates
 
-Several plugins hand-roll project-keyed JSON persistence today (window/buffer
-layout, tree scroll state, spell-ignore lists, command favorites, API
-metrics, filesystem-scan caches, picker history — see
-[project-store.md](../../../../../docs/ROADMAP/project-store.md) for the full
-list). None need to change; this is a "when convenient" simplification, not
-a required migration.
+Several plugins hand-roll project-keyed JSON persistence today. Each of these
+could drop its own persistence code in favor of `store.project`
+opportunistically, without behavior changes — none need to, this is a "when
+convenient" simplification, not a required migration:
+
+- `cmdlog.nvim` favorites — removes the hand-rolled Windows ENOENT/mkdir path
+- `reposcope.nvim` metrics — removes raw `writefile`/`readfile`/`json.decode`
+- `filetree.nvim` session state — already project-keyed, would become a
+  thinner wrapper
+- `gopath.nvim` truncated-path cache, `pickers.nvim` history

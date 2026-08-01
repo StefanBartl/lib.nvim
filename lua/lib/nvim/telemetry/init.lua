@@ -43,7 +43,7 @@
 --- - Day bucketing reads the clock once per flush, not per call, so calls in
 ---   the last flush interval before midnight land in the previous day.
 ---
---- NOT IMPLEMENTED (phase 6 of docs/ROADMAP/usage-telemetry.md)
+--- NOT IMPLEMENTED (deliberately last, strictly more surprising than the rest)
 --- `wrap_tree(prefix)` — hooking `require` to catch lazily-loaded submodules.
 --- Strictly more powerful and strictly more ways to surprise; use explicit
 --- `wrap()` calls per module.
