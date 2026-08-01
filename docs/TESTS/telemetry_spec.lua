@@ -10,6 +10,7 @@ return function(H)
   local store = require("lib.nvim.telemetry.store")
   local fingerprint = require("lib.nvim.telemetry.fingerprint")
   local reminder = require("lib.nvim.telemetry.reminder")
+  local toggle = require("lib.nvim.telemetry.toggle")
 
   local seq = 0
   local function ns(name)
@@ -443,6 +444,80 @@ return function(H)
   end
 
   -- -------------------------------------------------------------------------
+  -- toggle.lua: persistent disable, isolated from the real stdpath("cache")
+  -- via an explicit dir (every function takes one for exactly this reason).
+  -- -------------------------------------------------------------------------
+  do
+    local topts = { dir = tmpdir }
+    local n1, n2 = ns("toggle_a"), ns("toggle_b")
+
+    H.eq(toggle.is_disabled(n1, topts), false, "nothing disabled yet")
+    toggle.disable(n1, topts)
+    H.eq(toggle.is_disabled(n1, topts), true, "disable persists immediately")
+    H.eq(toggle.is_disabled(n2, topts), false, "a different namespace is untouched")
+
+    toggle.disable(n2, topts)
+    local listed = toggle.disabled_list(topts)
+    table.sort(listed)
+    H.eq(#listed, 2, "disabled_list sees both")
+
+    toggle.enable(n1, topts)
+    H.eq(toggle.is_disabled(n1, topts), false, "enable clears it")
+    H.eq(toggle.is_disabled(n2, topts), true, "enabling one leaves the other disabled")
+
+    toggle.enable(n1, topts) -- enabling an already-enabled namespace: no-op, no error
+    toggle.enable(n2, topts)
+    H.eq(#toggle.disabled_list(topts), 0, "both cleared")
+  end
+
+  -- -------------------------------------------------------------------------
+  -- disable/enable integration: inst.start() honors a persisted disable, and
+  -- takes effect on a LIVE instance without the caller re-calling start().
+  -- Isolated via dir=tmpdir (threaded into the same toggle checks above).
+  -- -------------------------------------------------------------------------
+  do
+    local namespace = ns("toggle_integration")
+    local mod = { f = function() end }
+
+    -- Disabling before the instance exists: the common case (`:LibTelemetry
+    -- disable <ns>` for a plugin that has not loaded yet this session).
+    telemetry.disable(namespace) -- module-level API has no dir param; see below
+
+    -- Since the module-level disable() above has no way to know this
+    -- instance will use `dir=tmpdir` (it doesn't exist yet), it persisted to
+    -- the default cache — the documented edge case. Exercise the realistic
+    -- path instead: disable AFTER the instance exists, which is what
+    -- `:LibTelemetry disable <ns>` actually does for an already-loaded
+    -- plugin, and is the path that matters for "persistently toggle a
+    -- running plugin".
+    telemetry.enable(namespace) -- undo the pre-emptive (default-dir) disable above
+
+    local t = telemetry.new({ namespace = namespace, persist = false, dir = tmpdir })
+    t.wrap(mod)
+    H.eq(t.start(), true, "starts normally before any disable")
+    mod.f()
+
+    telemetry.disable(namespace)
+    H.eq(t.is_running(), false, "telemetry.disable() stops a live, running instance immediately")
+    H.eq(toggle.is_disabled(namespace, t._cache_opts), true, "persisted under the instance's own dir")
+
+    H.eq(t.start(), false, "start() is a no-op while disabled")
+    H.eq(t.is_running(), false, "...and does not report itself as running")
+
+    telemetry.enable(namespace)
+    H.eq(t.is_running(), true, "telemetry.enable() resumes it immediately")
+
+    local report = t.report()
+    H.eq(report.disabled, false, "report reflects the enabled state")
+
+    telemetry.disable(namespace)
+    H.eq(t.report().disabled, true, "report reflects the disabled state")
+
+    t.unwrap()
+    telemetry.enable(namespace) -- leave no persisted disable behind for this dir
+  end
+
+  -- -------------------------------------------------------------------------
   -- :LibTelemetry — per-namespace start/stop/reset leave other instances alone
   -- -------------------------------------------------------------------------
   do
@@ -477,6 +552,42 @@ return function(H)
 
     local ok = pcall(vim.cmd, "LibTelemetry stop does-not-exist")
     H.eq(ok, true, "an unknown namespace warns rather than erroring")
+
+    ta.unwrap()
+    tb.unwrap()
+  end
+
+  -- -------------------------------------------------------------------------
+  -- :LibTelemetry disable/enable/disabled — dir=tmpdir, isolated from the
+  -- real stdpath("cache") the same way the toggle tests above are.
+  -- -------------------------------------------------------------------------
+  do
+    local ns_a, ns_b = ns("cmd_disable_a"), ns("cmd_disable_b")
+    local mod_a, mod_b = { f = function() end }, { g = function() end }
+    local ta = telemetry.new({ namespace = ns_a, persist = false, dir = tmpdir })
+    local tb = telemetry.new({ namespace = ns_b, persist = false, dir = tmpdir })
+    ta.wrap(mod_a)
+    tb.wrap(mod_b)
+    ta.start()
+    tb.start()
+
+    vim.cmd("LibTelemetry disable " .. ns_a)
+    H.eq(ta.is_running(), false, ":LibTelemetry disable <ns> stops that instance now")
+    H.eq(tb.is_running(), true, "the other instance is untouched")
+    H.eq(ta.start(), false, "start() stays a no-op while disabled, even called directly")
+
+    local disabled_lines = {}
+    local ok_report = pcall(function()
+      disabled_lines = ta.report()
+    end)
+    H.eq(ok_report, true, "report() does not throw on a disabled instance")
+    H.eq(disabled_lines.disabled, true, "report marks it disabled")
+
+    vim.cmd("LibTelemetry enable " .. ns_a)
+    H.eq(ta.is_running(), true, ":LibTelemetry enable <ns> resumes it now")
+
+    local ok_unknown = pcall(vim.cmd, "LibTelemetry disable does-not-exist")
+    H.eq(ok_unknown, true, "disabling an unknown/not-yet-loaded namespace does not error")
 
     ta.unwrap()
     tb.unwrap()

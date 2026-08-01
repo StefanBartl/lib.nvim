@@ -11,6 +11,9 @@
 ---   :LibTelemetry start [ns]      start every instance, or just one
 ---   :LibTelemetry stop [ns]       stop every instance, or just one
 ---   :LibTelemetry reset [ns]      drop collected data, every instance or just one
+---   :LibTelemetry disable [ns]    stop + persist "off" across restarts
+---   :LibTelemetry enable [ns]     clear a persisted disable, resume now
+---   :LibTelemetry disabled        list namespaces currently disabled
 ---   :LibTelemetry coverage        which wrapped functions were never called
 ---   :LibTelemetry export [path]   write a JSON snapshot
 
@@ -19,7 +22,8 @@ local notify = require("lib.nvim.notify").create("[lib.nvim.telemetry]")
 
 local M = {}
 
-local SUBCOMMANDS = { "report", "start", "stop", "reset", "coverage", "export" }
+local SUBCOMMANDS =
+  { "report", "start", "stop", "reset", "disable", "enable", "disabled", "coverage", "export" }
 
 ---@return Lib.Telemetry
 local function telemetry()
@@ -152,6 +156,28 @@ function M.setup()
         end
         notify.info("collected data cleared")
       end
+    elseif first == "disable" or first == "enable" then
+      -- Unlike start/stop/reset, a namespace here does NOT need a live
+      -- instance to exist — disabling something before it has ever loaded
+      -- this session is the common case, not an edge case.
+      if rest and rest ~= "" then
+        mod[first](rest)
+        notify.info(("%sd %s"):format(first, rest))
+        return
+      end
+
+      local n = 0
+      for _, inst in ipairs(mod.instances()) do
+        mod[first](inst.namespace)
+        n = n + 1
+      end
+      notify.info(("%sd %d instance(s)"):format(first, n))
+    elseif first == "disabled" then
+      local list = mod.disabled()
+      show(
+        #list > 0 and list or { "no namespace is currently disabled." },
+        "lib.nvim.telemetry — disabled"
+      )
     elseif first == "coverage" then
       local lines = {}
       for _, inst in ipairs(mod.instances()) do
@@ -184,7 +210,7 @@ function M.setup()
     end
   end, {
     nargs = "*",
-    desc = "lib.nvim.telemetry: report|start|stop|reset|coverage|export [namespace]",
+    desc = "lib.nvim.telemetry: report|start|stop|reset|disable|enable|disabled|coverage|export [namespace]",
     complete = function(arg_lead, cmd_line)
       -- Second token of `start`/`stop`/`reset` is always a namespace, never
       -- another subcommand — narrow completion there instead of offering
@@ -193,7 +219,7 @@ function M.setup()
       local sub = before:match("^%S+%s+(%S+)%s+%S*$")
 
       local out = {}
-      if sub == "start" or sub == "stop" or sub == "reset" then
+      if sub == "start" or sub == "stop" or sub == "reset" or sub == "disable" or sub == "enable" then
         for _, inst in ipairs(telemetry().instances()) do
           out[#out + 1] = inst.namespace
         end

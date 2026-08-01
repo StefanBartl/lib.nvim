@@ -86,6 +86,7 @@
 ---@class Lib.Telemetry.Report
 ---@field namespace string
 ---@field running boolean
+---@field disabled boolean
 ---@field modes { counting: boolean, args: boolean, timing: boolean, errors: boolean }
 ---@field started_at integer
 ---@field sessions integer
@@ -121,5 +122,9 @@
 ---@field report_all fun(opts?: Lib.Telemetry.ReportOpts): Lib.Telemetry.Report[]
 ---@field flush_all fun(): integer
 ---@field stop_all fun(): integer
+---@field disable fun(namespace: string): nil
+---@field enable fun(namespace: string): nil
+---@field is_disabled fun(namespace: string): boolean
+---@field disabled fun(): string[]
 
 return {}
