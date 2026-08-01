@@ -22,6 +22,8 @@ local watch = require("lib.nvim.neotree.watch")
 watch.install()          -- patch neo-tree's fs_watch (idempotent; false if absent)
 watch.release(path)      -- close the handle(s) on path + every watched subpath
 watch.with_release(path, fn)  -- release → fn() → release again
+watch.list()             -- { path, active, exists }[], sorted — for diagnostics
+watch.count()            -- how many watchers are currently tracked
 ```
 
 - **`install()`** wraps `fs_watch.watch_folder` to record every watcher neo-tree
@@ -55,6 +57,12 @@ fsops.rename_file(old, new, {
 
 When nothing is installed/tracked (non-neotree setup, or the guarding feature is
 off), `release` simply releases nothing — so passing the hook is always safe.
+
+**`list()`** returns a snapshot of every tracked watcher (`path`, `active`, and
+`exists` — whether `path` still exists on disk). `exists = false` is the leak
+signature: a watcher still pointing at a path neo-tree never released after a
+move/delete. filetree.nvim's `handle_guard` feature surfaces this via
+`:Filetree handles` and its healthcheck line.
 
 Neo-tree-specific by design (it patches a neo-tree internal), hence its home
 under `lib.nvim.neotree`, alongside `node`.
