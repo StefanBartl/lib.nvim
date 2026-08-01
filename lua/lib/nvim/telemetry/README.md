@@ -111,6 +111,35 @@ t.unwrap()                                 -- also forget the registered targets
 started, is a no-op rather than an error, because hot-reloaded configs call
 setup paths repeatedly.
 
+### Persistent enable/disable
+
+`stop()` only affects the current process — tomorrow's session calls
+`t.start()` again and it's back. For "I looked at `markdown.nvim`'s numbers,
+I'm done, stop wrapping it, and don't start it again next time either" without
+editing whoever calls `t.start()` at startup:
+
+```lua
+telemetry.disable("markdown.nvim")   -- persists; stops a live instance right now
+telemetry.enable("markdown.nvim")    -- clears it; resumes a live instance right now
+telemetry.is_disabled("markdown.nvim")
+telemetry.disabled()                 -- every namespace currently disabled
+```
+
+Or from the command line: `:LibTelemetry disable markdown.nvim` /
+`:LibTelemetry enable markdown.nvim` / `:LibTelemetry disabled`. Works even
+before that namespace's instance has ever been created (disable a plugin
+before it loads this session) — `inst.start()` checks the flag and is a
+no-op while it's set, so the caller that wires `t.start()` up once at startup
+never has to change. The flag lives in its own cache entry, separate from a
+namespace's collected data, so `t.reset()` clears counts without silently
+re-enabling anything.
+
+One documented edge: the flag is persisted under the instance's own
+`opts.dir` once that instance exists (so it's checked consistently), but
+falls back to the default cache dir when disabling a namespace that has no
+live instance yet. If that instance later shows up with a **custom** `dir`,
+disable it again after it's created rather than before.
+
 ### Reading the data
 
 ```lua
@@ -303,4 +332,5 @@ Strictly more powerful and strictly more ways to surprise, notably around
 | `fingerprint.lua` | argument → bounded, non-secret string key |
 | `report.lua` | report building + rendering, incl. the memoization hint |
 | `reminder.lua` | the time/volume lifecycle trigger |
+| `toggle.lua` | persistent per-namespace enable/disable, independent of an instance's own data |
 | `command.lua` | `:LibTelemetry` (opt-in `setup()`) |

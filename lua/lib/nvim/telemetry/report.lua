@@ -49,7 +49,7 @@ end
 ---Build the report for one instance's data.
 ---@param namespace string
 ---@param data Lib.Telemetry.Data
----@param meta { running: boolean, wrapped: integer, modes: table }
+---@param meta { running: boolean, disabled: boolean, wrapped: integer, modes: table }
 ---@param opts? Lib.Telemetry.ReportOpts
 ---@return Lib.Telemetry.Report
 function M.build(namespace, data, meta, opts)
@@ -122,6 +122,7 @@ function M.build(namespace, data, meta, opts)
   return {
     namespace = namespace,
     running = meta.running,
+    disabled = meta.disabled,
     modes = meta.modes,
     wrapped = meta.wrapped,
     started_at = data.started_at,
@@ -149,7 +150,10 @@ function M.lines(report)
   end
   local mode_str = #modes > 0 and ("counting + " .. table.concat(modes, " + ")) or "counting"
 
-  local state = report.running and "running" or "stopped"
+  -- `M.disable()` always stops a live instance before persisting, and
+  -- `inst.start()` refuses to run while disabled, so "disabled" and
+  -- "running" never overlap in practice.
+  local state = report.disabled and "disabled" or (report.running and "running" or "stopped")
   out[#out + 1] = ("%s  —  %s"):format(report.namespace, state)
   out[#out + 1] = ("  %s · %s wrapped · %s calls · %d session(s)%s"):format(
     mode_str,

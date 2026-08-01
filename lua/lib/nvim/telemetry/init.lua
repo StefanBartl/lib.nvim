@@ -15,6 +15,9 @@
 ---   -- ... days later ...
 ---   vim.print(t.report({ since = "7d", top = 20 }))
 ---
+---   telemetry.disable("lib.nvim")   -- persists across restarts, stops it now;
+---   telemetry.enable("lib.nvim")    -- the caller of t.start() above never changes
+---
 --- OFF COSTS NOTHING, LITERALLY
 --- Instrumentation is *installed*, not compiled in: until `start()` runs, the
 --- shipped functions are the original functions — the same objects, not a
@@ -55,6 +58,7 @@ local registry = require("lib.nvim.telemetry.registry")
 local reminder = require("lib.nvim.telemetry.reminder")
 local report_mod = require("lib.nvim.telemetry.report")
 local store = require("lib.nvim.telemetry.store")
+local toggle = require("lib.nvim.telemetry.toggle")
 
 local M = {}
 
@@ -183,7 +187,7 @@ function M.new(opts)
     remind_after = reminder.DEFAULTS
   end
 
-  local inst = { namespace = namespace }
+  local inst = { namespace = namespace, _cache_opts = cache_opts }
 
   --- Targets registered via wrap()/wrap_fn(), whether or not currently attached.
   ---@type table[]
@@ -470,9 +474,24 @@ function M.new(opts)
   ---`opts.profile_args` / `opts.time` / `opts.errors` take either a list of
   ---keys or `true`. Argument profiling is deliberately not a global default:
   ---counting is one integer add, fingerprinting is work on every call.
+  ---
+  ---A no-op while this namespace is persistently disabled
+  ---(`telemetry.disable(namespace)` / `:LibTelemetry disable <ns>`) — the
+  ---caller that wires `t.start()` up at startup does not need to know or
+  ---care; the toggle takes effect without touching that call site.
   ---@param start_opts? Lib.Telemetry.StartOpts
   ---@return boolean started
   function inst.start(start_opts)
+    -- Same `cache_opts` this instance already uses for its own counts — so a
+    -- custom `dir` (tests; a plugin with its own cache location) is checked
+    -- consistently by both. The one edge this does not cover: pre-emptively
+    -- disabling a namespace, by name, before an instance with a non-default
+    -- `dir` has ever been created — nothing yet knows what dir it will use.
+    -- `telemetry.disable(namespace)` before that point falls back to the
+    -- default (real) cache; see toggle.lua's module doc-comment.
+    if toggle.is_disabled(namespace, cache_opts) then
+      return false
+    end
     start_opts = start_opts or {}
 
     for _, tgt in ipairs(targets) do
@@ -571,6 +590,7 @@ function M.new(opts)
 
     return report_mod.build(namespace, merged(), {
       running = running,
+      disabled = toggle.is_disabled(namespace, cache_opts),
       wrapped = #targets,
       modes = modes,
     }, report_opts)
@@ -698,6 +718,53 @@ function M.stop_all()
     end
   end
   return n
+end
+
+---Persistently disable a namespace: survives restarts, and takes effect
+---without the caller who wired up `t.start()` needing to change anything —
+---see `lib.nvim.telemetry.toggle` for why this is not just `inst.stop()`.
+---Stops a live instance immediately if one exists; works even if none does
+---(e.g. disabling a plugin before it has loaded this session).
+---
+---If a live instance already exists, the flag is persisted to ITS cache dir
+---(same one `inst.start()` will check) rather than the default — matters
+---only for an instance created with a custom `opts.dir`. Disabling a
+---not-yet-created namespace always uses the default dir, since nothing yet
+---knows what dir a future instance will pick.
+---@param namespace string
+function M.disable(namespace)
+  local inst = M.get(namespace)
+  toggle.disable(namespace, inst and inst._cache_opts or nil)
+  if inst then
+    inst.stop()
+  end
+end
+
+---Clear a persistent disable. Resumes a live instance immediately if one
+---exists (with whatever `start()` options it was last given).
+---@param namespace string
+function M.enable(namespace)
+  local inst = M.get(namespace)
+  toggle.enable(namespace, inst and inst._cache_opts or nil)
+  if inst then
+    inst.start()
+  end
+end
+
+---@param namespace string
+---@return boolean
+function M.is_disabled(namespace)
+  local inst = M.get(namespace)
+  return toggle.is_disabled(namespace, inst and inst._cache_opts or nil)
+end
+
+---Every namespace currently persisted as disabled, sorted. Best-effort: only
+---sees the default cache dir, so a namespace disabled under a live instance's
+---custom `opts.dir` will not appear here even though `is_disabled()` for that
+---exact namespace still returns correctly.
+---@return string[]
+function M.disabled()
+  return toggle.disabled_list()
 end
 
 ---@type Lib.Telemetry
