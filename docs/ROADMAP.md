@@ -11,7 +11,17 @@
 ## General
 
 1. Implement [vim-parity](../doc/vim-parity.md)
-2. Bessere Aufteilung in /docs, ausmisten
+2. ~~Bessere Aufteilung in /docs, ausmisten~~ Partially done — fully-implemented
+   concept docs with no unique content left outside their own module (no
+   granular source cross-references into specific sections) get deleted once
+   shipped: `DEBUG-MODULE-CONCEPT.md`, `project-store.md`,
+   `usage-telemetry.md`, `UI-KIT-TASK-native-select.md` all went this way.
+   `UI-KIT-CONCEPT.md` and `usrcmd_builder.md` stay — both are pointed at by
+   section number from their module's own shipped source comments, so
+   deleting them would leave dead links across live code. Still open: the
+   remaining audit docs (`Arch&Coding.md`/`Checklist.md`/`Zentral-Prinzipien.md`)
+   and `NEOTREE_FEATURES.md` are living references, not roadmap clutter, and
+   are not part of this pass.
 
 ---
 
@@ -42,8 +52,7 @@ lib.nvim was audited against the project checklists. Full per-rule status:
    on push/PR.
 6. ~~Project-scoped persistent store~~ Done — `lib.nvim.store.project`
    ships, combining `lib.nvim.cache.disk` + `lib.nvim.fs.project_key`. See
-   [project-store.md](ROADMAP/project-store.md) (updated with its
-   implementation status) and `doc/lib.nvim-store.txt`.
+   `lua/lib/nvim/store/project/README.md` and `doc/lib.nvim-store.txt`.
 7. ~~Subcommand user-command composer~~ Done — `lib.nvim.usercmd.composer`
    (`:Verb sub sub ARG` + derived `<Tab>` completion + Markdown docgen)
    ships all 8 planned phases (typed args, flags, bare `key=value`,
@@ -51,12 +60,10 @@ lib.nvim was audited against the project checklists. Full per-rule status:
    verb, generated reference at `docs/BINDINGS/Usercmds.md`. See
    [usrcmd_builder.md](ROADMAP/usrcmd_builder.md) and `doc/lib.nvim-composer.txt`.
 8. ~~Structured logging / diagnostics / crash dumps~~ Done — shipped as
-   `lib.nvim.logger` (not `lib.nvim.debug`; the naming question in the concept
-   doc was resolved in favour of `logger`). All four phases of
-   [DEBUG-MODULE-CONCEPT.md](ROADMAP/DEBUG-MODULE-CONCEPT.md) are in, plus a
-   global kill switch and tag filtering that the concept did not anticipate.
-   **That concept doc is a historical record — implementing it again would
-   duplicate `lib.nvim.logger`;** it now carries a banner saying so.
+   `lib.nvim.logger` (not `lib.nvim.debug`; the original concept's naming
+   question was resolved in favour of `logger`), all four originally-planned
+   phases plus a global kill switch and tag filtering the concept did not
+   anticipate. See `lua/lib/nvim/logger/README.md` and `doc/lib.nvim-logger.txt`.
 
 ---
 
