@@ -127,8 +127,10 @@ input, live_input, form, select, prompt, confirm, menu, picker, progress. >lua
   prompt  ask: `answer_type = "confirm"` (yes/no, boolean answer) or `"text"`.
           Add `layout = "buttons"` for the horizontal button dialog.
   confirm button dialog: horizontal buttons, h/l/arrows move focus, <CR>
-          confirms, <Esc>/q cancels. Default Yes/No -> boolean; custom `choices`
-          -> chosen string (cancel -> nil).
+          confirms, <Esc>/q cancels, left click confirms a button directly
+          (needs 'mouse'=a; click on blank space is a no-op, not a cancel).
+          Default Yes/No -> boolean; custom `choices` -> chosen string
+          (cancel -> nil).
   menu    cursor-anchored action list: items = { { label, action }, … };
           picking an item runs its callback.
   progress passthrough to |lib.nvim-progress| (lib.nvim.progress.create);
