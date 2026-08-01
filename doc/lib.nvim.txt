@@ -205,7 +205,9 @@ Neovim adapters.
     lib.nvim.telemetry     opt-in call counting / usage statistics: wrappers
                            installed at start() (zero cost while stopped),
                            namespaced persistence across restarts, argument
-                           fingerprinting with a memoization hint, opt-in
+                           fingerprinting with a memoization hint, per-
+                           namespace start/stop/reset + persistent
+                           disable/enable that survives a restart, opt-in
                            :LibTelemetry (see lua/lib/nvim/telemetry/README.md)
     lib.nvim.neotree       neo-tree.nvim-specific helpers: node (path/node
                            extraction from a neo-tree state, marks/pickers
@@ -282,6 +284,8 @@ Modules with dedicated `:help` documentation. Jump to one via its tag, or
     lib.nvim.usercmd.composer  subcommand user commands + docgen |lib.nvim-composer|
     lib.nvim.fs          filesystem helpers: paths, scanning, IO, trash |lib.nvim-fs|
     lib.nvim.store       project-scoped persistent state       |lib.nvim-store|
+    lib.nvim.logger      structured logging / diagnostics / crash dumps |lib.nvim-logger|
+    lib.nvim.harvest     collect from a scope, then show/export it |lib.nvim-harvest|
 
 Every other module documents itself in a `README.md` next to its source; see
 the namespace tables under |lib.nvim-namespaces|.
