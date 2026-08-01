@@ -96,7 +96,7 @@ kit.popup({ type = "prompt", question = "Delete?", answer_type = "confirm", on_a
 | `form`   | sequential multi-field prompt — chained `input`s collected into one keyed table; `<Esc>` skips an optional field, aborts on a `required` one |
 | `select` | native themed list chooser (single/multi; `j`/`k`, `<CR>`, `<Tab>` mark) |
 | `prompt` | ask: `answer_type = "confirm"` (yes/no → boolean) or `"text"` |
-| `confirm` | button dialog — horizontal buttons, `h`/`l`/arrows move, `<CR>` confirm, `<Esc>` cancel |
+| `confirm` | button dialog — horizontal buttons, `h`/`l`/arrows move, `<CR>` confirm, `<Esc>` cancel, left click confirms a button directly |
 | `menu`    | cursor-anchored action list — `{ label, action }` items; picking runs the action |
 | `progress`| passthrough to [`lib.nvim.progress`](../../progress/README.md) (`:update`/`:finish`/`:cancel`) |
 
@@ -157,6 +157,13 @@ kit.confirm({ question = "Pick", choices = { "Keep", "Discard", "Cancel" },
 `h`/`l`/arrows/`<Tab>` move focus (the focused button uses `KitSelection`),
 `<CR>` confirms, `<Esc>`/`q` cancels (default → `false`, custom → `nil`). See
 [assets/ui-kit/confirm-buttons.svg](../../../../../docs/ROADMAP/assets/ui-kit/confirm-buttons.svg).
+
+**Mouse:** a left click on a button focuses *and* confirms it in one action
+(needs `:set mouse=a`, as any mouse interaction does). Clicking blank space
+inside the dialog is a no-op — it does not cancel, matching the rest of the
+kit, where clicking empty space never dismisses a surface. Hit-testing uses
+`getmousepos()` against the per-button ranges the focus highlight already
+tracks, so the click target is exactly the visible `[ Label ]` box.
 
 ### Form (multi-field)
 

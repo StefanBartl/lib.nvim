@@ -1,9 +1,14 @@
 ---@module 'lib.nvim.ui.kit.confirm'
 --- Button-confirm component: a question with a row of horizontal buttons
 --- reachable with h/l (or arrows / <Tab>), <CR> confirms the focused button,
---- <Esc>/q cancels. The focused button is highlighted with the theme's
---- `KitSelection` group. This is the Phase-4 "cherry on top" from
---- docs/ROADMAP/UI-KIT-CONCEPT.md §9; sketch: assets/ui-kit/confirm-buttons.svg.
+--- <Esc>/q cancels. A left click on a button focuses *and* confirms it in
+--- one action, like a real button (not a two-step "click to focus, Enter to
+--- confirm" — `state.ranges`, already tracked for the focus-highlight
+--- extmark, is exactly the per-button screen geometry a click needs to hit-
+--- test against, so this is additive over existing state, not new state).
+--- The focused button is highlighted with the theme's `KitSelection` group.
+--- This is the Phase-4 "cherry on top" from docs/ROADMAP/UI-KIT-CONCEPT.md
+--- §9; sketch: assets/ui-kit/confirm-buttons.svg.
 ---
 --- Answer contract (matches the list-based confirm in prompt.lua):
 ---   - default { "Yes", "No" }  -> on_answer(boolean)  (Yes == true)
@@ -97,6 +102,44 @@ end
 ---@return integer
 function M.current_focus()
   return state.focus
+end
+
+--- Which button (if any) the mouse is currently over, by hit-testing
+--- `getmousepos()` against `state.ranges`. Reads live mouse state rather
+--- than relying on the click having already moved the cursor first — that
+--- ordering isn't a contract Neovim makes for a mapped `<LeftMouse>`, so
+--- hit-testing the click position directly is the only version-independent
+--- way to know which button was actually hit.
+---@return integer|nil
+local function button_at_mousepos()
+  if not M.is_open() then
+    return nil
+  end
+  local pos = vim.fn.getmousepos()
+  if pos.winid ~= state.surf.winid then
+    return nil
+  end
+  local row, col = pos.line - 1, pos.column - 1 -- getmousepos() is 1-based
+  for i, r in ipairs(state.ranges) do
+    if r.row == row and col >= r.start_col and col < r.end_col then
+      return i
+    end
+  end
+  return nil
+end
+
+--- Focus and confirm whichever button is under the mouse, if any. A click
+--- that misses every button (blank space in the dialog) is a no-op, not a
+--- cancel — matches clicking empty space anywhere else in the kit, which
+--- never dismisses the surface either.
+function M.click()
+  local i = button_at_mousepos()
+  if not i then
+    return
+  end
+  state.focus = i
+  render_focus()
+  M.confirm()
 end
 
 --- Move focus by `delta` buttons, wrapping around.
@@ -218,6 +261,7 @@ function M.open(opts)
   map("n", "<CR>", M.confirm, mo)
   map("n", "<Esc>", M.cancel, mo)
   map("n", "q", M.cancel, mo)
+  map("n", "<LeftMouse>", M.click, mo)
 
   return surf
 end
