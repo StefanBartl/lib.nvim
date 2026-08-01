@@ -1,21 +1,42 @@
-*lib.nvim-treesitter.txt*     Filetype allowlist gate for treesitter features
+*lib.nvim-treesitter.txt*     Filetype allowlist gate + parser install policy
 
 lib.nvim.treesitter                                    *lib.nvim-treesitter*
+
+Two independent submodules for treesitter-dependent features:
+
+  - `guard`         filetype allowlist gate (highlighting, foldexpr,
+                     indentexpr) — see |lib.nvim-treesitter-guard|
+  - `parser_policy` prompt-or-auto-install policy for missing-but-available
+                     parsers — see |lib.nvim-treesitter-parser_policy|
+
+==============================================================================
+CONTENTS                                       *lib.nvim-treesitter-contents*
+
+  1. Guard ................................. |lib.nvim-treesitter-guard|
+       Usage .............................. |lib.nvim-treesitter-guard-usage|
+       Functions .......................... |lib.nvim-treesitter-guard-functions|
+         is_enabled ....................... |lib.nvim-treesitter-is_enabled|
+  2. Parser Policy .......................... |lib.nvim-treesitter-parser_policy|
+       Usage .............................. |lib.nvim-treesitter-parser_policy-usage|
+       Modes .............................. |lib.nvim-treesitter-parser_policy-modes|
+       Functions .......................... |lib.nvim-treesitter-parser_policy-functions|
+         setup ............................ |lib.nvim-treesitter-parser_policy-setup|
+         get_mode ......................... |lib.nvim-treesitter-parser_policy-get_mode|
+         set_mode ......................... |lib.nvim-treesitter-parser_policy-set_mode|
+         declined ......................... |lib.nvim-treesitter-parser_policy-declined|
+         reset_declined ................... |lib.nvim-treesitter-parser_policy-reset_declined|
+         ensure ........................... |lib.nvim-treesitter-parser_policy-ensure|
+
+==============================================================================
+1. GUARD                                          *lib.nvim-treesitter-guard*
 
 Filetype allowlist gate for treesitter-dependent features (highlighting,
 foldexpr, indentexpr). Not a parser-availability probe — a curated allowlist
 of filetypes considered safe/desired for treesitter activation, kept
 centrally so multiple activation hooks share one list.
 
-==============================================================================
-CONTENTS                                       *lib.nvim-treesitter-contents*
-
-  1. Usage ................................ |lib.nvim-treesitter-usage|
-  2. Functions ............................ |lib.nvim-treesitter-functions|
-       is_enabled ......................... |lib.nvim-treesitter-is_enabled|
-
-==============================================================================
-1. USAGE                                          *lib.nvim-treesitter-usage*
+------------------------------------------------------------------------------
+USAGE                                       *lib.nvim-treesitter-guard-usage*
 >lua
     local guard = require("lib.nvim.treesitter.guard")
 
@@ -27,10 +48,9 @@ CONTENTS                                       *lib.nvim-treesitter-contents*
       end,
     })
 <
-==============================================================================
-2. FUNCTIONS                                  *lib.nvim-treesitter-functions*
-
 ------------------------------------------------------------------------------
+FUNCTIONS                               *lib.nvim-treesitter-guard-functions*
+
 is_enabled({bufnr}, {whitelist})            *lib.nvim-treesitter-is_enabled*
 
 Whether treesitter should be enabled for `bufnr`. `whitelist` defaults to
@@ -39,5 +59,83 @@ Whether treesitter should be enabled for `bufnr`. `whitelist` defaults to
     guard.is_enabled(bufnr)
     guard.is_enabled(bufnr, { lua = true, python = true })
 <
+==============================================================================
+2. PARSER POLICY                         *lib.nvim-treesitter-parser_policy*
+
+Prompt-or-auto-install policy for missing-but-available treesitter parsers.
+The modern `nvim-treesitter` (`main` branch) never auto-installs anything —
+without a mechanism like this, a missing parser degrades silently to no
+highlighting at all, with no error anywhere (this is how `---@module`
+LuaCATS annotations went unhighlighted for a while: the `luadoc` injection
+parser was simply never installed).
+
+This module never calls |vim.treesitter.start()| itself. Callers pass
+`opts.on_installed` to `ensure()` and decide what "the parser just became
+available" means for their buffer(s).
+
+------------------------------------------------------------------------------
+USAGE                          *lib.nvim-treesitter-parser_policy-usage*
+>lua
+    local policy = require("lib.nvim.treesitter.parser_policy")
+    policy.setup({ mode = "prompt" })
+
+    vim.api.nvim_create_autocmd("FileType", {
+      callback = function(args)
+        local lang = vim.treesitter.language.get_lang(vim.bo[args.buf].filetype)
+        policy.ensure(lang, {
+          on_installed = function()
+            pcall(vim.treesitter.start, args.buf)
+          end,
+        })
+      end,
+    })
+<
+------------------------------------------------------------------------------
+MODES                          *lib.nvim-treesitter-parser_policy-modes*
+
+"off"       Do nothing.
+"prompt"    (default) Ask once per language via a themed select prompt
+            (|lib.nvim-kit|): Yes / No / Never for this language.
+"auto"      Install immediately, no prompt — just a short notify.
+
+A "Never for `<lang>`" answer is remembered via |lib.nvim-cache| (disk
+backend) and survives restarts, so the same language never re-prompts.
+"No" is *not* remembered — it asks again next time.
+
+------------------------------------------------------------------------------
+FUNCTIONS                   *lib.nvim-treesitter-parser_policy-functions*
+
+setup({opts})                     *lib.nvim-treesitter-parser_policy-setup*
+
+`opts.mode` sets the initial mode (default `"prompt"`).
+
+------------------------------------------------------------------------------
+get_mode()                      *lib.nvim-treesitter-parser_policy-get_mode*
+
+Returns the current mode (`"off"|"prompt"|"auto"`).
+
+------------------------------------------------------------------------------
+set_mode({mode})                *lib.nvim-treesitter-parser_policy-set_mode*
+
+Switch mode at runtime. Returns `ok, err?`.
+
+------------------------------------------------------------------------------
+declined()                      *lib.nvim-treesitter-parser_policy-declined*
+
+Sorted `string[]` of languages the user said "never" to.
+
+------------------------------------------------------------------------------
+reset_declined()          *lib.nvim-treesitter-parser_policy-reset_declined*
+
+Clears the declined list, in memory and on disk.
+
+------------------------------------------------------------------------------
+ensure({lang}, {opts})              *lib.nvim-treesitter-parser_policy-ensure*
+
+Runs the policy for `lang`. No-op if `lang` is empty, already installed, not
+a known installable parser, mid-install/mid-prompt already, or (in
+`"prompt"` mode) declined. `opts.on_installed(lang)` fires once, only on a
+real successful install.
+
 ==============================================================================
 vim:tw=78:ts=8:ft=help:norl:
