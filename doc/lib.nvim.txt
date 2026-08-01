@@ -202,6 +202,13 @@ Neovim adapters.
     lib.nvim.store         project: persistent state keyed by project root
                            (git root, else cwd), built on cache.disk +
                            fs.project_key |lib.nvim-store|
+    lib.nvim.neotree       neo-tree.nvim-specific helpers: node (path/node
+                           extraction from a neo-tree state, marks/pickers
+                           share it), watch (file-watcher handle registry +
+                           proactive release — fixes a Windows directory-
+                           lock neo-tree's own fs_watch leaks on rename/
+                           delete; drive release() from cross.fs.mutate's
+                           on_retry hook, see lua/lib/nvim/neotree/watch/README.md)
 
 ------------------------------------------------------------------------------
 lib.vim                                                      *lib.nvim-lib.vim*
