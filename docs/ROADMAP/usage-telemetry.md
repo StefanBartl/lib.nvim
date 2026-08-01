@@ -1,6 +1,15 @@
 # `lib.nvim.telemetry` — opt-in call tracing & usage statistics
 
-> **Status:** concept, not implemented. Written in response to: "ein Modul,
+> **Status: implemented.** Phases 1–5 ship as `lib.nvim.telemetry`; the module
+> reference is [`lua/lib/nvim/telemetry/README.md`](../../lua/lib/nvim/telemetry/README.md)
+> and the spec is `docs/TESTS/telemetry_spec.lua`. Phase 6 (`wrap_tree`) is
+> deliberately not implemented — see [Implementation phases](#implementation-phases).
+> The [Open questions](#open-questions) below are answered, each with what was
+> chosen. **This document is now a design record**; the README is the
+> authoritative API reference, and implementing this doc again would duplicate
+> the module.
+>
+> Written in response to: "ein Modul,
 > das man ein- und ausschalten kann und alle Aufrufe zählt — nach 7 Tagen
 > nachschauen, wie oft wurde lib.xy aufgerufen, mit welchen Argumenten, und
 > wenn eine Funktion zu 90 % dasselbe Argument bekommt, kann man den Pfad
@@ -386,6 +395,13 @@ can be read correctly.
 
 ## Possible extensions, ranked
 
+Shipped: 1 (timing, `min`/`mean`/`max` — no `p95`, which needs a per-function
+histogram and a different size/accuracy trade-off), 3 (coverage, as
+`t.coverage()` and `:LibTelemetry coverage`) and 5 (error counting, opt-in).
+Not shipped: 2 (caller attribution) and 4 (session comparison) — both are
+additive on top of what exists and neither is needed to answer the original
+question.
+
 1. **Timing** (`min`/`max`/`mean`/`p95` per function). Natural companion to
    counts and the same machinery. Combined with counts it answers "what
    actually costs time", which is a better optimization question than "what
@@ -424,6 +440,8 @@ misleading:
 
 ## Implementation phases
 
+Phases 1–5 shipped. Phase 6 did not, for the reason stated in it.
+
 1. **Counting + persistence + report**, instance-based, with
    `t.wrap()`/`t.wrap_fn()` and `only`/`except`/`filter` scoping from the
    start. No arg profiling, no timing, no `wrap_tree`. This alone answers
@@ -447,6 +465,10 @@ misleading:
 
 ## Open questions
 
+All seven are answered below, each with what shipped and why. They are kept in
+their original form because the trade-off is the part worth remembering; the
+**Resolved** note is what the code does.
+
 1. **Aggregate vs. modules — for lib.nvim's own instance.** Instrumenting
    `lib.*` (the aggregate) is one wrap site and matches how config code
    calls things. Instrumenting each `require("lib.nvim.…")` module catches
@@ -455,28 +477,105 @@ misleading:
    — but this is a real trade-off, not an obvious call. (For *other*
    plugins the question doesn't arise the same way: they list their own
    modules explicitly via `t.wrap()`.)
+
+   > **Resolved: the aggregate**, as `t.wrap_lib()`. The limitation (a direct
+   > `require("lib.nvim.fs.mkdirp")` is invisible) is in the module's HONEST
+   > LIMITS. The wrap list is *derived* from the strategy rather than
+   > hand-written, so it cannot drift; table-valued keys (`lib.strings`,
+   > `lib.kit`) get their function fields registered one level deep, since
+   > `lib.strings` itself is never called. A plugin wanting module-level
+   > coverage calls `t.wrap()` per module, which is what other plugins do
+   > anyway.
+
 2. **Where the `loaded` cache hook lives.** Telemetry needs the strategies
    to expose a cache-reset; that is a small public addition to a module that
    currently has none. Worth designing deliberately rather than bolting on.
+
+   > **Resolved: a new `lib.strategies.control`**, which each strategy
+   > registers itself with at load time (`keys()` + optional `reset_cache()`).
+   > It answers a second question the concept did not raise but which turned
+   > out to matter more: under the metatable strategy `pairs(lib)` yields
+   > *nothing*, so the wrap list was not discoverable at all. `keys()` falls
+   > back to `pairs()` for the plain "eager"/"lazy" tables, so nothing depends
+   > on registration having happened.
+   >
+   > Note on `loaded[key]`: `wrap_lib()` `rawset`s the wrapper onto the
+   > aggregate, and a raw field shadows `__index` entirely — so the resolved-key
+   > cache cannot hand out a pre-wrap value for a wrapped key. `reset_cache()`
+   > is still used on `unwrap()`, where the raw fields are removed and the
+   > metatable takes over again.
+
 3. **Day-bucketing granularity.** Per-day keys make "last 7 days" trivial
    and bound growth. Per-session keys answer "which session was slow" but
    grow unboundedly. Probably per-day, with a session counter alongside.
+
+   > **Resolved: per-day, with a session counter**, as leaned. Day buckets hold
+   > call counts only — argument, timing and error stats are lifetime totals, so
+   > the stored size does not multiply by the retention window. The clock is
+   > read once per flush rather than per call, which costs at most one flush
+   > interval of misattribution around midnight and keeps the hot path free of
+   > `os.date`.
+
 4. **Default retention.** 7 days matches the stated use case; 30 would
    support "did last month's refactor change anything". Needs a number, and
    a documented prune step.
+
+   > **Resolved: 30 days** (`retention_days`), pruned on every flush. 7 days is
+   > the *reminder* threshold, which is the number the use case actually named;
+   > retention only has to be at least as long, and 30 is what makes
+   > before/after-a-refactor answerable without a second mechanism.
+
 5. **Namespace collision between plugins.** Two plugins picking the same
    namespace silently share a cache file and produce merged, wrong numbers.
    Options: require the namespace to match the plugin's own module prefix,
    warn on a second `new()` with an existing namespace, or just document it.
    Leaning "warn" — it is cheap and the failure is otherwise invisible.
+
+   > **Resolved: warn**, as leaned. Requiring the namespace to match a module
+   > prefix would break the legitimate case of one plugin running several
+   > scoped instances. Separately, the namespace is **sanitized** before it
+   > reaches `cache.disk` — the unescaped-path hole this document flagged is
+   > closed at the telemetry layer, and `store.sanitize` is covered by the spec.
+
 6. **Should a plugin's instance auto-stop on `VimLeavePre`?** Flushing there
    is settled; whether to also restore the wrappers is not. It costs
    nothing either way at shutdown, but "stop() always runs" is a cleaner
    invariant to reason about than "sometimes the process just ends".
+
+   > **Resolved: flush only, no auto-stop.** The invariant `stop()` protects is
+   > "no wrapper outlives the decision to collect", and at `VimLeavePre` the
+   > process outlives nothing. Calling `stop()` there would also make the exit
+   > path do teardown work whose only observable effect is on state about to be
+   > discarded. `stop()` itself flushes, so the two paths converge on the part
+   > that matters.
+
 7. **Should `only`/`except` accept patterns, or exact names only?** Exact
    names are unambiguous; Lua patterns are far more convenient for "all
    public functions" (`filter` already covers that case, which may make
    patterns redundant). Leaning exact names plus `filter`, so there is one
    escape hatch rather than two overlapping ones.
+
+   > **Resolved: exact names plus `filter`**, as leaned. `filter` receives
+   > `(name, fn)`, so a pattern is one line and anything a pattern cannot
+   > express is available too.
+
+## What shipped beyond the concept
+
+Three things the design did not call for, each because implementing it exposed
+the need:
+
+- **The shared wrap layer is in phase 1, not phase 6.** The concept deferred it
+  on the grounds that phase 1 only needed the *bookkeeping* to be module-level.
+  It turned out that once bookkeeping is module-level, subscription is a handful
+  of extra lines — and shipping the nesting bug first, then fixing it later,
+  would mean early data collected under it is quietly wrong.
+- **The dominant-argument hint is suppressed below 20 calls and for
+  zero-argument calls.** `()` is always 100 % dominant and never actionable, and
+  3-of-4 calls is 75 % and means nothing. A hint that fires on noise is a hint
+  that gets ignored, which costs more than not having it.
+- **`errors` and `outermost_only` are separate opt-ins from timing**, because
+  both need the call to return through the wrapper even when it raises — that
+  is a `pcall` per call, a materially different cost from two `hrtime()` reads,
+  and bundling them would have made timing quietly expensive.
 
 

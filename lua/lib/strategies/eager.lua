@@ -159,5 +159,9 @@ LIB.normalize = require("lib.nvim.normalize")
 LIB.system = require("lib.nvim.system")
 LIB.system_info = require("lib.nvim.system.info")
 
+-- Plain table, everything already resolved: pairs() is the full key set and
+-- there is nothing to invalidate.
+require("lib.strategies.control").register({ name = "eager", table = LIB })
+
 ---@type Lib
 return LIB

@@ -217,5 +217,33 @@ setmetatable(LIB, {
   end,
 })
 
+-- ============================================================================
+-- Introspection hook
+-- ============================================================================
+
+-- `pairs(LIB)` yields nothing under this strategy (every key lives behind
+-- `__index`), and `loaded` is a file-local. Callers that need the full key set
+-- or a cache invalidation go through `lib.strategies.control` instead of
+-- guessing — see that module for why both are unreachable from outside.
+require("lib.strategies.control").register({
+  name = "metatable",
+  table = LIB,
+  keys = function()
+    local keys = {}
+    for key in pairs(MODULE_MAP) do
+      keys[#keys + 1] = key
+    end
+    for key in pairs(SPECIAL_HANDLERS) do
+      if MODULE_MAP[key] == nil then
+        keys[#keys + 1] = key
+      end
+    end
+    return keys
+  end,
+  reset_cache = function()
+    loaded = {}
+  end,
+})
+
 ---@type Lib
 return LIB
