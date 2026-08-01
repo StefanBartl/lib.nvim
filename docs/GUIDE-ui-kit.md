@@ -92,7 +92,7 @@ is correct in any colorscheme. Override any of the seven semantic keys:
 | `input`    | single-line insert-mode prompt (`<CR>` submit, `<Esc>` cancel) | |
 | `select`   | native themed list chooser (`j`/`k`, `<CR>`, `<Tab>` marks in multi) | |
 | `prompt`   | ask: `answer_type = "confirm"` (yes/no → boolean) or `"text"` | |
-| `confirm`  | horizontal-button dialog (`h`/`l` move, `<CR>` confirm) | ↓ |
+| `confirm`  | horizontal-button dialog (`h`/`l` move, `<CR>` confirm, click confirms) | ↓ |
 | `menu`     | cursor-anchored action list (`{ label, action }`) | |
 | `picker`   | interactive prompt + results + preview (see §5) | ↓ |
 | `progress` | passthrough to [`lib.nvim.progress`](../lua/lib/nvim/progress/README.md) | |
@@ -108,7 +108,8 @@ is correct in any colorscheme. Override any of the seven semantic keys:
 **confirm** — `kit.confirm({ question, choices?, on_answer })`. Default
 `Yes`/`No` yields a boolean; a custom `choices` list yields the chosen string
 (cancel → `nil`). `h`/`l`/arrows move focus, `<CR>` confirms, `<Esc>`/`q`
-cancels.
+cancels. A left click on a button focuses and confirms it directly (needs
+`mouse=a`); clicking blank space in the dialog is a no-op, not a cancel.
 
 ![confirm](ROADMAP/assets/ui-kit/confirm-buttons.svg)
 
