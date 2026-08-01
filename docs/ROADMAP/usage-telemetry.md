@@ -85,38 +85,171 @@ silently under-reports and is trusted anyway.
 
 ## Proposed API
 
+**Instance-based, not a singleton** — same shape as `logger.new()` and
+`docmap.install()`, and for the same reason: this must be usable from any
+plugin against its own surface, not only by lib.nvim against `lib.*` (see
+[Use from other plugins](#use-from-other-plugins)).
+
 ```lua
 local telemetry = require("lib.nvim.telemetry")
 
--- Counting only. This is the "leave it on for a week" mode.
-telemetry.start()
+local t = telemetry.new({ namespace = "lib.nvim" })
 
--- Counting + argument profiling, scoped. Never global by default.
-telemetry.start({
-  profile_args = { "lib.nvim.fs.find_root", "lib.lua.strings.trim" },
+t.wrap(lib)               -- instrument a table of functions
+t.start()                 -- counting only: the "leave it on for a week" mode
+
+t.start({                 -- counting + argument profiling, scoped
+  profile_args = { "fs.find_root", "strings.trim" },
 })
 
-telemetry.stop()          -- restores originals, keeps collected data
-telemetry.is_running()
+t.stop()                  -- restores originals, keeps collected data
+t.is_running()
 
-telemetry.report()        -- table, for programmatic use
-telemetry.report({ sort = "calls", top = 30 })
+t.report()                -- table, for programmatic use
+t.report({ sort = "calls", top = 30 })
 
-telemetry.reset()         -- clear collected data
-telemetry.flush()         -- persist now (also happens on VimLeavePre)
+t.reset()                 -- clear collected data
+t.flush()                 -- persist now (also happens on VimLeavePre)
 ```
+
+`telemetry.instances()` enumerates every live instance, so one command can
+report across all of them without each plugin registering its own.
 
 Plus a user command, following `:LibMap`'s opt-in registration pattern
 (`require("lib.nvim.telemetry.command").setup()` — requiring the module
 alone never registers a command):
 
 ```vim
-:LibTelemetry            " show the report in a kit float
+:LibTelemetry            " report across all instances, in a kit float
+:LibTelemetry lsp.nvim   " report for one namespace
 :LibTelemetry start
 :LibTelemetry stop
 :LibTelemetry reset
 :LibTelemetry export     " write a JSON snapshot
 ```
+
+## Scope: whole project, one module, or single functions
+
+Instrumenting everything is rarely what you want, and it is the version with
+the highest on-cost. Scope should be selectable at three granularities,
+narrowing as you go:
+
+```lua
+-- 1. a whole table (a module, or lib's aggregate)
+t.wrap(require("lsp.servers"), "servers")
+
+-- 2. only some functions of it
+t.wrap(require("lsp.servers"), "servers", { only = { "attach", "detach" } })
+
+-- 3. everything except the noisy internals
+t.wrap(require("lsp.handlers"), "handlers", { except = { "on_publish" } })
+
+-- 4. a predicate, when a name list would be a list to maintain
+t.wrap(require("lsp.util"), "util", {
+  filter = function(name) return not name:match("^_") end,
+})
+
+-- 5. a single function, no table involved
+t.wrap_fn(require("lsp.servers").attach, "servers.attach")
+```
+
+This is not just ergonomics — it is what makes the advice in
+[What to instrument](#what-to-instrument-and-what-not-to) actionable.
+Saying "don't wrap hot inner helpers, wrap the public surface" is useless
+without a mechanism to *express* that, and `only`/`except`/`filter` is that
+mechanism. Narrower scope also means less on-cost: the overhead is per
+wrapped call, so wrapping 6 functions instead of 120 is proportionally
+cheaper while it runs.
+
+`wrap_fn` matters for a different reason: some interesting functions are not
+reachable as a named table field (a local passed into a callback, a closure
+returned by a factory such as `find_root({...}).find`). Wrapping the value
+directly covers those, at the cost of the caller having to store the
+returned wrapper themselves.
+
+## Use from other plugins
+
+**Yes — and it should be a first-class use case, not an afterthought.**
+`docmap` already set this precedent in this repo: written for `lib.nvim`,
+but every layout assumption is an option, so another plugin points it at its
+own tree and gets its own map. Telemetry should follow exactly that rule.
+
+```lua
+-- in lsp.nvim
+local t = require("lib.nvim.telemetry").new({ namespace = "lsp.nvim" })
+
+t.wrap(require("lsp.servers"), "servers")
+t.wrap(require("lsp.handlers"), "handlers", { only = { "definition", "hover" } })
+t.start()
+
+-- days later, from inside lsp.nvim:
+local report = t.report({ since = "7d", top = 20 })
+```
+
+Four things make this work, and one of them needs care:
+
+**Persistence is already namespaced.** `cache.disk` keys by namespace, so
+`lsp.nvim`'s counts and `lib.nvim`'s counts are separate files with no merge
+logic needed. **But**: `cache.disk` builds its path as
+`cache_dir .. "/" .. namespace .. ".json"` with *no* sanitization (verified
+in `lua/lib/nvim/cache/disk.lua`). A namespace is a plugin-chosen string, so
+telemetry must sanitize it before passing it down — otherwise a namespace
+containing `/` or `..` writes outside the cache directory. Cheap to fix at
+the telemetry layer; fixing it in `cache.disk` itself would be a separate,
+wider change.
+
+**Reports are per-instance by default.** `t.report()` returns only that
+namespace's data — exactly what "ich aktiviere es in lsp.nvim und kann dort
+die stats auslesen" asks for. The cross-instance view is opt-in via
+`telemetry.instances()`, so a plugin never accidentally reports on another
+plugin's numbers.
+
+**Teardown is per-instance and idempotent.** Each instance restores only
+what it wrapped. Stopping twice, or stopping an instance that never started,
+is a no-op rather than an error — same rule as `docmap.uninstall()`, and for
+the same reason (hot-reloaded configs call setup paths repeatedly).
+
+**The wrap target differs, and that is the real asymmetry.** `lib.nvim` has
+one flat aggregate table, so `t.wrap(lib)` covers nearly everything. A
+plugin's public surface is usually spread across submodules, so wrapping
+`require("lsp")` alone catches far less. Two options, both worth offering:
+
+| Approach | Coverage | Cost |
+|---|---|---|
+| `t.wrap(module, prefix, opts)`, called per module | Exactly what you list | Explicit, no surprises, but a list to maintain |
+| `t.wrap_tree("lsp")` — hook `require` for a module prefix | Everything under the prefix, including lazily-loaded submodules | More invasive; must not break `package.loaded` identity |
+
+Phase 1 should ship `t.wrap()`/`t.wrap_fn()` only. `wrap_tree` is strictly
+more powerful and strictly more likely to have surprising interactions — it
+deserves its own phase and its own testing, not a day-one bundle.
+
+### The one genuinely tricky case: two instances, one function
+
+If `lsp.nvim`'s instance wraps a function that `lib.nvim`'s instance has
+*already* wrapped, you get nested wrappers. Two real problems, not stylistic
+ones:
+
+- **Double counting** — the inner wrapper's count and the outer's both fire,
+  and neither is wrong on its own, but a naive cross-instance report sums
+  them.
+- **Restore ordering** — if the *inner* instance stops first, the outer
+  wrapper still holds a reference to the inner wrapper, and the "original"
+  it restores later is actually a wrapper. Stopping in the wrong order
+  leaves instrumentation permanently installed with no way to notice.
+
+For the common case this never happens: each plugin wraps its own modules,
+and the sets are disjoint. It only arises when a plugin wants to measure its
+use of *another* library's functions — which is really the caller-attribution
+feature (extension #2 below), not plain counting.
+
+The fix, when that phase comes: **one shared wrap layer, instances
+subscribe.** A function is wrapped at most once, globally; the wrapper
+dispatches the event to every instance that registered interest in that key.
+Restore then happens once, when the last interested instance detaches, and
+double counting is structurally impossible. Phase 1 does not need this, but
+the internals must not preclude it — specifically, the wrap bookkeeping
+should live in a module-level registry from the start, not inside each
+instance's closure.
 
 ## Persistence: the "nach 7 Tagen" part
 
@@ -131,6 +264,46 @@ should use it rather than inventing a second file format.
   `report({ since = "7d" })` is answerable and old days can be dropped.
 - Bound the stored size explicitly. An unbounded table keyed by argument
   value is a memory leak with a plausible-sounding name — see below.
+
+## Lifecycle: reminding you to actually read the data
+
+Telemetry that gets switched on and then forgotten is the failure mode this
+feature invites: it keeps costing overhead for months, and the data it
+collected never gets looked at. So once **enough** data exists, the module
+should say so, once, and point at the report.
+
+```
+[lib.nvim.telemetry] lsp.nvim has been collecting for 7 days
+(48 210 calls, 63 functions). Review with :LibTelemetry lsp.nvim —
+stop with :LibTelemetry stop.
+```
+
+Design rules, each with a reason:
+
+- **The threshold check must not touch the hot path.** Checking "have we hit
+  7 days / N calls yet?" on every wrapped call would add a branch and a
+  clock read to the exact code path this whole design keeps minimal. Check
+  it where work already happens anyway: at flush time, and once on
+  `VimEnter`. A reminder being a few minutes late costs nothing.
+- **Fire once per threshold, and persist that it fired.** A reminder that
+  reappears every session is a nag that gets muted, which defeats it. The
+  "already reminded at 7d" flag belongs in the same cache entry as the
+  counts.
+- **Both a time and a volume trigger, whichever comes first.** 7 days of a
+  barely-used function is not enough data; 50 000 calls in one afternoon
+  already is. Configurable per instance: `remind_after = { days = 7,
+  calls = 50000 }`, `remind_after = false` to opt out entirely.
+- **Actionable, not informational.** The message names the exact commands
+  for reading and stopping. A reminder that says "you have data" without
+  saying how to look at it just moves the forgetting one step later.
+- **Escalate to a second, gentler reminder only if the first is ignored.**
+  If collection continues far past the threshold (say 4× the configured
+  duration), one more notice — then stop reminding for good. Two messages
+  over months is a reminder; more is nagging.
+
+Worth noting: this pairs naturally with the "dominant argument → consider
+memoization" hint. The reminder is what gets the user to *look*; the hint is
+what makes looking worth it.
 
 ## Argument profiling, done honestly
 
@@ -251,23 +424,37 @@ misleading:
 
 ## Implementation phases
 
-1. **Counting + persistence + report.** No arg profiling, no timing. This
-   alone answers the original question ("wie oft wurde xy aufgerufen") and
-   is the phase that must have zero off-cost.
-2. **`:LibTelemetry` command + kit report UI.** Uses `lib.nvim.ui.kit`; no
-   new UI code.
-3. **Argument fingerprinting**, per-function opt-in, bounded cardinality,
+1. **Counting + persistence + report**, instance-based, with
+   `t.wrap()`/`t.wrap_fn()` and `only`/`except`/`filter` scoping from the
+   start. No arg profiling, no timing, no `wrap_tree`. This alone answers
+   the original question ("wie oft wurde xy aufgerufen"), works for any
+   plugin against its own modules at whatever granularity it wants, and is
+   the phase that must have zero off-cost. Scoping belongs in phase 1 rather
+   than later: retrofitting it means every early adopter starts with
+   "instrument everything", which is the configuration most likely to make
+   telemetry itself look expensive.
+2. **`:LibTelemetry` command + kit report UI**, including the per-namespace
+   form. Uses `lib.nvim.ui.kit`; no new UI code.
+3. **Lifecycle reminder** — the time/volume trigger described above. Small,
+   and it is what stops phase 1 from quietly running forever unread.
+4. **Argument fingerprinting**, per-function opt-in, bounded cardinality,
    plus the "dominant argument → consider memoization" hint.
-4. **Timing**, then the extensions above in the listed order.
+5. **Timing**, then the extensions above in the listed order.
+6. **`wrap_tree(prefix)`** and the shared wrap layer (needed only once two
+   instances can target the same function — see the two-instances case
+   above). Deliberately last: strictly more power, strictly more ways to
+   surprise.
 
 ## Open questions
 
-1. **Aggregate vs. modules.** Instrumenting `lib.*` (the aggregate) is one
-   wrap site and matches how config code calls things. Instrumenting each
-   `require("lib.nvim.…")` module catches direct requires too but is ~120
-   wrap sites and much more invasive. My inclination is the aggregate for
-   phase 1, with the limitation documented — but this is a real trade-off,
-   not an obvious call.
+1. **Aggregate vs. modules — for lib.nvim's own instance.** Instrumenting
+   `lib.*` (the aggregate) is one wrap site and matches how config code
+   calls things. Instrumenting each `require("lib.nvim.…")` module catches
+   direct requires too but is ~120 wrap sites and much more invasive. My
+   inclination is the aggregate for phase 1, with the limitation documented
+   — but this is a real trade-off, not an obvious call. (For *other*
+   plugins the question doesn't arise the same way: they list their own
+   modules explicitly via `t.wrap()`.)
 2. **Where the `loaded` cache hook lives.** Telemetry needs the strategies
    to expose a cache-reset; that is a small public addition to a module that
    currently has none. Worth designing deliberately rather than bolting on.
@@ -277,3 +464,19 @@ misleading:
 4. **Default retention.** 7 days matches the stated use case; 30 would
    support "did last month's refactor change anything". Needs a number, and
    a documented prune step.
+5. **Namespace collision between plugins.** Two plugins picking the same
+   namespace silently share a cache file and produce merged, wrong numbers.
+   Options: require the namespace to match the plugin's own module prefix,
+   warn on a second `new()` with an existing namespace, or just document it.
+   Leaning "warn" — it is cheap and the failure is otherwise invisible.
+6. **Should a plugin's instance auto-stop on `VimLeavePre`?** Flushing there
+   is settled; whether to also restore the wrappers is not. It costs
+   nothing either way at shutdown, but "stop() always runs" is a cleaner
+   invariant to reason about than "sometimes the process just ends".
+7. **Should `only`/`except` accept patterns, or exact names only?** Exact
+   names are unambiguous; Lua patterns are far more convenient for "all
+   public functions" (`filter` already covers that case, which may make
+   patterns redundant). Leaning exact names plus `filter`, so there is one
+   escape hatch rather than two overlapping ones.
+
+
