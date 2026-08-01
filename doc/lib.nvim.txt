@@ -186,7 +186,8 @@ Neovim adapters.
     lib.nvim.require       safe / dir / lazy require
     lib.nvim.lua_ls        LuaLS: module path, @module annotation
     lib.nvim.core          misc Neovim helpers (has_exec, simple_echo)
-    lib.nvim.treesitter    filetype allowlist gate for treesitter features
+    lib.nvim.treesitter    filetype allowlist gate + prompt/auto-install
+                           policy for missing treesitter parsers
                            |lib.nvim-treesitter|
     lib.nvim.system        host env snapshot + Windows rpc pipe + cross-platform
                            system info (float + clipboard, :SystemInfo usercmd)
@@ -264,7 +265,7 @@ Modules with dedicated `:help` documentation. Jump to one via its tag, or
     lib.nvim.ui.kit      themed, composable UI toolkit       |lib.nvim-kit|
     lib.lua.time.diff    high-precision time / interval diff |lib.nvim-time_diff|
     lib.nvim.progress    style-agnostic progress indicator   |lib.nvim-progress|
-    lib.nvim.treesitter  filetype allowlist gate            |lib.nvim-treesitter|
+    lib.nvim.treesitter  filetype allowlist gate + parser install policy |lib.nvim-treesitter|
     lib.nvim.selection   reselect a Visual range after mutation |lib.nvim-selection|
     lib.nvim.usercmd.composer  subcommand user commands + docgen |lib.nvim-composer|
     lib.nvim.fs          filesystem helpers: paths, scanning, IO, trash |lib.nvim-fs|
