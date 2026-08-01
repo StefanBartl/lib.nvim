@@ -323,5 +323,9 @@ LIB.normalize = lazy_module("lib.nvim.normalize")
 LIB.system = lazy_module("lib.nvim.system")
 LIB.system_info = lazy_module("lib.nvim.system.info")
 
+-- Plain table: `control.keys()` can enumerate it via pairs(), and there is no
+-- resolved-key cache to invalidate (each proxy memoizes its own module).
+require("lib.strategies.control").register({ name = "lazy", table = LIB })
+
 ---@type Lib
 return LIB
