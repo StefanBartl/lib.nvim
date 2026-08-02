@@ -12,7 +12,6 @@ return function(H)
   local eq, ok = H.eq, H.ok
 
   local lock = require("lib.nvim.cross.fs.lock")
-  local uv = vim.uv or vim.loop
   local is_windows = vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1
 
   local dir = vim.fn.tempname()
@@ -74,19 +73,24 @@ return function(H)
     lock.who(path, function(h, e)
       holders, werr, done = h, e, true
     end)
-    vim.wait(20000, function() return done end, 50)
+    vim.wait(20000, function()
+      return done
+    end, 50)
     eq(done, true, "who: the lookup calls back within the timeout")
     eq(werr, nil, "who: an unlocked file is not an error: " .. tostring(werr))
-    ok(type(holders) == "table" and #holders == 0,
-      "who: an unlocked file has no holders")
+    ok(type(holders) == "table" and #holders == 0, "who: an unlocked file has no holders")
   end
 
   -- report() stitches probe + holders into one block regardless of platform.
   do
     local path = dir .. "unlocked.txt"
     local lines, done = nil, false
-    lock.report(path, function(l) lines, done = l, true end)
-    vim.wait(20000, function() return done end, 50)
+    lock.report(path, function(l)
+      lines, done = l, true
+    end)
+    vim.wait(20000, function()
+      return done
+    end, 50)
     eq(done, true, "report: calls back")
     local text = table.concat(lines or {}, "\n")
     ok(text:find("rename probe:", 1, true) ~= nil, "report: includes the probe section")

@@ -107,9 +107,13 @@ end
 ---@return string|nil err
 local function ensure_script()
   local path = fn.stdpath("cache") .. "/lib_nvim_fs_lock.ps1"
-  if fn.filereadable(path) == 1 then return path, nil end
+  if fn.filereadable(path) == 1 then
+    return path, nil
+  end
   local ok, err = pcall(fn.writefile, vim.split(PS_SCRIPT, "\n"), path)
-  if not ok then return nil, tostring(err) end
+  if not ok then
+    return nil, tostring(err)
+  end
   return path, nil
 end
 
@@ -128,14 +132,19 @@ end
 function M.probe(path)
   local probe_path = path .. ".libnvim-lockprobe"
   local ok, err = uv.fs_rename(path, probe_path)
-  if not ok then return false, tostring(err) end
+  if not ok then
+    return false, tostring(err)
+  end
 
   local back_ok, back_err = uv.fs_rename(probe_path, path)
   if not back_ok then
     -- Leaving the file parked under the probe name would be a far worse
     -- outcome than the lock we came to diagnose, so this must not be silent.
-    return false, ("probe renamed the file but could not restore it — it is now at %s (%s)")
-      :format(probe_path, tostring(back_err))
+    return false,
+      ("probe renamed the file but could not restore it — it is now at %s (%s)"):format(
+        probe_path,
+        tostring(back_err)
+      )
   end
   return true, nil
 end

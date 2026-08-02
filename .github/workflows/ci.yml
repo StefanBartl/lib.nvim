@@ -13,7 +13,12 @@ jobs:
       - uses: JohnnyMorganz/stylua-action@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          version: latest
+          # Pinned, not "latest": a stylua release changed formatting behavior
+          # out from under this repo once already (see .stylua.toml), and
+          # nobody noticed until CI had been red on every push for weeks.
+          # Bump deliberately, with `stylua --write .` run and the diff
+          # reviewed, not by drifting.
+          version: v2.5.2
           args: --check .
 
   luacheck:

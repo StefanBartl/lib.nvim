@@ -27,7 +27,8 @@ local function convert(flag, path)
     return nil
   end
 
-  local ok, out = require("lib.nvim.cross.run_argv").run_blocking_captured({ "wslpath", flag, path })
+  local ok, out =
+    require("lib.nvim.cross.run_argv").run_blocking_captured({ "wslpath", flag, path })
   if not ok then
     return nil
   end

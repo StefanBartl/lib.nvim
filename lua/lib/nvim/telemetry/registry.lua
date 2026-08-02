@@ -26,10 +26,9 @@ local unpack_ = table.unpack or unpack
 
 --- `{ original(...) }` loses everything after a nil, and a wrapped function
 --- returning `1, nil, 3` must still return `1, nil, 3`. Capture the arity.
-local pack = table.pack
-  or function(...)
-    return { n = select("#", ...), ... }
-  end
+local pack = table.pack or function(...)
+  return { n = select("#", ...), ... }
+end
 
 --- container table -> field name -> site
 ---@type table<table, table<string, table>>

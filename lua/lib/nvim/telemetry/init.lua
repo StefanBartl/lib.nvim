@@ -370,8 +370,8 @@ function M.new(opts)
   ---@param container table
   ---@param field string
   ---@param key string
-  ---@param opts Lib.Telemetry.WrapOpts
-  local function add_target(container, field, key, opts)
+  ---@param target_opts Lib.Telemetry.WrapOpts
+  local function add_target(container, field, key, target_opts)
     for _, tgt in ipairs(targets) do
       if tgt.container == container and tgt.field == field then
         return
@@ -381,20 +381,20 @@ function M.new(opts)
       container = container,
       field = field,
       key = key,
-      module_id = opts.module_id,
+      module_id = target_opts.module_id,
       wants = {
-        args = opts.profile_args or false,
-        time = opts.time or false,
-        errors = opts.errors or false,
-        outermost_only = opts.outermost_only or false,
+        args = target_opts.profile_args or false,
+        time = target_opts.time or false,
+        errors = target_opts.errors or false,
+        outermost_only = target_opts.outermost_only or false,
       },
     }
-    if opts.module_id then
+    if target_opts.module_id then
       -- Recorded regardless of running/persist state, same as `key` itself —
       -- a consumer resolving keys later (telemetry.load(), no live instance)
       -- needs this even from a namespace that only ever wrapped, never
       -- started.
-      pending.modules[key] = opts.module_id
+      pending.modules[key] = target_opts.module_id
     end
     if running then
       local tgt = targets[#targets]
@@ -842,10 +842,8 @@ function M.new(opts)
   -- stop re-clearing for a second instance with the same namespace (a
   -- hot-reloaded plugin), leaving the previous instance's callbacks alongside
   -- the new ones instead of replacing them.
-  local group = vim.api.nvim_create_augroup(
-    "lib_telemetry_" .. store.sanitize(namespace),
-    { clear = true }
-  )
+  local group =
+    vim.api.nvim_create_augroup("lib_telemetry_" .. store.sanitize(namespace), { clear = true })
 
   autocmd.create("VimLeavePre", function()
     -- Flush is settled; restoring the wrappers is not worth doing at shutdown,
