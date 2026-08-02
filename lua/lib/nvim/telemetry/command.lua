@@ -15,15 +15,30 @@
 ---   :LibTelemetry enable [ns]     clear a persisted disable, resume now
 ---   :LibTelemetry disabled        list namespaces currently disabled
 ---   :LibTelemetry coverage        which wrapped functions were never called
----   :LibTelemetry export [path]   write a JSON snapshot
+---   :LibTelemetry export [path]   write a snapshot (JSON, or Markdown if path ends .md)
+---   :LibTelemetry open [ns]       render + open externally (report_style: auto/kit/mdview/file)
 
 local usercmd = require("lib.nvim.usercmd")
 local notify = require("lib.nvim.notify").create("[lib.nvim.telemetry]")
+local report_file = require("lib.nvim.telemetry.report_file")
+local resolve_report_style = require("lib.nvim.telemetry.report_style")
+local telemetry_config = require("lib.nvim.telemetry.config")
+local mdview_renderer = require("lib.nvim.telemetry.renderers.mdview")
 
 local M = {}
 
-local SUBCOMMANDS =
-  { "report", "start", "stop", "reset", "disable", "enable", "disabled", "coverage", "export" }
+local SUBCOMMANDS = {
+  "report",
+  "start",
+  "stop",
+  "reset",
+  "disable",
+  "enable",
+  "disabled",
+  "coverage",
+  "export",
+  "open",
+}
 
 ---@return Lib.Telemetry
 local function telemetry()
@@ -86,7 +101,6 @@ end
 ---@return string|nil written
 local function export(path)
   local mod = telemetry()
-  local payload = { exported_at = os.time(), reports = mod.report_all() }
 
   local target = path
   if not target or target == "" then
@@ -95,6 +109,17 @@ local function export(path)
       os.date("%Y%m%d-%H%M%S")
     )
   end
+
+  -- Format inferred from the target's own extension rather than a separate
+  -- `--format` flag: this command's argument parsing is deliberately
+  -- positional-only (see the module doc-comment), and ".md means Markdown"
+  -- needs no flag grammar to be unambiguous.
+  if target:sub(-3):lower() == ".md" then
+    local ok = report_file.write(target, mod.markdown_all())
+    return ok and target or nil
+  end
+
+  local payload = { exported_at = os.time(), reports = mod.report_all() }
 
   local ok, encoded = pcall(vim.json.encode, payload)
   if not ok then
@@ -108,6 +133,69 @@ local function export(path)
   file:write(encoded)
   file:close()
   return target
+end
+
+---`:LibTelemetry open [ns]` — render + hand the report to whatever
+---`report_style` resolves to. Always forces a flush first: the honest-limits
+---note in the roadmap doc is explicit that the browser shows the *last*
+---flush, and `open` is the one moment that promise should hold as tightly as
+---possible.
+---@param namespace string|nil
+local function open_report(namespace)
+  local mod = telemetry()
+  local style = resolve_report_style(telemetry_config.report_style())
+
+  ---@param lines string[]
+  ---@param path string
+  ---@param kit_lines string[]
+  ---@param title string
+  local function dispatch(lines, path, kit_lines, title)
+    if style == "mdview" then
+      local ok, err = mdview_renderer.open(lines, path)
+      if not ok then
+        notify.warn(("mdview open failed (%s) — falling back to the kit float"):format(err))
+        show(kit_lines, title)
+      end
+    elseif style == "file" then
+      local ok, err = report_file.write(path, lines)
+      if ok then
+        notify.info("wrote " .. path)
+      else
+        notify.error("failed to write report: " .. tostring(err))
+      end
+    else -- "kit"
+      show(kit_lines, title)
+    end
+  end
+
+  if namespace and namespace ~= "" then
+    local inst = mod.get(namespace)
+    if not inst then
+      notify.warn(("no telemetry instance for namespace %q"):format(namespace))
+      return
+    end
+    inst.flush()
+    dispatch(
+      inst.markdown(),
+      report_file.namespace_path(namespace, inst._cache_opts),
+      inst.lines(),
+      ("lib.nvim.telemetry — %s"):format(namespace)
+    )
+    return
+  end
+
+  -- Bare: every instance, combined — a snapshot at invocation time. Only a
+  -- per-namespace open can be truly self-updating (see report_file.lua):
+  -- the combined file has no single flush cycle that owns it.
+  for _, inst in ipairs(mod.instances()) do
+    inst.flush()
+  end
+  dispatch(
+    mod.markdown_all({ sort = "calls", top = 40 }),
+    report_file.combined_path(),
+    report_lines({ sort = "calls", top = 40 }, nil),
+    "lib.nvim.telemetry"
+  )
 end
 
 ---Register `:LibTelemetry`. Idempotent (`usercmd.create` defaults to `force`).
@@ -200,6 +288,8 @@ function M.setup()
       else
         notify.error("export failed")
       end
+    elseif first == "open" then
+      open_report(rest)
     else
       -- "report" (explicit or implied) — a bare namespace is the common case.
       local namespace = first
@@ -210,11 +300,12 @@ function M.setup()
     end
   end, {
     nargs = "*",
-    desc = "lib.nvim.telemetry: report|start|stop|reset|disable|enable|disabled|coverage|export [namespace]",
+    desc = "lib.nvim.telemetry: report|start|stop|reset|disable|enable|disabled|coverage|export|open [namespace]",
     complete = function(arg_lead, cmd_line)
-      -- Second token of `start`/`stop`/`reset` is always a namespace, never
-      -- another subcommand — narrow completion there instead of offering
-      -- "start"/"stop"/... again as if it were a third grammar position.
+      -- Second token of `start`/`stop`/`reset`/`open` is always a namespace,
+      -- never another subcommand — narrow completion there instead of
+      -- offering "start"/"stop"/... again as if it were a third grammar
+      -- position.
       local before = cmd_line:sub(1, #cmd_line - #arg_lead)
       local sub = before:match("^%S+%s+(%S+)%s+%S*$")
 
@@ -223,6 +314,7 @@ function M.setup()
         or sub == "reset"
         or sub == "disable"
         or sub == "enable"
+        or sub == "open"
 
       local out = {}
       if takes_namespace then

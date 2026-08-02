@@ -15,7 +15,8 @@
    concept docs with no unique content left outside their own module (no
    granular source cross-references into specific sections) get deleted once
    shipped: `DEBUG-MODULE-CONCEPT.md`, `project-store.md`,
-   `usage-telemetry.md`, `UI-KIT-TASK-native-select.md` all went this way.
+   `usage-telemetry.md`, `UI-KIT-TASK-native-select.md`,
+   `telemetry-browser-report.md` all went this way.
    `UI-KIT-CONCEPT.md` and `usrcmd_builder.md` stay — both are pointed at by
    section number from their module's own shipped source comments, so
    deleting them would leave dead links across live code. Still open: the
@@ -75,9 +76,6 @@ rejected.
 
 - [autocmd-dispatcher.md](ROADMAP/autocmd-dispatcher.md) — one autocmd, many
   handlers.
-- [telemetry-browser-report.md](ROADMAP/telemetry-browser-report.md) — a
-  Markdown renderer for telemetry reports, plus a self-updating browser
-  dashboard via `:MDView standalone`'s file-watch mode.
 - [telemetry-documentation-bridge.md](ROADMAP/telemetry-documentation-bridge.md)
   — cross documentation.nvim's static `dead-function` check with telemetry's
   runtime counts; each method's blind spot is the other's evidence. The

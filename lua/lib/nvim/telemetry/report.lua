@@ -212,6 +212,124 @@ function M.lines(report)
   return out
 end
 
+---Markdown rendering of the same report `M.lines` renders for the terminal.
+---A separate function, not a flag on `M.lines`, because the two are shaped
+---for different readers: `M.lines`'s box-drawing indentation and column
+---padding are terminal artifacts that do not survive a Markdown renderer,
+---and a GFM table is not `kit.viewer`-friendly either. Both build from the
+---same `M.build()` result, so neither can drift from the other's numbers.
+---@param report Lib.Telemetry.Report
+---@return string[]
+function M.markdown(report)
+  local out = {}
+
+  local modes = {}
+  if report.modes.args then
+    modes[#modes + 1] = "args"
+  end
+  if report.modes.timing then
+    modes[#modes + 1] = "timing"
+  end
+  if report.modes.errors then
+    modes[#modes + 1] = "errors"
+  end
+  local mode_str = #modes > 0 and ("counting + " .. table.concat(modes, " + ")) or "counting"
+
+  local state = report.disabled and "disabled" or (report.running and "running" or "stopped")
+
+  out[#out + 1] = ("# %s — telemetry"):format(report.namespace)
+  out[#out + 1] = ""
+  out[#out + 1] = ("**%s** · %s · %s wrapped · %s calls · %d session(s)%s"):format(
+    state,
+    mode_str,
+    num(report.wrapped),
+    num(report.total_calls),
+    report.sessions,
+    report.since and (" · last " .. report.since) or ""
+  )
+  if report.started_at then
+    out[#out + 1] = ("Collecting since %s."):format(os.date("%Y-%m-%d %H:%M", report.started_at))
+  end
+  out[#out + 1] = ""
+
+  if #report.entries == 0 then
+    out[#out + 1] = "_(no calls recorded)_"
+    return out
+  end
+
+  out[#out + 1] = "| Function | Calls | Ø ms | Errors |"
+  out[#out + 1] = "| --- | ---: | ---: | ---: |"
+  for _, e in ipairs(report.entries) do
+    out[#out + 1] = ("| `%s` | %s | %s | %s |"):format(
+      e.key,
+      num(e.calls),
+      e.mean_ms and ("%.2f"):format(e.mean_ms) or "—",
+      e.errors > 0 and num(e.errors) or "—"
+    )
+  end
+
+  -- Argument-profile subsections only for entries that actually have a
+  -- profile, so a counting-only instance (the default) renders as one clean
+  -- table and nothing else.
+  for _, e in ipairs(report.entries) do
+    if e.args then
+      out[#out + 1] = ""
+      out[#out + 1] = ("### `%s` — argument profile"):format(e.key)
+      out[#out + 1] = ""
+      out[#out + 1] = "| Share | Argument |"
+      out[#out + 1] = "| ---: | --- |"
+
+      local shown = 0
+      for _, a in ipairs(e.args) do
+        shown = shown + 1
+        if shown > ARGS_SHOWN then
+          break
+        end
+        out[#out + 1] = ("| %.0f %% | `%s` |"):format(a.share * 100, a.fingerprint)
+      end
+      if (e.other or 0) > 0 then
+        out[#out + 1] = ("| %.0f %% | `<other: %d distinct>` |"):format(
+          e.calls > 0 and (e.other / e.calls * 100) or 0,
+          e.distinct or 0
+        )
+      end
+      if e.hint then
+        out[#out + 1] = ""
+        out[#out + 1] = ("> **%s**"):format(e.hint)
+      end
+    end
+  end
+
+  return out
+end
+
+---Combine several reports into one document — one `#` heading for the
+---document, each report's own heading demoted to `##` so the result is a
+---single well-formed Markdown file rather than several concatenated ones.
+---@param reports Lib.Telemetry.Report[]
+---@return string[]
+function M.markdown_all(reports)
+  local out = { "# lib.nvim — telemetry", "" }
+
+  if #reports == 0 then
+    out[#out + 1] = "_(no telemetry instances)_"
+    return out
+  end
+
+  for i, report in ipairs(reports) do
+    if i > 1 then
+      out[#out + 1] = ""
+      out[#out + 1] = "---"
+      out[#out + 1] = ""
+    end
+    local section = M.markdown(report)
+    section[1] = section[1]:gsub("^# ", "## ")
+    vim.list_extend(out, section)
+  end
+
+  return out
+end
+
 M.DOMINANT_SHARE = DOMINANT_SHARE
 M.DOMINANT_MIN_CALLS = DOMINANT_MIN_CALLS
 M.num = num
