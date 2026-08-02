@@ -19,6 +19,11 @@
 ---@field remind_after? Lib.Telemetry.RemindAfter|false # lifecycle reminder (default { days = 7, calls = 50000 })
 ---@field persist? boolean                              # false keeps everything in memory (default true)
 ---@field max_arg_values? integer                       # distinct fingerprints kept per function (default 32)
+---@field report_file? boolean                          # keep this namespace's Markdown report on disk, rewritten at every flush (default false); see lua/lib/nvim/telemetry/report_file.lua
+
+--- "auto" (default) prefers mdview if loadable, else the kit float — same
+--- degrade-silently discipline as `lib.nvim.progress`'s style resolution.
+---@alias Lib.Telemetry.ReportStyle "auto"|"kit"|"mdview"|"file"
 
 --- Scoping options for `wrap()`. `only` and `except` are exact names, never
 --- patterns — `filter` is the single escape hatch for anything else.
@@ -123,6 +128,7 @@
 ---@field is_running fun(): boolean
 ---@field report fun(opts?: Lib.Telemetry.ReportOpts): Lib.Telemetry.Report
 ---@field lines fun(opts?: Lib.Telemetry.ReportOpts): string[]
+---@field markdown fun(opts?: Lib.Telemetry.ReportOpts): string[]
 ---@field coverage fun(): { called: string[], uncalled: string[] }
 ---@field resolved_modules fun(): table<string, string>
 ---@field reset fun(): nil
@@ -135,6 +141,8 @@
 ---@field get fun(namespace: string): Lib.Telemetry.Instance|nil
 ---@field load fun(namespace: string, opts?: Lib.Cache.Opts): Lib.Telemetry.Data|nil
 ---@field report_all fun(opts?: Lib.Telemetry.ReportOpts): Lib.Telemetry.Report[]
+---@field markdown_all fun(opts?: Lib.Telemetry.ReportOpts): string[]
+---@field setup fun(opts?: { report_style?: Lib.Telemetry.ReportStyle }): nil
 ---@field flush_all fun(): integer
 ---@field stop_all fun(): integer
 ---@field disable fun(namespace: string): nil

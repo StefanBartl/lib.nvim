@@ -21,6 +21,8 @@
 ---   -- from a DIFFERENT Neovim process, no instance of its own:
 ---   local data = telemetry.load("lib.nvim")   -- nil if nothing was ever persisted
 ---
+---   :LibTelemetry open lib.nvim   -- render + open externally (mdview if loadable, else the kit float)
+---
 --- OFF COSTS NOTHING, LITERALLY
 --- Instrumentation is *installed*, not compiled in: until `start()` runs, the
 --- shipped functions are the original functions — the same objects, not a
@@ -67,11 +69,19 @@ local autocmd = require("lib.nvim.autocmd")
 local notify = require("lib.nvim.notify").create("[lib.nvim.telemetry]")
 local registry = require("lib.nvim.telemetry.registry")
 local reminder = require("lib.nvim.telemetry.reminder")
+local report_file = require("lib.nvim.telemetry.report_file")
 local report_mod = require("lib.nvim.telemetry.report")
 local store = require("lib.nvim.telemetry.store")
+local telemetry_config = require("lib.nvim.telemetry.config")
 local toggle = require("lib.nvim.telemetry.toggle")
 
 local M = {}
+
+---Module-level defaults — currently just `report_style`, read by
+---`:LibTelemetry open`. See `config.lua` for why this is the one setting
+---that lives outside `telemetry.new(opts)`.
+---@type fun(opts?: { report_style?: Lib.Telemetry.ReportStyle })
+M.setup = telemetry_config.setup
 
 ---@type Lib.Telemetry.Instance[]
 local instances = {}
@@ -242,6 +252,7 @@ function M.new(opts)
     max_arg_values = opts.max_arg_values,
     persist = opts.persist,
     dir = opts.dir,
+    report_file = opts.report_file or false,
   })
   local cache_opts = cfg.dir and { dir = cfg.dir } or nil
   local remind_after = opts.remind_after
@@ -683,6 +694,7 @@ function M.new(opts)
       store.merge(base, pending, cfg.max_arg_values)
       pending = empty_delta()
       inst._check_reminder(base)
+      inst._write_report_file()
       return true
     end
 
@@ -697,7 +709,21 @@ function M.new(opts)
       base = disk_data
       pending = empty_delta()
     end
+    inst._write_report_file()
     return ok
+  end
+
+  ---Opt-in (`opts.report_file = true`): keep this namespace's Markdown report
+  ---on disk, rewritten at every flush. What makes `renderers/mdview.lua`'s
+  ---browser tab self-updating — the relay watches this same path.
+  ---Best-effort and silent: a write failure here must not surface as a flush
+  ---failure, since the counters themselves already flushed successfully by
+  ---the time this runs.
+  function inst._write_report_file()
+    if not cfg.report_file then
+      return
+    end
+    report_file.write(report_file.namespace_path(namespace, cache_opts), inst.markdown())
   end
 
   ---@param data Lib.Telemetry.Data
@@ -738,6 +764,12 @@ function M.new(opts)
   ---@return string[]
   function inst.lines(report_opts)
     return report_mod.lines(inst.report(report_opts))
+  end
+
+  ---@param report_opts? Lib.Telemetry.ReportOpts
+  ---@return string[]
+  function inst.markdown(report_opts)
+    return report_mod.markdown(inst.report(report_opts))
   end
 
   ---The inverse question: which registered functions were never called? An
@@ -889,6 +921,15 @@ function M.report_all(opts)
     out[#out + 1] = inst.report(opts)
   end
   return out
+end
+
+---One combined Markdown document across every live instance — what
+---`:LibTelemetry open` (no namespace) renders. See `inst.markdown()` for the
+---per-instance form.
+---@param opts? Lib.Telemetry.ReportOpts
+---@return string[]
+function M.markdown_all(opts)
+  return report_mod.markdown_all(M.report_all(opts))
 end
 
 ---@return integer flushed

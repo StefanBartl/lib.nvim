@@ -276,13 +276,90 @@ require("lib.nvim.telemetry.command").setup()
 :LibTelemetry stop [ns]       " every instance, or just one
 :LibTelemetry reset [ns]      " every instance, or just one
 :LibTelemetry coverage
-:LibTelemetry export [path]
+:LibTelemetry export [path]   " JSON, or Markdown if path ends .md
+:LibTelemetry open [ns]       " render + open externally — see "Browser report" below
 ```
 
-`start`/`stop`/`reset` take an optional namespace — `:LibTelemetry stop
+`start`/`stop`/`reset`/`open` take an optional namespace — `:LibTelemetry stop
 markdown.nvim` steers just that instance, leaving every other one running.
 Omit it to act on every instance at once. `<Tab>` after `start `/`stop `/
-`reset ` completes namespaces only (not the subcommand list again).
+`reset `/`open ` completes namespaces only (not the subcommand list again).
+
+`export`'s format is inferred from the target path's own extension rather
+than a separate flag — this command's argument parsing stays positional
+throughout. `:LibTelemetry export report.md` writes the same document
+`telemetry.markdown_all()` would; anything else (including the default
+auto-named path) writes the existing JSON snapshot.
+
+## Browser report
+
+Two separable things: rendering a report as **Markdown** (useful on its own —
+paste into an issue, commit a snapshot, diff two weeks), and handing that
+Markdown to a **browser** via [mdview.nvim](https://github.com/StefanBartl/mdview.nvim)'s
+own `:MDView standalone`, which already does exactly the right thing for
+this: it hands a file path to the relay binary's own `--watch` mode and steps
+out of the chain entirely — the relay watches the file on disk and
+broadcasts changes to the browser itself. mdview.nvim is a soft dependency
+throughout, `pcall`-guarded.
+
+```lua
+t.markdown({ since = "7d", top = 30 })   -- -> string[], the same shape as t.lines() but GFM
+telemetry.markdown_all(opts)             -- every instance, one combined document
+```
+
+**Self-updating, opt-in:** `report_file = true` keeps a namespace's Markdown
+report on disk (`stdpath("cache")/lib.nvim/telemetry/<namespace>.md`),
+rewritten at every flush. Point `:MDView standalone` at that same path (or
+just use `:LibTelemetry open <ns>`) and the browser tab becomes a live
+dashboard with no new machinery on either side — telemetry already flushes
+periodically, mdview's relay already watches a file. Writing a Markdown file
+every 60 s for someone who never opened a browser is waste, so this is opt-in
+per instance:
+
+```lua
+telemetry.new({ namespace = "lib.nvim", report_file = true })
+```
+
+**`:LibTelemetry open [ns]`** renders + opens externally, forcing a flush
+first so the render is current. Which renderer it uses is configuration, not
+a subcommand — the same shape `lib.nvim.progress` already uses for its
+`progress_style`:
+
+```lua
+require("lib.nvim.telemetry").setup({
+  report_style = "auto",   -- "auto" | "kit" | "mdview" | "file"
+})
+```
+
+| Style | Effect |
+| --- | --- |
+| `"auto"` (default) | mdview if loadable, else the kit float |
+| `"kit"` | the same in-editor float `:LibTelemetry <ns>` already renders |
+| `"mdview"` | write the report + `:MDView standalone` it; falls back to `"kit"` if mdview is not loadable |
+| `"file"` | just write the report to disk, no window opened |
+
+This is module-level, not per-instance (`telemetry.setup`, not
+`telemetry.new({...})`) — `:LibTelemetry open` with no namespace spans every
+live instance at once, so there is one resolved answer to "how should `open`
+render", not one per instance.
+
+Honest limits:
+
+- **The browser shows the last flush, not this instant.** `open` forces one,
+  so the initial render is current; after that it is as live as
+  `flush_interval_ms`.
+- **A bare `:LibTelemetry open` (no namespace) is a snapshot, not
+  self-updating.** Only a per-namespace file has one flush cycle that owns
+  it; the combined `report.md` has no single instance to keep rewriting it,
+  so it is rendered fresh at invocation time and left there.
+- **No HTML of our own.** Markdown out, mdview renders — generating HTML here
+  would duplicate mdview's themes/highlighter and immediately drift from them.
+- **mdview.nvim self-installs its relay binary from GitHub Releases on first
+  use** (checksum-verified, no Go/Rust toolchain needed) — for *either* of
+  its modes, not just standalone. The first `:LibTelemetry open` with
+  `report_style = "mdview"` may pause briefly for that download; failures
+  (no network, no `curl`) are mdview's own to report, and this bridge just
+  degrades to `"kit"`.
 
 ## Use from another plugin
 
@@ -424,7 +501,11 @@ ways to surprise, notably around `package.loaded` identity. Use explicit
 | `registry.lua` | the one shared wrap layer; instances subscribe to a site |
 | `store.lua` | persistence, namespace sanitization, merge-on-write, day buckets, pruning, module-id map, read-without-an-instance |
 | `fingerprint.lua` | argument → bounded, non-secret string key |
-| `report.lua` | report building + rendering, incl. the memoization hint |
+| `report.lua` | report building + rendering (terminal lines and Markdown), incl. the memoization hint |
+| `report_file.lua` | where a rendered Markdown report lives on disk, and writing one there |
+| `report_style.lua` | resolve `report_style` ("auto"/"kit"/"mdview"/"file") to a concrete destination |
+| `renderers/mdview.lua` | bridges a report to a browser tab via mdview.nvim's `:MDView standalone` |
+| `config.lua` | module-level defaults (`report_style`) via `telemetry.setup()` |
 | `reminder.lua` | the time/volume lifecycle trigger |
 | `toggle.lua` | persistent per-namespace enable/disable, independent of an instance's own data |
 | `command.lua` | `:LibTelemetry` (opt-in `setup()`) |

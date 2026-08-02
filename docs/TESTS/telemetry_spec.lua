@@ -819,5 +819,311 @@ return function(H)
     tb.unwrap()
   end
 
+  -- -------------------------------------------------------------------------
+  -- report.markdown(): the same report data M.lines renders, as GFM instead
+  -- of terminal box-drawing. Built from the same M.build() result, so it
+  -- cannot report different numbers than M.lines does.
+  -- -------------------------------------------------------------------------
+  do
+    local namespace = ns("markdown")
+    local mod = {
+      find = function(path)
+        return path
+      end,
+      quiet = function() end,
+    }
+    local t = telemetry.new({ namespace = namespace, persist = false })
+    t.wrap(mod, "fs")
+    t.start({ profile_args = { "fs.find" } })
+    for _ = 1, 25 do
+      mod.find("/repo/lib.nvim")
+    end
+    mod.find("/repo/other")
+    mod.quiet()
+
+    local text = table.concat(t.markdown(), "\n")
+    H.ok(text:find("# " .. namespace .. " — telemetry", 1, true) ~= nil, "H1 names the namespace")
+    H.ok(text:find("| Function | Calls | Ø ms | Errors |", 1, true) ~= nil, "table header present")
+    H.ok(text:find("`fs.find`", 1, true) ~= nil, "busiest entry rendered as a table row")
+    H.ok(
+      text:find("### `fs.find` — argument profile", 1, true) ~= nil,
+      "argument-profile subsection for a profiled function"
+    )
+    H.ok(text:find("candidate for", 1, true) ~= nil, "memoization hint carried into a blockquote")
+    H.eq(
+      text:find("### `fs.quiet`", 1, true),
+      nil,
+      "no argument-profile subsection for an unprofiled function"
+    )
+
+    t.stop()
+    t.unwrap()
+  end
+
+  do
+    local t = telemetry.new({ namespace = ns("markdown_empty"), persist = false })
+    H.ok(
+      vim.tbl_contains(t.markdown(), "_(no calls recorded)_"),
+      "empty instance renders the no-data line, not an empty table"
+    )
+    t.unwrap()
+  end
+
+  -- -------------------------------------------------------------------------
+  -- markdown_all(): combined document, one H1, each report's own heading
+  -- demoted to H2 so the result is one well-formed file.
+  -- -------------------------------------------------------------------------
+  do
+    local ns_a, ns_b = ns("md_all_a"), ns("md_all_b")
+    local mod_a, mod_b = { f = function() end }, { g = function() end }
+    local ta = telemetry.new({ namespace = ns_a, persist = false })
+    local tb = telemetry.new({ namespace = ns_b, persist = false })
+    ta.wrap(mod_a)
+    tb.wrap(mod_b)
+    ta.start()
+    tb.start()
+    mod_a.f()
+    mod_b.g()
+
+    local lines = telemetry.markdown_all()
+    local text = table.concat(lines, "\n")
+    H.eq(lines[1], "# lib.nvim — telemetry", "one combined H1")
+    H.eq(text:find("\n# ", 1, true), nil, "no second H1 -- per-report headings are demoted")
+    H.ok(
+      text:find("## " .. ns_a .. " — telemetry", 1, true) ~= nil,
+      "first namespace's heading demoted to H2"
+    )
+    H.ok(
+      text:find("## " .. ns_b .. " — telemetry", 1, true) ~= nil,
+      "second namespace's heading demoted to H2"
+    )
+    H.ok(text:find("\n---\n", 1, true) ~= nil, "reports separated by a thematic break")
+
+    ta.stop()
+    tb.stop()
+    ta.unwrap()
+    tb.unwrap()
+  end
+
+  -- -------------------------------------------------------------------------
+  -- report_file.lua: path resolution (dir-overridable, mirrors store.lua's
+  -- own sanitize/cache_key convention) and best-effort disk writes.
+  -- -------------------------------------------------------------------------
+  do
+    local report_file = require("lib.nvim.telemetry.report_file")
+
+    H.eq(report_file.dir({ dir = tmpdir }):sub(1, #tmpdir), tmpdir, "dir override is honored")
+    H.ok(
+      report_file.dir({ dir = tmpdir }):find("telemetry", 1, true) ~= nil,
+      "lives under a telemetry/ subdir"
+    )
+    H.eq(
+      report_file.namespace_path("lib.nvim", { dir = tmpdir }),
+      report_file.dir({ dir = tmpdir }) .. "/lib.nvim.md",
+      "namespace path is sanitize(namespace).md under dir()"
+    )
+    H.eq(
+      report_file.combined_path({ dir = tmpdir }),
+      report_file.dir({ dir = tmpdir }) .. "/report.md",
+      "combined path is report.md under dir()"
+    )
+
+    local path = report_file.dir({ dir = tmpdir }) .. "/write_test.md"
+    local ok, err = report_file.write(path, { "# hello", "", "world" })
+    H.eq(ok, true, "write succeeds")
+    H.eq(err, nil, "no error on success")
+
+    local file = io.open(path, "r")
+    H.ok(file ~= nil, "the file exists")
+    local content = file:read("*a")
+    file:close()
+    H.eq(content, "# hello\n\nworld\n", "content round-trips, trailing newline added")
+  end
+
+  -- -------------------------------------------------------------------------
+  -- report_file = true: keep this namespace's Markdown report on disk,
+  -- rewritten at every flush -- what makes the mdview bridge self-updating.
+  -- -------------------------------------------------------------------------
+  do
+    local namespace = ns("report_file_opt")
+    local report_file = require("lib.nvim.telemetry.report_file")
+    local mod = { f = function() end }
+
+    local t = telemetry.new({
+      namespace = namespace,
+      persist = false,
+      dir = tmpdir,
+      report_file = true,
+    })
+    t.wrap(mod)
+    t.start()
+    mod.f()
+    t.flush()
+
+    local path = report_file.namespace_path(namespace, { dir = tmpdir })
+    local file = io.open(path, "r")
+    H.ok(file ~= nil, "report_file = true writes a per-namespace file at flush")
+    local content = file:read("*a")
+    file:close()
+    H.ok(content:find("| `f` | 1 |", 1, true) ~= nil, "the written report reflects current counts")
+
+    mod.f()
+    t.flush()
+    local file2 = io.open(path, "r")
+    local content2 = file2:read("*a")
+    file2:close()
+    H.ok(
+      content2:find("| `f` | 2 |", 1, true) ~= nil,
+      "rewritten on the next flush with updated counts"
+    )
+
+    t.stop()
+    t.unwrap()
+  end
+
+  do
+    local namespace = ns("report_file_off")
+    local report_file = require("lib.nvim.telemetry.report_file")
+    local mod = { f = function() end }
+    local t = telemetry.new({ namespace = namespace, persist = false, dir = tmpdir })
+    t.wrap(mod)
+    t.start()
+    mod.f()
+    t.flush()
+
+    local path = report_file.namespace_path(namespace, { dir = tmpdir })
+    H.eq(io.open(path, "r"), nil, "no file written when report_file is left at its false default")
+    t.unwrap()
+  end
+
+  -- -------------------------------------------------------------------------
+  -- report_style resolution: mdview.nvim is not on this test run's runtime
+  -- path (docs/TESTS/run.lua only appends the lib.nvim repo itself), so
+  -- "mdview"/"auto" deterministically fall back to "kit" here -- exactly the
+  -- degrade-silently path a consumer without mdview installed hits for real.
+  -- -------------------------------------------------------------------------
+  do
+    local resolve_style = require("lib.nvim.telemetry.report_style")
+    local mdview_renderer = require("lib.nvim.telemetry.renderers.mdview")
+
+    H.eq(mdview_renderer.available(), false, "mdview.nvim is not on rtp in this test run")
+
+    H.eq(resolve_style("kit"), "kit", "explicit kit stays kit")
+    H.eq(resolve_style("file"), "file", "explicit file stays file")
+    H.eq(resolve_style("mdview"), "kit", "explicit mdview degrades to kit when unavailable")
+    H.eq(resolve_style("auto"), "kit", "auto degrades to kit when mdview is unavailable")
+    H.eq(resolve_style(nil), "kit", "nil behaves like auto")
+    H.eq(resolve_style("nonsense"), "kit", "an unrecognized value behaves like auto")
+
+    local ok, err = mdview_renderer.open({ "x" }, tmpdir .. "/mdview_open_test.md")
+    H.eq(ok, false, "mdview.open() fails cleanly, not raising, when mdview is unavailable")
+    H.ok(err ~= nil, "...with an explanatory error")
+  end
+
+  -- -------------------------------------------------------------------------
+  -- telemetry.setup({ report_style = ... }): the one module-level default,
+  -- separate from telemetry.new(opts) -- see config.lua for why.
+  -- -------------------------------------------------------------------------
+  do
+    local config = require("lib.nvim.telemetry.config")
+    H.eq(config.report_style(), "auto", "auto is the default")
+    telemetry.setup({ report_style = "file" })
+    H.eq(config.report_style(), "file", "setup() overrides the module-level default")
+    telemetry.setup({ report_style = "auto" })
+    H.eq(config.report_style(), "auto", "setup() again restores it for the rest of this run")
+  end
+
+  -- -------------------------------------------------------------------------
+  -- :LibTelemetry export — format inferred from the target path's extension,
+  -- not a separate flag (this command's argument parsing stays positional).
+  -- -------------------------------------------------------------------------
+  do
+    local namespace = ns("export")
+    local mod = { f = function() end }
+    local t = telemetry.new({ namespace = namespace, persist = false })
+    t.wrap(mod)
+    t.start()
+    mod.f()
+
+    local md_path = tmpdir .. "/export_test.md"
+    vim.cmd("LibTelemetry export " .. md_path)
+    local md_file = io.open(md_path, "r")
+    H.ok(md_file ~= nil, "export writes a .md path as Markdown")
+    local md_content = md_file:read("*a")
+    md_file:close()
+    H.ok(
+      md_content:find("# lib.nvim — telemetry", 1, true) ~= nil,
+      "combined Markdown document, same shape as markdown_all()"
+    )
+
+    local json_path = tmpdir .. "/export_test.json"
+    vim.cmd("LibTelemetry export " .. json_path)
+    local json_file = io.open(json_path, "r")
+    H.ok(json_file ~= nil, "export writes a .json path as JSON (unchanged default behavior)")
+    local json_content = json_file:read("*a")
+    json_file:close()
+    local ok_decode, decoded = pcall(vim.json.decode, json_content)
+    H.eq(ok_decode, true, "the .json export is still valid JSON")
+    H.ok(decoded.reports ~= nil, "...with the expected top-level shape")
+
+    t.stop()
+    t.unwrap()
+  end
+
+  -- -------------------------------------------------------------------------
+  -- :LibTelemetry open [ns] — forces a flush, then dispatches per
+  -- report_style. "mdview" falls back to "kit" here since mdview is
+  -- unavailable in this test run (see report_style resolution tests above).
+  -- -------------------------------------------------------------------------
+  do
+    local namespace = ns("open")
+    local mod = { f = function() end }
+    local t = telemetry.new({ namespace = namespace, persist = false, dir = tmpdir })
+    t.wrap(mod)
+    t.start()
+    mod.f()
+
+    telemetry.setup({ report_style = "kit" })
+    local ok = pcall(vim.cmd, "LibTelemetry open " .. namespace)
+    H.eq(ok, true, ":LibTelemetry open <ns> does not error with report_style = kit")
+
+    telemetry.setup({ report_style = "file" })
+    ok = pcall(vim.cmd, "LibTelemetry open " .. namespace)
+    H.eq(ok, true, ":LibTelemetry open <ns> does not error with report_style = file")
+    local report_file = require("lib.nvim.telemetry.report_file")
+    local path = report_file.namespace_path(namespace, { dir = tmpdir })
+    H.ok(io.open(path, "r") ~= nil, "report_style = file wrote the per-namespace report")
+
+    telemetry.setup({ report_style = "mdview" })
+    ok = pcall(vim.cmd, "LibTelemetry open " .. namespace)
+    H.eq(
+      ok,
+      true,
+      "report_style = mdview falls back to the kit float without erroring when mdview is unavailable"
+    )
+
+    ok = pcall(vim.cmd, "LibTelemetry open does-not-exist")
+    H.eq(ok, true, "an unknown namespace warns rather than erroring")
+
+    ok = pcall(vim.cmd, "LibTelemetry open")
+    H.eq(ok, true, "bare open (every instance, combined) does not error")
+
+    telemetry.setup({ report_style = "auto" }) -- restore default for any later spec
+    t.stop()
+    t.unwrap()
+  end
+
+  do
+    local completions = vim.fn.getcompletion("LibTelemetry open ", "cmdline")
+    H.eq(
+      vim.tbl_contains(completions, "open"),
+      false,
+      "subcommands not repeated as a 2nd arg after open"
+    )
+
+    local first_token_completions = vim.fn.getcompletion("LibTelemetry o", "cmdline")
+    H.ok(vim.tbl_contains(first_token_completions, "open"), "open is offered as a subcommand")
+  end
+
   vim.fn.delete(tmpdir, "rf")
 end

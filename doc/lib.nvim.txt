@@ -211,8 +211,10 @@ Neovim adapters.
                            to real module paths automatically), per-namespace
                            start/stop/reset + persistent disable/enable that
                            survives a restart, telemetry.load() to read a
-                           namespace off disk with no live instance, opt-in
-                           :LibTelemetry
+                           namespace off disk with no live instance, a
+                           Markdown renderer + opt-in self-updating browser
+                           report via mdview.nvim (:LibTelemetry open),
+                           opt-in :LibTelemetry
                            (see lua/lib/nvim/telemetry/README.md)
     lib.nvim.neotree       neo-tree.nvim-specific helpers: node (path/node
                            extraction from a neo-tree state, marks/pickers
