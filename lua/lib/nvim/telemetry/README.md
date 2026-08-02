@@ -192,6 +192,7 @@ disable it again after it's created rather than before.
 t.report({ sort = "calls", top = 30, since = "7d" })  -- table
 t.lines({ top = 20 })                                 -- rendered strings
 t.coverage()                                          -- { called, uncalled }
+t.resolved_modules()                                  -- { [key] = real Lua module path }
 t.reset()                                             -- clear memory + disk
 t.flush()                                             -- persist now
 ```
@@ -212,6 +213,53 @@ telemetry.report_all(opts)
 telemetry.flush_all()
 telemetry.stop_all()
 ```
+
+### Reading without an instance — and resolving keys to real modules
+
+A fresh Neovim process with no live instance for a namespace (a `:DocMap
+check` run, a CLI tool, a health check) can still read what an *earlier*
+session collected:
+
+```lua
+local data = telemetry.load("lsp.nvim")   -- Lib.Telemetry.Data|nil
+if data then
+  vim.print(data.functions)   -- same shape as t.report() works from
+end
+```
+
+`nil` means *nothing was ever persisted for this namespace* — deliberately
+distinct from a well-formed empty table. A caller has to be able to tell
+"telemetry was never enabled here" from "enabled, and zero calls happened",
+or an unanalyzed tree renders as a graveyard instead of "no data".
+
+The other half of "read this from outside the process that collected it" is
+matching a telemetry key back to the real Lua module it came from — the key
+alone (`"bindings.actions.next_heading"`) does not say that. `wrap_loaded()`
+knows the answer at wrap time (its keys ARE derived from a real
+`package.loaded` path) and records it automatically:
+
+```lua
+t.wrap_loaded("markdown")
+t.resolved_modules()   -- { ["bindings.actions.next_heading"] = "markdown.bindings.actions", ... }
+```
+
+The same map is in `data.modules` from `telemetry.load()`, keyed the same
+way — no live instance required to read it either. A plain `t.wrap(container,
+prefix)` resolves nothing on its own (`prefix` is a caller-chosen label, not
+necessarily a real module path — `t.wrap(require("lsp.servers"), "servers")`
+does not make `"servers"` mean `"lsp.servers"`), unless the caller vouches
+for it explicitly:
+
+```lua
+t.wrap(require("lsp.servers"), "servers", { module_id = "lsp.servers" })
+```
+
+A key with no entry in `resolved_modules()` / `data.modules` is **unmatched**,
+not "zero calls" — a consumer joining telemetry against a static key set (the
+motivating case: documentation.nvim's `dead-function` check, see
+[`telemetry-documentation-bridge.md`](../../../../docs/ROADMAP/telemetry-documentation-bridge.md))
+must keep those two claims distinguishable, or the join produces false
+positives it can't tell apart from real ones.
 
 ## `:LibTelemetry`
 
@@ -374,7 +422,7 @@ ways to surprise, notably around `package.loaded` identity. Use explicit
 | --- | --- |
 | `init.lua` | instance factory, scoping, lifecycle, module-level registry |
 | `registry.lua` | the one shared wrap layer; instances subscribe to a site |
-| `store.lua` | persistence, namespace sanitization, merge-on-write, day buckets, pruning |
+| `store.lua` | persistence, namespace sanitization, merge-on-write, day buckets, pruning, module-id map, read-without-an-instance |
 | `fingerprint.lua` | argument → bounded, non-secret string key |
 | `report.lua` | report building + rendering, incl. the memoization hint |
 | `reminder.lua` | the time/volume lifecycle trigger |

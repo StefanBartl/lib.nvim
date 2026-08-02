@@ -30,6 +30,7 @@
 ---@field time? boolean                        # measure duration for these functions
 ---@field errors? boolean                      # count raised errors for these functions
 ---@field outermost_only? boolean              # recursive calls count once (costs a pcall)
+---@field module_id? string                    # the real Lua module path `container` came from, if known (set automatically by wrap_loaded()). Enables a consumer to resolve a wrapped key back to source; omit when the wrap prefix is not a real module path.
 
 --- Scoping for `wrap_loaded()`: the per-function `only`/`except`/`filter`
 --- vocabulary, plus the same three one level up for whole modules.
@@ -80,6 +81,7 @@
 ---@field functions table<string, Lib.Telemetry.FnStats>
 ---@field days table<string, table<string, integer>>          # "YYYY-MM-DD" -> key -> calls
 ---@field reminded table<string, boolean>                     # threshold name -> already notified
+---@field modules table<string, string>                       # wrapped key -> real Lua module path, only for keys lib.nvim can resolve (see WrapOpts.module_id / wrap_loaded); a key with no entry is unmatched, not zero-calls
 
 ---@class Lib.Telemetry.ReportEntry
 ---@field key string
@@ -122,6 +124,7 @@
 ---@field report fun(opts?: Lib.Telemetry.ReportOpts): Lib.Telemetry.Report
 ---@field lines fun(opts?: Lib.Telemetry.ReportOpts): string[]
 ---@field coverage fun(): { called: string[], uncalled: string[] }
+---@field resolved_modules fun(): table<string, string>
 ---@field reset fun(): nil
 ---@field flush fun(): boolean
 ---@field wrapped_keys fun(): string[]
@@ -130,6 +133,7 @@
 ---@field new fun(opts: Lib.Telemetry.Options): Lib.Telemetry.Instance
 ---@field instances fun(): Lib.Telemetry.Instance[]
 ---@field get fun(namespace: string): Lib.Telemetry.Instance|nil
+---@field load fun(namespace: string, opts?: Lib.Cache.Opts): Lib.Telemetry.Data|nil
 ---@field report_all fun(opts?: Lib.Telemetry.ReportOpts): Lib.Telemetry.Report[]
 ---@field flush_all fun(): integer
 ---@field stop_all fun(): integer

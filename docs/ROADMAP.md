@@ -80,7 +80,10 @@ rejected.
   dashboard via `:MDView standalone`'s file-watch mode.
 - [telemetry-documentation-bridge.md](ROADMAP/telemetry-documentation-bridge.md)
   — cross documentation.nvim's static `dead-function` check with telemetry's
-  runtime counts; each method's blind spot is the other's evidence.
+  runtime counts; each method's blind spot is the other's evidence. The
+  lib.nvim-side contract (`telemetry.load()`, key→module-path resolution)
+  shipped; the documentation.nvim-side consumer (mode 7, the join, the
+  `doccoverage` lines) is still open and lives in that repo's own roadmap.
 
 ---
 
