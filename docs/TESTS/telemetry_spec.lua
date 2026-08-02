@@ -177,6 +177,120 @@ return function(H)
   end
 
   -- -------------------------------------------------------------------------
+  -- wrap_loaded: the whole loaded subtree, module-level scoping, stable keys
+  -- -------------------------------------------------------------------------
+  do
+    -- A fake plugin: a thin façade plus the submodules that hold the real
+    -- functions -- the shape wrap_loaded exists for.
+    package.loaded["fakeplug"] = { facade = function() end }
+    package.loaded["fakeplug.core"] = { a = function() end, b = function() end }
+    package.loaded["fakeplug.bindings.actions"] = { go = function(x) return x end }
+    package.loaded["fakeplug.@types"] = { noise = function() end }
+    package.loaded["fakeplugother"] = { must_not_match = function() end }
+
+    local t = telemetry.new({ namespace = ns("loaded"), persist = false })
+    local n, mods = t.wrap_loaded("fakeplug")
+    H.eq(n, 5, "façade + every loaded submodule")
+    H.eq(mods, 4, "four modules contributed")
+
+    local keys = t.wrapped_keys()
+    H.ok(vim.tbl_contains(keys, "facade"), "the prefix module itself keeps bare keys")
+    H.ok(vim.tbl_contains(keys, "core.a"), "submodule keys drop the prefix")
+    H.ok(
+      vim.tbl_contains(keys, "bindings.actions.go"),
+      "nested submodule keeps its full relative path"
+    )
+    H.eq(vim.tbl_contains(keys, "must_not_match"), false, "prefix match is on a dot boundary")
+    t.unwrap()
+
+    -- module_filter / module_except / module_only
+    local t2 = telemetry.new({ namespace = ns("loaded_filter"), persist = false })
+    local n2 = t2.wrap_loaded("fakeplug", {
+      module_filter = function(name)
+        return not name:match("@types")
+      end,
+    })
+    H.eq(n2, 4, "module_filter drops the @types module")
+    t2.unwrap()
+
+    local t3 = telemetry.new({ namespace = ns("loaded_only"), persist = false })
+    H.eq(
+      t3.wrap_loaded("fakeplug", { module_only = { "fakeplug.bindings.actions" } }),
+      1,
+      "module_only narrows to one module"
+    )
+    H.eq(t3.wrapped_keys()[1], "bindings.actions.go", "and its key is still prefix-relative")
+    t3.unwrap()
+
+    local t4 = telemetry.new({ namespace = ns("loaded_except"), persist = false })
+    H.eq(
+      t4.wrap_loaded("fakeplug", { module_except = { "fakeplug.core", "fakeplug.@types" } }),
+      2,
+      "module_except removes whole modules"
+    )
+    t4.unwrap()
+
+    -- per-function scoping still applies underneath the module scoping
+    local t5 = telemetry.new({ namespace = ns("loaded_fn"), persist = false })
+    H.eq(
+      t5.wrap_loaded("fakeplug", { only = { "a", "go" } }),
+      2,
+      "only/except/filter still scope functions within each module"
+    )
+    t5.unwrap()
+
+    -- counting + argument profiling by predicate over the structured key
+    local t6 = telemetry.new({ namespace = ns("loaded_args"), persist = false })
+    t6.wrap_loaded("fakeplug")
+    t6.start({
+      profile_args = function(key)
+        return key:match("^bindings%.") ~= nil
+      end,
+    })
+    package.loaded["fakeplug.bindings.actions"].go("/repo/x")
+    package.loaded["fakeplug.bindings.actions"].go("/repo/x")
+    package.loaded["fakeplug.core"].a()
+
+    local by_key = {}
+    for _, e in ipairs(t6.report().entries) do
+      by_key[e.key] = e
+    end
+    H.eq(by_key["bindings.actions.go"].calls, 2, "predicate-selected function counted")
+    H.eq(
+      by_key["bindings.actions.go"].args[1].fingerprint,
+      '("/repo/x")',
+      "and its arguments were fingerprinted"
+    )
+    H.eq(by_key["core.a"].args, nil, "a key the predicate rejected has no argument profile")
+    t6.stop()
+    t6.unwrap()
+
+    -- re-registering is a no-op, so calling wrap_loaded again to pick up
+    -- newly-required modules cannot double-count
+    local t7 = telemetry.new({ namespace = ns("loaded_again"), persist = false })
+    local first = t7.wrap_loaded("fakeplug")
+    H.eq(t7.wrap_loaded("fakeplug"), first, "second call re-registers the same targets")
+    H.eq(#t7.wrapped_keys(), first, "target list did not grow")
+    t7.start()
+    package.loaded["fakeplug.core"].a()
+    H.eq(t7.report().total_calls, 1, "one call is counted once, not twice")
+    t7.stop()
+    t7.unwrap()
+
+    H.eq(t7.wrap_loaded(""), 0, "an empty prefix registers nothing")
+
+    for _, name in ipairs({
+      "fakeplug",
+      "fakeplug.core",
+      "fakeplug.bindings.actions",
+      "fakeplug.@types",
+      "fakeplugother",
+    }) do
+      package.loaded[name] = nil
+    end
+  end
+
+  -- -------------------------------------------------------------------------
   -- argument fingerprinting
   -- -------------------------------------------------------------------------
   H.eq(fingerprint.of(0), "()", "no arguments")
