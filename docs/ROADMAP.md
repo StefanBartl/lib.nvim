@@ -67,6 +67,23 @@ lib.nvim was audited against the project checklists. Full per-rule status:
 
 ---
 
+## Open concepts (not implemented)
+
+Design proposals that have **not** shipped. A doc leaves this list either by
+being implemented (and then usually deleted — see General §2) or by being
+rejected.
+
+- [autocmd-dispatcher.md](ROADMAP/autocmd-dispatcher.md) — one autocmd, many
+  handlers.
+- [telemetry-browser-report.md](ROADMAP/telemetry-browser-report.md) — a
+  Markdown renderer for telemetry reports, plus a self-updating browser
+  dashboard via `:MDView standalone`'s file-watch mode.
+- [telemetry-documentation-bridge.md](ROADMAP/telemetry-documentation-bridge.md)
+  — cross documentation.nvim's static `dead-function` check with telemetry's
+  runtime counts; each method's blind spot is the other's evidence.
+
+---
+
 ## Finish
 
 1. Expand modules
