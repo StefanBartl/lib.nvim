@@ -122,8 +122,13 @@ local function in_scope(name, fn, opts)
   return true
 end
 
----`true` (everything) / a name list / nil.
----@param spec string[]|true|nil
+---`true` (everything) / a name list / a predicate / nil.
+---
+---The predicate form exists because `wrap_loaded()` produces long, structured
+---keys (`bindings.actions.next_heading`), and "profile everything under
+---`core.`" is then a one-liner instead of a list that goes stale the moment a
+---module gains a function.
+---@param spec string[]|true|fun(key: string): boolean|nil
 ---@param key string
 ---@return boolean
 local function selected(spec, key)
@@ -133,12 +138,51 @@ local function selected(spec, key)
   if spec == true then
     return true
   end
+  if type(spec) == "function" then
+    local ok, hit = pcall(spec, key)
+    return ok and hit == true
+  end
   for _, n in ipairs(spec) do
     if n == key then
       return true
     end
   end
   return false
+end
+
+---Scope a *module* (not a function) for `wrap_loaded`. Deliberately the same
+---vocabulary as the per-function `only`/`except`/`filter`, one level up, so
+---there is one thing to learn rather than two.
+---@param name string
+---@param opts Lib.Telemetry.WrapLoadedOpts
+---@return boolean
+local function module_in_scope(name, opts)
+  if opts.module_only then
+    local hit = false
+    for _, n in ipairs(opts.module_only) do
+      if n == name then
+        hit = true
+        break
+      end
+    end
+    if not hit then
+      return false
+    end
+  end
+
+  if opts.module_except then
+    for _, n in ipairs(opts.module_except) do
+      if n == name then
+        return false
+      end
+    end
+  end
+
+  if opts.module_filter and not opts.module_filter(name) then
+    return false
+  end
+
+  return true
 end
 
 ---@return Lib.Telemetry.Data
@@ -408,6 +452,69 @@ function M.new(opts)
     end
 
     return n
+  end
+
+  ---Register every already-loaded module under `prefix` — `prefix` itself and
+  ---anything beginning `prefix.`.
+  ---
+  ---WHY "LOADED" AND NOT "EVERY MODULE ON DISK"
+  ---A plugin's public surface is usually a thin façade over many submodules:
+  ---`require("markdown")` exposes 11 one-line delegators, while the 35
+  ---`markdown.*` modules behind it hold 125 functions — and the ones a keymap
+  ---actually calls live only in the latter. Wrapping the façade measures the
+  ---façade. But *discovering* those submodules by scanning `lua/` would mean
+  ---`require`-ing every file to see what is in it, which forces eager loading
+  ---of modules the plugin deliberately deferred and runs their top-level code
+  ---for the side effect of counting it. Reading `package.loaded` instead costs
+  ---nothing, triggers nothing, and cannot break a lazy-loading plugin.
+  ---
+  ---The honest trade-off: coverage is "what is loaded at this moment". Call it
+  ---after the plugin has initialized (its `config()`, a `User LazyLoad`
+  ---handler); a submodule first required an hour later is not included. Call
+  ---it again to pick those up — re-registering an already-registered target is
+  ---a no-op.
+  ---
+  ---Keys are the module path minus `prefix.`, plus the function name:
+  ---`markdown.bindings.actions.next_heading` -> `bindings.actions.next_heading`.
+  ---The namespace already says which plugin this is, so repeating it in every
+  ---key would only cost report width.
+  ---@param prefix string
+  ---@param wrap_opts? Lib.Telemetry.WrapLoadedOpts
+  ---@return integer registered
+  ---@return integer modules
+  function inst.wrap_loaded(prefix, wrap_opts)
+    if type(prefix) ~= "string" or prefix == "" then
+      return 0, 0
+    end
+    wrap_opts = wrap_opts or {}
+
+    local dot = prefix .. "."
+    local names = {}
+    for name, value in pairs(package.loaded) do
+      if type(name) == "string" and type(value) == "table" then
+        if name == prefix or name:sub(1, #dot) == dot then
+          if module_in_scope(name, wrap_opts) then
+            names[#names + 1] = name
+          end
+        end
+      end
+    end
+
+    -- Sorted so the wrap order — and therefore the target list — is stable
+    -- across runs. `pairs(package.loaded)` is not.
+    table.sort(names)
+
+    local n, mods = 0, 0
+    for _, name in ipairs(names) do
+      local key_prefix = (name == prefix) and nil or name:sub(#dot + 1)
+      local added = inst.wrap(package.loaded[name], key_prefix, wrap_opts)
+      if added > 0 then
+        mods = mods + 1
+        n = n + added
+      end
+    end
+
+    return n, mods
   end
 
   ---Detach everything and forget the registered targets.

@@ -31,15 +31,22 @@ already uses for `vim.fn.system`.
 
 When it *is* on:
 
-| Mode | Per-call cost |
-| --- | --- |
-| Counting | one table index + one integer add |
-| Timing | + two `vim.uv.hrtime()` reads |
-| Argument profiling | + one fingerprint computation (cheap for scalars, not for tables) |
-| `errors` / `outermost_only` | + one `pcall` (the call must return through us even when it raises) |
+| Mode | Per-call cost | Measured (200k calls, 2 scalar args) |
+| --- | --- | ---: |
+| Counting | one table index + one integer add | **0.014 µs** |
+| + timing | two `vim.uv.hrtime()` reads | 0.394 µs |
+| + argument profiling | one fingerprint computation | 0.619 µs |
+| `errors` / `outermost_only` | one `pcall` (the call must return through us even when it raises) | — |
 
-Argument profiling is per-function opt-in rather than a global switch for
-exactly this reason.
+Counting is genuinely free at editor scale. Argument profiling is **~44×
+counting** — still nothing on a surface driven by keypresses and autocmds
+(0.6 µs × a few thousand calls a day), and a real cost on helpers that run in
+inner loops. That asymmetry is why it is opt-in per function rather than a
+global switch, and why `profile_args` accepts a predicate:
+
+```lua
+t.start({ profile_args = function(key) return key:match("^bindings%.") ~= nil end })
+```
 
 ## API
 
@@ -95,13 +102,52 @@ rather than hand-maintained — a hand-written list is drift waiting to happen.
 Table-valued keys (`lib.strings`, `lib.kit`, …) get their function fields
 registered one level deep.
 
+### `wrap_loaded` — a whole plugin, not just its façade
+
+Wrapping one module usually measures the wrong thing. A plugin's `init.lua`
+is typically a thin façade over the modules that hold the real code —
+`require("markdown")` exposes **11** one-line delegators while the 35 loaded
+`markdown.*` modules hold **125** functions, and the ones its keymaps actually
+call live only in the latter.
+
+```lua
+t.wrap_loaded("markdown")                       -- the whole loaded subtree
+t.wrap_loaded("markdown", {
+  module_only   = { "markdown.bindings.actions" },   -- exact module names
+  module_except = { "markdown.config" },
+  module_filter = function(name)                     -- predicate over the path
+    return not name:find("@types", 1, true)
+  end,
+  only = { "attach" },                               -- per-function scoping
+})                                                   -- still applies underneath
+```
+
+Module-level scoping uses the same `only`/`except`/`filter` vocabulary as the
+per-function scoping, one level up, so there is one thing to learn rather than
+two. Both apply: modules are selected first, then functions within them.
+
+Keys are the module path minus the prefix, plus the function name —
+`markdown.bindings.actions.next_heading` → `bindings.actions.next_heading`.
+The namespace already says which plugin this is.
+
+**Why "loaded" and not "every module on disk":** discovering submodules by
+scanning `lua/` would mean `require`-ing every file to see what is in it,
+forcing eager loading of modules the plugin deliberately deferred and running
+their top-level code as a side effect of counting. Reading `package.loaded`
+costs nothing and cannot break a lazy-loading plugin. The trade-off is that
+coverage is *"what is loaded at this moment"* — call it after the plugin has
+initialized, and call it again later to pick up modules required since
+(re-registering an existing target is a no-op, so nothing double-counts).
+
 ### Lifecycle
 
 ```lua
 t.start()                                  -- counting only
-t.start({ profile_args = { "fs.find_root" },  -- or `true` for everything
-          time = { "fs.find_root" },
-          errors = true })
+t.start({ profile_args = { "fs.find_root" },  -- a key list,
+          time = true,                        -- `true` for everything,
+          errors = function(key)              -- or a predicate over the key
+            return key:match("^io%.") ~= nil
+          end })
 t.stop()                                   -- restores originals, keeps the data
 t.is_running()
 t.unwrap()                                 -- also forget the registered targets

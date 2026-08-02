@@ -31,10 +31,20 @@
 ---@field errors? boolean                      # count raised errors for these functions
 ---@field outermost_only? boolean              # recursive calls count once (costs a pcall)
 
+--- Scoping for `wrap_loaded()`: the per-function `only`/`except`/`filter`
+--- vocabulary, plus the same three one level up for whole modules.
+---@class Lib.Telemetry.WrapLoadedOpts : Lib.Telemetry.WrapOpts
+---@field module_only? string[]                      # wrap only these exact module names
+---@field module_except? string[]                    # wrap everything but these modules
+---@field module_filter? fun(name: string): boolean  # predicate over the full module path
+
+--- Each field takes a key list, `true` for everything, or a predicate over the
+--- key — the predicate form matters once `wrap_loaded()` produces structured
+--- keys, where "everything under `core.`" is a one-liner but a list is not.
 ---@class Lib.Telemetry.StartOpts
----@field profile_args? string[]|true  # enable argument fingerprinting for these keys (or all)
----@field time? string[]|true          # enable timing for these keys (or all)
----@field errors? string[]|true        # enable error counting for these keys (or all)
+---@field profile_args? string[]|true|fun(key: string): boolean  # argument fingerprinting
+---@field time? string[]|true|fun(key: string): boolean          # duration measurement
+---@field errors? string[]|true|fun(key: string): boolean        # count raised errors
 
 ---@class Lib.Telemetry.ReportOpts
 ---@field sort? "calls"|"name"|"time"  # default "calls"
@@ -104,6 +114,7 @@
 ---@field wrap fun(container: table, prefix?: string, opts?: Lib.Telemetry.WrapOpts): integer
 ---@field wrap_fn fun(fn: function, key: string, opts?: Lib.Telemetry.WrapOpts): function
 ---@field wrap_lib fun(opts?: Lib.Telemetry.WrapOpts): integer
+---@field wrap_loaded fun(prefix: string, opts?: Lib.Telemetry.WrapLoadedOpts): integer, integer
 ---@field unwrap fun(): nil
 ---@field start fun(opts?: Lib.Telemetry.StartOpts): boolean
 ---@field stop fun(): boolean

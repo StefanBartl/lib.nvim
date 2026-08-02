@@ -203,12 +203,14 @@ Neovim adapters.
                            (git root, else cwd), built on cache.disk +
                            fs.project_key |lib.nvim-store|
     lib.nvim.telemetry     opt-in call counting / usage statistics: wrappers
-                           installed at start() (zero cost while stopped),
-                           namespaced persistence across restarts, argument
-                           fingerprinting with a memoization hint, per-
-                           namespace start/stop/reset + persistent
-                           disable/enable that survives a restart, opt-in
-                           :LibTelemetry (see lua/lib/nvim/telemetry/README.md)
+                           installed at start() (zero cost while stopped,
+                           0.014us/call when counting), namespaced persistence
+                           across restarts, argument fingerprinting with a
+                           memoization hint, wrap_loaded() for a plugin's whole
+                           loaded subtree rather than its facade, per-namespace
+                           start/stop/reset + persistent disable/enable that
+                           survives a restart, opt-in :LibTelemetry
+                           (see lua/lib/nvim/telemetry/README.md)
     lib.nvim.neotree       neo-tree.nvim-specific helpers: node (path/node
                            extraction from a neo-tree state, marks/pickers
                            share it), watch (file-watcher handle registry +

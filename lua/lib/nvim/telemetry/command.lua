@@ -218,8 +218,14 @@ function M.setup()
       local before = cmd_line:sub(1, #cmd_line - #arg_lead)
       local sub = before:match("^%S+%s+(%S+)%s+%S*$")
 
+      local takes_namespace = sub == "start"
+        or sub == "stop"
+        or sub == "reset"
+        or sub == "disable"
+        or sub == "enable"
+
       local out = {}
-      if sub == "start" or sub == "stop" or sub == "reset" or sub == "disable" or sub == "enable" then
+      if takes_namespace then
         for _, inst in ipairs(telemetry().instances()) do
           out[#out + 1] = inst.namespace
         end
