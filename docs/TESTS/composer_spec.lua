@@ -205,7 +205,10 @@ return function(H)
   do
     local fn, err = parse.resolve_run("definitely.not.a.module")
     ok(fn == nil, "resolve_run: bad module path → nil fn (two-value form)")
-    ok(type(err) == "string" and err:match("definitely%.not%.a%.module"), "resolve_run: bad module path → real require error, not swallowed")
+    ok(
+      type(err) == "string" and err:match("definitely%.not%.a%.module"),
+      "resolve_run: bad module path → real require error, not swallowed"
+    )
   end
   do
     local fn, err = parse.resolve_run(function() end)
@@ -650,7 +653,13 @@ return function(H)
     local captured
     local spec_lw = {
       routes = {
-        { path = { "go" }, range = true, run = function(ctx) captured = ctx.range end },
+        {
+          path = { "go" },
+          range = true,
+          run = function(ctx)
+            captured = ctx.range
+          end,
+        },
       },
     }
     parse.dispatch(
@@ -672,7 +681,13 @@ return function(H)
     local captured
     local spec_bw = {
       routes = {
-        { path = { "go" }, range = true, run = function(ctx) captured = ctx.range end },
+        {
+          path = { "go" },
+          range = true,
+          run = function(ctx)
+            captured = ctx.range
+          end,
+        },
       },
     }
     parse.dispatch(
@@ -694,12 +709,27 @@ return function(H)
     local captured
     local spec_no_range = {
       routes = {
-        { path = { "go" }, run = function(ctx) captured = ctx.range end },
+        {
+          path = { "go" },
+          run = function(ctx)
+            captured = ctx.range
+          end,
+        },
       },
     }
     local root4 = tree.build(spec_no_range.routes)
-    parse.dispatch("ComposerSpecNoRange", spec_no_range, root4, { fargs = { "go" }, range = 0 }, cap)
-    eq(captured.mode, nil, "ctx.range.mode: nil when no range was given, even with stale marks present")
+    parse.dispatch(
+      "ComposerSpecNoRange",
+      spec_no_range,
+      root4,
+      { fargs = { "go" }, range = 0 },
+      cap
+    )
+    eq(
+      captured.mode,
+      nil,
+      "ctx.range.mode: nil when no range was given, even with stale marks present"
+    )
     eq(captured.col1, nil, "ctx.range.col1: nil when no range was given")
     eq(captured.col2, nil, "ctx.range.col2: nil when no range was given")
   end
@@ -906,18 +936,30 @@ return function(H)
       local ran = false
       local spec_v = {
         routes = {
-          { path = { "go" }, range = true, visual = allow, run = function() ran = true end },
+          {
+            path = { "go" },
+            range = true,
+            visual = allow,
+            run = function()
+              ran = true
+            end,
+          },
         },
       }
-      local msgs = {}
+      local visual_msgs = {}
       parse.dispatch(
         "ComposerSpecVisualGuard",
         spec_v,
         tree.build(spec_v.routes),
         { fargs = { "go" }, range = 2, line1 = l1, line2 = l2 },
-        { error = function(m) msgs[#msgs + 1] = m end, info = function() end }
+        {
+          error = function(m)
+            visual_msgs[#visual_msgs + 1] = m
+          end,
+          info = function() end,
+        }
       )
-      return (not ran) and (msgs[1] or "rejected") or nil
+      return (not ran) and (visual_msgs[1] or "rejected") or nil
     end
 
     -- Marks span exactly the invoked range -> the allowlist is enforced.
@@ -959,7 +1001,9 @@ return function(H)
             path = { "go" },
             range = true,
             visual = { "linewise" },
-            run = function() ran = true end,
+            run = function()
+              ran = true
+            end,
           },
         },
       }
@@ -986,17 +1030,30 @@ return function(H)
     local ran = false
     local spec_v = {
       visual = { "linewise" },
-      routes = { { path = { "go" }, range = true, run = function() ran = true end } },
+      routes = {
+        {
+          path = { "go" },
+          range = true,
+          run = function()
+            ran = true
+          end,
+        },
+      },
     }
-    local msgs = {}
+    local visual_msgs = {}
     parse.dispatch(
       "ComposerSpecVisualSpec",
       spec_v,
       tree.build(spec_v.routes),
       { fargs = { "go" }, range = 2, line1 = 1, line2 = 1 },
-      { error = function(m) msgs[#msgs + 1] = m end, info = function() end }
+      {
+        error = function(m)
+          visual_msgs[#visual_msgs + 1] = m
+        end,
+        info = function() end,
+      }
     )
-    ok(not ran and msgs[1], "spec.visual: applies to a route that declares none of its own")
+    ok(not ran and visual_msgs[1], "spec.visual: applies to a route that declares none of its own")
   end
 
   -- ------------------------------------------------------------------ check()
@@ -1021,7 +1078,8 @@ return function(H)
     eq(by_path.good.err, nil, "check.results: a passing route carries no err")
     eq(by_path.broken.ok, false, "check.results: an unloadable module path fails")
     ok(
-      type(by_path.broken.err) == "string" and by_path.broken.err:match("definitely%.not%.a%.module"),
+      type(by_path.broken.err) == "string"
+        and by_path.broken.err:match("definitely%.not%.a%.module"),
       "check.results: reports the REAL require error, not a generic message"
     )
   end
@@ -1029,21 +1087,33 @@ return function(H)
   do
     -- route.check: passing, failing, and throwing.
     local root_c = tree.build({
-      { path = { "pass" }, run = function() end, check = function() return true end },
+      {
+        path = { "pass" },
+        run = function() end,
+        check = function()
+          return true
+        end,
+      },
       {
         path = { "fail" },
         run = function() end,
-        check = function() return false, "docker not on PATH" end,
+        check = function()
+          return false, "docker not on PATH"
+        end,
       },
       {
         path = { "throws" },
         run = function() end,
-        check = function() error("boom") end,
+        check = function()
+          error("boom")
+        end,
       },
       {
         path = { "bare-false" },
         run = function() end,
-        check = function() return false end, -- no message supplied
+        check = function()
+          return false
+        end, -- no message supplied
       },
     })
     local by_path = {}
@@ -1114,11 +1184,21 @@ return function(H)
     local calls = {}
     ---@diagnostic disable-next-line: inject-field
     vim.health = {
-      start = function(s) calls[#calls + 1] = { "start", s } end,
-      ok = function(s) calls[#calls + 1] = { "ok", s } end,
-      error = function(s) calls[#calls + 1] = { "error", s } end,
-      info = function(s) calls[#calls + 1] = { "info", s } end,
-      warn = function(s) calls[#calls + 1] = { "warn", s } end,
+      start = function(s)
+        calls[#calls + 1] = { "start", s }
+      end,
+      ok = function(s)
+        calls[#calls + 1] = { "ok", s }
+      end,
+      error = function(s)
+        calls[#calls + 1] = { "error", s }
+      end,
+      info = function(s)
+        calls[#calls + 1] = { "info", s }
+      end,
+      warn = function(s)
+        calls[#calls + 1] = { "warn", s }
+      end,
     }
     -- check.lua caches the shim at require time, so re-require it fresh.
     package.loaded["lib.nvim.usercmd.composer.check"] = nil
@@ -1130,7 +1210,10 @@ return function(H)
       kinds[#kinds + 1] = c[1]
     end
     ok(vim.tbl_contains(kinds, "start"), "checkhealth: opens a section even for an unknown verb")
-    ok(vim.tbl_contains(kinds, "error"), "checkhealth: unregistered verb reports an error, not a crash")
+    ok(
+      vim.tbl_contains(kinds, "error"),
+      "checkhealth: unregistered verb reports an error, not a crash"
+    )
 
     calls = {}
     composer.verb("ComposerSpecHealthEmpty", { routes = {} })

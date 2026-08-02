@@ -25,7 +25,11 @@ return function(H)
   -- namespace sanitization (cache.disk does none of its own)
   -- -------------------------------------------------------------------------
   H.eq(store.sanitize("lib.nvim"), "lib.nvim", "plain namespace untouched")
-  H.eq(store.sanitize("../../evil"), "_.._evil", "path separators neutralized, leading dots dropped")
+  H.eq(
+    store.sanitize("../../evil"),
+    "_.._evil",
+    "path separators neutralized, leading dots dropped"
+  )
   H.eq(store.sanitize("a/b"), "a_b", "slash neutralized")
   H.eq(store.sanitize("..."), "unnamed", "dots-only namespace does not escape")
   H.eq(store.cache_key("x"):sub(1, 10), "telemetry/", "namespaced under telemetry/")
@@ -209,7 +213,11 @@ return function(H)
     -- functions -- the shape wrap_loaded exists for.
     package.loaded["fakeplug"] = { facade = function() end }
     package.loaded["fakeplug.core"] = { a = function() end, b = function() end }
-    package.loaded["fakeplug.bindings.actions"] = { go = function(x) return x end }
+    package.loaded["fakeplug.bindings.actions"] = {
+      go = function(x)
+        return x
+      end,
+    }
     package.loaded["fakeplug.@types"] = { noise = function() end }
     package.loaded["fakeplugother"] = { must_not_match = function() end }
 
@@ -337,10 +345,7 @@ return function(H)
   H.eq(fingerprint.value({ 1, 2, 3 }), "<table:#3>", "table by shape, not contents")
   H.eq(fingerprint.value({}), "<table:empty>", "empty table")
   H.eq(fingerprint.value(print), "<function>", "function by type")
-  H.ok(
-    #fingerprint.value(("x"):rep(500)) < 60,
-    "long strings truncated rather than stored whole"
-  )
+  H.ok(#fingerprint.value(("x"):rep(500)) < 60, "long strings truncated rather than stored whole")
 
   do
     local mod = {
@@ -590,7 +595,11 @@ return function(H)
     H.eq(loaded.functions.go.calls, 1, "telemetry.load() sees the same data, no instance required")
     H.eq(loaded.modules.go, "fakeplug_ro", "...including the module map")
 
-    H.eq(telemetry.load(nil, { dir = tmpdir }), nil, "a non-string namespace is refused, not errored on")
+    H.eq(
+      telemetry.load(nil, { dir = tmpdir }),
+      nil,
+      "a non-string namespace is refused, not errored on"
+    )
     H.eq(telemetry.load("", { dir = tmpdir }), nil, "an empty namespace is refused too")
   end
 
@@ -725,7 +734,11 @@ return function(H)
 
     telemetry.disable(namespace)
     H.eq(t.is_running(), false, "telemetry.disable() stops a live, running instance immediately")
-    H.eq(toggle.is_disabled(namespace, t._cache_opts), true, "persisted under the instance's own dir")
+    H.eq(
+      toggle.is_disabled(namespace, t._cache_opts),
+      true,
+      "persisted under the instance's own dir"
+    )
 
     H.eq(t.start(), false, "start() is a no-op while disabled")
     H.eq(t.is_running(), false, "...and does not report itself as running")
