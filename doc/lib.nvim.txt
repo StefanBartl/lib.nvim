@@ -207,9 +207,12 @@ Neovim adapters.
                            0.014us/call when counting), namespaced persistence
                            across restarts, argument fingerprinting with a
                            memoization hint, wrap_loaded() for a plugin's whole
-                           loaded subtree rather than its facade, per-namespace
+                           loaded subtree rather than its facade (keys resolve
+                           to real module paths automatically), per-namespace
                            start/stop/reset + persistent disable/enable that
-                           survives a restart, opt-in :LibTelemetry
+                           survives a restart, telemetry.load() to read a
+                           namespace off disk with no live instance, opt-in
+                           :LibTelemetry
                            (see lua/lib/nvim/telemetry/README.md)
     lib.nvim.neotree       neo-tree.nvim-specific helpers: node (path/node
                            extraction from a neo-tree state, marks/pickers

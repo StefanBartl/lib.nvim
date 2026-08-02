@@ -18,6 +18,9 @@
 ---   telemetry.disable("lib.nvim")   -- persists across restarts, stops it now;
 ---   telemetry.enable("lib.nvim")    -- the caller of t.start() above never changes
 ---
+---   -- from a DIFFERENT Neovim process, no instance of its own:
+---   local data = telemetry.load("lib.nvim")   -- nil if nothing was ever persisted
+---
 --- OFF COSTS NOTHING, LITERALLY
 --- Instrumentation is *installed*, not compiled in: until `start()` runs, the
 --- shipped functions are the original functions — the same objects, not a
@@ -42,6 +45,14 @@
 ---   `pcall` per call).
 --- - Day bucketing reads the clock once per flush, not per call, so calls in
 ---   the last flush interval before midnight land in the previous day.
+--- - A wrapped key resolves to a real Lua module path (`Data.modules`, see
+---   `resolved_modules()`) only for `wrap_loaded()` targets and any `wrap()`
+---   call given an explicit `opts.module_id` — a plain `wrap(tbl, "servers")`
+---   prefix is a caller-chosen label, not necessarily a real module path, and
+---   is deliberately left unresolved rather than guessed. A consumer joining
+---   telemetry against a static key set (documentation.nvim's dead-function
+---   check, for one) must treat an unresolved key as "unmatched", never as
+---   "no calls" — those are different claims.
 ---
 --- NOT IMPLEMENTED (deliberately last, strictly more surprising than the rest)
 --- `wrap_tree(prefix)` — hooking `require` to catch lazily-loaded submodules.
@@ -187,7 +198,14 @@ end
 
 ---@return Lib.Telemetry.Data
 local function empty_delta()
-  return { version = store.VERSION, sessions = 0, functions = {}, days = {}, reminded = {} }
+  return {
+    version = store.VERSION,
+    sessions = 0,
+    functions = {},
+    days = {},
+    reminded = {},
+    modules = {},
+  }
 end
 
 -- ---------------------------------------------------------------------------
@@ -352,6 +370,7 @@ function M.new(opts)
       container = container,
       field = field,
       key = key,
+      module_id = opts.module_id,
       wants = {
         args = opts.profile_args or false,
         time = opts.time or false,
@@ -359,6 +378,13 @@ function M.new(opts)
         outermost_only = opts.outermost_only or false,
       },
     }
+    if opts.module_id then
+      -- Recorded regardless of running/persist state, same as `key` itself —
+      -- a consumer resolving keys later (telemetry.load(), no live instance)
+      -- needs this even from a namespace that only ever wrapped, never
+      -- started.
+      pending.modules[key] = opts.module_id
+    end
     if running then
       local tgt = targets[#targets]
       registry.attach(tgt.container, tgt.field, tgt.key, inst, tgt.wants)
@@ -507,7 +533,12 @@ function M.new(opts)
     local n, mods = 0, 0
     for _, name in ipairs(names) do
       local key_prefix = (name == prefix) and nil or name:sub(#dot + 1)
-      local added = inst.wrap(package.loaded[name], key_prefix, wrap_opts)
+      -- `name` here IS the real `package.loaded` module path -- unlike a
+      -- plain `wrap()` prefix (a caller-chosen label), this one is exact by
+      -- construction, so every key wrap_loaded() produces is resolvable.
+      -- Copied per module rather than mutating the caller's `wrap_opts`.
+      local scoped_opts = vim.tbl_extend("force", wrap_opts, { module_id = name })
+      local added = inst.wrap(package.loaded[name], key_prefix, scoped_opts)
       if added > 0 then
         mods = mods + 1
         n = n + added
@@ -729,12 +760,43 @@ function M.new(opts)
     return { called = called, uncalled = uncalled }
   end
 
+  ---Every wrapped key that resolves to a real Lua module path, alongside
+  ---that path — the join a consumer (e.g. documentation.nvim matching a
+  ---telemetry key back to its static IR) can make honestly.
+  ---
+  ---Only `wrap_loaded()` targets resolve, plus any `wrap()` call given an
+  ---explicit `opts.module_id`: their key is derived from (or asserted
+  ---against) a real `package.loaded` path, not a caller-chosen label.
+  ---`t.wrap(require("lsp.servers"), "servers")` does NOT resolve on its
+  ---own — "servers" is not necessarily "lsp.servers" — and is deliberately
+  ---absent here rather than guessed. A key with no entry is "unmatched", not
+  ---"zero calls"; those are different claims and must stay distinguishable.
+  ---@return table<string, string>  key -> real Lua module path
+  function inst.resolved_modules()
+    local out = {}
+    for _, tgt in ipairs(targets) do
+      if tgt.module_id then
+        out[tgt.key] = tgt.module_id
+      end
+    end
+    return out
+  end
+
   ---Drop everything collected, in memory and on disk. Wrapping is untouched.
   function inst.reset()
     base = store.empty()
     pending = empty_delta()
     pending.started_at = os.time()
     pending.sessions = 1
+    -- The module-id map is structural (which key resolves to which real
+    -- path), not a count -- clearing the disk copy would otherwise erase it
+    -- until something calls wrap()/wrap_loaded() again, even though the
+    -- currently wrapped targets (untouched by reset()) already know it.
+    for _, tgt in ipairs(targets) do
+      if tgt.module_id then
+        pending.modules[tgt.key] = tgt.module_id
+      end
+    end
     if cfg.persist then
       store.clear(namespace, cache_opts)
     end
@@ -793,6 +855,30 @@ function M.get(namespace)
     end
   end
   return nil
+end
+
+---Read a namespace's telemetry data straight off disk, without creating a
+---live instance for it.
+---
+---For a consumer that only wants to know what happened in *some other*
+---Neovim session — documentation.nvim's dead-function join is the motivating
+---case: a fresh `:DocMap check` run has no telemetry instance for the tree
+---it is analyzing, and standing one up just to read counts would start
+---collecting for a namespace nothing intends to keep running.
+---
+---Returns `nil` when nothing was ever persisted for `namespace`, deliberately
+---distinct from a well-formed empty table — a caller has to be able to tell
+---"telemetry was never enabled here" from "enabled, and zero calls were
+---recorded". Collapsing those two would render an unanalyzed tree as a
+---graveyard instead of "no data" (see the module doc-comment's HONEST LIMITS).
+---@param namespace string
+---@param opts? Lib.Cache.Opts
+---@return Lib.Telemetry.Data|nil
+function M.load(namespace, opts)
+  if type(namespace) ~= "string" or namespace == "" then
+    return nil
+  end
+  return store.load_readonly(namespace, opts)
 end
 
 ---@param opts? Lib.Telemetry.ReportOpts

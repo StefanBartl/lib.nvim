@@ -1,9 +1,14 @@
 # `documentation.nvim` × `lib.nvim.telemetry` — runtime truth for a static analyzer
 
-> **Status:** concept, not implemented. Written in response to: "prüfe, ob
-> documentation.nvim dieses Telemetry-Modul verwenden könnte, also wenn es
-> installiert ist, dann einen neuen Tab 'telemetry' einfügen, dort der Report
-> sichtbar + weitere interessante Stats".
+> **Status:** the lib.nvim-side contract below ships as of `telemetry.load()`
+> + module-id resolution (`Lib.Telemetry.WrapOpts.module_id`,
+> `inst.resolved_modules()`, `Data.modules`). The consumer half — mode 7,
+> the `dead-function` join, the two `doccoverage` aggregate lines — is still
+> unbuilt; it belongs in documentation.nvim's own roadmap (see "Where the
+> work lives" below). Written in response to: "prüfe, ob documentation.nvim
+> dieses Telemetry-Modul verwenden könnte, also wenn es installiert ist, dann
+> einen neuen Tab 'telemetry' einfügen, dort der Report sichtbar + weitere
+> interessante Stats".
 >
 > **Verdict: yes — and the tab is the least interesting part of it.** The
 > valuable thing is a join neither tool can produce alone: documentation.nvim
@@ -79,20 +84,25 @@ inst.report({ since = "30d" })       -- per-function calls/timing/errors
 ```
 
 `coverage()` exists precisely for this — it is the set difference between the
-wrap list and the observed keys. What is missing is only the ability to read a
-namespace's counts **without a live instance**, i.e. straight off disk: a
-`:DocMap check` run in a fresh Neovim has no telemetry instance for the tree it
-is analyzing.
-
-**One small addition to lib.nvim, then:**
+wrap list and the observed keys. What was missing was only the ability to
+read a namespace's counts **without a live instance**, i.e. straight off
+disk: a `:DocMap check` run in a fresh Neovim has no telemetry instance for
+the tree it is analyzing. **Shipped:**
 
 ```lua
-telemetry.load(namespace, opts)  -- -> Lib.Telemetry.Data|nil, read-only
+local data = telemetry.load(namespace, opts)  -- Lib.Telemetry.Data|nil, read-only
 ```
 
-Thin wrapper over the existing `store.load()`, which already does exactly this
-and is already namespaced, sanitized and merge-on-write. No new file format,
-no new IO.
+Thin wrapper over `store.load_readonly()`, itself a small variant of the
+existing `store.load()` (already namespaced, sanitized, merge-on-write). No
+new file format, no new IO — the one behavioral difference from `load()` is
+the one that matters here: it returns `nil`, not a well-formed empty table,
+when nothing was ever persisted for `namespace`. `load()` can't do that and
+stay correct for its actual caller (a live instance's `base`, which always
+wants *something* to merge into); a namespace with no live instance needs the
+distinction instead — "never enabled here" (`nil`) vs. "enabled, zero calls"
+(a `Data` with empty `functions`). Collapsing those two is exactly how this
+concept would quietly turn "no data" into a graveyard.
 
 ## Key-matching is the one real problem
 
@@ -102,20 +112,38 @@ documentation.nvim's IR keys are `module_id .. "#" .. fn.name`
 (`check.lua:686`). Those do not line up on their own.
 
 This is where the concept could quietly produce wrong answers, so it needs to
-fail loudly instead:
+fail loudly instead — **shipped as "record it, don't guess it":**
 
-- **Match on the module's real Lua module path, not the wrap prefix.** That
-  means telemetry should record the prefix *and* enough to resolve it — or,
-  simpler and more honest, documentation.nvim should only join namespaces
-  whose keys it can resolve, and report the rest as "unmatched" rather than
-  silently treating unmatched as never-called.
+- **`wrap_loaded()` resolves every key automatically.** Its keys are already
+  derived from a real `package.loaded` path (that is the whole mechanism —
+  see its own doc-comment), so at wrap time lib.nvim knows the exact module
+  path and records it, rather than making a consumer reconstruct it later by
+  parsing the key. A plain `wrap()` call resolves only if the caller passes
+  `opts.module_id` explicitly — `t.wrap(require("lsp.servers"), "servers")`
+  does **not** resolve on its own, because `"servers"` is a caller-chosen
+  label, not necessarily `"lsp.servers"`, and guessing that equivalence is
+  exactly the wrong-answer risk this section exists to close off.
+- **The mapping is queryable live and persisted to disk.**
+  `inst.resolved_modules()` returns `{ [key] = module_id }` for the current
+  process; the same map lands in `Data.modules` on every flush, so
+  `telemetry.load(namespace)` — no live instance required — returns it too.
+  documentation.nvim builds its join key as `data.modules[key] .. "#" ..
+  key:match("([^.]+)$")` for any `key` present in `data.modules`, and treats
+  every other key as **unmatched**, never as "no calls".
 - **"Unmatched" must never render as ☠️.** A function telemetry has no opinion
   about is not a dead function; it is a function with no data. The mode must
   distinguish *no data* from *zero calls*, and the `dead-function` check must
-  only be suppressed or escalated on a real match.
-- `wrap_lib()`'s aggregate keys (`trim`, `find_root`) are flat and correspond
-  to `MODULE_MAP` entries, not to module paths — those need the strategy's own
-  mapping to resolve, which `lib.strategies.control` can already enumerate.
+  only be suppressed or escalated on a real match — i.e. only on a key present
+  in `data.modules`.
+- **`wrap_lib()`'s aggregate keys stay deliberately unresolved.** `trim`,
+  `find_root` etc. are flat and correspond to `MODULE_MAP` entries private to
+  the "metatable" strategy, not to module paths, and resolving them would
+  need a strategy-wide key→path registry that does not exist yet (`lib.
+  strategies.control` enumerates *keys*, not where they resolve to) — a
+  bigger, separate change with no motivating caller today. This is also why
+  the Honest Limits section below already recommends `wrap_loaded()` over
+  `wrap_lib()` for dead-surface analysis specifically: it is the one that
+  resolves.
 
 ## Proposed shape
 
@@ -147,17 +175,19 @@ whole document: it sorts the documentation backlog by evidence of actual use.
 
 ## Where the work lives
 
-| Piece | Repo |
-| --- | --- |
-| `telemetry.load(namespace)` — read counts off disk without an instance | lib.nvim |
-| Key-resolution helper (wrap prefix ↔ module path), or the honest "unmatched" contract | lib.nvim |
-| Mode 7 + entry builder + join logic | documentation.nvim |
-| `dead-function` suppression/escalation from runtime evidence | documentation.nvim |
-| The two `doccoverage` aggregate lines | documentation.nvim |
+| Piece | Repo | Status |
+| --- | --- | --- |
+| `telemetry.load(namespace)` — read counts off disk without an instance | lib.nvim | **done** |
+| Key-resolution (`WrapOpts.module_id`, `resolved_modules()`, `Data.modules`), honest "unmatched" for the rest | lib.nvim | **done** |
+| Mode 7 + entry builder + join logic | documentation.nvim | open |
+| `dead-function` suppression/escalation from runtime evidence | documentation.nvim | open |
+| The two `doccoverage` aggregate lines | documentation.nvim | open |
 
 The bulk is documentation.nvim's, so the consumer half belongs in **its** own
 roadmap; this document is the lib.nvim-side contract plus the reasoning for
-why the join is worth building at all.
+why the join is worth building at all. The lib.nvim side is covered by
+`docs/TESTS/telemetry_spec.lua` and documented in
+`lua/lib/nvim/telemetry/README.md`.
 
 ## Honest limits
 

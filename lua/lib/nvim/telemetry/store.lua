@@ -57,6 +57,7 @@ function M.empty()
     functions = {},
     days = {},
     reminded = {},
+    modules = {},
   }
 end
 
@@ -72,6 +73,10 @@ local function normalize(raw)
   raw.reminded = type(raw.reminded) == "table" and raw.reminded or {}
   raw.sessions = tonumber(raw.sessions) or 0
   raw.started_at = tonumber(raw.started_at) or os.time()
+  -- Added after version 1 shipped; older cache files simply lack it. Purely
+  -- additive, so this does not warrant a version bump — a missing map and an
+  -- empty one mean the same thing to every reader.
+  raw.modules = type(raw.modules) == "table" and raw.modules or {}
   return raw
 end
 
@@ -81,6 +86,27 @@ end
 function M.load(namespace, opts)
   local ok, raw = pcall(disk.load, M.cache_key(namespace), opts)
   return normalize(ok and raw or nil)
+end
+
+---Like `load`, but distinguishes "nothing was ever persisted" from "persisted
+---and empty" — returns `nil` rather than a well-formed empty table when no
+---cache entry exists for `namespace`.
+---
+---`load()` collapses that distinction on purpose: a live instance's `base`
+---always wants *something* to merge into, and "never flushed before" and
+---"flushed, zero counts" are the same starting point for it. A caller reading
+---a namespace it does not own — no live instance, possibly never enabled
+---here at all — needs to tell those apart, or "no data" renders as a
+---graveyard instead of "no data". See `telemetry.load()`.
+---@param namespace string
+---@param opts? Lib.Cache.Opts
+---@return Lib.Telemetry.Data|nil
+function M.load_readonly(namespace, opts)
+  local ok, raw = pcall(disk.load, M.cache_key(namespace), opts)
+  if not ok or raw == nil then
+    return nil
+  end
+  return normalize(raw)
 end
 
 ---@param namespace string
@@ -205,6 +231,15 @@ function M.merge(base, delta, max_values)
   end
   for k, v in pairs(delta.reminded or {}) do
     base.reminded[k] = v
+  end
+
+  -- Structural, not a count: which key resolves to which real Lua module
+  -- path. Stable across sessions by construction (derived from
+  -- `package.loaded`), so last-write-wins is equivalent to first-write-wins
+  -- here -- there is no meaningful "older" value to preserve.
+  base.modules = base.modules or {}
+  for key, module_id in pairs(delta.modules or {}) do
+    base.modules[key] = module_id
   end
 
   return base

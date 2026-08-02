@@ -138,6 +138,31 @@ return function(H)
   end
 
   -- -------------------------------------------------------------------------
+  -- module-id resolution: a plain wrap() resolves only if the caller vouches
+  -- for the prefix explicitly -- the prefix is a label, not necessarily a
+  -- real module path, and a guess here is exactly the failure mode the
+  -- documentation.nvim join has to avoid (see wrap_loaded's own resolution
+  -- test further down, where the module path is never guessed either).
+  -- -------------------------------------------------------------------------
+  do
+    local mod = { f = function() end }
+
+    local t1 = telemetry.new({ namespace = ns("wrap_unresolved"), persist = false })
+    t1.wrap(mod, "servers")
+    H.eq(next(t1.resolved_modules()), nil, "a bare wrap() prefix resolves nothing")
+    t1.unwrap()
+
+    local t2 = telemetry.new({ namespace = ns("wrap_resolved"), persist = false })
+    t2.wrap(mod, "servers", { module_id = "lsp.servers" })
+    H.eq(
+      t2.resolved_modules()["servers.f"],
+      "lsp.servers",
+      "an explicit module_id is honored for a plain wrap()"
+    )
+    t2.unwrap()
+  end
+
+  -- -------------------------------------------------------------------------
   -- shared wrap layer: two instances, one function
   -- -------------------------------------------------------------------------
   do
@@ -278,6 +303,20 @@ return function(H)
     t7.unwrap()
 
     H.eq(t7.wrap_loaded(""), 0, "an empty prefix registers nothing")
+
+    -- module-id resolution: every wrap_loaded() key is derived from a real
+    -- `package.loaded` path, so every one of them resolves.
+    local t8 = telemetry.new({ namespace = ns("loaded_modules"), persist = false })
+    t8.wrap_loaded("fakeplug")
+    local resolved = t8.resolved_modules()
+    H.eq(resolved.facade, "fakeplug", "the prefix module itself resolves to the prefix path")
+    H.eq(resolved["core.a"], "fakeplug.core", "a submodule key resolves to its real module path")
+    H.eq(
+      resolved["bindings.actions.go"],
+      "fakeplug.bindings.actions",
+      "a nested submodule key resolves too"
+    )
+    t8.unwrap()
 
     for _, name in ipairs({
       "fakeplug",
@@ -480,6 +519,79 @@ return function(H)
 
     t2.reset()
     H.eq(store.load(namespace, { dir = tmpdir }).functions.f, nil, "reset clears the disk copy")
+  end
+
+  -- -------------------------------------------------------------------------
+  -- reset(): the module-id map is repopulated from the still-wrapped targets
+  -- immediately, not left empty until something calls wrap() again -- reset()
+  -- promises "wrapping is untouched", and the module map is a property of the
+  -- wrapping, not of the counts it clears.
+  -- -------------------------------------------------------------------------
+  do
+    local namespace = ns("reset_modules")
+    package.loaded["fakeplug_reset"] = { go = function() end }
+
+    local t = telemetry.new({ namespace = namespace, persist = true, dir = tmpdir })
+    t.wrap_loaded("fakeplug_reset")
+    t.start()
+    package.loaded["fakeplug_reset"].go()
+    t.stop() -- flush #1: counts and module map both on disk
+
+    t.reset() -- clears memory + disk; wrapping (targets) is untouched
+    H.eq(
+      t.resolved_modules().go,
+      "fakeplug_reset",
+      "resolved_modules() reflects current targets right after reset()"
+    )
+
+    t.flush()
+    H.eq(
+      store.load_readonly(namespace, { dir = tmpdir }).modules.go,
+      "fakeplug_reset",
+      "the module-id map is back on disk after the next flush, without re-wrapping"
+    )
+    H.eq(
+      store.load_readonly(namespace, { dir = tmpdir }).functions.go,
+      nil,
+      "counts stayed cleared -- only the module map was carried forward"
+    )
+
+    t.unwrap()
+    package.loaded["fakeplug_reset"] = nil
+  end
+
+  -- -------------------------------------------------------------------------
+  -- telemetry.load() / store.load_readonly(): read a namespace off disk with
+  -- no live instance, distinguishing "never persisted" (nil) from "persisted,
+  -- zero calls" -- the distinction documentation.nvim's join depends on so an
+  -- unanalyzed tree renders as "no data", not a graveyard.
+  -- -------------------------------------------------------------------------
+  do
+    local namespace = ns("readonly")
+
+    H.eq(store.load_readonly(namespace, { dir = tmpdir }), nil, "nothing on disk yet")
+    H.eq(telemetry.load(namespace, { dir = tmpdir }), nil, "module-level load() agrees")
+
+    package.loaded["fakeplug_ro"] = { go = function() end }
+    local t = telemetry.new({ namespace = namespace, persist = true, dir = tmpdir })
+    t.wrap_loaded("fakeplug_ro")
+    t.start()
+    package.loaded["fakeplug_ro"].go()
+    t.stop() -- flushes
+    t.unwrap()
+    package.loaded["fakeplug_ro"] = nil
+
+    local disk_readonly = store.load_readonly(namespace, { dir = tmpdir })
+    H.ok(disk_readonly ~= nil, "data now exists on disk")
+    H.eq(disk_readonly.functions.go.calls, 1, "counts round-trip")
+    H.eq(disk_readonly.modules.go, "fakeplug_ro", "the module-id map round-trips too")
+
+    local loaded = telemetry.load(namespace, { dir = tmpdir })
+    H.eq(loaded.functions.go.calls, 1, "telemetry.load() sees the same data, no instance required")
+    H.eq(loaded.modules.go, "fakeplug_ro", "...including the module map")
+
+    H.eq(telemetry.load(nil, { dir = tmpdir }), nil, "a non-string namespace is refused, not errored on")
+    H.eq(telemetry.load("", { dir = tmpdir }), nil, "an empty namespace is refused too")
   end
 
   -- -------------------------------------------------------------------------
