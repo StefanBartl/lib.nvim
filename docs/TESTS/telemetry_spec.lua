@@ -1138,5 +1138,119 @@ return function(H)
     H.ok(vim.tbl_contains(first_token_completions, "open"), "open is offered as a subcommand")
   end
 
+  -- -------------------------------------------------------------------------
+  -- Options.info: free-form metadata (branch, version/release tag, …)
+  -- bundled with the report -- the caller supplies it (e.g. via
+  -- lib.nvim.git.info(dir)); this module never inspects a repo to guess it.
+  -- -------------------------------------------------------------------------
+  do
+    local mod = { f = function() end }
+    local t = telemetry.new({
+      namespace = ns("info"),
+      persist = false,
+      info = { branch = "main", version = "v1.2.3" },
+    })
+    t.wrap(mod)
+    t.start()
+    mod.f()
+
+    local rep = t.report()
+    H.eq(rep.info.branch, "main", "report().info carries Options.info through")
+    H.eq(rep.info.version, "v1.2.3", "...every field of it")
+
+    local text = table.concat(t.lines(), "\n")
+    H.ok(text:find("branch=main", 1, true) ~= nil, "lines() renders the info fields")
+    H.ok(text:find("version=v1.2.3", 1, true) ~= nil, "...sorted, so key order is deterministic")
+
+    local md = table.concat(t.markdown(), "\n")
+    H.ok(md:find("branch=main", 1, true) ~= nil, "markdown() renders the same info line")
+
+    t.stop()
+    t.unwrap()
+  end
+
+  do
+    local t = telemetry.new({ namespace = ns("info_absent"), persist = false })
+    local rep = t.report()
+    H.eq(next(rep.info), nil, "no Options.info given -> report().info is empty, not nil")
+    H.eq(
+      table.concat(t.lines(), "\n"):find("=", 1, true),
+      nil,
+      "lines() renders no info line at all when there is nothing to show"
+    )
+    t.unwrap()
+  end
+
+  -- info persists across a flush, and a newer session's info replaces an
+  -- older one wholesale rather than merging field-by-field -- a branch
+  -- switch between sessions should not leave a stale field from the first
+  -- one sitting alongside the new ones.
+  do
+    local namespace = ns("info_persist")
+    local mod = { f = function() end }
+
+    local t1 = telemetry.new({
+      namespace = namespace,
+      persist = true,
+      dir = tmpdir,
+      info = { branch = "feature-x", version = "v1.0.0" },
+    })
+    t1.wrap(mod)
+    t1.start()
+    mod.f()
+    t1.stop() -- flushes
+    t1.unwrap()
+
+    local on_disk = store.load(namespace, { dir = tmpdir })
+    H.eq(on_disk.info.branch, "feature-x", "info reached disk")
+    H.eq(on_disk.info.version, "v1.0.0", "...every field")
+
+    local t2 = telemetry.new({
+      namespace = namespace,
+      persist = true,
+      dir = tmpdir,
+      info = { branch = "main" }, -- narrower table, different branch
+    })
+    H.eq(t2.report().info.branch, "main", "a fresh instance's info is visible immediately")
+    t2.wrap(mod)
+    t2.start()
+    mod.f()
+    t2.stop()
+    t2.unwrap()
+
+    local merged = store.load(namespace, { dir = tmpdir })
+    H.eq(merged.info.branch, "main", "the newer session's info wins")
+    H.eq(
+      merged.info.version,
+      nil,
+      "...wholesale, not merged field-by-field -- the stale 'version' from the first session is gone, not carried over"
+    )
+  end
+
+  -- reset() keeps Options.info available immediately, the same treatment
+  -- the module-id map gets -- info is a property of this instance's
+  -- configuration, not of the counts reset() clears.
+  do
+    local t = telemetry.new({
+      namespace = ns("info_reset"),
+      persist = true,
+      dir = tmpdir,
+      info = { branch = "main" },
+    })
+    t.reset()
+    H.eq(
+      t.report().info.branch,
+      "main",
+      "resolved_modules()-style: info survives reset() in memory"
+    )
+    t.flush()
+    H.eq(
+      store.load(t.namespace, { dir = tmpdir }).info.branch,
+      "main",
+      "...and is back on disk after the next flush, without re-specifying it"
+    )
+    t.unwrap()
+  end
+
   vim.fn.delete(tmpdir, "rf")
 end

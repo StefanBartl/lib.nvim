@@ -120,6 +120,36 @@ function M.head_short_hash(git_cmd)
   return git_system({ bin, "rev-parse", "--short", "HEAD" })
 end
 
+--- One-shot repo identity snapshot for an arbitrary directory. Unlike every
+--- other function here, which reads the current working directory
+--- implicitly, this takes an explicit path (`git -C <dir> ...`) — a caller
+--- correlating data with *a specific plugin's* repo state (`lib.nvim.
+--- telemetry`'s `info` field, for one) usually wants a different repo than
+--- whatever the editor's own cwd happens to be, not this one extended with
+--- a `cwd` parameter on every existing function above.
+---@param dir string Absolute or relative path inside the target repo.
+---@param git_cmd? string
+---@return { branch: string|nil, version: string|nil, commit: string|nil }
+function M.info(dir, git_cmd)
+  local bin = git_cmd or "git"
+  local function run(args)
+    local argv = { bin, "-C", dir }
+    for _, a in ipairs(args) do
+      argv[#argv + 1] = a
+    end
+    return git_system(argv)
+  end
+  return {
+    -- `nil` in detached HEAD, same as `current_branch` above.
+    branch = run({ "symbolic-ref", "--short", "HEAD" }),
+    -- The nearest reachable tag, or the short hash if none exists yet
+    -- (`--always`) — "version tag" and "there is no tag" both answered
+    -- honestly rather than one masquerading as the other.
+    version = run({ "describe", "--tags", "--always" }),
+    commit = run({ "rev-parse", "--short", "HEAD" }),
+  }
+end
+
 --- Parse `git status --porcelain -u` output into a path -> status-code map.
 --- Handles ordinary XY codes (M/A/D/R/C/U, "??" untracked, "!!" ignored) and
 --- rename/copy entries ("R  old -> new" / "C  old -> new"), keying renames

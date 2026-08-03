@@ -29,6 +29,28 @@ local function num(n)
   return (out:gsub("^%s+", ""))
 end
 
+---Render `Options.info`/`Data.info` as one deterministic, sorted line —
+---shared by `M.lines` and `M.markdown` so the two never disagree on key
+---order. `nil` when there is nothing to show, so callers can skip the line
+---entirely rather than rendering an empty one.
+---@param info table<string, string>
+---@return string?
+local function format_info(info)
+  local keys = {}
+  for k in pairs(info) do
+    keys[#keys + 1] = k
+  end
+  if #keys == 0 then
+    return nil
+  end
+  table.sort(keys)
+  local parts = {}
+  for _, k in ipairs(keys) do
+    parts[#parts + 1] = ("%s=%s"):format(k, tostring(info[k]))
+  end
+  return table.concat(parts, " · ")
+end
+
 ---@param stats Lib.Telemetry.ArgStats
 ---@param calls integer
 ---@return { fingerprint: string, count: integer, share: number }[] top, integer other, integer distinct
@@ -129,6 +151,7 @@ function M.build(namespace, data, meta, opts)
     sessions = data.sessions or 0,
     total_calls = total,
     since = days and (days .. "d") or nil,
+    info = data.info or {},
     entries = entries,
   }
 end
@@ -164,6 +187,10 @@ function M.lines(report)
   )
   if report.started_at then
     out[#out + 1] = ("  collecting since %s"):format(os.date("%Y-%m-%d %H:%M", report.started_at))
+  end
+  local info_line = format_info(report.info)
+  if info_line then
+    out[#out + 1] = ("  %s"):format(info_line)
   end
   out[#out + 1] = ""
 
@@ -249,6 +276,10 @@ function M.markdown(report)
   )
   if report.started_at then
     out[#out + 1] = ("Collecting since %s."):format(os.date("%Y-%m-%d %H:%M", report.started_at))
+  end
+  local info_line = format_info(report.info)
+  if info_line then
+    out[#out + 1] = ("_%s_"):format(info_line)
   end
   out[#out + 1] = ""
 

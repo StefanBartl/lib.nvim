@@ -20,6 +20,7 @@
 ---@field persist? boolean                              # false keeps everything in memory (default true)
 ---@field max_arg_values? integer                       # distinct fingerprints kept per function (default 32)
 ---@field report_file? boolean                          # keep this namespace's Markdown report on disk, rewritten at every flush (default false); see lua/lib/nvim/telemetry/report_file.lua
+---@field info? table<string, string>                   # free-form metadata bundled with the report (branch, version/release tag, commit, …) — see lib.nvim.git.info() for a ready-made source; the caller supplies it, this module never inspects a repo to guess it
 
 --- "auto" (default) prefers mdview if loadable, else the kit float — same
 --- degrade-silently discipline as `lib.nvim.progress`'s style resolution.
@@ -87,6 +88,7 @@
 ---@field days table<string, table<string, integer>>          # "YYYY-MM-DD" -> key -> calls
 ---@field reminded table<string, boolean>                     # threshold name -> already notified
 ---@field modules table<string, string>                       # wrapped key -> real Lua module path, only for keys lib.nvim can resolve (see WrapOpts.module_id / wrap_loaded); a key with no entry is unmatched, not zero-calls
+---@field info table<string, string>                          # free-form metadata from Options.info — last-write-wins on merge, not accumulated, since a newer session's branch/version supersedes an older one rather than adding to it
 
 ---@class Lib.Telemetry.ReportEntry
 ---@field key string
@@ -110,6 +112,7 @@
 ---@field total_calls integer
 ---@field wrapped integer
 ---@field since? string
+---@field info table<string, string>
 ---@field entries Lib.Telemetry.ReportEntry[]
 
 -- ---------------------------------------------------------------------------

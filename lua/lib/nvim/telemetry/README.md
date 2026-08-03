@@ -65,6 +65,8 @@ persisted counts.
 | `remind_after` | `{ days = 7, calls = 50000 }` | lifecycle reminder; `false` opts out |
 | `persist` | `true` | `false` keeps everything in memory |
 | `max_arg_values` | `32` | distinct fingerprints kept per function |
+| `report_file` | `false` | keep this namespace's Markdown report on disk, rewritten at every flush — see "Browser report" |
+| `info` | `{}` | free-form metadata bundled with the report (branch, version, …) — see "Report metadata" below |
 
 A second `new()` with a namespace that already has a live instance **warns** —
 two plugins sharing a namespace would silently merge into one cache file and
@@ -213,6 +215,42 @@ telemetry.report_all(opts)
 telemetry.flush_all()
 telemetry.stop_all()
 ```
+
+### Report metadata — which branch/version this data came from
+
+A count on its own does not say *when* it is from — 12,000 calls to a
+function that no longer exists by that name a week later is a stale number
+wearing a fresh-looking one's clothes. `Options.info` bundles whatever the
+caller considers the important context alongside the counts:
+
+```lua
+telemetry.new({
+  namespace = "lsp.nvim",
+  info = { branch = "main", version = "v1.2.3" },  -- any string keys, any string values
+})
+```
+
+This module never inspects a repo to guess at that — the caller almost
+always already knows which directory its own plugin lives in, and guessing
+wrong silently is worse than not having the field. `lib.nvim.git.info(dir)`
+is a ready-made source for the common case:
+
+```lua
+local info = require("lib.nvim.git").info(plugin_dir)
+-- { branch = "main", version = "v1.2.3" or a short hash if untagged, commit = "abc1234" }
+telemetry.new({ namespace = "lsp.nvim", info = info })
+```
+
+Shows up in `t.report().info`, and as a line in both `t.lines()` and
+`t.markdown()` (sorted by key, so rendering is deterministic) — absent
+entirely when empty, rather than an empty line nobody asked for.
+
+**Last-write-wins, not merged field-by-field.** A branch switch between
+sessions replaces the whole `info` table on the next flush; the previous
+session's fields do not linger alongside the new ones the way `wrap_loaded()`
+keys or counts accumulate. `Options.info` is set once at construction
+(`telemetry.new`) — there is no `t.set_info(...)` to change it mid-process,
+the same way `dir`/`persist` are construction-time only.
 
 ### Reading without an instance — and resolving keys to real modules
 
