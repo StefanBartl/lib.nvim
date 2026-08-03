@@ -214,6 +214,8 @@ Neovim adapters.
                            namespace off disk with no live instance, a
                            Markdown renderer + opt-in self-updating browser
                            report via mdview.nvim (:LibTelemetry open),
+                           opt-in Options.info metadata (branch/version/…,
+                           see lib.nvim.git.info()) bundled with the report,
                            opt-in :LibTelemetry
                            (see lua/lib/nvim/telemetry/README.md)
     lib.nvim.neotree       neo-tree.nvim-specific helpers: node (path/node

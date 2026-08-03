@@ -30,6 +30,23 @@ Git repo, `repo_root()`/`current_branch()`/etc. all just return `nil`.
 the command fails, produces no output, or the output doesn't match
 `"<n> <n>"`, both results are `false` rather than raising.
 
+## Querying a different repo than the editor's cwd
+
+Every function above reads the current working directory implicitly — the
+right default for editor features, wrong for correlating data with *a
+specific plugin's* repo state (e.g. `lib.nvim.telemetry`'s `info` field,
+tagging a report with the branch/version of the plugin it was collected
+from, not of whatever the editor's cwd happens to be).
+
+```lua
+git.info("/path/to/some/plugin")
+-- { branch = "main", version = "v1.2.3" or a short hash if untagged, commit = "abc1234" }
+```
+
+Runs `git -C <dir> ...` for each field; any field the command fails to
+answer (detached HEAD for `branch`, no tags and no commits for `version`) is
+`nil` rather than a guessed placeholder.
+
 ## Status parsing
 
 ```lua

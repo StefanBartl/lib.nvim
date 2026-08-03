@@ -55,6 +55,11 @@
 ---   telemetry against a static key set (documentation.nvim's dead-function
 ---   check, for one) must treat an unresolved key as "unmatched", never as
 ---   "no calls" — those are different claims.
+--- - `Options.info` (branch/version/whatever the caller wants bundled with
+---   the report) is never inspected or guessed at here —
+---   `lib.nvim.git.info(dir)` is a ready-made source, but the caller supplies
+---   the directory. Last-write-wins wholesale on flush, not merged
+---   field-by-field, and set only at `new()` — there is no `t.set_info(...)`.
 ---
 --- NOT IMPLEMENTED (deliberately last, strictly more surprising than the rest)
 --- `wrap_tree(prefix)` — hooking `require` to catch lazily-loaded submodules.
@@ -253,6 +258,7 @@ function M.new(opts)
     persist = opts.persist,
     dir = opts.dir,
     report_file = opts.report_file or false,
+    info = type(opts.info) == "table" and opts.info or {},
   })
   local cache_opts = cfg.dir and { dir = cfg.dir } or nil
   local remind_after = opts.remind_after
@@ -278,6 +284,12 @@ function M.new(opts)
   local pending = empty_delta()
   pending.sessions = 1
   pending.started_at = os.time()
+  -- Written at construction, not the hot path -- `Options.info` does not
+  -- change during a process's life, so there is nothing to re-derive per
+  -- call. Present in `pending` (not written straight into `base`) so it
+  -- flows through the same merge-on-flush path everything else here does,
+  -- and only actually lands on disk once persisted.
+  pending.info = cfg.info
 
   --- Read once per flush, not per call — see HONEST LIMITS.
   local today = store.today()
@@ -829,6 +841,9 @@ function M.new(opts)
         pending.modules[tgt.key] = tgt.module_id
       end
     end
+    -- Same reasoning as the module-id map: `Options.info` is a property of
+    -- this instance, not of the counts `reset()` clears.
+    pending.info = cfg.info
     if cfg.persist then
       store.clear(namespace, cache_opts)
     end

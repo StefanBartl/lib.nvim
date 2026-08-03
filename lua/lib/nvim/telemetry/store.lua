@@ -58,6 +58,7 @@ function M.empty()
     days = {},
     reminded = {},
     modules = {},
+    info = {},
   }
 end
 
@@ -77,6 +78,7 @@ local function normalize(raw)
   -- additive, so this does not warrant a version bump — a missing map and an
   -- empty one mean the same thing to every reader.
   raw.modules = type(raw.modules) == "table" and raw.modules or {}
+  raw.info = type(raw.info) == "table" and raw.info or {}
   return raw
 end
 
@@ -240,6 +242,19 @@ function M.merge(base, delta, max_values)
   base.modules = base.modules or {}
   for key, module_id in pairs(delta.modules or {}) do
     base.modules[key] = module_id
+  end
+
+  -- Unlike `modules`, genuinely last-write-wins, not merely equivalent to
+  -- it: a branch/version can change between sessions (an upgrade, a
+  -- `git checkout`), and the newer session's `info` describes the state
+  -- that produced the calls just merged in, not a blend of two states that
+  -- were never simultaneously true. Replaced wholesale rather than
+  -- key-by-key so a caller who stops setting a field (switches to a
+  -- narrower `info` table) does not leave a stale one behind forever.
+  if delta.info and next(delta.info) ~= nil then
+    base.info = delta.info
+  else
+    base.info = base.info or {}
   end
 
   return base

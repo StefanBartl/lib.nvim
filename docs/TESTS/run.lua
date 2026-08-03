@@ -35,6 +35,7 @@ local specs = {
   "neotree_watch_spec.lua",
   "composer_spec.lua",
   "telemetry_spec.lua",
+  "git_spec.lua",
 }
 
 --- Straight to stdout rather than through `print`.
