@@ -20,8 +20,11 @@
 > `runtime-analysis.nvim` repo (`docs/ECOSYSTEM.md` step 7, in
 > documentation.nvim). `:LibTelemetry` is now `:RATelemetry`. `wrap_lib()`
 > was **not** migrated — it was deleted, and lib.nvim gained
-> `lib.strategies.telemetry_wrap` as its thin replacement, built on the
-> already-public `inst.wrap()`. Everything else below — `telemetry.load()`,
+> `lib.strategies.telemetry_wrap` as its self-contained replacement: one
+> `setup()` call creates the instance, materializes the metatable-hidden
+> aggregate, wraps it and starts it — a caller needs neither
+> `runtime-analysis.telemetry`'s API nor `lib.strategies.control`'s.
+> Everything else below — `telemetry.load()`,
 > module-id resolution, the honest-limits reasoning, the proposed Mode 7
 > shape — carried over unchanged; only the require paths and command name
 > the reasoning refers to changed, not the reasoning itself. Left
