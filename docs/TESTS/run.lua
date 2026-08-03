@@ -11,6 +11,33 @@
 -- Make the repo importable whether invoked via -l (cwd) or luafile.
 vim.opt.rtp:append(vim.fn.getcwd())
 
+-- runtime-analysis.nvim is a runtime dependency of telemetry_wrap_spec.lua
+-- only (the thin caller instrumenting `require("lib")` now lives there) —
+-- the same three-candidate search runtime-analysis.nvim's own run.lua uses
+-- to find lib.nvim, mirrored back. Not fatal if missing: that one spec fails
+-- with a clear `require` error rather than the whole runner refusing to start.
+local function add_runtime_analysis()
+  if pcall(require, "runtime-analysis.telemetry") then
+    return
+  end
+  local candidates = {}
+  if vim.env.RUNTIME_ANALYSIS_DIR and vim.env.RUNTIME_ANALYSIS_DIR ~= "" then
+    candidates[#candidates + 1] = vim.env.RUNTIME_ANALYSIS_DIR
+  end
+  candidates[#candidates + 1] = vim.fn.getcwd() .. "/.deps/runtime-analysis.nvim"
+  candidates[#candidates + 1] = vim.fs.dirname(vim.fn.getcwd()) .. "/runtime-analysis.nvim"
+  for _, dir in ipairs(candidates) do
+    if dir and vim.fn.isdirectory(dir) == 1 then
+      vim.opt.rtp:append(dir)
+      if pcall(require, "runtime-analysis.telemetry") then
+        return
+      end
+    end
+  end
+end
+
+add_runtime_analysis()
+
 local dir = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
 local H = dofile(dir .. "harness.lua")
 
@@ -34,7 +61,7 @@ local specs = {
   "lock_spec.lua",
   "neotree_watch_spec.lua",
   "composer_spec.lua",
-  "telemetry_spec.lua",
+  "telemetry_wrap_spec.lua",
   "git_spec.lua",
   "curl_spec.lua",
 }

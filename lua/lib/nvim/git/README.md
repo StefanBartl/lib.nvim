@@ -34,9 +34,9 @@ the command fails, produces no output, or the output doesn't match
 
 Every function above reads the current working directory implicitly — the
 right default for editor features, wrong for correlating data with *a
-specific plugin's* repo state (e.g. `lib.nvim.telemetry`'s `info` field,
-tagging a report with the branch/version of the plugin it was collected
-from, not of whatever the editor's cwd happens to be).
+specific plugin's* repo state (e.g. `runtime-analysis.telemetry`'s `info`
+field, tagging a report with the branch/version of the plugin it was
+collected from, not of whatever the editor's cwd happens to be).
 
 ```lua
 git.info("/path/to/some/plugin")

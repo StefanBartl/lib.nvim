@@ -202,22 +202,14 @@ Neovim adapters.
     lib.nvim.store         project: persistent state keyed by project root
                            (git root, else cwd), built on cache.disk +
                            fs.project_key |lib.nvim-store|
-    lib.nvim.telemetry     opt-in call counting / usage statistics: wrappers
-                           installed at start() (zero cost while stopped,
-                           0.014us/call when counting), namespaced persistence
-                           across restarts, argument fingerprinting with a
-                           memoization hint, wrap_loaded() for a plugin's whole
-                           loaded subtree rather than its facade (keys resolve
-                           to real module paths automatically), per-namespace
-                           start/stop/reset + persistent disable/enable that
-                           survives a restart, telemetry.load() to read a
-                           namespace off disk with no live instance, a
-                           Markdown renderer + opt-in self-updating browser
-                           report via mdview.nvim (:LibTelemetry open),
-                           opt-in Options.info metadata (branch/version/…,
-                           see lib.nvim.git.info()) bundled with the report,
-                           opt-in :LibTelemetry
-                           (see lua/lib/nvim/telemetry/README.md)
+    (telemetry)            opt-in call counting / usage statistics moved to
+                           runtime-analysis.telemetry (runtime-analysis.nvim,
+                           a sibling plugin; see that plugin's README.md and
+                           documentation.nvim's docs/ECOSYSTEM.md step 7).
+                           This repo keeps a thin caller,
+                           lib.strategies.telemetry_wrap, for instrumenting
+                           require("lib")'s own metatable-hidden aggregate
+                           specifically (see lua/lib/strategies/telemetry_wrap.lua).
     lib.nvim.neotree       neo-tree.nvim-specific helpers: node (path/node
                            extraction from a neo-tree state, marks/pickers
                            share it), watch (file-watcher handle registry +

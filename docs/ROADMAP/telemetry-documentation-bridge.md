@@ -14,6 +14,20 @@
 > valuable thing is a join neither tool can produce alone: documentation.nvim
 > knows what *exists and is documented*, telemetry knows what *actually ran*.
 > Everything below was checked against documentation.nvim's actual source.
+>
+> **Update (2026-08-03):** the module this document is about has moved.
+> `lib.nvim.telemetry` is now `runtime-analysis.telemetry`, in the sibling
+> `runtime-analysis.nvim` repo (`docs/ECOSYSTEM.md` step 7, in
+> documentation.nvim). `:LibTelemetry` is now `:RATelemetry`. `wrap_lib()`
+> was **not** migrated — it was deleted, and lib.nvim gained
+> `lib.strategies.telemetry_wrap` as its thin replacement, built on the
+> already-public `inst.wrap()`. Everything else below — `telemetry.load()`,
+> module-id resolution, the honest-limits reasoning, the proposed Mode 7
+> shape — carried over unchanged; only the require paths and command name
+> the reasoning refers to changed, not the reasoning itself. Left
+> unrewritten below deliberately, as a record of the design at the time it
+> was made; treat every `lib.nvim.telemetry`/`:LibTelemetry`/`wrap_lib()`
+> mention past this point as historical.
 
 ## The tab is easy; say so and move on
 
@@ -185,9 +199,10 @@ whole document: it sorts the documentation backlog by evidence of actual use.
 
 The bulk is documentation.nvim's, so the consumer half belongs in **its** own
 roadmap; this document is the lib.nvim-side contract plus the reasoning for
-why the join is worth building at all. The lib.nvim side is covered by
+why the join is worth building at all. The lib.nvim side has since moved to
+`runtime-analysis.nvim` (see the Update note above) — covered there by
 `docs/TESTS/telemetry_spec.lua` and documented in
-`lua/lib/nvim/telemetry/README.md`.
+`lua/runtime-analysis/telemetry/README.md`.
 
 ## Honest limits
 

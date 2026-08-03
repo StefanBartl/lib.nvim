@@ -41,6 +41,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # telemetry_wrap_spec.lua exercises lib.strategies.telemetry_wrap
+      # against the real runtime-analysis.telemetry module (moved there from
+      # this repo) — without this, that one spec would only ever hit its own
+      # soft-`pcall` no-op branch, never the real integration.
+      - uses: actions/checkout@v4
+        with:
+          repository: StefanBartl/runtime-analysis.nvim
+          path: .deps/runtime-analysis.nvim
       - uses: rhysd/action-setup-vim@v1
         with:
           neovim: true
