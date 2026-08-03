@@ -1,10 +1,21 @@
 ---@module 'lib.nvim.net.curl'
---- Async (and blocking) HTTP-via-curl helper with JSON-body decoding.
+--- Async (and blocking) HTTP-via-curl helper, two tiers.
 ---
 --- Builds a `curl` argv from `opts` (method, headers, bearer token, query
---- string, body), spawns it through `vim.system` (requires Neovim 0.10+),
---- and decodes a JSON response for you. No `jobstart` fallback — this is a
---- new, opt-in module, so `vim.system` is a hard requirement.
+--- string, body), spawns it through `vim.system` (requires Neovim 0.10+). No
+--- `jobstart` fallback — this is a new, opt-in module, so `vim.system` is a
+--- hard requirement.
+---
+--- `fetch_json`/`fetch_json_blocking` decode the response body as JSON for a
+--- caller that already knows the answer is JSON. `fetch_raw`/
+--- `fetch_raw_blocking` return the response verbatim instead — status,
+--- headers, body, undecoded — for a caller that needs to *show* the
+--- response (a request-runner UI, say) or whose content type is not JSON at
+--- all. Neither is a special case of the other: `fetch_json` never sees a
+--- status code or headers at all (curl's own process exit code says
+--- nothing about the HTTP status — it is `0` for a successful *request*
+--- regardless of whether the server answered `200` or `404`), and
+--- `fetch_raw` never assumes the body parses as anything in particular.
 ---
 --- Usage:
 --- ```lua
@@ -23,6 +34,12 @@
 --- end)
 ---
 --- local ok, data, raw = curl.fetch_json_blocking("https://api.example.com/items")
+---
+--- local ok2, resp = curl.fetch_raw_blocking("https://api.example.com/items")
+--- if ok2 then
+---   print(resp.status, resp.status_text, resp.headers["content-type"])
+---   print(resp.body)
+--- end
 --- ```
 
 require("lib.nvim.net.curl.@types")
@@ -57,9 +74,16 @@ end
 ---Build the curl argv table for `url`/`opts`.
 ---@param url string
 ---@param opts Lib.Net.Curl.FetchOpts
+---@param include_headers boolean? Add `-i`, so the response headers precede
+---the body in stdout — what `fetch_raw`/`fetch_raw_blocking` need to parse
+---status and headers out; `fetch_json`/`fetch_json_blocking` leave this
+---unset, since a header block would break their JSON decode.
 ---@return string[]
-local function build_argv(url, opts)
+local function build_argv(url, opts, include_headers)
   local argv = { "curl", "-sS", "-X", opts.method or "GET" }
+  if include_headers then
+    argv[#argv + 1] = "-i"
+  end
 
   for key, value in pairs(opts.headers or {}) do
     argv[#argv + 1] = "-H"
@@ -96,6 +120,120 @@ local function decode_result(obj)
     return false, "invalid JSON response"
   end
   return true, decoded
+end
+
+---Parse curl `-i` output (response headers, then a blank line, then the
+---body) into status/headers/body. curl's own process exit code says nothing
+---about the HTTP status — it is 0 for a successful *request* regardless of
+---whether the server answered 200 or 404 — so this is the only way to learn
+---what actually came back.
+---
+---Loops past any informational response (a `100 Continue` preamble, or a
+---redirect hop if the caller ever passes `-L`, which `build_argv` does not
+---today): each 1xx/redirect response is itself a complete
+---"status line + headers + blank line" block, immediately followed by
+---another one, so the loop keeps unwrapping blocks until it finds one not
+---followed by a further `HTTP/` line — that one is the real, final response.
+---@param output string Raw stdout from a curl invocation built with `include_headers = true`.
+---@return Lib.Net.Curl.RawResponse? response `nil` on unparseable output.
+---@return string? err Set only when `response` is `nil`.
+local function parse_raw_response(output)
+  while true do
+    if not output:match("^HTTP/") then
+      return nil, "no HTTP status line in curl output"
+    end
+    local sep_s, sep_e = output:find("\r?\n\r?\n")
+    local block, rest
+    if sep_s then
+      block, rest = output:sub(1, sep_s - 1), output:sub(sep_e + 1)
+    else
+      -- Headers with no blank-line terminator at all (a truncated or
+      -- header-only response) — treat everything as headers, body empty,
+      -- rather than guessing where one might have started.
+      block, rest = output, ""
+    end
+
+    local lines = vim.split(block, "\r?\n")
+    local code, text = lines[1]:match("^HTTP/[%d%.]+%s+(%d+)%s*(.-)%s*$")
+    if not code then
+      return nil, "malformed status line: " .. lines[1]
+    end
+
+    if rest:match("^HTTP/") then
+      -- An intermediate block (1xx, or a redirect hop) — unwrap and keep
+      -- going; this one is not the caller's answer.
+      output = rest
+    else
+      local headers = {}
+      for i = 2, #lines do
+        local k, v = lines[i]:match("^([^:]+):%s*(.-)%s*$")
+        if k then
+          headers[k:lower()] = v
+        end
+      end
+      return { status = tonumber(code), status_text = text or "", headers = headers, body = rest }
+    end
+  end
+end
+
+---Fetch `url` and return the response verbatim — status, headers and body,
+---undecoded — asynchronously. The second, "Postman-lite" tier alongside
+---`fetch_json`: that one is right when the caller already knows the answer
+---is JSON and only wants the decoded value; this one is for a caller that
+---needs to *show* the response, or one whose content type is not JSON at
+---all.
+---@param url string
+---@param opts Lib.Net.Curl.FetchOpts|nil
+---@param cb fun(ok:boolean, response_or_err:Lib.Net.Curl.RawResponse|string, raw_obj:vim.SystemCompleted)
+function M.fetch_raw(url, opts, cb)
+  if not vim.system then
+    error("lib.nvim.net.curl requires Neovim 0.10+ (vim.system)")
+  end
+  opts = opts or {}
+
+  local argv = build_argv(url, opts, true)
+
+  vim.system(argv, { text = true, timeout = opts.timeout_ms }, function(obj)
+    if obj.code ~= 0 then
+      local err = (obj.stderr and obj.stderr ~= "") and obj.stderr or ("curl exited " .. obj.code)
+      cb(false, err, obj)
+      return
+    end
+    local response, err = parse_raw_response(obj.stdout)
+    if not response then
+      cb(false, err, obj)
+      return
+    end
+    cb(true, response, obj)
+  end)
+end
+
+---Fetch `url` and return the response verbatim, blocking the caller. See
+---`fetch_raw` for what "verbatim" means and when to reach for it instead of
+---`fetch_json_blocking`.
+---@param url string
+---@param opts Lib.Net.Curl.FetchOpts|nil
+---@return boolean ok
+---@return Lib.Net.Curl.RawResponse|string response_or_err
+---@return vim.SystemCompleted raw_obj
+function M.fetch_raw_blocking(url, opts)
+  if not vim.system then
+    error("lib.nvim.net.curl requires Neovim 0.10+ (vim.system)")
+  end
+  opts = opts or {}
+
+  local argv = build_argv(url, opts, true)
+
+  local obj = vim.system(argv, { text = true }):wait(opts.timeout_ms)
+  if obj.code ~= 0 then
+    local err = (obj.stderr and obj.stderr ~= "") and obj.stderr or ("curl exited " .. obj.code)
+    return false, err, obj
+  end
+  local response, err = parse_raw_response(obj.stdout)
+  if not response then
+    return false, err, obj
+  end
+  return true, response, obj
 end
 
 ---Fetch `url` and decode the response body as JSON, asynchronously.

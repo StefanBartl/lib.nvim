@@ -36,6 +36,7 @@ local specs = {
   "composer_spec.lua",
   "telemetry_spec.lua",
   "git_spec.lua",
+  "curl_spec.lua",
 }
 
 --- Straight to stdout rather than through `print`.
