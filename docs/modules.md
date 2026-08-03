@@ -37,8 +37,14 @@
 | [`lib.nvim.system`](../lua/lib/nvim/system/README.md) | host env snapshot (`is_windows`/`is_wsl`/…, `home`, `pathsep`, `repo_base`) + Windows rpc pipe + `proc_trace` (blocking-call instrumentation for freeze diagnosis); opt-in `setup` |
 | [`lib.nvim.progress`](../lua/lib/nvim/progress/README.md) | style-agnostic progress indicator: `notify`/`statusline`/`fidget`/`float`/`kit` renderers, delay-guard, focus-gated cancel-with-confirm ([`:help`](../doc/lib.nvim-progress.txt)) |
 | [`lib.nvim.selection`](../lua/lib/nvim/selection/README.md) | reselect a Visual line/char range after a mapping mutates it: `keep_lines`/`keep_chars` ([`:help`](../doc/lib.nvim-selection.txt)) |
-| [`lib.nvim.telemetry`](../lua/lib/nvim/telemetry/README.md) | opt-in call counting / usage statistics: wrappers installed at `start()` (literally zero cost while stopped, 0.014 µs/call counting), `only`/`except`/`filter` scoping per function and per module, `wrap_loaded()` for a plugin's whole loaded subtree instead of its façade (keys resolve to real module paths automatically via `resolved_modules()`/`Data.modules`), namespaced persistence across restarts with day buckets, `telemetry.load()` to read a namespace off disk with no live instance, argument fingerprinting with a "dominant argument → memoize" hint, coverage (never-called) report, a Markdown renderer plus opt-in self-updating browser report via mdview.nvim's `:MDView standalone` (`report_file = true`, `:LibTelemetry open`, `report_style` "auto"/"kit"/"mdview"/"file"), opt-in `Options.info` report metadata (branch/version/…, caller-supplied — `lib.nvim.git.info(dir)` is a ready-made source), lifecycle reminder, per-namespace start/stop/reset, persistent disable/enable (survives a restart), opt-in `:LibTelemetry` |
 | [`lib.nvim.harvest`](../lua/lib/nvim/harvest/README.md) | "collect from a scope, then show/export it" building blocks: `scope` (buffer/range/buffers/cwd/path → sources with provenance), `render` (rows → GFM table / CSV / lines), `sink` (clipboard / file / scratch buffer / picker), `emit` ([`:help`](../doc/lib.nvim-harvest.txt)) |
+
+Opt-in call counting / usage statistics (`wrap`/`wrap_loaded`, persistence,
+Markdown/browser reports, `:RATelemetry`) moved to
+[`runtime-analysis.telemetry`](https://github.com/StefanBartl/runtime-analysis.nvim/blob/main/lua/runtime-analysis/telemetry/README.md)
+— `docs/ECOSYSTEM.md` step 7 in that plugin's sibling, documentation.nvim.
+This repo keeps a thin caller, `lib.strategies.telemetry_wrap`, for
+instrumenting `require("lib")`'s own metatable-hidden aggregate specifically.
 
 ## `lib.vim.*` — classic Vim
 
@@ -54,7 +60,7 @@ and are generated on install by your plugin manager (see [Help docs](help.md)).
 
 - [`lib.lua.memo`](../lua/lib/lua/memo/README.md) · [`lib.lua.lazy`](../lua/lib/lua/lazy/README.md) · [`lib.lua.time.diff`](../lua/lib/lua/time/diff/README.md)
 - [`lib.nvim.notify`](../lua/lib/nvim/notify/README.md) · [`lib.nvim.window`](../lua/lib/nvim/window/README.md) · [`lib.nvim.ui.hover_select`](../lua/lib/nvim/ui/hover_select/README.md) · [`lib.nvim.ui.statusline`](../lua/lib/nvim/ui/statusline/README.md)
-- [`lib.nvim.system`](../lua/lib/nvim/system/README.md) · [`lib.nvim.progress`](../lua/lib/nvim/progress/README.md) · [`lib.nvim.selection`](../lua/lib/nvim/selection/README.md) · [`lib.nvim.telemetry`](../lua/lib/nvim/telemetry/README.md)
+- [`lib.nvim.system`](../lua/lib/nvim/system/README.md) · [`lib.nvim.progress`](../lua/lib/nvim/progress/README.md) · [`lib.nvim.selection`](../lua/lib/nvim/selection/README.md)
 - [`lib.nvim.buf_win_tab.capture`](../lua/lib/nvim/buf_win_tab/capture/README.md) · [`lib.nvim.buf_win_tab.resize_guarded`](../lua/lib/nvim/buf_win_tab/resize_guarded/README.md)
 - [`lib.nvim.fs.ignore.list`](../lua/lib/nvim/fs/ignore/list/README.md) · [`lib.nvim.fs.is_subpath`](../lua/lib/nvim/fs/is_subpath/README.md) · [`lib.nvim.fs.polymorphic_rootresolver`](../lua/lib/nvim/fs/polymorphic_rootresolver/README.md) · [`lib.nvim.fs.find_root`](../lua/lib/nvim/fs/find_root/README.md)
 - [`lib.nvim.fs.create_entry`](../lua/lib/nvim/fs/create_entry/README.md) · [`lib.nvim.fs.mkdirp`](../lua/lib/nvim/fs/mkdirp/README.md) · [`lib.nvim.fs.normkey`](../lua/lib/nvim/fs/normkey/README.md) · [`lib.nvim.fs.project_key`](../lua/lib/nvim/fs/project_key/README.md)
