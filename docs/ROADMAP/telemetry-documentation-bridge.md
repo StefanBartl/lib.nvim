@@ -1,13 +1,19 @@
 # `documentation.nvim` × `lib.nvim.telemetry` — runtime truth for a static analyzer
 
-> **Status:** the lib.nvim-side contract below ships as of `telemetry.load()`
-> + module-id resolution (`Lib.Telemetry.WrapOpts.module_id`,
-> `inst.resolved_modules()`, `Data.modules`). The consumer half — mode 7,
-> the `dead-function` join, the two `doccoverage` aggregate lines — is still
-> unbuilt; it belongs in documentation.nvim's own roadmap (see "Where the
-> work lives" below). Written in response to: "prüfe, ob documentation.nvim
-> dieses Telemetry-Modul verwenden könnte, also wenn es installiert ist, dann
-> einen neuen Tab 'telemetry' einfügen, dort der Report sichtbar + weitere
+> **Status: fully shipped (2026-08-04).** The lib.nvim-side contract shipped
+> first, as `telemetry.load()` + module-id resolution
+> (`Lib.Telemetry.WrapOpts.module_id`, `inst.resolved_modules()`,
+> `Data.modules`) — since moved to `runtime-analysis.telemetry` along with
+> the rest of this module (see the Update note below). The consumer half —
+> mode 8 (not 7; see that note), the `dead-function` join, the two
+> `doccoverage` aggregate lines — landed in documentation.nvim as
+> `documentation.core.telemetry_join` + a `telemetry` mode in `:DocBrowse`,
+> exactly the shape proposed below. See documentation.nvim's own
+> `docs/ECOSYSTEM.md` step 8 for the full writeup, and
+> `runtime-analysis.nvim`'s `docs/FINISHED.md` for that repository's side.
+> Written in response to: "prüfe, ob documentation.nvim dieses
+> Telemetry-Modul verwenden könnte, also wenn es installiert ist, dann einen
+> neuen Tab 'telemetry' einfügen, dort der Report sichtbar + weitere
 > interessante Stats".
 >
 > **Verdict: yes — and the tab is the least interesting part of it.** The
@@ -194,11 +200,11 @@ whole document: it sorts the documentation backlog by evidence of actual use.
 
 | Piece | Repo | Status |
 | --- | --- | --- |
-| `telemetry.load(namespace)` — read counts off disk without an instance | lib.nvim | **done** |
-| Key-resolution (`WrapOpts.module_id`, `resolved_modules()`, `Data.modules`), honest "unmatched" for the rest | lib.nvim | **done** |
-| Mode 7 + entry builder + join logic | documentation.nvim | open |
-| `dead-function` suppression/escalation from runtime evidence | documentation.nvim | open |
-| The two `doccoverage` aggregate lines | documentation.nvim | open |
+| `telemetry.load(namespace)` — read counts off disk without an instance | runtime-analysis.nvim (moved from lib.nvim) | **done** |
+| Key-resolution (`WrapOpts.module_id`, `resolved_modules()`, `Data.modules`), honest "unmatched" for the rest | runtime-analysis.nvim (moved from lib.nvim) | **done** |
+| Mode 8 (not 7 — see the Status note above) + entry builder + join logic | documentation.nvim | **done** |
+| `dead-function` suppression from runtime evidence | documentation.nvim | **done** — suppression only, never escalation, per this document's own Honest Limits section |
+| The two `doccoverage` aggregate lines | documentation.nvim | **done** |
 
 The bulk is documentation.nvim's, so the consumer half belongs in **its** own
 roadmap; this document is the lib.nvim-side contract plus the reasoning for
