@@ -77,4 +77,5 @@ function M.publish_globals(opts)
   return env
 end
 
+---@type Lib.System.Env.Module
 return M

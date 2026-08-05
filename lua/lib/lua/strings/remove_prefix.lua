@@ -10,6 +10,7 @@ local default_blacklist = {
 
 --- Escape Lua pattern magic characters so the input becomes a safe literal pattern.
 --- This function escapes: ^ $ ( ) % . [ ] * + - ?
+--- @internal
 --- @param s string
 --- @return string
 local function escape_lua_pattern(s)

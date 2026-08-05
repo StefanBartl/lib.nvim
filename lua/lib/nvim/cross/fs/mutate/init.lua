@@ -13,6 +13,8 @@
 
 local M = {}
 
+---@internal
+---@return uv
 local function uv()
   return vim.uv or vim.loop
 end

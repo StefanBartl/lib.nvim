@@ -39,6 +39,7 @@ local COMMANDS = {
   win = "lcd",
 }
 
+---@internal
 ---Drop a trailing slash unless the path *is* a root ("/", "C:/", "//host/share").
 ---@param p string
 ---@return string
@@ -54,6 +55,7 @@ local function strip_trailing_slash(p)
   return without
 end
 
+---@internal
 ---Run `fn` in the window that owns the requested scope.
 ---
 ---A tab-local `:tcd` has to be executed from *some* window inside that tab —

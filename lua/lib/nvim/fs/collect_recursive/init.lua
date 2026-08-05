@@ -19,6 +19,7 @@ local uv = vim.uv or vim.loop
 
 local M = {}
 
+---@internal
 ---Recursively walk `dir`, appending matching absolute paths into `out`.
 ---@param dir string
 ---@param opts Lib.Fs.CollectRecursive.Opts

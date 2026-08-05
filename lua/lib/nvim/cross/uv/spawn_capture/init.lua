@@ -5,6 +5,8 @@
 --- (fire-and-inherit-stdio): none of those cover "spawn argv, buffer output,
 --- invoke a callback once, with an optional kill-on-timeout".
 
+---@internal
+---@return uv
 local function uv()
   return vim.uv or vim.loop
 end

@@ -51,6 +51,7 @@ local ORDINALS = {
 
 --- Create a new timer instance with isolated state.
 --- Automatically starts timing on creation.
+---@internal
 ---@return Lib.Time.TimeDiff
 ---@nodiscard
 local function create_timer()

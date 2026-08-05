@@ -9,6 +9,7 @@ local LIB = {}
 -- Lazy Loading Setup
 -- ============================================================================
 
+---@internal
 ---Create a lazy-loading proxy for a module
 ---@param module_path string
 ---@return any

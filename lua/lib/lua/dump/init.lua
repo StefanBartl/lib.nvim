@@ -16,6 +16,7 @@ local M = {}
 ---@type integer Default hard recursion-depth limit.
 local DEFAULT_MAX_DEPTH = 30
 
+---@internal
 ---@param value any
 ---@param depth integer
 ---@param key any

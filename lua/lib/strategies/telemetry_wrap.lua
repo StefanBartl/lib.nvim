@@ -36,6 +36,9 @@ local instance = nil
 ---@type string[]
 local lib_keys = {}
 
+---@internal
+---Forces every enumerable key onto `lib` via `rawset`, then wraps the
+---aggregate and each resolved submodule table with telemetry.
 ---@param inst RA.Telemetry.Instance
 ---@param lib table
 ---@param control table

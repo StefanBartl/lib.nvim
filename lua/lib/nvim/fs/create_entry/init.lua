@@ -14,6 +14,7 @@ local is_valid_filename = require("lib.nvim.fs.is_valid_filename")
 
 local fn = vim.fn
 
+---@internal
 ---True when `path` ends with a `/` or `\` separator.
 ---@param path string
 ---@return boolean
@@ -21,6 +22,7 @@ local function ends_with_separator(path)
   return path:match("[/\\]$") ~= nil
 end
 
+---@internal
 ---Validate every path segment of `name` individually (not the whole string
 ---at once — `name` may legitimately contain `/`/`\` to create a new file
 ---inside a not-yet-existing subdirectory in one step).

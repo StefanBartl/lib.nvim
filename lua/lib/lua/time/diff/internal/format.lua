@@ -15,6 +15,7 @@ local M = {}
 ---@param unit TimeUnit Display unit
 ---@return string formatted Formatted string
 ---@nodiscard
+---@internal
 local function format_checkpoint(index, elapsed, unit)
   local converted = convert.convert_time(elapsed, unit)
   local suffix = convert.unit_suffix(unit)
@@ -26,6 +27,7 @@ end
 ---@param unit TimeUnit Display unit
 ---@return string[] lines Array of formatted lines
 ---@nodiscard
+---@internal
 local function format_stats_summary(stats, unit)
   local lines = {}
 
