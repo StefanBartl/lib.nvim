@@ -9,6 +9,9 @@
 
 local M = {}
 
+---@internal
+--- Create an empty node for `token` (nil at root).
+---@param token string|nil
 ---@return Lib.UserCmd.Composer.Node
 local function new_node(token)
   return { children = {}, token = token }

@@ -1,3 +1,4 @@
+---@meta
 ---@module 'lib.nvim.buf_win_tab.capture.@types'
 
 ---@class BufWinCapture.Tag

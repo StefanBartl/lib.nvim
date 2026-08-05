@@ -7,6 +7,7 @@ local surface = require("lib.nvim.ui.kit.surface")
 
 local M = {}
 
+---@internal
 --- Normalize a message (string or string[]) to buffer lines.
 ---@param message string|string[]
 ---@return string[]

@@ -16,7 +16,11 @@ local api = vim.api
 
 local M = {}
 
+---@internal
 --- Move the cursor in `win` by `delta` rows, wrapping around.
+---@param win integer
+---@param buf integer
+---@param delta integer
 local function move_in(win, buf, delta)
   if not api.nvim_win_is_valid(win) then
     return

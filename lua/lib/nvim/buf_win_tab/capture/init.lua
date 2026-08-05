@@ -13,6 +13,7 @@ local M = {}
 local DEFAULT_TIMEOUT = 300
 local DEFAULT_INTERVAL = 20
 
+---@internal
 ---Capture current editor state
 ---@return table<integer, true>, table<integer, true>
 local function snapshot_state()
@@ -29,6 +30,7 @@ local function snapshot_state()
   return wins, bufs
 end
 
+---@internal
 ---Compute delta between two snapshots
 ---@param before table<integer, true>
 ---@param after integer[]
@@ -43,6 +45,7 @@ local function delta(before, after)
   return out
 end
 
+---@internal
 ---Filter windows to only include focusable, valid content windows
 ---@param wins integer[]
 ---@return integer[]
@@ -73,6 +76,7 @@ local function filter_focusable_windows(wins)
   return focusable
 end
 
+---@internal
 ---Apply tags to buffers and windows
 ---@param result BufWinCapture.Results
 ---@param tag BufWinCapture.Tag|nil
@@ -94,6 +98,7 @@ local function apply_tags(result, tag)
   end
 end
 
+---@internal
 ---Emit User autocommand
 ---@param result BufWinCapture.Results
 local function emit_event(result)
@@ -103,6 +108,7 @@ local function emit_event(result)
   })
 end
 
+---@internal
 --- Safely stop and close a uv timer exactly once
 ---@param t uv.uv_timer_t
 local function safe_close_timer(t)

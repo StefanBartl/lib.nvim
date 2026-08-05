@@ -41,6 +41,7 @@ local registry = {}
 ---@type boolean
 local _installed = false
 
+---@internal
 ---Normalize a path for prefix comparison: forward slashes, no trailing slash,
 ---lowercased drive letter. Neo-tree stores native-separator paths (backslash on
 ---Windows) while callers query with forward-slash paths — the same separator/
@@ -59,6 +60,7 @@ local function norm(p)
   return p
 end
 
+---@internal
 ---True when `path` is `base` itself or lives under it.
 ---@param base string
 ---@param path string
@@ -75,6 +77,7 @@ local function under(base, path)
   return path:sub(1, #base + 1) == base .. "/"
 end
 
+---@internal
 ---Close a Watcher's OS handle, releasing the directory lock.
 ---
 ---`recreate = true`: hand the Watcher a fresh, unstarted `fs_event` afterward,

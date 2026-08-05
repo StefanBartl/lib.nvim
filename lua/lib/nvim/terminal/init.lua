@@ -1,5 +1,8 @@
 ---@module 'lib.nvim.terminal'
--- Terminal helper functions
+--- Terminal helper functions: path escaping, terminal-buffer detection/cleanup,
+--- and Kitty-terminal detection.
+
+require("lib.nvim.terminal.@types")
 
 local M = {}
 
@@ -11,7 +14,8 @@ function M.escape(path)
   return (path:gsub("([%s%$`\\])", "\\%1"))
 end
 
---- Checks if buffer is a terminal buffer
+--- Checks if buffer is a terminal buffer.
+--- Returns `nil` when `bufnr`'s `buftype` cannot be read.
 ---@param bufnr integer
 ---@return boolean|nil
 function M.is_terminal_buf(bufnr)
@@ -27,7 +31,8 @@ function M.is_terminal_buf(bufnr)
   end
 end
 
---- Checks if buffer is terminal buffer, if -> try to delete terminal buffer and return boolean of succes, else return nil
+--- Deletes `bufnr` if it is a valid buffer number (force-deletes without
+--- checking `buftype`). Returns `nil` when `bufnr` is not a number.
 ---@param bufnr integer
 ---@return boolean|nil
 function M.delete_terminal_buf(bufnr)
@@ -44,6 +49,8 @@ function M.delete_terminal_buf(bufnr)
   end
 end
 
+--- Return true if the current terminal environment is Kitty (Linux/macOS).
+--- Heuristics: `KITTY_LISTEN_ON` set, or `TERM` contains "kitty".
 ---@return boolean
 function M.is_kitty()
   local env = vim.env
@@ -54,4 +61,5 @@ function M.is_kitty()
   return term:find("kitty", 1, true) ~= nil
 end
 
+---@type Lib.Terminal.ALL
 return M

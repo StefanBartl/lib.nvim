@@ -32,6 +32,7 @@ local M = {}
 
 local DEFAULT_DELAY_MS = 150
 
+---@internal
 ---@param prefix string|nil
 ---@return string
 local function normalize_title(prefix)
@@ -46,6 +47,7 @@ end
 
 ---Safely stop+close a uv timer exactly once (same idempotent pattern as
 ---`lib.nvim.buf_win_tab.capture`).
+---@internal
 ---@param t uv.uv_timer_t|nil
 local function safe_close_timer(t)
   if not t then

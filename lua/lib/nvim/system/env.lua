@@ -34,6 +34,7 @@ local DEFAULT_GLOBAL_FIELDS = {
 ---@type Lib.System.Env|nil
 local cache
 
+---@internal
 ---@return Lib.System.Env
 local function compute()
   local is_windows = require("lib.nvim.cross.platform.is_windows")()

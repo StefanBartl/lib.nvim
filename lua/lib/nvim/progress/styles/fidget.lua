@@ -8,6 +8,7 @@
 
 require("lib.nvim.progress.@types")
 
+---@internal
 ---@param spec Lib.Progress.Spec
 ---@return integer|nil
 local function percentage(spec)

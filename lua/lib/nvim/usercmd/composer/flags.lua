@@ -58,6 +58,7 @@ local function find_short_spec(route, tok)
 end
 M.find_short_spec = find_short_spec
 
+---@internal
 --- Consume one resolved flag occurrence (long or short) starting at
 --- `tokens[i]`, applying it to `flags`. `inline_val` is the `--name=value`
 --- payload when present (never set for short flags — those only take the

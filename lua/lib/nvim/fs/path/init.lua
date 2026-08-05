@@ -7,6 +7,7 @@ local unpack = table.unpack or unpack
 
 local M = {}
 
+---@internal
 --- True if `path` is already absolute (Windows drive, UNC, or POSIX root).
 ---@param path string
 ---@return boolean

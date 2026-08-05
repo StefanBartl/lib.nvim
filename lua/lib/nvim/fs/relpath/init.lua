@@ -26,6 +26,7 @@ return function(path, base)
   -- Windows drive letters (or, in principle, differing UNC hosts) mean there
   -- is no relative path between the two at all; POSIX paths always share the
   -- single "/" root, so this only ever bails out on Windows.
+  ---@internal
   local function root_of(p)
     return p:match("^(%a:)/") or (p:sub(1, 1) == "/" and "/") or ""
   end

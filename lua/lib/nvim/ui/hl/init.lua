@@ -1,9 +1,7 @@
 ---@module 'lib.nvim.ui.hl'
--- =========================================================
--- Highlight helper utilities.
---
--- Idempotent highlight definition with namespace support.
--- =========================================================
+--- Highlight helper utilities.
+---
+--- Idempotent highlight definition with namespace support.
 
 local M = {}
 

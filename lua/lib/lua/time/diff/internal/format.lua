@@ -91,6 +91,7 @@ end
 ---@param unit TimeUnit Display unit
 ---@return string row Formatted table row
 ---@nodiscard
+---@internal
 local function format_table_row(index, elapsed, delta, unit)
   local elapsed_conv = convert.convert_time(elapsed, unit)
   local delta_conv = convert.convert_time(delta, unit)
@@ -103,6 +104,7 @@ end
 ---@param has_stddev boolean Whether to include stddev/CV
 ---@return string[] lines Array of formatted lines
 ---@nodiscard
+---@internal
 local function format_stats_section(stats, unit, has_stddev)
   local lines = {
     "├──────────────────────────────────────────────┤",

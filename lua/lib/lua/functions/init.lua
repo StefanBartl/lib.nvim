@@ -1,6 +1,7 @@
 ---@module 'lib.lua.functions'
 --- Aggregator for lib.lua's higher-order function helpers (noop, identity,
 --- const, raise, etc.), lazily delegating to lib.lua.functions.meta.
+---@see lib.lua.functions.meta
 
 local lazy = require("lib.lua.lazy")
 ---@type Lib.Functions.Meta

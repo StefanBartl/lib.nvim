@@ -16,6 +16,7 @@
 
 local notify = require("lib.nvim.notify").create("[lib.nvim.map]")
 
+---@internal
 local function notify_caller(flags, modes, lhs, rhs, opts)
   -- Stack layout:
   -- 1: debug.getinfo

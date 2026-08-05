@@ -45,6 +45,7 @@ local G = {
 -- Gating — the hot path. Must stay cheap so a disabled logger is ~free.
 -- ---------------------------------------------------------------------------
 
+---@internal
 ---@param inst table
 ---@param level integer
 ---@param opts Lib.Logger.CallOpts|nil
@@ -93,6 +94,7 @@ end
 -- Logger factory
 -- ---------------------------------------------------------------------------
 
+---@internal
 ---Resolve the file path for a logger. `false` disables the file sink; `nil`
 ---uses the per-name default under stdpath("log").
 ---@param name string
@@ -132,6 +134,7 @@ function M.new(opts)
 
   -- Core dispatch. `src_level = 4`: getinfo(4) from here lands on the user's
   -- call site (do_log -> level closure -> user).
+  ---@internal
   local function do_log(level, msg, ctx, call_opts)
     if not passes(inst, level, call_opts) then
       return
@@ -235,6 +238,7 @@ function M.new(opts)
 
   -- xpcall wrapper. rethrow=true -> re-raise after logging (guard);
   -- rethrow=false -> swallow and return nil (wrap).
+  ---@internal
   local function make_guard(fn, fname, rethrow)
     fname = fname or "<anonymous>"
     return function(...)

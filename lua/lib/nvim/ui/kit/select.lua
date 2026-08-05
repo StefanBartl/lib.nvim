@@ -41,6 +41,7 @@ local M = {}
 --- recursion ending in a stack overflow.
 local delegating = false
 
+---@internal
 ---The current `vim.ui.select`, or nil if it is somehow not callable.
 ---@return function|nil
 local function ui_select_fn()
@@ -48,6 +49,7 @@ local function ui_select_fn()
   return type(sel) == "function" and sel or nil
 end
 
+---@internal
 ---Whether `sel` is something other than Neovim's builtin `vim.ui.select`.
 ---Deliberately re-checked on every call rather than cached: plugins install
 ---their override from `setup()`, which can run long after kit is required
@@ -62,6 +64,7 @@ local function is_overridden(sel)
   return not (info.source:gsub("\\", "/")):match("/vim/ui%.lua$")
 end
 
+---@internal
 ---Render one item to a single buffer-safe display line. Mirrors
 ---`vim.ui.select`'s contract (`format_item` defaults to `tostring`), and
 ---additionally flattens embedded newlines -- the chooser writes these

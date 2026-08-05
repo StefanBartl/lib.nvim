@@ -14,6 +14,7 @@ local M = {}
 -- Internal helpers
 -- =========================================================
 
+---@internal
 --- Execute a git command (argv, no shell) and return trimmed stdout.
 --- Stderr is suppressed to avoid user-facing noise.
 ---@param argv string[]
@@ -132,6 +133,7 @@ end
 ---@return { branch: string|nil, version: string|nil, commit: string|nil }
 function M.info(dir, git_cmd)
   local bin = git_cmd or "git"
+  ---@internal
   local function run(args)
     local argv = { bin, "-C", dir }
     for _, a in ipairs(args) do

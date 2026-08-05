@@ -59,6 +59,7 @@ function M.resolve_mode(mode)
   return M.is_global() and "float" or "statusline"
 end
 
+---@internal
 ---Render `text` into a statusline expression.
 ---@param text string
 ---@param hl string?
@@ -77,6 +78,7 @@ local function as_expression(text, hl, align)
   return body
 end
 
+---@internal
 ---Pad `text` for float rendering, where there are no alignment items.
 ---@param text string
 ---@param width integer

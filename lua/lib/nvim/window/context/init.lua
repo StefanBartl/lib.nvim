@@ -29,6 +29,9 @@ M.stats = {
   misses = 0,
 }
 
+---@internal
+--- Placeholder snapshot for an invalid/closed window.
+---@param winid integer
 ---@return Lib.Window.Context.Ctx
 local function invalid_ctx(winid)
   return {
@@ -108,6 +111,7 @@ function M.invalidate(winid)
   cache[winid] = nil
 end
 
+--- Cache hit/miss counters since the process started.
 ---@return Lib.Window.Context.Stats
 function M.get_stats()
   local total = M.stats.hits + M.stats.misses

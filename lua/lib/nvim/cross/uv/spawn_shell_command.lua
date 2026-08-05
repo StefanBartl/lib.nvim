@@ -7,6 +7,7 @@
 ---@param opts table Optional table:
 ---           stdio: uv.spawn stdio table
 ---           on_exit: callback(code, signal)
+---@return (uv.uv_process_t)? handle uv.spawn handle
 return function(cmd, args, opts)
   args = args or {}
   opts = opts or {}

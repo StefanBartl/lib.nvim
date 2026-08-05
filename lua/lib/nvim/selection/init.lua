@@ -29,6 +29,7 @@ local M = {}
 --- Feed a key sequence without remapping, queued to run once the current
 --- mapping function returns (`nvim_feedkeys` "n" flag = non-interactive
 --- typeahead, not executed synchronously).
+---@internal
 ---@param keys string
 ---@return nil
 local function feed(keys)

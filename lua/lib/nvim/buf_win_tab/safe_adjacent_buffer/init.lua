@@ -3,6 +3,7 @@
 
 local M = {}
 
+---@internal
 ---Checks whether a buffer is a normal, writable file buffer
 ---@param bufnr integer
 ---@return boolean

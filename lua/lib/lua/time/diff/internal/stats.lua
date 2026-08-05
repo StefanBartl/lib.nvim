@@ -15,6 +15,7 @@ local M = {}
 ---@param start_time number Start timestamp (ns)
 ---@return number[] deltas Array of intervals
 ---@nodiscard
+---@internal
 local function calculate_deltas(checks, start_time)
   if #checks == 0 then
     return {}
@@ -37,6 +38,7 @@ end
 ---@return number max Maximum value
 ---@return number sum Sum of all values
 ---@nodiscard
+---@internal
 local function calculate_min_max_sum(deltas)
   local min_val = math.huge
   local max_val = -math.huge
@@ -60,6 +62,7 @@ end
 ---@param sorted_deltas number[] Sorted array of intervals
 ---@return number median Median value
 ---@nodiscard
+---@internal
 local function calculate_median(sorted_deltas)
   local n = #sorted_deltas
   if n == 0 then

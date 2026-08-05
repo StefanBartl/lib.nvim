@@ -1,6 +1,8 @@
 ---@module 'lib.nvim.require'
 ---Safe and extended require utilities
 
+require("lib.nvim.require.@types")
+
 local notify = require("lib.nvim.notify").create("[lib.nvim.require]")
 
 local M = {}
@@ -173,4 +175,5 @@ function M.lazy(module_name)
   end
 end
 
+---@type Lib.Require
 return M

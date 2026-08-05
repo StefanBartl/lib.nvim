@@ -196,6 +196,7 @@ return function(opts)
     return root
   end
 
+  ---@internal
   ---@param path string
   ---@return string|nil
   local function find(path)
@@ -236,6 +237,7 @@ return function(opts)
     return root
   end
 
+  ---@internal
   ---Drop all cached root lookups (e.g. after markers change on disk).
   local function clear()
     if cache then

@@ -12,6 +12,7 @@ require("lib.nvim.progress.@types")
 
 local window = require("lib.nvim.window")
 
+---@internal
 ---@param spec Lib.Progress.Spec
 ---@return string
 local function render_suffix(spec)
@@ -24,6 +25,7 @@ local function render_suffix(spec)
   return ""
 end
 
+---@internal
 ---@param spec Lib.Progress.Spec
 ---@return string
 local function render_line(spec)
@@ -31,6 +33,7 @@ local function render_line(spec)
   return spec.title .. text .. render_suffix(spec)
 end
 
+---@internal
 ---@param bufnr integer|nil
 ---@param line string
 local function set_line(bufnr, line)
@@ -42,6 +45,7 @@ local function set_line(bufnr, line)
   vim.bo[bufnr].modifiable = false
 end
 
+---@internal
 ---@param winid integer|nil
 local function close(winid)
   if winid and vim.api.nvim_win_is_valid(winid) then
@@ -49,6 +53,7 @@ local function close(winid)
   end
 end
 
+---@internal
 ---@param bufnr integer
 ---@param spec Lib.Progress.Spec
 ---@param request_cancel fun()

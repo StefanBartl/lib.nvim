@@ -34,6 +34,7 @@ M.stats = {
   invalidations = 0,
 }
 
+---@internal
 ---@param ctx Lib.Buffer.Context.Ctx
 ---@param ignore_buftypes string[]|nil
 ---@param ignore_filetypes string[]|nil
@@ -58,6 +59,8 @@ local function is_processable(ctx, ignore_buftypes, ignore_filetypes)
   return true
 end
 
+---@internal
+---@param bufnr integer
 ---@return Lib.Buffer.Context.Ctx
 local function invalid_ctx(bufnr)
   return {

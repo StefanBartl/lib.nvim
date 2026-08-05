@@ -33,6 +33,7 @@ return function(path, content, cb)
     return
   end
 
+  ---@internal
   local function finish(ok, err)
     vim.schedule(function()
       cb(ok, err)

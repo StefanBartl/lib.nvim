@@ -19,6 +19,7 @@ require("lib.nvim.harvest.@types")
 
 local M = {}
 
+---@internal
 --- Cell text, flattened to a single line and with GFM's cell separator
 --- escaped — an unescaped "|" would silently split one cell into two.
 ---@param v any
@@ -30,6 +31,7 @@ local function cell(v)
   return s
 end
 
+---@internal
 --- Display width of `s` (not its byte length): `vim.fn.strdisplaywidth`
 --- accounts for multibyte and double-width characters, which is what column
 --- padding has to agree with to look aligned.
@@ -39,6 +41,7 @@ local function width(s)
   return vim.fn.strdisplaywidth(s)
 end
 
+---@internal
 ---@param s string
 ---@param w integer
 ---@param align "l"|"c"|"r"
@@ -103,6 +106,7 @@ function M.markdown_table(headers, rows, opts)
     w[c] = math.max(w[c], 3)
   end
 
+  ---@internal
   local function row_line(cells)
     local parts = {}
     for c = 1, ncols do
@@ -140,6 +144,7 @@ function M.csv(headers, rows, sep)
   sep = sep or ","
   local lines = {}
 
+  ---@internal
   local function emit(r)
     local parts = {}
     for i, v in ipairs(r) do

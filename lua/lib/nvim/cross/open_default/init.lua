@@ -22,6 +22,7 @@
 local run = require("lib.nvim.cross.run")
 local expand_path = require("lib.nvim.cross.fs.expand_path")
 
+---@internal
 ---@param text string
 ---@return boolean
 local function looks_like_url(text)
@@ -30,6 +31,7 @@ local function looks_like_url(text)
     or text:match("^www%.") ~= nil
 end
 
+---@internal
 ---@param unix_path string
 ---@return string|nil
 local function wsl_to_win_path(unix_path)

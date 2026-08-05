@@ -1,14 +1,18 @@
 ---@module 'lib.nvim.system.rpc_pipe'
 ---@brief Start a predictable named-pipe RPC server on Windows with neotest compatibility
 
+require("lib.nvim.system.@types")
+
 local notify = require("lib.nvim.notify").create("[lib.nvim.system.rpc_pipe]")
 
 local M = {}
 
 --- Try to start a Windows named-pipe RPC server and export NVIM_LISTEN_ADDRESS.
----@param opts table|nil
----  opts.debug = true -> emit vim.notify debug/warn messages
----  opts.allow_override = true -> allow NVIM_LISTEN_ADDRESS to be overridden by env
+--- No-op on non-Windows platforms and inside detected test environments.
+---@param opts? { debug?: boolean, allow_override?: boolean }
+--- `debug`: emit vim.notify debug/warn messages (default false).
+--- `allow_override`: allow an already-set `NVIM_LISTEN_ADDRESS` to win over the pipe (default true).
+---@return nil
 function M.setup(opts)
   opts = opts or {}
   local debug = opts.debug or false
@@ -92,8 +96,10 @@ function M.get_address()
 end
 
 --- Clear RPC address (useful for tests)
+---@return nil
 function M.clear()
   vim.env.NVIM_LISTEN_ADDRESS = nil
 end
 
+---@type Lib.System.RpcPipe
 return M

@@ -10,6 +10,7 @@ local make_scratch = require("lib.nvim.window.make_scratch")
 local serialize = require("lib.nvim.logger.serialize")
 local notify = require("lib.nvim.notify").create("[lib.nvim.logger]")
 
+---@internal
 ---Collect recent records across all loggers, newest last, capped at `limit`.
 ---@param mod Lib.Logger
 ---@param limit integer

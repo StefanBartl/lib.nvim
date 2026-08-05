@@ -19,6 +19,7 @@ local function uv()
   return vim.uv or vim.loop
 end
 
+---@internal
 ---Local, matching the precedent in `lib.nvim.buf_win_tab.windows_utils`.
 ---@return boolean
 local function is_windows()
@@ -36,6 +37,7 @@ local TRANSIENT = {
   EBUSY = true, -- Windows: file mapped/in use; POSIX: mountpoint busy
 }
 
+---@internal
 ---@param err string|nil
 ---@return boolean
 local function is_transient(err)

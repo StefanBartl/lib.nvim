@@ -34,6 +34,7 @@ local state = {
   ns = api.nvim_create_namespace("lib_kit_confirm"),
 }
 
+---@internal
 ---@param s string
 ---@param width integer
 ---@return string
@@ -42,6 +43,7 @@ local function center(s, width)
   return string.rep(" ", pad) .. s
 end
 
+---@internal
 --- Build the centered button line and each button's byte-column range.
 ---@param labels string[]
 ---@param width integer
@@ -65,6 +67,7 @@ local function build_button_line(labels, width, row)
   return line, ranges
 end
 
+---@internal
 --- Repaint the focus highlight on the current button.
 local function render_focus()
   local buf = state.surf and state.surf.bufnr
@@ -81,6 +84,7 @@ local function render_focus()
   end
 end
 
+--- Whether a confirm dialog is currently open.
 ---@return boolean
 function M.is_open()
   return state.surf ~= nil and state.surf:is_valid()
@@ -99,11 +103,13 @@ function M.close()
   state.on_answer = nil
 end
 
+--- 1-based index of the currently focused button.
 ---@return integer
 function M.current_focus()
   return state.focus
 end
 
+---@internal
 --- Which button (if any) the mouse is currently over, by hit-testing
 --- `getmousepos()` against `state.ranges`. Reads live mouse state rather
 --- than relying on the click having already moved the cursor first — that

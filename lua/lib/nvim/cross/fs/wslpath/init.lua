@@ -16,6 +16,7 @@
 
 local M = {}
 
+---@internal
 ---Run `wslpath` with `flag` on `path` and return the trimmed output.
 ---Blocking by design: callers need the converted path to build the very next
 ---argv, and the conversion is a single sub-millisecond spawn.

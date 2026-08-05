@@ -15,6 +15,7 @@ local api = vim.api
 local Surface = {}
 Surface.__index = Surface
 
+--- Replace the surface's buffer content, preserving `modifiable`.
 ---@param lines string[]
 function Surface:set_lines(lines)
   if not api.nvim_buf_is_valid(self.bufnr) then
@@ -26,6 +27,7 @@ function Surface:set_lines(lines)
   api.nvim_set_option_value("modifiable", was_modifiable, { buf = self.bufnr })
 end
 
+--- Update (or clear, with nil) the float's title.
 ---@param title string|nil
 function Surface:set_title(title)
   if api.nvim_win_is_valid(self.winid) then
@@ -33,12 +35,15 @@ function Surface:set_title(title)
   end
 end
 
+--- Move the cursor into this surface's window, if still valid.
 function Surface:focus()
   if api.nvim_win_is_valid(self.winid) then
     api.nvim_set_current_win(self.winid)
   end
 end
 
+--- Register a callback to run when the surface closes (any cause). Multiple
+--- callbacks may be registered; all run, in registration order.
 ---@param cb fun()
 function Surface:on_close(cb)
   if type(cb) == "function" then
@@ -46,6 +51,7 @@ function Surface:on_close(cb)
   end
 end
 
+--- Whether the surface's window handle still refers to a live window.
 ---@return boolean
 function Surface:is_valid()
   return api.nvim_win_is_valid(self.winid)
@@ -62,6 +68,7 @@ function Surface:fire_close()
   end
 end
 
+--- Close the underlying window (if still valid) and fire close callbacks.
 function Surface:close()
   if api.nvim_win_is_valid(self.winid) then
     pcall(api.nvim_win_close, self.winid, true)

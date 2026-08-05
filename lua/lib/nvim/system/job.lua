@@ -11,8 +11,11 @@
 ---     on_stderr = function(_, line) ... end,
 ---   })
 
+require("lib.nvim.system.@types")
+
 local M = {}
 
+---@internal
 ---@param cb fun(err: nil, line: string)|nil
 ---@return fun(err: string|nil, data: string|nil)|nil
 local function line_buffered(cb)
@@ -68,4 +71,5 @@ function M.start(opts)
   })
 end
 
+---@type Lib.System.Job
 return M

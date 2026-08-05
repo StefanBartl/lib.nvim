@@ -69,4 +69,5 @@ function M.gen_token(len)
   return random_hex(len)
 end
 
+---@type Lib.Token
 return M

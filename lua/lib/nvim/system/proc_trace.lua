@@ -37,6 +37,8 @@
 --- fully restores the original functions — safe to leave wired into a
 --- diagnostic command that a user reaches for only when something is slow.
 
+require("lib.nvim.system.@types")
+
 local notify = require("lib.nvim.notify").create("[lib.nvim.system.proc_trace]")
 
 local M = {}
@@ -48,6 +50,7 @@ local active_log_path = nil
 ---@type uv_hrtime|nil
 local t0 = nil
 
+---@internal
 ---@param cmd string|string[]
 ---@return string
 local function cmd_to_str(cmd)
@@ -57,12 +60,14 @@ local function cmd_to_str(cmd)
   return tostring(cmd)
 end
 
+---@internal
 ---@return number
 local function since_start_ms()
   local uv = vim.uv or vim.loop
   return (uv.hrtime() - (t0 or uv.hrtime())) / 1e6
 end
 
+---@internal
 ---@param fd file*
 ---@param kind string
 ---@param cmd_str string
@@ -200,14 +205,17 @@ function M.stop()
   return { path = path, active = false }
 end
 
+--- Whether tracing is currently active.
 ---@return boolean
 function M.is_active()
   return originals ~= nil
 end
 
+--- Path of the active (or last used) log file, if any.
 ---@return string|nil
 function M.log_path()
   return active_log_path
 end
 
+---@type Lib.System.ProcTrace
 return M

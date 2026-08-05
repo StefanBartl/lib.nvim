@@ -12,6 +12,7 @@
 
 local core = require("lib.nvim.core")
 
+---@internal
 ---@param argv string[]
 ---@param text string
 ---@return boolean

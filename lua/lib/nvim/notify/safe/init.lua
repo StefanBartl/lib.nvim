@@ -119,7 +119,7 @@ end
 --- Returns a table with safe methods that automatically prefix messages.
 ---
 ---@param prefix string Notification prefix (e.g., "[plugin-name]")
----@return table notifier Safe notifier with info/warn/error/debug/notify methods
+---@return Lib.Notify.Safe.Notifier notifier Safe notifier with info/warn/error/debug/notify methods
 function M.create_safe(prefix)
   -- Normalize prefix once
   if type(prefix) ~= "string" then

@@ -36,7 +36,9 @@ local REFERENCE = {
   "-- updates as you type · q closes",
 }
 
+---@internal
 --- Initial config: an override table on top, reference below.
+---@return string[]
 local function initial_lines()
   local out = {
     "return {",
@@ -52,14 +54,17 @@ local function initial_lines()
   return out
 end
 
+---@internal
 --- Config buffer contents for a bare preset name, reference below.
 ---@param name string
+---@return string[]
 local function preset_lines(name)
   local out = { ("return %q"):format(name) }
   vim.list_extend(out, REFERENCE)
   return out
 end
 
+---@internal
 --- Evaluate the config buffer to a theme argument.
 ---@param bufnr integer
 ---@return boolean ok, any theme_arg_or_error
@@ -76,6 +81,7 @@ local function eval_config(bufnr)
   return true, result
 end
 
+---@internal
 --- Build the gallery: returns lines and a list of box-bounded highlights.
 --- Each hl is { row, group } (whole box row) or { row, col0, col1, group }.
 ---@param resolved Lib.UI.Kit.Theme

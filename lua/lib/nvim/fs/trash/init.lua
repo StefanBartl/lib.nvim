@@ -31,6 +31,7 @@ local uv = vim.uv or vim.loop
 
 local M = {}
 
+---@internal
 ---Escape `str` for embedding in a single-quoted POSIX shell argument.
 ---@param str string
 ---@return string
@@ -38,6 +39,7 @@ local function sh_quote(str)
   return "'" .. str:gsub("'", "'\\''") .. "'"
 end
 
+---@internal
 ---Escape `str` for embedding in a single-quoted PowerShell string literal.
 ---@param str string
 ---@return string
@@ -45,6 +47,7 @@ local function ps_quote(str)
   return str:gsub("'", "''")
 end
 
+---@internal
 ---Escape `str` for embedding in a double-quoted AppleScript string literal.
 ---@param str string
 ---@return string
@@ -52,6 +55,7 @@ local function osa_quote(str)
   return (str:gsub("\\", "\\\\"):gsub('"', '\\"'))
 end
 
+---@internal
 ---@param path string
 ---@return string
 local function windows_cmd(path)
@@ -65,6 +69,7 @@ local function windows_cmd(path)
     .. "','OnlyErrorDialogs','SendToRecycleBin')"
 end
 
+---@internal
 ---@param path string
 ---@return string
 local function macos_cmd(path)
@@ -73,6 +78,7 @@ local function macos_cmd(path)
     .. "\"'"
 end
 
+---@internal
 ---Directory that holds trashed files for the XDG fallback.
 ---@return string
 local function xdg_trash_files_dir()
@@ -81,6 +87,7 @@ local function xdg_trash_files_dir()
   return base .. "/Trash/files"
 end
 
+---@internal
 ---Fallback: move `path` into the XDG trash directory via `fs_rename`.
 ---NOTE: this does not write the accompanying `.trashinfo` metadata that real
 ---trash implementations use, so "restore from trash" UIs may not show the
@@ -103,6 +110,7 @@ local function xdg_fallback_blocking(path)
   return true, nil
 end
 
+---@internal
 ---Fallback: move `path` into the XDG trash directory, asynchronously.
 ---@param path string
 ---@param cb fun(ok: boolean, err: string|nil)
@@ -124,6 +132,7 @@ local function xdg_fallback_async(path, cb)
   end)
 end
 
+---@internal
 ---Build the Linux trash command to run, or `nil` if only the fallback applies.
 ---@param path string
 ---@return string|nil cmd

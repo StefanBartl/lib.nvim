@@ -16,23 +16,27 @@ local uv = vim.uv or vim.loop
 -- "label" style — <root>/<ellipsis>/<parent>/<file>
 --------------------------------------------------------------------------------
 
+---@internal
 ---@return string
 local function label_homedir()
   return (uv.os_homedir and uv.os_homedir()) or vim.fn.expand("~")
 end
 
+---@internal
 ---@param p string
 ---@return string
 local function label_to_display_sep(p)
   return (p:gsub("\\", "/"))
 end
 
+---@internal
 ---@param p string
 ---@return boolean
 local function label_is_unc(p)
   return p:match("^//") ~= nil
 end
 
+---@internal
 ---@param p string
 ---@return string, string
 local function label_split_unc_root(p)
@@ -46,12 +50,14 @@ local function label_split_unc_root(p)
   return root, rest
 end
 
+---@internal
 ---@param p string
 ---@return boolean
 local function label_is_windows_drive(p)
   return p:match("^%a:[/\\]") ~= nil
 end
 
+---@internal
 ---@param p string
 ---@return string, string
 local function label_split_drive_root(p)
@@ -61,6 +67,7 @@ local function label_split_drive_root(p)
   return drive, rest
 end
 
+---@internal
 ---@param path string
 ---@param ellipsis string
 ---@return string
@@ -113,6 +120,7 @@ end
 -- "fit" style — width-budget ellipsis collapsing
 --------------------------------------------------------------------------------
 
+---@internal
 --- Determine path separator depending on platform.
 --- @return string separator ("/" on POSIX, "\" on Windows)
 local function get_sep()
@@ -120,6 +128,7 @@ local function get_sep()
   return package.config:sub(1, 1)
 end
 
+---@internal
 --- Split a string by a separator.
 --- Keeps a leading empty token to denote a leading separator (root) if present.
 --- @param s string
@@ -143,6 +152,7 @@ local function split(s, sep)
   return parts
 end
 
+---@internal
 --- Join parts into a path using separator.
 --- If first part is empty string, it denotes a leading separator (root).
 --- @param parts string[]
@@ -164,6 +174,7 @@ local function join(parts, sep)
   return table.concat(parts, sep)
 end
 
+---@internal
 --- Return length in characters (tries utf8.len, falls back to byte length).
 --- @param s string
 --- @return integer
@@ -242,6 +253,7 @@ return function(path, max_len, opts)
   end
 
   -- 1) Try collapsing entire middle to ellipsis: first + sep + ell + sep + last
+  ---@internal
   local function build_with_ellipsis()
     local out_parts = {}
     if has_root then

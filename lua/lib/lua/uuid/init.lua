@@ -17,6 +17,7 @@ local HEX = "0123456789abcdef"
 local VARIANT_CHARS = { "8", "9", "a", "b" }
 
 ---Return `n` random lowercase hex digits concatenated.
+---@internal
 ---@param n integer
 ---@return string
 local function rand_hex(n)

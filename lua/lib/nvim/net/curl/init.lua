@@ -46,6 +46,7 @@ require("lib.nvim.net.curl.@types")
 
 local M = {}
 
+---@internal
 ---Percent-encode `s` for safe use in a URL query component.
 ---@param s string
 ---@return string
@@ -57,6 +58,7 @@ local function url_encode(s)
   )
 end
 
+---@internal
 ---Build the `?k=v&...` query string (with leading `?`) for `query`, or `""`.
 ---@param query table<string, string>|nil
 ---@return string
@@ -71,6 +73,7 @@ local function build_query_string(query)
   return "?" .. table.concat(parts, "&")
 end
 
+---@internal
 ---Build the curl argv table for `url`/`opts`.
 ---@param url string
 ---@param opts Lib.Net.Curl.FetchOpts
@@ -105,6 +108,7 @@ local function build_argv(url, opts, include_headers)
   return argv
 end
 
+---@internal
 ---Decode a completed curl `obj` into the `(ok, data_or_err, raw_obj)` contract.
 ---@param obj vim.SystemCompleted
 ---@return boolean ok
@@ -122,6 +126,7 @@ local function decode_result(obj)
   return true, decoded
 end
 
+---@internal
 ---Parse curl `-i` output (response headers, then a blank line, then the
 ---body) into status/headers/body. curl's own process exit code says nothing
 ---about the HTTP status — it is 0 for a successful *request* regardless of
