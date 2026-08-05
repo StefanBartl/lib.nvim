@@ -95,6 +95,7 @@ is correct in any colorscheme. Override any of the seven semantic keys:
 | `confirm`  | horizontal-button dialog (`h`/`l` move, `<CR>` confirm, click confirms) | ↓ |
 | `menu`     | cursor-anchored action list (`{ label, action }`) | |
 | `picker`   | interactive prompt + results + preview (see §5) | ↓ |
+| `compare`  | pick two items out of one picker, view them side by side (see §5) | |
 | `progress` | passthrough to [`lib.nvim.progress`](../lua/lib/nvim/progress/README.md) | |
 
 **note** — `kit.note({ title, message, timeout? })`
@@ -173,6 +174,25 @@ local p = kit.picker({
 })
 -- <C-n>/<C-p> or arrows move the selection; <Esc> closes.
 ```
+
+### Compare two items (pick two, view side by side)
+
+`kit.compare` is a picker for picking *two* things: search, mark one
+(`<M-c>` or `<CR>`), search again, `<CR>` a second time to view both at once.
+
+```lua
+kit.compare({
+  items = scanned_files,
+  render = function(item, surface) surface:set_lines(read_lines(item)) end,
+  on_close = function(a, b) end, -- b is nil if the pick was aborted
+})
+```
+
+`render(item, surface)` is the only rendering contract, so it isn't limited
+to text: images.nvim's `:Image compare` draws a terminal-overlay image into
+`surface.winid`'s screen coordinates instead of setting buffer lines. See
+`docs/ROADMAP/UI-KIT-CONCEPT.md` §13e for the three-state flow
+(SEARCH → MARKED → COMPARE) in full, and `docs/EXAMPLES/kit-compare.lua`.
 
 ## 6. Live preview playground
 

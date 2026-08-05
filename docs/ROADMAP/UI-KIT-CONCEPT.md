@@ -455,21 +455,22 @@ surfaces the library already uses:
 
 ## 13. Phased roadmap
 
-> Status: **Phases 1–11 shipped — the originally scoped roadmap, plus every
+> Status: **Phases 1–12 shipped — the originally scoped roadmap, plus every
 > follow-on primitive the migration audit called for, is complete;
 > hover_select fully absorbed.** Theme engine, surface, and every component
-> (`note`/`viewer`/`toast`/`input`/`live_input`/`form`/`select`/`prompt`/`picker`/`confirm`/`menu`/`progress`),
+> (`note`/`viewer`/`toast`/`input`/`live_input`/`form`/`select`/`prompt`/`picker`/`confirm`/`menu`/`compare`/`progress`),
 > the layout engine + `picker` template. `menu` is a cursor-anchored action
 > list; `viewer` is a read-only info panel (auto-sized, closes on focus loss);
 > `form` chains `input` prompts into one multi-field result; `live_input` adds
-> a debounced `on_change` on top of `input`; `progress` passes through to the
-> dedicated `lib.nvim.progress`; `sync` blocks (via `vim.wait`) on an
-> `on_submit`/`on_cancel`-shaped component and returns its result as a plain
-> value, for callers that can't be recast to callback style (§13a); `select`
-> items can now be plain strings *or* rich multi-line entries with per-span
-> highlights (§13b); `input` gained `secret = true` for masked entry (§13c)
-> and `completion = "file"` for real ins-completion on `<Tab>` (§13d). All
-> hover_select call sites were migrated to `kit.select` and the standalone
+> a debounced `on_change` on top of `input`; `compare` picks two items out of
+> one scrollable list and shows them side by side (§13e); `progress` passes
+> through to the dedicated `lib.nvim.progress`; `sync` blocks (via `vim.wait`)
+> on an `on_submit`/`on_cancel`-shaped component and returns its result as a
+> plain value, for callers that can't be recast to callback style (§13a);
+> `select` items can now be plain strings *or* rich multi-line entries with
+> per-span highlights (§13b); `input` gained `secret = true` for masked entry
+> (§13c) and `completion = "file"` for real ins-completion on `<Tab>` (§13d).
+> All hover_select call sites were migrated to `kit.select` and the standalone
 > `lib.nvim.ui.hover_select` module has been **removed** (§10 step 4 done).
 > What remains is migrating consumer plugins' existing call sites onto
 > `kit.viewer`/`kit.form`/`kit.live_input`/`kit.sync`/rich `kit.select`
@@ -489,6 +490,7 @@ surfaces the library already uses:
 | **9** ✅ | Rich `kit.select` items — multi-line entries with per-span custom highlights, navigation by logical item instead of raw line | See §13b below. Motivated by recommender.nvim's hand-rolled suggestion float (§ui_kit_migration audit §2/§4), a 3-line-per-item picker with per-column highlight groups that plain-string `kit.select` couldn't represent |
 | **10** ✅ | `kit.input({ secret = true })` — masked entry, each character concealed behind `mask` (default `"*"`), re-derived from the buffer on every edit; real text still reaches `on_submit` | See §13c below. Motivated by sandbox.nvim's `registry_commands.lua:30` (`vim.fn.inputsecret` for a registry password) — the only masked-input call site in the migration audit |
 | **11** ✅ | `kit.input({ completion = "file" })` — `<Tab>` completes via `vim.fn.getcompletion()` into the real ins-completion popup (`vim.fn.complete()`); `<Tab>`/`<S-Tab>` cycle it, `<CR>` accepts before submitting | See §13d below. Motivated by 4 identical `completion="file"`-blocked call sites in the migration audit (diff.nvim `prompt_file`, dap.nvim's `languages/{zig,rust,c,assembly}.lua`, color_my_ascii.nvim's `export.lua`, the nvim-config's `dotnet.lua`) — all four cited the exact same missing capability |
+| **12** ✅ | `kit.compare` — pick two items out of one picker (SEARCH → MARKED → COMPARE), view them side by side via a generic `render(item, surface)` contract | See §13e below. Motivated by images.nvim's roadmap ask for an image-comparison view, generalized: `render` just paints an item into a surface, so a text-diff caller and images.nvim's terminal-overlay caller share the same state machine |
 
 ### 13a. `kit.sync` — bridging kit's async components back to a plain return value — ✅ shipped
 
@@ -782,6 +784,83 @@ kit.input({
 Implemented in `lua/lib/nvim/ui/kit/input.lua`; example at
 `docs/EXAMPLES/kit-input.lua`; tests in `docs/TESTS/ui_kit_spec.lua`
 (§"input(completion = \"file\")").
+
+### 13e. `kit.compare` — pick two items, view them side by side — ✅ shipped (Phase 12)
+
+**Problem.** images.nvim's roadmap wanted a way to browse a list (of images),
+mark one, keep browsing, mark a second, and see both at once — a picker,
+followed by a two-pane compare view. Nothing to reuse existed: `kit.picker`
+stops at one result+preview pane, and building the compare view as
+images.nvim-local code would strand it there, even though the actual
+mechanic (search → freeze an item → search again → view both) has nothing to
+do with images specifically. A text-diff viewer would want the exact same
+flow.
+
+**Idea.** A new component with the same non-goal as `kit.picker`: no
+telescope/fzf-lua/snacks wrapping, so it isn't at the mercy of which engines
+happen to expose a custom-preview extension point (only snacks does — see
+images.nvim's own picker feature, which had to bind to snacks specifically
+for that reason). `kit.compare` is built on the same primitives `kit.picker`
+already uses (`surface` + hand-computed geometry), so it works regardless of
+which fuzzy-finder, if any, the user has installed.
+
+Three states, `<M-c>`/`<CR>` and `<CR>` again driving the transitions:
+
+```lua
+kit.compare({
+  items = scanned_files,
+  render = function(item, surface)
+    surface:set_lines(read_lines(item))   -- or draw a terminal overlay, etc.
+  end,
+  on_close = function(a, b) end,          -- b is nil if the pick was aborted
+})
+```
+
+- **SEARCH**: prompt + results (left) + a live preview of the highlighted
+  item (right) — visually `kit.picker`'s own layout.
+- **MARKED** (`mark_key`, default `<M-c>`, or `<CR>` — deliberately doing
+  double duty instead of adding a second dedicated key): the highlighted item
+  freezes into a new slot below the results list, which shrinks to make
+  room; the live preview on the right keeps following the selection as the
+  user searches again.
+- **COMPARE** (`<CR>` again): prompt/results/the frozen slot are gone,
+  replaced by two full-height preview panes side by side. `q`/`<Esc>` on
+  either pane closes everything.
+
+**Why not `kit.layout.compute`'s grid for the geometry.** MARKED needs a
+column split into two *rows* (results on top, the frozen preview below) next
+to a preview column that spans the full height — `layout.compute`'s model
+(`rows` containing `cols`, never the reverse) cannot express that nesting.
+Rather than extend the shared layout engine for this one caller, `compare.lua`
+computes its three states' geometry directly, the same way `layout.lua`
+computes its own slots internally (see its module doc for the exact reasoning).
+
+**The `render(item, surface)` contract is deliberately unopinionated about
+*what* gets painted.** For text, a caller just does
+`surface:set_lines(...)`. images.nvim's `:Image compare` (the motivating
+caller) draws via terminal escape sequences at `surface.winid`'s screen
+coordinates instead — not buffer content at all. Because that kind of overlay
+doesn't belong to any buffer, it survives a `surface:close()` untouched;
+`opts.clear`, if given, runs once before every state transition so a caller
+with that kind of overlay can wipe it before the old windows (with different
+coordinates) disappear. A plain-text caller simply omits `clear`.
+
+**No diff computation.** The second pane shows the plain rendered content —
+matching what was actually asked for ("two preview texts side by side," not
+a diff). `lib.lua.diff` (`myers`/`lines`, already in this repo) is a natural
+place to add diff highlighting for a text-mode caller later; out of scope
+for the first version, since no caller needs it yet.
+
+**Testability.** The returned handle exposes `state()`/`slots()`/`move()`/
+`mark()`/`confirm()`, mirroring `kit.picker`'s own handle shape
+(`slots`/`move`/`submit`) — specifically so the state machine is drivable
+headlessly, the same way `docs/TESTS/ui_kit_spec.lua`'s `picker (interactive)`
+section already does, without simulating real keypresses.
+
+Implemented in `lua/lib/nvim/ui/kit/compare.lua`; example at
+`docs/EXAMPLES/kit-compare.lua`; tests in `docs/TESTS/ui_kit_spec.lua`
+(§"compare"); consumed by images.nvim's `:Image compare`
+(`lua/images/compare.lua`).
 
 ## 14. Open decisions
 
