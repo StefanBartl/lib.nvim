@@ -8,3 +8,5 @@
 ---@field chars fun(): integer|nil, integer|nil, integer|nil # 0-based (row, scol, ecol) of a same-line charwise selection, or nil if not applicable
 ---@field reselect_chars fun(row: integer, scol: integer, ecol: integer): nil # Restore a charwise (`v`) selection spanning byte columns `[scol, ecol]` (0-based inclusive) on `row`
 ---@field keep_chars fun(fn: fun(row: integer, scol: integer, ecol: integer): any): any, boolean # Run `fn(row, scol, ecol)` against the current same-line charwise selection and reselect it; `applicable` is false (and `fn` is not called) when the selection isn't same-line charwise
+
+return {}

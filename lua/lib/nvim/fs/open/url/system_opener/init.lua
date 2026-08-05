@@ -23,6 +23,7 @@ require("lib.nvim.fs.open.url.system_opener.@types")
 
 local M = {}
 
+---@internal
 ---Resolve the argv list for the current platform.
 ---@param url string
 ---@param cfg AutoCmds.General.MD.GotoFile.Cfg
@@ -123,6 +124,7 @@ end
 
 --- Deprecated misspelling of `is_like`, kept as an alias so existing call
 --- sites keep working. Prefer `M.is_like`.
+---@deprecated use `M.is_like` instead
 ---@param s string
 ---@return boolean
 M.is_ike = M.is_like

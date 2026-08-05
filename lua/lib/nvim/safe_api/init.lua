@@ -340,4 +340,5 @@ function M.with_retry(fn, max_retries, ...)
   return false, nil, "Max retries exceeded"
 end
 
+---@type Lib.SafeApi
 return M

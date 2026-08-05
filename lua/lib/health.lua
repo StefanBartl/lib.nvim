@@ -31,6 +31,9 @@ local PROBE = {
   "lib.vim.notify",
 }
 
+---@internal
+---Checks whether the running Neovim version meets MIN_NVIM.
+---@return boolean
 local function version_ok()
   local v = vim.version()
   if v.major ~= MIN_NVIM[1] then
@@ -42,6 +45,7 @@ local function version_ok()
   return v.patch >= MIN_NVIM[3]
 end
 
+---Runs all lib.nvim health checks and reports via vim.health.
 function M.check()
   -- Neovim version --------------------------------------------------------
   h_start("lib.nvim: environment")

@@ -131,4 +131,5 @@ function M.keep_chars(fn)
   return ret, true
 end
 
+---@type Lib.Selection
 return M

@@ -23,6 +23,7 @@ function M.has_glob(names)
   return false
 end
 
+---@internal
 ---Translate a single glob into an anchored Lua pattern.
 ---@param glob string
 ---@return string

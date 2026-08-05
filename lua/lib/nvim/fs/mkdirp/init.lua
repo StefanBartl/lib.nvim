@@ -18,6 +18,9 @@ require("lib.nvim.fs.mkdirp.@types")
 
 local unify_slashes = require("lib.nvim.cross.fs.separators.unify_slashes")
 
+---@internal
+---Resolve the libuv API table, whichever name it lives under on this build.
+---@return uv
 local function uv()
   return vim.uv or vim.loop
 end
@@ -25,6 +28,7 @@ end
 -- 0755 — LuaJIT has no octal literals.
 local DIR_MODE = tonumber("755", 8)
 
+---@internal
 ---Split `path` into the part that must not be created (drive letter, UNC
 ---share, leading `/`) and the remaining segments to walk.
 ---@param path string Forward-slash normalized path

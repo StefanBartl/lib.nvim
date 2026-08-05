@@ -41,6 +41,7 @@ function M.memoize(fn, cap, keyer)
 end
 
 --- Generate a stable cache key from arguments
+---@internal
 ---@param ... any
 ---@return string
 local function default_keyer(...)

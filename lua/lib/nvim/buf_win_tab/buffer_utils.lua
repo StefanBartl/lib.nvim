@@ -191,6 +191,7 @@ function M.collect_all_buffer_info()
 end
 
 -- Convenience wrapper: print a compact summary of current buffers to the command line.
+---@return nil
 function M.print_summary()
   local coll = M.collect_all_buffer_info()
   vim.api.nvim_echo({

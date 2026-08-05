@@ -1,11 +1,11 @@
 ---@module 'lib.nvim_usrcmds'
--- Utility user commands that don't belong in a more specific plugin.
--- Each command is opt-in and can be toggled independently in setup().
---
--- Two surfaces over the same actions:
---   * flat commands  — :CwdHere, :PowershellProfile (kept for muscle memory)
---   * the :Lib verb  — :Lib cwd-here | ps-profile | helptags (composer-built,
---                      with <Tab> completion; dogfoods lib.nvim.usercmd.composer)
+--- Utility user commands that don't belong in a more specific plugin.
+--- Each command is opt-in and can be toggled independently in setup().
+---
+--- Two surfaces over the same actions:
+---   * flat commands  — :CwdHere, :PowershellProfile (kept for muscle memory)
+---   * the :Lib verb  — :Lib cwd-here | ps-profile | helptags (composer-built,
+---                      with <Tab> completion; dogfoods lib.nvim.usercmd.composer)
 
 require("lib.nvim_usrcmds.@types")
 
@@ -29,6 +29,8 @@ local defaults = {
 -- FIX: neotree/nvimtree/netrw does not auto-refresh after lcd — trigger a
 -- manual refresh in the file-tree plugin if needed.
 -- NOTE; Ja das wird jedenfalls benötigt, ist mir schon mehrmals aufgefallen, dass dder fieltree ein refresh benötigte. Umsetzen!
+---@internal
+---Sets the local (window) cwd to the directory of the current buffer.
 local function action_cwd_here()
   local bufname = vim.api.nvim_buf_get_name(0)
   if bufname == "" then
@@ -38,6 +40,8 @@ local function action_cwd_here()
   vim.cmd("lcd " .. vim.fn.fnameescape(dir))
 end
 
+---@internal
+---Opens the active PowerShell profile ($PROFILE) in Neovim.
 local function action_powershell_profile()
   if vim.fn.executable("powershell") ~= 1 then
     notify.error("PowershellProfile: powershell not available on this system")
@@ -54,12 +58,16 @@ local function action_powershell_profile()
   end
 end
 
+---@internal
+---Regenerates helptags for all installed plugins.
 local function action_helptags()
   vim.cmd("helptags ALL")
 end
 
 -- ── Flat commands (unchanged surface) ───────────────────────────────────────
 
+---@internal
+---Registers the LazyDone autocmd that regenerates helptags.
 local function register_helptags()
   autocmd.create("User", function()
     action_helptags()
@@ -70,6 +78,8 @@ local function register_helptags()
   })
 end
 
+---@internal
+---Registers the :CwdHere user command.
 local function register_cwd_here()
   vim.api.nvim_create_user_command(
     "CwdHere",
@@ -78,6 +88,8 @@ local function register_cwd_here()
   )
 end
 
+---@internal
+---Registers the :PowershellProfile user command.
 local function register_powershell_profile()
   vim.api.nvim_create_user_command(
     "PowershellProfile",
@@ -115,6 +127,7 @@ local function register_lib_verb(o)
   })
 end
 
+---Sets up the opt-in utility user commands per `opts`.
 ---@param opts Lib.NvimUsrCmds.Options|nil
 function M.setup(opts)
   local o = vim.tbl_extend("force", defaults, opts or {})

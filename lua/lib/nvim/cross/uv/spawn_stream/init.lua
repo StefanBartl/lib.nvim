@@ -25,6 +25,8 @@
 
 require("lib.nvim.cross.uv.spawn_stream.@types")
 
+---@internal
+---@return uv
 local function uv()
   return vim.uv or vim.loop
 end

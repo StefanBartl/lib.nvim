@@ -39,6 +39,7 @@ local M = {}
 ---never share (or clear) each other's group.
 local _seq = 0
 
+---@internal
 ---Read the cwd of the scope a guard holds.
 ---
 ---`getcwd()` takes window/tab *numbers*, not handles, so an explicit
@@ -69,6 +70,7 @@ local function scope_cwd(opts)
   return ok and cwd or ""
 end
 
+---@internal
 ---Canonical comparison key; "" for an unusable path so a failed lookup can
 ---never accidentally compare equal to a held directory.
 ---@param p string?
@@ -112,6 +114,7 @@ function M.hold(path, opts)
 
   local handle
 
+  ---@internal
   ---Put the cwd back where the guard wants it.
   local function reassert()
     reasserting = true

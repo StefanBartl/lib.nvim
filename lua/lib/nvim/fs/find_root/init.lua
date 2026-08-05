@@ -65,6 +65,7 @@ return function(opts)
 
   local max_depth = opts.max_depth
 
+  ---@internal
   ---Resolve the directory to search from: the path itself when it is a
   ---directory, otherwise its parent.
   ---@param path string
@@ -76,6 +77,7 @@ return function(opts)
     return vim.fn.fnamemodify(path, ":h")
   end
 
+  ---@internal
   ---Where the upward walk actually begins.
   ---
   ---With `skip_dirs`, anything at or below such a directory is off limits, so
@@ -104,6 +106,7 @@ return function(opts)
     return dir
   end
 
+  ---@internal
   ---The ancestor `max_depth` levels above `dir`, or nil when unbounded.
   ---
   ---Expressed as `vim.fs.find`'s `stop` directory — which is itself excluded
@@ -126,6 +129,7 @@ return function(opts)
     return current
   end
 
+  ---@internal
   ---True when `dir` directly contains any marker.
   ---@param dir string
   ---@return boolean
@@ -138,6 +142,7 @@ return function(opts)
     return false
   end
 
+  ---@internal
   ---Walk upward from `dir`, caching the root for every directory passed.
   ---@param dir string
   ---@return string|nil
@@ -231,6 +236,7 @@ return function(opts)
     return root
   end
 
+  ---Drop all cached root lookups (e.g. after markers change on disk).
   local function clear()
     if cache then
       cache = lru.new(capacity)

@@ -4,6 +4,7 @@
 local M = {}
 
 --- Lazy require to avoid overhead on cold load.
+---@internal
 ---@generic T
 ---@param mod string
 ---@return T

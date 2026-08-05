@@ -41,12 +41,14 @@ local NAMED_ESCAPES = {
   ["\t"] = "\\t",
 }
 
+---@internal
 ---@param c string # single char
 ---@return string
 local function escape_char(c)
   return NAMED_ESCAPES[c] or string.format("\\u%04x", c:byte())
 end
 
+---@internal
 ---@param s string
 ---@return string
 local function encode_string(s)
@@ -57,6 +59,7 @@ end
 -- Number formatting
 -- =========================================================
 
+---@internal
 ---@param n number
 ---@return string|nil encoded
 ---@return string|nil err
@@ -83,6 +86,7 @@ end
 --- Contiguous positive integer keys starting at 1 (Lua array semantics).
 --- Same definition as `lib.lua.json.decode.to_string_array.is_array_like`,
 --- duplicated locally to keep the encoder dependency-free.
+---@internal
 ---@param t table
 ---@return boolean
 local function is_array_like(t)
@@ -100,6 +104,7 @@ end
 -- Core encoder
 -- =========================================================
 
+---@internal
 ---@param value any
 ---@param opts Lib.JSON.EncodeOpts
 ---@param indent string|nil # resolved indent unit, nil = compact

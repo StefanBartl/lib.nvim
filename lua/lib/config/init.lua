@@ -64,6 +64,7 @@ function M.setup(opts)
   end
 end
 
+---Returns the current (merged) configuration.
 ---@return Lib.Config.Options
 function M.get()
   return M.options

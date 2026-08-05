@@ -18,3 +18,5 @@
 ---@field win_close fun(winnr: integer, force: boolean): boolean, nil, string|nil
 ---@field buf_delete fun(bufnr: integer, opts?: table): boolean, nil, string|nil
 ---@field with_retry fun(fn: function, max_retries: integer, ...: any): boolean, any|nil, string|nil
+
+return {}
