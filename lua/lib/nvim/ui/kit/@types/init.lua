@@ -153,6 +153,31 @@
 ---@field on_submit? fun(query: string)     # <CR>
 ---@field on_cancel? fun()                  # <Esc>
 
+--- Options for `kit.compare` / `kit.popup({ type = "compare" })`. See
+--- lua/lib/nvim/ui/kit/compare.lua's module doc for the SEARCH → MARKED →
+--- COMPARE flow.
+---@class Lib.UI.Kit.CompareOpts
+---@field items any[]                                  # candidates to pick from
+---@field format_item? fun(item: any): any              # results-list line; default tostring
+---@field query? fun(query: string, items: any[]): any[] # custom filter; default: substring match on format_item
+---@field render fun(item: any, surface: Lib.UI.Kit.Surface)  # required: paint `item` into `surface`
+---@field clear? fun()                                  # called once before every state transition
+---@field mark_key? string                               # marks the first pick (default "<M-c>"); <CR> also works
+---@field title? string
+---@field theme? Lib.UI.Kit.ThemeArg
+---@field on_close? fun(a: any, b: any)                  # a/b = the two picks; b is nil on an aborted pick
+
+--- Handle returned by `kit.compare`. `state`/`slots`/`move`/`mark`/`confirm`
+--- mirror `kit.picker`'s handle shape so the state machine is directly
+--- drivable/testable without simulating keypresses.
+---@class Lib.UI.Kit.CompareHandle
+---@field close fun()
+---@field state fun(): "search"|"marked"|"compare"
+---@field slots fun(): table<string, Lib.UI.Kit.Surface>
+---@field move fun(delta: integer)
+---@field mark fun()                                     # SEARCH only: freeze the highlighted item, enter MARKED
+---@field confirm fun()                                  # SEARCH: same as mark; MARKED: pick the 2nd item, enter COMPARE
+
 --- Options for `kit.setup`.
 ---@class Lib.UI.Kit.SetupOpts
 ---@field default? string                       # active preset name
@@ -173,6 +198,7 @@
 ---@field picker fun(opts: table): table|nil                 # interactive picker (prompt drives results)
 ---@field confirm fun(opts: table): Lib.UI.Kit.Surface|nil    # button-confirm dialog (horizontal buttons)
 ---@field menu fun(opts: table): Lib.UI.Kit.Surface|nil        # cursor-anchored action list (label → callback)
+---@field compare fun(opts: Lib.UI.Kit.CompareOpts): Lib.UI.Kit.CompareHandle|nil  # pick two items, view them side by side
 ---@field progress fun(opts: table): table                     # passthrough to lib.nvim.progress.create
 ---@field sync fun(open_fn: fun(opts: table): any, opts: table, timeout_ms: integer|nil): any  # vim.wait bridge for on_submit/on_cancel components; full signature (incl. the two boolean returns) is on lua/lib/nvim/ui/kit/init.lua's M.sync
 ---@field preview fun(): integer, integer                       # open the live theme playground (also :KitPreview)

@@ -871,6 +871,144 @@ return function(H)
   chooser.submit()
   eq(ran, "delete", "menu runs the picked item's action")
 
+  -- --------------------------------------------------------------- compare
+  -- `state`/`slots`/`move`/`mark`/`confirm` mirror `kit.picker`'s handle
+  -- shape specifically so the SEARCH -> MARKED -> COMPARE flow is drivable
+  -- headlessly, same as `picker (interactive)` above.
+  local cmp_items = { "apple", "banana", "cherry", "date" }
+  local cmp_renders = {}
+  local cmp_clears = 0
+  local cmp_close_calls, cmp_closed_a, cmp_closed_b = 0, nil, nil
+
+  local ch = assert(
+    kit.compare({
+      items = cmp_items,
+      render = function(item, surf)
+        table.insert(cmp_renders, item)
+        surf:set_lines({ "preview:" .. item })
+      end,
+      clear = function()
+        cmp_clears = cmp_clears + 1
+      end,
+      on_close = function(a, b)
+        cmp_close_calls = cmp_close_calls + 1
+        cmp_closed_a, cmp_closed_b = a, b
+      end,
+    }),
+    "compare opens"
+  )
+
+  eq(ch.state(), "search", "compare starts in SEARCH")
+  local search_slots = ch.slots()
+  ok(search_slots.prompt:is_valid(), "search: prompt slot valid")
+  ok(search_slots.results:is_valid(), "search: results slot valid")
+  ok(search_slots.preview:is_valid(), "search: preview slot valid")
+  eq(
+    vim.api.nvim_buf_get_lines(search_slots.results.bufnr, 0, -1, false)[1],
+    "apple",
+    "results list shows format_item output (default: tostring)"
+  )
+  eq(
+    vim.api.nvim_buf_get_lines(search_slots.preview.bufnr, 0, -1, false)[1],
+    "preview:apple",
+    "live preview renders the highlighted item"
+  )
+  eq(cmp_clears, 1, "clear() runs once for the initial mount")
+
+  ch.move(1) -- apple -> banana
+  eq(
+    vim.api.nvim_buf_get_lines(ch.slots().preview.bufnr, 0, -1, false)[1],
+    "preview:banana",
+    "move() re-renders the live preview"
+  )
+
+  -- mark "banana" -> MARKED
+  ch.mark()
+  eq(ch.state(), "marked", "mark() enters MARKED")
+  eq(cmp_clears, 2, "clear() runs again for the MARKED transition")
+  local marked_slots = ch.slots()
+  ok(marked_slots.marked:is_valid(), "marked: frozen slot valid")
+  eq(
+    vim.api.nvim_buf_get_lines(marked_slots.marked.bufnr, 0, -1, false)[1],
+    "preview:banana",
+    "frozen slot shows the marked item"
+  )
+  ok(marked_slots.results:is_valid(), "marked: results slot still there (still searchable)")
+  ok(marked_slots.preview:is_valid(), "marked: live preview slot still there")
+  eq(
+    vim.api.nvim_buf_get_lines(marked_slots.preview.bufnr, 0, -1, false)[1],
+    "preview:banana",
+    "live preview keeps showing the selection as of the moment it was marked"
+  )
+
+  -- move to "cherry" and confirm the second pick -> COMPARE
+  ch.move(1) -- banana -> cherry
+  eq(
+    vim.api.nvim_buf_get_lines(ch.slots().preview.bufnr, 0, -1, false)[1],
+    "preview:cherry",
+    "the live preview still follows the selection while MARKED"
+  )
+  ch.confirm()
+  eq(ch.state(), "compare", "confirm() enters COMPARE")
+  eq(cmp_clears, 3, "clear() runs again for the COMPARE transition")
+  local cmp_slots = ch.slots()
+  ok(cmp_slots.a:is_valid(), "compare: pane A valid")
+  ok(cmp_slots.b:is_valid(), "compare: pane B valid")
+  eq(cmp_slots.results, nil, "compare: results slot is gone")
+  eq(cmp_slots.prompt, nil, "compare: prompt slot is gone")
+  eq(
+    vim.api.nvim_buf_get_lines(cmp_slots.a.bufnr, 0, -1, false)[1],
+    "preview:banana",
+    "pane A renders the marked item"
+  )
+  eq(
+    vim.api.nvim_buf_get_lines(cmp_slots.b.bufnr, 0, -1, false)[1],
+    "preview:cherry",
+    "pane B renders the confirmed second item"
+  )
+
+  ch.close()
+  eq(cmp_clears, 4, "clear() runs once more on close")
+  eq(cmp_close_calls, 1, "on_close fires exactly once")
+  eq(cmp_closed_a, "banana", "on_close reports the marked item")
+  eq(cmp_closed_b, "cherry", "…and the confirmed second item, even closed programmatically from COMPARE")
+  ok(not cmp_slots.a:is_valid(), "compare panes close")
+  vim.cmd("stopinsert")
+
+  -- default substring filter (no opts.query given) narrows the results list
+  local ch2 = assert(
+    kit.compare({
+      items = { "red", "green", "blue" },
+      render = function(item, surf)
+        surf:set_lines({ item })
+      end,
+    }),
+    "compare (filter) opens"
+  )
+  local prompt_buf = ch2.slots().prompt.bufnr
+  vim.api.nvim_buf_set_lines(prompt_buf, 0, 1, false, { "bl" })
+  vim.api.nvim_exec_autocmds("TextChangedI", { buffer = prompt_buf })
+  vim.wait(150)
+  local results_lines = vim.api.nvim_buf_get_lines(ch2.slots().results.bufnr, 0, -1, false)
+  eq(#results_lines, 1, "query narrows the results to matches")
+  eq(results_lines[1], "blue", "…the one item containing the query")
+  ch2.close()
+  vim.cmd("stopinsert")
+
+  -- an empty item list opens no UI and reports (nil, nil) synchronously
+  local empty_called, empty_a, empty_b = false, nil, nil
+  local empty_handle = kit.compare({
+    items = {},
+    render = function() end,
+    on_close = function(a, b)
+      empty_called, empty_a, empty_b = true, a, b
+    end,
+  })
+  eq(empty_handle, nil, "compare with no items returns nil")
+  ok(empty_called, "on_close still fires for an empty item list")
+  eq(empty_a, nil, "…with a nil first pick")
+  eq(empty_b, nil, "…and a nil second pick")
+
   -- --------------------------------------------------------------- progress (passthrough)
   local ph = kit.progress({ text = "working", style = "notify" })
   ok(
