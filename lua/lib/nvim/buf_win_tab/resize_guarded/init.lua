@@ -39,6 +39,7 @@ local COMMON_FALLBACK = {
   ["<S-Right>"] = "<S-Right>",
 }
 
+---@internal
 --- Derive the key sequence to forward from the mapping's lhs.
 --- Converts shift-modified keys (e.g., <S-h>) to their terminal representation (e.g., "H").
 ---@param lhs string|nil The left-hand side of the mapping (e.g., "<S-h>")
@@ -73,6 +74,7 @@ local function derive_fallback(lhs)
   return nil
 end
 
+---@internal
 --- Forward a key sequence to the active buffer/terminal.
 --- Uses nvim_replace_termcodes to convert special key notation,
 --- then nvim_feedkeys to inject the keys as if typed by the user.

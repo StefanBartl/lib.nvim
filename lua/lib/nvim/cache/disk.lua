@@ -23,12 +23,14 @@ local uv = vim.uv or vim.loop
 
 local M = {}
 
+---@internal
 ---@param opts Lib.Cache.Opts|nil
 ---@return string
 local function cache_dir(opts)
   return (opts and opts.dir) or (vim.fn.stdpath("cache") .. "/lib.nvim/cache")
 end
 
+---@internal
 ---@param namespace string
 ---@param opts Lib.Cache.Opts|nil
 ---@return string
@@ -36,6 +38,7 @@ local function cache_path(namespace, opts)
   return cache_dir(opts) .. "/" .. namespace .. ".json"
 end
 
+---@internal
 ---Read and JSON-decode the cache file for `namespace`, if any.
 ---@param namespace string
 ---@param opts Lib.Cache.Opts|nil

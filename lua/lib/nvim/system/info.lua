@@ -132,6 +132,7 @@ end
 
 --- Copy `text` to the system clipboard ("+ register plus platform fallbacks,
 --- and the "* selection register where it exists).
+---@internal
 ---@param text string
 ---@return boolean ok
 local function to_clipboard(text)

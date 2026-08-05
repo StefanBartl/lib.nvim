@@ -23,6 +23,7 @@ local json = require("lib.nvim.fs.json")
 
 local M = {}
 
+---@internal
 ---True when `path` ends in a path component matching one of `ignore_dirs`.
 ---@param path string
 ---@param ignore_dirs string[]

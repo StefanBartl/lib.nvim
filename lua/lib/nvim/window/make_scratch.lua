@@ -22,6 +22,7 @@ local DEFAULT_WO = {
   cursorline = false,
 }
 
+---@internal
 ---Widest display column count across `lines` (multibyte-aware).
 ---@param lines string[]
 ---@return integer
@@ -36,6 +37,7 @@ local function content_width(lines)
   return max
 end
 
+---@internal
 ---Clamp `value` into the inclusive `[lo, hi]` range.
 ---@param value integer
 ---@param lo integer
@@ -45,6 +47,7 @@ local function clamp(value, lo, hi)
   return math.max(lo, math.min(value, hi))
 end
 
+---@internal
 ---Resolve width/height from opts and content, clamped to the editor size.
 ---@param lines string[]
 ---@param opts Lib.Window.MakeScratchOpts
@@ -68,6 +71,7 @@ local function resolve_dimensions(lines, opts)
   return clamp(want_w, 1, max_w), clamp(want_h, 1, max_h)
 end
 
+---@internal
 ---Create the scratch buffer and fill it with `lines`.
 ---@param lines string[]
 ---@param opts Lib.Window.MakeScratchOpts
@@ -104,6 +108,7 @@ local function create_buffer(lines, opts)
   return bufnr
 end
 
+---@internal
 ---Build the floating-window config, centering on the editor when no position is given.
 ---@param width integer
 ---@param height integer

@@ -15,6 +15,7 @@ local notify = require("lib.nvim.notify").create("[lib.nvim.window.nice_quit]")
 ---Normal-mode keys that close the window when no override is given.
 local DEFAULT_KEYS = { "q", "<Esc>" }
 
+---@internal
 ---Resolve the buffer backing a window, or nil if the window is invalid.
 ---@param winid integer
 ---@return integer|nil bufnr
@@ -29,6 +30,7 @@ local function win_buf(winid)
   return bufnr
 end
 
+---@internal
 ---Close `winid` safely. Idempotent (no-op if already gone) and never closes the
 ---last remaining window in the tabpage, which Neovim would refuse anyway.
 ---@param winid integer

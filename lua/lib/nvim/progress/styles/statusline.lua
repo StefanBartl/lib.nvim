@@ -21,12 +21,14 @@ local order = {}
 ---`active()` only refreshes on the next unrelated redraw (cursor move, mode
 ---change, …) — a background search would otherwise look frozen while the
 ---user is idle. Scheduled so this is safe regardless of the caller's context.
+---@internal
 local function request_redraw()
   vim.schedule(function()
     pcall(vim.cmd, "redrawstatus")
   end)
 end
 
+---@internal
 ---@param spec Lib.Progress.Spec
 ---@return string
 local function render_text(spec)
@@ -44,6 +46,7 @@ local function render_text(spec)
   return spec.title .. table.concat(parts, " ")
 end
 
+---@internal
 ---@param state table
 local function clear(state)
   text_by_state[state] = nil

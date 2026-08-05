@@ -50,4 +50,5 @@ function M.setup(opts)
   return M.env.get()
 end
 
+---@type Lib.System
 return M

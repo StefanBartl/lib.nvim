@@ -39,6 +39,7 @@ local state = {
   content_ns = api.nvim_create_namespace("lib_kit_chooser_content"), -- per-item custom highlights
 }
 
+--- Whether a chooser is currently open.
 ---@return boolean
 function M.is_open()
   return state.surf ~= nil and state.surf:is_valid()
@@ -47,6 +48,7 @@ end
 --- Normalize one raw item (string or rich table) into an entry, without row
 --- offsets yet (those are assigned in a second pass once every item's line
 --- count is known).
+---@internal
 ---@param item any
 ---@return table entry
 local function normalize_item(item)
@@ -68,6 +70,7 @@ end
 
 --- Build `state.entries` (with row offsets) and the flattened buffer lines
 --- from `items`.
+---@internal
 ---@param items any[]
 ---@return table[] entries, string[] flat_lines
 local function build_entries(items)
@@ -88,6 +91,7 @@ local function build_entries(items)
 end
 
 --- Resolve the logical (1-based) item index containing 0-based buffer `row`.
+---@internal
 ---@param row0 integer
 ---@return integer|nil
 local function item_at_row(row0)
@@ -99,6 +103,7 @@ local function item_at_row(row0)
   return nil
 end
 
+---@internal
 --- Paint every entry's custom highlight spans (once, at open time — entries
 --- never change after that, unlike selection marks which toggle).
 local function render_content_highlights()
@@ -126,12 +131,15 @@ local function render_content_highlights()
   end
 end
 
+---@internal
+--- Clear multi-select marks from the chooser buffer.
 local function clear_marks()
   if state.surf and api.nvim_buf_is_valid(state.surf.bufnr) then
     api.nvim_buf_clear_namespace(state.surf.bufnr, state.ns, 0, -1)
   end
 end
 
+---@internal
 --- Repaint multi-select marks from `state.selections`. A marked item's whole
 --- row span is highlighted, not just its anchor row.
 local function render_marks()

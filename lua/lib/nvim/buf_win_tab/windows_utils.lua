@@ -9,6 +9,7 @@ local M = {}
 
 -- Local helpers and types -----------------------------------------------------
 
+---@internal
 -- Detect platform to allow any small Windows-specific behavior if needed.
 ---@return boolean
 local function is_windows()
@@ -21,6 +22,7 @@ local function is_windows()
   return sys:match("Windows") ~= nil or sys:match("MSYS") ~= nil or sys:match("CYGWIN") ~= nil
 end
 
+---@internal
 -- Small helper to safely get buffer info from vim.fn.getbufinfo with optional fields.
 ---@param opts table|nil
 ---@return table[] list

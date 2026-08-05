@@ -28,6 +28,7 @@ local api = vim.api
 local uv = vim.uv or vim.loop
 local nvim_buf_get_changedtick = api.nvim_buf_get_changedtick
 
+---@internal
 --- Monotonic clock in seconds. `os.clock()` measures CPU time, not wall time,
 --- so a TTL built on it would barely advance while Neovim sits idle; `hrtime`
 --- is wall-clock-accurate and immune to system clock adjustments.

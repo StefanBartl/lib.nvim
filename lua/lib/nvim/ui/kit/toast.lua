@@ -19,6 +19,7 @@ local MARGIN = 2 -- columns from the right edge / rows from the top
 --- Live toasts, oldest first. Each: { surf = Surface, height = integer }.
 local stack = {}
 
+---@internal
 --- Drop dead toasts and reflow the survivors from the top-right corner down.
 local function reflow()
   local live = {}

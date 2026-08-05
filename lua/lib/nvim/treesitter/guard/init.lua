@@ -51,4 +51,5 @@ function M.is_enabled(bufnr, whitelist)
   return (whitelist or M.DEFAULT_WHITELIST)[ft] == true
 end
 
+---@type Lib.Treesitter.Guard
 return M

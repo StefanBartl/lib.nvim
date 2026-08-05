@@ -34,6 +34,7 @@ local fn = vim.fn
 
 local M = {}
 
+---@internal
 ---Re-conceal every character of the input's single line with `mask`.
 ---@param bufnr integer
 ---@param ns integer
@@ -52,6 +53,7 @@ local function apply_mask(bufnr, ns, mask)
   end
 end
 
+---@internal
 ---Complete the fragment before the cursor via `vim.fn.getcompletion()` and
 ---open the native completion popup at the right start column.
 ---@param bufnr integer

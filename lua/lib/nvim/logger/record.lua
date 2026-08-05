@@ -20,6 +20,7 @@ function M.level_name(level)
   return LEVEL_NAME[level] or ("LVL" .. tostring(level))
 end
 
+---@internal
 ---Resolve `ctx`, which may be a table or a thunk returning a table.
 ---The thunk form lets callers defer expensive context building to after the
 ---level gate, so it costs nothing when the level is inactive.

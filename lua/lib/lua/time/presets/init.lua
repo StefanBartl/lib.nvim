@@ -15,6 +15,7 @@ local M = {}
 
 local SECONDS_PER_DAY = 86400
 
+---@internal
 ---@param ts integer
 ---@return osdate
 local function to_date_table(ts)
@@ -22,6 +23,7 @@ local function to_date_table(ts)
 end
 
 ---Start-of-day timestamp for the calendar day containing `ts`.
+---@internal
 ---@param ts integer
 ---@return integer
 local function start_of_day(ts)

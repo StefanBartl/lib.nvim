@@ -30,12 +30,14 @@
 ---@type LibYaml
 local M = {}
 
+---@internal
 ---@param s string
 ---@return string
 local function trim(s)
   return (s:gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
+---@internal
 ---@param s string
 ---@return integer
 local function leading_spaces(s)
@@ -44,6 +46,7 @@ local function leading_spaces(s)
 end
 
 ---Strip one layer of matching quotes, if present.
+---@internal
 ---@param s string
 ---@return string
 local function strip_quotes(s)
@@ -63,6 +66,7 @@ end
 local NULL = {}
 
 ---Coerce a raw (not-yet-trimmed) scalar string into a Lua value.
+---@internal
 ---@param raw string
 ---@return any value Lua value, or the internal NULL sentinel
 local function coerce_scalar(raw)
@@ -87,6 +91,7 @@ local function coerce_scalar(raw)
 end
 
 ---True when `content` is a list-item line (`-` alone, or `- ...`).
+---@internal
 ---@param content string
 ---@return boolean
 local function is_list_item(content)
@@ -98,6 +103,7 @@ end
 ---@field content string
 ---@field lineno integer
 
+---@internal
 ---@param text string
 ---@return YamlLine[]
 local function tokenize(text)
@@ -135,6 +141,7 @@ function M.simple_parse(text)
   ---Parse one block (map or list) whose lines all share the same indent,
   ---which must be >= `min_indent`. Stops when a line dedents below that
   ---shared indent, or when input is exhausted.
+  ---@internal
   ---@param min_indent integer
   ---@return table|nil block
   ---@return string|nil err

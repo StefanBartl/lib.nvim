@@ -56,6 +56,7 @@ local deferred = {
   end,
 }
 
+---@internal
 --- Whether the command should accept the bang form: explicit spec.bang wins,
 --- otherwise true iff any route opts into it.
 ---@param spec Lib.UserCmd.Composer.Spec
@@ -72,6 +73,7 @@ local function wants_bang(spec)
   return false
 end
 
+---@internal
 --- Whether the command should accept a range: explicit spec.range wins,
 --- otherwise the first route to opt in wins (nvim_create_user_command's
 --- `range` is a single command-level option, not per-route — a mix of
@@ -91,6 +93,7 @@ local function wants_range(spec)
   return nil
 end
 
+---@internal
 --- Whether the command should accept a `:N Verb` count prefix: explicit
 --- spec.count wins, otherwise the first route to opt in wins (same
 --- single-command-level-option reasoning as wants_range — nvim_create_user_command
@@ -109,6 +112,7 @@ local function wants_count(spec)
   return nil
 end
 
+---@internal
 --- Build a handle for a registered verb.
 ---@param name string
 ---@param spec Lib.UserCmd.Composer.Spec
@@ -146,6 +150,7 @@ local function make_handle(name, spec, root)
   return handle
 end
 
+---@internal
 --- Build the route tree, register the user command, record the verb.
 ---@param name string
 ---@param spec Lib.UserCmd.Composer.Spec
@@ -177,6 +182,7 @@ local function register(name, spec)
   return handle
 end
 
+---@internal
 --- Fluent builder — accumulates a spec, registers on `:build()`.
 ---@param name string
 ---@return table

@@ -19,6 +19,7 @@ local M = {}
 
 local uv, fn = vim.uv or vim.loop, vim.fn
 
+---@internal
 ---@return boolean
 local function is_windows()
   return fn.has("win32") == 1 or fn.has("win64") == 1
@@ -102,6 +103,7 @@ function M.supported()
   return is_windows()
 end
 
+---@internal
 ---Materialize the helper script under `stdpath("cache")`, once per session.
 ---@return string|nil path
 ---@return string|nil err
@@ -233,4 +235,5 @@ function M.report(path, cb)
   end)
 end
 
+---@type Lib.Cross.Fs.Lock
 return M

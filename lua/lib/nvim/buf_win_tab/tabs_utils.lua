@@ -8,6 +8,7 @@ local M = {}
 
 -- Types ----------------------------------------------------------------------
 
+---@internal
 -- Collect a TabInfo for a given tabpage object.
 ---@param tabpage userdata
 ---@return TabInfo

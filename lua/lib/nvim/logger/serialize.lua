@@ -12,6 +12,7 @@ local M = {}
 local MAX_DEPTH = 8
 local MAX_ITEMS = 200 -- per table, guards against dumping a whole buffer table
 
+---@internal
 ---Recursively convert `value` into something `vim.json.encode` accepts.
 ---@param value any
 ---@param redact table<string, true>|nil  # keys to replace with "<redacted>"

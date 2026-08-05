@@ -30,6 +30,7 @@ local uv = vim.uv or vim.loop
 local DEFAULT_MAX_FILES = 2000
 local DEFAULT_MAX_FILESIZE = 1024 * 1024 -- 1 MiB
 
+---@internal
 --- Default prune predicate: lib.nvim's shared basename ignore list, so a
 --- harvest over a repo skips `.git`, `node_modules`, … the same way every
 --- other lib.nvim-based tool does.
@@ -46,6 +47,7 @@ local function default_ignore()
   end
 end
 
+---@internal
 --- Read a file into a Source, or nil when it is unreadable, too large, or
 --- looks binary. Binary detection is a NUL-byte probe of the first chunk:
 --- cheap, and enough to keep a stray `.png` out of a text harvest.
@@ -84,6 +86,7 @@ local function read_source(path, max_filesize)
   return { file = vim.fs.normalize(path), lines = lines, first = 1 }
 end
 
+---@internal
 ---@param bufnr integer
 ---@return Lib.Harvest.Source|nil
 local function buffer_source(bufnr)
@@ -99,6 +102,7 @@ local function buffer_source(bufnr)
   }
 end
 
+---@internal
 --- Collect readable text files under `root`.
 ---@param root string
 ---@param opts Lib.Harvest.ScopeOpts

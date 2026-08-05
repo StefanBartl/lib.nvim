@@ -16,6 +16,7 @@
 
 local unify_slashes = require("lib.nvim.cross.fs.separators.unify_slashes")
 
+---@internal
 --- Guard: the input must be a string. Returns it unchanged for chaining.
 ---@param path string
 ---@return string
@@ -28,6 +29,7 @@ local function validate(path)
   return path
 end
 
+---@internal
 --- Detect a POSIX root prefix: '/' for absolute paths, '' otherwise.
 ---@param path string  # forward-slash form
 ---@return string root  # "/" or ""
@@ -35,6 +37,7 @@ local function detect_root(path)
   return path:match("^/") and "/" or ""
 end
 
+---@internal
 --- Split a forward-slash path into its non-empty segments (drops repeated '/').
 ---@param path string  # forward-slash form
 ---@return string[] segments
@@ -46,6 +49,7 @@ local function split_segments(path)
   return segments
 end
 
+---@internal
 --- True when a segment is a bare Windows drive prefix ('C:', 'e:').
 ---@param seg string
 ---@return boolean
@@ -53,6 +57,7 @@ local function is_drive_prefix(seg)
   return seg:match("^%a:$") ~= nil
 end
 
+---@internal
 --- Reduce raw segments into a collapsed stack, applying the '.'/'..' rules.
 --- Pure: builds and returns a fresh list, never mutates the input.
 ---@param segments string[]
@@ -81,6 +86,7 @@ local function collapse_segments(segments, has_root)
   return out
 end
 
+---@internal
 --- Reassemble a root marker and collapsed segments into a path string.
 ---@param root string  # "/" or ""
 ---@param segments string[]

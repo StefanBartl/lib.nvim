@@ -6,6 +6,7 @@
 
 require("lib.nvim.progress.@types")
 
+---@internal
 ---@param want Lib.Progress.Style|nil
 ---@return Lib.Progress.StyleImpl
 local function resolve_style(want)

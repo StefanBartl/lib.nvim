@@ -11,6 +11,7 @@
 
 require("lib.nvim.progress.@types")
 
+---@internal
 ---@param spec Lib.Progress.Spec
 ---@return string
 local function render_suffix(spec)
@@ -23,6 +24,7 @@ local function render_suffix(spec)
   return ""
 end
 
+---@internal
 ---@param spec Lib.Progress.Spec
 ---@return string
 local function render_line(spec)
@@ -30,6 +32,7 @@ local function render_line(spec)
   return spec.title .. text .. render_suffix(spec)
 end
 
+---@internal
 ---@param surf any lib.nvim.ui.kit surface handle
 ---@param line string
 local function set_line(surf, line)
@@ -38,6 +41,7 @@ local function set_line(surf, line)
   end
 end
 
+---@internal
 ---@param surf any lib.nvim.ui.kit surface handle
 local function close(surf)
   if surf and surf:is_valid() then
@@ -45,6 +49,7 @@ local function close(surf)
   end
 end
 
+---@internal
 ---@param bufnr integer
 ---@param spec Lib.Progress.Spec
 ---@param request_cancel fun()

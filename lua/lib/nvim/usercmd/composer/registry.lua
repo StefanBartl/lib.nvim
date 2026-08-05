@@ -28,6 +28,7 @@ function M.add(name, handle)
   VERBS[name] = handle
 end
 
+--- Look up a registered verb handle by command name.
 ---@param name string
 ---@return Lib.UserCmd.Composer.Handle|nil
 function M.get(name)

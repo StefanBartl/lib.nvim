@@ -33,6 +33,7 @@ local disk = require("lib.nvim.cache.disk")
 local M = {}
 
 ---Deterministic, filesystem-safe short key for an arbitrary string.
+---@internal
 ---Not cryptographic — only used to turn an absolute project path into a
 ---directory name that can't collide with path separators.
 ---@param s string
@@ -46,6 +47,7 @@ local function short_hash(s)
 end
 
 ---Directory `lib.nvim.cache.disk` should use for the project resolved from
+---@internal
 ---`opts.path` (default cwd).
 ---@param opts? Lib.Store.Project.Opts
 ---@return string dir

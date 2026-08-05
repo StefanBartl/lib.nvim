@@ -42,6 +42,7 @@ function M.safe_call(fn, ...)
   return false, nil, tostring(result)
 end
 
+---@internal
 ---@param bufnr integer
 ---@return boolean valid
 ---@return string|nil error
@@ -58,6 +59,7 @@ local function validate_buffer(bufnr)
   return true, nil
 end
 
+---@internal
 ---@param winnr integer
 ---@return boolean valid
 ---@return string|nil error

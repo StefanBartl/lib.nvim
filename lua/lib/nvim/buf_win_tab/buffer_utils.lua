@@ -22,6 +22,7 @@ M.DEFAULT_EXCLUDE_FILETYPES = {
 
 -- Local helpers and types -----------------------------------------------------
 
+---@internal
 -- Utility: check if a value exists in list
 ---@param list string[] list to check
 ---@param v string value to look for

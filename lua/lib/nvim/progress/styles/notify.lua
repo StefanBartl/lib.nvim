@@ -8,6 +8,7 @@
 
 require("lib.nvim.progress.@types")
 
+---@internal
 ---@param spec Lib.Progress.Spec
 ---@return string
 local function render_text(spec)
@@ -26,6 +27,7 @@ local function render_text(spec)
 end
 
 ---Notify, tolerating backends that don't support `replace` or return nothing.
+---@internal
 ---@param text string
 ---@param level integer
 ---@param replace_id any|nil

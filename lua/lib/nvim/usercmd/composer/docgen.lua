@@ -12,6 +12,7 @@ local M = {}
 local BEGIN = "<!-- lib.nvim:composer -->"
 local END = "<!-- /lib.nvim:composer -->"
 
+---@internal
 --- Escape a pipe so a description never breaks a Markdown table row.
 ---@param s string
 ---@return string
@@ -82,6 +83,7 @@ function M.render(entries)
   return table.concat(parts, "\n")
 end
 
+---@internal
 --- Splice a generated block between BEGIN/END markers in existing content,
 --- appending the block (with markers) if they are absent.
 ---@param existing string

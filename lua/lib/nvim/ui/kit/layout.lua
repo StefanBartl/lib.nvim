@@ -15,6 +15,7 @@ local M = {}
 --- Border thickness assumed per slot when tiling (one cell all around).
 local BORDER = 1
 
+---@internal
 --- Resolve a size token against a total: a fraction (<=1) of `total`, a fixed
 --- integer (>1), or nil.
 ---@param size number|nil
@@ -30,6 +31,7 @@ local function resolve_size(size, total)
   return math.floor(size)
 end
 
+---@internal
 --- Distribute `avail` cells (minus gaps) across items whose `.size` is a
 --- fraction, a fixed int, or nil (nil items share the remainder).
 ---@param items { size: number|nil }[]
@@ -70,6 +72,7 @@ local function distribute(items, avail, gap)
   return sizes
 end
 
+---@internal
 --- Convert an outer slot rectangle (including border) to content geometry that
 --- `nvim_open_win` expects.
 ---@param x integer

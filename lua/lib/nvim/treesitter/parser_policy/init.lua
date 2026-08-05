@@ -54,6 +54,7 @@ local PENDING = {}
 ---@type table<string, boolean> languages the user said "never" to
 local DECLINED = {}
 
+---@internal
 --- Load a previously persisted declined-set, if any. Best-effort: a missing
 --- or unreadable cache file just leaves DECLINED empty, same as first run.
 ---@return nil
@@ -66,6 +67,7 @@ end
 
 load_declined()
 
+---@internal
 ---@return nil
 local function persist_declined()
   local ok, err = disk.save(CACHE_NS, { declined = DECLINED })
@@ -74,6 +76,7 @@ local function persist_declined()
   end
 end
 
+---@internal
 ---@param lang string
 ---@return nil
 local function decline(lang)
@@ -128,6 +131,9 @@ function M.reset_declined()
   disk.clear(CACHE_NS)
 end
 
+---@internal
+--- Kick off an actual parser installation via `nvim-treesitter`'s `install`
+--- API. No-op (silently) if that API isn't present/shaped as expected.
 ---@param lang string
 ---@param on_installed? fun(lang: string)
 ---@return nil
@@ -237,4 +243,5 @@ function M.ensure(lang, opts)
   })
 end
 
+---@type Lib.Treesitter.ParserPolicy
 return M

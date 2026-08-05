@@ -19,6 +19,7 @@ local close_on_focus_lost = require("lib.nvim.window.close_on_focus_lost")
 
 local M = {}
 
+---@internal
 ---Normalize a message (string or string[]) to buffer lines.
 ---@param message string|string[]
 ---@return string[]

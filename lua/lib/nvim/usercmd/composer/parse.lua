@@ -59,6 +59,7 @@ function M.usage(cmd_name, root)
   return table.concat(lines, "\n")
 end
 
+---@internal
 --- Bind leftover tokens to a route's arg schema, coercing each.
 ---@param route Lib.UserCmd.Composer.Route
 ---@param rest string[]
@@ -187,6 +188,7 @@ function M.dispatch(cmd_name, spec, root, opts, notify)
   return run(ctx)
 end
 
+---@internal
 --- Best-effort Visual-mode/column info for the range that was just given.
 ---
 --- `vim.fn.visualmode()`/the `'<`/`'>` marks are NOT proof that the CURRENT
@@ -212,6 +214,7 @@ end
 ---@type table<string, string>
 local MODE_NAME = { v = "charwise", V = "linewise", ["\22"] = "blockwise" }
 
+---@internal
 --- Accept either spelling in a `visual` allowlist, so a route can say
 --- `{ "blockwise" }` or `{ "\22" }` — the friendly name is what error
 --- messages use.

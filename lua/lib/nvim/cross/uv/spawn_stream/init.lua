@@ -34,6 +34,7 @@ end
 -- LuaJIT (Lua 5.1) has no `table.unpack`, only the global `unpack`.
 local unpack_fn = table.unpack or unpack
 
+---@internal
 ---Build a chunk consumer that emits complete lines and keeps the trailing
 ---partial line in a closure until more data (or EOF) arrives.
 ---@param emit fun(line: string)|nil

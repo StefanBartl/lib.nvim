@@ -97,6 +97,7 @@ function M.resolve(theme)
   return resolved
 end
 
+---@internal
 --- Define the Kit* highlight groups for a resolved theme (idempotent).
 ---@param resolved Lib.UI.Kit.Theme
 local function materialize(resolved)
@@ -196,6 +197,7 @@ function M.presets()
   return out
 end
 
+--- Name of the currently active default preset.
 ---@return string
 function M.default()
   return default_name

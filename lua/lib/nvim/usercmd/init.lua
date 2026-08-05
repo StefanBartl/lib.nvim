@@ -1,15 +1,15 @@
 ---@module 'lib.nvim.usercmd'
--- =========================================================
--- User command helper utilities.
---
--- Standardized wrapper around nvim_create_user_command with
--- sane defaults, defensive execution and LuaLS annotations.
--- =========================================================
+--- User command helper utilities.
+---
+--- Standardized wrapper around nvim_create_user_command with sane defaults,
+--- defensive execution and LuaLS annotations.
 
 local notify = require("lib.nvim.notify").create("[lib.nvim.usercmd]")
 
 local M = {}
 
+--- Register a user command with sane defaults (`force = true`, pcall-wrapped
+--- callback, `desc`/`nargs` defaults) and optional buffer-local registration.
 ---@param name string
 ---@param callback string|fun(args:Lib.UserCommand.Args)
 ---@param opts LibUserCommandOpts|nil
