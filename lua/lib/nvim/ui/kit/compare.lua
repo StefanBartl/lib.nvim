@@ -164,6 +164,7 @@ function M.open(opts)
     return nil
   end
   local clear = opts.clear
+  local on_compare = opts.on_compare
   local mark_key = opts.mark_key or "<M-c>"
   local title = opts.title or "Compare"
   local theme = opts.theme
@@ -507,6 +508,14 @@ function M.open(opts)
       map("n", "<Esc>", close_compare, mo)
     end
 
+    -- Fired once with BOTH picks before either pane renders: a caller whose
+    -- `render` draws something that depends on the *other* item too (e.g.
+    -- images.nvim scaling two images relative to each other, not each to
+    -- its own pane) has no other point in this contract where both items
+    -- are known at once — `render(item, surface)` only ever sees one.
+    if on_compare then
+      pcall(on_compare, a, b)
+    end
     pcall(render, a, surfaces.a)
     pcall(render, b, surfaces.b)
     surfaces.a:focus()
