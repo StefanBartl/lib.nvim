@@ -162,6 +162,7 @@
 ---@field query? fun(query: string, items: any[]): any[] # custom filter; default: substring match on format_item
 ---@field render fun(item: any, surface: Lib.UI.Kit.Surface)  # required: paint `item` into `surface`
 ---@field clear? fun()                                  # called once before every state transition
+---@field on_compare? fun(a: any, b: any)                # fires once with BOTH picks, before either render() call for COMPARE — the only point in this contract where a caller's render can know its sibling item, e.g. to scale two images relative to each other instead of each to its own pane
 ---@field mark_key? string                               # marks the first pick (default "<M-c>"); <CR> also works
 ---@field title? string
 ---@field theme? Lib.UI.Kit.ThemeArg

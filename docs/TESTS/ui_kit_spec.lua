@@ -879,12 +879,19 @@ return function(H)
   local cmp_renders = {}
   local cmp_clears = 0
   local cmp_close_calls, cmp_closed_a, cmp_closed_b = 0, nil, nil
+  local cmp_on_compare_calls, cmp_on_compare_a, cmp_on_compare_b = 0, nil, nil
+  -- Shared log across on_compare/render so "before either render" is a
+  -- provable order, not just an isolated fact about on_compare's own call
+  -- count — a caller like images.nvim relies on seeing it BEFORE render, not
+  -- merely on it firing at some point.
+  local cmp_order = {}
 
   local ch = assert(
     kit.compare({
       items = cmp_items,
       render = function(item, surf)
         table.insert(cmp_renders, item)
+        table.insert(cmp_order, "render:" .. item)
         surf:set_lines({ "preview:" .. item })
       end,
       clear = function()
@@ -893,6 +900,11 @@ return function(H)
       on_close = function(a, b)
         cmp_close_calls = cmp_close_calls + 1
         cmp_closed_a, cmp_closed_b = a, b
+      end,
+      on_compare = function(a, b)
+        cmp_on_compare_calls = cmp_on_compare_calls + 1
+        cmp_on_compare_a, cmp_on_compare_b = a, b
+        table.insert(cmp_order, "on_compare")
       end,
     }),
     "compare opens"
@@ -965,6 +977,18 @@ return function(H)
     vim.api.nvim_buf_get_lines(cmp_slots.b.bufnr, 0, -1, false)[1],
     "preview:cherry",
     "pane B renders the confirmed second item"
+  )
+  eq(cmp_on_compare_calls, 1, "on_compare fires exactly once")
+  eq(cmp_on_compare_a, "banana", "on_compare gets the marked item as a")
+  eq(cmp_on_compare_b, "cherry", "…and the confirmed second item as b")
+  -- The last three log entries, not the whole log: SEARCH-state moves also
+  -- rendered "apple"/"banana"/"cherry" for the live preview, so only the
+  -- tail proves the COMPARE-state ordering, not just that the strings occur.
+  local tail = { cmp_order[#cmp_order - 2], cmp_order[#cmp_order - 1], cmp_order[#cmp_order] }
+  eq(
+    table.concat(tail, ","),
+    "on_compare,render:banana,render:cherry",
+    "on_compare fires before either COMPARE-state render() call, with both panes still in a,b order"
   )
 
   ch.close()
