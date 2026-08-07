@@ -54,6 +54,22 @@ local PENDING = {}
 ---@type table<string, boolean> languages the user said "never" to
 local DECLINED = {}
 
+--- `kit.select` is backed by a single shared chooser instance (see
+--- lib.nvim.ui.kit.chooser: "single active chooser"); opening a second one
+--- while a first is still up silently closes the first instead of erroring.
+--- Without a queue here, two `FileType` events landing close together (e.g.
+--- a background buffer's filetype firing right after the file you actually
+--- opened) would race for that one chooser: whichever popup opens second
+--- wins the display AND your next keypress, while the first's prompt just
+--- vanishes as a silent cancel. Queueing so only one language ever prompts
+--- at a time turns that into two sequential, individually-answerable
+--- prompts instead.
+---@type { lang: string, opts: Lib.Treesitter.ParserPolicy.EnsureOpts }[]
+local QUEUE = {}
+
+---@type string|nil lang whose prompt currently owns the shared kit chooser
+local PROMPT_LANG = nil
+
 ---@internal
 --- Load a previously persisted declined-set, if any. Best-effort: a missing
 --- or unreadable cache file just leaves DECLINED empty, same as first run.
@@ -167,6 +183,77 @@ local function install(lang, on_installed)
   end)
 end
 
+---@internal
+--- Forward-declared: `process_queue` and `open_prompt` call each other
+--- (a resolved prompt processes the queue, which may open the next prompt).
+---@type fun(lang: string, opts: Lib.Treesitter.ParserPolicy.EnsureOpts)
+local open_prompt
+
+---@internal
+--- Pop the next queued language (if any) and prompt for it, once the shared
+--- chooser is free again. No-op if a prompt is still active or nothing is
+--- queued.
+---@return nil
+local function process_queue()
+  if PROMPT_LANG ~= nil then
+    return
+  end
+  local next_entry = table.remove(QUEUE, 1)
+  if next_entry then
+    open_prompt(next_entry.lang, next_entry.opts)
+  end
+end
+
+---@internal
+--- Open the install-prompt for `lang`. Assumes the shared kit chooser is
+--- free — callers must check/set `PROMPT_LANG` themselves (`ensure()` and
+--- `process_queue()` both do). Deferred one tick via `vim.schedule`: this
+--- fires from a `FileType` autocmd mid-`:edit`, and whatever opened the
+--- buffer (a picker, session restore, …) often does its own focus/cleanup
+--- on a scheduled tick right after — opening synchronously here would win
+--- focus only to have it stolen back a moment later. Scheduling puts us
+--- after that cleanup instead.
+---@param lang string
+---@param opts Lib.Treesitter.ParserPolicy.EnsureOpts
+---@return nil
+open_prompt = function(lang, opts)
+  PROMPT_LANG = lang
+  vim.schedule(function()
+    local ok_kit, kit = pcall(require, "lib.nvim.ui.kit")
+    if not ok_kit then
+      -- No UI toolkit available: fail safe to "do nothing" rather than a raw
+      -- vim.ui.select, so this module never assumes a specific picker stack.
+      PENDING[lang] = nil
+      PROMPT_LANG = nil
+      process_queue()
+      return
+    end
+
+    kit.popup({
+      type = "select",
+      message = ("Treesitter parser '%s' is not installed. Install now?"):format(lang),
+      selection = { "Yes", "No", ("Never for '%s'"):format(lang) },
+      respect_override = true,
+      on_select = function(choice)
+        PENDING[lang] = nil
+        PROMPT_LANG = nil
+        if choice == "Yes" then
+          install(lang, opts.on_installed)
+        elseif type(choice) == "string" and choice:match("^Never") then
+          decline(lang)
+        end
+        -- "No": deliberately no state change - ask again next time.
+        process_queue()
+      end,
+      on_cancel = function()
+        PENDING[lang] = nil
+        PROMPT_LANG = nil
+        process_queue()
+      end,
+    })
+  end)
+end
+
 ---Ensure a treesitter parser is installed for `lang`, following the current
 ---policy mode. No-op if `lang` is empty, already installed, not a known
 ---installable parser, already pending, or (in "prompt" mode) declined.
@@ -215,32 +302,13 @@ function M.ensure(lang, opts)
   end
 
   PENDING[lang] = true
-  local ok_kit, kit = pcall(require, "lib.nvim.ui.kit")
-  if not ok_kit then
-    -- No UI toolkit available: fail safe to "do nothing" rather than a raw
-    -- vim.ui.select, so this module never assumes a specific picker stack.
-    PENDING[lang] = nil
+  if PROMPT_LANG ~= nil then
+    -- A different language's prompt already owns the shared kit chooser;
+    -- queue instead of opening a second one that would silently clobber it.
+    QUEUE[#QUEUE + 1] = { lang = lang, opts = opts }
     return
   end
-
-  kit.popup({
-    type = "select",
-    message = ("Treesitter parser '%s' is not installed. Install now?"):format(lang),
-    selection = { "Yes", "No", ("Never for '%s'"):format(lang) },
-    respect_override = true,
-    on_select = function(choice)
-      PENDING[lang] = nil
-      if choice == "Yes" then
-        install(lang, opts.on_installed)
-      elseif type(choice) == "string" and choice:match("^Never") then
-        decline(lang)
-      end
-      -- "No": deliberately no state change - ask again next time.
-    end,
-    on_cancel = function()
-      PENDING[lang] = nil
-    end,
-  })
+  open_prompt(lang, opts)
 end
 
 ---@type Lib.Treesitter.ParserPolicy
