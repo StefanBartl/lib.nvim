@@ -94,6 +94,14 @@ end
 --- `vim.system`'s process detachment is unreliable for GUI processes on
 --- those platforms — `jobstart` with `detach = true` handles it correctly.
 --- Elsewhere, `vim.system(argv, { detach = true })` is used when available.
+---
+--- GUI processes only, on Windows. libuv's DETACHED_PROCESS leaves the child
+--- without standard handles, and a CONSOLE program launched this way exits
+--- before running anything: a detached `powershell.exe -Command Set-Content …`
+--- returns a valid job id and never writes the file. A GUI process does not
+--- care, which is why `explorer.exe` works here and PowerShell does not. For a
+--- console helper, spawn it normally (`vim.system(argv, {})`) and simply don't
+--- wait on it — see `lib.nvim.cross.reveal_in_fm`, which needs both.
 ---@param argv string[]
 ---@return boolean ok
 ---@return string|nil err
