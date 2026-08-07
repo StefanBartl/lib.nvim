@@ -287,6 +287,7 @@ Modules with dedicated `:help` documentation. Jump to one via its tag, or
     lib.nvim.store       project-scoped persistent state       |lib.nvim-store|
     lib.nvim.logger      structured logging / diagnostics / crash dumps |lib.nvim-logger|
     lib.nvim.harvest     collect from a scope, then show/export it |lib.nvim-harvest|
+    lib.nvim.deps        declare/detect/install external tools  |lib.nvim-deps|
 
 Every other module documents itself in a `README.md` next to its source; see
 the namespace tables under |lib.nvim-namespaces|.

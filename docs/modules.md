@@ -32,6 +32,7 @@
 | `lib.nvim.require`     | safe / dir / lazy require                           |
 | `lib.nvim.lua_ls`      | LuaLS: module path, `@module` annotation            |
 | `lib.nvim.core`        | misc Neovim helpers (`has_exec`, `simple_echo`)     |
+| [`lib.nvim.deps`](../lua/lib/nvim/deps/README.md) | optional external tools (pandoc, ImageMagick, tesseract, …): `health` (`:checkhealth` reporting, replaces the hand-rolled `check_exe` pattern), `spec` (`docs/INSTALL.md`/`docs/install.json` parsing + lookup, `why` enforced), `pm` (package-manager detection + command composition), `install` (pure plan + confirmed terminal handoff), `view` (the report), and the `:Lib deps show|install` routes — see [`docs/ROADMAP/dependency-installer.md`](ROADMAP/dependency-installer.md) |
 | `lib.nvim.neotree`     | neo-tree helpers: `node` (get_path / collect_nodes / extract_paths) |
 | [`lib.nvim.treesitter`](../lua/lib/nvim/treesitter/guard/README.md) | `guard`: filetype allowlist gate for treesitter activation; [`parser_policy`](../lua/lib/nvim/treesitter/parser_policy/README.md): prompt-or-auto-install policy for missing-but-available parsers, persisted "never" list ([`:help`](../doc/lib.nvim-treesitter.txt)) |
 | [`lib.nvim.system`](../lua/lib/nvim/system/README.md) | host env snapshot (`is_windows`/`is_wsl`/…, `home`, `pathsep`, `repo_base`) + Windows rpc pipe + `proc_trace` (blocking-call instrumentation for freeze diagnosis); opt-in `setup` |
@@ -71,6 +72,7 @@ and are generated on install by your plugin manager (see [Help docs](help.md)).
 - [`lib.nvim.lua_ls.insert.module_annotation`](../lua/lib/nvim/lua_ls/insert/module_annnotation/README.md)
 - [`lib.nvim.treesitter.guard`](../lua/lib/nvim/treesitter/guard/README.md) · [`lib.nvim.treesitter.parser_policy`](../lua/lib/nvim/treesitter/parser_policy/README.md)
 - [`lib.nvim.usercmd.composer`](../lua/lib/nvim/usercmd/composer/README.md)
+- [`lib.nvim.deps`](../lua/lib/nvim/deps/README.md)
 
 **`:help` pages**
 

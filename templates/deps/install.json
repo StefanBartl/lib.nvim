@@ -1,0 +1,22 @@
+{
+  "_comment": "Copy to <your-plugin>/docs/install.json and fill in one entry per optional tool. Parsed by lib.nvim.deps.spec.parse_json / lib.nvim.deps.spec.load — see lua/lib/nvim/deps/README.md in lib.nvim for the field reference. This variant has no line-oriented parsing limits (unlike docs/INSTALL.md's YAML-in-fence blocks): 'why' can be as long as it needs to be, and you can add extra fields beyond the ones below without breaking anything (unknown fields are ignored, not rejected). Prefer this over INSTALL.md when you want that, or the fastest possible parse (native vim.json.decode). Every entry needs: bin, a non-empty why, and at least one pkg entry. 'required' defaults to false if omitted; 'see' is optional. Remove this _comment key before shipping — it is not a recognized field and is ignored either way, kept here only as an inline note.",
+  "tools": [
+    {
+      "bin": "<executable-name>",
+      "required": false,
+      "why": "<one sentence (or more, this format allows it): what this unlocks, said plainly>",
+      "see": "<optional anchor into this plugin's own docs, e.g. '#ocr-backend'>",
+      "pkg": {
+        "apt": "<debian/ubuntu package name>",
+        "dnf": "<fedora package name>",
+        "pacman": "<arch package name>",
+        "zypper": "<opensuse package name>",
+        "apk": "<alpine package name>",
+        "brew": "<macos/homebrew package name>",
+        "winget": "<windows/winget package id>",
+        "scoop": "<windows/scoop package name>",
+        "choco": "<windows/chocolatey package name>"
+      }
+    }
+  ]
+}

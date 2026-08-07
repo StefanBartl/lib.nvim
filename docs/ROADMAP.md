@@ -65,6 +65,19 @@ lib.nvim was audited against the project checklists. Full per-rule status:
    question was resolved in favour of `logger`), all four originally-planned
    phases plus a global kill switch and tag filtering the concept did not
    anticipate. See `lua/lib/nvim/logger/README.md` and `doc/lib.nvim-logger.txt`.
+9. ~~External-tool installer~~ Done — shipped as `lib.nvim.deps`
+   (`health`/`spec`/`pm`/`install`/`view`) plus `:Lib deps show|install`.
+   Plugins declare optional tools in `docs/INSTALL.md` or `docs/install.json`
+   with a validation-enforced `why`; installs are composed for the host's
+   package manager, confirmed, and typed into a terminal the user submits.
+   Two design corrections came out of building it — routes on the existing
+   `:Lib` verb instead of a new `:LibDeps` command, and a lazy.nvim fallback
+   after `runtimepath` proved to miss 76 of 120 plugins. The concept doc
+   [dependency-installer.md](ROADMAP/dependency-installer.md) stays (contra
+   General §2): its Mason comparison, the measurement, and the rejected
+   alternatives are reasoning the module README deliberately doesn't carry.
+   **Not yet consumed by any plugin** — `pdfport.nvim` is the intended first
+   author.
 
 ---
 

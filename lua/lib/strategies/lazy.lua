@@ -314,6 +314,9 @@ LIB.resolve_log_level = lazy_module("lib.nvim.notify.resolve_log_level")
 -- === LOGGER ===
 LIB.logger = lazy_module("lib.nvim.logger")
 
+-- === DEPS ===
+LIB.deps = lazy_module("lib.nvim.deps")
+
 -- === TIME ===
 LIB.time_diff = lazy_module("lib.lua.time.diff")
 

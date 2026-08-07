@@ -135,6 +135,9 @@ LIB.resolve_log_level = require("lib.nvim.notify.resolve_log_level")
 -- === LOGGER ===
 LIB.logger = require("lib.nvim.logger")
 
+-- === DEPS ===
+LIB.deps = require("lib.nvim.deps")
+
 -- === LAZY ===
 LIB.lazy = require("lib.lua.lazy")
 
