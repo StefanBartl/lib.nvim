@@ -10,9 +10,11 @@
 --- file manager that supports it (see below).
 ---
 --- Platform dispatch:
----   Windows → explorer.exe /select,<path>   (file, reveal)
----             explorer.exe <dir>            (directory, or reveal = false)
----   WSL     → same, after converting the path via `wslpath -w`
+---   Windows → win_reveal.ps1, which runs explorer.exe /select,<path> (file,
+---             reveal) or explorer.exe <dir> and then RAISES the resulting
+---             window (see below)
+---   WSL     → the same script via powershell.exe, after converting both the
+---             target and the script path with `wslpath -w`
 ---   macOS   → open -R <file> / open <dir>
 ---   Linux   → the first available manager on PATH. Revealing a FILE only
 ---             uses a manager known to select it (nautilus, nemo, dolphin,
@@ -24,6 +26,22 @@
 --- Windows paths are converted to backslashes before dispatch: explorer.exe
 --- does not reliably accept forward slashes, and `/select,C:/x/y` in
 --- particular silently opens the wrong folder rather than failing.
+---
+--- Why Windows goes through a PowerShell script instead of spawning
+--- explorer.exe directly: spawning it directly DOES create the window, but
+--- the window never comes to the front, which is the only part the user can
+--- observe. Windows grants SetForegroundWindow only to the process that owns
+--- the foreground window; with Neovim in a terminal that process is the
+--- terminal host, not nvim.exe, so both nvim and the Explorer it spawns are
+--- denied and the new window is created behind everything. Under a GUI
+--- Neovim (Neovide, nvim-qt) nvim.exe *is* the foreground process and the
+--- identical code appeared to work — hence the long history of this bug
+--- being "fixed", then regressing with no reproducible pattern. win_reveal.ps1
+--- locates the window Explorer opened and raises it via AttachThreadInput;
+--- see its header for the mechanism.
+---
+--- If PowerShell or the script is unavailable, the direct explorer.exe spawn
+--- is still used: a window that opens behind other windows beats no window.
 ---
 --- Consolidates two independent copies of this dispatch: open.nvim's
 --- `handlers/filemanager.lua` and filetree.nvim's
@@ -69,6 +87,122 @@ end
 ---@return string
 local function to_win_sep(path)
   return (path:gsub("/", "\\"))
+end
+
+---@internal
+---Absolute path of win_reveal.ps1, which ships next to this file.
+---Resolved from this chunk's own source rather than `nvim_get_runtime_file`
+---so it also works when lib.nvim is loaded from outside 'runtimepath'.
+---@return string|nil
+local function win_script()
+  local source = debug.getinfo(1, "S").source
+  if source:sub(1, 1) ~= "@" then
+    return nil
+  end
+  local path = vim.fn.fnamemodify(source:sub(2), ":h") .. "/win_reveal.ps1"
+  local uv = vim.uv or vim.loop
+  return uv.fs_stat(path) and path or nil
+end
+
+---@internal
+---PowerShell executable for the raise step. Windows PowerShell is preferred
+---over pwsh purely because it is guaranteed to be present; either works.
+---@param wsl boolean
+---@return string|nil
+local function powershell(wsl)
+  for _, exe in ipairs(wsl and { "powershell.exe", "pwsh.exe" } or { "powershell", "pwsh" }) do
+    if vim.fn.executable(exe) == 1 then
+      return exe
+    end
+  end
+  return nil
+end
+
+---@internal
+---Spawn the PowerShell helper.
+---
+---Deliberately NOT `run.run_detached`: on Windows that uses
+---`jobstart(..., { detach = true })`, and libuv's DETACHED_PROCESS leaves the
+---child with no standard handles, whereupon powershell.exe exits before
+---running a single statement — verified with a detached one-liner whose only
+---job was to write a marker file, which never appeared. explorer.exe survives
+---that treatment because it is a GUI process; PowerShell does not. This is
+---exactly why the first version of this fix silently did nothing.
+---
+---An ordinary piped spawn is the right shape anyway: the helper lives a
+---second or two, nothing ever waits on it, and if Neovim quits in that window
+---there is no window left to raise.
+---@param argv string[]
+---@return boolean ok
+---@return string|nil err
+local function spawn_helper(argv)
+  if vim.system then
+    local ok, err = pcall(vim.system, argv, {})
+    if not ok then
+      return false, tostring(err)
+    end
+    return true, nil
+  end
+
+  -- Neovim < 0.10. The empty handlers are load-bearing: they are what makes
+  -- jobstart set up the pipes the child needs.
+  local jid = vim.fn.jobstart(argv, {
+    stdout_buffered = true,
+    stderr_buffered = true,
+    on_stdout = function() end,
+    on_stderr = function() end,
+  })
+  if jid <= 0 then
+    return false, "jobstart failed"
+  end
+  return true, nil
+end
+
+---@internal
+---Build the argv that reveals `win_path` through win_reveal.ps1, or nil when
+---PowerShell or the script is missing and the caller must fall back to a
+---bare explorer.exe spawn.
+---@param win_path string   Absolute Windows path, backslash-separated.
+---@param select boolean    Highlight a file inside its parent directory.
+---@param reuse boolean     Navigate an existing Explorer window instead.
+---@param wsl boolean
+---@return string[]|nil
+local function win_reveal_argv(win_path, select, reuse, wsl)
+  local exe = powershell(wsl)
+  local script = win_script()
+  if not exe or not script then
+    return nil
+  end
+
+  local script_arg ---@type string|nil
+  if wsl then
+    -- powershell.exe is a Windows process: it cannot read the /mnt/... form.
+    script_arg = require("lib.nvim.cross.fs.wslpath").to_win(script)
+    if not script_arg then
+      return nil
+    end
+  else
+    script_arg = to_win_sep(script)
+  end
+
+  local argv = {
+    exe,
+    "-NoProfile",
+    "-NonInteractive",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    script_arg,
+    "-Path",
+    win_path,
+  }
+  if select then
+    argv[#argv + 1] = "-Select"
+  end
+  if reuse then
+    argv[#argv + 1] = "-Reuse"
+  end
+  return argv
 end
 
 ---@internal
@@ -131,7 +265,9 @@ return function(target, opts)
   -- An explicit launcher override skips platform dispatch entirely: the user
   -- named the program, so the only sane thing to pass it is the path. A file
   -- still resolves to its parent directory when `reveal = false`, matching
-  -- what the built-in branches do.
+  -- what the built-in branches do. The Windows raise is skipped too — it
+  -- looks the window up as an Explorer folder window, which an arbitrary
+  -- third-party manager is not.
   if opts.command and opts.command ~= "" then
     local argv = type(opts.command) == "table" and vim.deepcopy(opts.command) or { opts.command }
     local arg = (file and not reveal) and parent_of(path) or path
@@ -142,15 +278,20 @@ return function(target, opts)
   end
 
   local cmd ---@type string[]|nil
+  local via_helper = false ---@type boolean
+
+  local reuse = opts.reuse == true
 
   if is_windows and not is_wsl then
-    local win = to_win_sep(path)
-    if file and reveal then
-      -- `/select,<path>` is one argument, comma included — a space after the
-      -- comma makes explorer.exe ignore the path and open Documents.
-      cmd = { "explorer.exe", "/select," .. win }
-    else
-      cmd = { "explorer.exe", file and to_win_sep(parent_of(path)) or win }
+    local select = file and reveal
+    local win = to_win_sep(select and path or (file and parent_of(path) or path))
+    cmd = win_reveal_argv(win, select, reuse, false)
+    via_helper = cmd ~= nil
+    if not cmd then
+      -- No PowerShell: the window will open behind other windows, but it
+      -- opens. `/select,<path>` is one argument, comma included — a space
+      -- after the comma makes explorer.exe ignore the path and open Documents.
+      cmd = { "explorer.exe", select and ("/select," .. win) or win }
     end
   elseif is_wsl then
     local unix_target = (file and not reveal) and parent_of(path) or path
@@ -162,10 +303,13 @@ return function(target, opts)
       if not cmd then
         return false, "wslpath conversion failed for: " .. unix_target
       end
-    elseif file and reveal then
-      cmd = { "explorer.exe", "/select," .. win }
     else
-      cmd = { "explorer.exe", win }
+      local select = file and reveal
+      cmd = win_reveal_argv(win, select, reuse, true)
+      via_helper = cmd ~= nil
+      if not cmd then
+        cmd = { "explorer.exe", select and ("/select," .. win) or win }
+      end
     end
   elseif is_macos then
     if file and reveal then
@@ -180,5 +324,8 @@ return function(target, opts)
     end
   end
 
+  if via_helper then
+    return spawn_helper(cmd)
+  end
   return run.run_detached(cmd)
 end
