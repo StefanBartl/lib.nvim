@@ -199,13 +199,14 @@ quietly dropped from the command.
 package manager, nothing missing, or nothing installable — it only ever
 opens a terminal when there is a real command to hand over.
 
-## `lib.nvim.deps.view` — the report
+## `lib.nvim.deps.view` — the report, and installing from it
 
 ```lua
 local view = require("lib.nvim.deps.view")
 
-view.lines("pdfport.nvim", result)   --> string[]  (pure, testable)
-view.show("pdfport.nvim", result)    --> renders into a named scratch split
+view.lines("pdfport.nvim", result)         --> string[]  (pure, testable)
+view.show("pdfport.nvim", result)          --> popup (kit.viewer) or a scratch split fallback
+view.render("pdfport.nvim", result, opts, ui)  --> { lines, line_tools } — the overlay `show` builds on
 ```
 
 Missing-and-required sorts first, then merely-missing, then present — the
@@ -213,3 +214,24 @@ reason to open this view is to find what isn't there. A `why` under 20
 characters gets a visible nudge: the parser can enforce that `why` exists,
 but not that it says anything useful, so that judgement is surfaced where a
 plugin author will see it rather than pretended to be validation.
+
+`show()` opens a `lib.nvim.ui.kit` `viewer` popup when kit is installed
+(soft dependency — falls back to a plain read-only scratch split,
+`view.show_split`, otherwise), with three keymaps:
+
+| Key | Effect |
+|---|---|
+| `i` | Install the tool under the cursor |
+| `<CR>` | Expand/collapse that tool's install output |
+| `I` | Install everything missing |
+| `q` / `<Esc>` | Close |
+
+`i` does not always run inline. A package manager that needs root
+(`pm.needs_terminal`) has no interactive stdin to answer a `sudo` password
+prompt from a plain backgrounded job, so that case still confirms and hands
+off to a real terminal via `deps.install.run` — the same safety rule as the
+bulk install, just reached from a different key. Only managers that don't
+need elevation (brew, scoop, most winget) install inline, streaming
+stdout/stderr into the popup live via `lib.nvim.cross.uv.spawn_stream`, and
+flip that tool's line from `[missing]` to `[ok]` the moment the install
+finishes.

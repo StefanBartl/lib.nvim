@@ -32,6 +32,18 @@ function M.first_available(candidates)
   return nil
 end
 
+---Drop `bin`'s memoized `has_exec` result, so the next call re-probes PATH.
+---For the one legitimate case where "not found" can go stale within a
+---session: something installed `bin` after `has_exec` first cached it —
+---`lib.nvim.deps.view`'s inline install flips a tool's status line from
+---`[missing]` to `[ok]` this way once its install finishes. Not needed for
+---the opposite direction (PATH losing a binary mid-session is not a case
+---any known caller re-checks).
+---@param bin string
+function M.forget_exec(bin)
+  exec_cache[bin] = nil
+end
+
 M.simple_echo = lazy.require("lib.nvim.core.simple_echo")
 
 ---@type Lib.Nvim

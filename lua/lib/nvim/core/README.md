@@ -20,6 +20,16 @@ and returns the first hit (also benefiting from that cache), or `nil` if none
 of them are on `PATH`.
 
 ```lua
+core.forget_exec("pdftotext")   -- drop the cached result; next has_exec re-probes
+```
+
+For the one case a memoized "not found" can go stale within a single Neovim
+session: something installs the binary mid-session and the caller wants the
+next check to see it. `lib.nvim.deps.view`'s inline `i`-to-install flips a
+tool's status line this way once its install finishes — without it, a
+just-installed tool would still read as missing until Neovim restarted.
+
+```lua
 core.simple_echo("All done.")
 core.simple_echo("File not found.", "WarningMsg", true)   -- highlighted + err flag
 ```

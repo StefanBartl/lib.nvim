@@ -313,6 +313,20 @@ why: "No pkg given, should fail."
     )
 
     eq(pm.render({ "a b", "c" }), '"a b" c', "pm.render: quotes only tokens that need it")
+
+    eq(type(pm.is_root()), "boolean", "pm.is_root: always returns a boolean")
+    eq(
+      pm.needs_terminal(brew),
+      false,
+      "pm.needs_terminal: brew never needs root -> false regardless of is_root()"
+    )
+    if not pm.is_root() then
+      eq(
+        pm.needs_terminal(pm.get("apt")),
+        true,
+        "pm.needs_terminal: a root-requiring manager needs a terminal when not already root"
+      )
+    end
   end
 
   -- ------------------------------------------------------------------- install
@@ -479,6 +493,110 @@ why: "No pkg given, should fail."
       table.concat(empty, "\n"):match("declares no external tools"),
       "view.lines: empty spec says so rather than rendering a bare header"
     )
+  end
+
+  -- ---------------------------------------------------- view.render (ui state)
+  do
+    local view = require("lib.nvim.deps.view")
+    local brew = require("lib.nvim.deps.pm").get("brew")
+    local result = {
+      tools = {
+        {
+          bin = "ghostbin",
+          required = true,
+          why = "Testing streamed output.",
+          pkg = { brew = "ghost" },
+        },
+      },
+      errors = {},
+    }
+
+    -- render(..., {}) must equal lines() exactly: the interactive overlay
+    -- must not change anything when nothing is running.
+    eq(
+      table.concat(view.render("fixture", result, { manager = brew }, {}).lines, "\n"),
+      table.concat(view.lines("fixture", result, { manager = brew }), "\n"),
+      "view.render: empty ui table renders identically to lines()"
+    )
+
+    local ui = { ghostbin = { lines = {}, running = true, done = false, collapsed = false } }
+    local running = view.render("fixture", result, { manager = brew }, ui)
+    local running_text = table.concat(running.lines, "\n")
+    ok(running_text:match("installing…"), "view.render: running state shows an installing marker")
+    ok(running_text:match("<CR> to collapse"), "view.render: running+expanded offers to collapse")
+
+    -- line_tools must point back at the right tool for a line inside the
+    -- header block, so a keymap can resolve "which tool is the cursor on".
+    local header_idx
+    for i, l in ipairs(running.lines) do
+      if l:match("^%[MISSING") then
+        header_idx = i
+      end
+    end
+    ok(header_idx ~= nil, "view.render: found the tool's header line")
+    eq(
+      running.line_tools[header_idx] and running.line_tools[header_idx].bin,
+      "ghostbin",
+      "view.render: line_tools maps the header line back to its tool"
+    )
+    eq(running.line_tools[1], nil, "view.render: line_tools is nil for non-tool lines (the title)")
+
+    ui.ghostbin.lines = { "Downloading...", "Installing..." }
+    local with_output =
+      table.concat(view.render("fixture", result, { manager = brew }, ui).lines, "\n")
+    ok(with_output:match("| Downloading%.%.%."), "view.render: streamed lines appear, expanded")
+
+    ui.ghostbin.collapsed = true
+    local collapsed =
+      table.concat(view.render("fixture", result, { manager = brew }, ui).lines, "\n")
+    ok(not collapsed:match("Downloading"), "view.render: collapsed hides the streamed output")
+    ok(collapsed:match("<CR> to expand"), "view.render: collapsed offers to expand")
+
+    ui.ghostbin.running = false
+    ui.ghostbin.done = true
+    ui.ghostbin.exit_code = 0
+    ui.ghostbin.collapsed = false
+    local done_text =
+      table.concat(view.render("fixture", result, { manager = brew }, ui).lines, "\n")
+    ok(done_text:match("exit 0"), "view.render: done state shows the exit code")
+    ok(not done_text:match("installing…"), "view.render: done state no longer shows 'installing'")
+  end
+
+  -- --------------------------------------------------------------- forget_exec
+  -- End-to-end, not just "doesn't error": a binary that genuinely appears on
+  -- PATH mid-session must still read as missing until forget_exec clears the
+  -- cached miss — this is exactly the gap that made view.lua's inline
+  -- install leave a just-installed tool's line stuck on `[missing]`.
+  do
+    local core = require("lib.nvim.core")
+    local is_windows = require("lib.nvim.cross.platform.is_windows")()
+
+    local dir = vim.fn.tempname()
+    vim.fn.mkdir(dir, "p")
+    local name = "fx-forget-exec-probe"
+    local bin_path = dir .. "/" .. name .. (is_windows and ".cmd" or "")
+
+    ok(core.has_exec(name) == false, "forget_exec: not yet on PATH -> miss")
+
+    local f = io.open(bin_path, "w")
+    f:write(is_windows and "@echo off\r\n" or "#!/bin/sh\nexit 0\n")
+    f:close()
+    if not is_windows then
+      os.execute("chmod +x " .. bin_path)
+    end
+
+    local had_path = vim.env.PATH
+    vim.env.PATH = dir .. (is_windows and ";" or ":") .. had_path
+
+    ok(
+      core.has_exec(name) == false,
+      "forget_exec: cached miss survives PATH actually gaining the binary"
+    )
+    core.forget_exec(name)
+    ok(core.has_exec(name) == true, "forget_exec: cleared -> re-probes and finds it")
+
+    vim.env.PATH = had_path
+    os.remove(bin_path)
   end
 
   -- -------------------------------------------------------------------- health

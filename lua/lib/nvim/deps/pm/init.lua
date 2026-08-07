@@ -116,11 +116,13 @@ function M.detect()
   return M.available()[1]
 end
 
----@internal
 ---True when the current process is already root, so `sudo` would be noise.
----`getuid` is absent on Windows, where the question doesn't arise.
+---`getuid` is absent on Windows, where the question doesn't arise. Exported
+---(not just internal) because `deps.view` needs the same answer to decide
+---whether a tool can be installed inline (no interactive stdin available for
+---a password prompt) or needs the terminal handoff — see `M.needs_terminal`.
 ---@return boolean
-local function is_root()
+function M.is_root()
   local uv = vim.uv or vim.loop
   return type(uv.getuid) == "function" and uv.getuid() == 0
 end
@@ -148,7 +150,7 @@ function M.commands(manager, packages)
   ---@return string[]
   local function one(pkgs)
     local argv = {}
-    if manager.needs_root and not is_root() and core.has_exec("sudo") then
+    if manager.needs_root and not M.is_root() and core.has_exec("sudo") then
       argv[#argv + 1] = "sudo"
     end
     argv[#argv + 1] = manager.bin
@@ -170,6 +172,17 @@ function M.commands(manager, packages)
     commands[#commands + 1] = one({ pkg })
   end
   return commands
+end
+
+---True when installing via `manager` needs an interactive terminal (a
+---privilege-elevation prompt this process cannot answer on its own) rather
+---than a plain backgrounded job. Used by `deps.view` to decide whether a
+---single-tool inline install is safe, or must fall back to
+---`deps.install.run`'s confirm-then-terminal handoff.
+---@param manager Lib.Deps.Manager
+---@return boolean
+function M.needs_terminal(manager)
+  return manager.needs_root and not M.is_root()
 end
 
 ---Render an argv list as a copy-pasteable shell string, quoting only the

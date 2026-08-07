@@ -409,13 +409,65 @@ Phasing (all shipped):
 
 ## Still worth doing
 
-- **A real consumer** (phase 5 above). Everything here is exercised by its
-  own spec suite and an end-to-end check, but no shipped plugin declares a
-  spec yet, so the format has not met a real author with real tools.
-- **`deps.health` migrations** in the ~10 plugins still hand-rolling
-  `check_exe` — mechanical, but each is a change in another repo.
+- **`deps.health` migrations** in the plugins still hand-rolling `check_exe`
+  — mechanical, but each is a change in another repo.
 - **Windows elevation** is untested in practice. `choco` wants an elevated
   shell and `winget` raises its own UAC prompt; the current design punts
   both to the terminal the user submits the command in, which is the right
   boundary but has only been reasoned about, not tried on a machine that
   actually needs elevation.
+
+## Follow-up: popup + inline install (`i`/`<CR>`/`I`)
+
+`pdfport.nvim` shipping the first real spec surfaced a UX request the
+original design didn't cover: a horizontal split for `:Lib deps show` reads
+fine but isn't "install from here" — the request was specifically for
+something closer to Mason's or LazyVim's install UI (press a key on an
+item, its install runs, output streams into the same panel, collapsible).
+
+**Shipped**, in `deps.view`:
+
+- `show()` now opens a `lib.nvim.ui.kit` `viewer` popup (soft dependency,
+  same as `pdfport.nvim`'s own mode picker) instead of a plain split, with
+  `show_split` kept as the explicit fallback for when `kit` isn't
+  installed.
+- `i` installs the tool under the cursor. This could not be a blanket
+  "run it in the background" the way Mason does, because Mason's installs
+  are sandboxed and need no privilege — several of `deps.pm`'s managers do
+  (`apt`, `dnf`, `pacman`, `zypper`, `apk`, and `choco`'s elevated shell).
+  `pm.needs_terminal(manager)` decides per-manager: no elevation needed →
+  install inline via `lib.nvim.cross.uv.spawn_stream`, output streamed live
+  into the popup; elevation needed → the existing confirm-then-terminal
+  handoff from `deps.install.run`, unchanged, just reachable from `i` too.
+  This is the same safety boundary as before, not a relaxation of it — the
+  inline path only exists where a plain backgrounded job was already safe.
+- `<CR>` expands/collapses a tool's streamed output; `I` runs the bulk
+  install unchanged.
+- A tool's line flips `[missing]` → `[ok]` live once its inline install
+  exits 0.
+
+**Two real bugs found while building this**, both worth recording because
+neither would show up in a casual read of the code:
+
+1. **`t[#t + 1] = nil` is a Lua no-op.** `render()`'s original line-to-tool
+   map built itself by appending to `line_tools` in lockstep with the
+   rendered `lines` array — but assigning `nil` never grows a table's
+   length, so every non-tool line (the header, blank lines, `##` section
+   titles) silently failed to reserve its slot, and every tool line after
+   it shifted one index earlier. The practical effect: `i`/`<CR>` on the
+   popup would have resolved to the *wrong tool* the moment any non-tool
+   line preceded a tool line — which is every real render, starting with
+   line 1. Fixed with an explicit line counter instead of `#line_tools + 1`
+   (`lua/lib/nvim/deps/view.lua`). Caught by a new test asserting
+   `line_tools[header_line].bin` actually matches, not just that the
+   header line exists.
+2. **`core.has_exec` memoizes "not found" forever**, which is correct for
+   its original callers (nothing they check installs mid-session) but wrong
+   for an inline install that just changed the answer. Without a fix, a
+   tool installed via `i` would report success but keep showing
+   `[missing]` until Neovim restarted. Added `lib.nvim.core.forget_exec(bin)`
+   — a narrow, single-purpose cache-buster — called once on a successful
+   inline install, right before the re-render that reads the header status.
+   Verified end-to-end (not just "doesn't error"): a test drops a real
+   executable onto `$PATH` mid-run and confirms the cached miss survives
+   until `forget_exec` clears it.
