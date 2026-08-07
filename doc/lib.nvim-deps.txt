@@ -1,0 +1,234 @@
+*lib.nvim-deps.txt*   Declare, detect and install a plugin's external tools
+
+lib.nvim.deps                                                *lib.nvim-deps*
+
+Plugins that degrade gracefully without optional CLI tools (pandoc,
+ImageMagick, tesseract, poppler-utils, ...) all end up hand-rolling the same
+two things: a `vim.fn.executable` probe in `health.lua`, and a hint string
+telling the user what to type. `lib.nvim.deps` replaces both with a declared
+spec the plugin ships, and adds the step nobody had: composing the correct
+install command for the host's package manager.
+
+Nothing here ever executes an install command. See |lib.nvim-deps-safety|.
+
+==============================================================================
+CONTENTS                                            *lib.nvim-deps-contents*
+
+  1. Declaring tools ......................... |lib.nvim-deps-declaring|
+       docs/INSTALL.md ....................... |lib.nvim-deps-markdown|
+       docs/install.json ..................... |lib.nvim-deps-json|
+  2. Commands ................................. |lib.nvim-deps-commands|
+  3. Safety model ............................. |lib.nvim-deps-safety|
+  4. Submodules ............................... |lib.nvim-deps-submodules|
+       deps.health ........................... |lib.nvim-deps-health|
+       deps.spec ............................. |lib.nvim-deps-spec|
+       deps.pm ............................... |lib.nvim-deps-pm|
+       deps.install .......................... |lib.nvim-deps-install|
+       deps.view ............................. |lib.nvim-deps-view|
+  5. Resolution ............................... |lib.nvim-deps-resolution|
+
+==============================================================================
+1. DECLARING TOOLS                                  *lib.nvim-deps-declaring*
+
+A plugin declares its optional external tools in ONE of two files, both under
+its own `docs/` directory. Copyable templates live in `templates/deps/` in
+the lib.nvim repo.
+
+Every tool entry needs three things, all enforced by validation:
+
+    bin     the executable probed on PATH
+    why     one sentence saying what this tool unlocks
+    pkg     package name per package manager, at least one entry
+
+`why` being REQUIRED is the point of the whole format, not a nicety: a
+manifest entry that doesn't say why a tool matters produces a nameless "tool
+missing" report, which is what the hand-rolled hint strings already did.
+`required` defaults to false; `see` is optional.
+
+docs/INSTALL.md                                      *lib.nvim-deps-markdown*
+
+Ordinary Markdown prose, plus one fenced `install-tool` block per tool. The
+block body is decoded with |lib.lua.yaml|'s minimal subset — no anchors, no
+flow style, no block scalars, so keep `why` on one line. Renders as normal
+documentation on GitHub, which is this variant's reason to exist. >
+
+    ```install-tool
+    bin: pdftotext
+    required: false
+    why: "Enables the fast plain-text extraction backend."
+    pkg:
+      apt: poppler-utils
+      brew: poppler
+      pacman: poppler
+    ```
+<
+docs/install.json                                        *lib.nvim-deps-json*
+
+Same fields as JSON, decoded with `vim.json.decode`. No line-oriented
+parsing limits: multi-line `why`, arbitrary extra metadata (unknown fields
+are ignored, not rejected), and the fastest parse. Preferred automatically
+when a plugin ships both. >
+
+    {
+      "tools": [
+        {
+          "bin": "pdftotext",
+          "required": false,
+          "why": "Enables the fast plain-text extraction backend.",
+          "pkg": { "apt": "poppler-utils", "brew": "poppler" }
+        }
+      ]
+    }
+<
+==============================================================================
+2. COMMANDS                                          *lib.nvim-deps-commands*
+
+Registered by `require("lib.nvim_usrcmds").setup()` via its `deps` option
+(default: true), as routes on the existing `:Lib` verb rather than a second
+top-level command name.
+
+                                                                  *:Lib-deps*
+:Lib deps show {plugin}     Tools, each with its `why`, present/missing on
+                            this host, and the command that would install
+                            it. Opens a scratch split. Missing-and-required
+                            sorts first, then missing, then present.
+
+:Lib deps show              List every plugin that ships a spec at all.
+
+:Lib deps install {plugin}  Compose the install command for this host's
+                            package manager, ask, then hand it to a
+                            terminal. See |lib.nvim-deps-safety|.
+
+`<Tab>` completes plugin names that actually ship a spec.
+
+==============================================================================
+3. SAFETY MODEL                                        *lib.nvim-deps-safety*
+
+Requiring any module under `lib.nvim.deps` registers nothing and touches
+nothing. `plan()` only probes. The single function that opens anything is
+`deps.install.run`, and its contract is:
+
+    1. Reachable only from an explicit user action (`:Lib deps install`),
+       never from `require` or a `setup()`.
+    2. Asks for confirmation, showing the exact command first.
+    3. Opens a terminal running your shell and TYPES the command into it
+       WITHOUT a trailing newline. You press Enter.
+
+Point 3 is why this does not use `jobstart`/`vim.system`: a backgrounded
+privileged install with its password prompt swallowed is the failure mode
+worth designing out. A `sudo` prompt is answered at a real terminal.
+
+Two further omissions, both deliberate:
+
+    No `-y`/`--noconfirm`   The package manager keeps its own confirmation
+                            prompt. Seeing what apt is about to pull in
+                            beats suppressing it for tidiness.
+
+    No elevation logic      Beyond prefixing `sudo` (only when the manager
+                            needs root, the process is not already root,
+                            and `sudo` is on PATH). On Windows, elevation
+                            is the package manager's own business.
+
+==============================================================================
+4. SUBMODULES                                      *lib.nvim-deps-submodules*
+
+deps.health                                            *lib.nvim-deps-health*
+
+Replaces the hand-rolled `check_exe`/`probe` loop in a plugin's own
+`health.lua`. Probes executables via |lib.nvim.core|'s memoized `has_exec`,
+and Python modules by shelling out to the first of python3/python/py. >lua
+
+    require("lib.nvim.deps.health").report({
+      { bin = "pdftotext", required = false, hint = "install poppler-utils" },
+      { python_module = "pdfplumber", hint = "pip install pdfplumber" },
+    })
+
+    -- or straight from a parsed spec, reusing each tool's `why` as the hint:
+    require("lib.nvim.deps.health").from_tools(result.tools)
+<
+deps.spec                                                *lib.nvim-deps-spec*
+>lua
+    local spec = require("lib.nvim.deps.spec")
+
+    spec.parse_markdown(text)   --> { tools = {...}, errors = {...} }
+    spec.parse_json(text)       --> same shape
+    spec.load(path)             --> dispatches on the .json extension
+    spec.find("pdfport.nvim")   --> path to that plugin's spec, or nil
+    spec.plugins()              --> every plugin shipping a spec, sorted
+<
+`errors` is never nil: a malformed or incomplete entry is reported rather
+than silently dropped, and a file can be partly valid.
+
+deps.pm                                                    *lib.nvim-deps-pm*
+>lua
+    local pm = require("lib.nvim.deps.pm")
+
+    pm.detect()      --> the manager to use here, or nil
+    pm.available()   --> every manager present, in this OS's preference order
+    pm.get("apt")    --> a manager definition by id, installed or not
+    pm.commands(pm.get("brew"), { "poppler" })  --> { { "brew", "install", ... } }
+    pm.render(argv)  --> a copy-pasteable shell string
+<
+Known ids, matching the keys a tool's `pkg` map uses: apt, dnf, pacman,
+zypper, apk, brew, winget, scoop, choco. WSL is treated as plain Linux —
+inside WSL the distro's own manager is the right answer.
+
+`commands` returns a LIST of argv lists, not one. `winget` cannot take
+several packages per invocation (extra tokens become query terms), so it
+gets one command per package while every other manager gets one combined
+command. Callers must not assume a single command.
+
+deps.install                                          *lib.nvim-deps-install*
+>lua
+    local install = require("lib.nvim.deps.install")
+
+    local plan = install.plan(result.tools)
+    -- plan.manager / present / missing / installable / unsupported
+    --    / packages / commands
+
+    install.run(plan)   -- asks, then hands off to a terminal
+<
+`plan()` is pure. `installable` vs `unsupported` splits the missing tools by
+whether this host's manager has a declared package name, so a tool with no
+`brew` entry is reported rather than quietly dropped from the command.
+
+`run()` returns false — with a notification, opening nothing — when there is
+no package manager, nothing missing, or nothing installable.
+
+deps.view                                                *lib.nvim-deps-view*
+>lua
+    require("lib.nvim.deps.view").lines("pdfport.nvim", result)  --> string[]
+    require("lib.nvim.deps.view").show("pdfport.nvim", result)
+<
+`lines()` is pure and does the whole job; `show()` only puts its output in a
+named scratch split. A `why` under 20 characters gets a visible nudge: the
+parser can enforce that `why` exists, but not that it says anything useful,
+so that judgement is surfaced where the plugin author will see it instead of
+pretended to be validation.
+
+==============================================================================
+5. RESOLUTION                                      *lib.nvim-deps-resolution*
+
+`spec.find` and `spec.plugins` resolve in two steps:
+
+    1. 'runtimepath' — manager-agnostic. Covers packer, vim-plug, mini.deps,
+       a symlinked dev checkout, and every LOADED lazy.nvim plugin. The
+       plugin name must match a whole path segment, so `pdfport.nvim` does
+       not match a directory named `my-pdfport.nvim-fork`.
+
+    2. lazy.nvim's plugin registry, consulted through `pcall` only if step 1
+       missed and lazy.nvim is present.
+
+Step 2 is not redundant. lazy.nvim puts a plugin on 'runtimepath' only once
+it actually LOADS. Measured against a real config while building this: 120
+plugins configured, 44 loaded at startup, 76 pending — and all 76 were
+resolvable through lazy's `dir` while being absent from 'runtimepath'. A
+runtimepath-only lookup would have silently failed for the majority of a
+lazy-loading user's plugins, and "silently" is what makes it serious: a spec
+that cannot be found looks exactly like a plugin that ships none.
+
+lib.nvim does not take a dependency on lazy.nvim for this — step 1 remains
+the primary path, and other managers put plugins on 'runtimepath' eagerly.
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:

@@ -20,6 +20,7 @@ local defaults = {
   cwd_here = true,
   powershell_profile = vim.fn.has("win32") == 1,
   lib_verb = true,
+  deps = true,
 }
 
 -- ── Shared actions ──────────────────────────────────────────────────────────
@@ -119,6 +120,15 @@ local function register_lib_verb(o)
       desc = "Open the active PowerShell profile",
       run = action_powershell_profile,
     }
+  end
+
+  -- `:Lib deps show|install` rather than a separate `:LibDeps` command: a
+  -- second top-level name for a subordinate feature is exactly the
+  -- `:VerbFeatureA`/`:VerbFeatureB` shape composer exists to replace.
+  if o.deps then
+    for _, route in ipairs(require("lib.nvim.deps").routes()) do
+      routes[#routes + 1] = route
+    end
   end
 
   require("lib.nvim.usercmd.composer").verb("Lib", {

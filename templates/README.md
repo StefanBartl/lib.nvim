@@ -87,3 +87,25 @@ Example: `migrate.nvim/docs/TESTS/run.lua` excludes `migrate.opt` /
 3. Keep the env var name `$LIB_NVIM_PATH` — it's the one convention every
    existing copy agrees on (a couple of older copies used `$REPOS_DIR`
    instead; prefer `$LIB_NVIM_PATH` for new ones).
+
+## `deps/` — declaring optional external tools
+
+Two starting points for a plugin's `docs/INSTALL.md` or `docs/install.json`
+— the declared-dependency spec `lib.nvim.deps.spec` parses (see
+[`lua/lib/nvim/deps/README.md`](../lua/lib/nvim/deps/README.md) and
+[`docs/ROADMAP/dependency-installer.md`](../docs/ROADMAP/dependency-installer.md)
+for the full design). Unlike the test-runner boilerplate above, these two
+*are* meant to be copied verbatim into a consuming plugin's own `docs/`
+directory and filled in, not adapted:
+
+- [`deps/INSTALL.md`](deps/INSTALL.md) — Markdown + fenced `install-tool`
+  blocks; readable as plain prose on GitHub.
+- [`deps/install.json`](deps/install.json) — same fields, JSON; no
+  line-oriented parsing limits (multi-line `why`, extra metadata), parsed
+  natively via `vim.json.decode`. `lib.nvim.deps.spec.find` prefers this one
+  when a plugin ships both.
+
+Both require the same three things per tool: `bin`, a non-empty `why`
+(validation fails without one — see the roadmap doc's "Describing tools"
+section for why that's enforced, not just documented), and at least one
+`pkg` entry.

@@ -61,6 +61,9 @@ local MODULE_MAP = {
   -- LOGGER
   logger = "lib.nvim.logger",
 
+  -- DEPS
+  deps = "lib.nvim.deps",
+
   -- LAZY/MEMO (eager - used internally)
   lazy = "lib.lua.lazy",
   memo = "lib.lua.memo",
