@@ -21,6 +21,19 @@ A "Never for `<lang>`" answer is remembered in `stdpath("cache")` via
 `lib.nvim.cache.disk` and survives restarts, so the same language never
 re-prompts. "No" is *not* remembered — it asks again next time.
 
+`lib.nvim.ui.kit`'s select prompt is backed by a single shared chooser
+instance, so only one language ever prompts at a time: if `ensure()` is
+called for a second language while a prompt is still up (e.g. a second
+`FileType` firing moments after the first, from a background buffer),
+it's queued rather than opened immediately — opening a second `kit.select`
+concurrently would silently close the first one instead of erroring, and
+you'd end up answering "Yes" to whichever language won the race. Queued
+languages prompt one after another as each prior one resolves. Each prompt
+is also deferred one event-loop tick (`vim.schedule`) past the triggering
+`FileType` autocmd, so it reliably grabs keyboard focus even when whatever
+opened the buffer (a picker, session restore, …) does its own focus
+cleanup right after.
+
 This module never calls `vim.treesitter.start()` itself. Callers pass
 `opts.on_installed` to `ensure()` and decide what "the parser just became
 available" means for their buffer(s).
