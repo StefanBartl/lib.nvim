@@ -8,6 +8,8 @@
 ---@field fs Lib.Cross.Fs
 ---@field separators Lib.Cross.Separators
 ---@field uv Lib.Cross.Uv
+---@field open_default fun(target: string): boolean, string|nil # Open a path/URL with the OS default application.
+---@field reveal_in_fm fun(target: string, opts?: Lib.Cross.RevealInFm.Opts): boolean, string|nil # Show a path in the system file manager.
 
 ---Libuv-backed process helpers.
 ---@class Lib.Cross.Uv

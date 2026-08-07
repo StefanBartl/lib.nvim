@@ -44,6 +44,7 @@ cross.run.run_detached(argv)
 cross.run.run_argv.run_blocking(argv, input)
 
 cross.open_default(target) -- open a path/URL with the OS default handler
+cross.reveal_in_fm(path, opts) -- show a path in the system file manager
 ```
 
 Note that `cross.fs.cwd` (`lib.nvim.cross.fs._cwd`) and `cross.uv.fs`

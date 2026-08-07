@@ -75,8 +75,27 @@ function M.candidates(root, arg_lead, cmd_line)
 
   -- Choosing a subcommand: at a node that has children and no positional args
   -- have been started yet.
+  --
+  -- A node can have BOTH literal children and a route of its own (the
+  -- `path = {}` root-route shape, e.g. `:Open [target] [scope]` alongside
+  -- `:Open viewer …`). Offering only the literals there hides every value the
+  -- root route accepts — `:Open <Tab>` would list just "viewer" and none of
+  -- the handler names. So the literals come first, then the route's own first
+  -- positional; `tree.walk` still resolves an actually-typed literal to the
+  -- child route, so the two never conflict at execution time.
   if next(node.children) ~= nil and filled == 0 then
     out = argtypes.prefix(tree.child_keys(node), arg_lead)
+    if route and route.args and route.args[1] then
+      local seen = {}
+      for _, c in ipairs(out) do
+        seen[c] = true
+      end
+      for _, c in ipairs(argtypes.complete(arg_lead, route.args[1])) do
+        if not seen[c] then
+          out[#out + 1] = c
+        end
+      end
+    end
   elseif route and route.args then
     -- Otherwise we are completing a positional argument of the matched route.
     local spec = route.args[filled + 1]

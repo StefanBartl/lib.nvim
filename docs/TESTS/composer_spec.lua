@@ -126,6 +126,39 @@ return function(H)
     eq(comp("", "Demo buffer "), "", "complete: no args past a leaf with no schema")
   end
 
+  -- Root route (`path = {}`) coexisting with literal children: the first slot
+  -- must offer BOTH, or every value the root route accepts is invisible.
+  -- This is open.nvim's `:Open [target] [scope]` next to `:Open viewer …`,
+  -- where completing only "viewer" hid all handler names.
+  do
+    local mixed = tree.build({
+      {
+        path = {},
+        args = {
+          {
+            name = "target",
+            type = "STRING",
+            enum = { "browser", "filemanager" },
+          },
+        },
+        run = function() end,
+      },
+      { path = { "viewer" }, run = function() end },
+    })
+    local got = join(complete.candidates(mixed, "", "Demo "))
+    eq(got, "viewer,browser,filemanager", "complete: literals first, then the root route's own arg")
+    eq(
+      join(complete.candidates(mixed, "f", "Demo f")),
+      "filemanager",
+      "complete: root-route arg is prefix-filtered alongside the literals"
+    )
+    eq(
+      join(complete.candidates(mixed, "v", "Demo v")),
+      "viewer",
+      "complete: a literal still wins its own prefix"
+    )
+  end
+
   -- committed-token extraction (bang + trailing lead handling)
   do
     eq(

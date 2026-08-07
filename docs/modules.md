@@ -67,6 +67,7 @@ and are generated on install by your plugin manager (see [Help docs](help.md)).
 - [`lib.nvim.fs.chdir`](../lua/lib/nvim/fs/chdir/README.md) · [`lib.nvim.fs.dir_guard`](../lua/lib/nvim/fs/dir_guard/README.md)
 - [`lib.nvim.fs.open.url.system_opener`](../lua/lib/nvim/fs/open/url/system_opener/README.md) · [`lib.nvim.cross.uv.spawn_stream`](../lua/lib/nvim/cross/uv/spawn_stream/README.md)
 - [`lib.nvim.cross.fs.mutate`](../lua/lib/nvim/cross/fs/mutate/README.md) · [`lib.nvim.cross.fs.lock`](../lua/lib/nvim/cross/fs/lock/README.md)
+- [`lib.nvim.cross.open_default`](../lua/lib/nvim/cross/open_default/README.md) · [`lib.nvim.cross.reveal_in_fm`](../lua/lib/nvim/cross/reveal_in_fm/README.md)
 - [`lib.nvim.lua_ls.insert.module_annotation`](../lua/lib/nvim/lua_ls/insert/module_annnotation/README.md)
 - [`lib.nvim.treesitter.guard`](../lua/lib/nvim/treesitter/guard/README.md) · [`lib.nvim.treesitter.parser_policy`](../lua/lib/nvim/treesitter/parser_policy/README.md)
 - [`lib.nvim.usercmd.composer`](../lua/lib/nvim/usercmd/composer/README.md)

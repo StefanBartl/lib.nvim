@@ -48,5 +48,6 @@ M.run = {
 }
 
 M.open_default = require("lib.nvim.cross.open_default")
+M.reveal_in_fm = require("lib.nvim.cross.reveal_in_fm")
 
 return M
