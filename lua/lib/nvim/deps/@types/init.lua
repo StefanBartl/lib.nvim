@@ -75,16 +75,29 @@
 ---@field detect fun(): Lib.Deps.Manager|nil
 ---@field commands fun(manager: Lib.Deps.Manager, packages: string[]): string[][]
 ---@field render fun(argv: string[]): string
+---@field is_root fun(): boolean
+---@field needs_terminal fun(manager: Lib.Deps.Manager): boolean
 
 ---`lib.nvim.deps.install` module surface: plan computation + confirmed terminal handoff.
 ---@class Lib.Deps.Install
 ---@field plan fun(tools: Lib.Deps.Tool[], opts?: { manager?: Lib.Deps.Manager }): Lib.Deps.Plan
 ---@field run fun(plan: Lib.Deps.Plan, opts?: { confirm?: boolean }): boolean
 
+---Live install state for one tool, keyed by `tool.bin` in `deps.view`'s
+---`ui` tables.
+---@class Lib.Deps.View.ToolUiState
+---@field lines string[] streamed stdout/stderr lines, in arrival order
+---@field running boolean
+---@field done boolean
+---@field exit_code integer|nil
+---@field collapsed boolean
+
 ---`lib.nvim.deps.view` module surface: render/show a plugin's tool report.
 ---@class Lib.Deps.View
+---@field render fun(plugin_name: string, result: Lib.Deps.ParseResult, opts?: { manager?: Lib.Deps.Manager }, ui?: table<string, Lib.Deps.View.ToolUiState>): { lines: string[], line_tools: (Lib.Deps.Tool|nil)[] }
 ---@field lines fun(plugin_name: string, result: Lib.Deps.ParseResult, opts?: { manager?: Lib.Deps.Manager }): string[]
----@field show fun(plugin_name: string, result: Lib.Deps.ParseResult): integer, integer
+---@field show_split fun(plugin_name: string, result: Lib.Deps.ParseResult): integer, integer
+---@field show fun(plugin_name: string, result: Lib.Deps.ParseResult, opts?: { manager?: Lib.Deps.Manager }): integer, integer
 
 ---`lib.nvim.deps` module surface.
 ---@class Lib.Deps

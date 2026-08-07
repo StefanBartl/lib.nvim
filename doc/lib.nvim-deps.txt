@@ -101,6 +101,22 @@ top-level command name.
 
 `<Tab>` completes plugin names that actually ship a spec.
 
+`:Lib deps show` opens a popup (via |lib.nvim.ui.kit|'s `viewer`, when
+installed — falls back to a read-only scratch split otherwise) with three
+keymaps:
+
+    i        Install the tool under the cursor. Inline with live streamed
+             output when the package manager needs no elevation (brew,
+             scoop, most winget); otherwise the same confirm-then-terminal
+             handoff as bulk install, since a backgrounded job has no
+             interactive stdin for a sudo password. See |lib.nvim-deps-safety|.
+    <CR>     Expand/collapse that tool's install output.
+    I        Install everything missing (same as `:Lib deps install`).
+    q/<Esc>  Close.
+
+A tool's line flips from `[missing]` to `[ok]` the moment its inline
+install finishes successfully.
+
 ==============================================================================
 3. SAFETY MODEL                                        *lib.nvim-deps-safety*
 
