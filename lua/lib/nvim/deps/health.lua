@@ -13,6 +13,7 @@ local health = vim.health or require("health")
 local h_ok = health.ok or health.report_ok
 local h_warn = health.warn or health.report_warn
 local h_err = health.error or health.report_error
+local h_info = health.info or health.report_info
 
 ---@internal
 ---@param entry Lib.Deps.HealthEntry
@@ -73,6 +74,37 @@ function M.from_tools(tools)
     }
   end
   M.report(entries)
+end
+
+---Locate, parse, and report `plugin_name`'s own declared-tools spec via
+---`:checkhealth`, ending with a pointer to `:Lib deps show` for the fuller
+---report (why each tool matters, the install command). This is the
+---one-line hook a plugin's own `health.lua` adds, instead of re-listing its
+---tools by hand a second time:
+---
+---   require("lib.nvim.deps.health").report_for("pdfport.nvim")
+---
+---Silently does nothing when the plugin ships no spec (`spec.find` finds
+---neither `docs/install.json` nor `docs/INSTALL.md`) or the spec declares no
+---tools — a `:checkhealth` section for a plugin that declares nothing
+---shouldn't print anything.
+---@param plugin_name string
+function M.report_for(plugin_name)
+  local spec = require("lib.nvim.deps.spec")
+  local path = spec.find(plugin_name)
+  if not path then
+    return
+  end
+
+  local result = spec.load(path)
+  if not result or #result.tools == 0 then
+    return
+  end
+
+  M.from_tools(result.tools)
+  h_info(
+    ("Run :Lib deps show %s for why each tool matters and how to install it."):format(plugin_name)
+  )
 end
 
 ---@type Lib.Deps.Health

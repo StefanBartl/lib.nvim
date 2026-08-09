@@ -417,6 +417,52 @@ Phasing (all shipped):
   boundary but has only been reasoned about, not tried on a machine that
   actually needs elevation.
 
+## Follow-up: first-run popup + a `:checkhealth` hook
+
+Second UX request, after the popup/inline-install one below: the normal
+flow for installing one of these plugins is "see it on GitHub, copy the
+lazy.nvim spec, paste it into `plugins/`, restart" — nowhere in that flow
+does anyone read a README section about optional tools unless something
+breaks later and they go looking. The ask: the *first* time a plugin
+initializes after being installed, show the tools popup automatically, so
+the information arrives without the user having to know to ask for it.
+Ongoing, `:Lib deps show <plugin>` stays the way to check again.
+
+**Where this could have gone wrong**, and why it doesn't: an automatic
+popup is a real UI side effect, which sits right up against this module's
+core rule ("requiring a module here never touches the user's editor by
+itself"). The rule survives intact because the trigger is `deps.first_run
+.show_once`, called from the *consuming plugin's own* `setup()` — an
+explicit action the user already took (installing and configuring the
+plugin), not something `lib.nvim.deps` decided to do on `require`. Nothing
+under `lib.nvim.deps` calls `show_once` on anyone's behalf.
+
+**Shipped:**
+
+- `lib.nvim.deps.first_run` — `show_once(plugin_name, opts)`, persisted via
+  `lib.nvim.cache.disk` (so "already shown" survives a restart, which is
+  the whole point). No-op after the first call, including when there was
+  nothing to show — a plugin with no spec, an empty spec, or nothing
+  currently missing all still get marked seen, because this is a one-time
+  welcome, not a watcher that might pop up later once something *becomes*
+  missing.
+- `deps.show_once` — a two-line re-export at the top level, since
+  "`require("lib.nvim.deps").show_once(...)`" is the form a consuming
+  plugin's `setup()` actually calls.
+- `:Lib deps reset-first-run [plugin]` — clears the "seen" state, mainly
+  for testing the flow without reinstalling.
+- `deps.health.report_for(plugin_name)` — the `:checkhealth` half of the
+  same idea (the user's own follow-up question): one line a plugin's
+  `health.lua` adds, which locates and reports the plugin's own spec (same
+  as `from_tools`, but without the plugin having to load its own spec by
+  hand first) and points at `:Lib deps show` for the fuller report.
+
+**Integration is three independent opt-ins** (ship a spec / add the
+`health.lua` line / add the `setup()` line) — a plugin can take any subset.
+None of the three make a spec mandatory, and skipping all three leaves a
+plugin behaving exactly as it did before `lib.nvim.deps` existed. Full
+reference: `:help lib.nvim-deps-integrating`.
+
 ## Follow-up: popup + inline install (`i`/`<CR>`/`I`)
 
 `pdfport.nvim` shipping the first real spec surfaced a UX request the

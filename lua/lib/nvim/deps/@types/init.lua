@@ -48,6 +48,7 @@
 ---@class Lib.Deps.Health
 ---@field report fun(entries: Lib.Deps.HealthEntry[]): nil
 ---@field from_tools fun(tools: Lib.Deps.Tool[]): nil report health directly from a parsed spec's `tools`
+---@field report_for fun(plugin_name: string): nil locate + report a plugin's own spec, plus a pointer to `:Lib deps show`
 
 ---One OS package manager: how to detect it and how to compose an install command.
 ---@class Lib.Deps.Manager
@@ -92,6 +93,14 @@
 ---@field exit_code integer|nil
 ---@field collapsed boolean
 
+---`lib.nvim.deps.first_run` module surface: show a plugin's deps popup once
+---ever, persisted across restarts.
+---@class Lib.Deps.FirstRun
+---@field seen fun(plugin_name: string, cache_opts?: Lib.Cache.Opts): boolean
+---@field mark_seen fun(plugin_name: string, cache_opts?: Lib.Cache.Opts)
+---@field reset fun(plugin_name?: string, cache_opts?: Lib.Cache.Opts)
+---@field show_once fun(plugin_name: string, opts?: { manager?: Lib.Deps.Manager, cache?: Lib.Cache.Opts }): boolean
+
 ---`lib.nvim.deps.view` module surface: render/show a plugin's tool report.
 ---@class Lib.Deps.View
 ---@field render fun(plugin_name: string, result: Lib.Deps.ParseResult, opts?: { manager?: Lib.Deps.Manager }, ui?: table<string, Lib.Deps.View.ToolUiState>): { lines: string[], line_tools: (Lib.Deps.Tool|nil)[] }
@@ -106,6 +115,8 @@
 ---@field pm Lib.Deps.Pm
 ---@field install Lib.Deps.Install
 ---@field view Lib.Deps.View
+---@field first_run Lib.Deps.FirstRun
+---@field show_once fun(plugin_name: string, opts?: { manager?: Lib.Deps.Manager, cache?: Lib.Cache.Opts }): boolean
 ---@field plugins fun(): string[] every plugin on runtimepath shipping a deps spec
 ---@field show fun(plugin_name: string): boolean render one plugin's tool report in a scratch split
 ---@field install_for fun(plugin_name: string): boolean plan + confirm + hand off to a terminal
