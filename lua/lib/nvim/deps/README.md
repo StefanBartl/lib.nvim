@@ -19,7 +19,8 @@ Requiring this module registers nothing and touches nothing.
 | `deps.spec` | Parse + validate `docs/INSTALL.md` / `docs/install.json`; locate them for any plugin |
 | `deps.pm` | Package-manager detection + install-command composition |
 | `deps.install` | Install-plan computation (pure) and the confirmed terminal handoff |
-| `deps.view` | Render a plugin's tool report into lines / a scratch split |
+| `deps.view` | Render a plugin's tool report into lines / a popup with install keymaps |
+| `deps.first_run` | Show a plugin's tool report once, ever — for a consuming plugin's own `setup()` |
 
 ## `:Lib deps` — the user-facing surface
 
@@ -146,6 +147,56 @@ pkg:
   ]
 }
 ```
+
+## `lib.nvim.deps.health.report_for` — the `:checkhealth` hook
+
+The one-line addition a plugin's own `health.lua` makes instead of
+re-listing its tools a second time by hand:
+
+```lua
+-- inside your plugin's health.lua, in M.check():
+require("lib.nvim.deps.health").report_for("pdfport.nvim")
+```
+
+Locates and parses the plugin's own spec, reports each tool the same way
+`from_tools` does, and adds one line pointing at `:Lib deps show
+<plugin>` for the fuller report. Silently does nothing if the plugin ships
+no spec — a `:checkhealth` section for a plugin that declares nothing
+shouldn't print anything.
+
+## `lib.nvim.deps.first_run` — "tell me on first install, not from the README"
+
+The flow this exists for: install a plugin via lazy.nvim, restart Neovim,
+and the *first* time that plugin's `setup()` runs, see a popup explaining
+which tools it wants and why — instead of reading the README and copying
+install commands by hand. Every subsequent restart, `:Lib deps show
+<plugin>` is the ongoing way to see the same report.
+
+```lua
+-- inside your plugin's own setup(), typically near the end:
+function M.setup(opts)
+  ...
+  require("lib.nvim.deps").show_once("pdfport.nvim")
+end
+```
+
+`show_once` is a no-op after its first call for a given plugin name — the
+"seen" state persists across restarts (`lib.nvim.cache.disk`, namespace
+`lib.nvim.deps.first_run`), and past-tense-only: nothing here re-checks or
+re-notifies later just because a tool that was present becomes missing.
+It's also a no-op, but still marks the plugin as seen, when there's simply
+nothing to show — no spec file, an empty spec, or (once shown) a spec whose
+declared tools are all already present.
+
+This is the one call in `lib.nvim.deps` reachable from a place that isn't a
+`:Lib deps` command — deliberately safe to be, since the trigger is still
+an explicit action by the consuming plugin (`setup()`), never `require`,
+and the popup itself only ever *shows* — installing anything still goes
+through the same `i`/confirm/terminal path as `:Lib deps show` always has.
+
+`:Lib deps reset-first-run [plugin]` clears the "seen" state (one plugin,
+or every plugin with no argument) — mainly useful for testing this exact
+flow without reinstalling the plugin.
 
 ## `lib.nvim.deps.pm` — package managers
 

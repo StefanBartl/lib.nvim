@@ -10,6 +10,7 @@ lib.nvim utility commands
 | --- | --- |
 | `:Lib cwd-here` | lcd to the current buffer's directory |
 | `:Lib deps install {plugin:DEPS_PLUGIN}` | Offer to install a plugin's missing external tools (asks first) |
+| `:Lib deps reset-first-run [{plugin:DEPS_PLUGIN}]` | Forget that a plugin's (or every plugin's) first-run popup was already shown |
 | `:Lib deps show [{plugin:DEPS_PLUGIN}]` | List a plugin's declared external tools, why each matters, and what's missing |
 | `:Lib helptags` | Regenerate all helptags now |
 | `:Lib ps-profile` | Open the active PowerShell profile |

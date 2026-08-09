@@ -25,7 +25,9 @@ CONTENTS                                            *lib.nvim-deps-contents*
        deps.pm ............................... |lib.nvim-deps-pm|
        deps.install .......................... |lib.nvim-deps-install|
        deps.view ............................. |lib.nvim-deps-view|
+       deps.first_run ........................ |lib.nvim-deps-first_run|
   5. Resolution ............................... |lib.nvim-deps-resolution|
+  6. Integrating a plugin ...................... |lib.nvim-deps-integrating|
 
 ==============================================================================
 1. DECLARING TOOLS                                  *lib.nvim-deps-declaring*
@@ -222,6 +224,26 @@ parser can enforce that `why` exists, but not that it says anything useful,
 so that judgement is surfaced where the plugin author will see it instead of
 pretended to be validation.
 
+deps.first_run                                      *lib.nvim-deps-first_run*
+>lua
+    require("lib.nvim.deps").show_once("pdfport.nvim")
+<
+Shows a plugin's declared-tools popup once, ever — persisted across
+restarts via |lib.nvim.cache.disk| (namespace `lib.nvim.deps.first_run`).
+No-op on every call after the first, including when there was nothing to
+show (no spec, empty spec, or nothing declared is missing) — those still
+mark the plugin seen, since this is a one-time welcome, not an ongoing
+watcher. Call it from the CONSUMING PLUGIN's own `setup()`, never from
+`require` — see |lib.nvim-deps-integrating|.
+
+    require("lib.nvim.deps.first_run").seen(name)         --> boolean
+    require("lib.nvim.deps.first_run").mark_seen(name)
+    require("lib.nvim.deps.first_run").reset(name)        --> forget one, or all with no arg
+
+                                                    *:Lib-deps-reset-first-run*
+:Lib deps reset-first-run [plugin]  Forget the "seen" state so the popup
+                                    shows again on the next `show_once`.
+
 ==============================================================================
 5. RESOLUTION                                      *lib.nvim-deps-resolution*
 
@@ -245,6 +267,35 @@ that cannot be found looks exactly like a plugin that ships none.
 
 lib.nvim does not take a dependency on lazy.nvim for this — step 1 remains
 the primary path, and other managers put plugins on 'runtimepath' eagerly.
+
+==============================================================================
+6. INTEGRATING A PLUGIN                          *lib.nvim-deps-integrating*
+
+Three independent, optional additions — pick any subset:
+
+    1. Ship `docs/install.json` (or `docs/INSTALL.md`), see
+       |lib.nvim-deps-declaring|. Required for the other two to have
+       anything to show.
+
+    2. In the plugin's own `health.lua`, inside `M.check()`: >lua
+
+        require("lib.nvim.deps.health").report_for("your-plugin.nvim")
+<
+       One line, replaces re-listing the same tools by hand a second time.
+
+    3. In the plugin's own `setup()`, typically near the end: >lua
+
+        function M.setup(opts)
+          ...
+          require("lib.nvim.deps").show_once("your-plugin.nvim")
+        end
+<
+       Shows the popup once, ever, the first time the plugin initializes
+       after being installed. See |lib.nvim-deps-first_run|.
+
+None of these make a spec file mandatory, and none run at `require` time —
+a plugin with no spec, or that skips (2)/(3) entirely, behaves exactly as
+it did before `lib.nvim.deps` existed.
 
 ==============================================================================
 vim:tw=78:ts=8:ft=help:norl:

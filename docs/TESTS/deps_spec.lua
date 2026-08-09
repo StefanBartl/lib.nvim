@@ -599,6 +599,99 @@ why: "No pkg given, should fail."
     os.remove(bin_path)
   end
 
+  -- ----------------------------------------------------------------- first_run
+  do
+    local first_run = require("lib.nvim.deps.first_run")
+    local cache_dir = vim.fn.tempname()
+    local cache = { dir = cache_dir }
+
+    eq(first_run.seen("fx.nvim", cache), false, "first_run.seen: nothing recorded yet -> false")
+
+    -- No spec anywhere on runtimepath: show_once must still mark it seen
+    -- (so a plugin with no spec isn't re-resolved via spec.find on every
+    -- single startup) and must not open anything (returns false).
+    eq(
+      first_run.show_once("a-plugin-with-no-spec-fx", { cache = cache }),
+      false,
+      "show_once: no spec found -> false"
+    )
+    eq(
+      first_run.seen("a-plugin-with-no-spec-fx", cache),
+      true,
+      "show_once: still marks seen even with nothing to show"
+    )
+
+    -- A real fixture plugin dir on rtp, with one MISSING tool -> show_once
+    -- must report true (a popup would have opened) exactly once.
+    local base = vim.fn.tempname()
+    local plugin_dir = base .. "/first-run-fixture.nvim"
+    vim.fn.mkdir(plugin_dir .. "/docs", "p")
+    local f = io.open(plugin_dir .. "/docs/install.json", "w")
+    f:write(vim.json.encode({
+      tools = {
+        {
+          bin = "a-binary-that-should-not-exist-anywhere-fr",
+          required = true,
+          why = "Fixture for first_run.show_once.",
+          pkg = { apt = "ghost" },
+        },
+      },
+    }))
+    f:close()
+    vim.opt.rtp:prepend(plugin_dir)
+
+    eq(
+      first_run.show_once("first-run-fixture.nvim", { cache = cache }),
+      true,
+      "show_once: a genuinely missing declared tool -> true (would show)"
+    )
+    eq(first_run.seen("first-run-fixture.nvim", cache), true, "show_once: marks seen after showing")
+    eq(
+      first_run.show_once("first-run-fixture.nvim", { cache = cache }),
+      false,
+      "show_once: second call is a no-op"
+    )
+
+    first_run.reset("first-run-fixture.nvim", cache)
+    eq(first_run.seen("first-run-fixture.nvim", cache), false, "reset: un-marks a single plugin")
+
+    first_run.mark_seen("another-fx.nvim", cache)
+    first_run.reset(nil, cache)
+    eq(
+      first_run.seen("another-fx.nvim", cache),
+      false,
+      "reset: with no argument clears every plugin"
+    )
+
+    vim.opt.rtp:remove(plugin_dir)
+  end
+
+  -- A plugin whose only declared tool is already present -> nothing
+  -- actionable, show_once must not report true even though a spec exists.
+  do
+    local first_run = require("lib.nvim.deps.first_run")
+    local cache = { dir = vim.fn.tempname() }
+
+    local base = vim.fn.tempname()
+    local plugin_dir = base .. "/all-present-fixture.nvim"
+    vim.fn.mkdir(plugin_dir .. "/docs", "p")
+    local f = io.open(plugin_dir .. "/docs/install.json", "w")
+    -- `nvim` is guaranteed present: this suite runs inside it.
+    f:write(vim.json.encode({
+      tools = { { bin = "nvim", why = "Always present in this suite.", pkg = { apt = "neovim" } } },
+    }))
+    f:close()
+    vim.opt.rtp:prepend(plugin_dir)
+
+    eq(
+      first_run.show_once("all-present-fixture.nvim", { cache = cache }),
+      false,
+      "show_once: nothing missing -> false even though a spec exists"
+    )
+
+    vim.opt.rtp:remove(plugin_dir)
+  end
+
   -- -------------------------------------------------------------------- health
   -- No dedicated assertions on :checkhealth output (no other module in this
   -- suite unit-tests health.lua rendering either) — just confirm neither
@@ -609,6 +702,25 @@ why: "No pkg given, should fail."
     { bin = "a-binary-name-that-should-not-exist-anywhere", required = true, hint = "n/a" },
     { python_module = "a_module_that_should_not_exist", hint = "n/a" },
   })
+  -- report_for: no spec anywhere -> must not error (and, being health.lua
+  -- output, nothing to assert on beyond that — same posture as report/
+  -- from_tools above).
+  health.report_for("a-plugin-with-absolutely-no-spec-fx")
+
+  do
+    local base = vim.fn.tempname()
+    local plugin_dir = base .. "/report-for-fixture.nvim"
+    vim.fn.mkdir(plugin_dir .. "/docs", "p")
+    local f = io.open(plugin_dir .. "/docs/install.json", "w")
+    f:write(vim.json.encode({
+      tools = { { bin = "nvim", why = "Always present.", pkg = { apt = "neovim" } } },
+    }))
+    f:close()
+    vim.opt.rtp:prepend(plugin_dir)
+    health.report_for("report-for-fixture.nvim")
+    vim.opt.rtp:remove(plugin_dir)
+  end
+
   health.from_tools({
     {
       bin = "a-binary-name-that-should-not-exist-anywhere",

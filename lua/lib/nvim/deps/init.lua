@@ -18,6 +18,17 @@ M.health = require("lib.nvim.deps.health")
 M.pm = require("lib.nvim.deps.pm")
 M.install = require("lib.nvim.deps.install")
 M.view = require("lib.nvim.deps.view")
+M.first_run = require("lib.nvim.deps.first_run")
+
+---Show `plugin_name`'s declared-tools popup once, ever — call from the
+---consuming plugin's own `setup()`. See `lib.nvim.deps.first_run` for the
+---full contract (persisted "seen" state, when it's a no-op).
+---@param plugin_name string
+---@param opts? { manager?: Lib.Deps.Manager, cache?: Lib.Cache.Opts }
+---@return boolean shown
+function M.show_once(plugin_name, opts)
+  return M.first_run.show_once(plugin_name, opts)
+end
 
 ---Every plugin on `runtimepath` shipping a deps spec. Convenience re-export
 ---of `lib.nvim.deps.spec.plugins`.
@@ -126,6 +137,19 @@ function M.routes()
       desc = "Offer to install a plugin's missing external tools (asks first)",
       run = function(ctx)
         M.install_for(ctx.args.plugin)
+      end,
+    },
+    {
+      path = { "deps", "reset-first-run" },
+      args = { { name = "plugin", type = "DEPS_PLUGIN", optional = true } },
+      desc = "Forget that a plugin's (or every plugin's) first-run popup was already shown",
+      run = function(ctx)
+        M.first_run.reset(ctx.args.plugin)
+        local notify = require("lib.nvim.notify").create("[lib.nvim.deps]")
+        notify.info(
+          ctx.args.plugin and (ctx.args.plugin .. " will show its first-run popup again")
+            or "every plugin will show its first-run popup again"
+        )
       end,
     },
   }
