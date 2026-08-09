@@ -78,6 +78,7 @@
 ---@field count?   integer                                   # allow a :N Verb count prefix at the command level, default value when omitted
 ---@field buffer?  boolean|integer                           # register buffer-locally: true = current buffer, or an explicit bufnr. Default: nil (global)
 ---@field visual?  Lib.UserCmd.Composer.VisualMode[]         # default `visual` allowlist for routes that declare none of their own
+---@field notify_prefix? string                              # notify() bracket prefix for this verb's dispatch errors/usage. Default: "[Name]" (the verb name) — override when it doesn't already identify your plugin, e.g. two verbs from one plugin that should share one prefix
 
 --- Range info handed to a route's handler via `ctx.range`. `mode`/`col1`/`col2`
 --- are best-effort: populated from `vim.fn.visualmode()`/`getpos("'<"/"'>")`
