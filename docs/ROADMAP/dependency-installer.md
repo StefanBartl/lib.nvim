@@ -242,11 +242,24 @@ to once (3) below exists (`see: "#ocr-backend"`).
 The install module needs to find *some other plugin's* spec file by name,
 without caring which plugin manager installed it — `lib.nvim.deps`
 shouldn't gain a dependency on lazy.nvim's internals just to answer "where
-is `pdfport.nvim` on disk". `vim.api.nvim_get_runtime_file("**/docs/install.json", true)`
-answers this manager-agnostically: any plugin on `runtimepath` is findable
-this way, filtered down by the plugin-name path segment the caller asked
-for (as a whole segment, so `pdfport.nvim` doesn't match a directory named
-`my-pdfport.nvim-fork`).
+is `pdfport.nvim` on disk". `vim.api.nvim_get_runtime_file("docs/install.json", true)`
+(no `**` prefix — see the correction below) answers this manager-agnostically:
+any plugin on `runtimepath` is findable this way, filtered down by the
+plugin-name path segment the caller asked for (as a whole segment, so
+`pdfport.nvim` doesn't match a directory named `my-pdfport.nvim-fork`).
+
+**Correction, found while wiring up `mdview.nvim`**: the original
+implementation used the recursive form, `"**/docs/install.json"`. Every
+`runtimepath` entry is already a plugin's root directory — `docs/` sits
+directly under it, one level down, never nested arbitrarily deeper — so the
+`**` prefix was buying nothing and only recursing needlessly. It turned out
+to be actively dangerous: `mdview.nvim` carries a 156 MB, 17 293-file
+`node_modules/` (client-bundle build tooling), and with it on `runtimepath`,
+`spec.find`/`spec.plugins` did not return within a minute — `:Lib deps show`
+would have looked hung to a real user on a real plugin. Fixed by dropping
+the `**` prefix: `nvim_get_runtime_file("docs/install.json", true)` checks
+exactly `<rtp-entry>/docs/install.json` per entry, no recursion, effectively
+instant regardless of what else a plugin's directory contains.
 
 **This turned out not to be enough, and the gap is large.** Open question 4
 below asked whether the API resolves cleanly against real plugin-manager

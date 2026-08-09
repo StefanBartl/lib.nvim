@@ -208,6 +208,37 @@ why: "No pkg given, should fail."
     vim.opt.rtp:remove(plugin_dir)
   end
 
+  -- `find`/`plugins` must NOT recurse into a plugin's subdirectories — see
+  -- docs/ROADMAP/dependency-installer.md's "Runtime lookup" correction:
+  -- nvim_get_runtime_file("**/docs/install.json", true) did not return
+  -- within a minute against a real plugin (mdview.nvim) carrying a
+  -- 17k-file node_modules/. Proven here without timing: a spec file nested
+  -- one level deeper than a plugin root must NOT be found — a recursive
+  -- glob would find it too, so this fails if `**` is ever reintroduced.
+  do
+    local base = vim.fn.tempname()
+    local plugin_dir = base .. "/no-recursion-fixture.nvim"
+    vim.fn.mkdir(plugin_dir .. "/some-subdir/docs", "p")
+    local f = io.open(plugin_dir .. "/some-subdir/docs/install.json", "w")
+    f:write(vim.json.encode({ tools = {} }))
+    f:close()
+
+    vim.opt.rtp:prepend(plugin_dir)
+    eq(
+      spec.find("no-recursion-fixture.nvim"),
+      nil,
+      "find: a docs/install.json nested below the plugin root is NOT found (non-recursive lookup)"
+    )
+    local found_it = false
+    for _, n in ipairs(spec.plugins()) do
+      if n == "no-recursion-fixture.nvim" then
+        found_it = true
+      end
+    end
+    ok(not found_it, "plugins: same non-recursive guarantee")
+    vim.opt.rtp:remove(plugin_dir)
+  end
+
   -- ------------------------------------------------------------------ plugins
   do
     local base = vim.fn.tempname()
