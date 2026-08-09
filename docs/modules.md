@@ -1,5 +1,8 @@
 # Namespaces & modules
 
+For a function-signature-level index (every exported function, not just
+namespace one-liners), split by topic, see [`API/README.md`](API/README.md).
+
 ## `lib.lua.*` — Lua
 
 | Module             | Contents                                                |
