@@ -17,6 +17,14 @@
 ---
 --- After the first run, `:Lib deps show pdfport.nvim` is the ongoing way to
 --- see the same report — `show_once` does not run again.
+---
+--- User-side opt-out, checked on every `show_once` call — set from the
+--- user's own `init.lua`, no `require("lib.nvim.deps").setup()` call
+--- needed (so it works regardless of load order relative to the plugins
+--- that call `show_once`):
+---
+---   vim.g.lib_nvim_deps_disable_first_run = true        -- every plugin
+---   vim.g.lib_nvim_deps_disabled_plugins = { "images.nvim" }  -- just these
 
 local NAMESPACE = "lib.nvim.deps.first_run"
 
@@ -65,6 +73,28 @@ function M.reset(plugin_name, cache_opts)
   disk.save(NAMESPACE, seen, cache_opts)
 end
 
+---@internal
+---True when the user has opted out of first-run popups, globally or for
+---this specific plugin, via `vim.g`. Checked fresh on every call (not
+---cached) — these are meant to be set once in the user's own config and
+---read as plain globals, not toggled at runtime.
+---@param plugin_name string
+---@return boolean
+local function user_disabled(plugin_name)
+  if vim.g.lib_nvim_deps_disable_first_run then
+    return true
+  end
+  local disabled_list = vim.g.lib_nvim_deps_disabled_plugins
+  if type(disabled_list) == "table" then
+    for _, name in ipairs(disabled_list) do
+      if name == plugin_name then
+        return true
+      end
+    end
+  end
+  return false
+end
+
 ---Show `plugin_name`'s declared-tools popup once, ever. No-op on every call
 ---after the first — including when there was nothing to show (no spec
 ---file, spec declares no tools, or nothing declared is actually missing):
@@ -73,11 +103,20 @@ end
 ---subsequent startup once one *becomes* missing later — this is a one-time
 ---welcome, not an ongoing watcher. `:Lib deps show` stays available for
 ---checking again at any time.
+---
+---Also a no-op, without marking anything seen, when the user opted out via
+---`vim.g.lib_nvim_deps_disable_first_run` or
+---`vim.g.lib_nvim_deps_disabled_plugins` — not marking it seen means the
+---popup picks up right where it would have if the user later removes the
+---opt-out, rather than having been silently consumed while disabled.
 ---@param plugin_name string
 ---@param opts? { manager?: Lib.Deps.Manager, cache?: Lib.Cache.Opts }
 ---@return boolean shown
 function M.show_once(plugin_name, opts)
   opts = opts or {}
+  if user_disabled(plugin_name) then
+    return false
+  end
   if M.seen(plugin_name, opts.cache) then
     return false
   end

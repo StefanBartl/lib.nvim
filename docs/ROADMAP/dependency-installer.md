@@ -476,6 +476,55 @@ None of the three make a spec mandatory, and skipping all three leaves a
 plugin behaving exactly as it did before `lib.nvim.deps` existed. Full
 reference: `:help lib.nvim-deps-integrating`.
 
+## Follow-up: user opt-out (`vim.g`)
+
+Third request, once the popup had actually been wired into eleven plugins:
+a way for the user to turn it off. The question that shaped the design
+wasn't "should this be configurable" — obviously yes — but *where does the
+setting live*, asked concretely: a user who installs, say, `gopath.nvim`
+alone, with `lib.nvim` pulled in only as its transitive dependency, has no
+`lib.nvim` config block of their own. A `require("lib.nvim.deps").setup({
+first_run = false })`-shaped API would need one to exist, and would need to
+run *before* every consuming plugin's own `setup()` — a load-order
+constraint with no natural place to satisfy it from a bare
+`dependencies = {"StefanBartl/lib.nvim"}` lazy.nvim spec.
+
+**Shipped:** two plain `vim.g` variables, checked fresh on every
+`show_once` call rather than cached or read once at some "configure
+lib.nvim" step that may not exist:
+
+```lua
+vim.g.lib_nvim_deps_disable_first_run = true              -- every plugin
+vim.g.lib_nvim_deps_disabled_plugins = { "gopath.nvim" }   -- just these
+```
+
+`vim.g` sidesteps both problems at once: it needs no block to live in (any
+line, anywhere in `init.lua`, including inside the very plugin spec's own
+`config = function()`), and it needs no load-order guarantee (it's read at
+call time, not captured once at some earlier setup step). Neither variable
+is retroactive — opting out stops future `show_once` calls without marking
+anything seen, so lifting the opt-out later resumes exactly where it would
+have.
+
+Documented in two places, deliberately: this file/README (the mechanism)
+and, added to all eleven consuming plugins' own READMEs next to their
+existing `docs/install.json` blurb, because that is where a user who
+installed *only that one plugin* will actually be looking — not here.
+
+**Not built, and noted as future work rather than implemented now:** a
+per-plugin `setup({ deps_popup = false })`-shaped option in each consuming
+plugin, internally setting the `vim.g` entry (or just skipping its own
+`show_once` call). That would put the toggle in the single most-obvious
+place — the plugin's own `setup()` call — and matches the
+opt-in/opt-out-flag shape already used elsewhere in this ecosystem (e.g.
+`lib.nvim_usrcmds`'s `deps = true/false`). Deliberately not retrofitted
+into eleven plugins' config schemas right now: the `vim.g` toggle already
+covers the actual need at zero per-plugin code cost, and a second knob per
+plugin is a cost worth paying only if the `vim.g` form turns out not to be
+discoverable enough in practice. If it's ever added, it should compose
+with the `vim.g` toggle, not replace it — a global "I never want this"
+switch is worth keeping regardless of how many plugins grow their own.
+
 ## Follow-up: popup + inline install (`i`/`<CR>`/`I`)
 
 `pdfport.nvim` shipping the first real spec surfaced a UX request the
