@@ -4,6 +4,7 @@
 ---FIX: LSP
 
 local notify = require("lib.nvim.notify").create("[lib.nvim.buf_win_tab.windows_utils]")
+local buffer_utils = require("lib.nvim.buf_win_tab.buffer_utils")
 
 local M = {}
 
@@ -182,6 +183,34 @@ function M.format_buffers_report()
     lines[#lines + 1] = line
   end
   return table.concat(lines, "\n")
+end
+
+-- True when every currently listed buffer is a "non-file" buffer (matches
+-- buffer_utils.DEFAULT_EXCLUDE_FILETYPES, or has a non-empty buftype like
+-- terminal/quickfix/nofile) -- i.e. no real file buffer is open. Vacuously
+-- true when nothing is listed at all, matching the intended use case: "is
+-- it safe to auto-open a dashboard/file-tree because there's no file to
+-- lose focus from".
+---@return boolean
+function M.only_nonfile_listed_buffers()
+  local exclude = {}
+  for _, ft in ipairs(buffer_utils.DEFAULT_EXCLUDE_FILETYPES) do
+    exclude[ft] = true
+  end
+
+  local listed = getbufinfo({ buflisted = 1 })
+  for i = 1, #listed do
+    local b = listed[i]
+    local buftype = b.buftype or vim.api.nvim_get_option_value("buftype", { buf = b.bufnr })
+    local filetype = (b.variables and b.variables.ft)
+      or vim.api.nvim_get_option_value("filetype", { buf = b.bufnr })
+      or ""
+    local is_file_buffer = buftype == "" and not exclude[filetype]
+    if is_file_buffer then
+      return false
+    end
+  end
+  return true
 end
 
 -- Aggregate function: collect many pieces of state and return a table.

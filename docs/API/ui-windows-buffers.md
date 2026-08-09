@@ -50,20 +50,13 @@ M.get_buffers_grouped_by_filetype(): table<string, integer[]>
 M.get_current_buffer_info(): table
 M.get_tabpage_buffers(tabnr?: integer): integer[]
 M.format_buffers_report(): string
+M.only_nonfile_listed_buffers(): boolean
+  -- true when every listed buffer is non-file (matches buffer_utils.DEFAULT_EXCLUDE_FILETYPES,
+  -- or has a non-empty buftype like terminal/quickfix/nofile); vacuously true if none qualify
 M.collect_all_state(): table
 M.show_aggregated_state(silent?: boolean): string|nil
 M.collect_win_report(winid?: integer): { textual: string[], raw: table }
 ```
-
-> **Known discrepancy:** `Command-List.md` documents an additional
-> `lib.nvim.buf_win_tab.neotree` unit (`find_neotree_window`,
-> `open_neotree_and_focus`, `setup_autotree_on_last_close`,
-> `only_nonfile_listed_buffers`, `open_neotree_if_last_buffer`), and
-> `windows_utils.lua`'s `collect_all_state()` calls
-> `M.only_nonfile_listed_buffers()` — but no such function/file exists
-> anywhere in the tree. This looks like stale documentation or a missing
-> implementation, not a working module. Worth a follow-up fix (implement it
-> or remove the dead reference) rather than acting on it as-is.
 
 ### `lib.nvim.buf_win_tab.capture` (see README)
 Deterministic capture of buffers/windows created by an Ex command, via

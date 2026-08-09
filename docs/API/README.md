@@ -52,17 +52,21 @@ with worked examples.
   from each source file's `---@param`/`---@return` annotations where
   present; a bare parameter list means the source had no such annotations.
 
-## Known gaps / follow-ups noted while compiling this
+## Fixed since this reference was first compiled
 
-- **`lib.nvim.buf_win_tab`**: `windows_utils.lua`'s `collect_all_state()`
-  calls `M.only_nonfile_listed_buffers()`, and a sibling `Command-List.md`
-  documents a `lib.nvim.buf_win_tab.neotree` unit — neither exists anywhere
-  in the tree. Looks like stale documentation or a missing implementation;
-  worth a follow-up to either implement it or remove the dead reference.
-- A handful of modules mix concerns across namespace boundaries — e.g.
-  `lib.lua.strings.convert.hex_to_string` calls `vim.fn.nr2char` despite
-  living under the editor-independent `lib.lua.*` tree. Flagged inline in
-  [foundations-lua.md](foundations-lua.md) rather than silently glossed over.
+- **`lib.nvim.buf_win_tab.windows_utils.only_nonfile_listed_buffers`** was
+  called by `collect_all_state()` but didn't exist — every call to
+  `collect_all_state()`/`show_aggregated_state()` crashed. Implemented
+  (reuses `buffer_utils.DEFAULT_EXCLUDE_FILETYPES` for consistency); the
+  stale `lib.nvim.buf_win_tab.neotree` unit documented in the sibling
+  `Command-List.md` (4 further functions, never implemented, never called
+  anywhere) was removed rather than built out blind — its one useful piece,
+  finding a Neo-tree window, is already covered by the newer, more general
+  `lib.nvim.window.find_by_filetype("neo-tree")`.
+- **`lib.lua.strings.convert.hex_to_string`** called `vim.fn.nr2char`,
+  breaking the "no `vim` API" rule the rest of `lib.lua.*` follows. Now a
+  pure Lua UTF-8 encoder (delegates to `lib.lua.strings.utf8.encode`,
+  which already exists for exactly this).
 
 See [Conventions](../conventions.md) for how new modules should be
 documented going forward, and [Help docs](../help.md) for `:help` tag
