@@ -64,6 +64,8 @@
 ---
 ---@field format_buffers_report fun(): string # Format compact multi-line report of all buffers. Includes: listed status, modified flag, filetype, buftype, size, name. Returns newline-separated string suitable for :messages or logging.
 ---
+---@field only_nonfile_listed_buffers fun(): boolean # True when every listed buffer is non-file (matches buffer_utils.DEFAULT_EXCLUDE_FILETYPES, or has a non-empty buftype like terminal/quickfix/nofile). Vacuously true when no listed buffer qualifies as a real file buffer.
+---
 ---@field collect_all_state fun(): AggregatedState # Aggregate function: collect comprehensive system state. Includes: platform, buffer counts, filetype grouping, current buffer info, tabpage buffers. Returns AggregatedState structure with all metadata. Useful for debugging and status displays.
 ---
 ---@field show_aggregated_state fun(silent?: boolean): string|nil # Print or return aggregated state information. If silent=true: returns formatted string. If silent=false/nil: uses vim.notify with INFO level via vim.schedule. Includes platform, counts, IDs, detailed buffer list. Returns string if silent, nil otherwise.

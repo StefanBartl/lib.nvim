@@ -144,12 +144,13 @@ capitalize, uncapitalize, normalize_ws, pad_start, pad_end, pad_center,
 indent, dedent`.
 
 ### `lib.lua.strings.convert.hex_to_string` (no README)
-Converts a hex codepoint string (e.g. `"F0056"`) to a UTF-8 character via
-`vim.fn.nr2char`. **Note:** unlike the rest of this namespace, this one file
-does depend on `vim.fn` — not actually editor-independent.
+Converts a hex codepoint string (e.g. `"F0056"`) to a UTF-8 character —
+pure Lua via `lib.lua.strings.utf8.encode` (previously called
+`vim.fn.nr2char`, the one exception to this namespace's "no `vim`
+dependency" rule; fixed).
 
 ```
-return function(hex: string): string   -- "" on invalid input
+return function(hex: string): string   -- "" on invalid input or codepoint 0 (matches the old nr2char(0) behavior)
 ```
 
 ---

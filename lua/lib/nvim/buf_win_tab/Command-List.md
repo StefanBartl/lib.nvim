@@ -6,7 +6,6 @@
   - [lib.nvim.buf_win_tab.buffer_utils](#libbuf_win_tabbuffer_utils)
   - [lib.nvim.buf_win_tab.windows_utils](#libbuf_win_tabwindows_utils)
   - [lib.nvim.buf_win_tab.tabs_utils](#libbuf_win_tabtabs_utils)
-  - [lib.nvim.buf_win_tab.neotree](#libbuf_win_tabneotree)
 
 ---
 
@@ -33,24 +32,18 @@ buf_win_tab/
 │  ├─ get_current_buffer_info() -> table
 │  ├─ get_tabpage_buffers(tabnr?: integer) -> integer[]
 │  ├─ format_buffers_report() -> string
+│  ├─ only_nonfile_listed_buffers() -> boolean
 │  ├─ collect_all_state() -> table
 │  └─ show_aggregated_state(silent?: boolean) -> string|nil
 │
-├─ tabs
-│  ├─ list_tabs() -> TabInfo[]
-│  ├─ format_tab_one_line(info: TabInfo) -> string
-│  ├─ print_tabs(tabs?: TabInfo[]) -> nil
-│  ├─ get_current_tab() -> TabInfo?
-│  ├─ get_tab_by_number(tabnr: integer) -> TabInfo?
-│  ├─ is_single_tab() -> boolean
-│  └─ collect_report() -> table
-│
-└─ neotree
-   ├─ find_neotree_window() -> number|nil
-   ├─ open_neotree_and_focus(neotree_cmd?: string) -> boolean
-   ├─ setup_autotree_on_last_close(opts?: table) -> nil
-   ├─ only_nonfile_listed_buffers() -> boolean
-   └─ open_neotree_if_last_buffer() -> boolean
+└─ tabs
+   ├─ list_tabs() -> TabInfo[]
+   ├─ format_tab_one_line(info: TabInfo) -> string
+   ├─ print_tabs(tabs?: TabInfo[]) -> nil
+   ├─ get_current_tab() -> TabInfo?
+   ├─ get_tab_by_number(tabnr: integer) -> TabInfo?
+   ├─ is_single_tab() -> boolean
+   └─ collect_report() -> table
 
 
 
@@ -82,6 +75,7 @@ buf_win_tab/
 | `get_current_buffer_info`         | `() -> table`                    | Returns information about the current buffer.                         |                                                        |
 | `get_tabpage_buffers`             | `(tabnr?: integer) -> integer[]` | Returns buffer IDs for a tabpage (or the current tab when nil).       |                                                        |
 | `format_buffers_report`           | `() -> string`                   | Formats a compact report of all buffers.                             |                                                        |
+| `only_nonfile_listed_buffers`     | `() -> boolean`                  | True when every listed buffer is non-file (matches `buffer_utils.DEFAULT_EXCLUDE_FILETYPES` or has a non-empty `buftype`); vacuously true if nothing that qualifies as a real file buffer is listed. |
 | `collect_all_state`               | `() -> table`                    | Collects various state information about buffers, tabs, platform.     |                                                        |
 | `show_aggregated_state`           | `(silent?: boolean) -> string    | nil`                                                                   | Prints aggregated state, optionally only as a string.  |
 
@@ -98,17 +92,5 @@ buf_win_tab/
 | `get_tab_by_number`   | `(tabnr: integer) -> TabInfo?` | Returns the TabInfo for a specific tab number.                     |
 | `is_single_tab`       | `() -> boolean`                | Checks whether only one tab is open.                               |
 | `collect_report`      | `() -> table`                  | Collects structured information about all tabs.                    |
-
----
-
-## lib.nvim.buf_win_tab.neotree
-
-| Name                           | Signature                           | Description                                                                     |                                                 |
-| ------------------------------ | ----------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `find_neotree_window`          | `() -> number                       | nil`                                                                            | Finds a Neo-tree window ID, if present.         |
-| `open_neotree_and_focus`       | `(neotree_cmd?: string) -> boolean` | Runs a Neo-tree command and focuses the window.                                 |                                                 |
-| `setup_autotree_on_last_close` | `(opts?: table) -> nil`             | Autocommand that opens Neo-tree when the last "real" buffers are closed.        |                                                 |
-| `only_nonfile_listed_buffers`  | `() -> boolean`                     | Checks whether only non-file buffers are listed.                               |                                                 |
-| `open_neotree_if_last_buffer`  | `() -> boolean`                     | Opens Neo-tree when the last file buffer was closed.                            |                                                 |
 
 ---
