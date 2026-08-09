@@ -279,7 +279,15 @@ function M.find(plugin_name)
   end
 
   for _, file in ipairs(SPEC_FILES) do
-    local found = pick(vim.api.nvim_get_runtime_file("**/" .. file, true))
+    -- No `**` prefix: each `runtimepath` entry already IS a plugin root, so
+    -- `file` alone checks exactly `<rtp-entry>/docs/install.json` per
+    -- entry — no recursion needed. `**` would recurse into every
+    -- subdirectory of every plugin looking for a nested `docs/`, which is
+    -- both unnecessary and genuinely dangerous: measured against a real
+    -- plugin repo carrying a 17k-file `node_modules/` (mdview.nvim), the
+    -- recursive form did not return within a minute. Non-recursive stats
+    -- one path per `runtimepath` entry and is effectively instant.
+    local found = pick(vim.api.nvim_get_runtime_file(file, true))
     if found then
       return found
     end
@@ -316,7 +324,8 @@ function M.plugins()
   end
 
   for _, file in ipairs(SPEC_FILES) do
-    for _, path in ipairs(vim.api.nvim_get_runtime_file("**/" .. file, true)) do
+    -- Non-recursive for the same reason `find` is — see the comment there.
+    for _, path in ipairs(vim.api.nvim_get_runtime_file(file, true)) do
       -- ".../<plugin-dir>/docs/<file>" — the plugin name is two segments up.
       add(path:gsub("\\", "/"):match("([^/]+)/docs/[^/]+$"))
     end
