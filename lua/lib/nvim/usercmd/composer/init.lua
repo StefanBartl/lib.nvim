@@ -29,7 +29,6 @@
 require("lib.nvim.usercmd.composer.@types")
 
 local usercmd = require("lib.nvim.usercmd")
-local notify = require("lib.nvim.notify").create("[lib.nvim.usercmd.composer]")
 local tree = require("lib.nvim.usercmd.composer.tree")
 local parse = require("lib.nvim.usercmd.composer.parse")
 local complete = require("lib.nvim.usercmd.composer.complete")
@@ -39,22 +38,39 @@ local registry = require("lib.nvim.usercmd.composer.registry")
 
 local M = {}
 
--- Defer user-facing messages so a bad-argument report surfaces as a clean
--- notification instead of a raw "Vim:… command error" traceback (the same
--- technique replacer.nvim uses). parse.lua stays synchronous/testable via its
--- injected notifier; only production registration wraps it.
-local deferred = {
-  error = function(msg)
-    vim.schedule(function()
-      notify.error(msg)
-    end)
-  end,
-  info = function(msg)
-    vim.schedule(function()
-      notify.info(msg)
-    end)
-  end,
-}
+---@internal
+--- Build the deferred `{error, info}` notifier passed to `parse.dispatch` for
+--- one verb. Deferring surfaces a bad-argument report as a clean notification
+--- instead of a raw "Vim:… command error" traceback (the same technique
+--- replacer.nvim uses); parse.lua stays synchronous/testable via its injected
+--- notifier — only production registration wraps it.
+---
+--- composer is a single shared module required by every plugin that uses it
+--- (30+ repos), so there is no one "the" prefix to notify under. Each verb
+--- gets its own notifier prefixed with `spec.notify_prefix`, defaulting to
+--- the verb's own name (e.g. `:Gopath` -> "[Gopath]") — in virtually every
+--- consumer that already identifies the owning plugin with zero setup, since
+--- one verb per plugin is the norm. Override `notify_prefix` explicitly when
+--- it doesn't (e.g. several verbs from one plugin that should share a
+--- prefix).
+---@param name string
+---@param spec Lib.UserCmd.Composer.Spec
+---@return { error: fun(msg), info: fun(msg) }
+local function make_deferred_notify(name, spec)
+  local notify = require("lib.nvim.notify").create(spec.notify_prefix or ("[" .. name .. "]"))
+  return {
+    error = function(msg)
+      vim.schedule(function()
+        notify.error(msg)
+      end)
+    end,
+    info = function(msg)
+      vim.schedule(function()
+        notify.info(msg)
+      end)
+    end,
+  }
+end
 
 ---@internal
 --- Whether the command should accept the bang form: explicit spec.bang wins,
@@ -160,6 +176,7 @@ local function register(name, spec)
   spec.routes = spec.routes or {}
 
   local root = tree.build(spec.routes)
+  local deferred = make_deferred_notify(name, spec)
 
   local handler = function(opts)
     return parse.dispatch(name, spec, root, opts, deferred)
