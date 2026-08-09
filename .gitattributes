@@ -2,3 +2,11 @@
 # `set -euo pipefail` is parsed as `pipefail\r` and bash aborts with "invalid
 # option name" — the script silently stops working on a Windows clone.
 *.sh        text eol=lf
+
+# .stylua.toml pins line_endings = "Unix". Without this, core.autocrlf=true
+# checks Lua files out as CRLF on Windows clones, and `stylua --check` then
+# reports a full-file false diff for every line (content is identical, only
+# the line ending differs) — this is what made CI's stylua job red on
+# docs/EXAMPLES/*.lua and docs/TESTS/*.lua. Force LF so the working tree
+# always matches what stylua expects to check against.
+*.lua       text eol=lf
