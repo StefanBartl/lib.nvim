@@ -337,7 +337,12 @@ function M.open(opts)
     local rs = surfaces.results
     local cur = api.nvim_get_option_value("winhighlight", { win = rs.winid })
     local sep = cur ~= "" and "," or ""
-    pcall(api.nvim_set_option_value, "winhighlight", cur .. sep .. "CursorLine:KitSelection", { win = rs.winid })
+    pcall(
+      api.nvim_set_option_value,
+      "winhighlight",
+      cur .. sep .. "CursorLine:KitSelection",
+      { win = rs.winid }
+    )
 
     local pbuf = surfaces.prompt.bufnr
     if query_text ~= "" then

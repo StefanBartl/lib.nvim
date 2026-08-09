@@ -995,7 +995,11 @@ return function(H)
   eq(cmp_clears, 4, "clear() runs once more on close")
   eq(cmp_close_calls, 1, "on_close fires exactly once")
   eq(cmp_closed_a, "banana", "on_close reports the marked item")
-  eq(cmp_closed_b, "cherry", "…and the confirmed second item, even closed programmatically from COMPARE")
+  eq(
+    cmp_closed_b,
+    "cherry",
+    "…and the confirmed second item, even closed programmatically from COMPARE"
+  )
   ok(not cmp_slots.a:is_valid(), "compare panes close")
   vim.cmd("stopinsert")
 
