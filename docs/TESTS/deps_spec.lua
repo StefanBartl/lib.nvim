@@ -697,6 +697,72 @@ why: "No pkg given, should fail."
     vim.opt.rtp:remove(plugin_dir)
   end
 
+  -- vim.g opt-out: neither disable path should mark anything seen (so
+  -- removing the opt-out later picks up exactly where it left off, not
+  -- silently consumed while disabled).
+  do
+    local first_run = require("lib.nvim.deps.first_run")
+    local base = vim.fn.tempname()
+    local plugin_dir = base .. "/optout-fixture.nvim"
+    vim.fn.mkdir(plugin_dir .. "/docs", "p")
+    local f = io.open(plugin_dir .. "/docs/install.json", "w")
+    f:write(vim.json.encode({
+      tools = {
+        {
+          bin = "a-binary-that-should-not-exist-anywhere-oo",
+          required = true,
+          why = "Fixture for the vim.g opt-out.",
+          pkg = { apt = "ghost" },
+        },
+      },
+    }))
+    f:close()
+    vim.opt.rtp:prepend(plugin_dir)
+
+    local cache = { dir = vim.fn.tempname() }
+
+    vim.g.lib_nvim_deps_disable_first_run = true
+    eq(
+      first_run.show_once("optout-fixture.nvim", { cache = cache }),
+      false,
+      "show_once: global vim.g opt-out -> false"
+    )
+    eq(
+      first_run.seen("optout-fixture.nvim", cache),
+      false,
+      "show_once: global opt-out does not mark seen"
+    )
+    vim.g.lib_nvim_deps_disable_first_run = nil
+
+    vim.g.lib_nvim_deps_disabled_plugins = { "optout-fixture.nvim" }
+    eq(
+      first_run.show_once("optout-fixture.nvim", { cache = cache }),
+      false,
+      "show_once: per-plugin vim.g opt-out -> false"
+    )
+    eq(
+      first_run.seen("optout-fixture.nvim", cache),
+      false,
+      "show_once: per-plugin opt-out does not mark seen"
+    )
+    -- A different plugin name is unaffected by the per-plugin list.
+    eq(
+      first_run.show_once("not-in-the-list.nvim", { cache = cache }),
+      false,
+      "show_once: per-plugin opt-out list does not affect other plugins (no spec -> false anyway)"
+    )
+    vim.g.lib_nvim_deps_disabled_plugins = nil
+
+    -- Opt-out lifted: show_once now behaves normally again.
+    eq(
+      first_run.show_once("optout-fixture.nvim", { cache = cache }),
+      true,
+      "show_once: opt-out removed -> behaves normally again"
+    )
+
+    vim.opt.rtp:remove(plugin_dir)
+  end
+
   -- A plugin whose only declared tool is already present -> nothing
   -- actionable, show_once must not report true even though a spec exists.
   do

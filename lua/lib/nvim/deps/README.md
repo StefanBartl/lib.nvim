@@ -198,6 +198,46 @@ through the same `i`/confirm/terminal path as `:Lib deps show` always has.
 or every plugin with no argument) — mainly useful for testing this exact
 flow without reinstalling the plugin.
 
+### Opting out
+
+Set either of these — anywhere in your own config, no
+`require("lib.nvim.deps")` call needed:
+
+```lua
+vim.g.lib_nvim_deps_disable_first_run = true              -- every plugin, everywhere
+vim.g.lib_nvim_deps_disabled_plugins = { "gopath.nvim" }   -- just these
+```
+
+**Where** matters less than it might seem: `vim.g` is a plain global, read
+fresh on every `show_once` call, so it works no matter when or where it's
+set relative to the plugin that calls `show_once` — the top of `init.lua`,
+inside that plugin's own lazy.nvim `config = function() ... end`, anywhere.
+This is deliberate: a user who installed, say, `gopath.nvim` alone (with
+`lib.nvim` pulled in only as its transitive dependency) has no `lib.nvim`
+config block of their own to put a `setup({ ... })` option into — a
+`vim.g` toggle needs no such block to exist. Both variables are also worth
+mentioning explicitly in **every consuming plugin's own README**, next to
+its `docs/install.json` blurb — that's where a user who only installed
+*that one plugin* will actually be looking when they want to turn the
+popup off, not this file.
+
+Neither variable is retroactive: it stops **future** `show_once` calls, it
+does not mark anything as already-seen — so removing the opt-out later
+picks up exactly where it would have without one, rather than having
+silently consumed the "first run" while disabled.
+
+**Future direction, not yet built:** a plugin could additionally expose
+its *own* `setup({ deps_popup = false })`-style option that internally sets
+the per-plugin `vim.g` entry (or simply skips its own `show_once` call) —
+that would put the toggle in the one place a user is even more likely to
+look first (that plugin's own `setup()` call) and matches how other
+opt-in/opt-out flags already work across this ecosystem (e.g.
+`lib.nvim_usrcmds`' `deps = true/false`). Deliberately not retrofitted into
+every consuming plugin right now — the `vim.g` toggle already covers the
+need with zero per-plugin code, and adding a redundant second knob to each
+plugin's config schema is a cost worth paying only if the `vim.g` form
+turns out not to be discoverable enough in practice.
+
 ## `lib.nvim.deps.pm` — package managers
 
 ```lua
