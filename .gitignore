@@ -1,7 +1,6 @@
 # Lua / LuaRocks
 *.luac
 luac.out
-.luarc.json
 
 # Test / coverage artifacts
 luacov.stats.out
