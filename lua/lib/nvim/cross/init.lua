@@ -45,6 +45,7 @@ M.run = {
   run_blocking = require("lib.nvim.cross.run").run_blocking,
   run_detached = require("lib.nvim.cross.run").run_detached,
   run_argv = require("lib.nvim.cross.run_argv"),
+  env = require("lib.nvim.cross.run.env"),
 }
 
 M.open_default = require("lib.nvim.cross.open_default")

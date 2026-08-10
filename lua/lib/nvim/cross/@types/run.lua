@@ -7,5 +7,6 @@
 ---@field run_blocking fun(cmd: string): OsRunResult
 ---@field run_detached fun(argv: string[]): boolean, string|nil # Launch argv detached (fire-and-forget); routes through jobstart on Windows/WSL since vim.system detach is unreliable there for GUI processes.
 ---@field run_argv { run_blocking: fun(cmd: string[], input?: string): boolean, string|nil, run_blocking_captured: fun(cmd: string[], input?: string): boolean, string }
+---@field env Lib.Cross.Run.Env # Spawn-environment builder: completed PATH + recoverable session/keyring variables.
 
 return {}

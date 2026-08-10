@@ -74,6 +74,7 @@ do
   end
 end
 LIB.run_argv = require("lib.nvim.cross.run_argv")
+LIB.spawn_env = lazy_module("lib.nvim.cross.run.env")
 
 -- === Clipboard ===
 LIB.copy_to_clipboard = lazy_module("lib.nvim.cross.copy_to_clipboard")

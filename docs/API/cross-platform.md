@@ -1,11 +1,11 @@
 # API Reference — `lib.nvim.cross.*` (cross-platform OS/process/fs helpers)
 
-Part of the [lib.nvim API reference](README.md). 29 submodules covering OS
+Part of the [lib.nvim API reference](README.md). 30 submodules covering OS
 detection, executable/Mason lookup, clipboard, opening files with the
 system default app, revealing files in the file manager, path separator
 normalization, WSL path conversion, file mutation/locking, and process
 spawning (three tiers: shell-string `run`, argv-only `run_argv`, and
-libuv-direct `uv.*`).
+libuv-direct `uv.*`, plus `run.env` for the environment they are handed).
 
 The root `lib.nvim.cross` aggregator (see README) wires up
 `cross.is_windows`, `cross.executable`, `cross.fs`, `cross.separators`,
@@ -203,6 +203,39 @@ M.run_blocking(cmd: string): OsRunResult
 M.run_detached(argv: string[]): boolean ok, string|nil err
   -- fire-and-forget; Windows/WSL routes through jobstart(detach=true) (vim.system unreliable for GUI there)
 ```
+
+### `lib.nvim.cross.run.env` (see README)
+Spawn-environment builder. A subprocess inherits **Neovim's own** process
+environment, not an interactive login shell's — so a `PATH` assembled by a
+shell hook (`nvm`/`pyenv`/`rbenv`/`asdf`/`mise`/Homebrew) is missing, and
+keyring-backed CLIs (`gh`, `glab`) report "not logged in" because the
+session variable that makes the keyring reachable
+(`DBUS_SESSION_BUS_ADDRESS`, `XDG_RUNTIME_DIR`, `SSH_AUTH_SOCK`) never
+arrived. Replaces the per-plugin
+`vim.tbl_extend("force", vim.fn.environ(), { … })` hand-roll.
+
+```
+M.build(opts?: Lib.Cross.Run.Env.Opts): table<string,string>
+  -- environ() + completed PATH + recoverable session vars; writes PATH back under the
+  -- key the base already used (`Path` on Windows — a second PATH key would conflict)
+M.path(opts?): string
+  -- extra_paths -> mason bin -> inherited PATH -> login-shell PATH -> candidate_dirs();
+  -- nothing inherited is dropped or reordered, dedup case-insensitive on Windows
+M.apply(spawn_opts?: table, opts?): table
+  -- copy of spawn_opts with env filled in; an existing spawn_opts.env is folded in as overrides
+M.candidate_dirs(): string[]
+  -- existing well-known bin dirs, version-manager shims first (cached)
+M.session_vars(): string[]        -- known session/keyring var names for this platform
+M.SESSION_VARS: table<string, string[]>   -- keyed by platform; `wsl` aliases `linux`
+M.missing(): string[]             -- which of those Neovim itself never received (diagnostic)
+M.login_shell_env(timeout_ms?): table<string,string>|nil
+  -- `$SHELL -lc env` (fallback `sh`), bounded + cached; nil on native Windows
+M.clear()                         -- drop cached dir scan + login-shell probe
+```
+`opts`: `base?`, `extra_paths?`, `passthrough?`, `vars?`, `mason?`
+(default `false`), `login_shell?`, `timeout_ms?` (default `3000`).
+
+Reachable as `cross.run.env`, and flat as `lib.spawn_env`.
 
 ### `lib.nvim.cross.run_argv` (see README)
 Low-level argv-based process runner with stdin support, no shell involved.
