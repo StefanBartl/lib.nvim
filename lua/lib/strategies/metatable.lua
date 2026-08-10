@@ -21,6 +21,7 @@ local MODULE_MAP = {
   is = "lib.nvim.cross.platform.is",
   copy_to_clipboard = "lib.nvim.cross.copy_to_clipboard",
   run_argv = "lib.nvim.cross.run_argv",
+  spawn_env = "lib.nvim.cross.run.env",
 
   -- FILESYSTEM
   is_subpath = "lib.nvim.fs.is_subpath",

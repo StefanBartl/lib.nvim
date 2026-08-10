@@ -42,6 +42,8 @@ cross.run.run(cmd, cb)
 cross.run.run_blocking(cmd)
 cross.run.run_detached(argv)
 cross.run.run_argv.run_blocking(argv, input)
+cross.run.env.build()             -- completed spawn env (PATH + session vars)
+cross.run.env.apply(spawn_opts)   -- same, folded into a vim.system opts table
 
 cross.open_default(target) -- open a path/URL with the OS default handler
 cross.reveal_in_fm(path, opts) -- show a path in the system file manager

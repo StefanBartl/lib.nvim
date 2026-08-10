@@ -19,6 +19,7 @@ LIB.shell = cross_run.shell
 LIB.run = cross_run.run
 LIB.run_blocking = cross_run.run_blocking
 LIB.run_argv = require("lib.nvim.cross.run_argv")
+LIB.spawn_env = require("lib.nvim.cross.run.env")
 -- Clipboard
 LIB.copy_to_clipboard = require("lib.nvim.cross.copy_to_clipboard")
 

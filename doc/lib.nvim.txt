@@ -171,6 +171,8 @@ Neovim adapters.
                            cache), trash (cross-platform send-to-trash)
                            |lib.nvim-fs|
     lib.nvim.cross         cross-platform: OS detection, run/argv, clipboard,
+                           run.env (spawn environment: guaranteed-complete
+                           PATH + session/keyring vars) |lib.nvim-spawn-env|,
                            uv: spawn_capture (buffered, one callback at exit)
                            and spawn_stream (line-by-line streaming, optional
                            timeout, returns a kill handle),
@@ -288,6 +290,7 @@ Modules with dedicated `:help` documentation. Jump to one via its tag, or
     lib.nvim.logger      structured logging / diagnostics / crash dumps |lib.nvim-logger|
     lib.nvim.harvest     collect from a scope, then show/export it |lib.nvim-harvest|
     lib.nvim.deps        declare/detect/install external tools  |lib.nvim-deps|
+    lib.nvim.cross.run.env  spawn environment: complete PATH + session vars |lib.nvim-spawn-env|
 
 Every other module documents itself in a `README.md` next to its source; see
 the namespace tables under |lib.nvim-namespaces|.

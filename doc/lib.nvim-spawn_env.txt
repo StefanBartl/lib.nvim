@@ -1,0 +1,212 @@
+*lib.nvim-spawn_env.txt*  *lib.nvim-spawn-env*     Subprocess spawn environment
+
+Author:  lib.nvim maintainers
+License: Same as Neovim
+
+================================================================================
+CONTENTS                                                    *spawn_env-contents*
+
+1. Introduction ............................ |spawn_env-introduction|
+2. Usage ................................... |spawn_env-usage|
+3. API Reference ........................... |spawn_env-api|
+4. Options ................................. |spawn_env-options|
+5. Diagnosis ............................... |spawn_env-diagnosis|
+6. Technical Notes ......................... |spawn_env-technical|
+
+================================================================================
+INTRODUCTION                                            *spawn_env-introduction*
+
+`lib.nvim.cross.run.env` builds a deliberately completed environment table for
+subprocesses spawned from Neovim — a guaranteed-complete `PATH` plus the
+session/keyring variables an authenticated CLI needs.
+
+A subprocess started with `vim.system()`, `vim.uv.spawn()` or `jobstart()`
+inherits Neovim's own process environment, not the environment an interactive
+login shell would have. That is standard `fork`+`exec` / `CreateProcess`
+semantics on every OS, not a Neovim bug — but it bites in two independent ways:
+
+PATH is short ~
+  Entries added by a shell hook (`nvm`, `pyenv`, `rbenv`, `asdf`, `mise`,
+  Homebrew's `shellenv`, `~/.cargo/bin`) only exist after `.zshrc`/`.profile`
+  ran. Start Neovim from a window-manager entry, a dock icon, a terminal that
+  does not spawn a login shell, or a CI runner, and a spawned CLI is either
+  missing entirely or resolves to the wrong version.
+
+Session-bound auth is not an environment variable ~
+  `gh`/`glab` read their token from the OS keyring, and reaching the keyring
+  depends on a variable the desktop session sets — `DBUS_SESSION_BUS_ADDRESS`
+  for gnome-keyring/kwallet via libsecret on Linux, the login-session binding
+  on macOS, the user context on Windows. Without it the CLI reports "not
+  logged in" while the token sits valid in the keyring.
+
+`env -i <cmd>` in a shell reproduces exactly this failure with no Neovim
+involved — a fast way to confirm the cause is the environment, not the spawn.
+
+Before this module, every plugin that cared hand-rolled its own
+`vim.tbl_extend("force", vim.fn.environ(), { ... })`.
+
+================================================================================
+USAGE                                                          *spawn_env-usage*
+
+>lua
+  local env = require("lib.nvim.cross.run.env")
+  -- or, via the aggregator: require("lib").spawn_env
+
+  -- The common case: hand a completed env to a spawn call
+  vim.system({ "gh", "api", "/user" }, { env = env.build() }, on_done)
+
+  -- Same, keeping other spawn options
+  vim.system({ "docker", "ps" }, env.apply({ cwd = root, text = true }), cb)
+
+  -- Only the PATH part
+  vim.env.PATH = env.path({ extra_paths = { "/opt/mytool/bin" }, mason = true })
+
+  -- Recover state Neovim's own process never received (POSIX, blocking)
+  local e = env.build({ login_shell = true })
+<
+
+================================================================================
+API REFERENCE                                                    *spawn_env-api*
+
+env.build({opts})                                            *spawn_env.build()*
+  `vim.fn.environ()` (or `opts.base`), with `PATH` replaced by `env.path(opts)`
+  and every known session variable filled in wherever a value can be recovered.
+
+  Parameters: ~
+    {opts} `Lib.Cross.Run.Env.Opts|nil` - see |spawn_env-options|
+
+  Returns: ~
+    `table<string,string>` - environment table for a spawn call
+
+  Note: ~
+    `PATH` is written back under the key the base table already used — on
+    Windows that is `Path`, and adding a second `PATH` key would hand the
+    child two conflicting entries.
+
+env.path({opts})                                              *spawn_env.path()*
+  A `PATH` string with every existing well-known binary directory guaranteed
+  present. Nothing inherited is dropped or reordered; candidates are appended.
+
+  Precedence: ~
+    `opts.extra_paths` -> Mason `bin` (with `mason = true`) -> inherited `PATH`
+    -> login-shell `PATH` (with `login_shell = true`) -> `candidate_dirs()`
+
+  Returns: ~
+    `string` - `;`-separated on Windows, `:`-separated elsewhere; duplicates
+    removed case- and separator-insensitively on Windows
+
+env.apply({spawn_opts}, {opts})                              *spawn_env.apply()*
+  A copy of {spawn_opts} with `env` filled in by `build()`, every other key
+  untouched. An `env` already present in {spawn_opts} is folded in as
+  overrides, so caller-supplied variables survive. The input is not mutated.
+
+  Returns: ~
+    `table` - options table for `vim.system`
+
+env.candidate_dirs()                                *spawn_env.candidate_dirs()*
+  The platform's well-known binary directories that actually exist (checked
+  via `uv.fs_stat`), in priority order — version-manager shims first (they
+  exist to shadow the system binary, and an interactive shell puts them in
+  front too), then user bin dirs, then system ones. Cached for the session.
+
+  Returns: ~
+    `string[]`
+
+env.session_vars()                                    *spawn_env.session_vars()*
+  Known session/keyring/agent variable names for the current platform,
+  `SESSION_VARS.common` first.
+
+  Returns: ~
+    `string[]`
+
+env.SESSION_VARS                                          *spawn_env.SESSION_VARS*
+  The underlying table, keyed by the platform names
+  `lib.nvim.cross.platform.is()` reports: `common`, `linux`, `wsl`, `macos`,
+  `windows`. `wsl` aliases `linux` — a WSL userland needs the Linux session
+  variables, not the Windows ones.
+
+env.missing()                                              *spawn_env.missing()*
+  Which known session variables are absent from Neovim's own environment.
+
+  Returns: ~
+    `string[]`
+
+env.login_shell_env({timeout_ms})                  *spawn_env.login_shell_env()*
+  The environment of `$SHELL -lc env` (falling back to `sh`) — what an
+  interactive shell has after its profile ran, and the only way to recover
+  state Neovim's own process never received.
+
+  Parameters: ~
+    {timeout_ms} `integer|nil` - default `3000`
+
+  Returns: ~
+    `table<string,string>|nil` - `nil` on native Windows, or on failure
+
+  Note: ~
+    Blocking, but bounded, so a profile that blocks on a prompt or a slow
+    network mount cannot hang Neovim. Cached for the session.
+
+env.clear()                                                  *spawn_env.clear()*
+  Drop the cached directory scan and login-shell probe. Call after installing
+  a toolchain or editing a shell profile inside a running session.
+
+================================================================================
+OPTIONS                                                      *spawn_env-options*
+
+All three of `build()`, `path()` and `apply()` take the same option table:
+
+    base          `table<string,string>` starting environment
+                  (default `vim.fn.environ()`)
+    extra_paths   `string[]` directories prepended to `PATH`, highest priority
+    passthrough   `string[]` extra variable names to carry over from `vim.env`
+                  when absent from `base`
+    vars          `table<string,string>` explicit overrides, applied last
+    mason         `boolean` also put Mason's `bin` directory on `PATH`
+                  (default `false`)
+    login_shell   `boolean` fill gaps from a POSIX login shell
+                  (blocking, cached; no-op on Windows)
+    timeout_ms    `integer` timeout for the `login_shell` probe (default `3000`)
+
+================================================================================
+DIAGNOSIS                                                  *spawn_env-diagnosis*
+
+`build()` cannot invent a value Neovim never received — that is its honest
+limit. `missing()` reports which known session variables are in that state,
+which is the explanation whenever a keyring-backed CLI fails from Neovim but
+works in the shell next to it:
+
+>lua
+  for _, name in ipairs(require("lib").spawn_env.missing()) do
+    vim.print("not inherited by Neovim: " .. name)
+  end
+<
+
+A non-empty result is the cue to pass `login_shell = true`, or to supply the
+value explicitly via `vars`.
+
+================================================================================
+TECHNICAL NOTES                                            *spawn_env-technical*
+
+Windows PATH key ~
+  Windows environment blocks are case-insensitive and `vim.fn.environ()`
+  reports `Path` there. `build()` looks up the existing key case-insensitively
+  and writes back under it, rather than introducing a second `PATH` entry.
+
+Caching ~
+  `candidate_dirs()` (a filesystem scan) and `login_shell_env()` (a subprocess)
+  are each computed once per session. `clear()` resets both.
+
+No login shell on Windows ~
+  `login_shell_env()` returns `nil` on native Windows. There is no login-shell
+  initialisation step there: a Windows process receives its environment from
+  the user profile at creation time, which Neovim already inherited.
+
+Related ~
+  |lib.nvim-lib.nvim| for the namespace overview;
+  `lua/lib/nvim/cross/run/env/README.md` for the same content with examples;
+  `lib.nvim.cross.run` (shell-string runners), `lib.nvim.cross.run_argv`
+  (argv runners, no shell), `lib.nvim.cross.executable` (is the binary
+  reachable at all?).
+
+================================================================================
+vim:tw=80:ts=2:ft=help:norl:
