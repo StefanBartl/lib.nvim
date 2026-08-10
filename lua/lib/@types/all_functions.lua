@@ -85,8 +85,8 @@
 ---@field require_lazy fun(module_name: string): fun(): table # Lazy-loading wrapper
 ---@field require_safe fun(name: string): boolean, any # Safe require with structured error handling
 ---@field resolve_log_level fun(level?: LogLevel, default?: LogLevelNumber): integer # Resolve log level
----@field run fun(cmd: string, cb: fun(ok:boolean, res:OsRunResult): nil): nil # Async run using vim.system when available; falls back to jobstart
----@field run_blocking fun(cmd: string): OsRunResult # Blocking run (utility for quick conversions / probing)
+---@field run fun(cmd: string, cb: fun(ok:boolean, res:OsRunResult), opts?: Lib.Cross.Run.RunOpts): nil # Async run using vim.system when available; falls back to jobstart. Enriched via cross.run.env by default (opts.env = false to opt out)
+---@field run_blocking fun(cmd: string, opts?: Lib.Cross.Run.RunOpts): OsRunResult # Blocking run (utility for quick conversions / probing). Enriched via cross.run.env by default
 ---@field safe Lib.Notify.Safe
 ---@field set fun(group: string, opts: Lib.Highlight.Opts, ns: string|integer|nil)-
 ---@field shell fun(): OsShell # Pick a shell suitable for the platform

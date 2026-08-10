@@ -45,6 +45,11 @@ involved — a fast way to confirm the cause is the environment, not the spawn.
 Before this module, every plugin that cared hand-rolled its own
 `vim.tbl_extend("force", vim.fn.environ(), { ... })`.
 
+`lib.nvim.cross.run`'s shell-string runners (`run`/`run_blocking`,
+|lib.nvim-spawn-env-run-integration| below) already build on this module by
+default, so a plugin that only needs to run a shell command string gets the
+fix without calling anything here directly.
+
 ================================================================================
 USAGE                                                          *spawn_env-usage*
 
@@ -64,6 +69,24 @@ USAGE                                                          *spawn_env-usage*
   -- Recover state Neovim's own process never received (POSIX, blocking)
   local e = env.build({ login_shell = true })
 <
+
+                                                    *lib.nvim-spawn-env-run-integration*
+`lib.nvim.cross.run`'s `run`/`run_blocking` (shell-string runners) call
+`env.build()` themselves before every spawn — no explicit `env.build()` call
+needed for that path:
+
+>lua
+  local run = require("lib.nvim.cross.run")
+
+  run.run_blocking("gh auth status")                    -- enriched by default
+  run.run_blocking("gh api /user", { env_opts = { login_shell = true } })
+  run.run_blocking("echo $PATH", { env = false })        -- opt out entirely
+<
+
+See `:help lib.nvim.cross.run` (`lua/lib/nvim/cross/run/README.md`) for the
+full `opts.env`/`opts.env_opts` contract. Argv-based runners
+(`cross.uv.spawn_capture`/`spawn_stream`, `cross.run_argv`) are not wired to
+this by default — pass `env.build()`/`env.apply()` explicitly there.
 
 ================================================================================
 API REFERENCE                                                    *spawn_env-api*

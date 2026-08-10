@@ -31,6 +31,7 @@ CONTENTS                                              *lib.nvim-fs-contents*
        polymorphic_rootresolver .. |lib.nvim-fs-polymorphic_rootresolver|
   6. Scanning ........................................ |lib.nvim-fs-scanning|
        collect_recursive .................... |lib.nvim-fs-collect_recursive|
+       collect_async ............................ |lib.nvim-fs-collect_async|
        scan_cached ............................. |lib.nvim-fs-scan_cached|
        scan_roots ................................ |lib.nvim-fs-scan_roots|
   7. IO ............................................... |lib.nvim-fs-io|
@@ -266,6 +267,30 @@ Options ~
                                         prune a path (and, for a dir, its
                                         whole subtree) when it returns true
 
+collect_async({root}, {opts}, {on_done})     *lib.nvim-fs-collect_async*
+
+Non-blocking counterpart to `collect`, same result and same `opts`. The
+synchronous walk above blocks the caller until each `fs_scandir`/`fs_stat`
+syscall returns — fine for a handful of directories, but stalls Neovim's
+main loop for the whole walk on a large tree (a `node_modules`, a
+monorepo). `collect_async` uses the async form of those same libuv calls,
+one directory at a time, driven by a small internal coroutine so the walk
+still reads like a plain recursive function — no callback pyramid — while
+control genuinely returns to the event loop between calls. `files_async`/
+`dirs_async` mirror `files`/`dirs`. >lua
+
+    local cancel = collect_recursive.collect_async("/repo", { kind = "files" }, function(paths)
+      -- called once, vim.schedule-dispatched
+    end)
+    -- cancel()  -- stop early; on_done will not fire at all
+<
+Not a parallel scan and not necessarily a wall-clock speedup — the fix is
+for main-loop responsiveness during a large tree, not raw throughput;
+siblings are still visited sequentially, deliberately, to keep the
+coroutine driver simple. Returns a `cancel()` function: calling it stops
+the walk after its current in-flight libuv call settles, and `on_done` is
+not called at all afterward.
+
 ------------------------------------------------------------------------------
 scan_cached({root}, {opts})                        *lib.nvim-fs-scan_cached*
 
@@ -284,6 +309,11 @@ Options ~
 
 Cache key is `root .. ":" .. kind`; only the walk is cached, not any
 downstream per-path work.
+
+`M.scan_async(root, opts, on_done)` is the non-blocking counterpart: a
+cache miss walks via `collect_recursive.collect_async` instead of
+blocking; a cache hit still calls `on_done` (vim.schedule-dispatched
+either way, so both branches behave the same to a caller).
 
 ------------------------------------------------------------------------------
 scan_roots({roots}, {opts})                          *lib.nvim-fs-scan_roots*
@@ -305,6 +335,12 @@ Options ~
                                           JSON file
     ttl_seconds    integer               cache lifetime; omit for "never
                                           expires until manually invalidated"
+
+`M.scan_async(roots, opts, on_done)` is the non-blocking counterpart: same
+options and cache semantics (the JSON cache file itself is still read/
+written synchronously — one small file, not the part that scales badly),
+roots still walked sequentially, one `collect_async` call chained into the
+next.
 
 ==============================================================================
 7. IO                                                     *lib.nvim-fs-io*

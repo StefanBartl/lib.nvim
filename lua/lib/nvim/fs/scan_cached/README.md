@@ -31,6 +31,13 @@ local lua_files = scan_cached.scan("/repo/lua", {
     return not is_dir and abs_path:sub(-4) ~= ".lua"
   end,
 })
+
+-- non-blocking counterpart: same options, walks async on a cache miss
+-- instead of stalling the main loop on a large root; a cache hit still
+-- calls on_done (vim.schedule-dispatched either way).
+scan_cached.scan_async("/repo/lua", { ttl_seconds = 5 }, function(files)
+  -- ...
+end)
 ```
 
 ## Options
@@ -45,6 +52,15 @@ local lua_files = scan_cached.scan("/repo/lua", {
 ## Returns
 
 A flat `string[]` of absolute paths under `root`.
+
+## `scan_async(root, opts?, on_done)`
+
+Non-blocking counterpart to `scan`. Same TTL/`refresh` semantics and cache
+key; a cache miss walks via
+[`collect_recursive.collect_async`](../collect_recursive/README.md#collect_asyncroot-opts-on_done)
+instead of the blocking walk. `on_done(paths)` fires exactly once, always
+`vim.schedule`-dispatched — on a cache hit too, so both paths behave the
+same from a caller's perspective.
 
 ## Notes
 

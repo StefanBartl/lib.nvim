@@ -15,4 +15,10 @@ then absorbs so nobody has to re-solve it.
 - **[subprocess-env.md](subprocess-env.md)** — spawned subprocesses inherit
   Neovim's own environment, not a login shell's: incomplete `PATH`,
   unreachable OS keyring. `lib.nvim.cross.run.env` builds the completed
-  environment for `vim.system`/`vim.uv.spawn`/`jobstart`.
+  environment for `vim.system`/`vim.uv.spawn`/`jobstart`; `cross.run`'s
+  `run`/`run_blocking` apply it by default.
+- **[async-directory-walk.md](async-directory-walk.md)** — recursive
+  directory scans (`collect_recursive`, and `scan_cached`/`scan_roots` built
+  on it) block the main loop on large trees. Coroutine-driven `*_async`
+  counterparts fix that without a callback pyramid or a general async
+  framework.

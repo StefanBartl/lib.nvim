@@ -28,19 +28,48 @@ print(res.code, res.stdout)
 local ok, err = run.run_detached({ "explorer.exe", "C:\\" })
 ```
 
-### `run(cmd, cb)`
+### `run(cmd, cb, opts?)`
 
 Runs `cmd` (a shell command string) through `shell()` asynchronously. Uses
 `vim.system` when available; falls back to `vim.fn.jobstart` with buffered
 stdout/stderr on older Neovim. `cb(ok, res)` always fires, with
 `res = { code, signal, stdout, stderr }` (all defaulted so none are `nil`).
 
-### `run_blocking(cmd) -> OsRunResult`
+### `run_blocking(cmd, opts?) -> OsRunResult`
 
 Synchronous equivalent of `run`. Uses `vim.system(...):wait()` when
 available; otherwise falls back to `vim.fn.systemlist()` plus
 `vim.v.shell_error`, returning `stderr = "systemlist failed"` if that call
-itself errors.
+itself errors — the `opts.env`/enrichment below has no effect on this legacy
+fallback path, since `systemlist()` takes no `env` of its own.
+
+### `env` enrichment (default on)
+
+Both `run` and `run_blocking` pass every spawned command through
+`lib.nvim.cross.run.env.build()` by default — a guaranteed-complete `PATH`
+plus recoverable session/keyring variables (see
+[`docs/FEATURES/subprocess-env.md`](../../../../../docs/FEATURES/subprocess-env.md)).
+No code changes needed to get that fix; `opts` only exists to tune or opt out
+of it:
+
+```lua
+-- Default: env is cross.run.env.build() — completed PATH, session vars.
+run.run_blocking("gh auth status")
+
+-- Add/override specific vars, still on top of the completed environment.
+run.run_blocking("echo $MY_TOKEN", { env = { MY_TOKEN = token } })
+
+-- Tune the underlying build() call (see cross.run.env's own opts).
+run.run_blocking("gh api /user", { env_opts = { login_shell = true } })
+
+-- Opt out entirely — bare vim.system/jobstart inheritance, the
+-- pre-cross.run.env behaviour.
+run.run_blocking("echo $PATH", { env = false })
+```
+
+`opts.env` as a table is folded in as overrides on top of the built
+environment (same precedence as `cross.run.env.apply()`); `opts.env_opts` is
+passed straight through to `build()`.
 
 ### `run_detached(argv) -> ok, err`
 

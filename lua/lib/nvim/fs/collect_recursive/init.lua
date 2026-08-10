@@ -11,6 +11,12 @@
 --- local all = collect_recursive.collect("/repo", { kind = "files" })
 --- local files = collect_recursive.files("/repo", { ignore = function(p) return p:match("/%.git$") ~= nil end })
 --- local dirs = collect_recursive.dirs("/repo")
+---
+--- -- Non-blocking counterpart, same options, for large trees (node_modules-
+--- -- sized) where the synchronous walk above would stall the main loop:
+--- local cancel = collect_recursive.collect_async("/repo", { kind = "files" }, function(paths)
+---   -- called once, vim.schedule-dispatched
+--- end)
 ---```
 
 require("lib.nvim.fs.collect_recursive.@types")
@@ -94,6 +100,194 @@ end
 ---@return string[]
 function M.dirs(root, opts)
   return M.collect(root, vim.tbl_extend("force", opts or {}, { kind = "dirs" }))
+end
+
+-- ============================================================================
+-- Async walk — same result as `collect()`, without blocking the main loop.
+--
+-- `walk()` above is synchronous: `uv.fs_scandir`/`fs_stat` without a
+-- callback block the caller until the syscall returns, which is fine for a
+-- handful of directories but stalls Neovim's UI on a large tree (a
+-- `node_modules`, a monorepo). The libuv calls below take a callback instead
+-- and become genuinely async — the event loop keeps servicing input/redraws
+-- while a scan is in flight — but chaining raw callbacks through recursive
+-- directory descent produces exactly the callback-pyramid mess `fs/write/
+-- async` was flagged for in the plenary/libuv research this was born from.
+--
+-- `await`/`run_async` are a minimal coroutine-based async/await: `walk_async`
+-- below reads like the synchronous `walk()` above (plain recursive calls,
+-- one `await()` per libuv call) while every `await()` actually yields
+-- control back to the event loop. No promise/future objects, no scheduler
+-- beyond `step()` — deliberately not a plenary.async port (see
+-- docs/ROADMAP/personal/lib_nvim.nvim/plenary-libuv-research.md, "async"
+-- row: "kein clear Bedarf"; the collect_async use case is exactly the
+-- exception that *does* need it).
+-- ============================================================================
+
+---@internal
+--- Suspend the running coroutine until `starter` settles. `starter(resume)`
+--- must arrange for `resume(...)` to be called — typically by passing it
+--- straight through as a libuv callback. Whatever `resume` receives becomes
+--- this call's return values. Only valid inside a coroutine driven by
+--- `run_async`.
+---@param starter fun(resume: fun(...))
+---@return ... whatever `resume` was called with
+local function await(starter)
+  return coroutine.yield(starter)
+end
+
+---@internal
+--- Drive a coroutine written against `await()` to completion. `on_done` is
+--- called once with the coroutine body's return value, `vim.schedule`-
+--- dispatched — every resume happens from inside a raw libuv callback (fast-
+--- event context), so nothing past the last `await()` may safely touch
+--- `vim.fn`/`vim.api` without this.
+---@param body fun(): any
+---@param on_done fun(result: any)
+local function run_async(body, on_done)
+  local co = coroutine.create(body)
+
+  local function step(...)
+    local resume_ok, starter_or_result = coroutine.resume(co, ...)
+    if not resume_ok then
+      -- A bug in `body` (or in an `ignore` callback it invokes) surfaces
+      -- here, inside a libuv callback rather than the caller's own stack —
+      -- routed through vim.schedule + vim.notify so it reaches :messages
+      -- instead of vanishing into (or crashing) the event loop.
+      vim.schedule(function()
+        vim.notify(
+          "[lib.nvim.fs.collect_recursive] collect_async: " .. tostring(starter_or_result),
+          vim.log.levels.ERROR
+        )
+      end)
+      return
+    end
+    if coroutine.status(co) == "dead" then
+      vim.schedule(function()
+        on_done(starter_or_result)
+      end)
+      return
+    end
+    -- `starter_or_result` is what `body` handed to `await()`: a starter
+    -- function expecting `step` itself as its `resume` callback.
+    starter_or_result(step)
+  end
+
+  step()
+end
+
+---@internal
+---Async counterpart to `walk()`. Same traversal/ignore/kind semantics;
+---every `uv.fs_scandir`/`uv.fs_stat` call is awaited instead of blocking.
+---@param dir string
+---@param opts Lib.Fs.CollectRecursive.Opts
+---@param out string[]
+---@param is_cancelled fun(): boolean
+local function walk_async(dir, opts, out, is_cancelled)
+  if is_cancelled() then
+    return
+  end
+
+  local scandir_err, handle = await(function(resume)
+    uv.fs_scandir(dir, resume)
+  end)
+  if scandir_err or not handle then
+    return
+  end
+
+  while true do
+    if is_cancelled() then
+      return
+    end
+
+    local name, kind_hint = uv.fs_scandir_next(handle)
+    if not name then
+      break
+    end
+
+    local abs_path = dir .. "/" .. name
+
+    local is_dir
+    if kind_hint == "directory" then
+      is_dir = true
+    elseif kind_hint == "file" then
+      is_dir = false
+    else
+      local _, st = await(function(resume)
+        uv.fs_stat(abs_path, resume)
+      end)
+      is_dir = (st and st.type == "directory") or false
+    end
+
+    if is_dir then
+      local ignored = opts.ignore ~= nil and opts.ignore(abs_path, true) or false
+      if not ignored then
+        if opts.kind ~= "files" then
+          out[#out + 1] = abs_path
+        end
+        walk_async(abs_path, opts, out, is_cancelled)
+      end
+    else
+      local ignored = opts.ignore ~= nil and opts.ignore(abs_path, false) or false
+      if not ignored and opts.kind ~= "dirs" then
+        out[#out + 1] = abs_path
+      end
+    end
+  end
+end
+
+---Async counterpart to `collect()`: same result, without blocking the main
+---loop while it walks. `on_done(paths)` fires exactly once, `vim.schedule`-
+---dispatched — never for a cancelled walk.
+---
+---This walks one directory at a time (async, not blocking, but not
+---parallel either) — the fix for main-loop stalls on a large tree, not a
+---wall-clock speedup; concurrent sibling scanning was left out to keep the
+---coroutine driver simple (see the module-level comment above `await`).
+---@param root string
+---@param opts? Lib.Fs.CollectRecursive.Opts
+---@param on_done fun(paths: string[])
+---@return fun() cancel Stop after the current in-flight libuv call settles; `on_done` will not fire.
+function M.collect_async(root, opts, on_done)
+  opts = opts or {}
+  opts.kind = opts.kind or "all"
+
+  local cancelled = false
+  local function is_cancelled()
+    return cancelled
+  end
+
+  run_async(function()
+    local out = {}
+    walk_async(root, opts, out, is_cancelled)
+    return out
+  end, function(out)
+    if not cancelled then
+      on_done(out)
+    end
+  end)
+
+  return function()
+    cancelled = true
+  end
+end
+
+---Async convenience: collect only files.
+---@param root string
+---@param opts? Lib.Fs.CollectRecursive.Opts
+---@param on_done fun(paths: string[])
+---@return fun() cancel
+function M.files_async(root, opts, on_done)
+  return M.collect_async(root, vim.tbl_extend("force", opts or {}, { kind = "files" }), on_done)
+end
+
+---Async convenience: collect only directories.
+---@param root string
+---@param opts? Lib.Fs.CollectRecursive.Opts
+---@param on_done fun(paths: string[])
+---@return fun() cancel
+function M.dirs_async(root, opts, on_done)
+  return M.collect_async(root, vim.tbl_extend("force", opts or {}, { kind = "dirs" }), on_done)
 end
 
 ---@type Lib.Fs.CollectRecursive

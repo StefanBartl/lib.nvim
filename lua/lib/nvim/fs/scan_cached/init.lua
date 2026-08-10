@@ -56,5 +56,38 @@ function M.scan(root, opts)
   return found
 end
 
+---Async counterpart to `scan`: same TTL cache, but a cache miss walks via
+---`collect_recursive.collect_async` instead of blocking the main loop.
+---A cache hit still calls `on_done` — `vim.schedule`-dispatched, matching
+---the miss path, so callers can treat both uniformly.
+---@param root string
+---@param opts? Lib.Fs.ScanCached.Opts
+---@param on_done fun(paths: string[])
+---@return nil
+---@see lib.nvim.fs.collect_recursive.collect_async
+function M.scan_async(root, opts, on_done)
+  opts = opts or {}
+  local kind = opts.kind or "files"
+  local ttl = opts.ttl_seconds or DEFAULT_TTL_SECONDS
+  local key = root .. ":" .. kind
+
+  local ns = memory.namespace("lib.nvim.fs.scan_cached", { ttl = ttl })
+
+  if not opts.refresh then
+    local cached = ns.get(key)
+    if cached then
+      vim.schedule(function()
+        on_done(cached)
+      end)
+      return
+    end
+  end
+
+  collect_recursive.collect_async(root, { kind = kind, ignore = opts.ignore }, function(found)
+    ns.set(key, found)
+    on_done(found)
+  end)
+end
+
 ---@type Lib.Fs.ScanCached
 return M
