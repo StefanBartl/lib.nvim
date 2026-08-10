@@ -9,5 +9,6 @@
 
 ---@class Lib.Fs.ScanCached
 ---@field scan fun(root: string, opts?: Lib.Fs.ScanCached.Opts): string[]
+---@field scan_async fun(root: string, opts: Lib.Fs.ScanCached.Opts|nil, on_done: fun(paths: string[])): nil # Non-blocking counterpart to `scan`; a cache hit still calls on_done, vim.schedule-dispatched.
 
 return {}

@@ -199,6 +199,11 @@ M.collect(root: string, opts?: Lib.Fs.CollectRecursive.Opts): string[]
   -- opts.kind: "all"|"files"|"dirs" (default "all"), opts.ignore: fun(abs_path, is_dir): boolean
 M.files(root: string, opts?): string[]   -- shorthand, kind = "files"
 M.dirs(root: string, opts?): string[]    -- shorthand, kind = "dirs"
+M.collect_async(root: string, opts?: Lib.Fs.CollectRecursive.Opts, on_done: fun(paths: string[])): fun() cancel
+  -- non-blocking counterpart; coroutine-driven over async fs_scandir/fs_stat, one dir
+  -- at a time (not parallel); on_done always vim.schedule-dispatched, never after cancel()
+M.files_async(root: string, opts?, on_done): fun() cancel   -- shorthand, kind = "files"
+M.dirs_async(root: string, opts?, on_done): fun() cancel    -- shorthand, kind = "dirs"
 ```
 
 ### `lib.nvim.fs.scan_cached` (see README)
@@ -207,15 +212,22 @@ lifetime); built on `collect_recursive` + `lib.nvim.cache.memory`.
 
 ```
 M.scan(root: string, opts?: Lib.Fs.ScanCached.Opts): string[]
+M.scan_async(root: string, opts?: Lib.Fs.ScanCached.Opts, on_done: fun(paths: string[])): nil
+  -- non-blocking counterpart; a miss walks via collect_recursive.collect_async,
+  -- a hit still calls on_done (vim.schedule-dispatched either way)
 ```
 `opts`: `kind` (default `"files"`), `ignore`, `ttl_seconds` (default 5), `refresh`.
 
 ### `lib.nvim.fs.scan_roots` (see README)
 Scan multiple root directories, with directory-name ignoring and an
-optional TTL-based on-disk JSON cache. Sequential by design.
+optional TTL-based on-disk JSON cache. Sequential by design — `scan_async`
+too, one root at a time, not in parallel.
 
 ```
 M.scan(roots: string[], opts?: Lib.Fs.ScanRoots.Opts): string[]
+M.scan_async(roots: string[], opts?: Lib.Fs.ScanRoots.Opts, on_done: fun(paths: string[])): nil
+  -- non-blocking counterpart; the JSON cache file itself is still read/written
+  -- synchronously, only the per-root walk is async
 ```
 `opts`: `ignore_dirs` (default `{}`), `kind` (default `"files"`), `cache_path?`, `ttl_seconds?` (nil = never expires).
 

@@ -197,12 +197,19 @@ detached). For argv-based execution with no shell, see `run_argv`.
 M.shell(): OsShell
   -- { prog = "powershell", args = {...}, is_powershell = true } on native Windows,
   -- else { prog = "sh", args = { "-lc" }, is_powershell = false }
-M.run(cmd: string, cb: fun(ok: boolean, res: OsRunResult))
+M.run(cmd: string, cb: fun(ok: boolean, res: OsRunResult), opts?: Lib.Cross.Run.RunOpts)
   -- async; vim.system when available, else jobstart; res = { code, signal, stdout, stderr }
-M.run_blocking(cmd: string): OsRunResult
+M.run_blocking(cmd: string, opts?: Lib.Cross.Run.RunOpts): OsRunResult
 M.run_detached(argv: string[]): boolean ok, string|nil err
   -- fire-and-forget; Windows/WSL routes through jobstart(detach=true) (vim.system unreliable for GUI there)
 ```
+`run`/`run_blocking` are enriched via `run.env.build()` by default — every
+spawned command gets a completed `PATH` plus recoverable session/keyring
+variables without any caller change. `opts`: `env?` (table folded in as
+overrides, or `false` to opt out of enrichment entirely — bare
+`vim.system`/`jobstart` inheritance), `env_opts?` (passed straight through to
+`run.env.build()`, e.g. `{ login_shell = true }`). Has no effect on the
+`systemlist()` legacy fallback of `run_blocking`, which takes no `env`.
 
 ### `lib.nvim.cross.run.env` (see README)
 Spawn-environment builder. A subprocess inherits **Neovim's own** process

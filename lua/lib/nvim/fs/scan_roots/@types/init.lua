@@ -13,5 +13,6 @@
 
 ---@class Lib.Fs.ScanRoots
 ---@field scan fun(roots: string[], opts?: Lib.Fs.ScanRoots.Opts): string[]
+---@field scan_async fun(roots: string[], opts: Lib.Fs.ScanRoots.Opts|nil, on_done: fun(paths: string[])): nil # Non-blocking counterpart to `scan`; roots are still walked sequentially, not in parallel. Always vim.schedule-dispatched.
 
 return {}

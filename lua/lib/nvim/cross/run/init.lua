@@ -18,20 +18,55 @@ function M.shell()
   return { prog = "sh", args = { "-lc" }, is_powershell = false }
 end
 
+---@internal
+--- Resolve the `env` table to hand `vim.system`/`jobstart`. By default every
+--- `run`/`run_blocking` call is enriched via `cross.run.env.build()` — a
+--- guaranteed-complete `PATH` plus recoverable session/keyring variables —
+--- so callers get that fix without doing anything (see
+--- `docs/FEATURES/subprocess-env.md`). `opts.env = false` opts a call back
+--- out entirely, reverting to bare `vim.system`/`jobstart` inheritance (the
+--- pre-existing behaviour); `opts.env` as a table is folded in as overrides
+--- on top of the built environment, same precedence as `env.apply()`.
+---@param opts Lib.Cross.Run.RunOpts
+---@return table<string,string>|nil
+local function resolve_env(opts)
+  if opts.env == false then
+    return nil
+  end
+
+  local build_opts = opts.env_opts or {}
+  if type(opts.env) == "table" then
+    build_opts = vim.tbl_extend(
+      "force",
+      build_opts,
+      { vars = vim.tbl_extend("force", opts.env, build_opts.vars or {}) }
+    )
+  end
+
+  return require("lib.nvim.cross.run.env").build(build_opts)
+end
+
 --- Async run using vim.system when available; falls back to jobstart.
 ---@param cmd string
 ---@param cb fun(ok:boolean, res:OsRunResult)
+---@param opts? Lib.Cross.Run.RunOpts
 ---@return nil
-function M.run(cmd, cb)
+function M.run(cmd, cb, opts)
+  opts = opts or {}
   local sh = M.shell()
+  local env = resolve_env(opts)
   local function pack(code, signal, stdout, stderr)
     return { code = code or 0, signal = signal or 0, stdout = stdout or "", stderr = stderr or "" }
   end
 
   if vim.system then
-    vim.system({ sh.prog, sh.args[1], sh.args[2], sh.args[3], cmd }, { text = true }, function(obj)
-      cb(obj.code == 0, pack(obj.code, obj.signal, obj.stdout, obj.stderr))
-    end)
+    vim.system(
+      { sh.prog, sh.args[1], sh.args[2], sh.args[3], cmd },
+      { text = true, env = env },
+      function(obj)
+        cb(obj.code == 0, pack(obj.code, obj.signal, obj.stdout, obj.stderr))
+      end
+    )
     return
   end
 
@@ -41,6 +76,7 @@ function M.run(cmd, cb)
   local jid = vim.fn.jobstart(full, {
     stdout_buffered = true,
     stderr_buffered = true,
+    env = env,
     on_stdout = function(_, data)
       if data then
         stdout = data
@@ -62,12 +98,15 @@ end
 
 --- Blocking run (utility for quick conversions / probing).
 ---@param cmd string
+---@param opts? Lib.Cross.Run.RunOpts
 ---@return OsRunResult
-function M.run_blocking(cmd)
+function M.run_blocking(cmd, opts)
+  opts = opts or {}
   local sh = M.shell()
+  local env = resolve_env(opts)
   if vim.system then
     local obj = vim
-      .system({ sh.prog, sh.args[1], sh.args[2], sh.args[3], cmd }, { text = true })
+      .system({ sh.prog, sh.args[1], sh.args[2], sh.args[3], cmd }, { text = true, env = env })
       :wait()
     return {
       code = obj.code or 1,
@@ -76,7 +115,9 @@ function M.run_blocking(cmd)
       stderr = obj.stderr or "",
     }
   end
-  -- Minimal blocking fallback via systemlist()
+  -- Minimal blocking fallback via systemlist(). systemlist() has no env
+  -- parameter of its own; a caller relying on `opts.env`/enrichment here
+  -- degrades silently to bare process inheritance on this legacy path.
   local full = sh.prog .. " " .. table.concat(sh.args, " ") .. " " .. cmd
   local ok, out = pcall(vim.fn.systemlist, full)
   local code = vim.v.shell_error or 1

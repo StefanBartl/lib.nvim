@@ -85,13 +85,35 @@ fully fixable from inside Neovim, cause **B** is not, in general. That is
 what `missing()` is for: a non-empty result *is* the explanation, and the
 cue to pass `login_shell = true` or an explicit `vars` entry.
 
+## Wired in by default: `lib.nvim.cross.run`
+
+`cross.run`'s shell-string runners (`run`/`run_blocking`) call `env.build()`
+themselves before every spawn — a plugin that only needs to run a command
+**string** gets the fix without touching this module at all:
+
+```lua
+local run = require("lib.nvim.cross.run")
+
+run.run_blocking("gh auth status")                    -- enriched by default
+run.run_blocking("gh api /user", { env_opts = { login_shell = true } })
+run.run_blocking("echo $PATH", { env = false })        -- opt out entirely
+```
+
+See `lua/lib/nvim/cross/run/README.md` for the full `opts.env`/`opts.env_opts`
+contract. This is **not** wired into the argv-based runners
+(`cross.uv.spawn_capture`/`spawn_stream`, `cross.run_argv`) — those still need
+an explicit `env = env.build()`/`env.apply(...)` call.
+
 ## Adoption
 
 Consumers still to migrate off their own env handling (or off implicit
 inheritance): `reposcope.nvim` (gh/curl/wget), `github_stats.nvim`,
 `pdfport.nvim` (pandoc/pdftotext/ollama), `sandbox.nvim`
 (docker/podman/nerdctl), `replacer.nvim` (ripgrep), `pickers.nvim`
-(fd/rg).
+(fd/rg). Several of these call argv-based runners directly (not
+`cross.run`'s shell-string path), so migrating them still means an explicit
+`env.build()`/`env.apply()` call at each call site — the default-on wiring
+above only covers `cross.run.run`/`run_blocking` callers.
 
 ## Related
 

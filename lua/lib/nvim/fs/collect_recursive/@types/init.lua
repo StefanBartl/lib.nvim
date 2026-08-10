@@ -11,5 +11,8 @@
 ---@field collect fun(root: string, opts?: Lib.Fs.CollectRecursive.Opts): string[]
 ---@field files fun(root: string, opts?: Lib.Fs.CollectRecursive.Opts): string[]
 ---@field dirs fun(root: string, opts?: Lib.Fs.CollectRecursive.Opts): string[]
+---@field collect_async fun(root: string, opts: Lib.Fs.CollectRecursive.Opts|nil, on_done: fun(paths: string[])): (fun()) # Non-blocking counterpart to `collect`; returns a cancel function. on_done is vim.schedule-dispatched, never called for a cancelled walk.
+---@field files_async fun(root: string, opts: Lib.Fs.CollectRecursive.Opts|nil, on_done: fun(paths: string[])): (fun())
+---@field dirs_async fun(root: string, opts: Lib.Fs.CollectRecursive.Opts|nil, on_done: fun(paths: string[])): (fun())
 
 return {}
