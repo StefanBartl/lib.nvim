@@ -142,7 +142,17 @@ function M.show_once(plugin_name, opts)
     return false
   end
 
-  require("lib.nvim.deps.view").show(plugin_name, result, { manager = opts.manager })
+  -- Deferred, not called inline: `show_once` can end up invoked from a
+  -- restricted context it has no control over — e.g. a statusline component
+  -- that does a bare `require(plugin_name)` on a not-yet-loaded lazy.nvim
+  -- plugin, which runs that plugin's `config()` (and thus `setup()`, and
+  -- thus this) synchronously *during statusline redraw*, where Neovim's
+  -- textlock forbids buffer/window mutation (E565). `vim.schedule` bumps
+  -- the actual floating-window creation to the next safe tick regardless of
+  -- how `show_once` was reached.
+  vim.schedule(function()
+    require("lib.nvim.deps.view").show(plugin_name, result, { manager = opts.manager })
+  end)
   return true
 end
 
