@@ -4,7 +4,6 @@
 
   - [General](#general)
   - [Open concepts (not implemented)](#open-concepts-not-implemented)
-  - [Finish](#finish)
 
 ---
 
@@ -43,10 +42,3 @@ rejected.
 
 ---
 
-## Finish
-
-1. Expand modules
-2. Optimizations
-3. Create a ROADMAP of features that might be worthwhile
-
----
