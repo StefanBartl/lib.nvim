@@ -50,10 +50,6 @@ Markdown/browser reports, `:RATelemetry`) moved to
 This repo keeps a thin caller, `lib.strategies.telemetry_wrap`, for
 instrumenting `require("lib")`'s own metatable-hidden aggregate specifically.
 
-## `lib.vim.*` — classic Vim
-
-Mirrors the public API of `lib.nvim.*`. Where a port onto `vim.fn`/Vimscript is feasible there is a real implementation; otherwise an adapter with the identical signature raises a clear not-implemented error. See [`doc/vim-parity.md`](../doc/vim-parity.md) for the porting status.
-
 ## Per-module documentation
 
 Larger modules carry their own detailed docs. Markdown references sit next to

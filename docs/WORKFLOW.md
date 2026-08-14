@@ -49,11 +49,7 @@ this to a user.
 `lib.lua.*` is editor-independent (no `vim` API at all — safe to unit-test
 outside Neovim, safe to eventually move to a standalone Lua library).
 `lib.nvim.*` is the Neovim adapter layer — this is what you want for
-essentially everything in a real plugin. `lib.vim.*` mirrors `lib.nvim.*`
-with API-compatible signatures for classic Vim, and is a stub/not-implemented
-surface for anything that has no classic-Vim equivalent (floats, for
-instance) — don't reach for it unless you specifically support non-Neovim
-Vim.
+essentially everything in a real plugin.
 
 ## Registering a command: raw API, `usercmd.create`, or `composer`?
 

@@ -267,8 +267,7 @@ window.close_on_focus_lost(winid)  -- also closes when clicking away
 
 ## Notes
 
-* Float-specific functions (`set_title`, `center`) have no equivalent in classic
-  Vim; in `lib.vim.*` they are carried as a not-implemented stub with the same
-  signature (see [`doc/vim-parity.md`](../../../../doc/vim-parity.md)).
+* Float-specific functions (`set_title`, `center`) have no classic-Vim
+  equivalent — floating windows are a Neovim-only concept.
 * All functions are defensive: invalid window IDs return a safe value
   (`false` / `nil`) plus a debug `notify`, instead of throwing.
