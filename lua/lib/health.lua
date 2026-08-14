@@ -29,7 +29,6 @@ local PROBE = {
   "lib.nvim.ui.kit",
   "lib.nvim.usercmd.composer",
   "lib.nvim.autocmd.dispatcher",
-  "lib.vim.notify",
 }
 
 ---@internal
@@ -140,11 +139,6 @@ function M.check()
       end
     end
   end
-
-  -- Classic Vim parity ----------------------------------------------------
-  h_start("lib.nvim: lib.vim parity")
-  h_info("lib.vim.* are API-compatible stubs for classic Vim.")
-  h_info("Calling an unported function raises a clear error. See doc/vim-parity.md.")
 end
 
 return M

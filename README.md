@@ -58,10 +58,10 @@ See [docs/installation.md](docs/installation.md) for config-wide setup (needed b
 
 ## Documentation
 
-- [Architecture](docs/architecture.md) — the `lib.lua.*` / `lib.nvim.*` / `lib.vim.*` namespace split and its guiding rule.
+- [Architecture](docs/architecture.md) — the `lib.lua.*` / `lib.nvim.*` namespace split and its guiding rule.
 - [Installation](docs/installation.md) — installing as a plugin dependency vs. config-wide bootstrap.
 - [Usage](docs/usage.md) — requiring modules directly or via the aggregator.
-- [Namespaces & modules](docs/modules.md) — full module reference for `lib.lua.*`, `lib.nvim.*`, and `lib.vim.*`, plus links to per-module docs.
+- [Namespaces & modules](docs/modules.md) — full module reference for `lib.lua.*` and `lib.nvim.*`, plus links to per-module docs.
 - [Features](docs/FEATURES/README.md) — cross-cutting capabilities written up as problem → solution (e.g. the [subprocess environment](docs/FEATURES/subprocess-env.md) a spawned CLI actually sees).
 - [Configuration](docs/configuration.md) — the `require("lib")` aggregator strategies and their defaults.
 - [Health](docs/health.md) — using `:checkhealth lib` to verify your setup.

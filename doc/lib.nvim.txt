@@ -9,7 +9,6 @@ CONTENTS                                                    *lib.nvim-contents*
   4. Namespaces ............................... |lib.nvim-namespaces|
        lib.lua ................................ |lib.nvim-lib.lua|
        lib.nvim ............................... |lib.nvim-lib.nvim|
-       lib.vim ................................ |lib.nvim-lib.vim|
   5. Configuration ............................ |lib.nvim-config|
   6. Health ................................... |lib.nvim-health|
   7. Conventions .............................. |lib.nvim-conventions|
@@ -22,15 +21,13 @@ lib.nvim is a reusable Lua/Neovim helper library, extracted from a private
 Neovim configuration so that personal plugins can share one tested base via a
 |lazy.nvim| dependency.
 
-The library is split by responsibility into three namespaces:
+The library is split by responsibility into two namespaces:
 
     lib.lua.*    general, editor-independent Lua helpers (no `vim` API)
     lib.nvim.*   Neovim-specific helpers (adapters onto the `vim` API)
-    lib.vim.*    optional classic-Vim implementations, API-compatible
 
 Guiding rule: anything that does not need the `vim` API belongs in lib.lua.*.
-lib.nvim.* is only an adapter onto Neovim. lib.vim.* mirrors lib.nvim.* with a
-compatible signature for classic Vim where feasible.
+lib.nvim.* is only an adapter onto Neovim.
 
 ==============================================================================
 2. INSTALLATION                                         *lib.nvim-installation*
@@ -225,14 +222,6 @@ Neovim adapters.
                            delete; drive release() from cross.fs.mutate's
                            on_retry hook, see lua/lib/nvim/neotree/watch/README.md)
 
-------------------------------------------------------------------------------
-lib.vim                                                      *lib.nvim-lib.vim*
-
-Mirrors the public API of lib.nvim.* for classic Vim. Where a port onto
-`vim.fn`/Vimscript is feasible there is a real implementation; otherwise an
-adapter with the identical signature raises a clear not-implemented error.
-See the bundled doc/vim-parity.md for the porting status.
-
 ==============================================================================
 5. CONFIGURATION                                              *lib.nvim-config*
 
@@ -259,8 +248,8 @@ Run a diagnostic with: >
 
     :checkhealth lib
 <
-It reports the Neovim version, the configured aggregator strategy, whether a
-representative set of modules resolves, and the lib.vim parity status.
+It reports the Neovim version, the configured aggregator strategy, and
+whether a representative set of modules resolves.
 
 ==============================================================================
 7. CONVENTIONS                                           *lib.nvim-conventions*
