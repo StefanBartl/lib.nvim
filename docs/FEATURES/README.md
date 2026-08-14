@@ -28,7 +28,8 @@ tree.
   persistence, crash capture, near-zero-cost kill switches).
 - **[COMMANDS.md](COMMANDS.md)** — `lib.nvim.usercmd` and the `composer`
   subsystem (the most widely-used module in the library — 30+ consuming
-  plugins), plus `autocmd`, `map`, `dotrepeat`, `debounce`.
+  plugins), plus `autocmd` (incl. `autocmd.dispatcher` — one autocmd, many
+  lazy-loaded, prioritized handlers), `map`, `dotrepeat`, `debounce`.
 - **[WINDOW_BUFFER.md](WINDOW_BUFFER.md)** — overlay/floating window helpers,
   cached window/buffer context, Visual-selection restoration, statusline
   segments, terminal-buffer helpers.
