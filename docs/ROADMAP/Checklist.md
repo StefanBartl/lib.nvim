@@ -107,8 +107,7 @@ custom sort/search/insert/delete hot loops or bit-trick code paths to audit
 against this section.
 
 ## Concentrated action items
-Same as [Arch&Coding.md](Arch&Coding.md#concentrated-action-items):
-missing `@module` tag, recursive `fs` collector candidate, the Neo-tree-
-coupled window helper, and the still-open automated-test gap. Additionally
-from this pass: no lint/CI pipeline (`luacheck`) configured yet — minor,
-`.stylua.toml` covers formatting already.
+Same as [Arch&Coding.md](Arch&Coding.md#concentrated-action-items): the
+still-open automated-test gap. Additionally from this pass: no lint/CI
+pipeline (`luacheck`) configured yet — minor, `.stylua.toml` covers
+formatting already.
