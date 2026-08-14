@@ -145,6 +145,40 @@ underlying API — passing `buffer` routes to buffer-local scoping and
 independently-memoized caches; `autocmd.augroup.create.clear(name)` is a
 third, always-unconditional one-off.
 
+## Autocmd dispatcher
+
+One autocmd, many handlers — a generic dispatcher factory (plus a `FileType`
+convenience wrapper) for plugins that would otherwise hand-roll N separate
+`FileType`/event autocmds, each with its own guard and lazy `require`.
+
+- **Module:** `lib.nvim.autocmd.dispatcher` (`new`), `dispatcher.filetype`
+  (`new`)
+
+```lua
+local dispatcher = require("lib.nvim.autocmd.dispatcher")
+
+local ft = dispatcher.filetype.new({ group = "MyFiletypeDispatcher" })
+ft.register("lua", { load = function() require("lsp.languages.scripting.lua") end,
+  priority = 10, once = true })
+ft.register("noice*", { load = function() require("noice_setup") end })  -- glob key
+ft.attach()
+```
+
+Buys three things a plain `FileType` autocmd doesn't: **uniform lazy
+loading** (`load` is only `require`d once its key actually matches),
+**deterministic ordering** via `priority` (native autocmds fire in
+registration order, effectively arbitrary across plugins), and **per-buffer
+`once`** (`nvim_create_autocmd`'s own `once` is once-globally, not
+once-per-buffer). It is deliberately **not** a performance win over plain
+autocmds for the common case — one autocmd firing for every event and
+matching in Lua does *more* work than native per-pattern dispatch for a
+buffer with no registered handlers; the win is uniformity and the two
+capabilities above, not raw speed. See
+[`lua/lib/nvim/autocmd/dispatcher/README.md`](../../lua/lib/nvim/autocmd/dispatcher/README.md)
+for the full reference, including key-list registrations, glob matching, and
+why two registrations that happen to share one loader still get independent
+`once` tracking.
+
 ## Keymap wrapper
 
 A `vim.keymap.set` wrapper with sane defaults and defensive validation —

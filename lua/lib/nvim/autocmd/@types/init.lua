@@ -31,5 +31,6 @@
 ---@field create fun(event: string|string[], callback: fun(args:Lib.Autocmd.Args), opts: LibAutocmdOpts|nil): integer # Create autocommand, returns its id
 ---@field get_augroup fun(name: string, opts: { clear?: boolean, prefix?: string }|nil): integer # Augroup registry: Centralized augroup creation with optional prefixing and deduplication.
 ---@field augroup Lib.AutoCmd.AuGroup
+---@field dispatcher Lib.Autocmd.Dispatcher
 
 return {}

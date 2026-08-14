@@ -150,7 +150,10 @@ Neovim adapters.
     lib.nvim.logger        structured logging / diagnostics / crash dumps
     lib.nvim.map           keymap helpers
     lib.nvim.usercmd       user-command helpers
-    lib.nvim.autocmd       autocmd / augroup helpers
+    lib.nvim.autocmd       autocmd / augroup helpers; autocmd.dispatcher: one
+                           autocmd, many handlers (lazy-loaded, prioritized,
+                           per-buffer once), plus a FileType convenience
+                           wrapper
     lib.nvim.buffer        buffer helpers (insert_lines, is_markdown_buf,
                            open_background, …); buffer.context: changedtick-
                            cached buffer metadata accessor

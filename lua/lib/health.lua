@@ -28,6 +28,7 @@ local PROBE = {
   "lib.nvim.core",
   "lib.nvim.ui.kit",
   "lib.nvim.usercmd.composer",
+  "lib.nvim.autocmd.dispatcher",
   "lib.vim.notify",
 }
 

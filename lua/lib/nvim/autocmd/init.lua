@@ -11,6 +11,7 @@ local notify = require("lib.nvim.notify").create("[lib.nvim.autocmd]")
 local M = {}
 
 M.augroup = require("lib.lua.lazy").require("lib.nvim.autocmd.augroup")
+M.dispatcher = require("lib.lua.lazy").require("lib.nvim.autocmd.dispatcher")
 
 ---@type table<string, integer>
 local groups = {}
