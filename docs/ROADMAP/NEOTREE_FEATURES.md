@@ -50,7 +50,7 @@ audits *lib.nvim* against filetree.nvim's category layout) and complements
 | `is_dir`, `is_readable_file`, `is_subpath`, `relpath` | `lib.nvim.fs.is_dir`, `.is_readable_file`, `.is_subpath`, `.relpath` | infra/fileops | 🟡 candidate |
 | Find nearest ancestor dir containing marker files | `lib.nvim.fs.find_upward_dir` | infra | 🟡 candidate — overlaps `actions/project_root` / filetree.nvim's `infra.project_root` |
 | Polymorphic root resolver (multi-strategy project root) | `lib.nvim.fs.polymorphic_rootresolver` | infra | 🟡 candidate, stronger version of the above |
-| **Recursive directory collection** | *(none)* | infra | ❌ **gap** — filetree.nvim's `util.fs` hand-rolls an iterative recursive collector (used by `fs.collect_recursive`, O(n), stack-based). lib.nvim has no equivalent; a `lib.nvim.fs.collect_recursive`-style helper would be a genuine, reusable port target instead of leaving it duplicated per-plugin. |
+| Recursive directory collection (sync + async) | `lib.nvim.fs.collect_recursive` (`collect`/`collect_async`, `files`/`files_async`, `dirs`/`dirs_async`) | infra | 🟡 candidate — closed gap; filetree.nvim's `util.fs` still hand-rolls its own iterative recursive collector and can migrate onto this instead (see [`docs/FEATURES/async-directory-walk.md`](../FEATURES/async-directory-walk.md)). |
 | Path/value normalization (`normalize_path`, `path_kind`, `to_path`, `to_argv`, …) | `lib.nvim.normalize.*` | paths/infra | 🟡 candidate |
 
 ## system / infra — cross-platform
@@ -92,8 +92,9 @@ audits *lib.nvim* against filetree.nvim's category layout) and complements
   maintains locally; migrating means routing through lib.nvim with a local
   fallback so filetree.nvim still runs standalone — same approach it already
   used for `map`/`usercmd`/`autocmd`/`hover_select`.
-- The one concrete **gap** worth closing in lib.nvim first is the recursive
-  directory collector (no `fs.collect_recursive` equivalent yet).
+- The recursive directory collector gap is closed:
+  `lib.nvim.fs.collect_recursive` now exists, sync and async, and is the
+  migration target for filetree.nvim's hand-rolled `util.fs` walker.
 - The former Neo-tree-specific window lookup has been generalized to
   `lib.nvim.window.find_by_filetype(filetype)` — filetree.nvim can now call it
   with whatever filetype its active adapter uses, instead of a Neo-tree-only

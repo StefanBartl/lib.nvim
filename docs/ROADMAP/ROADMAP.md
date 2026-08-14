@@ -15,7 +15,13 @@
    granular source cross-references into specific sections) get deleted once
    shipped: `DEBUG-MODULE-CONCEPT.md`, `project-store.md`,
    `usage-telemetry.md`, `UI-KIT-TASK-native-select.md`,
-   `telemetry-browser-report.md` all went this way.
+   `telemetry-browser-report.md`, `telemetry-documentation-bridge.md` (both
+   sides shipped, and the module it covered — `lib.nvim.telemetry` — has
+   since moved out of this repo entirely, to `runtime-analysis.nvim`; current
+   docs live there and in documentation.nvim's `docs/ECOSYSTEM.md`),
+   `autocmd-dispatcher.md` (shipped as `lib.nvim.autocmd.dispatcher`; current
+   docs live at `lua/lib/nvim/autocmd/dispatcher/README.md` and
+   `docs/FEATURES/COMMANDS.md`) all went this way.
    `UI-KIT-CONCEPT.md` and `usrcmd_builder.md` stay — both are pointed at by
    section number from their module's own shipped source comments, so
    deleting them would leave dead links across live code. Still open: the
@@ -31,14 +37,11 @@ Design proposals that have **not** shipped. A doc leaves this list either by
 being implemented (and then usually deleted — see General §2) or by being
 rejected.
 
-- [autocmd-dispatcher.md](ROADMAP/autocmd-dispatcher.md) — one autocmd, many
-  handlers.
-- [telemetry-documentation-bridge.md](ROADMAP/telemetry-documentation-bridge.md)
-  — cross documentation.nvim's static `dead-function` check with telemetry's
-  runtime counts; each method's blind spot is the other's evidence. The
-  lib.nvim-side contract (`telemetry.load()`, key→module-path resolution)
-  shipped; the documentation.nvim-side consumer (mode 7, the join, the
-  `doccoverage` lines) is still open and lives in that repo's own roadmap.
+- [kit-dashboard.md](ROADMAP/kit-dashboard.md) — a persistent, activatable
+  `ui.kit` list (unlike every existing kit component, one that outlives a
+  single activation) plus a generic file/url/func/dir jump-target union.
+  Analysis only, extracted out of `UI-KIT-CONCEPT.md` §15 — three open
+  design questions listed there before this is ready to build.
 
 ---
 

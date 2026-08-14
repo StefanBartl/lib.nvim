@@ -108,13 +108,5 @@ fast-path pattern. `table.insert` still appears 69 times repo-wide; acceptable
 outside genuine hot paths (the rule is about tight loops, not all inserts).
 
 ## Concentrated action items
-1. ~~Add the missing `---@module` tag to `spawn_shell_command.lua`.~~ Done.
-2. Consider a `lib.nvim.fs.collect_recursive` helper (see
-   [NEOTREE_FEATURES.md](NEOTREE_FEATURES.md) — currently every consumer
-   hand-rolls this).
-3. ~~`lib.nvim.window.neotree.get_neotree_window` bakes in a Neo-tree-specific
-   name/impl.~~ Done — replaced by generic
-   `lib.nvim.window.find_by_filetype(filetype)`, which takes any filetype
-   string instead of hardcoding `"neo-tree"`.
-4. Tests remain the biggest structural gap (§6) — no automated suite exists;
+1. Tests remain the biggest structural gap (§6) — no automated suite exists;
    tracked as a deliberate, later addition.
