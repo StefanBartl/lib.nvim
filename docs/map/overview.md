@@ -3,7 +3,7 @@
 > **Generated** by `documentation`. Do not edit by hand — run `:DocMap`
 > (or `nvim --headless -l scripts/gen_map.lua`) to regenerate.
 
-**140 modules** · 24 namespaces · 124 helper files
+**141 modules** · 24 namespaces · 125 helper files
 
 The [interactive map](index.html) has filtering, full descriptions and
 source links; this page is the version the code host renders directly.
@@ -84,6 +84,7 @@ flowchart LR
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.lua.yaml` | Deliberately minimal, dependency-free YAML-ish decoder, pure Lua. | 7 | [README](../../lua/lib/lua/yaml/README.md) · [src](../../lua/lib/lua/yaml/init.lua) |
 | &nbsp;&nbsp;`lib.nvim` | Namespace-Aggregator für die Neovim-spezifischen Helfer. |  | [README](../../lua/lib/nvim/README.md) · [src](../../lua/lib/nvim/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.autocmd` | ========================================================= Autocommand helper utilities. | 5 | [README](../../lua/lib/nvim/autocmd/README.md) · [src](../../lua/lib/nvim/autocmd/init.lua) |
+| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.autocmd.dispatcher` | Generic, event-agnostic autocmd dispatcher: one autocmd, many handlers. | 4 | [README](../../lua/lib/nvim/autocmd/dispatcher/README.md) · [src](../../lua/lib/nvim/autocmd/dispatcher/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;`buf_win_tab` |  |  |  |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.buf_win_tab.capture` | Deterministic capture of buffers and windows created by Ex commands. | 7 | [README](../../lua/lib/nvim/buf_win_tab/capture/README.md) · [src](../../lua/lib/nvim/buf_win_tab/capture/init.lua) |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`lib.nvim.buf_win_tab.get_option` | Read a buffer option across a wide range of Neovim versions. |  | [README](../../lua/lib/nvim/buf_win_tab/get_option/README.md) · [src](../../lua/lib/nvim/buf_win_tab/get_option/init.lua) |
@@ -224,22 +225,16 @@ flowchart LR
 
 ## Drift
 
-0 errors · 32 warnings · 85 info
+0 errors · 26 warnings · 85 info
 
 | Severity | Check | Message |
 |---|---|---|
-| warn | `doc-references-missing` | docs/TESTS/README.md:38 references 'lib.spawn_env', but lib has no 'spawn_env' |
-| warn | `doc-references-missing` | lua/lib/lua/memo/README.md:277 references 'lib.schedule', but lib has no 'schedule' |
+| warn | `dead-readme-link` | lua/lib/nvim/ui/kit/README.md links to '../../../../../docs/ROADMAP/UI-KIT-CONCEPT.md' which does not exist |
+| warn | `dead-readme-link` | lua/lib/nvim/ui/kit/README.md links to '../../../../../docs/ROADMAP/assets/ui-kit/confirm-buttons.svg' which does not exist |
+| warn | `dead-readme-link` | lua/lib/nvim/usercmd/composer/README.md links to '../../../../../docs/ROADMAP/usrcmd_builder.md' which does not exist |
 | warn | `doc-references-missing` | docs/API/cross-platform.md:245 references 'lib.spawn_env', but lib has no 'spawn_env' |
-| warn | `doc-references-missing` | docs/ROADMAP/Arch&Coding.md:62 references 'lib.lua.functions.safe_call', but lib.lua.functions has no 'safe_call' |
-| warn | `doc-references-missing` | docs/ROADMAP/telemetry-documentation-bridge.md:25 references 'lib.nvim.telemetry', but lib.nvim has no 'telemetry' |
-| warn | `doc-references-missing` | docs/ROADMAP/telemetry-documentation-bridge.md:1 references 'lib.nvim.telemetry', but lib.nvim has no 'telemetry' |
-| warn | `doc-references-missing` | docs/ROADMAP/autocmd-dispatcher.md:126 references 'lib.nvim.docmap', but lib.nvim has no 'docmap' |
-| warn | `doc-references-missing` | docs/ROADMAP/UI-KIT-CONCEPT.md:1023 references 'lib.nvim.action', but lib.nvim has no 'action' |
-| warn | `doc-references-missing` | docs/ROADMAP/telemetry-documentation-bridge.md:38 references 'lib.nvim.telemetry', but lib.nvim has no 'telemetry' |
-| warn | `doc-references-missing` | docs/ROADMAP.md:64 references 'lib.nvim.debug', but lib.nvim has no 'debug' |
-| warn | `doc-references-missing` | docs/ROADMAP/autocmd-dispatcher.md:1 references 'lib.nvim.autocmd.dispatcher', but lib.nvim.autocmd has no 'dispatcher' |
-| warn | `doc-references-missing` | docs/ROADMAP/autocmd-dispatcher.md:179 references 'lib.nvim.autocmd.dispatcher', but lib.nvim.autocmd has no 'dispatcher' |
+| warn | `doc-references-missing` | docs/TESTS/README.md:39 references 'lib.spawn_env', but lib has no 'spawn_env' |
+| warn | `doc-references-missing` | lua/lib/lua/memo/README.md:277 references 'lib.schedule', but lib has no 'schedule' |
 | warn | `doc-references-missing` | lua/lib/nvim/terminal/README.md:26 references 'lib.nvim.normalize.buf_valid', but lib.nvim.normalize has no 'buf_valid' |
 | warn | `type-vs-class` | module table annotated ---@type LibDiffLines, but 1 field(s) are assigned to it — LuaLS reports missing-fields/"fields cannot be injected" for this shape; use ---@class instead (---@class lib.lua.diff.lines : LibDiffLines, plus @see the type definition, if LibDiffLines should still be checked against it) |
 | warn | `type-vs-class` | module table annotated ---@type LibDiffMyers, but 1 field(s) are assigned to it — LuaLS reports missing-fields/"fields cannot be injected" for this shape; use ---@class instead (---@class lib.lua.diff.myers : LibDiffMyers, plus @see the type definition, if LibDiffMyers should still be checked against it) |
