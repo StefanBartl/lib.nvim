@@ -332,4 +332,70 @@ return function(H)
   class.include(Dog, Loud)
   eq(fido:shout(), "FIDO!!!", "class.include: mixin method copied onto the target")
   eq(fido:speak(), "Fido barks", "class.include: target's own method wins over the mixin's")
+
+  -- ------------------------------------------------------ lib.lua.context_manager
+  local with = require("lib.lua.context_manager").with
+
+  -- Success path: release runs, body's result is forwarded.
+  do
+    local released = 0
+    local ok2, result = with(function()
+      return { acquired = true }
+    end, function()
+      released = released + 1
+    end, function(resource)
+      return resource.acquired and "body-ran"
+    end)
+    eq(ok2, true, "with: reports ok on a normal body return")
+    eq(result, "body-ran", "with: forwards body's return value")
+    eq(released, 1, "with: release ran exactly once")
+  end
+
+  -- Multiple return values from body are forwarded, including in the
+  -- presence of an embedded nil (the LuaJIT table.pack/unpack fallback).
+  do
+    local ok3, r1, r2, r3 = with(function()
+      return {}
+    end, function() end, function()
+      return 1, nil, 3
+    end)
+    eq(ok3, true, "with: ok on multi-return body")
+    eq(r1, 1, "with: first return value")
+    eq(r2, nil, "with: embedded nil survives")
+    eq(r3, 3, "with: third return value after the embedded nil")
+  end
+
+  -- body errors: release still runs, and the error surfaces to the caller.
+  do
+    local released = 0
+    local ok4, err = with(function()
+      return {}
+    end, function()
+      released = released + 1
+    end, function()
+      error("body boom")
+    end)
+    ok(not ok4, "with: reports not-ok when body errors")
+    eq(released, 1, "with: release still ran despite the body error")
+    ok(
+      type(err) == "table" and tostring(err.message):match("body boom") ~= nil,
+      "with: the error surfaces to the caller (structured, from error.safe_call)"
+    )
+  end
+
+  -- A failed acquire short-circuits: release is never called, body never runs.
+  do
+    local released, body_ran = 0, false
+    local ok5, err5 = with(function()
+      return nil, "acquire failed"
+    end, function()
+      released = released + 1
+    end, function()
+      body_ran = true
+    end)
+    ok(not ok5, "with: reports not-ok when acquire fails")
+    eq(err5, "acquire failed", "with: acquire's own error is returned verbatim")
+    eq(released, 0, "with: release is never called when acquire fails")
+    ok(not body_ran, "with: body never runs when acquire fails")
+  end
 end
