@@ -271,6 +271,43 @@ require("lib.nvim.system.job").start({
 once per complete line (trailing `\r` stripped), already inside
 `vim.schedule` — safe to touch buffers/windows directly.
 
+### `job.start_blocking(opts) -> vim.SystemCompleted`
+
+Runs a command to completion, blocking the caller, and returns the full
+captured `vim.SystemCompleted` (`.code`, `.stdout`, `.stderr`). Deliberately
+bypasses `on_stdout`/`on_stderr` — `vim.SystemObj:wait()` does not guarantee
+those `vim.schedule`-wrapped callbacks have already fired by the time it
+returns, so a caller that needs output synchronously available on return
+needs raw capture instead, the same reason
+[`lib.nvim.net.curl`](../net/curl/README.md)'s blocking tier captures raw
+`obj.stdout` rather than going through a line callback.
+
+```lua
+local obj = require("lib.nvim.system.job").start_blocking({
+  command = "git", args = { "rev-parse", "HEAD" }, timeout_ms = 5000,
+})
+if obj.code == 0 then print(vim.trim(obj.stdout)) end
+```
+
+### `job.chain(job_specs, on_done)`
+
+Runs a list of job specs in sequence, async, stopping at the first non-zero
+exit — plenary's `Job.chain`/`and_then*`/`after_success` chaining, minus the
+line-buffered tier (same raw-capture reasoning as `start_blocking`). Unless
+a spec sets its own `opts.stdin`, it defaults to the previous step's
+captured stdout.
+
+```lua
+require("lib.nvim.system.job").chain({
+  { command = "echo", args = { "hello" } },
+  { command = "cat" }, -- receives "hello\n" on stdin automatically
+}, function(ok, results)
+  if ok then
+    print(vim.trim(results[#results].stdout)) -- "hello"
+  end
+end)
+```
+
 ---
 
 ## `lib.nvim.system.setup(opts?)`
