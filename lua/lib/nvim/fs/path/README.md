@@ -1,6 +1,9 @@
 # `lib.nvim.fs.path`
 
-Small grab-bag of path helpers that don't warrant their own module.
+Small grab-bag of path helpers that don't warrant their own module. For a
+chainable, `plenary.Path`-style OOP wrapper, see
+[`lib.nvim.fs.path.object`](#lib.nvim.fs.path.object) below — additive,
+not a replacement for the flat API on this page.
 
 ## Usage
 
@@ -42,3 +45,36 @@ and exactly where the old implementation aborted with `E5560: Vimscript
 function must not be called in a fast event context`. Returns `true`
 immediately if `path` has no parent directory (empty, `"."`, or the parent
 already exists); returns `false, "empty path"` if `path` itself is empty/nil.
+
+## `lib.nvim.fs.path.object`
+
+A chainable OOP `Path`, built on [`lib.lua.class`](../../../lua/class/README.md).
+Every method is a thin facade over an existing `lib.nvim.fs` primitive —
+none of the filesystem logic here is new.
+
+```lua
+local Path = require("lib.nvim.fs.path.object")
+
+local p = Path.new("/tmp/report.txt")
+p:write("hello\n")
+p:exists()          --> true
+p:is_dir()           --> false
+p:read()             --> "hello\n"
+p:joinpath("sibling") --> a new Path("/tmp/report.txt/sibling")
+p:parent()            --> a new Path("/tmp")
+p:iter()              --> string[]: every path recursively under this one
+```
+
+| Method               | Delegates to                                      |
+|-----------------------|-----------------------------------------------------|
+| `Path.new(path)`       | —                                                    |
+| `:exists()`            | `(vim.uv or vim.loop).fs_stat`                       |
+| `:is_dir()`            | `(vim.uv or vim.loop).fs_stat`                       |
+| `:read()`              | `lib.nvim.fs.read`                                   |
+| `:write(content)`      | `lib.nvim.fs.write.to_file`                          |
+| `:joinpath(...)`       | `lib.nvim.fs.path.joinpath` — returns a new `Path`   |
+| `:parent()`            | `vim.fs.dirname` — returns a new `Path`              |
+| `:iter(opts?)`         | `lib.nvim.fs.collect_recursive.collect`              |
+
+`:iter()` is a **full recursive walk**, not plenary's shallow
+`Path:iter()` — `collect_recursive` has no depth limit to opt out of.

@@ -25,6 +25,7 @@ return function(H)
     "lib.nvim.fs.scan_roots",
     "lib.nvim.fs.scan_cached",
     "lib.nvim.fs.watch",
+    "lib.nvim.fs.path.object",
     "lib.nvim.fs.write.async",
     "lib.nvim.fs.write.batch",
     "lib.nvim.buf_win_tab.get_option",
@@ -328,6 +329,45 @@ return function(H)
   local encoded, encode_err = nvim_json.encode({ a = 1 })
   eq(encoded, '{"a":1}', "nvim.json.encode: delegates to lib.lua.json.encode")
   eq(encode_err, nil, "nvim.json.encode: no error on encodable input")
+
+  local Path = require("lib.nvim.fs.path.object")
+  local path_dir = tmp .. "/path_obj"
+  vim.fn.mkdir(path_dir, "p")
+
+  local missing_p = Path.new(path_dir .. "/nope.txt")
+  ok(not missing_p:exists(), "Path:exists: a missing file -> false")
+
+  local file_p = Path.new(path_dir):joinpath("note.txt")
+  eq(
+    file_p.path,
+    require("lib.nvim.fs.path").joinpath({ path_dir, "note.txt" }),
+    "Path:joinpath: returns a new Path wrapping fs.path.joinpath's own result"
+  )
+  local write_ok = file_p:write("hi\n")
+  ok(write_ok, "Path:write: succeeds")
+  ok(file_p:exists(), "Path:exists: a written file -> true")
+  ok(not file_p:is_dir(), "Path:is_dir: a file -> false")
+  eq(file_p:read(), "hi\n", "Path:read: reads back what was written")
+
+  local dir_p = Path.new(path_dir)
+  ok(dir_p:exists(), "Path:exists: a real directory -> true")
+  ok(dir_p:is_dir(), "Path:is_dir: a real directory -> true")
+
+  eq(dir_p:parent().path, vim.fs.dirname(path_dir), "Path:parent: matches vim.fs.dirname")
+
+  -- Matched by suffix, not exact string equality: collect_recursive builds
+  -- its paths via raw `dir .. "/" .. name` concatenation, while
+  -- Path:joinpath goes through vim.fs.joinpath's own normalization -- both
+  -- correct, not necessarily byte-identical separator style.
+  local names = dir_p:iter()
+  local found = false
+  for _, n in ipairs(names) do
+    if n:match("note%.txt$") then
+      found = true
+      break
+    end
+  end
+  ok(found, "Path:iter: lists the file written above")
 
   local collect = require("lib.nvim.fs.collect_recursive")
   vim.fn.mkdir(tmp .. "/walk/keep", "p")
