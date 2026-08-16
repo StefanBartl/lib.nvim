@@ -288,4 +288,48 @@ return function(H)
     "dump.to_lines: own field survives alongside a metatable"
   )
   ok(joined:match("metatable") ~= nil, "dump.to_lines: metatable is also dumped")
+
+  -- -------------------------------------------------------------- lib.lua.class
+  local class = require("lib.lua.class")
+
+  local Animal = class.new("Animal")
+  function Animal:init(name)
+    self.name = name
+  end
+  function Animal:speak()
+    return self.name .. " makes a sound"
+  end
+
+  local rex = Animal.new("Rex")
+  eq(rex.name, "Rex", "class: init() ran during .new()")
+  eq(rex:speak(), "Rex makes a sound", "class: own method callable")
+
+  local Dog = Animal:extend("Dog")
+  function Dog:speak() -- override
+    return self.name .. " barks"
+  end
+
+  local fido = Dog.new("Fido")
+  eq(fido.name, "Fido", "class: subclass instance inherits init() from the parent")
+  eq(fido:speak(), "Fido barks", "class: subclass override wins over the parent's method")
+
+  local Cat = Animal:extend("Cat") -- no override
+  local felix = Cat.new("Felix")
+  eq(
+    felix:speak(),
+    "Felix makes a sound",
+    "class: no override -> falls through to the parent's method"
+  )
+
+  local Loud = {
+    shout = function(self)
+      return self.name:upper() .. "!!!"
+    end,
+    speak = function(self)
+      return "should never win"
+    end,
+  }
+  class.include(Dog, Loud)
+  eq(fido:shout(), "FIDO!!!", "class.include: mixin method copied onto the target")
+  eq(fido:speak(), "Fido barks", "class.include: target's own method wins over the mixin's")
 end
