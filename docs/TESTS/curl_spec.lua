@@ -49,6 +49,33 @@ return function(H)
     end
   end
 
+  ---Like `start_server`, but also captures the raw request bytes curl sent,
+  ---for tests that need to assert on request content (headers, multipart
+  ---body) rather than just the response.
+  ---@param response string
+  ---@return integer port
+  ---@return uv_tcp_t server
+  ---@return { data: string|nil } captured `captured.data` is set once the request arrives.
+  local function start_capturing_server(response)
+    local server = uv.new_tcp()
+    assert(server:bind("127.0.0.1", 0))
+    local port = server:getsockname().port
+    local captured = { data = nil }
+    server:listen(128, function(listen_err)
+      assert(not listen_err, listen_err)
+      local client = uv.new_tcp()
+      server:accept(client)
+      client:read_start(function(_, chunk)
+        captured.data = (captured.data or "") .. (chunk or "")
+        client:write(response)
+        client:shutdown(function()
+          client:close()
+        end)
+      end)
+    end)
+    return port, server, captured
+  end
+
   -- 200, JSON body, a custom header — the common case.
   do
     local port, server = start_server(table.concat({
@@ -158,5 +185,192 @@ return function(H)
     })
     ok(not success, "curl.fetch_raw_blocking: an unreachable target reports ok = false")
     ok(type(err) == "string", "curl.fetch_raw_blocking: ... with a string error, not a crash")
+  end
+
+  -- opts.auth: Basic-auth header actually sent, not just accepted.
+  do
+    local port, server, captured = start_capturing_server(table.concat({
+      "HTTP/1.1 200 OK",
+      "",
+      "ok",
+    }, "\r\n"))
+
+    local success = curl.fetch_raw_blocking(("http://127.0.0.1:%d/"):format(port), {
+      auth = { user = "alice", pass = "hunter2" },
+    })
+    vim.wait(200, function()
+      return false
+    end, 10)
+
+    ok(success, "opts.auth: request succeeds")
+    ok(captured.data ~= nil, "opts.auth: server received the request")
+    ok(captured.data:match("Authorization: Basic ") ~= nil, "opts.auth: Basic auth header sent")
+
+    stop_server(server)
+  end
+
+  -- opts.form: multipart body actually sent, not just accepted.
+  do
+    local port, server, captured = start_capturing_server(table.concat({
+      "HTTP/1.1 200 OK",
+      "",
+      "ok",
+    }, "\r\n"))
+
+    local success = curl.fetch_raw_blocking(("http://127.0.0.1:%d/"):format(port), {
+      method = "POST",
+      form = { name = "report" },
+    })
+    vim.wait(200, function()
+      return false
+    end, 10)
+
+    ok(success, "opts.form: request succeeds")
+    ok(
+      captured.data:match("Content%-Type: multipart/form%-data") ~= nil,
+      "opts.form: multipart Content-Type header sent"
+    )
+    ok(captured.data:match('name="name"') ~= nil, "opts.form: field name present in the body")
+    ok(captured.data:match("report") ~= nil, "opts.form: field value present in the body")
+
+    stop_server(server)
+  end
+
+  -- opts.http_version: the request line itself reflects the forced version.
+  do
+    local port, server, captured = start_capturing_server(table.concat({
+      "HTTP/1.1 200 OK",
+      "",
+      "ok",
+    }, "\r\n"))
+
+    curl.fetch_raw_blocking(("http://127.0.0.1:%d/"):format(port), {
+      http_version = "1.0",
+    })
+    vim.wait(200, function()
+      return false
+    end, 10)
+
+    ok(
+      captured.data:match("^GET / HTTP/1%.0") ~= nil,
+      "opts.http_version: request line honors --http1.0"
+    )
+
+    stop_server(server)
+  end
+
+  -- opts.raw_args: appended verbatim and actually honored by curl.
+  do
+    local port, server, captured = start_capturing_server(table.concat({
+      "HTTP/1.1 200 OK",
+      "",
+      "ok",
+    }, "\r\n"))
+
+    curl.fetch_raw_blocking(("http://127.0.0.1:%d/"):format(port), {
+      raw_args = { "-A", "lib.nvim-test-agent" },
+    })
+    vim.wait(200, function()
+      return false
+    end, 10)
+
+    ok(
+      captured.data:match("User%-Agent: lib%.nvim%-test%-agent") ~= nil,
+      "opts.raw_args: appended verbatim and honored by curl"
+    )
+
+    stop_server(server)
+  end
+
+  -- opts.proxy: curl actually routes through it instead of connecting
+  -- directly — a proxy pointing at a closed local port must make an
+  -- otherwise-reachable request fail, proving the flag was honored rather
+  -- than silently ignored.
+  do
+    local port, server = start_server(table.concat({
+      "HTTP/1.1 200 OK",
+      "",
+      "ok",
+    }, "\r\n"))
+
+    local closed_port, closed_server = start_server("")
+    stop_server(closed_server)
+    vim.wait(50, function()
+      return false
+    end, 10)
+
+    local success = curl.fetch_raw_blocking(("http://127.0.0.1:%d/"):format(port), {
+      proxy = ("http://127.0.0.1:%d"):format(closed_port),
+      timeout_ms = 2000,
+    })
+    ok(
+      not success,
+      "opts.proxy: routes through the (unreachable) proxy instead of connecting directly"
+    )
+
+    stop_server(server)
+  end
+
+  -- download_blocking: body written straight to a file, not buffered.
+  do
+    local port, server = start_server(table.concat({
+      "HTTP/1.1 200 OK",
+      "Content-Type: application/octet-stream",
+      "",
+      "binary-ish-content-1234",
+    }, "\r\n"))
+
+    local dest = vim.fn.tempname()
+    local success, resp = curl.download_blocking(("http://127.0.0.1:%d/"):format(port), dest)
+
+    ok(success, "download_blocking: succeeds")
+    eq(resp.status, 200, "download_blocking: status parsed from the dumped headers")
+    eq(resp.body, "", "download_blocking: response.body is empty -- content went to the file")
+
+    local f = io.open(dest, "rb")
+    ok(f ~= nil, "download_blocking: destination file was created")
+    local content = f and f:read("*a") or nil
+    if f then
+      f:close()
+    end
+    eq(
+      content,
+      "binary-ish-content-1234",
+      "download_blocking: file content matches the response body"
+    )
+    os.remove(dest)
+
+    stop_server(server)
+  end
+
+  -- download (async): same contract, reached through the callback.
+  do
+    local port, server = start_server(table.concat({
+      "HTTP/1.1 200 OK",
+      "",
+      "async-download-body",
+    }, "\r\n"))
+
+    local dest = vim.fn.tempname()
+    local done, success
+    curl.download(("http://127.0.0.1:%d/"):format(port), dest, nil, function(cb_ok)
+      success, done = cb_ok, true
+    end)
+    vim.wait(2000, function()
+      return done == true
+    end, 20)
+
+    ok(done, "download: the callback fires")
+    ok(success, "download: reports ok for a real 200")
+
+    local f = io.open(dest, "rb")
+    local content = f and f:read("*a") or nil
+    if f then
+      f:close()
+    end
+    eq(content, "async-download-body", "download: file content matches")
+    os.remove(dest)
+
+    stop_server(server)
   end
 end
