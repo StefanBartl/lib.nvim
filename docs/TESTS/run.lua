@@ -64,6 +64,7 @@ local specs = {
   "mutate_spec.lua",
   "lock_spec.lua",
   "neotree_watch_spec.lua",
+  "watch_spec.lua",
   "composer_spec.lua",
   "telemetry_wrap_spec.lua",
   "git_spec.lua",
