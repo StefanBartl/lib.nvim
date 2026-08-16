@@ -15,6 +15,7 @@ namespace one-liners), split by topic, see [`API/README.md`](API/README.md).
 | [`lib.lua.memo`](../lua/lib/lua/memo/README.md) | memoization                          |
 | [`lib.lua.lazy`](../lua/lib/lua/lazy/README.md) | lazy-`require` proxy                 |
 | [`lib.lua.class`](../lua/lib/lua/class/README.md) | prototype OOP: `new`/`extend`/`include` mixins |
+| [`lib.lua.context_manager`](../lua/lib/lua/context_manager/README.md) | try/finally: `with(acquire, release, body)` |
 
 ## `lib.nvim.*` — Neovim
 
