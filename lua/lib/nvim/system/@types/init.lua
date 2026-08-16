@@ -74,16 +74,21 @@
 ---@field is_active fun(): boolean
 ---@field log_path fun(): string|nil # Path of the active (or last) log file.
 
---- Options accepted by `lib.nvim.system.job.start`.
+--- Options accepted by `lib.nvim.system.job.start` / `start_blocking` / `chain`.
 ---@class Lib.System.Job.Opts
 ---@field command string # Executable name/path.
 ---@field args? string[] # Argv, excluding `command` itself.
----@field on_stdout? fun(err: nil, line: string) # Called once per stdout line, already vim.schedule-wrapped.
----@field on_stderr? fun(err: nil, line: string) # Called once per stderr line, already vim.schedule-wrapped.
+---@field on_stdout? fun(err: nil, line: string) # Called once per stdout line, already vim.schedule-wrapped. Ignored by `start_blocking`/`chain` (raw-capture tier).
+---@field on_stderr? fun(err: nil, line: string) # Called once per stderr line, already vim.schedule-wrapped. Ignored by `start_blocking`/`chain` (raw-capture tier).
+---@field timeout_ms? integer # `start_blocking`/`chain` only: passed to `vim.system`'s `timeout` / `wait(timeout)`.
+---@field stdin? string # `start_blocking`/`chain` only: raw stdin text. In `chain`, defaults to the previous step's captured stdout unless set explicitly.
 
 --- `lib.nvim.system.job` module surface: a `vim.system` wrapper with
---- plenary.job-style line-buffered, schedule-safe callbacks.
+--- plenary.job-style line-buffered, schedule-safe callbacks, plus a
+--- raw-capture blocking/chaining tier.
 ---@class Lib.System.Job
 ---@field start fun(opts: Lib.System.Job.Opts): vim.SystemObj
+---@field start_blocking fun(opts: Lib.System.Job.Opts): vim.SystemCompleted
+---@field chain fun(job_specs: Lib.System.Job.Opts[], on_done: fun(ok: boolean, results: vim.SystemCompleted[]))
 
 return {}
