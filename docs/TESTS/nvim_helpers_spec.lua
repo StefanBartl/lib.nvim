@@ -278,6 +278,31 @@ return function(H)
   append_f:close()
   eq(append_raw, "x\ny\n", "fs.write.append: no CRLF translation (binary mode)")
 
+  local write_async = require("lib.nvim.fs.write.async")
+  local async_p = tmp .. "/async/nested/out.txt"
+  local async_ok, async_err
+  write_async(async_p, "async hello\n", function(ok2, err2)
+    async_ok, async_err = ok2, err2
+  end)
+  vim.wait(2000, function()
+    return async_ok ~= nil
+  end)
+  ok(async_ok, "fs.write.async: succeeds and creates missing parent dirs")
+  eq(async_err, nil, "fs.write.async: no error on success")
+  eq(read(async_p), "async hello\n", "fs.write.async: content round-trips")
+
+  local bad_async_ok, bad_async_err
+  -- An empty `fnamemodify(path, ":h")` result (a bare filename with no
+  -- directory component) is the one synchronous failure path.
+  write_async("", "x", function(ok2, err2)
+    bad_async_ok, bad_async_err = ok2, err2
+  end)
+  vim.wait(2000, function()
+    return bad_async_ok ~= nil
+  end)
+  eq(bad_async_ok, false, "fs.write.async: invalid path -> ok = false")
+  ok(bad_async_err ~= nil, "fs.write.async: invalid path yields an error message")
+
   local json = require("lib.nvim.fs.json")
   local jp = tmp .. "/data.json"
   ok(json.write(jp, { a = 1, b = { "x", "y" } }), "fs.json.write: succeeds")
