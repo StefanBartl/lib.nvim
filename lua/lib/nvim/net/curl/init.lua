@@ -1,10 +1,12 @@
 ---@module 'lib.nvim.net.curl'
---- Async (and blocking) HTTP-via-curl helper, two tiers.
+--- Async (and blocking) HTTP-via-curl helper, three tiers (JSON, raw,
+--- download-to-file).
 ---
 --- Builds a `curl` argv from `opts` (method, headers, bearer token, query
---- string, body), spawns it through `vim.system` (requires Neovim 0.10+). No
---- `jobstart` fallback — this is a new, opt-in module, so `vim.system` is a
---- hard requirement.
+--- string, body, form fields, basic auth, proxy, HTTP version, raw
+--- passthrough args), spawns it through `vim.system` (requires Neovim
+--- 0.10+). No `jobstart` fallback — this is a new, opt-in module, so
+--- `vim.system` is a hard requirement.
 ---
 --- `fetch_json`/`fetch_json_blocking` decode the response body as JSON for a
 --- caller that already knows the answer is JSON. `fetch_raw`/
@@ -16,6 +18,9 @@
 --- nothing about the HTTP status — it is `0` for a successful *request*
 --- regardless of whether the server answered `200` or `404`), and
 --- `fetch_raw` never assumes the body parses as anything in particular.
+--- `download`/`download_blocking` are a third tier: the body is written
+--- straight to a file (`-o`) instead of buffered in memory, for responses
+--- too large — or simply not needed — to hold as a Lua string.
 ---
 --- Usage:
 --- ```lua
@@ -39,6 +44,11 @@
 --- if ok2 then
 ---   print(resp.status, resp.status_text, resp.headers["content-type"])
 ---   print(resp.body)
+--- end
+---
+--- local ok3, resp3 = curl.download_blocking("https://example.com/big.zip", "/tmp/big.zip")
+--- if ok3 then
+---   print(resp3.status) -- resp3.body is "" -- the body went to /tmp/big.zip
 --- end
 --- ```
 
@@ -83,11 +93,43 @@ end
 ---the body in stdout — what `fetch_raw`/`fetch_raw_blocking` need to parse
 ---status and headers out; `fetch_json`/`fetch_json_blocking` leave this
 ---unset, since a header block would break their JSON decode.
+---@param download_dest string? Set by `download`/`download_blocking`: the
+---body goes to this file (`-o`) instead of stdout, headers are dumped to
+---stdout separately (`-D -`) since `-i` and `-o` don't compose the way
+---`fetch_raw` needs (with `-o`, `-i` would write headers into the file
+---too). Mutually exclusive with `include_headers`.
 ---@return string[]
-local function build_argv(url, opts, include_headers)
+local function build_argv(url, opts, include_headers, download_dest)
   local argv = { "curl", "-sS", "-X", opts.method or "GET" }
   if include_headers then
     argv[#argv + 1] = "-i"
+  elseif download_dest then
+    argv[#argv + 1] = "-D"
+    argv[#argv + 1] = "-"
+    argv[#argv + 1] = "-o"
+    argv[#argv + 1] = download_dest
+  end
+
+  if opts.insecure then
+    argv[#argv + 1] = "-k"
+  end
+
+  if opts.http_version == "1.0" then
+    argv[#argv + 1] = "--http1.0"
+  elseif opts.http_version == "1.1" then
+    argv[#argv + 1] = "--http1.1"
+  elseif opts.http_version == "2" then
+    argv[#argv + 1] = "--http2"
+  end
+
+  if opts.proxy then
+    argv[#argv + 1] = "-x"
+    argv[#argv + 1] = opts.proxy
+  end
+
+  if opts.auth then
+    argv[#argv + 1] = "-u"
+    argv[#argv + 1] = (opts.auth.user or "") .. ":" .. (opts.auth.pass or "")
   end
 
   for key, value in pairs(opts.headers or {}) do
@@ -100,9 +142,21 @@ local function build_argv(url, opts, include_headers)
     argv[#argv + 1] = "Authorization: Bearer " .. opts.bearer_token
   end
 
+  -- A value starting with "@" is curl's own file-upload syntax (-F
+  -- "field=@/path/to/file") and works unchanged — no separate file-upload
+  -- option needed.
+  for key, value in pairs(opts.form or {}) do
+    argv[#argv + 1] = "-F"
+    argv[#argv + 1] = key .. "=" .. value
+  end
+
   if opts.body then
     argv[#argv + 1] = "-d"
     argv[#argv + 1] = opts.body
+  end
+
+  for _, raw in ipairs(opts.raw_args or {}) do
+    argv[#argv + 1] = raw
   end
 
   argv[#argv + 1] = url .. build_query_string(opts.query)
@@ -278,6 +332,64 @@ function M.fetch_json_blocking(url, opts)
   local obj = vim.system(argv, { text = true }):wait(opts.timeout_ms)
   local ok, data_or_err = decode_result(obj)
   return ok, data_or_err, obj
+end
+
+---Fetch `url` and write the response body directly to `dest_path` instead
+---of buffering it in memory, asynchronously. Returns status/headers like
+---`fetch_raw` — `response.body` is always `""` here, since the body went
+---to `dest_path`, not stdout.
+---@param url string
+---@param dest_path string
+---@param opts Lib.Net.Curl.FetchOpts|nil
+---@param cb fun(ok:boolean, response_or_err:Lib.Net.Curl.RawResponse|string, raw_obj:vim.SystemCompleted)
+function M.download(url, dest_path, opts, cb)
+  if not vim.system then
+    error("lib.nvim.net.curl requires Neovim 0.10+ (vim.system)")
+  end
+  opts = opts or {}
+
+  local argv = build_argv(url, opts, false, dest_path)
+
+  vim.system(argv, { text = true, timeout = opts.timeout_ms }, function(obj)
+    if obj.code ~= 0 then
+      local err = (obj.stderr and obj.stderr ~= "") and obj.stderr or ("curl exited " .. obj.code)
+      cb(false, err, obj)
+      return
+    end
+    local response, err = parse_raw_response(obj.stdout)
+    if not response then
+      cb(false, err, obj)
+      return
+    end
+    cb(true, response, obj)
+  end)
+end
+
+---Blocking counterpart to `M.download`.
+---@param url string
+---@param dest_path string
+---@param opts Lib.Net.Curl.FetchOpts|nil
+---@return boolean ok
+---@return Lib.Net.Curl.RawResponse|string response_or_err
+---@return vim.SystemCompleted raw_obj
+function M.download_blocking(url, dest_path, opts)
+  if not vim.system then
+    error("lib.nvim.net.curl requires Neovim 0.10+ (vim.system)")
+  end
+  opts = opts or {}
+
+  local argv = build_argv(url, opts, false, dest_path)
+
+  local obj = vim.system(argv, { text = true }):wait(opts.timeout_ms)
+  if obj.code ~= 0 then
+    local err = (obj.stderr and obj.stderr ~= "") and obj.stderr or ("curl exited " .. obj.code)
+    return false, err, obj
+  end
+  local response, err = parse_raw_response(obj.stdout)
+  if not response then
+    return false, err, obj
+  end
+  return true, response, obj
 end
 
 return M
