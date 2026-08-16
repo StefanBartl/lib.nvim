@@ -24,6 +24,7 @@ return function(H)
     "lib.nvim.json",
     "lib.nvim.fs.scan_roots",
     "lib.nvim.fs.scan_cached",
+    "lib.nvim.fs.watch",
     "lib.nvim.fs.write.async",
     "lib.nvim.fs.write.batch",
     "lib.nvim.buf_win_tab.get_option",
