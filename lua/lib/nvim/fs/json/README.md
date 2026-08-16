@@ -1,10 +1,10 @@
 # `lib.nvim.fs.json`
 
-Read/write JSON files. Encoding is built on `lib.lua.json.encode`; decoding
-uses Neovim's built-in `vim.json.decode` (`lib.lua.json` only exposes an
-encoder and array-shape decode *helpers*, not a general JSON-string parser).
-Writes are atomic: content is written to a sibling `.tmp` file, then renamed
-over the destination.
+Read/write JSON files, built on `lib.nvim.json` for the actual
+encode/decode (see that module if you need to decode a JSON string that
+isn't coming from a file — an HTTP response body, say). Writes are atomic:
+content is written to a sibling `.tmp` file, then renamed over the
+destination.
 
 ## Usage
 

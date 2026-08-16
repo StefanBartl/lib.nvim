@@ -21,6 +21,7 @@ return function(H)
     "lib.nvim.fs.trash",
     "lib.nvim.fs.read",
     "lib.nvim.fs.json",
+    "lib.nvim.json",
     "lib.nvim.fs.scan_roots",
     "lib.nvim.fs.scan_cached",
     "lib.nvim.fs.write.async",
@@ -287,6 +288,20 @@ return function(H)
   local jbad, jerr = json.read(tmp .. "/nope.json")
   eq(jbad, nil, "fs.json.read: missing file -> nil")
   ok(jerr ~= nil, "fs.json.read: missing file yields an error message")
+
+  local nvim_json = require("lib.nvim.json")
+  local decoded, decode_err = nvim_json.decode('{"a":1,"list":[1,2,3]}')
+  eq(decoded.a, 1, "nvim.json.decode: scalar decodes")
+  eq(decoded.list[3], 3, "nvim.json.decode: nested array decodes")
+  eq(decode_err, nil, "nvim.json.decode: no error on valid input")
+
+  local bad_decoded, bad_err = nvim_json.decode("{not json")
+  eq(bad_decoded, nil, "nvim.json.decode: malformed input -> nil")
+  ok(bad_err ~= nil, "nvim.json.decode: malformed input yields an error message")
+
+  local encoded, encode_err = nvim_json.encode({ a = 1 })
+  eq(encoded, '{"a":1}', "nvim.json.encode: delegates to lib.lua.json.encode")
+  eq(encode_err, nil, "nvim.json.encode: no error on encodable input")
 
   local collect = require("lib.nvim.fs.collect_recursive")
   vim.fn.mkdir(tmp .. "/walk/keep", "p")
