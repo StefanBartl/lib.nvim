@@ -44,6 +44,8 @@
 
 require("lib.nvim.net.curl.@types")
 
+local nvim_json = require("lib.nvim.json")
+
 local M = {}
 
 ---@internal
@@ -119,8 +121,8 @@ local function decode_result(obj)
     return false, err
   end
 
-  local ok, decoded = pcall(vim.json.decode, obj.stdout)
-  if not ok then
+  local decoded, err = nvim_json.decode(obj.stdout)
+  if err then
     return false, "invalid JSON response"
   end
   return true, decoded

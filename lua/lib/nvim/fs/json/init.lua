@@ -1,10 +1,6 @@
 ---@module 'lib.nvim.fs.json'
---- Read/write JSON files, built on `lib.lua.json.encode` for encoding plus
---- `lib.nvim.fs.read` and `lib.nvim.fs.write.to_file`. Decoding uses
---- `vim.json.decode` (Neovim's built-in parser): `lib.lua.json` only exposes
---- an encoder and array-shape decode *helpers*, not a general JSON-string
---- parser, and this module lives in the `lib.nvim` (editor-adapter)
---- namespace where `vim.json` is always available.
+--- Read/write JSON files, built on `lib.nvim.json` (encode/decode) plus
+--- `lib.nvim.fs.read` and `lib.nvim.fs.write.to_file`.
 ---
 --- Writes are atomic: the encoded content is written to `path .. ".tmp"`
 --- first, then renamed over `path` — atomic on POSIX, best-effort on
@@ -21,7 +17,7 @@ require("lib.nvim.fs.json.@types")
 
 local read = require("lib.nvim.fs.read")
 local write_to_file = require("lib.nvim.fs.write.to_file")
-local lua_json = require("lib.lua.json")
+local nvim_json = require("lib.nvim.json")
 
 local uv = vim.uv or vim.loop
 
@@ -37,12 +33,7 @@ function M.read(path)
     return nil, "read failed: " .. tostring(read_err)
   end
 
-  local ok, decoded_or_err = pcall(vim.json.decode, content)
-  if not ok then
-    return nil, "invalid JSON: " .. tostring(decoded_or_err)
-  end
-
-  return decoded_or_err, nil
+  return nvim_json.decode(content)
 end
 
 ---JSON-encode `tbl` and write it to `path` atomically: write to a sibling
@@ -54,7 +45,7 @@ end
 ---@return boolean ok
 ---@return string|nil err
 function M.write(path, tbl)
-  local encoded, encode_err = lua_json.encode(tbl)
+  local encoded, encode_err = nvim_json.encode(tbl)
   if not encoded then
     return false, "encode failed: " .. tostring(encode_err)
   end
