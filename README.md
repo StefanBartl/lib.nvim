@@ -56,6 +56,26 @@ lib.notify(...) -- -> lib.nvim.notify
 
 See [docs/installation.md](docs/installation.md) for config-wide setup (needed before `lazy.nvim` finishes loading specs) and [docs/usage.md](docs/usage.md) for more usage patterns.
 
+## End-user commands
+
+Most of `lib.nvim` is Lua modules for plugin authors, but it also registers
+a few commands directly, opt-in via `require("lib.nvim_usrcmds").setup(opts)`:
+
+| Command | What it does |
+|---|---|
+| `:Lib helptags` | Regenerate all helptags now |
+| `:Lib cwd-here` (= `:CwdHere`) | `lcd` to the current buffer's directory |
+| `:Lib ps-profile` (= `:PowershellProfile`, Windows) | Open the active PowerShell profile in Neovim |
+| `:Lib deps show <plugin.nvim>` | Report which of a dependent plugin's optional external tools are missing, and why they matter |
+| `:Lib deps install <plugin.nvim>` | Compose and confirm an install command for what's missing |
+
+The `deps` system is what every sibling plugin's "declared, installable
+external tools" popup and `:Lib deps show <plugin>` come from — see
+[`lib.nvim.deps`](lua/lib/nvim/deps/README.md). `usercmd.composer`, the
+subcommand-verb builder every sibling plugin's own `:Command <sub>` grammar
+is built on, lives here too — see
+[`lib.nvim.usercmd.composer`](lua/lib/nvim/usercmd/composer/README.md).
+
 ## Documentation
 
 - [Architecture](docs/architecture.md) — the `lib.lua.*` / `lib.nvim.*` namespace split and its guiding rule.
