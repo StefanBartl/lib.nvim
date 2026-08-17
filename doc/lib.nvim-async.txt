@@ -1,0 +1,223 @@
+*lib.nvim-async.txt*  *lib.nvim-async*  Coroutine async/await over libuv
+
+Author:  lib.nvim.async maintainers
+License: Same as Neovim
+
+================================================================================
+CONTENTS                                                        *async-contents*
+
+1. Introduction ............................ |async-introduction|
+2. Usage ................................... |async-usage|
+3. API Reference ........................... |async-api|
+4. Control Primitives ...................... |async-control|
+5. Semantics ............................... |async-semantics|
+6. Technical Notes ......................... |async-technical|
+
+================================================================================
+INTRODUCTION                                                *async-introduction*
+
+`lib.nvim.async` is a minimal coroutine async/await over libuv, plus the two
+control primitives that need it (Semaphore, Condvar).
+
+The whole module rests on one protocol: `await(starter)` yields the `starter`
+function, and the driver in `run()` calls `starter(resume)`. Whatever `resume`
+receives becomes `await`'s return values. A libuv callback is passed straight
+through as `resume`; a semaphore waiter is just a stored `resume` called
+later. No promise/future objects, no scheduler beyond one `step()` function.
+
+Key features:
+- `await`/`run`: write recursive async code that reads like synchronous code
+- `wrap`: turn any callback-last function into an awaitable one
+- `Semaphore`: bound how many coroutines do something at once
+- `Condvar`: suspend until another coroutine signals
+- Errors surface via `vim.notify` instead of vanishing into the event loop
+
+This was extracted from real duplication, not written speculatively: both
+`lib.nvim.fs.collect_recursive` and `lib.nvim.fs.write.async` carried their
+own (already diverging) copy of the `await`/`run` pair. Both now delegate
+here.
+
+Why `lib.nvim` and not the editor-independent `lib.lua` tree: `run`'s
+completion and error paths must hop through `vim.schedule`, because every
+resume past the first happens inside a raw libuv callback (a fast-event
+context) where `vim.fn`/`vim.api` are off limits. Semaphore and Condvar are
+pure coroutine mechanics, but only mean anything under this runner.
+
+================================================================================
+USAGE                                                              *async-usage*
+
+Basic workflow:
+>
+  local async = require("lib.nvim.async")
+  local uv = vim.uv or vim.loop
+
+  -- uv.fs_open(path, flags, mode, cb) -- callback is argument 4
+  local fs_open = async.wrap(uv.fs_open, 4)
+  local fs_close = async.wrap(uv.fs_close, 2)
+
+  async.run(function()
+    local err, fd = fs_open("/tmp/x", "r", 438)
+    if err then
+      return nil, err
+    end
+    fs_close(fd)
+    return fd
+  end, function(fd, err)
+    -- vim.schedule-dispatched: safe to touch vim.api here
+    if not fd then
+      vim.notify("open failed: " .. tostring(err))
+    end
+  end, { tag = "my.module" })
+<
+Without `wrap`, the same call written against `await` directly:
+>
+  async.run(function()
+    local err, fd = async.await(function(resume)
+      uv.fs_open("/tmp/x", "r", 438, resume)
+    end)
+    return fd, err
+  end)
+<
+================================================================================
+API REFERENCE                                                        *async-api*
+
+async.await({starter})                                             *async.await*
+
+    Suspend the running coroutine until {starter} calls its `resume`.
+    Returns whatever `resume` was handed.
+
+    Only valid inside an `async.run` body.
+
+    Parameters: ~
+        {starter}  (fun(resume: fun(...)))  Arranges for `resume` to fire.
+
+    Return: ~
+        Whatever `resume` was called with.
+
+async.run({body}, {on_done}, {opts})                                 *async.run*
+
+    Drive a coroutine written against `async.await` to completion.
+
+    {on_done} receives {body}'s return values (all of them, embedded `nil`s
+    included) and is `vim.schedule`-dispatched.
+
+    Parameters: ~
+        {body}     (function)            The coroutine body.
+        {on_done}  (function|nil)        Completion callback. Optional.
+        {opts}     (table|nil)           See below.
+
+    Options: ~
+        {tag}       (string)    Prefix for the default error notification.
+                                Default "lib.nvim.async".
+        {on_error}  (function)  Called instead of the default `vim.notify`
+                                when {body} raises. NOT `vim.schedule`-
+                                wrapped -- it may run in a fast-event
+                                context.
+
+async.wrap({fn}, {argc})                                            *async.wrap*
+
+    Turn a callback-style function into an awaitable one. {argc} is {fn}'s
+    total argument count INCLUDING its callback, which must be the last
+    parameter: `uv.fs_open(path, flags, mode, cb)` is `argc = 4`.
+
+    The returned function is only callable inside an `async.run` body; it
+    returns whatever {fn} passes to its callback.
+
+    Callers may pass fewer than `argc - 1` arguments (a uv function with
+    optional parameters); the callback still lands in slot {argc}.
+
+================================================================================
+CONTROL PRIMITIVES                                               *async-control*
+
+async.Semaphore.new({permits})                                 *async.Semaphore*
+
+    Counting semaphore: at most {permits} coroutines hold it at once.
+
+    Methods: ~
+        :acquire()   Take a permit, suspending until one is free. Awaitable.
+        :release()   Give a permit back.
+
+    Example -- cap concurrent work at four: >
+      local sem = async.Semaphore.new(4)
+
+      async.run(function()
+        sem:acquire()
+        local result = do_something_awaitable()
+        sem:release()
+        return result
+      end)
+<
+async.Condvar.new()                                              *async.Condvar*
+
+    Condition variable.
+
+    Methods: ~
+        :wait()         Suspend until notified. Awaitable.
+        :notify_one()   Wake the longest-waiting coroutine, if any.
+        :notify_all()   Wake every waiting coroutine.
+
+    Example: >
+      local cv = async.Condvar.new()
+
+      async.run(function()
+        cv:wait()          -- suspends here
+        return "woken"
+      end, function(msg) vim.notify(msg) end)
+
+      cv:notify_one()      -- later, from anywhere
+<
+================================================================================
+SEMANTICS                                                      *async-semantics*
+
+Errors do not propagate to the caller. ~
+
+By the time {body} raises, the original call stack is gone -- the coroutine
+is being resumed from a libuv callback. The error goes to `opts.on_error`,
+defaulting to a `vim.notify` so it reaches |:messages| instead of vanishing
+into (or crashing) the event loop.
+
+`release` and `notify_*` resume synchronously. ~
+
+They do not return until the resumed coroutine yields again or finishes.
+This keeps handover ordering obvious -- no scheduler round-trip between a
+release and the acquire it unblocks -- at the cost of nesting the resumed
+coroutine's stack under the releasing one.
+
+`Semaphore:release` hands the permit straight to a waiter. ~
+
+When someone is queued, the permit goes to them rather than incrementing the
+count; otherwise a queued waiter could be starved by a later `acquire()`
+racing in.
+
+`Condvar:notify_all` swaps the waiter list out first. ~
+
+A coroutine that re-`wait()`s while being woken therefore queues for the
+NEXT notify rather than being woken again by this one.
+
+================================================================================
+TECHNICAL NOTES                                                *async-technical*
+
+No parallelism. ~
+
+This is concurrency over one event loop: `await` hands control back so other
+work proceeds, but nothing runs simultaneously. Async fixes main-loop
+stalls; it is not necessarily a wall-clock speedup.
+
+LuaJIT compatibility. ~
+
+Neovim's LuaJIT has neither `table.pack` nor Lua 5.2+'s `table.unpack` --
+only the global `unpack`, and no `pack` at all. Both are shimmed internally
+so multiple return values (including embedded `nil`s) survive the round trip
+through `run` and `wrap`.
+
+Relationship to plenary.async. ~
+
+Deliberately much smaller. There is no `a.void`, no task scheduler, no
+`util.join`; there are no promises or futures. The pieces here are the ones
+that had, or now have, a real consumer in this codebase.
+
+See also: ~
+    |lib.nvim-fs|       filesystem helpers, incl. the async directory walk
+    |lib.nvim-modules|  the full module index
+
+vim:tw=78:ts=8:sw=8:et:ft=help:norl:

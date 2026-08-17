@@ -285,6 +285,7 @@ Modules with dedicated `:help` documentation. Jump to one via its tag, or
     lib.nvim.harvest     collect from a scope, then show/export it |lib.nvim-harvest|
     lib.nvim.deps        declare/detect/install external tools  |lib.nvim-deps|
     lib.nvim.cross.run.env  spawn environment: complete PATH + session vars |lib.nvim-spawn-env|
+    lib.nvim.async       coroutine async/await over libuv      |lib.nvim-async|
 
 Every other module documents itself in a `README.md` next to its source; see
 the namespace tables under |lib.nvim-namespaces|.

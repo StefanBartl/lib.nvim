@@ -43,6 +43,7 @@ namespace one-liners), split by topic, see [`API/README.md`](API/README.md).
 | [`lib.nvim.system`](../lua/lib/nvim/system/README.md) | host env snapshot (`is_windows`/`is_wsl`/…, `home`, `pathsep`, `repo_base`) + Windows rpc pipe + `proc_trace` (blocking-call instrumentation for freeze diagnosis); opt-in `setup` |
 | [`lib.nvim.progress`](../lua/lib/nvim/progress/README.md) | style-agnostic progress indicator: `notify`/`statusline`/`fidget`/`float`/`kit` renderers, delay-guard, focus-gated cancel-with-confirm ([`:help`](../doc/lib.nvim-progress.txt)) |
 | [`lib.nvim.selection`](../lua/lib/nvim/selection/README.md) | reselect a Visual line/char range after a mapping mutates it: `keep_lines`/`keep_chars` ([`:help`](../doc/lib.nvim-selection.txt)) |
+| [`lib.nvim.async`](../lua/lib/nvim/async/README.md) | coroutine async/await over libuv: `await`/`run`/`wrap`, plus `Semaphore` and `Condvar` — the shared core behind `fs.collect_recursive`'s async walk and `fs.write.async` ([`:help`](../doc/lib.nvim-async.txt)) |
 | [`lib.nvim.harvest`](../lua/lib/nvim/harvest/README.md) | "collect from a scope, then show/export it" building blocks: `scope` (buffer/range/buffers/cwd/path → sources with provenance), `render` (rows → GFM table / CSV / lines), `sink` (clipboard / file / scratch buffer / picker), `emit` ([`:help`](../doc/lib.nvim-harvest.txt)) |
 
 Opt-in call counting / usage statistics (`wrap`/`wrap_loaded`, persistence,
@@ -75,10 +76,12 @@ and are generated on install by your plugin manager (see [Help docs](help.md)).
 - [`lib.nvim.treesitter.guard`](../lua/lib/nvim/treesitter/guard/README.md) · [`lib.nvim.treesitter.parser_policy`](../lua/lib/nvim/treesitter/parser_policy/README.md)
 - [`lib.nvim.usercmd.composer`](../lua/lib/nvim/usercmd/composer/README.md)
 - [`lib.nvim.deps`](../lua/lib/nvim/deps/README.md)
+- [`lib.nvim.async`](../lua/lib/nvim/async/README.md) · [`lib.nvim.fs.watch`](../lua/lib/nvim/fs/watch/README.md) · [`lib.nvim.json`](../lua/lib/nvim/json/README.md)
+- [`lib.lua.class`](../lua/lib/lua/class/README.md) · [`lib.lua.context_manager`](../lua/lib/lua/context_manager/README.md)
 
 **`:help` pages**
 
 - `:help lib.nvim` — overview hub · `:help lib.nvim-modules` — module index
-- `:help lib.nvim-window` · `:help lib.nvim-hover_select` · `:help lib.nvim-time_diff` · `:help lib.nvim-progress` · `:help lib.nvim-treesitter` · `:help lib.nvim-selection` · `:help lib.nvim-composer` · `:help lib.nvim-spawn-env`
+- `:help lib.nvim-window` · `:help lib.nvim-hover_select` · `:help lib.nvim-time_diff` · `:help lib.nvim-progress` · `:help lib.nvim-treesitter` · `:help lib.nvim-selection` · `:help lib.nvim-composer` · `:help lib.nvim-spawn-env` · `:help lib.nvim-async`
 
 See [Conventions](conventions.md) for the steps to follow when documenting a new module, and [Help docs](help.md) for how `:help` tags are generated.
