@@ -1,0 +1,162 @@
+*lib.nvim-strings_width.txt*  *lib.nvim-strings_width*  Display-width arithmetic
+
+Author:  lib.lua.strings.width maintainers
+License: Same as Neovim
+
+================================================================================
+CONTENTS                                                *strings_width-contents*
+
+1. Introduction ............................ |strings_width-introduction|
+2. Usage ................................... |strings_width-usage|
+3. API Reference ........................... |strings_width-api|
+4. Padding ................................. |strings_width-padding|
+5. Accuracy and limits ..................... |strings_width-accuracy|
+
+================================================================================
+INTRODUCTION                                        *strings_width-introduction*
+
+`lib.lua.strings.width` measures strings in terminal COLUMNS, as opposed to
+bytes (`#str`) or codepoints.
+
+The rest of `lib.lua.strings` measures in bytes, which is correct for ASCII
+and wrong for everything else. Three different numbers describe the same
+string: >
+
+  #"日本"                            -- 6   (bytes)
+  <two codepoints>                   -- 2   (characters)
+  width.display_width("日本")        -- 4   (columns)
+<
+`core.pad_end` and `wrap.center_text` pad by byte count, so any column
+containing CJK text, an emoji or a tab comes out misaligned. This module is
+the width-aware counterpart. It is ADDITIVE: the byte-based originals keep
+their cheaper, ASCII-correct behavior for callers that never see non-ASCII.
+
+Inside Neovim, prefer |strdisplaywidth()|. ~
+
+`vim.fn.strdisplaywidth()` is authoritative: it honors 'ambiwidth',
+'listchars' and the complete Unicode tables. This module exists because
+`lib.lua.*` is editor-independent by definition and cannot call `vim.fn` --
+and because `vim.fn` is unusable in a fast-event context (a |uv| timer, an
+`fs_event` callback), where a pure-Lua helper still works.
+
+================================================================================
+USAGE                                                      *strings_width-usage*
+
+>
+  local width = require("lib.lua.strings.width")
+
+  width.display_width("日本")                     -- 4
+  width.display_width("a\tb")                     -- 9
+  width.display_width("a\tb", { tabstop = 4 })    -- 5
+
+  width.char_width(0x65E5)                        -- 2  (CJK ideograph)
+  width.char_width(0x0301)                        -- 0  (combining accent)
+
+  width.truncate("日本語テキスト", 6)              -- "日本語", 6
+  width.truncate("abcdefgh", 5, { ellipsis = "..." })  -- "ab...", 5
+
+  width.pad_end("日本", 6)                         -- "日本  "
+<
+Via the aggregator, the three width-only names are flattened: >
+
+  local strings = require("lib.lua.strings")
+  strings.display_width("日本")   -- 4
+  strings.char_width(0x65E5)      -- 2
+  strings.truncate("abc", 2)      -- "ab", 2
+<
+================================================================================
+API REFERENCE                                                *strings_width-api*
+
+width.char_width({cp})                                     *width.char_width()*
+
+    Columns occupied by a single codepoint.
+
+    Returns: ~
+        0   Combining marks, zero-width spaces/joiners, variation
+            selectors, C0 controls, DEL, and tab (whose width is
+            column-dependent -- see `display_width`).
+        2   East Asian Wide and Fullwidth (UAX #11), plus the emoji
+            blocks terminals render double-width.
+        1   Everything else.
+
+width.display_width({str}, {opts})                      *width.display_width()*
+
+    Columns occupied by {str}.
+
+    Tabs advance to the next multiple of `opts.tabstop` (default 8), which
+    is why this is NOT simply the sum of `char_width` over the string: a
+    tab's width depends on the column it starts at.
+
+    Options: ~
+        {tabstop}  (integer)  Columns per tab stop. Default 8.
+
+width.truncate({str}, {max_cols}, {opts})                    *width.truncate()*
+
+    Truncate {str} to at most {max_cols} display columns, never splitting a
+    character in half.
+
+    Returns the truncated string and its display width.
+
+    Options: ~
+        {tabstop}   (integer)  Columns per tab stop. Default 8.
+        {ellipsis}  (string)   Appended WITHIN the budget when the string
+                               is cut, so the result still fits {max_cols}
+                               rather than overflowing it. Default "".
+
+    A double-width character that would straddle the limit is dropped
+    whole, so the result can be one column narrower than {max_cols}: >
+
+      width.truncate("日本語", 5)   -- "日本", 4
+<
+    If the ellipsis alone is wider than {max_cols}, the result is empty
+    rather than over-wide.
+
+================================================================================
+PADDING                                                  *strings_width-padding*
+
+width.pad_start({str}, {width}, {opts})                     *width.pad_start()*
+width.pad_end({str}, {width}, {opts})                         *width.pad_end()*
+width.pad_center({str}, {width}, {opts})                   *width.pad_center()*
+
+    Column-aware counterparts to `lib.lua.strings.core`'s byte-based
+    `pad_start`/`pad_end`/`pad_center`. An odd remainder in `pad_center`
+    goes to the right, matching the core version.
+
+    These are deliberately NOT flattened onto the `lib.lua.strings`
+    aggregator: those three names already belong to the byte-based
+    versions, and silently swapping their semantics would change existing
+    callers' output for any non-ASCII input. Reach them through the
+    submodule: >
+
+      local strings = require("lib.lua.strings")
+
+      strings.width.pad_end("日本", 6)   -- "日本  "  (column-aware)
+      strings.pad_end("日本", 6)         -- "日本"     (byte-based)
+<
+================================================================================
+ACCURACY AND LIMITS                                     *strings_width-accuracy*
+
+The width tables are a hand-maintained approximation of the Unicode data,
+not a generated copy of it. They cover the ranges that actually turn up in
+source, filenames and UI strings: Hangul, the CJK blocks and extensions,
+Yi, fullwidth forms, the common emoji blocks; and for zero width, the
+combining-mark blocks, zero-width spaces/joiners and variation selectors.
+
+A codepoint outside those ranges is measured as single-width rather than
+raising, so an exotic wide character is under-measured.
+
+Not handled: ~
+- 'ambiwidth' -- East Asian Ambiguous characters always count as 1.
+- Grapheme clusters -- an emoji built from several codepoints joined by
+  ZWJ is measured per component (the ZWJ itself is 0, the components are
+  2 each), which over-counts relative to what a terminal draws.
+- 'listchars'/'display' -- how Neovim renders a tab or a control character
+  in a real window is a window-local setting this module cannot see.
+
+For any of those, use |strdisplaywidth()| inside Neovim instead.
+
+See also: ~
+    |strdisplaywidth()|  Neovim's authoritative width function
+    |lib.nvim-modules|   the full module index
+
+vim:tw=78:ts=8:sw=8:et:ft=help:norl:

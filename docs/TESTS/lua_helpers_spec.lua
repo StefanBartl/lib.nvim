@@ -333,6 +333,97 @@ return function(H)
   eq(fido:shout(), "FIDO!!!", "class.include: mixin method copied onto the target")
   eq(fido:speak(), "Fido barks", "class.include: target's own method wins over the mixin's")
 
+  -- ------------------------------------------------------- lib.lua.strings.width
+  local swidth = require("lib.lua.strings.width")
+
+  eq(swidth.char_width(string.byte("a")), 1, "width.char_width: ascii is one column")
+  eq(swidth.char_width(0x65E5), 2, "width.char_width: CJK ideograph is two columns")
+  eq(swidth.char_width(0xFF21), 2, "width.char_width: fullwidth latin A is two columns")
+  eq(swidth.char_width(0x0301), 0, "width.char_width: a combining accent takes no column")
+  eq(swidth.char_width(0x200B), 0, "width.char_width: zero-width space takes no column")
+  eq(swidth.char_width(0x1F600), 2, "width.char_width: emoji is two columns")
+
+  eq(swidth.display_width(""), 0, "width.display_width: empty string")
+  eq(swidth.display_width("abc"), 3, "width.display_width: ascii == byte length")
+  -- "日本" is 6 bytes but 4 columns -- the whole reason this module exists.
+  eq(#"日本", 6, "width: the CJK fixture really is 6 bytes")
+  eq(swidth.display_width("日本"), 4, "width.display_width: CJK counts columns, not bytes")
+  eq(swidth.display_width("aé"), 2, "width.display_width: multibyte latin is still one column")
+  eq(
+    swidth.display_width("e\u{0301}"),
+    1,
+    "width.display_width: a combining accent adds no column to its base"
+  )
+
+  -- Tabs advance to the next stop, so their width depends on the column
+  -- they start at -- not a constant, which is why display_width is not just
+  -- a sum over char_width.
+  eq(swidth.display_width("\t"), 8, "width.display_width: a leading tab fills one stop")
+  eq(swidth.display_width("a\tb"), 9, "width.display_width: tab advances to the next stop")
+  eq(
+    swidth.display_width("a\tb", { tabstop = 4 }),
+    5,
+    "width.display_width: opts.tabstop is honored"
+  )
+  eq(
+    swidth.display_width("abcdefgh\t"),
+    16,
+    "width.display_width: a tab exactly on a stop still advances a full stop"
+  )
+
+  local trunc, trunc_w = swidth.truncate("日本語テキスト", 6)
+  eq(trunc, "日本語", "width.truncate: cuts on a character boundary, not a byte one")
+  eq(trunc_w, 6, "width.truncate: reports the resulting width")
+
+  eq(
+    (swidth.truncate("abcdef", 10)),
+    "abcdef",
+    "width.truncate: a string already inside the budget is returned unchanged"
+  )
+
+  -- An odd budget cannot fit a trailing double-width char, so the result
+  -- comes out one column narrower rather than one column over.
+  local odd, odd_w = swidth.truncate("日本語", 5)
+  eq(odd, "日本", "width.truncate: a straddling wide char is dropped whole")
+  eq(odd_w, 4, "width.truncate: ... leaving the result under the budget")
+
+  local ell, ell_w = swidth.truncate("abcdefgh", 5, { ellipsis = "..." })
+  eq(ell, "ab...", "width.truncate: the ellipsis fits inside the budget, not beyond it")
+  eq(ell_w, 5, "width.truncate: ... and the reported width matches")
+  eq(
+    (swidth.truncate("abcdef", 2, { ellipsis = "....." })),
+    "",
+    "width.truncate: an ellipsis wider than the budget yields an empty result, not an over-wide one"
+  )
+
+  eq(swidth.pad_end("日本", 6), "日本  ", "width.pad_end: pads by columns, not bytes")
+  eq(swidth.pad_start("日本", 6), "  日本", "width.pad_start: pads by columns")
+  eq(swidth.pad_center("日本", 8), "  日本  ", "width.pad_center: pads by columns")
+  eq(swidth.pad_end("日本", 2), "日本", "width.pad_end: no padding when already at/over width")
+  eq(
+    swidth.pad_center("ab", 5),
+    " ab  ",
+    "width.pad_center: an odd remainder goes right, matching core.pad_center"
+  )
+
+  -- The byte-based originals are deliberately left alone: this is the
+  -- behavior difference the new module exists to offer an alternative to.
+  local score = require("lib.lua.strings.core")
+  eq(score.pad_end("日本", 6), "日本", "core.pad_end: still byte-based (6 bytes -> no padding)")
+
+  -- Aggregator wiring: the three width-only names are flattened, the pad_*
+  -- ones are not (they would shadow core's byte-based versions).
+  local strings_agg = require("lib.lua.strings")
+  eq(type(strings_agg.display_width), "function", "strings aggregator: display_width wired")
+  eq(type(strings_agg.truncate), "function", "strings aggregator: truncate wired")
+  eq(type(strings_agg.char_width), "function", "strings aggregator: char_width wired")
+  eq(type(strings_agg.width.pad_end), "function", "strings aggregator: width submodule reachable")
+  eq(
+    strings_agg.pad_end("日本", 6),
+    "日本",
+    "strings aggregator: pad_end still resolves to core's byte-based version"
+  )
+
   -- ------------------------------------------------------ lib.lua.context_manager
   local with = require("lib.lua.context_manager").with
 

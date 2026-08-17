@@ -149,6 +149,46 @@ strings.center_text("hi", 6)                --> "  hi  "
 strings.center_text_lines({ "a", "bb" }, 4) --> { " a  ", " bb " }
 ```
 
+## Display width ([`width.lua`](width.lua))
+
+Everything above measures strings in **bytes**, which is correct for ASCII
+and wrong for everything else: `#"日本"` is 6, but it occupies 4 terminal
+columns. `width.lua` is the column-aware counterpart.
+
+```lua
+strings.display_width("日本")           --> 4  (6 bytes, 2 chars, 4 columns)
+strings.display_width("a\tb")           --> 9  (tab advances to the next stop)
+strings.display_width("a\tb", { tabstop = 4 }) --> 5
+strings.char_width(0x65E5)              --> 2  (CJK)
+strings.char_width(0x0301)              --> 0  (combining accent)
+strings.truncate("日本語テキスト", 6)    --> "日本語", 6
+strings.truncate("abcdefgh", 5, { ellipsis = "..." })  --> "ab...", 5
+```
+
+Padding lives on the submodule rather than the aggregator, because
+`pad_start`/`pad_end`/`pad_center` on the aggregator are already taken by
+the byte-based `core.lua` versions and silently swapping their semantics
+would change existing callers' output:
+
+```lua
+strings.width.pad_end("日本", 6)    --> "日本  "   (column-aware)
+strings.pad_end("日本", 6)          --> "日本"      (byte-based: 6 bytes already)
+```
+
+`truncate` never splits a character, and fits its `ellipsis` *inside* the
+budget rather than overflowing it. A double-width character that would
+straddle the limit is dropped whole, so a result can come out one column
+narrower than requested.
+
+**Inside Neovim, prefer `vim.fn.strdisplaywidth()`** — it is authoritative
+and handles `'ambiwidth'`, `'listchars'` and the complete Unicode tables.
+This module exists because `lib.lua.*` is editor-independent by definition
+and cannot call `vim.fn`, and because `vim.fn` is unavailable in a
+fast-event context where a pure-Lua helper still works. Its width tables
+are a hand-maintained approximation covering the ranges that actually turn
+up in source, filenames and UI strings; a codepoint outside them is
+measured as single-width rather than raising.
+
 ## Remove prefix ([`remove_prefix.lua`](remove_prefix.lua))
 
 ```lua
