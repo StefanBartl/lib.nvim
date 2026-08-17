@@ -48,6 +48,7 @@ local specs = {
   "run_argv_spec.lua",
   "run_spec.lua",
   "spawn_env_spec.lua",
+  "async_spec.lua",
   "async_walk_spec.lua",
   "wslpath_spec.lua",
   "system_job_spec.lua",

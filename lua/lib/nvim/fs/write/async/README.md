@@ -3,9 +3,9 @@
 Asynchronous counterpart to [`lib.nvim.fs.write.to_file`](../to_file/init.lua).
 Creates the parent directory synchronously (same `mkdir -p` semantics), then
 opens, writes and closes the file through libuv so a large write never blocks
-the editor. Internally a small coroutine (`await`/`run_async`, the same
-private-helper shape used by `lib.nvim.fs.collect_recursive`'s async walk)
-sequences `fs_open`/`fs_write`/`fs_close` instead of nesting three callbacks.
+the editor. Internally [`lib.nvim.async`](../../../async/README.md)
+sequences `fs_open`/`fs_write`/`fs_close` as one coroutine
+(`async.wrap` + `async.run`) instead of nesting three callbacks.
 
 The callback is invoked on the main loop (wrapped in `vim.schedule`), so it is
 safe to call `vim.api.*` from inside it.

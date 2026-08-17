@@ -31,13 +31,17 @@ flagged in `fs/write/async` (nested `fs_open` → `fs_write` → `fs_close`).
 
 ## The solution
 
-A minimal coroutine-based async/await, private to `collect_recursive`:
-`await(starter)` suspends the running coroutine until `starter`'s callback
-fires; `run_async(body, on_done)` drives a coroutine written against
-`await()` to completion. `walk_async` — the async counterpart to the
-existing synchronous `walk` — reads like a plain recursive function (one
-`await()` per libuv call) while every `await()` actually yields control
-back to the event loop.
+A minimal coroutine-based async/await: `await(starter)` suspends the
+running coroutine until `starter`'s callback fires; `run(body, on_done)`
+drives a coroutine written against `await()` to completion. `walk_async` —
+the async counterpart to the existing synchronous `walk` — reads like a
+plain recursive function (one `await()` per libuv call) while every
+`await()` actually yields control back to the event loop.
+
+That helper started out private to `collect_recursive`, was copied into
+`fs/write/async`, and now lives in [`lib.nvim.async`](../../lua/lib/nvim/async/README.md)
+— extracted once the duplication was real rather than hypothetical (see
+"What this deliberately is not" below for what changed since).
 
 ```lua
 local collect_recursive = require("lib.nvim.fs.collect_recursive")
@@ -65,12 +69,14 @@ directories are visited sequentially on purpose, to keep the coroutine
 driver simple — matching `scan_roots`'s existing "sequential by design"
 stance on multiple roots.
 
-**Not a plenary.async port.** The plenary/libuv research explicitly found
-no concrete need for a general async framework (`a.wrap`/`Condvar`/
-`Semaphore`) elsewhere in the codebase — `debounce` and
-`cross.uv.spawn_stream` already cover the usual callback-pyramid pain
-points. `await`/`run_async` here are deliberately scoped to this one
-recursive-walk problem, not exposed as a general-purpose primitive.
+**Superseded:** this section used to argue that `await`/`run_async` were
+deliberately scoped to this one recursive-walk problem and should not
+become a general primitive. A second consumer (`fs/write/async`) then
+copied them, and the pair was extracted into
+[`lib.nvim.async`](../../lua/lib/nvim/async/README.md), which now also
+carries the `wrap`/`Semaphore`/`Condvar` the research had left out. The
+restraint was about not building it *speculatively* — it was built once
+two real consumers existed.
 
 ## Cancellation
 

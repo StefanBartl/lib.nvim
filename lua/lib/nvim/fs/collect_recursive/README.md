@@ -50,10 +50,10 @@ Non-blocking counterpart to `collect`, same result and same `opts` (`kind`,
 caller until the syscall returns — fine for a handful of directories, but a
 `node_modules`-sized tree stalls Neovim's UI for the whole walk.
 `collect_async` uses the async form of those same libuv calls instead, one
-directory at a time, driven by a small internal coroutine (`await`/
-`run_async`) so the recursive walk still reads like the synchronous version
-— no callback pyramid — while every `await()` actually yields control back
-to the event loop.
+directory at a time, driven by [`lib.nvim.async`](../../async/README.md) so
+the recursive walk still reads like the synchronous version — no callback
+pyramid — while every `await()` actually yields control back to the event
+loop.
 
 This fixes the main-loop stall; it is **not** a parallel/concurrent scan and
 so not necessarily a wall-clock speedup — sibling directories are still

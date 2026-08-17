@@ -114,67 +114,18 @@ end
 -- directory descent produces exactly the callback-pyramid mess `fs/write/
 -- async` was flagged for in the plenary/libuv research this was born from.
 --
--- `await`/`run_async` are a minimal coroutine-based async/await: `walk_async`
--- below reads like the synchronous `walk()` above (plain recursive calls,
--- one `await()` per libuv call) while every `await()` actually yields
--- control back to the event loop. No promise/future objects, no scheduler
--- beyond `step()` — deliberately not a plenary.async port (see
--- docs/ROADMAP/personal/lib_nvim.nvim/plenary-libuv-research.md, "async"
--- row: "kein clear Bedarf"; the collect_async use case is exactly the
--- exception that *does* need it).
+-- `lib.nvim.async` provides a minimal coroutine-based async/await:
+-- `walk_async` below reads like the synchronous `walk()` above (plain
+-- recursive calls, one `await()` per libuv call) while every `await()`
+-- actually yields control back to the event loop.
+--
+-- That helper used to live here as a private copy (and a second, slightly
+-- diverged one in `fs/write/async`); both were extracted into
+-- `lib.nvim.async` once the duplication was real rather than hypothetical.
 -- ============================================================================
 
----@internal
---- Suspend the running coroutine until `starter` settles. `starter(resume)`
---- must arrange for `resume(...)` to be called — typically by passing it
---- straight through as a libuv callback. Whatever `resume` receives becomes
---- this call's return values. Only valid inside a coroutine driven by
---- `run_async`.
----@param starter fun(resume: fun(...))
----@return ... whatever `resume` was called with
-local function await(starter)
-  return coroutine.yield(starter)
-end
-
----@internal
---- Drive a coroutine written against `await()` to completion. `on_done` is
---- called once with the coroutine body's return value, `vim.schedule`-
---- dispatched — every resume happens from inside a raw libuv callback (fast-
---- event context), so nothing past the last `await()` may safely touch
---- `vim.fn`/`vim.api` without this.
----@param body fun(): any
----@param on_done fun(result: any)
-local function run_async(body, on_done)
-  local co = coroutine.create(body)
-
-  local function step(...)
-    local resume_ok, starter_or_result = coroutine.resume(co, ...)
-    if not resume_ok then
-      -- A bug in `body` (or in an `ignore` callback it invokes) surfaces
-      -- here, inside a libuv callback rather than the caller's own stack —
-      -- routed through vim.schedule + vim.notify so it reaches :messages
-      -- instead of vanishing into (or crashing) the event loop.
-      vim.schedule(function()
-        vim.notify(
-          "[lib.nvim.fs.collect_recursive] collect_async: " .. tostring(starter_or_result),
-          vim.log.levels.ERROR
-        )
-      end)
-      return
-    end
-    if coroutine.status(co) == "dead" then
-      vim.schedule(function()
-        on_done(starter_or_result)
-      end)
-      return
-    end
-    -- `starter_or_result` is what `body` handed to `await()`: a starter
-    -- function expecting `step` itself as its `resume` callback.
-    starter_or_result(step)
-  end
-
-  step()
-end
+local async = require("lib.nvim.async")
+local await = async.await
 
 ---@internal
 ---Async counterpart to `walk()`. Same traversal/ignore/kind semantics;
@@ -257,7 +208,7 @@ function M.collect_async(root, opts, on_done)
     return cancelled
   end
 
-  run_async(function()
+  async.run(function()
     local out = {}
     walk_async(root, opts, out, is_cancelled)
     return out
@@ -265,7 +216,7 @@ function M.collect_async(root, opts, on_done)
     if not cancelled then
       on_done(out)
     end
-  end)
+  end, { tag = "lib.nvim.fs.collect_recursive" })
 
   return function()
     cancelled = true
