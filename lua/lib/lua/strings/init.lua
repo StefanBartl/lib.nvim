@@ -75,5 +75,17 @@ M.change_case = require("lib.lua.strings.case").change_case
 M.center_text = require("lib.lua.strings.wrap").center_text
 M.center_text_lines = require("lib.lua.strings.wrap").center_text_lines
 
+-- width module
+-- Only the three functions with no byte-based counterpart are flattened
+-- onto the aggregator. `width.pad_start`/`pad_end`/`pad_center` are NOT:
+-- those names already belong to the byte-based `core` versions above, and
+-- silently swapping their semantics here would change existing callers'
+-- output for any non-ASCII input. Reach them through `M.width` instead.
+M.char_width = require("lib.lua.strings.width").char_width
+M.display_width = require("lib.lua.strings.width").display_width
+M.truncate = require("lib.lua.strings.width").truncate
+
+M.width = require("lib.lua.strings.width")
+
 ---@type Lib.Strings
 return M

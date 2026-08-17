@@ -19,6 +19,7 @@
 ---@field location Lib.Strings.Location.Mod
 ---@field case Lib.Strings.Case
 ---@field wrap Lib.Strings.Wrap
+---@field width Lib.Strings.Width.Mod
 
 -- ALL String Functions
 ---@class Lib.Strings.ALL
@@ -121,6 +122,12 @@
 -- =========================================================
 ---@field center_text fun(str: string, width: integer): string # Center a line within width columns.
 ---@field center_text_lines fun(lines: string[], width: integer): string[] # Center each line of a block.
+-- =========================================================
+-- lib.lua.strings.width
+-- =========================================================
+---@field char_width fun(cp: integer): integer # Columns for one codepoint (0/1/2).
+---@field display_width fun(str: string, opts?: Lib.Strings.Width.Opts): integer # Columns occupied by a string, tabs expanded.
+---@field truncate fun(str: string, max_cols: integer, opts?: Lib.Strings.Width.TruncateOpts): string, integer # Cut to a column budget without splitting a character.
 
 ---@class Lib.Strings.Utf8
 ---@field char_len fun(lead_byte: integer): integer
@@ -153,6 +160,22 @@
 ---@class Lib.Strings.Wrap
 ---@field center_text fun(str: string, width: integer): string
 ---@field center_text_lines fun(lines: string[], width: integer): string[]
+
+---Options for the `lib.lua.strings.width` measuring/padding functions.
+---@class Lib.Strings.Width.Opts
+---@field tabstop? integer Columns per tab stop (default `8`).
+
+---Options for `lib.lua.strings.width.truncate`.
+---@class Lib.Strings.Width.TruncateOpts : Lib.Strings.Width.Opts
+---@field ellipsis? string Appended within the budget when the string is cut (default `""`).
+
+---@class Lib.Strings.Width.Mod
+---@field char_width fun(cp: integer): integer # Columns for one codepoint: 0 (combining/control), 2 (wide/fullwidth), else 1.
+---@field display_width fun(str: string, opts?: Lib.Strings.Width.Opts): integer # Columns occupied by `str`, tabs expanded to the next stop.
+---@field truncate fun(str: string, max_cols: integer, opts?: Lib.Strings.Width.TruncateOpts): string, integer # Cut to `max_cols` columns without splitting a character.
+---@field pad_start fun(str: string, width: integer, opts?: Lib.Strings.Width.Opts): string
+---@field pad_end fun(str: string, width: integer, opts?: Lib.Strings.Width.Opts): string
+---@field pad_center fun(str: string, width: integer, opts?: Lib.Strings.Width.Opts): string
 
 ---@type Lib.Strings
 local strings

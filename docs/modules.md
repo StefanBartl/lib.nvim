@@ -8,7 +8,7 @@ namespace one-liners), split by topic, see [`API/README.md`](API/README.md).
 | Module             | Contents                                                |
 | ------------------ | ------------------------------------------------------- |
 | `lib.lua.tables`   | array / dict / set / functional / safe / unique / `with`|
-| `lib.lua.strings`  | trim, split/join, case conversion, padding, slugify, …  |
+| [`lib.lua.strings`](../lua/lib/lua/strings/README.md) | trim, split/join, case conversion, padding, slugify, … plus [`width`](../lua/lib/lua/strings/width.lua): display-width (column) arithmetic — CJK/emoji/tab-aware `display_width`/`truncate`/padding ([`:help`](../doc/lib.nvim-strings_width.txt)) |
 | `lib.lua.functions`| meta helpers: noop, identity, const, raise, …           |
 | [`lib.lua.time`](../lua/lib/lua/time/diff/README.md) | time / diff calculation ([`:help`](../doc/lib.nvim-time_diff.txt)) |
 | `lib.lua.json`     | decode helpers (string array)                           |
@@ -82,6 +82,6 @@ and are generated on install by your plugin manager (see [Help docs](help.md)).
 **`:help` pages**
 
 - `:help lib.nvim` — overview hub · `:help lib.nvim-modules` — module index
-- `:help lib.nvim-window` · `:help lib.nvim-hover_select` · `:help lib.nvim-time_diff` · `:help lib.nvim-progress` · `:help lib.nvim-treesitter` · `:help lib.nvim-selection` · `:help lib.nvim-composer` · `:help lib.nvim-spawn-env` · `:help lib.nvim-async`
+- `:help lib.nvim-window` · `:help lib.nvim-hover_select` · `:help lib.nvim-time_diff` · `:help lib.nvim-progress` · `:help lib.nvim-treesitter` · `:help lib.nvim-selection` · `:help lib.nvim-composer` · `:help lib.nvim-spawn-env` · `:help lib.nvim-async` · `:help lib.nvim-strings_width`
 
 See [Conventions](conventions.md) for the steps to follow when documenting a new module, and [Help docs](help.md) for how `:help` tags are generated.
