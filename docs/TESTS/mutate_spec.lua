@@ -153,4 +153,39 @@ return function(H)
 
   local mkdirp_again_ok = mutate.mkdir_p(nested)
   eq(mkdirp_again_ok, true, "mkdir_p: re-creating an already-existing directory is still ok")
+
+  -- ------------------------------------------------------------- symlink/hardlink
+  --
+  -- Windows symlink creation needs either Developer Mode or an elevated
+  -- process (SeCreateSymbolicLinkPrivilege) -- CI/sandboxed runs commonly
+  -- have neither. Skip rather than fail on a privilege the test can't grant
+  -- itself; the real assertion (right libuv call, right (ok, err) shape) is
+  -- still exercised on every POSIX runner and any dev machine with the
+  -- privilege.
+  local link_src = dir .. "/link_src.txt"
+  local lf = assert(io.open(link_src, "w"))
+  lf:write("hi")
+  lf:close()
+
+  local symlink_ok, symlink_err = mutate.symlink(link_src, dir .. "/link_sym.txt", false)
+  if symlink_ok then
+    eq(
+      (vim.uv or vim.loop).fs_readlink(dir .. "/link_sym.txt"),
+      link_src,
+      "symlink: created link points at the target"
+    )
+  else
+    print("  note symlink() unavailable in this environment, skipping: " .. tostring(symlink_err))
+  end
+
+  local hardlink_ok = mutate.hardlink(link_src, dir .. "/link_hard.txt")
+  eq(hardlink_ok, true, "hardlink: creates a hard link to an existing file")
+  local hf = assert(io.open(dir .. "/link_hard.txt", "r"))
+  eq(hf:read("*a"), "hi", "hardlink: content matches the target")
+  hf:close()
+
+  local hardlink_missing_ok, hardlink_missing_err =
+    mutate.hardlink(dir .. "/does-not-exist.txt", dir .. "/link_hard2.txt")
+  eq(hardlink_missing_ok, false, "hardlink: a missing target fails")
+  ok(hardlink_missing_err ~= nil, "hardlink: a missing target reports an error")
 end

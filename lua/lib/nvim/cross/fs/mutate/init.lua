@@ -153,4 +153,35 @@ function M.mkdir_p(path, opts)
   end, opts)
 end
 
+---Create a symbolic link at `link_path` pointing to `target`. `target` is
+---stored verbatim (relative or absolute) — resolve it to an absolute path
+---before calling this if the link must not depend on `link_path`'s location.
+---@param target string      What the link points to. Need not exist.
+---@param link_path string   Where to create the link.
+---@param is_dir? boolean    Windows needs to know upfront whether `target` is
+---                          a directory (`uv_fs_symlink`'s `dir` flag); ignored
+---                          on POSIX, where the same call handles both.
+---@param opts? Lib.Cross.Fs.Mutate.RetryOpts
+---@return boolean ok
+---@return string|nil err
+function M.symlink(target, link_path, is_dir, opts)
+  return M.retry(function()
+    return uv().fs_symlink(target, link_path, is_dir and { dir = true } or nil)
+  end, opts)
+end
+
+---Create a hard link at `link_path` pointing to the existing file `target`.
+---Files only: neither Windows nor POSIX allows an unprivileged hard link to a
+---directory — use `M.symlink` for those.
+---@param target string      Existing file to link to.
+---@param link_path string   Where to create the link.
+---@param opts? Lib.Cross.Fs.Mutate.RetryOpts
+---@return boolean ok
+---@return string|nil err
+function M.hardlink(target, link_path, opts)
+  return M.retry(function()
+    return uv().fs_link(target, link_path)
+  end, opts)
+end
+
 return M
