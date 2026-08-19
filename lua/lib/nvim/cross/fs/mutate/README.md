@@ -27,8 +27,22 @@ if not ok then
 end
 ```
 
-All four primitives return libuv-style `(ok, err)` and take an optional
+All primitives return libuv-style `(ok, err)` and take an optional
 `RetryOpts` as their last argument.
+
+### Links
+
+```lua
+mutate.symlink(target, link_path, is_dir)   -- files AND directories
+mutate.hardlink(target, link_path)          -- files only
+```
+
+`symlink`'s `is_dir` flag matters on Windows only (`uv_fs_symlink`'s `dir`
+flag; POSIX ignores it) — pass whether `target` is a directory. `target` is
+stored in the link verbatim, so pass an absolute path unless a
+location-relative link is actually intended. Neither call requires `target`
+to exist first (a dangling symlink is valid); `hardlink` will fail at the
+libuv level if it doesn't, since a hard link needs a real inode to point at.
 
 ### Releasing your own handles
 
