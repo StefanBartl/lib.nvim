@@ -169,9 +169,15 @@ return function(H)
 
   local symlink_ok, symlink_err = mutate.symlink(link_src, dir .. "/link_sym.txt", false)
   if symlink_ok then
+    -- Compare separator-insensitively: `link_src` is hand-joined with "/" onto
+    -- a tempname() that is already backslashed on Windows, while fs_readlink
+    -- hands back the path the OS canonicalized when it wrote the reparse point
+    -- (all-backslash). The two spellings name the same file, so the assertion
+    -- is about the *target*, not about which slash the platform prefers.
+    local unify_slashes = require("lib.nvim.cross.fs.separators.unify_slashes")
     eq(
-      (vim.uv or vim.loop).fs_readlink(dir .. "/link_sym.txt"),
-      link_src,
+      unify_slashes((vim.uv or vim.loop).fs_readlink(dir .. "/link_sym.txt")),
+      unify_slashes(link_src),
       "symlink: created link points at the target"
     )
   else
