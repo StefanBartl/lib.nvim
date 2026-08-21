@@ -154,7 +154,10 @@ function M.new(opts)
     if type(spec) == "function" then
       fn, priority, once = spec, 0, false
     else
-      assert(type(spec) == "table" and type(spec.load) == "function", "dispatcher.register: handler must be a function or { load = fn }")
+      assert(
+        type(spec) == "table" and type(spec.load) == "function",
+        "dispatcher.register: handler must be a function or { load = fn }"
+      )
       fn, priority, once = spec.load, spec.priority or 0, spec.once == true
     end
 

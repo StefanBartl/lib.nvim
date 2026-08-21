@@ -57,12 +57,18 @@ return function(H)
     })
 
     -- Registered out of priority order on purpose.
-    d.register("Beta", { load = function()
-      order[#order + 1] = "prio-10"
-    end, priority = 10 })
-    d.register("Beta", { load = function()
-      order[#order + 1] = "prio-negative"
-    end, priority = -5 })
+    d.register("Beta", {
+      load = function()
+        order[#order + 1] = "prio-10"
+      end,
+      priority = 10,
+    })
+    d.register("Beta", {
+      load = function()
+        order[#order + 1] = "prio-negative"
+      end,
+      priority = -5,
+    })
     d.register("Beta", function()
       order[#order + 1] = "prio-default-0-first"
     end)
