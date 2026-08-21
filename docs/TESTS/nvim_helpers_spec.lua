@@ -152,7 +152,11 @@ return function(H)
   if is_windows then
     eq(normalize_sep("a/b/c"), "a\\b\\c", "normalize: forward slashes -> backslashes on Windows")
   else
-    eq(normalize_sep([[a\b\c]]), "a/b/c", "normalize: backslashes -> forward slashes on non-Windows")
+    eq(
+      normalize_sep([[a\b\c]]),
+      "a/b/c",
+      "normalize: backslashes -> forward slashes on non-Windows"
+    )
   end
 
   -- ------------------------------------------------------------- lib.nvim.window
