@@ -156,6 +156,10 @@ end
 ---Create a symbolic link at `link_path` pointing to `target`. `target` is
 ---stored verbatim (relative or absolute) — resolve it to an absolute path
 ---before calling this if the link must not depend on `link_path`'s location.
+---"Verbatim" is a POSIX guarantee only: Windows canonicalizes the target when
+---it writes the reparse point, so `fs_readlink` reads back an all-backslash
+---path even for a target passed in with forward slashes. Compare read-back
+---targets through `lib.nvim.cross.fs.separators.unify_slashes`.
 ---@param target string      What the link points to. Need not exist.
 ---@param link_path string   Where to create the link.
 ---@param is_dir? boolean    Windows needs to know upfront whether `target` is
