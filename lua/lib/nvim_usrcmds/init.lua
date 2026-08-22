@@ -68,14 +68,24 @@ end
 -- ── Flat commands (unchanged surface) ───────────────────────────────────────
 
 ---@internal
----Registers the LazyDone autocmd that regenerates helptags.
+---Regenerate helptags after lazy.nvim actually changed something on disk.
+---
+---This used to hang on `LazyDone`, which fires on *every* start. `helptags
+---ALL` walks every installed plugin's doc/ directory and rewrites its tags
+---file unconditionally -- measured at 229ms with ~116 plugins, and the second
+---run in the same session costs the same, because nothing about it is
+---incremental. Paying that on every launch buys nothing: help files only
+---change when a plugin is installed or updated, and those are exactly the
+---events below.
+---
+---`:Lib helptags` (and the flat `:Helptags`-style route) still regenerates on
+---demand, for the case where something changed outside lazy's knowledge.
 local function register_helptags()
   autocmd.create("User", function()
     action_helptags()
   end, {
-    pattern = "LazyDone",
-    once = true,
-    desc = "[lib.nvim_usrcmds] regenerate helptags after lazy.nvim finishes loading",
+    pattern = { "LazyInstall", "LazyUpdate", "LazySync" },
+    desc = "[lib.nvim_usrcmds] regenerate helptags after lazy.nvim installs/updates plugins",
   })
 end
 
