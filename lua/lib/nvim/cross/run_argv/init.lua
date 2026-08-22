@@ -57,4 +57,65 @@ function M.run_blocking_captured(cmd, input)
   return vim.v.shell_error == 0, out
 end
 
+--- Asynchronous counterpart to `run_blocking_captured`: spawns `cmd` and hands
+--- the outcome to `on_done` instead of blocking the UI thread until the process
+--- exits.
+---
+--- This exists because `run_blocking`/`run_blocking_captured` are, by a wide
+--- margin, the biggest source of UI freezes across the plugins built on this
+--- library: they are thin wrappers around `vim.system():wait()` (or
+--- `vim.fn.system`), so a caller cannot tell from the call site that the editor
+--- stops for the duration. Anything that can take longer than a few
+--- milliseconds -- container CLIs, PowerShell, git over the network, image
+--- tooling -- belongs here rather than there.
+---
+--- `on_done` is always invoked on the main loop (`vim.schedule`), so it is safe
+--- to touch buffers, windows and `vim.fn.*` from it. Both stdout and the exit
+--- code are passed on; `code` lets a caller report a bare "exit code N" when
+--- the process failed without writing anything.
+---
+--- The returned handle has a `stop()` method that sends SIGTERM. It is a no-op
+--- on the legacy fallback path (Neovim < 0.10), where there is no job to kill.
+---@param cmd string[]
+---@param on_done fun(ok: boolean, output: string, code: integer)
+---@param input? string
+---@return { stop: fun() } handle
+function M.run_async_captured(cmd, on_done, input)
+  if not vim.system then
+    -- Legacy fallback: no async process API. Run it the old way and report
+    -- through the same callback so callers only ever need one shape.
+    local out = vim.fn.system(cmd, input or "")
+    local code = vim.v.shell_error
+    vim.schedule(function()
+      on_done(code == 0, out, code)
+    end)
+    return { stop = function() end }
+  end
+
+  -- vim.system raises synchronously when cmd[1] cannot be spawned at all
+  -- (e.g. ENOENT) rather than delivering a failed SystemCompleted -- guard it
+  -- so that case reaches on_done like every other failure, instead of an
+  -- uncaught error escaping into the caller's stack.
+  local ok_spawn, job = pcall(vim.system, cmd, { text = true, stdin = input }, function(res)
+    vim.schedule(function()
+      on_done(res.code == 0, res.stdout or "", res.code)
+    end)
+  end)
+
+  if not ok_spawn then
+    vim.schedule(function()
+      on_done(false, tostring(job), -1)
+    end)
+    return { stop = function() end }
+  end
+
+  return {
+    stop = function()
+      pcall(function()
+        job:kill("sigterm")
+      end)
+    end,
+  }
+end
+
 return M
