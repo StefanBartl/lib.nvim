@@ -17,6 +17,8 @@ Two shapes are supported, matching the two patterns real callers need:
 - **chars** — a same-line charwise (`v`) byte-column range. For actions
   that rewrite part of a single line without changing its total length
   (swap-with-neighbor, inline transforms, ...).
+- **chars_multiline** — a charwise (`v`) selection spanning more than one
+  line. Complements `chars`, which only covers the same-line case.
 
 `gv` is deliberately not used: the `` '< ``/`` '> `` marks it reads are only
 set once Visual mode actually *ends*, so calling `gv` from inside a mapping
@@ -77,5 +79,19 @@ end)
   `applicable` is `false` (and `fn` is not called) when the current
   selection is not a same-line charwise selection — fall back to your own
   handling (e.g. `gv`) in that case.
+- `chars_multiline()` -> `srow, scol, erow, ecol` — 0-based row and
+  inclusive byte-column bounds of the active selection, if (and only if) it
+  is charwise and spans *more than one* line; otherwise `nil`. Complements
+  `chars()`. `srow`/`scol` is always the earlier point in the buffer,
+  regardless of which end the cursor is on.
+- `reselect_chars_multiline(srow, scol, erow, ecol)` — restore a charwise
+  (`v`) selection from byte column `scol` on `srow` to byte column `ecol`
+  on `erow` (0-based inclusive), covering every full line in between.
+- `keep_chars_multiline(fn)` -> `ret, applicable` — capture the current
+  multi-line charwise selection, run `fn(srow, scol, erow, ecol)`, then
+  reselect it. Only correct when `fn` doesn't shift where the first/last
+  line's selected span starts or ends — a mutation that changes that width
+  should reselect explicit new bounds itself via
+  `reselect_chars_multiline` instead.
 
 See `lua/lib/nvim/selection/@types/init.lua` for exact signatures.

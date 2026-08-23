@@ -21,6 +21,11 @@ CONTENTS                                        *lib.nvim-selection-contents*
        chars ................................. |lib.nvim-selection-chars|
        reselect_chars ............... |lib.nvim-selection-reselect_chars|
        keep_chars ....................... |lib.nvim-selection-keep_chars|
+       chars_multiline ............ |lib.nvim-selection-chars_multiline|
+       reselect_chars_multiline
+                          |lib.nvim-selection-reselect_chars_multiline|
+       keep_chars_multiline
+                              |lib.nvim-selection-keep_chars_multiline|
 
 ==============================================================================
 1. DESIGN                                         *lib.nvim-selection-design*
@@ -33,6 +38,9 @@ Two shapes are supported, matching the two patterns real callers need:
     chars   a same-line charwise (v) byte-column range. For actions that
             rewrite part of a single line without changing its total
             length (swap-with-neighbor, inline transforms, ...).
+    chars_multiline
+            a charwise (v) selection spanning more than one line.
+            Complements `chars`, which only covers the same-line case.
 
 `gv` is deliberately not used: the '< / '> marks it reads are only set once
 Visual mode actually ENDS, so calling `gv` from inside a mapping that is
@@ -115,6 +123,37 @@ Capture the current same-line charwise selection, run
 `applicable` is false (and `fn` is not called) when the current selection is
 not a same-line charwise selection — fall back to your own handling (e.g.
 `gv`) in that case.
+
+------------------------------------------------------------------------------
+chars_multiline()                        *lib.nvim-selection-chars_multiline*
+
+0-based `srow, scol, erow, ecol` (inclusive byte columns) of the active
+selection, if (and only if) it is charwise and spans MORE THAN ONE line;
+otherwise nil. Complements `chars()`, which only covers the same-line case.
+`srow`/`scol` is always the earlier point in the buffer, regardless of
+which end the cursor is on.
+
+------------------------------------------------------------------------------
+reselect_chars_multiline({srow}, {scol}, {erow}, {ecol})
+                                *lib.nvim-selection-reselect_chars_multiline*
+
+Restore a charwise (v) selection running from byte column `scol` on `srow`
+to byte column `ecol` on `erow` (0-based inclusive), covering every full
+line in between. Byte columns are converted to character offsets first,
+same as `reselect_chars`.
+
+------------------------------------------------------------------------------
+keep_chars_multiline({fn})           *lib.nvim-selection-keep_chars_multiline*
+
+Capture the current multi-line charwise selection, run
+`fn(srow, scol, erow, ecol)`, then reselect it. Returns `ret, applicable`;
+`applicable` is false (and `fn` is not called) when the current selection is
+not multi-line charwise.
+
+Only correct when `fn` doesn't shift where the first/last line's selected
+span starts or ends — a mutation that changes that width (e.g. `9.` ->
+`10.`) should reselect explicit new bounds itself via
+`reselect_chars_multiline` instead of this wrapper.
 
 ==============================================================================
 vim:tw=78:ts=8:ft=help:norl:

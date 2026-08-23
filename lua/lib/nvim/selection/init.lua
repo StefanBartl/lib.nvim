@@ -14,6 +14,12 @@
 ---   - chars: a same-line charwise (`v`) byte-column range — actions that
 ---     rewrite part of a single line without changing its total length.
 ---
+--- `chars_multiline` complements `chars` for the one shape it deliberately
+--- excludes: a charwise (`v`) selection spanning more than one line. It is a
+--- separate function, not a 4-value fallthrough on `chars` itself, so that
+--- function's existing same-line, 3-value contract never changes shape under
+--- callers that already rely on it.
+---
 --- `gv` is deliberately not used: the `'<`/`'>` marks it reads are only set
 --- once Visual mode actually *ends*, so calling `gv` from inside a mapping
 --- that is still conceptually "in" Visual mode reselects the *previous*
@@ -129,6 +135,78 @@ function M.keep_chars(fn)
   end
   local ret = fn(row, scol, ecol)
   M.reselect_chars(row, scol, ecol)
+  return ret, true
+end
+
+--- 0-based row and inclusive byte-column bounds of the current Visual
+--- selection, if (and only if) it is charwise and spans *more than one*
+--- line — the complement of `M.chars()`, which only covers the same-line
+--- case. `srow`/`scol` is always the earlier point in the buffer and
+--- `erow`/`ecol` the later one, regardless of which end the cursor is on
+--- (Visual selections can be drawn in either direction).
+---@return integer|nil srow, integer|nil scol, integer|nil erow, integer|nil ecol # nil for a linewise/blockwise or same-line selection.
+function M.chars_multiline()
+  if vim.fn.mode() ~= "v" then
+    return nil
+  end
+  local row_v, col_v = vim.fn.line("v"), vim.fn.col("v")
+  local row_d, col_d = vim.fn.line("."), vim.fn.col(".")
+  if row_v == row_d then
+    return nil
+  end
+  if row_v < row_d then
+    return row_v - 1, col_v - 1, row_d - 1, col_d - 1
+  end
+  return row_d - 1, col_d - 1, row_v - 1, col_v - 1
+end
+
+--- Restore a charwise (`v`) selection running from byte column `scol` on
+--- `srow` (0-based) to byte column `ecol` on `erow` (0-based, inclusive),
+--- covering every full line in between. Byte columns are converted to
+--- character offsets first, same as `M.reselect_chars`.
+---@param srow integer
+---@param scol integer
+---@param erow integer
+---@param ecol integer
+---@return nil
+function M.reselect_chars_multiline(srow, scol, erow, ecol)
+  local first = vim.api.nvim_buf_get_lines(0, srow, srow + 1, false)[1] or ""
+  local last = vim.api.nvim_buf_get_lines(0, erow, erow + 1, false)[1] or ""
+  local sc = math.max(vim.fn.charidx(first, scol), 0)
+  local ec = math.max(vim.fn.charidx(last, ecol), 0)
+
+  local keys = string.format("<Esc>%dG0", srow + 1)
+  if sc > 0 then
+    keys = keys .. sc .. "l"
+  end
+  keys = keys .. "v" .. string.format("%dG0", erow + 1)
+  if ec > 0 then
+    keys = keys .. ec .. "l"
+  end
+  feed(keys)
+end
+
+--- Capture the current multi-line charwise selection, run
+--- `fn(srow, scol, erow, ecol)`, then reselect the same bounds. If the
+--- current selection is not multi-line charwise (`M.chars_multiline()`
+--- returns nil), `fn` is not called at all — callers should fall back to
+--- their own handling (e.g. feeding `gv`) when `applicable` is false.
+---
+--- Only correct when `fn` rewrites the selected text in place without
+--- shifting where it starts/ends — same caveat as `M.keep_chars`. A
+--- mutation that changes the byte width of the first or last line (e.g.
+--- `9.` -> `10.`) needs to reselect explicit new bounds itself via
+--- `M.reselect_chars_multiline` instead of this wrapper.
+---@generic T
+---@param fn fun(srow: integer, scol: integer, erow: integer, ecol: integer): T
+---@return T|nil ret, boolean applicable
+function M.keep_chars_multiline(fn)
+  local srow, scol, erow, ecol = M.chars_multiline()
+  if not srow then
+    return nil, false
+  end
+  local ret = fn(srow, scol, erow, ecol)
+  M.reselect_chars_multiline(srow, scol, erow, ecol)
   return ret, true
 end
 

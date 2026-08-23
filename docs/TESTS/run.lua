@@ -58,6 +58,7 @@ local specs = {
   "lua_helpers_spec.lua",
   "nvim_helpers_spec.lua",
   "window_spec.lua",
+  "selection_spec.lua",
   "context_spec.lua",
   "cache_spec.lua",
   "cwd_spec.lua",
