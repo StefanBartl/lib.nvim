@@ -71,16 +71,24 @@ function M.validate(raw, spec)
 end
 
 --- Completion candidates for an arg spec (honoring `enum` first).
+---
+--- `cmd_line` is the whole command line as Neovim handed it to the completion
+--- callback. Built-in types ignore it; a custom type that has to know what was
+--- already typed before this slot (a nested router that dispatches on earlier
+--- tokens, say) reads it instead of guessing from `arg_lead` alone. It is nil
+--- when the caller has no command line to give: flag/kv *value* completion, and
+--- direct calls from tests.
 ---@param arg_lead string
 ---@param spec Lib.UserCmd.Composer.ArgSpec
+---@param cmd_line? string
 ---@return string[]
-function M.complete(arg_lead, spec)
+function M.complete(arg_lead, spec, cmd_line)
   if spec.enum then
     return prefix(spec.enum, arg_lead)
   end
   local def = M.get(spec.type)
   if def.complete then
-    return def.complete(arg_lead, spec)
+    return def.complete(arg_lead, spec, cmd_line)
   end
   return {}
 end

@@ -90,7 +90,7 @@ function M.candidates(root, arg_lead, cmd_line)
       for _, c in ipairs(out) do
         seen[c] = true
       end
-      for _, c in ipairs(argtypes.complete(arg_lead, route.args[1])) do
+      for _, c in ipairs(argtypes.complete(arg_lead, route.args[1], cmd_line)) do
         if not seen[c] then
           out[#out + 1] = c
         end
@@ -100,7 +100,7 @@ function M.candidates(root, arg_lead, cmd_line)
     -- Otherwise we are completing a positional argument of the matched route.
     local spec = route.args[filled + 1]
     if spec then
-      out = argtypes.complete(arg_lead, spec)
+      out = argtypes.complete(arg_lead, spec, cmd_line)
     end
   end
 

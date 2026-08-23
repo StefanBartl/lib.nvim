@@ -120,7 +120,7 @@
 --- A registered argument type: a validator and a completer.
 ---@class Lib.UserCmd.Composer.TypeDef
 ---@field validate fun(raw: string, spec: Lib.UserCmd.Composer.ArgSpec): boolean, any, string|nil  # ok, value, err
----@field complete? fun(arg_lead: string, spec: Lib.UserCmd.Composer.ArgSpec): string[]
+---@field complete? fun(arg_lead: string, spec: Lib.UserCmd.Composer.ArgSpec, cmd_line: string|nil): string[]  # cmd_line is the full command line (nil outside a real one) — for types whose candidates depend on tokens typed before this slot
 
 --- Handle returned by `composer.verb(...)` / `:build()`.
 ---@class Lib.UserCmd.Composer.Handle
