@@ -114,11 +114,13 @@ return function(H)
     local second = autocmd.group(name, true)
     H.ok(second ~= nil, "group() recreates a group that was deleted behind it")
 
-    local ok = pcall(autocmd.create, "User", function() end, {
+    -- Not named `ok`: the harness's own `ok` is destructured at the top of
+    -- this file, and shadowing it here would hide it for the rest of the block.
+    local created = pcall(autocmd.create, "User", function() end, {
       group = second,
       pattern = "LibNvimSpec",
     })
-    H.ok(ok, "the recreated id is usable")
+    H.ok(created, "the recreated id is usable")
 
     vim.api.nvim_del_augroup_by_name(name)
   end
