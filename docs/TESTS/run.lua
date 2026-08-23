@@ -73,6 +73,7 @@ local specs = {
   "git_spec.lua",
   "curl_spec.lua",
   "deps_spec.lua",
+  "contextmenu_spec.lua",
 }
 
 --- Straight to stdout rather than through `print`.
