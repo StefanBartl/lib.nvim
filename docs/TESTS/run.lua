@@ -42,6 +42,7 @@ local dir = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
 local H = dofile(dir .. "harness.lua")
 
 local specs = {
+  "polymorphic_rootresolver_spec.lua",
   "logger_spec.lua",
   "autocmd_spec.lua",
   "autocmd_dispatcher_spec.lua",

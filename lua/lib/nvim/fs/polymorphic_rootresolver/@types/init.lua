@@ -4,3 +4,14 @@
 ---@class RootResolverCfg
 ---@field markers string[] List of filenames/folders that indicate project root.
 ---@field include_stdpath_config boolean If true, uses Neovim's stdpath("config") as fallback.
+---@field resolve nil|fun(dir: string, cfg: RootResolverCfg): string|nil
+--- Replaces the default upward marker search. Receives the normalized starting
+--- directory (the file's directory, or the cwd for an unnamed buffer) and
+--- returns the project root, or nil to fall back to that directory.
+---
+--- The point is the plumbing around it: turning a buffer number or a filename
+--- into a directory, and honouring the optional callback the `vim.lsp` root_dir
+--- contract allows, is identical for every resolver and worth writing once. A
+--- server whose notion of "root" is more than "nearest marker" -- a scope
+--- switch, a language-specific config file, an ordering between the two --
+--- supplies it here instead of reimplementing the wrapper.

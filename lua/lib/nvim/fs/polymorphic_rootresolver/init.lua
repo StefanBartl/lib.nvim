@@ -2,6 +2,11 @@
 --- Generic polymorphic root-directory resolver for Neovim LSPs.
 --- Supports both buffer numbers and filenames, optional callbacks, and configurable
 --- project root markers for VCS or tool-specific files.
+---
+--- `cfg.resolve` replaces the marker search for servers whose notion of a root
+--- is more than "nearest marker", while keeping the argument normalization and
+--- the callback contract shared -- that boilerplate is the same in every
+--- resolver and is what gets copied when it is not available here.
 
 local uv = vim.uv or vim.loop
 local fs = vim.fs
@@ -44,7 +49,13 @@ return function(cfg)
     end
 
     ---@type string|nil
-    local root = fs.root(dir, cfg.markers)
+    local root
+    if type(cfg.resolve) == "function" then
+      local ok, resolved = pcall(cfg.resolve, dir, cfg)
+      root = ok and resolved or nil
+    else
+      root = fs.root(dir, cfg.markers)
+    end
     if not root then
       root = dir
     end
