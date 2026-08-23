@@ -97,4 +97,43 @@ return function(H)
   -- ----------------------------------------------------------- norm_pattern
   eq(autocmd.norm_pattern(nil), "*", "norm_pattern: nil becomes '*'")
   eq(autocmd.norm_pattern("*.md"), "*.md", "norm_pattern: an explicit pattern passes through")
+
+  -- ── augroup cache invalidation ────────────────────────────────────────
+  -- `group()` memoizes by name. Deleting the group behind its back --
+  -- `nvim_del_augroup_by_name`, which is the only way for a plugin to stop
+  -- owning its autocommands -- used to leave a dead id in that cache, so the
+  -- next create() against the same name failed with "Invalid 'group'".
+  do
+    local name = "lib_nvim_spec_group_" .. tostring(vim.uv.hrtime())
+
+    local first = autocmd.group(name, true)
+    H.ok(type(first) == "number", "group() returns an id")
+
+    vim.api.nvim_del_augroup_by_name(name)
+
+    local second = autocmd.group(name, true)
+    H.ok(second ~= nil, "group() recreates a group that was deleted behind it")
+
+    local ok = pcall(autocmd.create, "User", function() end, {
+      group = second,
+      pattern = "LibNvimSpec",
+    })
+    H.ok(ok, "the recreated id is usable")
+
+    vim.api.nvim_del_augroup_by_name(name)
+  end
+
+  -- Re-requesting with clear=true still clears, so a rebuild does not double
+  -- its autocommands.
+  do
+    local name = "lib_nvim_spec_clear_" .. tostring(vim.uv.hrtime())
+    local id = autocmd.group(name, true)
+    autocmd.create("User", function() end, { group = id, pattern = "LibNvimSpecA" })
+    H.eq(#vim.api.nvim_get_autocmds({ group = id }), 1, "one autocmd registered")
+
+    local again = autocmd.group(name, true)
+    H.eq(#vim.api.nvim_get_autocmds({ group = again }), 0, "clear=true emptied the group")
+
+    vim.api.nvim_del_augroup_by_name(name)
+  end
 end

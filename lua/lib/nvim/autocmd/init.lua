@@ -16,13 +16,40 @@ M.dispatcher = require("lib.lua.lazy").require("lib.nvim.autocmd.dispatcher")
 ---@type table<string, integer>
 local groups = {}
 
+---@internal
+--- Does this augroup id still exist?
+---
+--- `nvim_get_autocmds` raises for an unknown group, which is the only way to
+--- ask -- there is no lookup that returns nil.
+---@param id integer
+---@return boolean
+local function group_exists(id)
+  return (pcall(vim.api.nvim_get_autocmds, { group = id }))
+end
+
+--- Create (or look up) an augroup, memoized by name.
+---
+--- The cache is verified, not trusted. `nvim_del_augroup_by_name` is a normal
+--- thing for a consumer to call -- a plugin that owns a group and wants to stop
+--- owning it has no other way -- and the deleted id stayed in this cache, so
+--- the next `group()` for that name handed back an id Neovim no longer knew and
+--- every `create()` against it failed with "Invalid 'group'". Found from
+--- lsp.nvim, whose `bindings/autocmds.clear()` does exactly that.
 ---@param name string
 ---@param clear boolean|nil
 ---@return integer
 function M.group(name, clear)
-  if groups[name] == nil then
-    groups[name] = vim.api.nvim_create_augroup(name, { clear = clear == true })
+  local cached = groups[name]
+  if cached ~= nil and group_exists(cached) then
+    if clear == true then
+      -- Re-requesting with `clear` must still clear: the caller is rebuilding
+      -- its autocommands, and leaving the old ones would double them up.
+      return vim.api.nvim_create_augroup(name, { clear = true })
+    end
+    return cached
   end
+
+  groups[name] = vim.api.nvim_create_augroup(name, { clear = clear == true })
   return groups[name]
 end
 
