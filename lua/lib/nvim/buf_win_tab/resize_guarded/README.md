@@ -38,7 +38,11 @@ commit message in lazygit, because `<S-h>` is intercepted by the mapping.
 `create(cmd, exclude_filetypes?, exclude_names?, lhs?) -> function`
 
 Parameters:
-- `cmd` (string): The resize command to run, e.g. `"vertical resize -5"`.
+- `cmd` (string | fun(): string): The resize command to run, e.g.
+  `"vertical resize -5"`. A function is called at keypress time and must return
+  the command; that is what lets a caller build the step from per-keypress
+  state such as `vim.v.count1`, which cannot be baked into a fixed string when
+  the mapping is created.
 - `exclude_filetypes` (string[], optional): List of `filetype` values for which
   the mapping should **not** perform the resize (e.g. `{ "terminal" }`).
 - `exclude_names` (string[], optional): List of Lua patterns applied to

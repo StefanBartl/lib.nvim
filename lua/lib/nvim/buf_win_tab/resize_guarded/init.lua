@@ -98,7 +98,10 @@ end
 --- Create a guarded resize mapping callback function.
 --- This function checks if the current buffer should be excluded,
 --- and either forwards the key or executes the resize command.
----@param cmd string The resize command to execute (e.g., "vertical resize -5")
+---@param cmd string|fun(): string The resize command, or a function returning
+---       one. The function form is what lets a caller build the command per
+---       keypress -- e.g. scaling the step by `vim.v.count1`, which cannot be
+---       baked into a fixed string at mapping time.
 ---@param exclude_filetypes string[]|nil List of filetypes to exclude from resize
 ---@param exclude_names string[]|nil List of Lua patterns matching buffer names to exclude
 ---@param lhs string The original mapping lhs (e.g., "<S-h>") - REQUIRED for key forwarding
@@ -149,10 +152,11 @@ function M.create(cmd, exclude_filetypes, exclude_names, lhs)
       end
     end
 
-    -- Buffer is not excluded: execute the resize command
-    -- Use pcall to catch any errors from vim.cmd
+    -- Buffer is not excluded: execute the resize command.
+    -- Resolved here rather than at creation time so the function form can
+    -- read per-keypress state (`vim.v.count1`).
     local ok, err = pcall(function()
-      vim.cmd(cmd)
+      vim.cmd(type(cmd) == "function" and cmd() or cmd)
     end)
     if not ok then
       notify.error(
