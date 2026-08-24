@@ -231,9 +231,20 @@ return function(H)
       f:close()
     end
 
+    -- getcompletion() expands its argument as a Vim path pattern, so the raw
+    -- tempname() is unusable as a prefix on Windows for two reasons:
+    --   * it comes back in 8.3 short form ("C:\Users\STEFAN~1\..."), and the
+    --     "~" is taken as a home-directory reference mid-pattern;
+    --   * "\" is the pattern escape character, so backslash separators eat the
+    --     component that follows them.
+    -- fs_realpath() gives the long name, and forward slashes are accepted as
+    -- separators on both platforms -- on Linux/macOS both steps are no-ops.
+    local comp_dir = (vim.uv or vim.loop).fs_realpath(dir) or dir
+    comp_dir = comp_dir:gsub("\\", "/")
+
     -- getcompletion() itself (the piece trigger_completion drives) works
     -- headless -- no Insert mode needed for this call.
-    local matches = vim.fn.getcompletion(dir .. "/fi", "file")
+    local matches = vim.fn.getcompletion(comp_dir .. "/fi", "file")
     eq(#matches, 2, "getcompletion(file) finds both real files under the prefix")
 
     local comp =
