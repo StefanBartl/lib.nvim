@@ -204,6 +204,31 @@ often or too slowly" without manually wrapping every call site.
   `log_path`)
 - **Config:** `opts.threshold_ms` (default 200)
 
+## Count-prefixed keymaps
+
+Turns `3<leader>xy` into something a plugin handles correctly rather than
+approximately. Reading the count is a three-way choice — `count1` when "no
+count means once", raw `count` when 0 carries its own meaning, a clamp when
+the count indexes something bounded — and the module names all three instead
+of leaving each call site to pick.
+
+Repetition comes in two shapes. `times` runs the action once per count,
+synchronously. `chain` is for actions that complete *later*, via an event:
+each repeat waits for the caller's completion signal before the next fires.
+That distinction is not cosmetic — with a debug adapter, issuing the second
+step while the thread is still running from the first is a protocol
+violation, which is why dap.nvim grew this pattern first and why `chain`
+refuses to degrade into a plain loop when its driver is missing.
+
+- **Module:** `lib.nvim.count` (`get`, `raw`, `given`, `clamp`, `times`,
+  `chain`, `DEFAULT_MAX`)
+- **Config:** none. Per-call `count` and `max` on `times`/`chain`; the
+  explicit `count` also makes both testable without a keypress.
+- **Notes:** both repeat paths cap at `DEFAULT_MAX` (1000) — a typed count
+  can be fat-fingered. `chain` drops itself on `abort` and ignores a
+  completion signal that arrives afterwards, so a driver that detaches a beat
+  late cannot resurrect it.
+
 ## Memoized executable lookup
 
 A small grab-bag distinct from `cross.executable`: a memoized "does this

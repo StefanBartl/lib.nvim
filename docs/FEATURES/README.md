@@ -44,7 +44,8 @@ tree.
   multi-float layout engine.
 - **[INFRA.md](INFRA.md)** — persistent per-project storage, caching,
   external-dependency detection, treesitter gating, progress reporting, Git
-  queries, HTTP, and config-normalization/validated-API helpers.
+  queries, HTTP, count-prefixed keymaps, and
+  config-normalization/validated-API helpers.
 - **[subprocess-env.md](subprocess-env.md)** — spawned subprocesses inherit
   Neovim's own environment, not a login shell's: incomplete `PATH`,
   unreachable OS keyring. `lib.nvim.cross.run.env` builds the completed

@@ -104,6 +104,25 @@ return function(H)
       "enum: non-member rejected"
     )
     ok(argtypes.validate("anything", { name = "p", type = "STRING" }), "STRING: accepts any token")
+
+    -- WINDOW: ids are opaque, so validation is the only guard against a typo'd
+    -- one reaching a handler that would then raise deep inside nvim_win_*.
+    local spec_win = vim.api.nvim_get_current_win()
+    local wok, wv = argtypes.validate(tostring(spec_win), { name = "w", type = "WINDOW" })
+    ok(wok, "WINDOW: a live window id validates")
+    eq(wv, spec_win, "WINDOW: coerces to the numeric id")
+    ok(
+      not (argtypes.validate("999999", { name = "w", type = "WINDOW" })),
+      "WINDOW: a non-existent id is rejected"
+    )
+    ok(
+      not (argtypes.validate("nope", { name = "w", type = "WINDOW" })),
+      "WINDOW: a non-numeric token is rejected"
+    )
+    ok(
+      vim.tbl_contains(argtypes.complete("", { name = "w", type = "WINDOW" }), tostring(spec_win)),
+      "WINDOW: completion offers the live window ids"
+    )
   end
 
   -- ----------------------------------------------------------------- completion

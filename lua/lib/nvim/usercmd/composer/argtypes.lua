@@ -209,4 +209,26 @@ M.register("BUFFER", {
   end,
 })
 
+-- Window ids are opaque numbers nobody memorizes, so completion offers the
+-- live ones. Bare ids only: a `1000 (init.lua)` candidate would complete the
+-- annotation into the command line too, and every consumer would have to strip
+-- it back off. Mirrors BUFFER above, minus the name fallback -- windows have
+-- no names to match against.
+M.register("WINDOW", {
+  validate = function(raw)
+    local n = validators.to_int(raw)
+    if n and vim.api.nvim_win_is_valid(n) then
+      return true, n, nil
+    end
+    return false, nil, ("'%s' is not a valid window id"):format(raw)
+  end,
+  complete = function(arg_lead)
+    local out = {}
+    for _, w in ipairs(vim.api.nvim_list_wins()) do
+      out[#out + 1] = tostring(w)
+    end
+    return prefix(out, arg_lead)
+  end,
+})
+
 return M

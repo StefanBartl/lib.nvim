@@ -74,7 +74,7 @@ Each `run` receives a context table:
 3. ARGUMENT TYPES                              *lib.nvim-composer-argtypes*
 
 Each type carries validation and completion. Built-ins: STRING, INT, FLOAT,
-BOOL, PATH, DIR, FILE, BUFFER, plus `enum = {...}` on any ArgSpec (closed set,
+BOOL, PATH, DIR, FILE, BUFFER, WINDOW, plus `enum = {...}` on any ArgSpec (closed set,
 case-insensitive, completed from the members). Coercion reuses
 |lib.nvim.normalize| validators; PATH/DIR/FILE completion uses Neovim's own
 file completion. Register a custom type once: >lua

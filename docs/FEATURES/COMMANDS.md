@@ -65,7 +65,7 @@ route's own usage instead of a raw command error. A fluent builder form
 ### Argument types, flags, and bare `key=value`
 
 Each declared argument carries both validation and `<Tab>` completion —
-`STRING`, `INT`, `FLOAT`, `BOOL`, an `enum`, `PATH`/`DIR`/`FILE`/`BUFFER`, or a
+`STRING`, `INT`, `FLOAT`, `BOOL`, an `enum`, `PATH`/`DIR`/`FILE`/`BUFFER`/`WINDOW`, or a
 custom type registered once via `composer.register_type`. Routes may
 additionally declare `flags` (`--flag`/`-x`/`--flag=value`, parsed anywhere in
 the tail, `--` sentinel stops parsing) and `kv` (bare `key=value`, no dashes)

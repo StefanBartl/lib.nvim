@@ -43,7 +43,7 @@ default?: fun(ctx)                     -- handler for bare :Verb (no route path)
 routes?: RouteSpec[]                   -- the route tree; each route:
   path: string[]                       -- literal subcommand tokens ({} = verb's root route)
   args?: ArgSpec[]                     -- { name, type, optional?, enum?, values? }
-                                        --   types: STRING (default), INT, FLOAT, BOOL, PATH, DIR, FILE, BUFFER, custom
+                                        --   types: STRING (default), INT, FLOAT, BOOL, PATH, DIR, FILE, BUFFER, WINDOW, custom
   flags?: FlagSpec[]                   -- --flag/-x parsing: { name, short?, bool?, type?, enum?, repeatable? }
   kv?: KvSpec[]                        -- bare key=value parsing: { key, type?, enum?, default? }
   run: fun(ctx)|string                 -- handler, or a module path required lazily on first dispatch
@@ -135,6 +135,34 @@ string `desc` positional overrides `opts.desc`. `opts.buffer = true`
 normalizes to `0`. On validation failure, `vim.keymap.set` is **not**
 called — reports every failing field plus the real caller's call site
 instead.
+
+---
+
+## `lib.nvim.count` (see README)
+
+Count-prefix helpers for keymaps (`3<leader>xy`). Reading, plus the two ways
+an action repeats.
+
+```
+M.DEFAULT_MAX: integer                                   -- 1000; cap for times/chain
+M.get(): integer                                         -- vim.v.count1 ("no count means once")
+M.raw(): integer                                         -- vim.v.count (0 when none typed)
+M.given(): boolean                                       -- was a count typed at all
+M.clamp(min: integer, max: integer): integer             -- vim.v.count1 clamped into a range
+M.times(fn: fun(i: integer): boolean|nil, opts?: { count?: integer, max?: integer }): integer
+  -- runs fn once per count, synchronously; fn returning false stops early; returns times actually run
+M.chain(opts: Lib.Count.ChainOpts): boolean
+  -- repeats an async action, each call gated on the caller's completion signal; returns whether it chained
+```
+
+`chain` generalizes dap.nvim's `counted_step()`: `opts.subscribe(advance,
+abort)` registers the caller's listeners and returns an unsubscribe.
+`advance` releases the next call, `abort` drops the chain. With no count,
+`action` is called directly and `subscribe` is never invoked. A missing or
+raising `subscribe` reports and runs the action **once** — it deliberately
+does not fall back to a synchronous loop, which is the unpaced repetition
+`chain` exists to prevent. The chain also refuses to advance after `abort`,
+so a completion signal that was already queued cannot resurrect it.
 
 ---
 

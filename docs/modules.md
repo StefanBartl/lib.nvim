@@ -23,6 +23,7 @@ namespace one-liners), split by topic, see [`API/README.md`](API/README.md).
 | ---------------------- | --------------------------------------------------- |
 | [`lib.nvim.notify`](../lua/lib/nvim/notify/README.md) | notify wrapper + log-level resolution |
 | `lib.nvim.map`         | keymap helpers                                      |
+| [`lib.nvim.count`](../lua/lib/nvim/count/README.md) | count-prefix helpers for keymaps: `get`/`raw`/`given`/`clamp`, plus `times` (sync repeat) and `chain` (async repeat gated on a completion signal) |
 | [`lib.nvim.usercmd`](../lua/lib/nvim/usercmd/composer/README.md) | user-command helpers: `create` + [`composer`](../lua/lib/nvim/usercmd/composer/README.md) (subcommand verbs, completion, docgen — [`:help`](../doc/lib.nvim-composer.txt)) |
 | `lib.nvim.autocmd`     | autocmd / augroup helpers                           |
 | `lib.nvim.buffer`      | buffer helpers (`insert_lines`, `is_markdown_buf`, `open_background`) |

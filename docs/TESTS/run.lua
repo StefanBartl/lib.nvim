@@ -45,6 +45,7 @@ local specs = {
   "polymorphic_rootresolver_spec.lua",
   "logger_spec.lua",
   "autocmd_spec.lua",
+  "count_spec.lua",
   "autocmd_dispatcher_spec.lua",
   "run_argv_spec.lua",
   "run_spec.lua",

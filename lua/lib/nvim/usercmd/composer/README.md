@@ -191,6 +191,7 @@ Each type carries both validation and completion:
 | `DIR`    | `fs.is_dir`                   | directory completion         |
 | `FILE`   | `filereadable`                | file completion              |
 | `BUFFER` | valid bufnr or name match     | listed buffer basenames      |
+| `WINDOW` | valid window id               | live window ids              |
 
 Register a custom type once:
 
