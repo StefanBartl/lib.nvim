@@ -37,7 +37,7 @@ if not lib_path then
 end
 ```
 Examples: `fileops.nvim`, `color_my_ascii.nvim`, `debugging.nvim`,
-`diff.nvim`, `markdown.nvim` (all under `TESTS/run.lua` or `TESTS/run.lua`).
+`diff.nvim`, `markdown.nvim` (all under `TESTS/run.lua`).
 
 ### Pattern B — soft/optional dependency, note and continue
 
