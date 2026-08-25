@@ -12,6 +12,7 @@
 ---@field ahead_behind fun(git_cmd?:string):(boolean, boolean) # Check whether the current branch is ahead or behind its upstream.
 ---@field head_short_hash fun(git_cmd?:string):string|nil # Get the short hash of HEAD.
 ---@field info fun(dir: string, git_cmd?: string): { branch: string|nil, version: string|nil, commit: string|nil } # One-shot repo identity snapshot for an arbitrary directory (`git -C <dir> ...`), unlike every other function here which reads the cwd implicitly.
+---@field refs fun(dir?: string, opts?: { branches?: boolean, remotes?: boolean, tags?: boolean, limit?: integer }, git_cmd?: string): string[] # Named revisions (local branches, remote branches, tags), each group most-recent-commit first, deduplicated. Built for <Tab>-completing a revision argument.
 ---@field status_porcelain fun(git_cmd?:string):table<string, { code: string, orig_path: string|nil }>|nil # Parse `git status --porcelain -u` into a path -> {code, orig_path} map. Renames/copies are keyed by their new path.
 ---@field clear_line_diff fun(ns:integer):fun(buf:integer):nil # Create a buffer-scoped function that clears all virtual text in the given namespace. This function binds the namespace once and returns a callback suitable for autocmd usage.
 

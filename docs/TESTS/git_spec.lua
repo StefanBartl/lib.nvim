@@ -46,4 +46,52 @@ return function(H)
   local ok, missing_info = pcall(git.info, non_repo .. "-still-does-not-exist")
   H.eq(ok, true, "git.info: a nonexistent directory does not raise")
   H.eq(missing_info.branch, nil, "git.info: ...and every field is nil")
+  -- ── M.refs ────────────────────────────────────────────────────────────
+  --
+  -- This checkout has branches but (today) no tags, so the tag group is
+  -- asserted only through the group toggles, not through a fixture.
+  local refs = git.refs(root)
+  H.ok(type(refs) == "table" and #refs > 0, "git.refs: this repo has named revisions")
+  H.ok(
+    vim.tbl_contains(refs, "main"),
+    "git.refs: a local branch is offered bare, exactly as git accepts it as a revision"
+  )
+
+  local seen = {}
+  local unique = true
+  for _, r in ipairs(refs) do
+    if seen[r] then
+      unique = false
+    end
+    seen[r] = true
+  end
+  H.ok(unique, "git.refs: deduplicated")
+
+  -- Remote branches keep their prefix; stripping it would collide with the
+  -- identically named local branch and produce a candidate git cannot
+  -- disambiguate.
+  local has_remote = false
+  for _, r in ipairs(refs) do
+    if r:match("^origin/") then
+      has_remote = true
+    end
+  end
+  H.ok(has_remote, "git.refs: remote branches keep their remote prefix")
+
+  H.eq(#git.refs(root, { limit = 2 }), 2, "git.refs: limit caps the total")
+  H.ok(
+    #git.refs(root, { remotes = false, tags = false }) < #refs,
+    "git.refs: group toggles actually narrow the list"
+  )
+  for _, r in ipairs(git.refs(root, { branches = false, tags = false })) do
+    H.ok(r:match("/") ~= nil, "git.refs: remotes-only yields only prefixed refs (" .. r .. ")")
+  end
+
+  -- Same fail-quiet stance as `info`: not a repo -> empty list, not an error
+  -- and not nil, so a completion callback can return it directly.
+  local no_repo = vim.fn.tempname() .. "-not-a-repo-either"
+  vim.fn.mkdir(no_repo, "p")
+  H.eq(#git.refs(no_repo), 0, "git.refs: outside any repo, an empty list")
+  vim.fn.delete(no_repo, "rf")
+  H.eq(#git.refs(no_repo .. "/gone"), 0, "git.refs: nonexistent directory, an empty list")
 end

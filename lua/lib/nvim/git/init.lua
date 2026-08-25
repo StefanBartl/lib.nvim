@@ -152,6 +152,81 @@ function M.info(dir, git_cmd)
   }
 end
 
+--- List the repository's named revisions: local branches, then remote
+--- branches, then tags — each group sorted by most recent commit first, and
+--- the whole list deduplicated in that order.
+---
+--- Built for `<Tab>` completion of a "which revision?" argument, which is why
+--- the ordering matters more than it looks: `git for-each-ref` defaults to
+--- refname order, so a plain listing puts whatever starts with "a" in front
+--- of the branch you were on ten seconds ago. `-committerdate` puts the
+--- answer the user most likely wants within the first few candidates.
+---
+--- Remote branches are offered with their remote prefix (`origin/main`) and
+--- local ones without, because that is exactly how git itself accepts them
+--- as a revision — no normalization, so every candidate is directly usable.
+---
+--- Takes an explicit `dir` for the same reason `info` above does: a caller
+--- completing a revision for *a particular repository* usually does not mean
+--- the editor's cwd.
+---@param dir? string Path inside the target repo. Defaults to the cwd.
+---@param opts? { branches?: boolean, remotes?: boolean, tags?: boolean, limit?: integer } Which groups to include (all three default to true) and a cap on the total.
+---@param git_cmd? string
+---@return string[] # Possibly empty — a fresh repo with no commits has no refs, and neither does a non-repo.
+function M.refs(dir, opts, git_cmd)
+  opts = opts or {}
+  local bin = git_cmd or "git"
+
+  ---@param pattern string
+  ---@param strip integer How many leading ref path components to drop.
+  ---@return string[]
+  local function for_each_ref(pattern, strip)
+    local argv = { bin }
+    if dir and dir ~= "" then
+      argv[#argv + 1] = "-C"
+      argv[#argv + 1] = dir
+    end
+    vim.list_extend(argv, {
+      "for-each-ref",
+      "--sort=-committerdate",
+      ("--format=%%(refname:strip=%d)"):format(strip),
+      pattern,
+    })
+    local out = git_system(argv)
+    if not out then
+      return {}
+    end
+    return vim.split(out, "\n", { trimempty = true })
+  end
+
+  local groups = {}
+  if opts.branches ~= false then
+    groups[#groups + 1] = for_each_ref("refs/heads/", 2)
+  end
+  if opts.remotes ~= false then
+    -- strip=2 leaves "origin/main", which is what git accepts as a revision;
+    -- strip=3 would leave a bare "main" that collides with the local branch.
+    groups[#groups + 1] = for_each_ref("refs/remotes/", 2)
+  end
+  if opts.tags ~= false then
+    groups[#groups + 1] = for_each_ref("refs/tags/", 2)
+  end
+
+  local out, seen = {}, {}
+  for _, group in ipairs(groups) do
+    for _, ref in ipairs(group) do
+      if not seen[ref] then
+        seen[ref] = true
+        out[#out + 1] = ref
+        if opts.limit and #out >= opts.limit then
+          return out
+        end
+      end
+    end
+  end
+  return out
+end
+
 --- Parse `git status --porcelain -u` output into a path -> status-code map.
 --- Handles ordinary XY codes (M/A/D/R/C/U, "??" untracked, "!!" ignored) and
 --- rename/copy entries ("R  old -> new" / "C  old -> new"), keying renames

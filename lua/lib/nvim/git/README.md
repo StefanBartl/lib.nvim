@@ -47,6 +47,31 @@ Runs `git -C <dir> ...` for each field; any field the command fails to
 answer (detached HEAD for `branch`, no tags and no commits for `version`) is
 `nil` rather than a guessed placeholder.
 
+## Completing a revision argument
+
+`git.refs(dir?, opts?)` lists the repository's named revisions — local
+branches, then remote branches, then tags — for `<Tab>`-completing a "which
+revision?" command argument.
+
+```lua
+git.refs()                                     -- cwd's repo, everything
+git.refs("/path/to/repo", { limit = 20 })      -- another repo, capped
+git.refs(nil, { remotes = false, tags = false })  -- local branches only
+```
+
+Two details matter more than they look:
+
+- **Sorted by commit date, newest first.** `git for-each-ref` defaults to
+  refname order, which puts whatever starts with `a` ahead of the branch you
+  were on ten seconds ago. `-committerdate` puts the likely answer in the
+  first few candidates.
+- **Remote branches keep their prefix** (`origin/main`, not `main`), because
+  that is how git itself accepts them as a revision. Stripping it would also
+  collide with the identically named local branch.
+
+Returns an empty list — never `nil` — for a non-repo, a nonexistent path, or
+a repo with no commits, so a completion callback can return it directly.
+
 ## Status parsing
 
 ```lua
