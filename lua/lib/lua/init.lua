@@ -1,14 +1,15 @@
 ---@module 'lib.lua'
---- Namespace-Aggregator für die editorunabhängigen Lua-Helfer.
+--- Namespace aggregator for the editor-independent Lua helpers.
 ---
---- Diese Module benötigen KEINE `vim`-API und sind damit auch außerhalb von
---- Neovim verwendbar/testbar. Zugriff lädt das jeweilige Submodul lazy:
+--- None of these modules touch the `vim` API, so they are usable and testable
+--- outside Neovim too. Indexing loads the submodule lazily:
 ---
 ---   local Lua = require("lib.lua")
 ---   Lua.tables    -- == require("lib.lua.tables")
 ---   Lua.strings   -- == require("lib.lua.strings")
 ---
---- Direktes Requiren bleibt natürlich möglich und ist baumschüttelfreundlicher:
+--- Requiring a submodule directly still works, and is friendlier to
+--- tree-shaking:
 ---   local tables = require("lib.lua.tables")
 
 local cache = {}

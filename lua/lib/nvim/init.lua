@@ -1,15 +1,16 @@
 ---@module 'lib.nvim'
---- Namespace-Aggregator für die Neovim-spezifischen Helfer.
+--- Namespace aggregator for the Neovim-specific helpers.
 ---
---- Diese Module sind Adapter auf die `vim`-API. Zugriff lädt das jeweilige
---- Submodul lazy:
+--- These modules are adapters over the `vim` API. Indexing loads the submodule
+--- lazily:
 ---
 ---   local Nvim = require("lib.nvim")
 ---   Nvim.notify   -- == require("lib.nvim.notify")
 ---   Nvim.map      -- == require("lib.nvim.map")
 ---   Nvim.core     -- == require("lib.nvim.core")  (has_exec, simple_echo, …)
 ---
---- Direktes Requiren bleibt möglich und ist baumschüttelfreundlicher:
+--- Requiring a submodule directly still works, and is friendlier to
+--- tree-shaking:
 ---   local notify = require("lib.nvim.notify")
 
 local cache = {}

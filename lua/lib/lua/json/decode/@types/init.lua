@@ -3,29 +3,27 @@
 
 ---@class Lib.JSON.Decode.ToStringArray
 ---@description
---- Hilfsmodul zum Vereinheitlichen unterschiedlicher JSON-Decode-Ergebnisse
---- auf ein `string[]`.
---- Dient als Adapter zwischen frei geformten JSON-Daten (string, table, scalar)
---- und Downstream-APIs, die strikt `string[]` erwarten (z. B. UI-Listen).
+--- Flattens whatever a JSON decode produced into a `string[]`.
+--- The adapter between free-form JSON data (string, table, scalar) and
+--- downstream APIs that want a strict `string[]` -- a UI list, for instance.
 ---
 ---@field is_array_like fun(v: any): boolean
---- Prüft, ob ein Wert eine array-ähnliche Tabelle ist.
---- Erlaubt sind ausschließlich zusammenhängende positive Integer-Keys
---- beginnend bei 1 (Lua-Array-Semantik).
---- Gibt false für Maps, Sparse-Arrays oder Nicht-Tabellen zurück.
+--- Whether a value is an array-like table: contiguous positive integer keys
+--- starting at 1, which is Lua's own array semantics. Maps, sparse arrays and
+--- non-tables are false.
 ---
 ---@field table_to_string_array fun(tbl: table): string[]
---- Konvertiert eine Tabelle in ein `string[]`.
---- * Array-ähnliche Tabellen: jedes Element wird per `tostring` übernommen.
---- * Nicht-array-ähnliche Tabellen: Keys werden stabil sortiert und
----   als `"key: value"`-Strings serialisiert.
---- * Verschachtelte Tabellen werden mittels `vim.inspect` dargestellt.
+--- Convert a table into a `string[]`.
+--- * Array-like tables: every element goes through `tostring`.
+--- * Everything else: keys are sorted stably and serialized as
+---   `"key: value"` strings, so the output does not depend on `pairs` order.
+--- * Nested tables are rendered with `vim.inspect`.
 ---
 ---@field ensure_string_array fun(v: any): string[]
---- Erzwingt ein `string[]` aus beliebigem Input.
---- * table   → `table_to_string_array`
---- * string  → Aufteilung an Newlines (`vim.split`)
---- * scalar  → Einzel-Array mit `tostring(v)`
---- Garantiert immer ein nicht-nil `string[]`.
+--- Coerce any input into a `string[]`.
+--- * table   -> `table_to_string_array`
+--- * string  -> split on newlines (`vim.split`)
+--- * scalar  -> a one-element array holding `tostring(v)`
+--- Never returns nil.
 
 return {}

@@ -13,7 +13,7 @@ local h_info = H.info or H.report_info
 
 local MIN_NVIM = { 0, 10, 0 }
 
----@type string[] Repräsentative Module je Namespace (müssen ladbar sein).
+---@type string[] One representative module per namespace; each must load.
 local PROBE = {
   "lib.lua.tables.array",
   "lib.lua.strings",
