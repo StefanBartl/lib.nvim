@@ -86,6 +86,27 @@ local function build_query_string(query)
 end
 
 ---@internal
+---Escape `value` for a curl config file's quoted-string form. curl unescapes
+---`\\`, `\"`, `\t`, `\n`, `\r` and `\v` there; a raw newline ends the
+---option, so a value carrying one cannot be expressed and is rejected below.
+---@param value string
+---@return string
+local function config_quote(value)
+  local escaped = value:gsub("\\", "\\\\"):gsub('"', '\\"')
+  return '"' .. escaped .. '"'
+end
+
+---@internal
+---Whether a header name carries a credential and therefore must not reach
+---argv. Matched case-insensitively, since header names are.
+---@param name string
+---@return boolean
+local function is_secret_header(name)
+  local lower = name:lower()
+  return lower == "authorization" or lower == "proxy-authorization" or lower == "cookie"
+end
+
+---@internal
 ---Build the curl argv table for `url`/`opts`.
 ---@param url string
 ---@param opts Lib.Net.Curl.FetchOpts
@@ -98,9 +119,19 @@ end
 ---stdout separately (`-D -`) since `-i` and `-o` don't compose the way
 ---`fetch_raw` needs (with `-o`, `-i` would write headers into the file
 ---too). Mutually exclusive with `include_headers`.
----@return string[]
+---@return string[] argv
+---@return string|nil stdin  curl config for the credential-bearing options,
+---to be fed to the process; nil when there are none.
 local function build_argv(url, opts, include_headers, download_dest)
   local argv = { "curl", "-sS", "-X", opts.method or "GET" }
+
+  -- Anything carrying a credential goes into a config curl reads from stdin,
+  -- never into argv. A process's command line is readable by any other
+  -- process on the machine -- `ps` on Unix, Win32_Process on Windows --
+  -- verified here with a real token, which showed up in full in the process
+  -- list for the lifetime of the request. `-K -` is curl's own answer to
+  -- exactly this.
+  local config = {}
   if include_headers then
     argv[#argv + 1] = "-i"
   elseif download_dest then
@@ -128,18 +159,22 @@ local function build_argv(url, opts, include_headers, download_dest)
   end
 
   if opts.auth then
-    argv[#argv + 1] = "-u"
-    argv[#argv + 1] = (opts.auth.user or "") .. ":" .. (opts.auth.pass or "")
+    config[#config + 1] = "user = "
+      .. config_quote((opts.auth.user or "") .. ":" .. (opts.auth.pass or ""))
   end
 
   for key, value in pairs(opts.headers or {}) do
-    argv[#argv + 1] = "-H"
-    argv[#argv + 1] = key .. ": " .. value
+    local header = key .. ": " .. value
+    if is_secret_header(key) then
+      config[#config + 1] = "header = " .. config_quote(header)
+    else
+      argv[#argv + 1] = "-H"
+      argv[#argv + 1] = header
+    end
   end
 
   if opts.bearer_token then
-    argv[#argv + 1] = "-H"
-    argv[#argv + 1] = "Authorization: Bearer " .. opts.bearer_token
+    config[#config + 1] = "header = " .. config_quote("Authorization: Bearer " .. opts.bearer_token)
   end
 
   -- A value starting with "@" is curl's own file-upload syntax (-F
@@ -161,7 +196,15 @@ local function build_argv(url, opts, include_headers, download_dest)
 
   argv[#argv + 1] = url .. build_query_string(opts.query)
 
-  return argv
+  if #config == 0 then
+    return argv, nil
+  end
+
+  -- `-K -` has to precede the URL for curl to still treat the URL as the URL,
+  -- and it is inserted rather than appended for that reason.
+  table.insert(argv, 2, "-K")
+  table.insert(argv, 3, "-")
+  return argv, table.concat(config, "\n") .. "\n"
 end
 
 ---@internal
@@ -252,9 +295,9 @@ function M.fetch_raw(url, opts, cb)
   end
   opts = opts or {}
 
-  local argv = build_argv(url, opts, true)
+  local argv, stdin = build_argv(url, opts, true)
 
-  vim.system(argv, { text = true, timeout = opts.timeout_ms }, function(obj)
+  vim.system(argv, { text = true, stdin = stdin, timeout = opts.timeout_ms }, function(obj)
     if obj.code ~= 0 then
       local err = (obj.stderr and obj.stderr ~= "") and obj.stderr or ("curl exited " .. obj.code)
       cb(false, err, obj)
@@ -283,9 +326,9 @@ function M.fetch_raw_blocking(url, opts)
   end
   opts = opts or {}
 
-  local argv = build_argv(url, opts, true)
+  local argv, stdin = build_argv(url, opts, true)
 
-  local obj = vim.system(argv, { text = true }):wait(opts.timeout_ms)
+  local obj = vim.system(argv, { text = true, stdin = stdin }):wait(opts.timeout_ms)
   if obj.code ~= 0 then
     local err = (obj.stderr and obj.stderr ~= "") and obj.stderr or ("curl exited " .. obj.code)
     return false, err, obj
@@ -307,9 +350,9 @@ function M.fetch_json(url, opts, cb)
   end
   opts = opts or {}
 
-  local argv = build_argv(url, opts)
+  local argv, stdin = build_argv(url, opts)
 
-  vim.system(argv, { text = true, timeout = opts.timeout_ms }, function(obj)
+  vim.system(argv, { text = true, stdin = stdin, timeout = opts.timeout_ms }, function(obj)
     local ok, data_or_err = decode_result(obj)
     cb(ok, data_or_err, obj)
   end)
@@ -327,9 +370,9 @@ function M.fetch_json_blocking(url, opts)
   end
   opts = opts or {}
 
-  local argv = build_argv(url, opts)
+  local argv, stdin = build_argv(url, opts)
 
-  local obj = vim.system(argv, { text = true }):wait(opts.timeout_ms)
+  local obj = vim.system(argv, { text = true, stdin = stdin }):wait(opts.timeout_ms)
   local ok, data_or_err = decode_result(obj)
   return ok, data_or_err, obj
 end
@@ -348,9 +391,9 @@ function M.download(url, dest_path, opts, cb)
   end
   opts = opts or {}
 
-  local argv = build_argv(url, opts, false, dest_path)
+  local argv, stdin = build_argv(url, opts, false, dest_path)
 
-  vim.system(argv, { text = true, timeout = opts.timeout_ms }, function(obj)
+  vim.system(argv, { text = true, stdin = stdin, timeout = opts.timeout_ms }, function(obj)
     if obj.code ~= 0 then
       local err = (obj.stderr and obj.stderr ~= "") and obj.stderr or ("curl exited " .. obj.code)
       cb(false, err, obj)
@@ -378,9 +421,9 @@ function M.download_blocking(url, dest_path, opts)
   end
   opts = opts or {}
 
-  local argv = build_argv(url, opts, false, dest_path)
+  local argv, stdin = build_argv(url, opts, false, dest_path)
 
-  local obj = vim.system(argv, { text = true }):wait(opts.timeout_ms)
+  local obj = vim.system(argv, { text = true, stdin = stdin }):wait(opts.timeout_ms)
   if obj.code ~= 0 then
     local err = (obj.stderr and obj.stderr ~= "") and obj.stderr or ("curl exited " .. obj.code)
     return false, err, obj

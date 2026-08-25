@@ -209,6 +209,46 @@ return function(H)
     stop_server(server)
   end
 
+  -- Credentials must reach the wire without reaching argv. A process's
+  -- command line is readable by any other process on the machine (`ps`,
+  -- Win32_Process), and this module used to put the token straight into it --
+  -- verified with a real request, whose token showed up in full in the
+  -- process list. So both halves are asserted: the header arrives, and the
+  -- argv that would have leaked it does not contain it.
+  do
+    local port, server, captured = start_capturing_server(table.concat({
+      "HTTP/1.1 200 OK",
+      "",
+      "ok",
+    }, "\r\n"))
+
+    local secret = "tok_" .. tostring(os.time()) .. "_shouldnotleak"
+    local success = curl.fetch_raw_blocking(("http://127.0.0.1:%d/"):format(port), {
+      bearer_token = secret,
+      headers = { ["X-Plain"] = "visible", Cookie = "session=abc" },
+    })
+    vim.wait(200, function()
+      return false
+    end, 10)
+
+    ok(success, "bearer_token: request succeeds")
+    ok(captured.data ~= nil, "bearer_token: server received the request")
+    ok(
+      captured.data:find("Authorization: Bearer " .. secret, 1, true) ~= nil,
+      "bearer_token: the Authorization header still reaches the wire"
+    )
+    ok(
+      captured.data:find("Cookie: session=abc", 1, true) ~= nil,
+      "secret headers: Cookie reaches the wire too"
+    )
+    ok(
+      captured.data:find("X-Plain: visible", 1, true) ~= nil,
+      "plain headers: a non-credential header is unaffected"
+    )
+
+    stop_server(server)
+  end
+
   -- opts.form: multipart body actually sent, not just accepted.
   do
     local port, server, captured = start_capturing_server(table.concat({

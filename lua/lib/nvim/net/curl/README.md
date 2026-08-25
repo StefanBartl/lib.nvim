@@ -98,16 +98,37 @@ Same shape as `fetch_raw`/`fetch_raw_blocking` — `response.body` is always
 Each pair delivers these values to `cb` for the async form, or returns them
 directly for the blocking form.
 
+## Credentials never go in argv
+
+A process's command line is readable by any other process on the machine —
+`ps` on Unix, `Win32_Process` on Windows. Anything passed as a curl argument
+is therefore public for the lifetime of the request, which is exactly the
+wrong place for a token.
+
+So `bearer_token`, `auth`, and any `headers` entry named `Authorization`,
+`Proxy-Authorization` or `Cookie` are written into a curl config fed to the
+process on stdin (`-K -`), which never appears in the process list. Everything
+else stays in argv where it is easier to debug.
+
+This is not theoretical: it was verified against a real request, whose token
+showed up in full in the process list. `TESTS/curl_spec.lua` asserts both
+halves — the header still reaches the wire, and the value is not in argv.
+
+**Not covered:** `body` is still `-d <body>` in argv. A request body large or
+multi-line enough to be worth sending cannot be expressed as a config value
+(a raw newline ends the option), and stdin is taken. Do not put a credential
+in a body through this module.
+
 ## `opts` fields (all tiers)
 
 | Field          | Sent as                              | Notes                                                    |
 |-----------------|----------------------------------------|-------------------------------------------------------------|
 | `method`        | `-X <method>`                          | Default `"GET"`                                              |
-| `headers`       | `-H "k: v"` per entry                  |                                                                |
-| `bearer_token`  | `-H "Authorization: Bearer <token>"`   |                                                                |
+| `headers`       | `-H "k: v"` per entry                  | `Authorization`, `Proxy-Authorization` and `Cookie` go via stdin — see below |
+| `bearer_token`  | `header = "Authorization: Bearer …"` on stdin | Never in argv — see below                              |
 | `query`         | `?k=v&...` appended to the URL         | URL-encoded                                                   |
 | `body`          | `-d <body>`                            | Raw request body                                              |
-| `auth`          | `-u user:pass`                         | `{ user, pass }`                                              |
+| `auth`          | `user = "user:pass"` on stdin          | `{ user, pass }`; never in argv — see below                   |
 | `form`          | `-F "k=v"` per entry                   | A value starting with `@` is curl's own file-upload syntax   |
 | `raw_args`      | appended verbatim                      | Escape hatch for anything not otherwise covered              |
 | `http_version`  | `--http1.0` / `--http1.1` / `--http2`  | `"1.0"`, `"1.1"`, or `"2"`                                    |
