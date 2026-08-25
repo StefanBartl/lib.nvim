@@ -76,6 +76,7 @@ local specs = {
   "deps_spec.lua",
   "contextmenu_spec.lua",
   "is_subpath_spec.lua",
+  "normkey_spec.lua",
 }
 
 --- Straight to stdout rather than through `print`.
