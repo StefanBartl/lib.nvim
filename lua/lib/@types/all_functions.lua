@@ -61,7 +61,7 @@
 ---@field is_linux fun(): boolean # returns true if corrent os is linux
 ---@field is_macos fun(): boolean # returns true if corrent os is macos
 ---@field is_markdown_buf fun(bufnr_arg: integer|nil): integer|nil # Returns buffer number if valid markdown buffer
----@field is_subpath fun(path: string, base: string): boolean # Check if path is subpath of base
+---@field is_subpath fun(path: string, base: string, opts?: Lib.Fs.IsSubpathOpts): boolean # Check if path is subpath of base; pass opts to canonicalize both sides via normkey
 ---@field is_terminal_buf fun(bufnr: integer): boolean|nil # Checks if buffer is terminal
 ---@field is_web_url fun(s: string): boolean
 ---@field is_windows fun(): boolean # returns true if corrent os is windows
