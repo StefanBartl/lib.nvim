@@ -77,6 +77,7 @@ local specs = {
   "contextmenu_spec.lua",
   "is_subpath_spec.lua",
   "normkey_spec.lua",
+  "globbable_spec.lua",
 }
 
 --- Straight to stdout rather than through `print`.

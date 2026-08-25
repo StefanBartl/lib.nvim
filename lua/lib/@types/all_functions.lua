@@ -49,6 +49,7 @@
 ---@field find_root fun(opts?: Lib.Fs.FindRoot.Opts): Lib.Fs.FindRoot # Cached marker-based project-root finder (factory → { find, clear })
 ---@field find_upward_dir fun(names: string[], from: string): string|nil # Find nearest ancestor directory holding a marker; `*`/`?` globs supported
 ---@field mkdirp Lib.Fs.Mkdirp # Recursive `mkdir -p` on libuv only — safe in a fast event context, unlike `vim.fn.mkdir`
+---@field globbable fun(root: string): string # Spelling of a directory path that is safe to hand to vim.fn.glob/globpath (resolves an 8.3 short name, which glob would read as a "~" home reference and return nothing for)
 ---@field has_exec fun(bin: string): boolean
 ---@field has_scheme fun(s: string): boolean
 ---@field hex_to_string fun(hex: string): string

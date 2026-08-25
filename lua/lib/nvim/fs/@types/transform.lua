@@ -12,6 +12,7 @@
 
 ---@class Lib.Fs.Transform
 ---@field dedup fun(entries: string[]): string[]
+---@field globbable fun(root: string): string
 ---@field path_shorten fun(path: string, max_len: integer|nil, opts?: Lib.Fs.PathShortenOpts): string
 ---@field relpath fun(path: string, base: string): string
 ---@field normkey fun(p: string, opts?: Lib.Fs.NormkeyOpts): string
