@@ -109,8 +109,10 @@ return function(H)
   eq(calls, 3, "no further call once the count is satisfied")
   ok(unsubscribed, "chain() unsubscribes after the last completion signal")
 
-  -- count <= 1: no listener at all.
-  calls, unsubscribed = 0, false
+  -- count <= 1: no listener at all. `unsubscribed` is deliberately not reset
+  -- here: this block asserts that nothing subscribes at all, so it never reads
+  -- the flag, and resetting it was a dead store the next block overwrote.
+  calls = 0
   local subscribed = false
   chained = count.chain({
     action = function()
