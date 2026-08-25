@@ -482,6 +482,17 @@ return function(H)
     end
     local top = comp("--e", "FlagsComp --e")
     eq(join(top), "--engine", "complete.candidates: flag-name completion routed through the engine")
+    -- A bare "--" must list every flag, not nothing: it is the keystroke at
+    -- which a user asks what the route accepts. (A committed "--" is still
+    -- the end-of-options separator -- that is flags.split's business, and it
+    -- is reached by typing a space, never by completing.)
+    local bare = comp("--", "FlagsComp --")
+    table.sort(bare)
+    eq(
+      table.concat(bare, ","),
+      "--dry,--engine,--type",
+      "complete.candidates: a bare '--' lists every declared flag"
+    )
     local vals = comp("--engine=", "FlagsComp --engine=")
     table.sort(vals)
     eq(

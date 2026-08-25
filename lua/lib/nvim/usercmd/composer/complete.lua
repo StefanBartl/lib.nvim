@@ -43,10 +43,18 @@ function M.candidates(root, arg_lead, cmd_line)
   local node, consumed = tree.walk(root, committed)
   local route = node.route
 
-  -- Currently typing a --flag or a bare "-" (short-flag prefix) — only
-  -- meaningful once a route is matched; a route with no declared flags falls
-  -- through unchanged, see flags.lua.
-  if (arg_lead:sub(1, 2) == "--" and arg_lead ~= "--") or arg_lead == "-" then
+  -- Currently typing a --flag, a bare "--", or a bare "-" (short-flag prefix)
+  -- — only meaningful once a route is matched; a route with no declared flags
+  -- falls through unchanged, see flags.lua.
+  --
+  -- A bare "--" is included even though a *committed* "--" is the
+  -- end-of-options separator (flags.split stops flag parsing there). That
+  -- separator costs nothing here: it is complete as typed, so reaching it
+  -- needs a space, not a <Tab>. Excluding "--" instead cost the one keystroke
+  -- at which "which flags does this route have?" is the obvious question,
+  -- and answered it with silence -- worst on exactly the flag-rich commands
+  -- where discovery matters most.
+  if arg_lead:sub(1, 2) == "--" or arg_lead == "-" then
     return flags.candidates(route, arg_lead)
   end
 
