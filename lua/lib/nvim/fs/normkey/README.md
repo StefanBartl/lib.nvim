@@ -48,3 +48,20 @@ not care, or when you must not pay a syscall.
 Two paths that refer to the same file (different casing, mixed separators, a
 symlink) normalize to the same key — use this wherever paths are compared or
 deduplicated (e.g. `lib.nvim.fs.project_key`).
+
+## Why this matters for `vim.fn.glob`
+
+`vim.fn.glob` and `globpath` read their argument as a **pattern**, and a `~` in
+a pattern is a home-directory reference. An 8.3 short name therefore breaks
+them outright: under `C:/Users/STEFAN~1/...` glob tries to resolve `~1` as a
+user, finds no such user, and returns an **empty list** — no error, no warning.
+Code that globs a directory it was handed will report "nothing here" for a
+directory full of files.
+
+Any root that came from `%TEMP%`, `vim.fn.tempname()` or a `getcwd()` inherited
+from one of those is in the short form on Windows. Put it through `normkey`
+(or `uv.fs_realpath`) before globbing.
+
+Fixed instances of exactly this, for reference: `filetree.nvim`'s
+`find_files` builtin backend and `pdfport.nvim`'s marker backend, both of which
+searched a temp directory and concluded it was empty.
