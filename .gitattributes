@@ -1,3 +1,8 @@
+# Catch-all safety net: any other text file also gets LF, in the repo and
+# on checkout, on every OS. The scoped rules below stay as documentation
+# of *why* each of these specific paths matters.
+* text=auto eol=lf
+
 # Shell scripts must keep LF endings regardless of core.autocrlf. With CRLF,
 # `set -euo pipefail` is parsed as `pipefail\r` and bash aborts with "invalid
 # option name" — the script silently stops working on a Windows clone.
