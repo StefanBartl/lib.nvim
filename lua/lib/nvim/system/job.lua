@@ -14,7 +14,7 @@
 --- `start_blocking`/`chain` are a different tier: raw stdout/stderr capture
 --- instead of line callbacks. `vim.SystemObj:wait()` does not guarantee
 --- `on_stdout`/`on_stderr` (`vim.schedule`-wrapped) have already fired by
---- the time it returns — `docs/TESTS/system_job_spec.lua` needs an extra
+--- the time it returns — `TESTS/system_job_spec.lua` needs an extra
 --- `vim.wait` after `:wait()` for exactly this reason — so a caller that
 --- needs output synchronously available on return needs raw capture
 --- instead, exactly like `lib.nvim.net.curl.fetch_json_blocking` does for

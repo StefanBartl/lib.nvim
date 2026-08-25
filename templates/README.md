@@ -20,7 +20,7 @@ depend on.
 The `add_lib_nvim()` function: finds `lib.nvim` via `$LIB_NVIM_PATH` → sibling
 checkout (`../lib.nvim`) → `stdpath("data")/lazy/lib.nvim`, and puts it on
 both `runtimepath` and `package.path`. Copy the function itself into your
-`docs/TESTS/run.lua` (or equivalent); then pick **one** of the caller
+`TESTS/run.lua` (or equivalent); then pick **one** of the caller
 patterns below depending on how your plugin actually depends on `lib.nvim`.
 
 ### Pattern A — hard dependency, fail the whole suite
@@ -37,7 +37,7 @@ if not lib_path then
 end
 ```
 Examples: `fileops.nvim`, `color_my_ascii.nvim`, `debugging.nvim`,
-`diff.nvim`, `markdown.nvim` (all under `docs/TESTS/run.lua` or `TESTS/run.lua`).
+`diff.nvim`, `markdown.nvim` (all under `TESTS/run.lua` or `TESTS/run.lua`).
 
 ### Pattern B — soft/optional dependency, note and continue
 
@@ -51,7 +51,7 @@ if not add_lib_nvim() then
   print("      Set $LIB_NVIM_PATH or check it out next to this repo to test the bridge.")
 end
 ```
-Example: `buffer-ctx.nvim/docs/TESTS/run.lua`.
+Example: `buffer-ctx.nvim/TESTS/run.lua`.
 
 ### Pattern C — resolve once, skip only the affected specs
 
@@ -65,7 +65,7 @@ if not add_lib_nvim() then
   return
 end
 ```
-Example: `pickers.nvim/docs/TESTS/pickers_spec.lua` (`command.complete`,
+Example: `pickers.nvim/TESTS/pickers_spec.lua` (`command.complete`,
 `sources.repos`, `selected_index.debounce` blocks).
 
 ### Pattern D — don't resolve at all, exclude from scope
@@ -76,7 +76,7 @@ because it also hard-requires something heavier than `lib.nvim` alone (e.g.
 leave the module's spec out of the runner's spec list, with a comment
 explaining why, rather than trying to make it load.
 
-Example: `migrate.nvim/docs/TESTS/run.lua` excludes `migrate.opt` /
+Example: `migrate.nvim/TESTS/run.lua` excludes `migrate.opt` /
 `migrate.notify` / `migrate.common.*` (hard-require `lib.nvim` *and*
 `telescope.nvim`) and only runs the dependency-free specs.
 

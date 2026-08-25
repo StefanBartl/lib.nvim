@@ -4,7 +4,7 @@
 · **Aggregators:** `require("lib.nvim.cross").run.env`, `require("lib").spawn_env`
 · **`:help`** `lib.nvim-spawn-env`
 · **API:** [cross-platform.md](../API/cross-platform.md#libnvimcrossrunenv-see-readme)
-· **Spec:** [`docs/TESTS/spawn_env_spec.lua`](../TESTS/spawn_env_spec.lua)
+· **Spec:** [`TESTS/spawn_env_spec.lua`](../../TESTS/spawn_env_spec.lua)
 
 ## The problem
 

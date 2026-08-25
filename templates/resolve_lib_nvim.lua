@@ -1,7 +1,7 @@
 -- templates/resolve_lib_nvim.lua — reference implementation.
 --
 -- Copy the `add_lib_nvim()` function below into a dependent plugin's headless
--- test runner (typically `docs/TESTS/run.lua`). Do NOT `require()` this file:
+-- test runner (typically `TESTS/run.lua`). Do NOT `require()` this file:
 -- it cannot live in `lua/lib/...` and be `require`d, because the whole point
 -- of the function is to make `lib.nvim` requireable in the first place — a
 -- plugin's test process starts with lib.nvim absent from `runtimepath` and

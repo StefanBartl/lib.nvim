@@ -35,7 +35,7 @@ jobs:
           luaVersion: "5.4"
       - uses: leafo/gh-actions-luarocks@v4
       - run: luarocks install luacheck
-      - run: luacheck lua docs/TESTS
+      - run: luacheck lua TESTS
 
   tests:
     runs-on: ubuntu-latest
@@ -53,4 +53,4 @@ jobs:
         with:
           neovim: true
           version: stable
-      - run: nvim --headless -u NONE -l docs/TESTS/run.lua
+      - run: nvim --headless -u NONE -l TESTS/run.lua

@@ -7,7 +7,7 @@
 [`lib.nvim.fs.scan_roots`](../../lua/lib/nvim/fs/scan_roots/README.md)
 (`scan_async`)
 · **API:** [filesystem.md](../API/filesystem.md#directory-scanning--walking)
-· **Spec:** [`docs/TESTS/async_walk_spec.lua`](../TESTS/async_walk_spec.lua)
+· **Spec:** [`TESTS/async_walk_spec.lua`](../../TESTS/async_walk_spec.lua)
 
 ## The problem
 
