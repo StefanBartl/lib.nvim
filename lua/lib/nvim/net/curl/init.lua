@@ -85,23 +85,24 @@ local function build_query_string(query)
   return "?" .. table.concat(parts, "&")
 end
 
----@internal
----Escape `value` for a curl config file's quoted-string form. curl unescapes
+---Escape `value` for a curl config file's quoted-string form.
+---
+---Public because a caller that builds its own curl argv needs the same two
+---helpers, and a second copy of them is a second thing to get wrong. curl unescapes
 ---`\\`, `\"`, `\t`, `\n`, `\r` and `\v` there; a raw newline ends the
 ---option, so a value carrying one cannot be expressed and is rejected below.
 ---@param value string
 ---@return string
-local function config_quote(value)
+function M.config_quote(value)
   local escaped = value:gsub("\\", "\\\\"):gsub('"', '\\"')
   return '"' .. escaped .. '"'
 end
 
----@internal
 ---Whether a header name carries a credential and therefore must not reach
 ---argv. Matched case-insensitively, since header names are.
 ---@param name string
 ---@return boolean
-local function is_secret_header(name)
+function M.is_secret_header(name)
   local lower = name:lower()
   return lower == "authorization" or lower == "proxy-authorization" or lower == "cookie"
 end
@@ -160,13 +161,13 @@ local function build_argv(url, opts, include_headers, download_dest)
 
   if opts.auth then
     config[#config + 1] = "user = "
-      .. config_quote((opts.auth.user or "") .. ":" .. (opts.auth.pass or ""))
+      .. M.config_quote((opts.auth.user or "") .. ":" .. (opts.auth.pass or ""))
   end
 
   for key, value in pairs(opts.headers or {}) do
     local header = key .. ": " .. value
-    if is_secret_header(key) then
-      config[#config + 1] = "header = " .. config_quote(header)
+    if M.is_secret_header(key) then
+      config[#config + 1] = "header = " .. M.config_quote(header)
     else
       argv[#argv + 1] = "-H"
       argv[#argv + 1] = header
@@ -174,7 +175,8 @@ local function build_argv(url, opts, include_headers, download_dest)
   end
 
   if opts.bearer_token then
-    config[#config + 1] = "header = " .. config_quote("Authorization: Bearer " .. opts.bearer_token)
+    config[#config + 1] = "header = "
+      .. M.config_quote("Authorization: Bearer " .. opts.bearer_token)
   end
 
   -- A value starting with "@" is curl's own file-upload syntax (-F

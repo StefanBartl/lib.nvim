@@ -15,14 +15,21 @@ end
 local unpack_fn = table.unpack or unpack
 
 ---@param argv string[] Command and arguments, e.g. { "curl", "-sS", url }
----@param opts? { timeout_ms?: integer, cwd?: string, env?: string[] } `env`, like
----libuv's own spawn `env` option, is an array of `"KEY=VALUE"` strings — not
----a `{ [key] = value }` dict. Passed straight through, unconverted.
+---@param opts? { timeout_ms?: integer, cwd?: string, env?: string[], stdin?: string } `env`,
+---like libuv's own spawn `env` option, is an array of `"KEY=VALUE"` strings —
+---not a `{ [key] = value }` dict. Passed straight through, unconverted.
+---
+---`stdin` is written to the child and the pipe is then closed, so a command
+---that reads until EOF (`curl -K -`, `rg --file -`) terminates. It exists for
+---the case where a value must not appear in argv: a process's command line is
+---readable by any other process on the machine, which makes it the wrong place
+---for a credential. Without `stdin` the child gets no stdin at all, as before.
 ---@param on_done fun(result: { ok: boolean, code: integer, signal: integer, stdout: string, stderr: string, timed_out: boolean })
 return function(argv, opts, on_done)
   opts = opts or {}
   local loop = uv()
 
+  local stdin_pipe = opts.stdin and loop.new_pipe(false) or nil
   local stdout_pipe = loop.new_pipe(false)
   local stderr_pipe = loop.new_pipe(false)
   local stdout_chunks, stderr_chunks = {}, {}
@@ -39,6 +46,9 @@ return function(argv, opts, on_done)
       pcall(timer.stop, timer)
       pcall(timer.close, timer)
       timer = nil
+    end
+    if stdin_pipe then
+      pcall(stdin_pipe.close, stdin_pipe)
     end
     pcall(stdout_pipe.close, stdout_pipe)
     pcall(stderr_pipe.close, stderr_pipe)
@@ -60,7 +70,7 @@ return function(argv, opts, on_done)
 
   local spawn_opts = {
     args = { unpack_fn(argv, 2) },
-    stdio = { nil, stdout_pipe, stderr_pipe },
+    stdio = { stdin_pipe, stdout_pipe, stderr_pipe },
     cwd = opts.cwd,
     env = opts.env,
   }
@@ -81,6 +91,14 @@ return function(argv, opts, on_done)
       })
     end)
     return
+  end
+
+  -- Written after the spawn, and closed straight after: the child is reading
+  -- until EOF, so leaving the pipe open would hang it.
+  if stdin_pipe then
+    stdin_pipe:write(opts.stdin, function()
+      pcall(stdin_pipe.shutdown, stdin_pipe)
+    end)
   end
 
   stdout_pipe:read_start(function(err, data)
