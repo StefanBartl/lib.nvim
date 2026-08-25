@@ -37,6 +37,7 @@
 ---@field short?      string                          # single-char alias matched as -x (e.g. short="r" for -r); next-token-value form only, no -x=value
 ---@field type?       Lib.UserCmd.Composer.ArgType    # value type; default "STRING". Ignored when bool=true
 ---@field bool?       boolean                         # presence-only flag, no value consumed, e.g. --dry
+---@field optional_value? boolean                    # value may be omitted: --name binds true, --name=value binds the value. Never consumes the next token (unlike a plain value flag), so a positional may follow the bare form. Ignored when bool=true
 ---@field enum?       string[]                        # closed set for the value (ignored when bool=true)
 ---@field repeatable? boolean                         # collect every occurrence into an array (ctx.flags.name = {...})
 ---@field default?    any                             # value bound when the flag is never passed

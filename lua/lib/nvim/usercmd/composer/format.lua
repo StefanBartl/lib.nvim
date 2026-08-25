@@ -26,7 +26,11 @@ end
 
 --- Render one flag spec as a placeholder token, e.g. `[--dry|-d]`,
 --- `[--type=<value>]`, `[--engine=<value>]` — always optional (a flag is
---- never required), repeatable ones get a trailing `...`.
+--- never required), repeatable ones get a trailing `...`. An
+--- `optional_value` flag nests the brackets — `[--changed[=<value>]]` —
+--- since for that one the `=<value>` really is the optional part, and
+--- rendering it like a plain value flag would document a bare `--changed`
+--- as an error when it is the flag's own documented default form.
 ---@param spec Lib.UserCmd.Composer.FlagSpec
 ---@return string
 function M.flag_token(spec)
@@ -35,7 +39,8 @@ function M.flag_token(spec)
     return "[--" .. spec.name .. short .. "]"
   end
   local value = spec.enum and "<" .. table.concat(spec.enum, "|") .. ">" or "<value>"
-  local inner = "--" .. spec.name .. short .. "=" .. value
+  local assigned = spec.optional_value and ("[=" .. value .. "]") or ("=" .. value)
+  local inner = "--" .. spec.name .. short .. assigned
   return "[" .. inner .. (spec.repeatable and " ..." or "") .. "]"
 end
 

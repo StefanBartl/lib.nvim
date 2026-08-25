@@ -82,6 +82,23 @@ local function consume_flag(route, spec, label, inline_val, tokens, i, stopped, 
   end
 
   local raw = inline_val
+  if raw == nil and spec.optional_value then
+    -- `--name` on its own is legal and binds `true`: "given, no value
+    -- specified", which the caller reads as its own default. It deliberately
+    -- never reaches for the next token -- that is the entire point of this
+    -- flavor. A flag whose value is optional cannot also be greedy, because
+    -- the token after it may be a legitimate positional (replacer's
+    -- `:Replace a b --changed cwd`, where `cwd` is the scope). Only the
+    -- inline `--name=value` form specifies a value.
+    if spec.repeatable then
+      flags[spec.name] = flags[spec.name] or {}
+      table.insert(flags[spec.name], true)
+    else
+      flags[spec.name] = true
+    end
+    return i, nil
+  end
+
   if raw == nil then
     local nxt = tokens[i + 1]
     if

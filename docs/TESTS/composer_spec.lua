@@ -13,6 +13,7 @@ return function(H)
   local complete = require("lib.nvim.usercmd.composer.complete")
   local argtypes = require("lib.nvim.usercmd.composer.argtypes")
   local docgen = require("lib.nvim.usercmd.composer.docgen")
+  local format = require("lib.nvim.usercmd.composer.format")
 
   -- Every internal + the aggregator path loads.
   for _, mod in ipairs({
@@ -470,6 +471,47 @@ return function(H)
       join(flags.candidates(no_flags_route, "--")),
       "",
       "flags.candidates: no declared flags -> no candidates"
+    )
+  end
+
+  -- optional_value: `--name` alone is legal, `--name=v` specifies a value,
+  -- and the bare form never eats the next token.
+  do
+    local opt_route = {
+      path = {},
+      args = { { name = "old", type = "STRING" }, { name = "scope", type = "STRING" } },
+      flags = {
+        { name = "changed", type = "STRING", optional_value = true },
+        { name = "dry", bool = true },
+      },
+    }
+
+    local p, f, err = flags.split(opt_route, { "foo", "--changed", "cwd" })
+    eq(err, nil, "optional_value: a bare flag is not an error")
+    eq(f.changed, true, "optional_value: bare form binds true, not a string")
+    eq(
+      table.concat(p, ","),
+      "foo,cwd",
+      "optional_value: the bare form leaves the following token a positional"
+    )
+
+    local p2, f2 = flags.split(opt_route, { "foo", "--changed=staged,modified", "cwd" })
+    eq(f2.changed, "staged,modified", "optional_value: inline =value binds the value")
+    eq(table.concat(p2, ","), "foo,cwd", "optional_value: inline form leaves positionals alone")
+
+    -- The contrast that motivates the flavor: a plain value flag IS greedy,
+    -- so the same command line would swallow the scope.
+    local plain_route = vim.deepcopy(opt_route)
+    plain_route.flags[1].optional_value = nil
+    local p3, f3, err3 = flags.split(plain_route, { "foo", "--changed", "cwd" })
+    eq(err3, nil, "control: a plain value flag accepts a space-separated value")
+    eq(f3.changed, "cwd", "control: ... by consuming the next token")
+    eq(table.concat(p3, ","), "foo", "control: ... which is why the positional is gone")
+
+    eq(
+      format.flag_token({ name = "changed", type = "STRING", optional_value = true }),
+      "[--changed[=<value>]]",
+      "optional_value: docgen nests the brackets, not documenting the bare form as an error"
     )
   end
 
