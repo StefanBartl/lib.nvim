@@ -38,7 +38,9 @@ local M = {}
 --- bound trigger fires with nothing to open it with.
 local _warned_missing = false
 local function warn_missing_once()
-  if _warned_missing then return end
+  if _warned_missing then
+    return
+  end
   _warned_missing = true
   notify.info("nvzone/menu not installed — context menu has nothing to open")
 end
@@ -52,7 +54,9 @@ end
 ---@param rtxt? string    Right-aligned hint text (usually a default keymap)
 ---@return Lib.ContextMenu.Item|nil
 function M.entry(available, label, fn, rtxt)
-  if not available then return nil end
+  if not available then
+    return nil
+  end
   return { name = label, rtxt = rtxt, cmd = fn }
 end
 
@@ -76,11 +80,19 @@ function M.group(out, ...)
   local compact = {}
   for i = 1, n do
     local item = select(i, ...)
-    if item ~= nil then compact[#compact + 1] = item end
+    if item ~= nil then
+      compact[#compact + 1] = item
+    end
   end
-  if #compact == 0 then return false end
-  if #out > 0 then out[#out + 1] = { name = "separator" } end
-  for _, item in ipairs(compact) do out[#out + 1] = item end
+  if #compact == 0 then
+    return false
+  end
+  if #out > 0 then
+    out[#out + 1] = { name = "separator" }
+  end
+  for _, item in ipairs(compact) do
+    out[#out + 1] = item
+  end
   return true
 end
 
@@ -94,7 +106,9 @@ end
 ---@param items Lib.ContextMenu.Item[]
 ---@return Lib.ContextMenu.Item|nil
 function M.submenu(label, items)
-  if type(items) ~= "table" or #items == 0 then return nil end
+  if type(items) ~= "table" or #items == 0 then
+    return nil
+  end
   return { name = label, items = items }
 end
 
@@ -120,7 +134,9 @@ function M.bind_buffer(bufnr, get_items, opts)
     end
 
     local items = get_items()
-    if type(items) ~= "table" or #items == 0 then return end
+    if type(items) ~= "table" or #items == 0 then
+      return
+    end
 
     menu.open(items, { mouse = mouse })
   end, {

@@ -83,7 +83,10 @@ return function(H)
     -- is not installed in the test environment — bind_buffer soft-requires
     -- it at trigger time and degrades to a single notify.
     local mapped = vim.fn.maparg("<RightMouse>", "n", false, true)
-    ok(type(mapped) == "table" and mapped.buffer == 1, "bind_buffer: registers a buffer-local mapping")
+    ok(
+      type(mapped) == "table" and mapped.buffer == 1,
+      "bind_buffer: registers a buffer-local mapping"
+    )
     eq(mapped.desc, "test menu", "bind_buffer: keymap desc passed through")
 
     local call_ok = pcall(mapped.callback)
