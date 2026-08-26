@@ -250,6 +250,68 @@ return function(H)
   eq(moved[1].lhs, "<Plug>(libspec-both-moved)", "an override moves the first bind")
   eq(moved[2].lhs, "<Plug>(libspec-both-moved)", "an override moves the second bind too")
 
+  -- ------------------------------------------------- buffer-local preset
+  --
+  -- images.nvim binds its whole preset per buffer from a FileType autocmd.
+  -- The action set is the same in every buffer; only the target differs.
+
+  local buf_a = vim.api.nvim_create_buf(false, true)
+  local buf_b = vim.api.nvim_create_buf(false, true)
+  local bspec = {
+    order = { "hover" },
+    actions = {
+      hover = { default = "<Plug>(libspec-buf)", rhs = function() end, desc = "hover" },
+    },
+  }
+  keymap.register("libspec_buf", bspec, nil, { buffer = buf_a })
+
+  local function buf_mapped(buf, lhs)
+    for _, mp in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do
+      if mp.lhs == lhs then
+        return true
+      end
+    end
+    return false
+  end
+
+  ok(buf_mapped(buf_a, "<Plug>(libspec-buf)"), "opts.buffer binds in that buffer")
+  ok(not buf_mapped(buf_b, "<Plug>(libspec-buf)"), "and not in another")
+  ok(not mapped("<Plug>(libspec-buf)"), "and not globally")
+
+  -- Re-registering for a second buffer is the normal case, not an error.
+  keymap.register("libspec_buf", bspec, nil, { buffer = buf_b })
+  ok(buf_mapped(buf_b, "<Plug>(libspec-buf)"), "re-registering binds the next buffer too")
+  eq(
+    #keymap.registered("libspec_buf"),
+    1,
+    "the registry still records one action, not one per buffer"
+  )
+
+  vim.api.nvim_buf_delete(buf_a, { force = true })
+  vim.api.nvim_buf_delete(buf_b, { force = true })
+
+  -- ------------------------------------------ unknown names warn only once
+  --
+  -- A buffer-local preset re-registers on every FileType, so an un-deduped
+  -- warning would fire once per file opened.
+
+  local warnings = 0
+  local orig = vim.notify
+  vim.notify = function(msg, ...)
+    if type(msg) == "string" and msg:find("no such keymap action", 1, true) then
+      warnings = warnings + 1
+    end
+    return orig(msg, ...)
+  end
+  for _ = 1, 3 do
+    keymap.register("libspec_warnonce", {
+      order = { "real" },
+      actions = { real = { rhs = function() end, desc = "real" } },
+    }, { typo_here = "<Plug>(libspec-warn)" })
+  end
+  vim.notify = orig
+  eq(warnings, 1, "an unknown name is reported once, not once per registration")
+
   -- --------------------------------------------------------- icon gate
   --
   -- Neovim cannot see the terminal's font -- strdisplaywidth() returns 1 even

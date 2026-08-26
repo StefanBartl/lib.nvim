@@ -60,6 +60,10 @@
 ---@field prefix? string                        # The group prefix, e.g. "<leader>s".
 ---@field which_key? Lib.Keymap.WhichKey|Lib.Keymap.WhichKey[]|false # Group label(s); a list carries its own `prefix` per entry.
 
+--- Options for one `register` call, as opposed to the spec itself.
+---@class Lib.Keymap.RegisterOpts
+---@field buffer? integer|boolean  # Bind buffer-locally; `true` means the current buffer.
+
 --- One resolved action, as recorded in the registry.
 ---@class Lib.Keymap.Registered
 ---@field plugin string
@@ -79,7 +83,7 @@
 
 ---@class Lib.Keymap : Lib.Map
 ---@field set fun(modes: string|string[], lhs: string, rhs: string|function, opts: Lib.Map.Opts|nil, desc: string?): nil
----@field register fun(plugin: string, spec: Lib.Keymap.Spec, user: table|false|nil): Lib.Keymap.Registered[]
+---@field register fun(plugin: string, spec: Lib.Keymap.Spec, user: table|false|nil, opts?: Lib.Keymap.RegisterOpts): Lib.Keymap.Registered[]
 ---@field registered fun(plugin: string|nil): table<string, Lib.Keymap.Registered[]>|Lib.Keymap.Registered[]
 ---@field conflicts fun(): Lib.Keymap.Conflict[]
 

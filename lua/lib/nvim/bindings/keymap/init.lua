@@ -47,9 +47,10 @@ M.set = set
 ---@param plugin string
 ---@param spec Lib.Keymap.Spec
 ---@param user table|false|nil
+---@param opts Lib.Keymap.RegisterOpts|nil
 ---@return Lib.Keymap.Registered[]
-function M.register(plugin, spec, user)
-  return require("lib.nvim.bindings.keymap.registry").register(plugin, spec, user)
+function M.register(plugin, spec, user, opts)
+  return require("lib.nvim.bindings.keymap.registry").register(plugin, spec, user, opts)
 end
 
 --- Everything registered so far. See `registry.registered`.

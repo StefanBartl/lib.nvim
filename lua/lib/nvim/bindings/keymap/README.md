@@ -151,6 +151,24 @@ keymap override is otherwise completely silent.
 config key — which is exactly what this module offers instead. Mappings bind
 straight onto the action's `rhs`.
 
+### Buffer-local presets
+
+Some presets belong to a filetype rather than to the session — images.nvim
+binds its whole set per buffer from a `FileType` autocmd. Pass the buffer:
+
+```lua
+keymap.register("images", spec, cfg.keymaps, { buffer = ev.buf })
+```
+
+Re-registering per buffer is the normal case, not an error. The action set is
+the same everywhere; only the target differs, so the registry keeps **one**
+record per plugin rather than one per buffer — which is what `registered()`
+and the health check want to read.
+
+An unknown name is reported **once** per plugin, not once per registration.
+Without that, one typo in a buffer-local preset would warn once per file
+opened.
+
 ## which-key
 
 **which-key needs no registration to show these mappings.** It reads

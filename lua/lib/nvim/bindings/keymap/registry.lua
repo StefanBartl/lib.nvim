@@ -65,6 +65,15 @@ local M = {}
 ---@type table<string, Lib.Keymap.Registered[]>
 local registered = {}
 
+--- Names already reported as unknown, per plugin.
+---
+--- Buffer-local presets re-register on every `FileType`, so without this a
+--- single typo would warn once per file opened -- twenty markdown buffers,
+--- twenty identical messages. The report is about the *config*, which does not
+--- change between buffers, so once is the right number.
+---@type table<string, table<string, true>>
+local warned = {}
+
 ---@internal
 --- Levenshtein distance, capped -- only ever run over the action names of one
 --- plugin (a handful of short strings) when a spec key did not match.
@@ -179,11 +188,14 @@ end
 ---@param plugin string          # Plugin name, used in messages and as the registry key.
 ---@param spec Lib.Keymap.Spec
 ---@param user table|false|nil   # The user's `keymaps` table; `false` binds nothing.
+---@param opts Lib.Keymap.RegisterOpts|nil # `buffer` binds buffer-locally.
 ---@return Lib.Keymap.Registered[] bound # What was actually bound, in declaration order.
-function M.register(plugin, spec, user)
+function M.register(plugin, spec, user, opts)
   vim.validate("plugin", plugin, "string")
   vim.validate("spec", spec, "table")
   vim.validate("user", user, { "table", "boolean", "nil" })
+  vim.validate("opts", opts, { "table", "nil" })
+  opts = opts or {}
 
   local actions = spec.actions or {}
 
@@ -197,8 +209,10 @@ function M.register(plugin, spec, user)
   -- Reserved keys are not actions; everything else in `user` claims to be one.
   local reserved = { preset = true, which_key = true, enable = true }
   local unknown = {}
+  warned[plugin] = warned[plugin] or {}
   for key in pairs(user) do
-    if not reserved[key] and actions[key] == nil then
+    if not reserved[key] and actions[key] == nil and not warned[plugin][key] then
+      warned[plugin][key] = true
       local hint = nearest(key, actions)
       unknown[#unknown + 1] = hint and ("%s (did you mean %s?)"):format(key, hint) or key
     end
@@ -269,7 +283,12 @@ function M.register(plugin, spec, user)
           }
 
           if lhs and binding_enabled and rhs ~= nil then
-            local opts = vim.tbl_extend("force", b.opts or action.opts or {}, {})
+            local map_opts = vim.tbl_extend("force", b.opts or action.opts or {}, {})
+            -- A buffer-local preset re-registers per buffer; the caller says
+            -- which one, since the action itself is the same everywhere.
+            if opts.buffer ~= nil then
+              map_opts.buffer = opts.buffer
+            end
             -- which-key reads plain keymaps and their `desc` on its own, so an
             -- action needs no registration to show up there. `which_key = false`
             -- is the one thing only the plugin can express, and which-key's own
