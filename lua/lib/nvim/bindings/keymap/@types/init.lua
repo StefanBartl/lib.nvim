@@ -44,7 +44,7 @@
 --- under the cursor, visual mode on the selection. That is one action to a
 --- user (one name, one key, one override), so it stays one action here.
 ---@class Lib.Keymap.Action
----@field default? string                 # Default `lhs`. Absent = no key by default.
+---@field default? string|string[]        # Default `lhs`, or several. Absent = no key by default.
 ---@field rhs? string|function            # Absent = declared but not bindable (docs/health only).
 ---@field mode? string|string[]           # Default "n".
 ---@field desc? string                    # Prefixed with the plugin name when bound.

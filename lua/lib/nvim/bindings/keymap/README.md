@@ -60,6 +60,26 @@ keymaps = {
 **recorded** — the health check and the generated docs want to know what
 exists, not only what is currently bound.
 
+### Several keys for one action
+
+`default` and the user's override both accept a list. One action on more than
+one key is a real case — gopath binds `open_here` to `gF` *and* to a
+double-click — and it stays one action, so moving or dropping it is still said
+once:
+
+```lua
+open_here = { default = { "gF", "<2-LeftMouse>" }, rhs = ..., desc = "open here" },
+```
+
+```lua
+mappings = { open_here = { "gF", "<C-CR>" } }   -- replaces both defaults
+mappings = { open_here = false }                -- drops both
+```
+
+A list override replaces the defaults outright rather than adding to them:
+"also bind this" and "bind exactly these" are different requests, and only the
+second one lets a user *remove* a default they dislike.
+
 ### One key, two modes, different functions
 
 The same key routinely means the same *intent* in two modes while calling

@@ -109,6 +109,42 @@ return function(H)
   end
   ok(found, "conflicts() reports an lhs claimed by two plugins")
 
+  -- ------------------------------------------------------ several keys
+  --
+  -- One action on more than one key is a real case, not a convenience:
+  -- gopath binds `open_here` to `gF` and to a double-click. It stays one
+  -- action, so moving or dropping it is still said once.
+
+  local multi_key = keymap.register("libspec_keys", {
+    order = { "twokeys", "dropped" },
+    actions = {
+      twokeys = {
+        default = { "<Plug>(libspec-k1)", "<Plug>(libspec-k2)" },
+        rhs = function() end,
+        desc = "two keys",
+      },
+      dropped = { default = { "<Plug>(libspec-k3)" }, rhs = function() end, desc = "dropped" },
+    },
+  }, { dropped = false })
+
+  ok(mapped("<Plug>(libspec-k1)"), "the first of several defaults binds")
+  ok(mapped("<Plug>(libspec-k2)"), "the second of several defaults binds")
+  ok(not mapped("<Plug>(libspec-k3)"), "`false` drops a list-valued action too")
+  eq(#multi_key, 3, "one entry per key, plus the dropped action's own")
+  eq(multi_key[1].name, multi_key[2].name, "both keys share the action name")
+
+  -- A user override may be a list as well, and replaces the defaults wholly.
+  local over = keymap.register("libspec_keys2", {
+    order = { "k" },
+    actions = { k = { default = "<Plug>(libspec-k4)", rhs = function() end, desc = "k" } },
+  }, { k = { "<Plug>(libspec-k5)", "<Plug>(libspec-k6)" } })
+  ok(
+    mapped("<Plug>(libspec-k5)") and mapped("<Plug>(libspec-k6)"),
+    "a list override binds every key"
+  )
+  ok(not mapped("<Plug>(libspec-k4)"), "a list override replaces the default outright")
+  eq(#over, 2, "a list override yields one entry per key")
+
   -- ------------------------------------------------------------- binds
   --
   -- One key, one name, one override -- but two modes calling different
@@ -204,6 +240,10 @@ return function(H)
     "<Plug>(libspec-beta-moved)",
     "<Plug>(libspec-hidden)",
     "<Plug>(libspec-both)",
+    "<Plug>(libspec-k1)",
+    "<Plug>(libspec-k2)",
+    "<Plug>(libspec-k5)",
+    "<Plug>(libspec-k6)",
     "<Plug>(libspec-both-moved)",
   }) do
     pcall(vim.keymap.del, "n", lhs)

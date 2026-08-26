@@ -109,27 +109,45 @@ local function nearest(key, actions)
 end
 
 ---@internal
---- Resolve one action's `lhs` from the user's override table.
+--- Every `lhs` an action should bind, from the user's override or its default.
 ---
---- Returns `nil` when the action is to be skipped, which is deliberately the
---- same answer for "the user disabled it" and "the plugin declared no default":
---- an action with no key is not an error, it is simply only reachable through
---- the command or the API.
+--- Returns an empty list when the action is to be skipped, which is
+--- deliberately the same answer for "the user disabled it" and "the plugin
+--- declared no default": an action with no key is not an error, it is simply
+--- only reachable through the command or the API.
+---
+--- A list is accepted on both sides. One action on several keys is a real
+--- case, not a convenience -- gopath binds `open_here` to `gF` *and* a
+--- double-click -- and it stays one action, so moving or dropping it is still
+--- said once.
 ---@param action Lib.Keymap.Action
----@param override string|false|nil
----@return string|nil
+---@param override string|string[]|false|nil
+---@return string[]
 local function resolve_lhs(action, override)
+  local chosen
   if override == false then
-    return nil
+    return {}
+  elseif type(override) == "string" or type(override) == "table" then
+    chosen = override
+  else
+    chosen = action.default
   end
-  if type(override) == "string" and override ~= "" then
-    return override
+
+  if type(chosen) == "string" then
+    return chosen ~= "" and { chosen } or {}
   end
-  local default = action.default
-  if type(default) == "string" and default ~= "" then
-    return default
+
+  if type(chosen) == "table" then
+    local out = {}
+    for _, lhs in ipairs(chosen) do
+      if type(lhs) == "string" and lhs ~= "" then
+        out[#out + 1] = lhs
+      end
+    end
+    return out
   end
-  return nil
+
+  return {}
 end
 
 ---Register a plugin's named keymap actions and bind the ones that survive the
@@ -192,7 +210,7 @@ function M.register(plugin, spec, user)
   for _, name in ipairs(names) do
     local action = actions[name]
     if action then
-      local lhs = resolve_lhs(action, user[name])
+      local lhs_list = resolve_lhs(action, user[name])
 
       -- One action, possibly several bindings. The same key routinely means
       -- the same *intent* in two modes while calling different functions:
@@ -205,39 +223,48 @@ function M.register(plugin, spec, user)
         binds = { { mode = action.mode, rhs = action.rhs, desc = action.desc, opts = action.opts } }
       end
 
+      -- An action with no key still yields one entry: the docs and the health
+      -- check ask what EXISTS, and "declared, reachable only by command" is a
+      -- real answer they need to be able to give.
+      local keys = #lhs_list > 0 and lhs_list or { nil }
+
       for _, b in ipairs(binds) do
         local desc_text = b.desc or action.desc
         local desc = desc_text and ("%s: %s"):format(plugin, desc_text) or nil
         local rhs = b.rhs or action.rhs
 
-        ---@type Lib.Keymap.Registered
-        local entry = {
-          plugin = plugin,
-          name = name,
-          lhs = lhs,
-          mode = b.mode or action.mode or "n",
-          desc = desc,
-          rhs = rhs,
-          which_key = action.which_key,
-          bound = false,
-        }
+        for i = 1, math.max(#keys, 1) do
+          local lhs = lhs_list[i]
 
-        if lhs and binding_enabled and rhs ~= nil then
-          local opts = vim.tbl_extend("force", b.opts or action.opts or {}, {})
-          -- which-key reads plain keymaps and their `desc` on its own, so an
-          -- action needs no registration to show up there. `which_key = false`
-          -- is the one thing only the plugin can express, and which-key's own
-          -- convention for it is this magic description.
-          if action.which_key == false then
-            opts.desc = "which_key_ignore"
-          else
-            opts.desc = desc
+          ---@type Lib.Keymap.Registered
+          local entry = {
+            plugin = plugin,
+            name = name,
+            lhs = lhs,
+            mode = b.mode or action.mode or "n",
+            desc = desc,
+            rhs = rhs,
+            which_key = action.which_key,
+            bound = false,
+          }
+
+          if lhs and binding_enabled and rhs ~= nil then
+            local opts = vim.tbl_extend("force", b.opts or action.opts or {}, {})
+            -- which-key reads plain keymaps and their `desc` on its own, so an
+            -- action needs no registration to show up there. `which_key = false`
+            -- is the one thing only the plugin can express, and which-key's own
+            -- convention for it is this magic description.
+            if action.which_key == false then
+              opts.desc = "which_key_ignore"
+            else
+              opts.desc = desc
+            end
+            set(entry.mode, lhs, rhs, opts)
+            entry.bound = true
           end
-          set(entry.mode, lhs, rhs, opts)
-          entry.bound = true
-        end
 
-        bound[#bound + 1] = entry
+          bound[#bound + 1] = entry
+        end
       end
     end
   end
