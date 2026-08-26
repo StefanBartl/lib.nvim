@@ -214,7 +214,10 @@ function M.register(plugin, spec, user, opts)
   user = (type(user) == "table") and user or {}
 
   -- Reserved keys are not actions; everything else in `user` claims to be one.
-  local reserved = { preset = true, which_key = true, enable = true }
+  -- Names a `keymaps` block routinely carries that are settings, not actions.
+  -- `prefix` is one: several presets here build their defaults from a
+  -- user-configurable prefix, and it sits in the same table as the overrides.
+  local reserved = { preset = true, which_key = true, enable = true, prefix = true }
   local unknown = {}
   warned[plugin] = warned[plugin] or {}
   for key in pairs(user) do
