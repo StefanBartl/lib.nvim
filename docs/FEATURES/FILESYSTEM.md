@@ -94,6 +94,7 @@ multi-root scans with directory-name ignoring.
 - **Module:** `lib.nvim.fs.collect_recursive` (`collect`/`files`/`dirs` and
   their `_async` counterparts), `lib.nvim.fs.scan_cached` (`scan`/`scan_async`),
   `lib.nvim.fs.scan_roots` (`scan`/`scan_async`)
+- **Deep dive:** [`docs/guides/async-directory-walk.md`](../guides/async-directory-walk.md)
 
 Recursive directory scans block the main loop on a large tree —
 `fs_scandir`/`fs_stat` called without a callback wait for the syscall
@@ -129,7 +130,7 @@ or async. `collect_async` returns a `cancel()` that stops the walk after the
 current in-flight libuv call settles and skips `on_done` entirely — not "a
 partial result," genuinely never called.
 
-See [async-directory-walk.md](async-directory-walk.md) for the full
+See [async-directory-walk.md](../guides/async-directory-walk.md) for the full
 problem/solution write-up, including verified equivalence against the
 synchronous walkers.
 

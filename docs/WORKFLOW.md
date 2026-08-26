@@ -217,7 +217,7 @@ running anything without an explicit user action.
 - **`cross.run`'s environment enrichment does not extend to argv runners.**
   Covered above, but worth repeating: this is the #1 real bug this
   ecosystem has hit migrating a plugin onto `lib.nvim` (see
-  [FEATURES/subprocess-env.md](FEATURES/subprocess-env.md)'s "Adoption"
+  [guides/subprocess-env.md](guides/subprocess-env.md)'s "Adoption"
   section for the list of plugins still migrating, and why each one's
   argv-runner call sites need an explicit fix, not just a dependency bump).
 - **`opts.buffer` and `opts.pattern` are mutually exclusive** in

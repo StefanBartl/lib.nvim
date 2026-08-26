@@ -48,7 +48,7 @@ fallback path, since `systemlist()` takes no `env` of its own.
 Both `run` and `run_blocking` pass every spawned command through
 `lib.nvim.cross.run.env.build()` by default — a guaranteed-complete `PATH`
 plus recoverable session/keyring variables (see
-[`docs/FEATURES/subprocess-env.md`](../../../../../docs/FEATURES/subprocess-env.md)).
+[`docs/guides/subprocess-env.md`](../../../../../docs/guides/subprocess-env.md)).
 No code changes needed to get that fix; `opts` only exists to tune or opt out
 of it:
 

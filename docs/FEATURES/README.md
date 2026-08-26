@@ -13,13 +13,15 @@ what each one does.
 depend on it as a hard dependency, and its surface spans logging, the
 subcommand-composer framework most of those plugins build their own
 commands on, window/buffer helpers, a themed UI toolkit, filesystem and
-cross-platform helpers, and more. Two entries below
-([subprocess-env.md](subprocess-env.md), [async-directory-walk.md](async-directory-walk.md))
-are essay-style problem/solution write-ups that came out of a specific
-ecosystem-wide finding — a bug or platform behaviour several plugins hit
-independently, which lib.nvim then absorbed so nobody has to re-solve it.
-The rest are organized by theme, each file covering one area of the module
-tree.
+cross-platform helpers, and more. Every file here is organized by theme,
+each covering one area of the module tree.
+
+The two essay-style problem/solution write-ups that used to live here moved
+to [`../guides/`](../guides/README.md) on 2026-08-26: only theme files belong
+in this folder, because the parser behind the Features tab reads every `##`
+in it as a feature, and an essay's own section headings were counted as
+eleven features that do not exist. Both topics are still in the catalogue
+below, one entry each, each linking out to its long version.
 
 ## Files
 
@@ -46,13 +48,10 @@ tree.
   external-dependency detection, treesitter gating, progress reporting, Git
   queries, HTTP, count-prefixed keymaps, and
   config-normalization/validated-API helpers.
-- **[subprocess-env.md](subprocess-env.md)** — spawned subprocesses inherit
-  Neovim's own environment, not a login shell's: incomplete `PATH`,
-  unreachable OS keyring. `lib.nvim.cross.run.env` builds the completed
-  environment for `vim.system`/`vim.uv.spawn`/`jobstart`; `cross.run`'s
-  `run`/`run_blocking` apply it by default.
-- **[async-directory-walk.md](async-directory-walk.md)** — recursive
-  directory scans (`collect_recursive`, and `scan_cached`/`scan_roots` built
-  on it) block the main loop on large trees. Coroutine-driven `*_async`
-  counterparts fix that without a callback pyramid or a general async
-  framework.
+## Deep dives
+
+Two topics have a long-form write-up beside their catalogue entry, in
+[`../guides/`](../guides/README.md): the
+[subprocess environment](../guides/subprocess-env.md) a spawned CLI actually
+sees, and the [async directory walk](../guides/async-directory-walk.md) that
+keeps a large tree off the main loop.

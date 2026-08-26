@@ -130,6 +130,7 @@ documented as GUI-only for exactly this reason.
 - **Module:** `lib.nvim.cross.run.env` (`build`, `path`, `apply`,
   `candidate_dirs`, `missing`, `login_shell_env`, `clear`) · also reachable
   as `require("lib").spawn_env`
+- **Deep dive:** [`docs/guides/subprocess-env.md`](../guides/subprocess-env.md)
 
 A subprocess started with `vim.system()`/`vim.uv.spawn()`/`jobstart()`
 inherits **Neovim's own process environment**, not an interactive login
@@ -167,7 +168,7 @@ spawn, so a plugin that only runs a command **string** gets this fix for
 free. **Not** wired into the argv-based runners (`run_argv`,
 `uv.spawn_capture`/`spawn_stream`) — those need an explicit
 `env.build()`/`env.apply(...)` call at the call site. See
-[subprocess-env.md](subprocess-env.md) for the full write-up, including the
+[subprocess-env.md](../guides/subprocess-env.md) for the full write-up, including the
 list of sibling plugins still migrating onto this.
 
 ## Argv process runners (no shell)

@@ -82,7 +82,7 @@ is built on, lives here too — see
 - [Installation](docs/installation.md) — installing as a plugin dependency vs. config-wide bootstrap.
 - [Usage](docs/usage.md) — requiring modules directly or via the aggregator.
 - [Namespaces & modules](docs/modules.md) — full module reference for `lib.lua.*` and `lib.nvim.*`, plus links to per-module docs.
-- [Features](docs/FEATURES/README.md) — cross-cutting capabilities written up as problem → solution (e.g. the [subprocess environment](docs/FEATURES/subprocess-env.md) a spawned CLI actually sees).
+- [Features](docs/FEATURES/README.md) — cross-cutting capabilities written up as problem → solution (e.g. the [subprocess environment](docs/guides/subprocess-env.md) a spawned CLI actually sees).
 - [Configuration](docs/configuration.md) — the `require("lib")` aggregator strategies and their defaults.
 - [Health](docs/health.md) — using `:checkhealth lib` to verify your setup.
 - [Help docs](docs/help.md) — how the `:help lib.nvim*` vimdoc tags are generated and indexed.

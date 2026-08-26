@@ -23,7 +23,7 @@ end
 --- `run`/`run_blocking` call is enriched via `cross.run.env.build()` — a
 --- guaranteed-complete `PATH` plus recoverable session/keyring variables —
 --- so callers get that fix without doing anything (see
---- `docs/FEATURES/subprocess-env.md`). `opts.env = false` opts a call back
+--- `docs/guides/subprocess-env.md`). `opts.env = false` opts a call back
 --- out entirely, reverting to bare `vim.system`/`jobstart` inheritance (the
 --- pre-existing behaviour); `opts.env` as a table is folded in as overrides
 --- on top of the built environment, same precedence as `env.apply()`.

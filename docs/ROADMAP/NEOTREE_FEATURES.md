@@ -50,7 +50,7 @@ audits *lib.nvim* against filetree.nvim's category layout) and complements
 | `is_dir`, `is_readable_file`, `is_subpath`, `relpath` | `lib.nvim.fs.is_dir`, `.is_readable_file`, `.is_subpath`, `.relpath` | infra/fileops | 🟡 candidate |
 | Find nearest ancestor dir containing marker files | `lib.nvim.fs.find_upward_dir` | infra | 🟡 candidate — overlaps `actions/project_root` / filetree.nvim's `infra.project_root` |
 | Polymorphic root resolver (multi-strategy project root) | `lib.nvim.fs.polymorphic_rootresolver` | infra | 🟡 candidate, stronger version of the above |
-| Recursive directory collection (sync + async) | `lib.nvim.fs.collect_recursive` (`collect`/`collect_async`, `files`/`files_async`, `dirs`/`dirs_async`) | infra | 🟡 candidate — closed gap; filetree.nvim's `util.fs` still hand-rolls its own iterative recursive collector and can migrate onto this instead (see [`docs/FEATURES/async-directory-walk.md`](../FEATURES/async-directory-walk.md)). |
+| Recursive directory collection (sync + async) | `lib.nvim.fs.collect_recursive` (`collect`/`collect_async`, `files`/`files_async`, `dirs`/`dirs_async`) | infra | 🟡 candidate — closed gap; filetree.nvim's `util.fs` still hand-rolls its own iterative recursive collector and can migrate onto this instead (see [`docs/guides/async-directory-walk.md`](../guides/async-directory-walk.md)). |
 | Path/value normalization (`normalize_path`, `path_kind`, `to_path`, `to_argv`, …) | `lib.nvim.normalize.*` | paths/infra | 🟡 candidate |
 
 ## system / infra — cross-platform
