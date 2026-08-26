@@ -90,17 +90,36 @@ function M.apply(plugin, spec, user, bound)
   ---@type table[]
   local entries = {}
 
-  local prefix = spec.prefix
-  if group_spec and prefix then
-    local group = type(group_spec) == "table" and group_spec.group or plugin
-    local entry = { prefix, group = group }
-    if type(group_spec) == "table" and group_spec.icon and icons_ok() then
-      entry.icon = group_spec.icon
+  ---@param prefix string|nil
+  ---@param g table|true
+  local function add_group(prefix, g)
+    if not prefix then
+      return
     end
-    if type(group_spec) == "table" and group_spec.mode then
-      entry.mode = group_spec.mode
+    local entry = { prefix, group = (type(g) == "table" and g.group) or plugin }
+    if type(g) == "table" then
+      if g.icon and icons_ok() then
+        entry.icon = g.icon
+      end
+      if g.mode then
+        entry.mode = g.mode
+      end
     end
     entries[#entries + 1] = entry
+  end
+
+  -- One plugin may own several prefixes. fileops labels `<leader>n` and
+  -- `<leader>p` separately -- "next file" and "prev file" are two groups, not
+  -- one -- so a list is accepted alongside the single-group form. An array
+  -- has a [1]; a single group spec does not, so the two cannot be confused.
+  if group_spec then
+    if type(group_spec) == "table" and group_spec[1] ~= nil then
+      for _, g in ipairs(group_spec) do
+        add_group(g.prefix, g)
+      end
+    else
+      add_group(spec.prefix, group_spec)
+    end
   end
 
   -- Per-action extras. `desc` is deliberately not repeated here: which-key

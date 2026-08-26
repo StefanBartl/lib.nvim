@@ -24,6 +24,7 @@
 --- `desc` is absent on purpose: which-key reads it from the mapping itself, and
 --- passing it a second time only creates a copy that can disagree.
 ---@class Lib.Keymap.WhichKey
+---@field prefix? string         # Only in the list form: the prefix this group labels.
 ---@field group? string          # Label for a prefix, e.g. "Spotlight" for `<leader>s`.
 ---@field icon? string|table
 ---@field mode? string|string[]  # Defaults to the action's own mode.
@@ -57,7 +58,7 @@
 ---@field actions table<string, Lib.Keymap.Action>
 ---@field order? string[]                       # Declaration order for docs/health; sorted when absent.
 ---@field prefix? string                        # The group prefix, e.g. "<leader>s".
----@field which_key? Lib.Keymap.WhichKey|false  # Prefix-level group label.
+---@field which_key? Lib.Keymap.WhichKey|Lib.Keymap.WhichKey[]|false # Group label(s); a list carries its own `prefix` per entry.
 
 --- One resolved action, as recorded in the registry.
 ---@class Lib.Keymap.Registered

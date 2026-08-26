@@ -166,7 +166,23 @@ Three things *are* outside what which-key can infer:
 | **Icon** | `which_key = { icon = "" }`, per action or on the prefix — see below |
 | **Hiding** one mapping | `which_key = false` on the action |
 
-A table implies "yes" — there is no separate `true` to remember. Hiding works
+A table implies "yes" — there is no separate `true` to remember.
+
+One plugin may own several prefixes. fileops labels `<leader>n` and
+`<leader>p` separately — "next file" and "prev file" are two groups, and
+labelling them together would say neither — so a **list** is accepted next to
+the single-group form:
+
+```lua
+which_key = {
+  { prefix = "<leader>n", group = "fileops: next file" },
+  { prefix = "<leader>p", group = "fileops: prev file" },
+},
+```
+
+An array has a `[1]`; a single group spec does not, so the two cannot be
+confused.
+ Hiding works
 even without which-key installed: it sets which-key's own `which_key_ignore`
 description on the mapping rather than calling into the plugin.
 
