@@ -1,9 +1,9 @@
--- TESTS/autocmd_spec.lua — lib.nvim.autocmd
+-- TESTS/autocmd_spec.lua — lib.nvim.bindings.autocmd
 
 return function(H)
   local eq, ok = H.eq, H.ok
 
-  local autocmd = require("lib.nvim.autocmd")
+  local autocmd = require("lib.nvim.bindings.autocmd")
 
   -- ------------------------------------------------------------- M.create
   --

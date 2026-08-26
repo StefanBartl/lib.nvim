@@ -1,9 +1,9 @@
--- TESTS/autocmd_dispatcher_spec.lua — lib.nvim.autocmd.dispatcher
+-- TESTS/autocmd_dispatcher_spec.lua — lib.nvim.bindings.autocmd.dispatcher
 
 return function(H)
   local eq, ok = H.eq, H.ok
 
-  local dispatcher = require("lib.nvim.autocmd.dispatcher")
+  local dispatcher = require("lib.nvim.bindings.autocmd.dispatcher")
 
   -- ------------------------------------------------------- register/attach
   do

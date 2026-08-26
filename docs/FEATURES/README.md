@@ -28,7 +28,7 @@ below, one entry each, each linking out to its long version.
 - **[LOGGING.md](LOGGING.md)** — `lib.nvim.notify` (prefixed, fast-event-safe
   notifications) and `lib.nvim.logger` (structured logging, JSONL
   persistence, crash capture, near-zero-cost kill switches).
-- **[COMMANDS.md](COMMANDS.md)** — `lib.nvim.usercmd` and the `composer`
+- **[COMMANDS.md](COMMANDS.md)** — `lib.nvim.bindings.usercmd` and the `composer`
   subsystem (the most widely-used module in the library — 30+ consuming
   plugins), plus `autocmd` (incl. `autocmd.dispatcher` — one autocmd, many
   lazy-loaded, prioritized handlers), `map`, `dotrepeat`, `debounce`.

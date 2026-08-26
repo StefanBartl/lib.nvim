@@ -1,4 +1,4 @@
-# `lib.nvim.usercmd.composer`
+# `lib.nvim.bindings.usercmd.composer`
 
 Compose a declarative route spec into **one** Neovim user command with
 subcommands, `<Tab>` completion, and Markdown docs — all read from the same
@@ -9,7 +9,7 @@ Turns the `:VerbFeatureA` / `:VerbFeatureB` anti-pattern into
 (`:Replace`, `:File`, `:Markdown`). Full design:
 [docs/ROADMAP/usrcmd_builder.md](../../../../../docs/ROADMAP/usrcmd_builder.md).
 
-Built on [`lib.nvim.usercmd.create`](../init.lua) (defensive registration),
+Built on [`lib.nvim.bindings.usercmd.create`](../init.lua) (defensive registration),
 [`lib.nvim.normalize.validators`](../../normalize/validators.lua) (arg
 coercion), and [`lib.nvim.fs`](../../fs) (`PATH`/`DIR`/`FILE` args + docgen
 writing).
@@ -21,7 +21,7 @@ Runnable scenarios: [docs/EXAMPLES](../../../../../docs/EXAMPLES) —
 ## Usage
 
 ```lua
-local composer = require("lib.nvim.usercmd.composer")
+local composer = require("lib.nvim.bindings.usercmd.composer")
 
 composer.verb("Replace", {
   desc    = "Text replacement operations",
@@ -355,7 +355,7 @@ for a handler that can't be reached anyway.
 
 ```lua
 -- in your plugin's existing lua/<plugin>/health.lua, inside M.check():
-require("lib.nvim.usercmd.composer").checkhealth("Replace")
+require("lib.nvim.bindings.usercmd.composer").checkhealth("Replace")
 ```
 
 Composer generates the whole per-route section; you supply the one line that
@@ -380,7 +380,7 @@ indistinguishable from a global one.
 ## Access
 
 ```lua
-require("lib.nvim.usercmd.composer")   -- direct (most efficient)
+require("lib.nvim.bindings.usercmd.composer")   -- direct (most efficient)
 require("lib").composer                -- via aggregator
 require("lib").usercmd.composer        -- via the usercmd namespace
 ```

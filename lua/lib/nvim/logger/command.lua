@@ -5,7 +5,7 @@
 
 local M = {}
 
-local usercmd = require("lib.nvim.usercmd")
+local usercmd = require("lib.nvim.bindings.usercmd")
 local make_scratch = require("lib.nvim.window.make_scratch")
 local serialize = require("lib.nvim.logger.serialize")
 local notify = require("lib.nvim.notify").create("[lib.nvim.logger]")

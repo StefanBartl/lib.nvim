@@ -10,7 +10,7 @@
 --- whose prompt slot the caller wires itself.
 
 local layout = require("lib.nvim.ui.kit.layout")
-local map = require("lib.nvim.map")
+local map = require("lib.nvim.bindings.keymap")
 
 local api = vim.api
 

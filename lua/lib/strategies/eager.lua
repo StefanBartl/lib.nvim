@@ -122,12 +122,12 @@ LIB.hl = require("lib.nvim.ui.hl")
 LIB.kit = require("lib.nvim.ui.kit")
 
 -- === AUTOCMD/KEYMAP ===
-LIB.autocmd = require("lib.nvim.autocmd")
-LIB.autogroup = require("lib.nvim.autocmd.augroup")
-LIB.autogroup_create_clear = require("lib.nvim.autocmd.augroup").create.clear
-LIB.map = require("lib.nvim.map")
-LIB.usercmd = require("lib.nvim.usercmd")
-LIB.composer = require("lib.nvim.usercmd.composer")
+LIB.autocmd = require("lib.nvim.bindings.autocmd")
+LIB.autogroup = require("lib.nvim.bindings.autocmd.augroup")
+LIB.autogroup_create_clear = require("lib.nvim.bindings.autocmd.augroup").create.clear
+LIB.map = require("lib.nvim.bindings.keymap")
+LIB.usercmd = require("lib.nvim.bindings.usercmd")
+LIB.composer = require("lib.nvim.bindings.usercmd.composer")
 
 -- === NOTIFY ===
 LIB.notify = require("lib.nvim.notify")

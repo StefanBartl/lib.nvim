@@ -1,4 +1,4 @@
----@module 'lib.nvim.usercmd.composer.flags'
+---@module 'lib.nvim.bindings.usercmd.composer.flags'
 --- --flag / --flag=value / -x parsing, shared by dispatch and completion so a
 --- route's flags stay one declaration read by both (same principle as the
 --- route tree itself). Modeled on replacer.nvim's BOOL_FLAGS/VALUE_FLAGS
@@ -9,7 +9,7 @@
 --- pre-Phase-6 behavior exactly — a leading "--" or "-" in one of its
 --- positional values is not treated specially.
 
-local argtypes = require("lib.nvim.usercmd.composer.argtypes")
+local argtypes = require("lib.nvim.bindings.usercmd.composer.argtypes")
 
 local M = {}
 

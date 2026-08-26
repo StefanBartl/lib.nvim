@@ -12,18 +12,18 @@ A drop-in replacement for `nvim_create_user_command`/
 command is silently overwritten rather than raising `E174`) and never lets a
 callback error escape uncaught.
 
-- **Module:** `lib.nvim.usercmd` (`create`)
+- **Module:** `lib.nvim.bindings.usercmd` (`create`)
 - **Config:** defaults applied when omitted — `opts.desc = ""`, `opts.nargs =
   0`, `opts.force = true`
 
 ```lua
-local usercmd = require("lib.nvim.usercmd")
+local usercmd = require("lib.nvim.bindings.usercmd")
 usercmd.create("MyCmd", function(args) print(args.fargs[1]) end, { nargs = "?" })
 usercmd.create("TableView", handler, { buffer = true })  -- current-buffer-local
 ```
 
 A function `callback` is wrapped in `pcall`; a failure is reported via
-`lib.nvim.notify` (tagged `[lib.nvim.usercmd]`) naming the command, instead of
+`lib.nvim.notify` (tagged `[lib.nvim.bindings.usercmd]`) naming the command, instead of
 propagating the raw error.
 
 ## Subcommand composer
@@ -36,15 +36,15 @@ level, and generated Markdown docs, all read from the same tree so behavior
 and docs can never drift.
 
 - **Tab:** true
-- **Module:** `lib.nvim.usercmd.composer` (`verb`, fluent builder,
+- **Module:** `lib.nvim.bindings.usercmd.composer` (`verb`, fluent builder,
   `register_type`, `document`, `check_all`, `checkhealth`)
-- **Usage:** `require("lib.nvim.usercmd.composer")`,
+- **Usage:** `require("lib.nvim.bindings.usercmd.composer")`,
   `require("lib").composer`, or `require("lib").usercmd.composer`
 
 ### Basic route spec
 
 ```lua
-local composer = require("lib.nvim.usercmd.composer")
+local composer = require("lib.nvim.bindings.usercmd.composer")
 
 composer.verb("Replace", {
   desc    = "Text replacement operations",
@@ -116,7 +116,7 @@ route up front instead, and a route may declare its own `check` for anything
 composer can't infer (an external CLI, a config file).
 
 ```lua
-require("lib.nvim.usercmd.composer").checkhealth("Replace")  -- from your plugin's own health.lua
+require("lib.nvim.bindings.usercmd.composer").checkhealth("Replace")  -- from your plugin's own health.lua
 composer.notify_check_all()  -- notification-based alternative, no health.lua needed
 ```
 
@@ -126,18 +126,18 @@ Standardized autocommand creation on top of `nvim_create_autocmd` — automatic
 augroup lookup/caching, a `pcall`-wrapped callback, and event/pattern
 normalization so a plugin's own config can safely pass through user overrides.
 
-- **Module:** `lib.nvim.autocmd` (`create`, `group`, `get_augroup`,
+- **Module:** `lib.nvim.bindings.autocmd` (`create`, `group`, `get_augroup`,
   `norm_events`, `norm_pattern`)
 
 ```lua
-local autocmd = require("lib.nvim.autocmd")
+local autocmd = require("lib.nvim.bindings.autocmd")
 autocmd.create("BufWritePost", function(args) print("wrote", args.file) end, {
   group = "my-plugin", pattern = "*.lua",
 })
 ```
 
 An error inside the callback is reported via `lib.nvim.notify` (tagged
-`[lib.nvim.autocmd]`) instead of aborting whatever fired the event.
+`[lib.nvim.bindings.autocmd]`) instead of aborting whatever fired the event.
 `opts.buffer` and `opts.pattern` are mutually exclusive, matching the
 underlying API — passing `buffer` routes to buffer-local scoping and
 `pattern` is ignored, rather than silently downgrading to a global `"*"`.
@@ -151,11 +151,11 @@ One autocmd, many handlers — a generic dispatcher factory (plus a `FileType`
 convenience wrapper) for plugins that would otherwise hand-roll N separate
 `FileType`/event autocmds, each with its own guard and lazy `require`.
 
-- **Module:** `lib.nvim.autocmd.dispatcher` (`new`), `dispatcher.filetype`
+- **Module:** `lib.nvim.bindings.autocmd.dispatcher` (`new`), `dispatcher.filetype`
   (`new`)
 
 ```lua
-local dispatcher = require("lib.nvim.autocmd.dispatcher")
+local dispatcher = require("lib.nvim.bindings.autocmd.dispatcher")
 
 local ft = dispatcher.filetype.new({ group = "MyFiletypeDispatcher" })
 ft.register("lua", { load = function() require("lsp.languages.scripting.lua") end,
@@ -174,7 +174,7 @@ autocmds for the common case — one autocmd firing for every event and
 matching in Lua does *more* work than native per-pattern dispatch for a
 buffer with no registered handlers; the win is uniformity and the two
 capabilities above, not raw speed. See
-[`lua/lib/nvim/autocmd/dispatcher/README.md`](../../lua/lib/nvim/autocmd/dispatcher/README.md)
+[`lua/lib/nvim/bindings/autocmd/dispatcher/README.md`](../../lua/lib/nvim/bindings/autocmd/dispatcher/README.md)
 for the full reference, including key-list registrations, glob matching, and
 why two registrations that happen to share one loader still get independent
 `once` tracking.
@@ -182,15 +182,15 @@ why two registrations that happen to share one loader still get independent
 ## Keymap wrapper
 
 A `vim.keymap.set` wrapper with sane defaults and defensive validation —
-`require("lib.nvim.map")` returns the callable directly (the module *is* a
+`require("lib.nvim.bindings.keymap")` returns the callable directly (the module *is* a
 function, not a table to index into).
 
-- **Module:** `lib.nvim.map`
+- **Module:** `lib.nvim.bindings.keymap`
 - **Config:** defaults — `opts.noremap = true`, `opts.silent = true`,
   `opts.desc = ""`; `opts.buffer = true` normalizes to `0`
 
 ```lua
-local map = require("lib.nvim.map")
+local map = require("lib.nvim.bindings.keymap")
 map("n", "<leader>x", function() end, {}, "Do a thing")
 ```
 

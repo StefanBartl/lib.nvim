@@ -59,7 +59,7 @@ vim.api.nvim_create_autocmd("FileType", {
 Toggle at runtime from a user command:
 
 ```lua
-require("lib.nvim.usercmd").create("TSParserPolicy", function(args)
+require("lib.nvim.bindings.usercmd").create("TSParserPolicy", function(args)
   local policy = require("lib.nvim.treesitter.parser_policy")
   local mode = args.args
   if mode == "" then

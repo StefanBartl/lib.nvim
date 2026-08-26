@@ -22,7 +22,7 @@
 ---   memory.setup_auto_invalidation()      -- install the sweep autocmds
 ---   memory.disable_auto_invalidation()    -- and remove them again (toggle)
 
-local autocmd = require("lib.nvim.autocmd")
+local autocmd = require("lib.nvim.bindings.autocmd")
 
 local api = vim.api
 local uv = vim.uv or vim.loop
@@ -173,7 +173,7 @@ function M.setup_auto_invalidation(opts)
 
   -- `nvim_create_augroup(..., { clear = true })` always wipes and rebuilds
   -- the group, which is what makes this whole function idempotent; going
-  -- through `lib.nvim.autocmd.group` instead would cache the id after the
+  -- through `lib.nvim.bindings.autocmd.group` instead would cache the id after the
   -- first call and silently skip the clear on later calls.
   local group = api.nvim_create_augroup(name, { clear = true })
 

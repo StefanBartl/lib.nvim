@@ -1,6 +1,6 @@
 -- docs/EXAMPLES/composer-basic-verb.lua
 --
--- Module:   lib.nvim.usercmd.composer
+-- Module:   lib.nvim.bindings.usercmd.composer
 -- Scenario: turn the flat-command anti-pattern
 --             :ReplaceBuffer   :ReplaceCwd   :ReplaceSurroundQuote
 --           into one verb with subcommands and free <Tab> completion:
@@ -14,7 +14,7 @@
 --
 -- Call this once, e.g. from your plugin's setup()/plugin file.
 
-local composer = require("lib.nvim.usercmd.composer")
+local composer = require("lib.nvim.bindings.usercmd.composer")
 
 composer.verb("Replace", {
   desc = "Text replacement operations",

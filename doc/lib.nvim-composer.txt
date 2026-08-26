@@ -1,6 +1,6 @@
 *lib.nvim-composer.txt*    Subcommand user commands with completion and docgen
 
-lib.nvim.usercmd.composer                              *lib.nvim-composer*
+lib.nvim.bindings.usercmd.composer                              *lib.nvim-composer*
 
 Compose a declarative route spec into ONE Neovim user command with
 subcommands, `<Tab>` completion, and Markdown docs — all read from the same
@@ -26,7 +26,7 @@ CONTENTS                                       *lib.nvim-composer-contents*
 ==============================================================================
 1. USAGE                                          *lib.nvim-composer-usage*
 >lua
-    local composer = require("lib.nvim.usercmd.composer")
+    local composer = require("lib.nvim.bindings.usercmd.composer")
 
     composer.verb("Replace", {
       desc    = "Text replacement operations",
@@ -240,7 +240,7 @@ composer.register_type({name}, {def})       *lib.nvim-composer-register_type*
 composer.registry()                              *lib.nvim-composer-registry*
     The name->handle map of every verb built in this process.
 
-Access: `require("lib.nvim.usercmd.composer")` (direct),
+Access: `require("lib.nvim.bindings.usercmd.composer")` (direct),
 `require("lib").composer`, or `require("lib").usercmd.composer`.
 
 vim:tw=78:ts=8:sw=8:et:ft=help:norl:

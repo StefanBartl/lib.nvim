@@ -293,7 +293,7 @@ whether that plugin exposed its own verb for it.
 The original sketch here was a standalone `:LibDeps`. That was wrong on
 this repo's own terms: `lib.nvim` already owns a `:Lib` verb, and a second
 top-level name for a subordinate feature is exactly the
-`:VerbFeatureA`/`:VerbFeatureB` shape `lib.nvim.usercmd.composer` exists to
+`:VerbFeatureA`/`:VerbFeatureB` shape `lib.nvim.bindings.usercmd.composer` exists to
 replace — its README opens by naming that anti-pattern. So the routes hang
 off `:Lib`:
 

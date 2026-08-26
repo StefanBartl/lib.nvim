@@ -51,7 +51,7 @@
 --- for a caller that wants it — out of scope for now.
 
 local surface = require("lib.nvim.ui.kit.surface")
-local map = require("lib.nvim.map")
+local map = require("lib.nvim.bindings.keymap")
 local notify = require("lib.nvim.notify").create("[lib.nvim.ui.kit.compare]")
 
 local api = vim.api

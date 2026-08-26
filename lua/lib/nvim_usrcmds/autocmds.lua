@@ -5,7 +5,7 @@
 --- the same shape every plugin in this ecosystem uses, and the reason the
 --- stacking bug below was findable at all.
 
-local autocmd = require("lib.nvim.autocmd")
+local autocmd = require("lib.nvim.bindings.autocmd")
 local actions = require("lib.nvim_usrcmds.actions")
 
 local M = {}

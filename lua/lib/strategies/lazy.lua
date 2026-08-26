@@ -301,12 +301,12 @@ LIB.hl = lazy_module("lib.nvim.ui.hl")
 LIB.kit = lazy_module("lib.nvim.ui.kit")
 
 -- === AUTOCMD/KEYMAP ===
-LIB.autocmd = lazy_module("lib.nvim.autocmd")
-LIB.augroup = lazy_module("lib.nvim.autocmd.augroup")
-LIB.augroup_create_clear = lazy_module("lib.nvim.autocmd.augroup").create.clear
-LIB.map = lazy_module("lib.nvim.map")
-LIB.usercmd = lazy_module("lib.nvim.usercmd")
-LIB.composer = lazy_module("lib.nvim.usercmd.composer")
+LIB.autocmd = lazy_module("lib.nvim.bindings.autocmd")
+LIB.augroup = lazy_module("lib.nvim.bindings.autocmd.augroup")
+LIB.augroup_create_clear = lazy_module("lib.nvim.bindings.autocmd.augroup").create.clear
+LIB.map = lazy_module("lib.nvim.bindings.keymap")
+LIB.usercmd = lazy_module("lib.nvim.bindings.usercmd")
+LIB.composer = lazy_module("lib.nvim.bindings.usercmd.composer")
 
 -- === NOTIFY ===
 LIB.notify = lazy_module("lib.nvim.notify")

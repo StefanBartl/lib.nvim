@@ -22,10 +22,10 @@ namespace one-liners), split by topic, see [`API/README.md`](API/README.md).
 | Module                 | Contents                                            |
 | ---------------------- | --------------------------------------------------- |
 | [`lib.nvim.notify`](../lua/lib/nvim/notify/README.md) | notify wrapper + log-level resolution |
-| `lib.nvim.map`         | keymap helpers                                      |
+| `lib.nvim.bindings.keymap`         | keymap helpers                                      |
 | [`lib.nvim.count`](../lua/lib/nvim/count/README.md) | count-prefix helpers for keymaps: `get`/`raw`/`given`/`clamp`, plus `times` (sync repeat) and `chain` (async repeat gated on a completion signal) |
-| [`lib.nvim.usercmd`](../lua/lib/nvim/usercmd/composer/README.md) | user-command helpers: `create` + [`composer`](../lua/lib/nvim/usercmd/composer/README.md) (subcommand verbs, completion, docgen — [`:help`](../doc/lib.nvim-composer.txt)) |
-| `lib.nvim.autocmd`     | autocmd / augroup helpers                           |
+| [`lib.nvim.bindings.usercmd`](../lua/lib/nvim/bindings/usercmd/composer/README.md) | user-command helpers: `create` + [`composer`](../lua/lib/nvim/bindings/usercmd/composer/README.md) (subcommand verbs, completion, docgen — [`:help`](../doc/lib.nvim-composer.txt)) |
+| `lib.nvim.bindings.autocmd`     | autocmd / augroup helpers                           |
 | `lib.nvim.buffer`      | buffer helpers (`insert_lines`, `is_markdown_buf`, `open_background`) |
 | `lib.nvim.buf_win_tab` | buffer / window / tab utilities                     |
 | [`lib.nvim.window`](../lua/lib/nvim/window/README.md) | overlay/float helpers: `make_scratch`, `open_named_scratch`, `open_scratch_split`, `tag` (find by `vim.w[win].custom_tag`), `nice_quit`, `set_title`, `close_on_focus_lost`, `center`, `attach` ([`:help`](../doc/lib.nvim-window.txt)) |
@@ -75,7 +75,7 @@ and are generated on install by your plugin manager (see [Help docs](help.md)).
 - [`lib.nvim.cross.run.env`](../lua/lib/nvim/cross/run/env/README.md) — spawn environment: completed `PATH` + session/keyring variables
 - [`lib.nvim.lua_ls.insert.module_annotation`](../lua/lib/nvim/lua_ls/insert/module_annnotation/README.md)
 - [`lib.nvim.treesitter.guard`](../lua/lib/nvim/treesitter/guard/README.md) · [`lib.nvim.treesitter.parser_policy`](../lua/lib/nvim/treesitter/parser_policy/README.md)
-- [`lib.nvim.usercmd.composer`](../lua/lib/nvim/usercmd/composer/README.md)
+- [`lib.nvim.bindings.usercmd.composer`](../lua/lib/nvim/bindings/usercmd/composer/README.md)
 - [`lib.nvim.deps`](../lua/lib/nvim/deps/README.md)
 - [`lib.nvim.async`](../lua/lib/nvim/async/README.md) · [`lib.nvim.fs.watch`](../lua/lib/nvim/fs/watch/README.md) · [`lib.nvim.json`](../lua/lib/nvim/json/README.md)
 - [`lib.lua.class`](../lua/lib/lua/class/README.md) · [`lib.lua.context_manager`](../lua/lib/lua/context_manager/README.md)

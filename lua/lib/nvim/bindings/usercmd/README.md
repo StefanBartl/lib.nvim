@@ -1,4 +1,4 @@
-# `lib.nvim.usercmd`
+# `lib.nvim.bindings.usercmd`
 
 Standardized wrapper around `nvim_create_user_command`/
 `nvim_buf_create_user_command` with sane defaults and a defensive callback.
@@ -6,7 +6,7 @@ Standardized wrapper around `nvim_create_user_command`/
 ## Usage
 
 ```lua
-local usercmd = require("lib.nvim.usercmd")
+local usercmd = require("lib.nvim.bindings.usercmd")
 
 usercmd.create("MyCmd", function(args)
   print(args.fargs[1])
@@ -25,7 +25,7 @@ commands on every save). Pass `opts.force = false` to restore the raising
 behavior.
 
 A function `callback` is wrapped in `pcall`; a failure is reported via
-`require("lib.nvim.notify")` (tagged `[lib.nvim.usercmd]`) naming the command,
+`require("lib.nvim.notify")` (tagged `[lib.nvim.bindings.usercmd]`) naming the command,
 instead of propagating the raw error. A string `callback` (a Vim Ex command
 string) is passed through unwrapped, matching `nvim_create_user_command`'s
 own accepted types.
@@ -49,7 +49,7 @@ global command table.
 usercmd.composer.verb("Replace", { ... })
 ```
 
-`usercmd.composer` is a lazy proxy onto `lib.nvim.usercmd.composer` — set up
+`usercmd.composer` is a lazy proxy onto `lib.nvim.bindings.usercmd.composer` — set up
 via `__index` rather than an eager `require`, specifically to avoid a require
 cycle (the composer itself depends on `usercmd.create`). It builds one user
 command with subcommand routing, `<Tab>` completion, and generated docs from

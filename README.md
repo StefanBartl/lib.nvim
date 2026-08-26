@@ -74,7 +74,7 @@ external tools" popup and `:Lib deps show <plugin>` come from — see
 [`lib.nvim.deps`](lua/lib/nvim/deps/README.md). `usercmd.composer`, the
 subcommand-verb builder every sibling plugin's own `:Command <sub>` grammar
 is built on, lives here too — see
-[`lib.nvim.usercmd.composer`](lua/lib/nvim/usercmd/composer/README.md).
+[`lib.nvim.bindings.usercmd.composer`](lua/lib/nvim/bindings/usercmd/composer/README.md).
 
 ## Documentation
 

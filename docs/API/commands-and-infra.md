@@ -1,6 +1,6 @@
 # API Reference — commands, automation, infrastructure
 
-Part of the [lib.nvim API reference](README.md). Covers `lib.nvim.usercmd`
+Part of the [lib.nvim API reference](README.md). Covers `lib.nvim.bindings.usercmd`
 (including the `composer` subsystem), `autocmd`, `map`, `dotrepeat`,
 `debounce`, `deps`, `treesitter`, `store`, `logger`, `progress`, `harvest`,
 `git`, `net.curl`, `lua_ls`, `cache`, `core`, `normalize`, `require`,
@@ -8,9 +8,9 @@ Part of the [lib.nvim API reference](README.md). Covers `lib.nvim.usercmd`
 
 ---
 
-## `lib.nvim.usercmd` and `lib.nvim.usercmd.composer`
+## `lib.nvim.bindings.usercmd` and `lib.nvim.bindings.usercmd.composer`
 
-### `lib.nvim.usercmd` (see README)
+### `lib.nvim.bindings.usercmd` (see README)
 Standardized wrapper around `nvim_create_user_command`/
 `nvim_buf_create_user_command` with sane defaults (`force=true`,
 `desc=""`, `nargs=0`) and a `pcall`-wrapped, notify-on-error callback.
@@ -18,17 +18,17 @@ Standardized wrapper around `nvim_create_user_command`/
 ```
 M.create(name: string, callback: string|fun(args:Lib.UserCommand.Args), opts: LibUserCommandOpts|nil)
   -- opts.buffer (true=current buf, or bufnr) routes to nvim_buf_create_user_command; stripped before the native call
-M.composer   -- lazy proxy table onto lib.nvim.usercmd.composer (avoids a require cycle)
+M.composer   -- lazy proxy table onto lib.nvim.bindings.usercmd.composer (avoids a require cycle)
 ```
 
-### `lib.nvim.usercmd.composer` (see README — extensive, read it for the full narrative)
+### `lib.nvim.bindings.usercmd.composer` (see README — extensive, read it for the full narrative)
 
 **The most widely-used module in the whole library — 30+ consuming
 plugins.** Compose a declarative route-tree spec into ONE Neovim user
 command with subcommand dispatch, `<Tab>` completion, argument/flag/kv
 coercion, and generated Markdown docs, all driven from the same tree.
 
-Access: `require("lib.nvim.usercmd.composer")` (direct, most efficient),
+Access: `require("lib.nvim.bindings.usercmd.composer")` (direct, most efficient),
 `require("lib").composer`, `require("lib").usercmd.composer`.
 
 #### `M.verb(name: string, spec?: Lib.UserCmd.Composer.Spec): Lib.UserCmd.Composer.Handle|table`
@@ -95,23 +95,23 @@ Composer's internals (`parse.lua`, `tree.lua`, `flags.lua`, `kv.lua`,
 
 ---
 
-## `lib.nvim.autocmd` (see README)
+## `lib.nvim.bindings.autocmd` (see README)
 
 Standardized autocommand creation on top of `nvim_create_autocmd` —
 automatic augroup lookup/caching, a defensive `pcall`-wrapped callback,
 event/pattern normalization.
 
 ```
-M.augroup   -- lazily-required proxy onto lib.nvim.autocmd.augroup
+M.augroup   -- lazily-required proxy onto lib.nvim.bindings.autocmd.augroup
 M.group(name: string, clear?: boolean): integer          -- memoized in an internal cache
 M.get_augroup(name: string, opts?: { clear?, prefix? }): integer   -- separate cache from M.group
 M.create(event: string|string[], callback: fun(args), opts?: LibAutocmdOpts): integer
-  -- callback pcall-wrapped, notify-on-error tagged [lib.nvim.autocmd]; opts.buffer/opts.pattern mutually exclusive
+  -- callback pcall-wrapped, notify-on-error tagged [lib.nvim.bindings.autocmd]; opts.buffer/opts.pattern mutually exclusive
 M.norm_events(ev: any, fallback: string[]): string[]
 M.norm_pattern(pat: any): string|string[]                -- nil -> "*"
 ```
 
-### `lib.nvim.autocmd.augroup` (no separate README)
+### `lib.nvim.bindings.autocmd.augroup` (no separate README)
 A third, unrelated, uncached one-off augroup helper — always
 creates/clears unconditionally (no memoization).
 
@@ -121,11 +121,11 @@ M.create.clear(name: string): integer
 
 ---
 
-## `lib.nvim.map` (see README)
+## `lib.nvim.bindings.keymap` (see README)
 
 Convenience wrapper around `vim.keymap.set` with sane defaults and
 defensive argument validation. **The module itself is a function** —
-`require("lib.nvim.map")` returns the callable directly.
+`require("lib.nvim.bindings.keymap")` returns the callable directly.
 
 ```
 return function(modes: string|string[], lhs: string, rhs: string|function, opts?: Lib.Map.Opts, desc?: string)

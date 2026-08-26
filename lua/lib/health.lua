@@ -22,13 +22,13 @@ local PROBE = {
   "lib.nvim.logger",
   "lib.nvim.progress",
   "lib.nvim.ui.kit",
-  "lib.nvim.map",
+  "lib.nvim.bindings.keymap",
   "lib.nvim.fs.is_dir",
   "lib.nvim.store.project",
   "lib.nvim.core",
   "lib.nvim.ui.kit",
-  "lib.nvim.usercmd.composer",
-  "lib.nvim.autocmd.dispatcher",
+  "lib.nvim.bindings.usercmd.composer",
+  "lib.nvim.bindings.autocmd.dispatcher",
 }
 
 ---@internal

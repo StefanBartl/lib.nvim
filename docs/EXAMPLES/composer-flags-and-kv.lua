@@ -1,6 +1,6 @@
 -- docs/EXAMPLES/composer-flags-and-kv.lua
 --
--- Module:   lib.nvim.usercmd.composer
+-- Module:   lib.nvim.bindings.usercmd.composer
 -- Scenario: two grammars beyond plain positional args, both strictly
 --           opt-in per route (a route without `flags`/`kv` behaves exactly
 --           as before either feature existed):
@@ -12,7 +12,7 @@
 -- `:Replace {old} {new} [scope] [--flags]` live on a composer verb without
 -- inventing a new route shape for it.
 
-local composer = require("lib.nvim.usercmd.composer")
+local composer = require("lib.nvim.bindings.usercmd.composer")
 
 -- 1. FLAGS -- modeled on replacer.nvim's own BOOL_FLAGS/VALUE_FLAGS split.
 -- Flags may appear anywhere in the tail (before/after/between positionals),

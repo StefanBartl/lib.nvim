@@ -1,4 +1,4 @@
----@module 'lib.nvim.usercmd.composer.tree'
+---@module 'lib.nvim.bindings.usercmd.composer.tree'
 --- The route tree: the single source of truth read by dispatch, completion, and
 --- docgen. A node has literal `children` and an optional terminal `route`.
 

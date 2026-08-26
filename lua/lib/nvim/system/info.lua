@@ -175,7 +175,7 @@ end
 ---@param name? string # Command name, defaults to "SystemInfo".
 ---@param opts? Lib.System.Info.ShowOpts # Forwarded to `show` on execution.
 function M.create_usercmd(name, opts)
-  require("lib.nvim.usercmd").create(name or "SystemInfo", function()
+  require("lib.nvim.bindings.usercmd").create(name or "SystemInfo", function()
     M.show(opts)
   end, { desc = "Show system information (float + clipboard)" })
 end

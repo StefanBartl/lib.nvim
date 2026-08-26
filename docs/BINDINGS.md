@@ -23,7 +23,7 @@ deliberately small and every part of it is opt-in.
 on their behalf, so `lua/lib/nvim_usrcmds/` has no `keymaps.lua` at all — the
 one deliberate gap in the three-module `bindings/` split every plugin here uses.
 
-`lib.nvim.map` is a wrapper *for callers* around `vim.keymap.set`; it binds
+`lib.nvim.bindings.keymap` is a wrapper *for callers* around `vim.keymap.set`; it binds
 nothing itself. The only `vim.keymap.set` in the tree that fires is `q` inside
 the UI-kit preview surface (`ui/kit/preview.lua`) — buffer-local to a float
 this library opened, closed again with the float.
@@ -47,7 +47,7 @@ not exist on other platforms unless you ask for it.
 
 ### `:Lib`
 
-Built with `lib.nvim.usercmd.composer`, which dogfoods the module it ships. The
+Built with `lib.nvim.bindings.usercmd.composer`, which dogfoods the module it ships. The
 route list mirrors which features are enabled, so the verb never advertises an
 action the flat set would also omit.
 

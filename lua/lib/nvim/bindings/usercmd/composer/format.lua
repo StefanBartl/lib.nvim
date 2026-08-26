@@ -1,4 +1,4 @@
----@module 'lib.nvim.usercmd.composer.format'
+---@module 'lib.nvim.bindings.usercmd.composer.format'
 --- Shared rendering of arg schemas into human-readable tokens. Used by both the
 --- usage/error messages (parse.lua) and the Markdown docs (docgen.lua) so a
 --- route reads the same everywhere.

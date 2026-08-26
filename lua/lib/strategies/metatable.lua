@@ -50,10 +50,10 @@ local MODULE_MAP = {
   kit = "lib.nvim.ui.kit",
 
   -- AUTOCMD/KEYMAP
-  autocmd = "lib.nvim.autocmd",
-  map = "lib.nvim.map",
-  usercmd = "lib.nvim.usercmd",
-  composer = "lib.nvim.usercmd.composer",
+  autocmd = "lib.nvim.bindings.autocmd",
+  map = "lib.nvim.bindings.keymap",
+  usercmd = "lib.nvim.bindings.usercmd",
+  composer = "lib.nvim.bindings.usercmd.composer",
 
   -- NOTIFY
   notify = "lib.nvim.notify",

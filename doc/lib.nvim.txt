@@ -96,13 +96,13 @@ Direct module paths are recommended in plugin code (tree-shake friendly): >lua
 
     local notify = require("lib.nvim.notify")
     local tables = require("lib.lua.tables")
-    local map    = require("lib.nvim.map")
+    local map    = require("lib.nvim.bindings.keymap")
 <
 Or via the aggregator (`require("lib")`), which resolves keys on first access: >lua
 
     local lib = require("lib")
     lib.notify          -- -> lib.nvim.notify
-    lib.map             -- -> lib.nvim.map
+    lib.map             -- -> lib.nvim.bindings.keymap
     lib.is_windows()    -- -> lib.nvim.cross.platform.is_windows
 <
 ==============================================================================
@@ -145,9 +145,9 @@ Neovim adapters.
 
     lib.nvim.notify        notify wrapper + log-level resolution
     lib.nvim.logger        structured logging / diagnostics / crash dumps
-    lib.nvim.map           keymap helpers
-    lib.nvim.usercmd       user-command helpers
-    lib.nvim.autocmd       autocmd / augroup helpers; autocmd.dispatcher: one
+    lib.nvim.bindings.keymap           keymap helpers
+    lib.nvim.bindings.usercmd       user-command helpers
+    lib.nvim.bindings.autocmd       autocmd / augroup helpers; autocmd.dispatcher: one
                            autocmd, many handlers (lazy-loaded, prioritized,
                            per-buffer once), plus a FileType convenience
                            wrapper
@@ -281,7 +281,7 @@ Modules with dedicated `:help` documentation. Jump to one via its tag, or
     lib.nvim.progress    style-agnostic progress indicator   |lib.nvim-progress|
     lib.nvim.treesitter  filetype allowlist gate + parser install policy |lib.nvim-treesitter|
     lib.nvim.selection   reselect a Visual range after mutation |lib.nvim-selection|
-    lib.nvim.usercmd.composer  subcommand user commands + docgen |lib.nvim-composer|
+    lib.nvim.bindings.usercmd.composer  subcommand user commands + docgen |lib.nvim-composer|
     lib.nvim.fs          filesystem helpers: paths, scanning, IO, trash |lib.nvim-fs|
     lib.nvim.store       project-scoped persistent state       |lib.nvim-store|
     lib.nvim.logger      structured logging / diagnostics / crash dumps |lib.nvim-logger|

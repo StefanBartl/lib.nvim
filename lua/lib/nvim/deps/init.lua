@@ -94,7 +94,7 @@ end
 ---composer type is a side effect, and this module's contract is that
 ---requiring it has none.
 local function register_argtype()
-  require("lib.nvim.usercmd.composer").register_type("DEPS_PLUGIN", {
+  require("lib.nvim.bindings.usercmd.composer").register_type("DEPS_PLUGIN", {
     validate = function(raw)
       return true, raw, nil
     end,

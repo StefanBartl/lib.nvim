@@ -32,7 +32,7 @@ with worked examples.
   `lib.nvim.window.*` (including the `ui.kit` toolkit — ~19 themed UI
   primitives), `lib.nvim.notify.*`, `lib.nvim.selection`,
   `lib.nvim.terminal`, `lib.nvim.buffer.*`.
-- **[commands-and-infra.md](commands-and-infra.md)** — `lib.nvim.usercmd`
+- **[commands-and-infra.md](commands-and-infra.md)** — `lib.nvim.bindings.usercmd`
   and the **`composer`** subsystem (the most widely-used module in the
   library — 30+ consuming plugins), plus `autocmd`, `map`, `dotrepeat`,
   `debounce`, `deps`, `treesitter`, `store`, `logger`, `progress`,

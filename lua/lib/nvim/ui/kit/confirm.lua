@@ -17,7 +17,7 @@
 ---                                 on_answer(nil) for a custom choice list.
 
 local surface = require("lib.nvim.ui.kit.surface")
-local map = require("lib.nvim.map")
+local map = require("lib.nvim.bindings.keymap")
 
 local api = vim.api
 

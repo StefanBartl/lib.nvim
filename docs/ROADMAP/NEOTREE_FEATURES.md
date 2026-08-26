@@ -80,9 +80,9 @@ audits *lib.nvim* against filetree.nvim's category layout) and complements
 
 | Feature | Origin | Category | Status |
 |---|---|---|---|
-| `vim.keymap.set` wrapper with validation | `lib.nvim.map` | all | ✅ filetree.nvim's `util.map` wraps this (per its `ROADMAP.md`) |
-| `nvim_create_user_command` wrapper | `lib.nvim.usercmd` | all | ✅ used via `util.usercmd` |
-| Autocmd / augroup helpers | `lib.nvim.autocmd`, `lib.nvim.autocmd.augroup` | all | ✅ used via `util.autocmd` |
+| `vim.keymap.set` wrapper with validation | `lib.nvim.bindings.keymap` | all | ✅ filetree.nvim's `util.map` wraps this (per its `ROADMAP.md`) |
+| `nvim_create_user_command` wrapper | `lib.nvim.bindings.usercmd` | all | ✅ used via `util.usercmd` |
+| Autocmd / augroup helpers | `lib.nvim.bindings.autocmd`, `lib.nvim.bindings.autocmd.augroup` | all | ✅ used via `util.autocmd` |
 
 ---
 

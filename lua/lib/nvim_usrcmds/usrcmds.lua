@@ -7,7 +7,7 @@
 ---     memory; they predate the verb.
 ---   * the `:Lib` verb -- `:Lib helptags | cwd-here | ps-profile`, plus
 ---     `:Lib deps ...`. Composer-built, with `<Tab>` completion, and it
----     dogfoods `lib.nvim.usercmd.composer`.
+---     dogfoods `lib.nvim.bindings.usercmd.composer`.
 ---
 --- Both dispatch into `lib.nvim_usrcmds.actions`, so they cannot drift.
 
@@ -67,7 +67,7 @@ function M.lib_verb(o)
     end
   end
 
-  require("lib.nvim.usercmd.composer").verb("Lib", {
+  require("lib.nvim.bindings.usercmd.composer").verb("Lib", {
     desc = "lib.nvim utility commands",
     routes = routes,
   })

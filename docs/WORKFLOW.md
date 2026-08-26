@@ -56,13 +56,13 @@ essentially everything in a real plugin.
 Three tiers, pick the cheapest one that fits:
 
 - **A single command with no subcommands, simple args:**
-  `require("lib.nvim.usercmd").create(name, fn, opts)`. You get
+  `require("lib.nvim.bindings.usercmd").create(name, fn, opts)`. You get
   `force = true` (safe re-registration on config hot-reload — no `E174` when
   your `BufWritePost` autocmd re-sources config), a `pcall`-wrapped callback
   reported through `lib.nvim.notify` instead of a raw traceback, and
   `opts.buffer = true`/bufnr for a buffer-local command.
 - **A command with subcommands** (`:Verb sub1`, `:Verb sub2 arg`, flags,
-  `<Tab>` completion at every level): `require("lib.nvim.usercmd.composer")`.
+  `<Tab>` completion at every level): `require("lib.nvim.bindings.usercmd.composer")`.
   This is **the single most depended-on piece of this whole library** — 30+
   consuming plugins build their `:Verb noun` surface on it instead of
   hand-rolling `:VerbNoun` commands and their own completion function. If
@@ -74,7 +74,7 @@ Three tiers, pick the cheapest one that fits:
   defensive callback and idempotent registration for no benefit.
 
 ```lua
-local composer = require("lib.nvim.usercmd.composer")
+local composer = require("lib.nvim.bindings.usercmd.composer")
 composer.verb("MyPlugin", {
   routes = {
     { path = { "open" }, run = function(ctx) ... end },
@@ -221,7 +221,7 @@ running anything without an explicit user action.
   section for the list of plugins still migrating, and why each one's
   argv-runner call sites need an explicit fix, not just a dependency bump).
 - **`opts.buffer` and `opts.pattern` are mutually exclusive** in
-  `lib.nvim.autocmd.create`, matching the underlying API — passing both
+  `lib.nvim.bindings.autocmd.create`, matching the underlying API — passing both
   routes to buffer-local scoping and silently ignores `pattern`, rather than
   merging them into a global `"*"` pattern. If your plugin exposes both as
   user-configurable, validate that only one is set.

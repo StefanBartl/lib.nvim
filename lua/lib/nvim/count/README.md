@@ -90,4 +90,4 @@ the unsafe thing it exists to avoid.
 
 - `times` and `chain` both accept an explicit `count` in `opts`, which makes
   them testable without a real keypress.
-- Nothing here registers keymaps. Pair it with `lib.nvim.map`.
+- Nothing here registers keymaps. Pair it with `lib.nvim.bindings.keymap`.

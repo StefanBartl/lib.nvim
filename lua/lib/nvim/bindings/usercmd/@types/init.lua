@@ -1,5 +1,5 @@
 ---@meta
----@module 'lib.nvim.usercmd.@types'
+---@module 'lib.nvim.bindings.usercmd.@types'
 
 ---@class Lib.UserCommand.Args
 ---@field name string Command name

@@ -1,4 +1,4 @@
-# `lib.nvim.autocmd.dispatcher`
+# `lib.nvim.bindings.autocmd.dispatcher`
 
 One autocmd, many handlers — a generic, event-agnostic dispatcher factory,
 plus a `FileType` convenience wrapper on top.
@@ -12,7 +12,7 @@ per-buffer `once`).
 ## Usage
 
 ```lua
-local dispatcher = require("lib.nvim.autocmd.dispatcher")
+local dispatcher = require("lib.nvim.bindings.autocmd.dispatcher")
 
 local ft = dispatcher.new({
   event = "FileType",
@@ -47,7 +47,7 @@ defaults `context` to a `lib.nvim.buffer.context` snapshot of the triggering
 buffer (override via `opts.context`):
 
 ```lua
-local ft = require("lib.nvim.autocmd.dispatcher").filetype.new({ group = "MyDispatcher" })
+local ft = require("lib.nvim.bindings.autocmd.dispatcher").filetype.new({ group = "MyDispatcher" })
 
 ft.register("lua", function(ctx)
   -- ctx.context is a Lib.Buffer.Context.Ctx — filetype/buftype/modifiable/...
@@ -104,7 +104,7 @@ table doesn't grow unbounded across a long session.
 - **Not auto-attach on require.** Nothing runs until `attach()` is called
   explicitly.
 - **No re-wrapping of errors.** Registration goes through
-  `lib.nvim.autocmd.create`, which already `pcall`-guards the callback and
+  `lib.nvim.bindings.autocmd.create`, which already `pcall`-guards the callback and
   reports failures via `lib.nvim.notify` — a handler error aborts the rest
   of that dispatch's handler loop for that one event, same as a plain
   autocmd callback throwing would.

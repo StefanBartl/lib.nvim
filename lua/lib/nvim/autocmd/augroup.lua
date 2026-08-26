@@ -1,21 +1,14 @@
 ---@module 'lib.nvim.autocmd.augroup'
--- =========================================================
--- Augroup registry.
---
--- Centralized augroup creation with optional prefixing
--- and deduplication.
--- =========================================================
+---@deprecated Use `lib.nvim.bindings.autocmd.augroup`.
+--- Compatibility shim; the rationale is in `lib/nvim/bindings/init.lua` and in
+--- this module's former parent. Delete once nothing requires the old path.
 
-local M = {
-  create = {},
-}
+vim.deprecate(
+  "lib.nvim.autocmd.augroup",
+  "lib.nvim.bindings.autocmd.augroup",
+  "a future release",
+  "lib.nvim",
+  false
+)
 
---- Create/clear a namespaced augroup.
----@param name string
----@return integer
-function M.create.clear(name)
-  return vim.api.nvim_create_augroup(name, { clear = true })
-end
-
----@type Lib.AutoCmd.AuGroup
-return M
+return require("lib.nvim.bindings.autocmd.augroup")

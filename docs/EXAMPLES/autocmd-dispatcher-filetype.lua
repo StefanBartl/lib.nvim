@@ -1,6 +1,6 @@
 -- docs/EXAMPLES/autocmd-dispatcher-filetype.lua
 --
--- Module:   lib.nvim.autocmd.dispatcher (+ its FileType wrapper)
+-- Module:   lib.nvim.bindings.autocmd.dispatcher (+ its FileType wrapper)
 -- Scenario: replace N hand-rolled `FileType` autocmds -- one per language
 --           server setup, each with its own guard + lazy require -- with one
 --           registry: one real autocmd, deterministic ordering, lazy-loaded
@@ -9,7 +9,7 @@
 --
 -- Call this once, e.g. from your config's init or a plugin's setup().
 
-local dispatcher = require("lib.nvim.autocmd.dispatcher")
+local dispatcher = require("lib.nvim.bindings.autocmd.dispatcher")
 
 local ft = dispatcher.filetype.new({ group = "MyFiletypeDispatcher" })
 

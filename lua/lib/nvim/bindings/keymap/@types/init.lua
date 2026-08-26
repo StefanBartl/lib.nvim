@@ -1,5 +1,5 @@
 ---@meta
----@module 'lib.nvim.map.@types'
+---@module 'lib.nvim.bindings.keymap.@types'
 
 ---@class Lib.Map.ErrorFlags
 ---@field modes boolean

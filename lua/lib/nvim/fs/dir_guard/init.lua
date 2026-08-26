@@ -31,7 +31,7 @@ require("lib.nvim.fs.dir_guard.@types")
 
 local chdir = require("lib.nvim.fs.chdir")
 local normkey = require("lib.nvim.fs.normkey")
-local au = require("lib.nvim.autocmd")
+local au = require("lib.nvim.bindings.autocmd")
 
 local M = {}
 

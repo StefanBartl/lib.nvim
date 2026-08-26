@@ -21,7 +21,7 @@ local config = require("lib.nvim.logger.config")
 local Ring = require("lib.nvim.logger.ring")
 local Record = require("lib.nvim.logger.record")
 local sinks = require("lib.nvim.logger.sinks")
-local autocmd = require("lib.nvim.autocmd")
+local autocmd = require("lib.nvim.bindings.autocmd")
 
 local unpack = table.unpack or unpack
 

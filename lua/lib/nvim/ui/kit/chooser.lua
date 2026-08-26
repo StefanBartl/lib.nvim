@@ -17,7 +17,7 @@
 --- (every item is 1 line, anchor 0 — identical to the old behavior).
 
 local surface = require("lib.nvim.ui.kit.surface")
-local map = require("lib.nvim.map")
+local map = require("lib.nvim.bindings.keymap")
 local notify = require("lib.nvim.notify").create("[lib.nvim.ui.kit.chooser]")
 
 local api = vim.api

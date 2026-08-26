@@ -1,13 +1,13 @@
----@module 'lib.nvim.usercmd.composer.complete'
+---@module 'lib.nvim.bindings.usercmd.composer.complete'
 --- Completion engine. Derived entirely from the route tree: at the current slot
 --- it offers subcommand literals, or — once literals are exhausted — the current
 --- positional arg's completer. Adding a route or arg type extends `<Tab>` for
 --- free.
 
-local tree = require("lib.nvim.usercmd.composer.tree")
-local argtypes = require("lib.nvim.usercmd.composer.argtypes")
-local flags = require("lib.nvim.usercmd.composer.flags")
-local kv = require("lib.nvim.usercmd.composer.kv")
+local tree = require("lib.nvim.bindings.usercmd.composer.tree")
+local argtypes = require("lib.nvim.bindings.usercmd.composer.argtypes")
+local flags = require("lib.nvim.bindings.usercmd.composer.flags")
+local kv = require("lib.nvim.bindings.usercmd.composer.kv")
 
 local M = {}
 

@@ -20,13 +20,13 @@ that is meant to run headless at require-time).
 - [harvest-collect-links.lua](harvest-collect-links.lua) — extract Markdown
   links from the current buffer and jump to one via a picker.
 
-## `lib.nvim.autocmd.dispatcher`
+## `lib.nvim.bindings.autocmd.dispatcher`
 
 - [autocmd-dispatcher-filetype.lua](autocmd-dispatcher-filetype.lua) — collapse
   N hand-rolled `FileType` autocmds into one registry: lazy-loaded handlers,
   deterministic `priority` ordering, glob keys, per-buffer `once`.
 
-## `lib.nvim.usercmd.composer`
+## `lib.nvim.bindings.usercmd.composer`
 
 - [composer-basic-verb.lua](composer-basic-verb.lua) — the core model:
   routes, typed/enum args, a bare-verb default handler, derived completion.

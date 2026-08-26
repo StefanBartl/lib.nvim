@@ -211,7 +211,7 @@ function M.ensure_command()
   end
   M._command_installed = true
   pcall(function()
-    require("lib.nvim.usercmd").create("KitPreview", function()
+    require("lib.nvim.bindings.usercmd").create("KitPreview", function()
       M.open()
     end, { desc = "lib.nvim.ui.kit: live theme playground", force = true })
   end)

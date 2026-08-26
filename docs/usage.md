@@ -5,7 +5,7 @@ Direct module paths are recommended in plugin code (tree-shake friendly):
 ```lua
 local notify = require("lib.nvim.notify")
 local tables = require("lib.lua.tables")
-local map    = require("lib.nvim.map")
+local map    = require("lib.nvim.bindings.keymap")
 ```
 
 Or via the aggregator, which resolves keys lazily on first access:
@@ -13,7 +13,7 @@ Or via the aggregator, which resolves keys lazily on first access:
 ```lua
 local lib = require("lib")
 lib.notify          -- -> lib.nvim.notify
-lib.map             -- -> lib.nvim.map
+lib.map             -- -> lib.nvim.bindings.keymap
 lib.is_windows()    -- -> lib.nvim.cross.platform.is_windows
 ```
 

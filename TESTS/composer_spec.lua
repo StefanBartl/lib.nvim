@@ -1,4 +1,4 @@
--- TESTS/composer_spec.lua — lib.nvim.usercmd.composer
+-- TESTS/composer_spec.lua — lib.nvim.bindings.usercmd.composer
 --
 -- Covers the whole pipeline headlessly: tree build/walk, argument coercion,
 -- the completion engine, dispatch (happy + error paths via an injected
@@ -7,26 +7,26 @@
 return function(H)
   local eq, ok = H.eq, H.ok
 
-  local composer = require("lib.nvim.usercmd.composer")
-  local tree = require("lib.nvim.usercmd.composer.tree")
-  local parse = require("lib.nvim.usercmd.composer.parse")
-  local complete = require("lib.nvim.usercmd.composer.complete")
-  local argtypes = require("lib.nvim.usercmd.composer.argtypes")
-  local docgen = require("lib.nvim.usercmd.composer.docgen")
-  local format = require("lib.nvim.usercmd.composer.format")
+  local composer = require("lib.nvim.bindings.usercmd.composer")
+  local tree = require("lib.nvim.bindings.usercmd.composer.tree")
+  local parse = require("lib.nvim.bindings.usercmd.composer.parse")
+  local complete = require("lib.nvim.bindings.usercmd.composer.complete")
+  local argtypes = require("lib.nvim.bindings.usercmd.composer.argtypes")
+  local docgen = require("lib.nvim.bindings.usercmd.composer.docgen")
+  local format = require("lib.nvim.bindings.usercmd.composer.format")
 
   -- Every internal + the aggregator path loads.
   for _, mod in ipairs({
-    "lib.nvim.usercmd.composer",
-    "lib.nvim.usercmd.composer.tree",
-    "lib.nvim.usercmd.composer.parse",
-    "lib.nvim.usercmd.composer.complete",
-    "lib.nvim.usercmd.composer.argtypes",
-    "lib.nvim.usercmd.composer.docgen",
-    "lib.nvim.usercmd.composer.registry",
-    "lib.nvim.usercmd.composer.format",
-    "lib.nvim.usercmd.composer.flags",
-    "lib.nvim.usercmd.composer.kv",
+    "lib.nvim.bindings.usercmd.composer",
+    "lib.nvim.bindings.usercmd.composer.tree",
+    "lib.nvim.bindings.usercmd.composer.parse",
+    "lib.nvim.bindings.usercmd.composer.complete",
+    "lib.nvim.bindings.usercmd.composer.argtypes",
+    "lib.nvim.bindings.usercmd.composer.docgen",
+    "lib.nvim.bindings.usercmd.composer.registry",
+    "lib.nvim.bindings.usercmd.composer.format",
+    "lib.nvim.bindings.usercmd.composer.flags",
+    "lib.nvim.bindings.usercmd.composer.kv",
   }) do
     ok(require(mod) ~= nil, "loads: " .. mod)
   end
@@ -313,7 +313,7 @@ return function(H)
   end
 
   -- --------------------------------------------------------------- flags (Phase 6)
-  local flags = require("lib.nvim.usercmd.composer.flags")
+  local flags = require("lib.nvim.bindings.usercmd.composer.flags")
 
   -- A route WITHOUT declared flags: "--" tokens must NOT be treated specially
   -- (backward-compat guarantee — every pre-Phase-6 route keeps working as-is).
@@ -961,7 +961,7 @@ return function(H)
   end
 
   -- --------------------------------------------------------------- kv (key=value)
-  local kv = require("lib.nvim.usercmd.composer.kv")
+  local kv = require("lib.nvim.bindings.usercmd.composer.kv")
   local kv_route = {
     path = {},
     kv = {
@@ -1162,7 +1162,7 @@ return function(H)
   end
 
   -- ------------------------------------------------------------------ check()
-  local check = require("lib.nvim.usercmd.composer.check")
+  local check = require("lib.nvim.bindings.usercmd.composer.check")
 
   do
     -- A route whose run is a function always resolves; a route whose run is a
@@ -1306,8 +1306,8 @@ return function(H)
       end,
     }
     -- check.lua caches the shim at require time, so re-require it fresh.
-    package.loaded["lib.nvim.usercmd.composer.check"] = nil
-    local check_stubbed = require("lib.nvim.usercmd.composer.check")
+    package.loaded["lib.nvim.bindings.usercmd.composer.check"] = nil
+    local check_stubbed = require("lib.nvim.bindings.usercmd.composer.check")
 
     check_stubbed.checkhealth("NoSuchVerbRegisteredAnywhere")
     local kinds = {}
@@ -1334,6 +1334,6 @@ return function(H)
     pcall(vim.api.nvim_del_user_command, "ComposerSpecHealthEmpty")
 
     vim.health = real
-    package.loaded["lib.nvim.usercmd.composer.check"] = nil
+    package.loaded["lib.nvim.bindings.usercmd.composer.check"] = nil
   end
 end

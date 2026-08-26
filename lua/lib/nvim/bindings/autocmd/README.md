@@ -1,4 +1,4 @@
-# `lib.nvim.autocmd`
+# `lib.nvim.bindings.autocmd`
 
 Standardized autocommand creation on top of `vim.api.nvim_create_autocmd` —
 automatic augroup handling, a defensive callback wrapper, and event/pattern
@@ -7,7 +7,7 @@ normalization helpers.
 ## Usage
 
 ```lua
-local autocmd = require("lib.nvim.autocmd")
+local autocmd = require("lib.nvim.bindings.autocmd")
 
 autocmd.create("BufWritePost", function(args)
   print("wrote", args.file)
@@ -20,7 +20,7 @@ end, {
 ```
 
 `create`'s callback is always wrapped in `pcall`; an error inside it is
-reported via `require("lib.nvim.notify")` (tagged `[lib.nvim.autocmd]`)
+reported via `require("lib.nvim.notify")` (tagged `[lib.nvim.bindings.autocmd]`)
 instead of aborting whatever fired the autocmd. `opts.desc` defaults to `""`
 when omitted.
 

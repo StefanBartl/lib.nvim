@@ -1,6 +1,6 @@
 -- docs/EXAMPLES/composer-buffer-local-and-count.lua
 --
--- Module:   lib.nvim.usercmd.composer
+-- Module:   lib.nvim.bindings.usercmd.composer
 -- Scenario: two command-registration options beyond the plain global verb,
 --           both opt-in and both single command-level settings (matching
 --           `nvim_create_user_command`'s own bang/range/count, which are one
@@ -8,7 +8,7 @@
 --             spec.buffer  -- register via nvim_buf_create_user_command
 --             spec.count   -- accept a `:N Verb` count prefix
 
-local composer = require("lib.nvim.usercmd.composer")
+local composer = require("lib.nvim.bindings.usercmd.composer")
 
 -- 1. BUFFER-LOCAL -- `spec.buffer = true` registers for the CURRENT buffer
 -- (or pass an explicit bufnr). Typical use: a per-filetype command that

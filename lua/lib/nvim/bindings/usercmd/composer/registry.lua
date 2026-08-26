@@ -1,4 +1,4 @@
----@module 'lib.nvim.usercmd.composer.registry'
+---@module 'lib.nvim.bindings.usercmd.composer.registry'
 --- Module-level registry of every verb built in this process, plus the docs
 --- configuration. Lets `composer.document()` emit the whole plugin's command
 --- surface in one call.

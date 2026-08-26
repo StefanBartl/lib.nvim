@@ -1,4 +1,4 @@
----@module 'lib.nvim.usercmd.composer.check'
+---@module 'lib.nvim.bindings.usercmd.composer.check'
 --- Pre-flight validation of a verb's routes: does every route's `run` actually
 --- resolve, and does its optional `route.check` pass?
 ---
@@ -13,13 +13,13 @@
 --- as a bare "no runnable handler" with the real reason swallowed. `results()`
 --- resolves every route up front and reports the actual error.
 ---
----   local composer = require("lib.nvim.usercmd.composer")
+---   local composer = require("lib.nvim.bindings.usercmd.composer")
 ---   composer.checkhealth("Replace")      -- inside your plugin's health.lua
 ---   composer.notify_check_all()          -- or a one-shot notification
 
-local tree = require("lib.nvim.usercmd.composer.tree")
-local parse = require("lib.nvim.usercmd.composer.parse")
-local registry = require("lib.nvim.usercmd.composer.registry")
+local tree = require("lib.nvim.bindings.usercmd.composer.tree")
+local parse = require("lib.nvim.bindings.usercmd.composer.parse")
+local registry = require("lib.nvim.bindings.usercmd.composer.registry")
 
 local M = {}
 
@@ -119,7 +119,7 @@ end
 --- Same `results()` data, different presentation — not a second code path.
 ---@return boolean ok_overall true when every route of every verb passed
 function M.notify_check_all()
-  local notify = require("lib.nvim.notify").create("[lib.nvim.usercmd.composer]")
+  local notify = require("lib.nvim.notify").create("[lib.nvim.bindings.usercmd.composer]")
 
   local total, failed, lines = 0, 0, {}
   for name, results in pairs(M.all()) do

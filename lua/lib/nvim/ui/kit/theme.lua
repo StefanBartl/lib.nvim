@@ -9,7 +9,7 @@
 
 local hl = require("lib.nvim.ui.hl")
 local config = require("lib.nvim.ui.kit.config")
-local autocmd = require("lib.nvim.autocmd")
+local autocmd = require("lib.nvim.bindings.autocmd")
 
 local M = {}
 

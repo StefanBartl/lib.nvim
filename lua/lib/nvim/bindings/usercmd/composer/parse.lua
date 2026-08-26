@@ -1,13 +1,13 @@
----@module 'lib.nvim.usercmd.composer.parse'
+---@module 'lib.nvim.bindings.usercmd.composer.parse'
 --- Dispatch: walk the tree with the invoked tokens, bind + coerce positional
 --- args, build the handler context, and call `run`. Pure-ish: takes an injected
 --- notifier so it stays headlessly testable.
 
-local tree = require("lib.nvim.usercmd.composer.tree")
-local argtypes = require("lib.nvim.usercmd.composer.argtypes")
-local format = require("lib.nvim.usercmd.composer.format")
-local flags = require("lib.nvim.usercmd.composer.flags")
-local kv = require("lib.nvim.usercmd.composer.kv")
+local tree = require("lib.nvim.bindings.usercmd.composer.tree")
+local argtypes = require("lib.nvim.bindings.usercmd.composer.argtypes")
+local format = require("lib.nvim.bindings.usercmd.composer.format")
+local flags = require("lib.nvim.bindings.usercmd.composer.flags")
+local kv = require("lib.nvim.bindings.usercmd.composer.kv")
 
 local M = {}
 

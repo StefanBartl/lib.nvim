@@ -1,5 +1,5 @@
 ---@meta
----@module 'lib.nvim.usercmd.composer.@types'
+---@module 'lib.nvim.bindings.usercmd.composer.@types'
 
 --- Built-in argument type names. Custom types registered via
 --- `composer.register_type` extend this set at runtime.

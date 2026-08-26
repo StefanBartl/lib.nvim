@@ -36,7 +36,7 @@
 
 require("lib.nvim.ui.statusline.@types")
 
-local au = require("lib.nvim.autocmd")
+local au = require("lib.nvim.bindings.autocmd")
 
 local M = {}
 

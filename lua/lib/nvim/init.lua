@@ -6,7 +6,7 @@
 ---
 ---   local Nvim = require("lib.nvim")
 ---   Nvim.notify   -- == require("lib.nvim.notify")
----   Nvim.map      -- == require("lib.nvim.map")
+---   Nvim.map      -- == require("lib.nvim.bindings.keymap")
 ---   Nvim.core     -- == require("lib.nvim.core")  (has_exec, simple_echo, …)
 ---
 --- Requiring a submodule directly still works, and is friendlier to

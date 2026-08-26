@@ -1,5 +1,5 @@
 ---@meta
----@module 'lib.nvim.autocmd.@types'
+---@module 'lib.nvim.bindings.autocmd.@types'
 
 ---@class Lib.AutoCmd.AuGroup.Create
 ---@field clear fun(name: string): integer # Create/clear a namespaced augroup
