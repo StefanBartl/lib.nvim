@@ -193,36 +193,52 @@ function M.register(plugin, spec, user)
     local action = actions[name]
     if action then
       local lhs = resolve_lhs(action, user[name])
-      local desc = action.desc and ("%s: %s"):format(plugin, action.desc) or nil
 
-      ---@type Lib.Keymap.Registered
-      local entry = {
-        plugin = plugin,
-        name = name,
-        lhs = lhs,
-        mode = action.mode or "n",
-        desc = desc,
-        rhs = action.rhs,
-        which_key = action.which_key,
-        bound = false,
-      }
-
-      if lhs and binding_enabled and action.rhs ~= nil then
-        local opts = vim.tbl_extend("force", action.opts or {}, {})
-        -- which-key reads plain keymaps and their `desc` on its own, so an
-        -- action needs no registration to show up there. `which_key = false`
-        -- is the one thing only the plugin can express, and which-key's own
-        -- convention for it is this magic description.
-        if action.which_key == false then
-          opts.desc = "which_key_ignore"
-        else
-          opts.desc = desc
-        end
-        set(entry.mode, lhs, action.rhs, opts)
-        entry.bound = true
+      -- One action, possibly several bindings. The same key routinely means
+      -- the same *intent* in two modes while calling different functions:
+      -- spotlight's `toggle_here` marks the occurrence under the cursor in
+      -- normal mode and the selection in visual mode. That is one action to a
+      -- user -- one name, one key, one override -- so it stays one action
+      -- here, with the per-mode differences in `binds`.
+      local binds = action.binds
+      if not binds then
+        binds = { { mode = action.mode, rhs = action.rhs, desc = action.desc, opts = action.opts } }
       end
 
-      bound[#bound + 1] = entry
+      for _, b in ipairs(binds) do
+        local desc_text = b.desc or action.desc
+        local desc = desc_text and ("%s: %s"):format(plugin, desc_text) or nil
+        local rhs = b.rhs or action.rhs
+
+        ---@type Lib.Keymap.Registered
+        local entry = {
+          plugin = plugin,
+          name = name,
+          lhs = lhs,
+          mode = b.mode or action.mode or "n",
+          desc = desc,
+          rhs = rhs,
+          which_key = action.which_key,
+          bound = false,
+        }
+
+        if lhs and binding_enabled and rhs ~= nil then
+          local opts = vim.tbl_extend("force", b.opts or action.opts or {}, {})
+          -- which-key reads plain keymaps and their `desc` on its own, so an
+          -- action needs no registration to show up there. `which_key = false`
+          -- is the one thing only the plugin can express, and which-key's own
+          -- convention for it is this magic description.
+          if action.which_key == false then
+            opts.desc = "which_key_ignore"
+          else
+            opts.desc = desc
+          end
+          set(entry.mode, lhs, rhs, opts)
+          entry.bound = true
+        end
+
+        bound[#bound + 1] = entry
+      end
     end
   end
 

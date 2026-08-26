@@ -109,6 +109,72 @@ return function(H)
   end
   ok(found, "conflicts() reports an lhs claimed by two plugins")
 
+  -- ------------------------------------------------------------- binds
+  --
+  -- One key, one name, one override -- but two modes calling different
+  -- functions. Splitting that into two action names would make a user
+  -- override the same key twice.
+
+  local nmode_called, xmode_called = false, false
+  local multi = keymap.register("libspec_binds", {
+    order = { "both" },
+    actions = {
+      both = {
+        default = "<Plug>(libspec-both)",
+        desc = "fallback desc",
+        binds = {
+          {
+            mode = "n",
+            rhs = function()
+              nmode_called = true
+            end,
+            desc = "normal variant",
+          },
+          {
+            mode = "x",
+            rhs = function()
+              xmode_called = true
+            end,
+          },
+        },
+      },
+    },
+  }, nil)
+
+  eq(#multi, 2, "one action with two binds yields two registered entries")
+  eq(multi[1].name, multi[2].name, "both entries carry the same action name")
+  eq(multi[1].lhs, multi[2].lhs, "both entries share the action's lhs")
+  eq(multi[1].desc, "libspec_binds: normal variant", "a bind's own desc wins")
+  eq(
+    multi[2].desc,
+    "libspec_binds: fallback desc",
+    "a bind without desc falls back to the action's"
+  )
+  ok(mapped("<Plug>(libspec-both)", "n"), "the normal-mode bind is set")
+  ok(mapped("<Plug>(libspec-both)", "x"), "the visual-mode bind is set")
+
+  -- The two modes really do call different functions.
+  vim.api.nvim_feedkeys(
+    vim.api.nvim_replace_termcodes("<Plug>(libspec-both)", true, false, true),
+    "x",
+    false
+  )
+  ok(nmode_called and not xmode_called, "normal mode runs its own rhs")
+
+  -- A user override moves BOTH binds, because it is one action.
+  local moved = keymap.register("libspec_binds2", {
+    order = { "both" },
+    actions = {
+      both = {
+        default = "<Plug>(libspec-both2)",
+        desc = "d",
+        binds = { { mode = "n", rhs = function() end }, { mode = "x", rhs = function() end } },
+      },
+    },
+  }, { both = "<Plug>(libspec-both-moved)" })
+  eq(moved[1].lhs, "<Plug>(libspec-both-moved)", "an override moves the first bind")
+  eq(moved[2].lhs, "<Plug>(libspec-both-moved)", "an override moves the second bind too")
+
   -- ------------------------------------------------- which_key = false
   --
   -- which-key reads keymaps and their desc on its own, so hiding is the one
@@ -137,6 +203,8 @@ return function(H)
     "<Plug>(libspec-alpha)",
     "<Plug>(libspec-beta-moved)",
     "<Plug>(libspec-hidden)",
+    "<Plug>(libspec-both)",
+    "<Plug>(libspec-both-moved)",
   }) do
     pcall(vim.keymap.del, "n", lhs)
   end

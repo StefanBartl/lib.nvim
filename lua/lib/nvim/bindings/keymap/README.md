@@ -60,6 +60,30 @@ keymaps = {
 **recorded** — the health check and the generated docs want to know what
 exists, not only what is currently bound.
 
+### One key, two modes, different functions
+
+The same key routinely means the same *intent* in two modes while calling
+different functions — normal mode acting on the token under the cursor, visual
+mode on the selection. To a user that is **one** action: one name, one key, one
+override. So it stays one action here, with the per-mode differences in
+`binds`:
+
+```lua
+toggle_here = {
+  default = "<leader>sk",
+  desc = "toggle this occurrence only",   -- fallback for binds without one
+  binds = {
+    { mode = "n", rhs = api.toggle_here },
+    { mode = "x", rhs = api.toggle_here_selection, desc = "toggle this selection only" },
+  },
+},
+```
+
+Splitting that into `toggle_here` and `toggle_here_selection` would force a
+user who moves the key to say so twice, and to keep the two in step by hand.
+Each bind yields its own entry in `registered()`, sharing the action's name and
+`lhs`, so the docs can group them and `conflicts()` still sees one row per mode.
+
 ### Why names, not `lhs` keys
 
 Keying the override table by the current default — `{ ["]k"] = "<leader>n" }` —

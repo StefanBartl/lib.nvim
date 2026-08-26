@@ -28,13 +28,28 @@
 ---@field icon? string|table
 ---@field mode? string|string[]  # Defaults to the action's own mode.
 
+--- One mode's binding of an action, when the modes differ in more than name.
+---
+--- Fields left unset fall back to the action's own.
+---@class Lib.Keymap.Bind
+---@field mode? string|string[]
+---@field rhs? string|function
+---@field desc? string
+---@field opts? Lib.Map.Opts
+
 --- One named, user-overridable action.
+---
+--- `binds` covers the common case of one key meaning the same *intent* in two
+--- modes while calling different functions -- normal mode acting on the token
+--- under the cursor, visual mode on the selection. That is one action to a
+--- user (one name, one key, one override), so it stays one action here.
 ---@class Lib.Keymap.Action
 ---@field default? string                 # Default `lhs`. Absent = no key by default.
 ---@field rhs? string|function            # Absent = declared but not bindable (docs/health only).
 ---@field mode? string|string[]           # Default "n".
 ---@field desc? string                    # Prefixed with the plugin name when bound.
 ---@field opts? Lib.Map.Opts
+---@field binds? Lib.Keymap.Bind[]        # Per-mode variants; each yields its own registered entry.
 ---@field which_key? Lib.Keymap.WhichKey|false  # `false` hides it from which-key.
 
 --- What a plugin declares.
