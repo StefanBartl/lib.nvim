@@ -109,6 +109,30 @@ return function(H)
   end
   ok(found, "conflicts() reports an lhs claimed by two plugins")
 
+  -- --------------------------------------------- override with options
+  --
+  -- Some plugins let a mapping carry options beside its key (insights: the
+  -- scope and symbol type a mapping opens with). Such an override is a table
+  -- WITH an `lhs` field; a plain list of keys is a table WITHOUT one. The two
+  -- cannot be confused, and both have to keep working -- migrating a plugin
+  -- must not silently break its users' existing config.
+
+  local opts_over = keymap.register("libspec_lhsfield", {
+    order = { "a", "b" },
+    actions = {
+      a = { default = "<Plug>(libspec-lf1)", rhs = function() end, desc = "a" },
+      b = { default = "<Plug>(libspec-lf2)", rhs = function() end, desc = "b" },
+    },
+  }, {
+    a = { lhs = "<Plug>(libspec-lf-moved)", scope = "buffer" },
+    b = { lhs = { "<Plug>(libspec-lf3)", "<Plug>(libspec-lf4)" } },
+  })
+
+  ok(mapped("<Plug>(libspec-lf-moved)"), "a table override with `lhs` binds that key")
+  ok(not mapped("<Plug>(libspec-lf1)"), "and leaves the default free")
+  ok(mapped("<Plug>(libspec-lf3)") and mapped("<Plug>(libspec-lf4)"), "`lhs` may itself be a list")
+  eq(#opts_over, 3, "one entry per resolved key")
+
   -- ------------------------------------------------------- user = false
   --
   -- `mappings = false` for the whole table says the same thing as

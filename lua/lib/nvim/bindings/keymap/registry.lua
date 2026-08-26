@@ -121,7 +121,7 @@ end
 --- double-click -- and it stays one action, so moving or dropping it is still
 --- said once.
 ---@param action Lib.Keymap.Action
----@param override string|string[]|false|nil
+---@param override string|string[]|table|false|nil
 ---@return string[]
 local function resolve_lhs(action, override)
   local chosen
@@ -138,6 +138,20 @@ local function resolve_lhs(action, override)
   end
 
   if type(chosen) == "table" then
+    -- A table with an `lhs` field is one key plus the plugin's own options
+    -- (insights lets a mapping carry its scope and type). A table without one
+    -- is a plain list of keys. The two cannot be confused: an array has no
+    -- `lhs`, and a spec table has no positional entries.
+    if chosen.lhs ~= nil then
+      chosen = chosen.lhs
+      if type(chosen) == "string" then
+        return chosen ~= "" and { chosen } or {}
+      end
+      if type(chosen) ~= "table" then
+        return {}
+      end
+    end
+
     local out = {}
     for _, lhs in ipairs(chosen) do
       if type(lhs) == "string" and lhs ~= "" then

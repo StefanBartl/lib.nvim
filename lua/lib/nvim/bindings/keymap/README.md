@@ -106,6 +106,22 @@ user who moves the key to say so twice, and to keep the two in step by hand.
 Each bind yields its own entry in `registered()`, sharing the action's name and
 `lhs`, so the docs can group them and `conflicts()` still sees one row per mode.
 
+### Overrides that carry options
+
+Some plugins let a mapping carry more than its key — insights' symbol mappings
+also decide the scope and symbol type they open with. Such an override is a
+table **with** an `lhs` field:
+
+```lua
+keymaps = {
+  symbols_telescope = { lhs = "<leader>ps", scope = "buffer", type = "tables" },
+}
+```
+
+A plain list of keys is a table **without** one, so the two can never be
+confused: an array has no `lhs`, a spec table has no positional entries. The
+registry takes the key and leaves the rest to the plugin.
+
 ### Why names, not `lhs` keys
 
 Keying the override table by the current default — `{ ["]k"] = "<leader>n" }` —
