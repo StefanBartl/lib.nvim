@@ -250,6 +250,32 @@ return function(H)
   eq(moved[1].lhs, "<Plug>(libspec-both-moved)", "an override moves the first bind")
   eq(moved[2].lhs, "<Plug>(libspec-both-moved)", "an override moves the second bind too")
 
+  -- ---------------------------------------------------------- surfaces
+  --
+  -- One plugin, two keymap sets bound at different times: cascade has global
+  -- keys and list keys that only exist inside a matching buffer. Under one
+  -- registry key the second would erase the first.
+
+  local surf_spec = {
+    order = { "one" },
+    actions = { one = { default = "<Plug>(libspec-surf1)", rhs = function() end, desc = "one" } },
+  }
+  keymap.register("libspec_surface", surf_spec, nil)
+  keymap.register("libspec_surface", {
+    order = { "two" },
+    actions = { two = { default = "<Plug>(libspec-surf2)", rhs = function() end, desc = "two" } },
+  }, nil, { surface = "list" })
+
+  eq(#keymap.registered("libspec_surface"), 1, "the plain surface keeps its own record")
+  eq(#keymap.registered("libspec_surface/list"), 1, "the named surface gets its own")
+  eq(
+    keymap.registered("libspec_surface/list")[1].desc,
+    "libspec_surface: two",
+    "desc still carries the plugin name, not the surface"
+  )
+  pcall(vim.keymap.del, "n", "<Plug>(libspec-surf1)")
+  pcall(vim.keymap.del, "n", "<Plug>(libspec-surf2)")
+
   -- ------------------------------------------------------- bind = false
   --
   -- A buffer-local preset declares once at setup -- so the which-key group

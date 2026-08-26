@@ -195,7 +195,7 @@ end
 ---@param plugin string          # Plugin name, used in messages and as the registry key.
 ---@param spec Lib.Keymap.Spec
 ---@param user table|false|nil   # The user's `keymaps` table; `false` binds nothing.
----@param opts Lib.Keymap.RegisterOpts|nil # `buffer` binds buffer-locally.
+---@param opts Lib.Keymap.RegisterOpts|nil # `buffer` binds buffer-locally; `surface` separates two sets.
 ---@return Lib.Keymap.Registered[] bound # What was actually bound, in declaration order.
 function M.register(plugin, spec, user, opts)
   vim.validate("plugin", plugin, "string")
@@ -213,18 +213,25 @@ function M.register(plugin, spec, user, opts)
   local all_off = user == false
   user = (type(user) == "table") and user or {}
 
+  -- A plugin may own more than one keymap surface. cascade has two: global
+  -- keys, and the list keys that only exist inside a matching buffer. They are
+  -- different action sets bound at different times, so they get different
+  -- registry keys -- while `desc` keeps the plugin's own name, because that is
+  -- what a user reads in which-key and does not care to see split up.
+  local key = opts.surface and (plugin .. "/" .. opts.surface) or plugin
+
   -- Reserved keys are not actions; everything else in `user` claims to be one.
   -- Names a `keymaps` block routinely carries that are settings, not actions.
   -- `prefix` is one: several presets here build their defaults from a
   -- user-configurable prefix, and it sits in the same table as the overrides.
   local reserved = { preset = true, which_key = true, enable = true, prefix = true }
   local unknown = {}
-  warned[plugin] = warned[plugin] or {}
-  for key in pairs(user) do
-    if not reserved[key] and actions[key] == nil and not warned[plugin][key] then
-      warned[plugin][key] = true
-      local hint = nearest(key, actions)
-      unknown[#unknown + 1] = hint and ("%s (did you mean %s?)"):format(key, hint) or key
+  warned[key] = warned[key] or {}
+  for k in pairs(user) do
+    if not reserved[k] and actions[k] == nil and not warned[key][k] then
+      warned[key][k] = true
+      local hint = nearest(k, actions)
+      unknown[#unknown + 1] = hint and ("%s (did you mean %s?)"):format(k, hint) or k
     end
   end
   if #unknown > 0 then
@@ -233,7 +240,7 @@ function M.register(plugin, spec, user, opts)
 
   ---@type Lib.Keymap.Registered[]
   local bound = {}
-  registered[plugin] = bound
+  registered[key] = bound
 
   -- `preset = false` / `enable = false` mean "bind nothing". The actions are
   -- still recorded, because the health check and the generated docs want to
@@ -325,8 +332,8 @@ function M.register(plugin, spec, user, opts)
   -- per buffer for a buffer-local preset. `bind = false` still applies them:
   -- declaring the preset is exactly when a plugin wants its label up, whether
   -- or not this particular call binds anything.
-  if not all_off and user.preset ~= false and user.enable ~= false and not wk_applied[plugin] then
-    wk_applied[plugin] = true
+  if not all_off and user.preset ~= false and user.enable ~= false and not wk_applied[key] then
+    wk_applied[key] = true
     require("lib.nvim.bindings.keymap.which_key").apply(plugin, spec, user, bound)
   end
 

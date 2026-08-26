@@ -64,6 +64,7 @@
 ---@class Lib.Keymap.RegisterOpts
 ---@field buffer? integer|boolean  # Bind buffer-locally; `true` means the current buffer.
 ---@field bind? boolean            # `false` declares the actions (and the which-key group) without binding.
+---@field surface? string          # A second keymap set for the same plugin, recorded as "plugin/surface".
 
 --- One resolved action, as recorded in the registry.
 ---@class Lib.Keymap.Registered
