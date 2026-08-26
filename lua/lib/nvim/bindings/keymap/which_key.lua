@@ -67,6 +67,58 @@ local function wk()
   return mod
 end
 
+---Build one which-key group entry.
+---@param prefix string
+---@param g table|true  # `{ group?, icon?, mode? }`, or `true` for the plain label
+---@param plugin string  # Fallback label.
+---@return table
+function M.entry(prefix, g, plugin)
+  local entry = { prefix, group = (type(g) == "table" and g.group) or plugin }
+  if type(g) == "table" then
+    -- Icons only where the user says a Nerd Font is present: which-key draws
+    -- the glyph either way, and without the font it is an empty box.
+    if g.icon and icons_ok() then
+      entry.icon = g.icon
+    end
+    if g.mode then
+      entry.mode = g.mode
+    end
+  end
+  return entry
+end
+
+---Label one prefix as a group, outside of a `register` call.
+---
+---`register` puts a plugin's own groups up by itself; this is for the cases
+---where the prefix is not known until the user's config has been read --
+---sessions.nvim's keys are entirely opt-in, so the prefix they share is
+---whatever the user picked.
+---@param spec { prefix: string, group?: string, icon?: string, mode?: string|string[] }|table[]
+---@return boolean applied
+function M.add_group(spec)
+  vim.validate("spec", spec, "table")
+
+  ---@type table[]
+  local entries = {}
+  local list = spec[1] ~= nil and spec or { spec }
+  for _, g in ipairs(list) do
+    if g.prefix then
+      entries[#entries + 1] = M.entry(g.prefix, g, g.group or "")
+    end
+  end
+  if #entries == 0 then
+    return false
+  end
+
+  local mod = wk()
+  if not mod then
+    return false
+  end
+  -- pcall: which-key's spec format has changed between majors, and a label
+  -- being wrong is never worth taking a plugin's setup down with it.
+  return (pcall(mod.add, entries))
+end
+
 ---Register what which-key cannot infer: the prefix group label, and any
 ---per-action icons.
 ---
@@ -93,19 +145,16 @@ function M.apply(plugin, spec, user, bound)
   ---@param prefix string|nil
   ---@param g table|true
   local function add_group(prefix, g)
+    -- A group spec may carry its own `prefix`. Several plugins have no
+    -- top-level `spec.prefix` at all -- their keys do not share one -- and
+    -- would otherwise declare a group that silently never appears.
+    if type(g) == "table" and g.prefix then
+      prefix = g.prefix
+    end
     if not prefix then
       return
     end
-    local entry = { prefix, group = (type(g) == "table" and g.group) or plugin }
-    if type(g) == "table" then
-      if g.icon and icons_ok() then
-        entry.icon = g.icon
-      end
-      if g.mode then
-        entry.mode = g.mode
-      end
-    end
-    entries[#entries + 1] = entry
+    entries[#entries + 1] = M.entry(prefix, g, plugin)
   end
 
   -- One plugin may own several prefixes. fileops labels `<leader>n` and
