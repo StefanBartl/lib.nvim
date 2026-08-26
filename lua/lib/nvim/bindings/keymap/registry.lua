@@ -294,11 +294,11 @@ function M.register(plugin, spec, user, opts)
             -- is the one thing only the plugin can express, and which-key's own
             -- convention for it is this magic description.
             if action.which_key == false then
-              opts.desc = "which_key_ignore"
+              map_opts.desc = "which_key_ignore"
             else
-              opts.desc = desc
+              map_opts.desc = desc
             end
-            set(entry.mode, lhs, rhs, opts)
+            set(entry.mode, lhs, rhs, map_opts)
             entry.bound = true
           end
 

@@ -250,6 +250,32 @@ return function(H)
   eq(moved[1].lhs, "<Plug>(libspec-both-moved)", "an override moves the first bind")
   eq(moved[2].lhs, "<Plug>(libspec-both-moved)", "an override moves the second bind too")
 
+  -- --------------------------------------------------- per-action opts
+  --
+  -- Regression: the buffer-local support briefly passed the *caller's* option
+  -- table to the setter instead of the action's own, which dropped every
+  -- `action.opts` on the floor and leaked `desc` back into the caller's table.
+
+  local caller_opts = {}
+  local with_opts = keymap.register("libspec_opts", {
+    order = { "expr" },
+    actions = {
+      expr = {
+        default = "<Plug>(libspec-opts)",
+        rhs = function() end,
+        desc = "with opts",
+        opts = { nowait = true },
+      },
+    },
+  }, nil, caller_opts)
+
+  local om = vim.fn.maparg("<Plug>(libspec-opts)", "n", false, true)
+  eq(om.nowait, 1, "an action's own opts reach the mapping")
+  eq(om.desc, "libspec_opts: with opts", "and its desc still does too")
+  eq(caller_opts.desc, nil, "the caller's option table is not written into")
+  ok(with_opts[1].bound, "the action is bound")
+  pcall(vim.keymap.del, "n", "<Plug>(libspec-opts)")
+
   -- ------------------------------------------------- buffer-local preset
   --
   -- images.nvim binds its whole preset per buffer from a FileType autocmd.
