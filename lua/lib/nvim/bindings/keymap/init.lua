@@ -1,122 +1,73 @@
 ---@module 'lib.nvim.bindings.keymap'
--- =========================================================
--- Keymap helper utilities.
---
--- Convenience wrapper around vim.keymap.set with defaults
--- and deferred debug diagnostics for invalid argument types.
--- - optional buffer scoping
--- =========================================================
+--- Keymaps: the one-off wrapper, and the named-action registry.
+---@description
+--- Two levels, and most plugins want both:
+---
+--- **`keymap(...)`** -- the validated `vim.keymap.set` wrapper this module has
+--- always been. For the mappings that are not part of a plugin's public
+--- surface: buffer-local keys inside a floating window, `q` to close a report,
+--- anything a user has no reason to rebind.
+---
+--- ```lua
+--- local keymap = require("lib.nvim.bindings.keymap")
+--- keymap("n", "q", close, { buffer = true }, "close")
+--- ```
+---
+--- **`keymap.register(...)`** -- named actions the user's spec can remap or
+--- switch off, one by one. For everything that *is* public surface. See
+--- `registry.lua` for the shape and for why the override table is keyed by
+--- action name rather than by the current `lhs`.
+---
+--- ```lua
+--- keymap.register("spotlight", {
+---   prefix = "<leader>s",
+---   which_key = { group = "Spotlight" },
+---   actions = {
+---     toggle = { default = "<leader>sK", rhs = api.toggle, desc = "toggle every occurrence" },
+---   },
+--- }, cfg.keymaps)
+--- ```
+---
+--- The module stays **callable** so that the first form keeps working
+--- unchanged: it is `require`d in over a hundred places across these plugins,
+--- and turning it into a plain table would have broken every one of them for
+--- no benefit.
+---@see lib.nvim.bindings.keymap.registry
+---@see lib.nvim.bindings.keymap.which_key
 
--- ---@param flags Lib.Map.ErrorFlags
--- ---@param modes? string|string[]
--- ---@param lhs? string
--- ---@param rhs? string|function
--- ---@param opts? Lib.Map.Opts
--- ---@return nil
+local set = require("lib.nvim.bindings.keymap.set")
 
-local notify = require("lib.nvim.notify").create("[lib.nvim.bindings.keymap]")
+local M = {}
 
----@internal
-local function notify_caller(flags, modes, lhs, rhs, opts)
-  -- Stack layout:
-  -- 1: debug.getinfo
-  -- 2: notify_caller
-  -- 3: lib.nvim.bindings.keymap wrapper
-  -- 4: actual user call site
-  local info = debug.getinfo(4, "Slfn")
+--- Set one keymap. Identical to calling the module itself.
+---@type fun(modes: string|string[], lhs: string, rhs: string|function, opts: Lib.Map.Opts|nil, desc: string?): nil
+M.set = set
 
-  local caller = "<unknown>"
-  if info then
-    caller = string.format(
-      "%s:%d (%s)",
-      info.source or "?",
-      info.currentline or -1,
-      info.name or "<anonymous>"
-    )
-  end
-
-  ---@type string[]
-  local errors = {}
-
-  if flags.modes then
-    errors[#errors + 1] =
-      string.format("invalid modes (expected string|string[], got %s)", type(modes))
-  end
-
-  if flags.lhs then
-    errors[#errors + 1] = string.format("invalid lhs (expected string, got %s)", type(lhs))
-  end
-
-  if flags.rhs then
-    errors[#errors + 1] =
-      string.format("invalid rhs (expected function or string, got %s)", type(rhs))
-  end
-
-  if flags.buffer then
-    errors[#errors + 1] = string.format(
-      "invalid buffer option (expected boolean|integer, got %s)",
-      type(opts and opts.buffer)
-    )
-  end
-
-  notify.error(
-    string.format(
-      "[lib.nvim.bindings.keymap] argument validation failed:\n %s\n caller: %s",
-      table.concat(errors, "\n "),
-      caller
-    )
-  )
+--- Register a plugin's named actions. See `registry.register`.
+---@param plugin string
+---@param spec Lib.Keymap.Spec
+---@param user table|nil
+---@return Lib.Keymap.Registered[]
+function M.register(plugin, spec, user)
+  return require("lib.nvim.bindings.keymap.registry").register(plugin, spec, user)
 end
 
----Convenience wrapper for vim.keymap.set with defaults.
----@param modes string|string[]
----@param lhs string
----@param rhs string|function
----@param opts Lib.Map.Opts|nil
----@param desc string?
----@type Lib.Map
-return function(modes, lhs, rhs, opts, desc)
-  opts = opts or {}
-
-  ---@type Lib.Map.ErrorFlags
-  local flags = {
-    modes = not (type(modes) == "string" or type(modes) == "table"),
-    lhs = type(lhs) ~= "string",
-    rhs = type(rhs) ~= "function" and type(rhs) ~= "string",
-    buffer = opts.buffer ~= nil
-      and type(opts.buffer) ~= "boolean"
-      and type(opts.buffer) ~= "number",
-  }
-
-  if flags.modes or flags.lhs or flags.rhs or flags.buffer then
-    notify_caller(flags, modes, lhs, rhs, opts)
-    return
-  end
-
-  -- Apply description
-  if type(desc) == "string" then
-    opts.desc = desc
-  end
-
-  if opts.desc == nil then
-    opts.desc = ""
-  end
-
-  -- Default keymap behavior
-  if opts.noremap == nil then
-    opts.noremap = true
-  end
-
-  if opts.silent == nil then
-    opts.silent = true
-  end
-
-  -- Normalize buffer scoping:
-  -- buffer = true  -> current buffer (0)
-  -- buffer = n     -> explicit buffer number
-  if opts.buffer == true then
-    opts.buffer = 0
-  end
-
-  vim.keymap.set(modes, lhs, rhs, opts)
+--- Everything registered so far. See `registry.registered`.
+---@param plugin string|nil
+---@return table<string, Lib.Keymap.Registered[]>|Lib.Keymap.Registered[]
+function M.registered(plugin)
+  return require("lib.nvim.bindings.keymap.registry").registered(plugin)
 end
+
+--- `lhs` values claimed by more than one plugin. See `registry.conflicts`.
+---@return Lib.Keymap.Conflict[]
+function M.conflicts()
+  return require("lib.nvim.bindings.keymap.registry").conflicts()
+end
+
+---@type Lib.Keymap
+return setmetatable(M, {
+  __call = function(_, modes, lhs, rhs, opts, desc)
+    return set(modes, lhs, rhs, opts, desc)
+  end,
+})
