@@ -109,6 +109,21 @@ return function(H)
   end
   ok(found, "conflicts() reports an lhs claimed by two plugins")
 
+  -- ------------------------------------------------------- user = false
+  --
+  -- `mappings = false` for the whole table says the same thing as
+  -- `{ preset = false }`, and several plugins here spell it the short way.
+  -- Accepting both means migrating a plugin never silently changes what its
+  -- users' existing config means.
+
+  local off_all = keymap.register("libspec_falsetable", {
+    order = { "a" },
+    actions = { a = { default = "<Plug>(libspec-falsetable)", rhs = function() end, desc = "a" } },
+  }, false)
+  ok(not mapped("<Plug>(libspec-falsetable)"), "user = false binds nothing")
+  eq(#off_all, 1, "user = false still records the action")
+  eq(off_all[1].bound, false, "user = false records it as not bound")
+
   -- ------------------------------------------------------ several keys
   --
   -- One action on more than one key is a real case, not a convenience:

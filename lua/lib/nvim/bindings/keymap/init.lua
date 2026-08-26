@@ -46,7 +46,7 @@ M.set = set
 --- Register a plugin's named actions. See `registry.register`.
 ---@param plugin string
 ---@param spec Lib.Keymap.Spec
----@param user table|nil
+---@param user table|false|nil
 ---@return Lib.Keymap.Registered[]
 function M.register(plugin, spec, user)
   return require("lib.nvim.bindings.keymap.registry").register(plugin, spec, user)

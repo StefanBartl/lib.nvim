@@ -164,15 +164,21 @@ end
 ---wastes somebody's afternoon.
 ---@param plugin string          # Plugin name, used in messages and as the registry key.
 ---@param spec Lib.Keymap.Spec
----@param user table|nil         # The user's `keymaps` table, or nil for defaults.
+---@param user table|false|nil   # The user's `keymaps` table; `false` binds nothing.
 ---@return Lib.Keymap.Registered[] bound # What was actually bound, in declaration order.
 function M.register(plugin, spec, user)
   vim.validate("plugin", plugin, "string")
   vim.validate("spec", spec, "table")
-  vim.validate("user", user, { "table", "nil" })
+  vim.validate("user", user, { "table", "boolean", "nil" })
 
   local actions = spec.actions or {}
-  user = user or {}
+
+  -- `keymaps = false` for the whole table is the same statement as
+  -- `keymaps = { preset = false }`, and several plugins here spell it the
+  -- short way. Accepting both means migrating a plugin never silently changes
+  -- what its users' existing config means.
+  local all_off = user == false
+  user = (type(user) == "table") and user or {}
 
   -- Reserved keys are not actions; everything else in `user` claims to be one.
   local reserved = { preset = true, which_key = true, enable = true }
@@ -194,7 +200,7 @@ function M.register(plugin, spec, user)
   -- `preset = false` / `enable = false` mean "bind nothing". The actions are
   -- still recorded, because the health check and the generated docs want to
   -- know what *exists*, not only what is currently bound.
-  local binding_enabled = user.preset ~= false and user.enable ~= false
+  local binding_enabled = not all_off and user.preset ~= false and user.enable ~= false
 
   -- Declaration order, not `pairs` order: the docs and the health report read
   -- top to bottom and should not reshuffle between runs.

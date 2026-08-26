@@ -56,8 +56,10 @@ keymaps = {
 }
 ```
 
-`preset = false` (or `enable = false`) binds nothing, but the actions are still
-**recorded** — the health check and the generated docs want to know what
+`preset = false`, `enable = false`, or the whole table set to `false` all bind
+nothing — several plugins here spell it the short way, and accepting all three
+means migrating one never silently changes what its users' config means. The
+actions are still **recorded** — the health check and the generated docs want to know what
 exists, not only what is currently bound.
 
 ### Several keys for one action

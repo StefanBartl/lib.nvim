@@ -78,7 +78,7 @@
 
 ---@class Lib.Keymap : Lib.Map
 ---@field set fun(modes: string|string[], lhs: string, rhs: string|function, opts: Lib.Map.Opts|nil, desc: string?): nil
----@field register fun(plugin: string, spec: Lib.Keymap.Spec, user: table|nil): Lib.Keymap.Registered[]
+---@field register fun(plugin: string, spec: Lib.Keymap.Spec, user: table|false|nil): Lib.Keymap.Registered[]
 ---@field registered fun(plugin: string|nil): table<string, Lib.Keymap.Registered[]>|Lib.Keymap.Registered[]
 ---@field conflicts fun(): Lib.Keymap.Conflict[]
 
