@@ -160,6 +160,18 @@ binds its whole set per buffer from a `FileType` autocmd. Pass the buffer:
 keymap.register("images", spec, cfg.keymaps, { buffer = ev.buf })
 ```
 
+Declare once at setup and bind per buffer:
+
+```lua
+keymap.register("images", spec, cfg.keymaps, { bind = false })      -- at setup
+keymap.register("images", spec, cfg.keymaps, { buffer = ev.buf })   -- per buffer
+```
+
+`bind = false` declares the actions and puts the which-key group up without
+binding anything — the label is global and belongs there as soon as the preset
+exists, not on whichever buffer happens to match first, and `:checkhealth`
+should see the actions in a session that never opens a matching file.
+
 Re-registering per buffer is the normal case, not an error. The action set is
 the same everywhere; only the target differs, so the registry keeps **one**
 record per plugin rather than one per buffer — which is what `registered()`

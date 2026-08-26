@@ -74,6 +74,13 @@ local registered = {}
 ---@type table<string, table<string, true>>
 local warned = {}
 
+--- Plugins whose which-key groups have been handed over already.
+---
+--- Groups are global and a buffer-local preset registers per buffer, so
+--- without this the same label would be sent on every file opened.
+---@type table<string, true>
+local wk_applied = {}
+
 ---@internal
 --- Levenshtein distance, capped -- only ever run over the action names of one
 --- plugin (a handful of short strings) when a spec key did not match.
@@ -228,7 +235,10 @@ function M.register(plugin, spec, user, opts)
   -- `preset = false` / `enable = false` mean "bind nothing". The actions are
   -- still recorded, because the health check and the generated docs want to
   -- know what *exists*, not only what is currently bound.
-  local binding_enabled = not all_off and user.preset ~= false and user.enable ~= false
+  local binding_enabled = not all_off
+    and opts.bind ~= false
+    and user.preset ~= false
+    and user.enable ~= false
 
   -- Declaration order, not `pairs` order: the docs and the health report read
   -- top to bottom and should not reshuffle between runs.
@@ -308,7 +318,12 @@ function M.register(plugin, spec, user, opts)
     end
   end
 
-  if binding_enabled then
+  -- Groups are global, so they are handed over once per plugin -- not once
+  -- per buffer for a buffer-local preset. `bind = false` still applies them:
+  -- declaring the preset is exactly when a plugin wants its label up, whether
+  -- or not this particular call binds anything.
+  if not all_off and user.preset ~= false and user.enable ~= false and not wk_applied[plugin] then
+    wk_applied[plugin] = true
     require("lib.nvim.bindings.keymap.which_key").apply(plugin, spec, user, bound)
   end
 

@@ -63,6 +63,7 @@
 --- Options for one `register` call, as opposed to the spec itself.
 ---@class Lib.Keymap.RegisterOpts
 ---@field buffer? integer|boolean  # Bind buffer-locally; `true` means the current buffer.
+---@field bind? boolean            # `false` declares the actions (and the which-key group) without binding.
 
 --- One resolved action, as recorded in the registry.
 ---@class Lib.Keymap.Registered

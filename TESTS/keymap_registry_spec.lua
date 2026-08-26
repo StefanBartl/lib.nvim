@@ -250,6 +250,22 @@ return function(H)
   eq(moved[1].lhs, "<Plug>(libspec-both-moved)", "an override moves the first bind")
   eq(moved[2].lhs, "<Plug>(libspec-both-moved)", "an override moves the second bind too")
 
+  -- ------------------------------------------------------- bind = false
+  --
+  -- A buffer-local preset declares once at setup -- so the which-key group
+  -- goes up and :checkhealth can see the actions in a session that never
+  -- opens a matching file -- and binds later, per buffer.
+
+  local declared = keymap.register("libspec_declare", {
+    order = { "d" },
+    actions = { d = { default = "<Plug>(libspec-declare)", rhs = function() end, desc = "d" } },
+  }, nil, { bind = false })
+
+  ok(not mapped("<Plug>(libspec-declare)"), "bind = false binds nothing")
+  eq(#declared, 1, "but the action is declared")
+  eq(declared[1].lhs, "<Plug>(libspec-declare)", "and its resolved lhs is recorded")
+  eq(declared[1].bound, false, "recorded as not bound")
+
   -- --------------------------------------------------- per-action opts
   --
   -- Regression: the buffer-local support briefly passed the *caller's* option
