@@ -14,7 +14,8 @@
 ---
 ---  1. **Group labels.** which-key sees `<leader>sk` and `<leader>sK` but has
 ---     no way to know that `<leader>s` is "spotlight". Only the plugin knows.
----  2. **Icons.** Not derivable from a mapping.
+---  2. **Icons.** Not derivable from a mapping -- and only sent when
+---     `vim.g.have_nerd_font` says so; see `icons_ok`.
 ---  3. **Hiding.** `which_key = false` on an action. which-key's own
 ---     convention for this is the magic description `which_key_ignore`, which
 ---     `registry.lua` applies directly -- so hiding needs no which-key
@@ -47,6 +48,14 @@
 --- since that path does not run through which-key at all.
 
 local M = {}
+
+---@internal
+--- Is it safe to send icons? Declared by the user, not detected -- see
+--- `lib.nvim.ui.nerd_font` for why detection is impossible.
+---@return boolean
+local function icons_ok()
+  return require("lib.nvim.ui.nerd_font").available()
+end
 
 ---@internal
 ---@return table|nil
@@ -85,7 +94,7 @@ function M.apply(plugin, spec, user, bound)
   if group_spec and prefix then
     local group = type(group_spec) == "table" and group_spec.group or plugin
     local entry = { prefix, group = group }
-    if type(group_spec) == "table" and group_spec.icon then
+    if type(group_spec) == "table" and group_spec.icon and icons_ok() then
       entry.icon = group_spec.icon
     end
     if type(group_spec) == "table" and group_spec.mode then
@@ -100,7 +109,7 @@ function M.apply(plugin, spec, user, bound)
   for _, e in ipairs(bound) do
     if e.bound and e.lhs and type(e.which_key) == "table" then
       local entry = { e.lhs }
-      if e.which_key.icon then
+      if e.which_key.icon and icons_ok() then
         entry.icon = e.which_key.icon
       end
       if e.which_key.group then

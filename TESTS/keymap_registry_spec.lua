@@ -226,6 +226,35 @@ return function(H)
   eq(moved[1].lhs, "<Plug>(libspec-both-moved)", "an override moves the first bind")
   eq(moved[2].lhs, "<Plug>(libspec-both-moved)", "an override moves the second bind too")
 
+  -- --------------------------------------------------------- icon gate
+  --
+  -- Neovim cannot see the terminal's font -- strdisplaywidth() returns 1 even
+  -- for U+10FFFD, a noncharacter no font contains -- so icons are declared,
+  -- not detected, and default to off. Declaring one must never throw or bind
+  -- differently either way.
+
+  local had = vim.g.have_nerd_font
+  for _, flag in ipairs({ false, true }) do
+    vim.g.have_nerd_font = flag
+    local iconed = keymap.register("libspec_icon_" .. tostring(flag), {
+      order = { "i" },
+      actions = {
+        i = {
+          default = "<Plug>(libspec-icon-" .. tostring(flag) .. ")",
+          rhs = function() end,
+          desc = "iconed",
+          which_key = { icon = "X" },
+        },
+      },
+    }, nil)
+    ok(
+      iconed[1].bound,
+      "an action with an icon binds regardless of the font flag (" .. tostring(flag) .. ")"
+    )
+    pcall(vim.keymap.del, "n", iconed[1].lhs)
+  end
+  vim.g.have_nerd_font = had
+
   -- ------------------------------------------------- which_key = false
   --
   -- which-key reads keymaps and their desc on its own, so hiding is the one

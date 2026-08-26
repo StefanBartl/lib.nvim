@@ -147,12 +147,33 @@ Three things *are* outside what which-key can infer:
 | | how |
 | --- | --- |
 | **Group label** for a prefix | `which_key = { group = "Spotlight" }` next to `prefix` |
-| **Icon** | `which_key = { icon = "" }`, per action or on the prefix |
+| **Icon** | `which_key = { icon = "" }`, per action or on the prefix — see below |
 | **Hiding** one mapping | `which_key = false` on the action |
 
 A table implies "yes" — there is no separate `true` to remember. Hiding works
 even without which-key installed: it sets which-key's own `which_key_ignore`
 description on the mapping rather than calling into the plugin.
+
+### Icons need a declared Nerd Font
+
+Icons are only sent when `vim.g.have_nerd_font` is `true`. Default: **off**.
+
+That is a declaration, not a check, because **Neovim cannot see the terminal's
+font**. Measured rather than assumed: `strdisplaywidth()` returns 1 for every
+codepoint, including `U+10FFFD` — a noncharacter no font contains. It consults
+Unicode width tables and never the font, so any "detection" here would be a
+guess dressed up as a check.
+
+Off by default is the asymmetry that matters: guessing wrong fills the popup
+with replacement boxes, while a missing icon costs nothing — the mapping still
+shows with its description. One line in a config turns them on everywhere:
+
+```lua
+vim.g.have_nerd_font = true
+```
+
+A plugin can therefore declare icons unconditionally; they stay inert until
+that line exists.
 
 `desc` is deliberately **not** sent to which-key: it already has it from the
 mapping, and a second copy is how the two get to disagree. (Four plugins here
