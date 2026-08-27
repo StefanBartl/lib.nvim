@@ -64,6 +64,36 @@ function M.glyph(hex, fallback)
   return g
 end
 
+--- Pick between two character sets: the rich one when a Nerd Font is
+--- declared, the plain one otherwise.
+---
+--- For the cases where the unit is not one glyph but a *set* that has to be
+--- consistent -- a sparkline ramp, a set of box-drawing pieces, a spinner.
+--- Picking per character would let a row mix `█` with `#`, which reads
+--- worse than either set alone.
+---
+--- Each character is width-checked like `M.glyph`: one that renders wider
+--- than a cell shifts every column after it, and in a ramp that is every
+--- subsequent row too. A single bad character rejects the whole set rather
+--- than being swapped out of it, for the same consistency reason.
+---@param rich string[]      # Preferred set, e.g. the block-element ramp.
+---@param fallback string[]  # Used when no Nerd Font is declared, or `rich` is unusable.
+---@return string[]
+function M.chars(rich, fallback)
+  vim.validate("rich", rich, "table")
+  vim.validate("fallback", fallback, "table")
+
+  if not M.available() or #rich == 0 then
+    return fallback
+  end
+  for _, c in ipairs(rich) do
+    if type(c) ~= "string" or vim.fn.strdisplaywidth(c) ~= 1 then
+      return fallback
+    end
+  end
+  return rich
+end
+
 --- `M.glyph` with padding, for separators that need breathing room.
 ---@param hex string
 ---@param fallback string
