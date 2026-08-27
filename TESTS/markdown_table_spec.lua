@@ -210,4 +210,22 @@ return function(H)
     pcall(vim.fn.delete, path)
     pcall(vim.fn.delete, plain)
   end
+
+  -- ------------------------------------------------------- exported primitives
+  -- These three are public because markdown.nvim's table_wrap (soft-wrapping
+  -- long cells) and the :Markdown table HTML import build rows outside the
+  -- normal parse -> render pipeline and need the same primitives directly,
+  -- rather than a third copy of them.
+  do
+    eq(T.trim("  x  "), "x", "trim strips both sides")
+    eq(T.trim(nil), "", "trim of a non-string is empty")
+
+    eq(T.gen_separator({ 3, 1 }, "spaced"), "| --- | - |", "spaced separator")
+    eq(T.gen_separator({ 3, 1 }, "compact"), "|-----|---|", "compact separator")
+
+    local row = T.format_row({ "a", "bb" }, { 3, 3 }, "left", {})
+    eq(row, "| a   | bb  |", "format_row pads per width/align")
+    local overridden = T.format_row({ "a", "bb" }, { 3, 3 }, "left", { [2] = "right" })
+    eq(overridden, "| a   |  bb |", "format_row honours the override map")
+  end
 end

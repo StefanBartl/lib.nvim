@@ -40,15 +40,17 @@ local M = {}
 -- Measuring and padding
 -- ─────────────────────────────────────────────────────────────────────────────
 
----@internal
+---Trim leading/trailing whitespace. Non-string input trims to `""`.
 ---@param str any
 ---@return string
-local function trim(str)
+function M.trim(str)
   if type(str) ~= "string" then
     return ""
   end
   return strings.trim(str)
 end
+
+local trim = M.trim
 
 ---Display width of `str` in terminal columns.
 ---
@@ -295,11 +297,11 @@ end
 -- Rendering
 -- ─────────────────────────────────────────────────────────────────────────────
 
----@internal
+---Render a table's separator row for a given style.
 ---@param widths integer[]
 ---@param style "spaced"|"compact"
 ---@return string
-local function gen_separator(widths, style)
+function M.gen_separator(widths, style)
   local parts = {}
   if style == "spaced" then
     for _, w in ipairs(widths) do
@@ -313,20 +315,24 @@ local function gen_separator(widths, style)
   return "|" .. table.concat(parts, "|") .. "|"
 end
 
----@internal
+local gen_separator = M.gen_separator
+
+---Render one already-padded table row.
 ---@param cells string[]
 ---@param widths integer[]
 ---@param default_align "left"|"center"|"right"
 ---@param override_map table<integer, string>
----@param width_fn fun(s: string): integer
+---@param width_fn? fun(s: string): integer
 ---@return string
-local function format_row(cells, widths, default_align, override_map, width_fn)
+function M.format_row(cells, widths, default_align, override_map, width_fn)
   local parts = {}
   for ci, w in ipairs(widths) do
     parts[#parts + 1] = M.pad_cell(cells[ci] or "", w, override_map[ci] or default_align, width_fn)
   end
   return "| " .. table.concat(parts, " | ") .. " |"
 end
+
+local format_row = M.format_row
 
 ---Re-render one parsed table.
 ---@param parsed Lib.Markdown.Table

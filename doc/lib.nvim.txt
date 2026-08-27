@@ -206,6 +206,10 @@ Neovim adapters.
     lib.nvim.store         project: persistent state keyed by project root
                            (git root, else cwd), built on cache.disk +
                            fs.project_key |lib.nvim-store|
+    lib.nvim.markdown.table  GFM pipe-table parse/render engine (parse, at_cursor,
+                           render, format_lines/_buffer/_at_cursor/_file);
+                           extracted from markdown.nvim and buffer-ctx.nvim,
+                           see lua/lib/nvim/markdown/table/README.md
     (telemetry)            opt-in call counting / usage statistics moved to
                            runtime-analysis.telemetry (runtime-analysis.nvim,
                            a sibling plugin; see that plugin's README.md and

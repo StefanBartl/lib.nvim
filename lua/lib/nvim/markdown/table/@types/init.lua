@@ -35,6 +35,7 @@
 ---@field lnum? integer                          # `format_at_cursor` only; defaults to the cursor line.
 
 ---@class Lib.Markdown.Table.Mod
+---@field trim fun(str: any): string
 ---@field display_width fun(str: any): integer
 ---@field pad_cell fun(str: string, width: integer, align: string, width_fn?: fun(s: string): integer): string
 ---@field is_table_line fun(line: any): boolean
@@ -44,6 +45,8 @@
 ---@field at_cursor fun(tables: Lib.Markdown.Table[], lnum: integer): Lib.Markdown.Table|nil, string|nil
 ---@field calc_widths fun(rows: string[][], col_count: integer, width_fn?: fun(s: string): integer): integer[]
 ---@field resolve_overrides fun(overrides: Lib.Markdown.Table.ColOverride[]|nil, header_cells: string[], col_count: integer): table<integer, string>, string[]
+---@field gen_separator fun(widths: integer[], style: "spaced"|"compact"): string
+---@field format_row fun(cells: string[], widths: integer[], default_align: "left"|"center"|"right", override_map: table<integer, string>, width_fn?: fun(s: string): integer): string
 ---@field render fun(parsed: Lib.Markdown.Table, opts?: Lib.Markdown.Table.RenderOpts): string[]
 ---@field format_lines fun(lines: string[], opts?: Lib.Markdown.Table.FormatOpts): string[], integer, string[]
 ---@field format_buffer fun(bufnr: integer|nil, opts?: Lib.Markdown.Table.FormatOpts): boolean, string|nil, integer, string[]
