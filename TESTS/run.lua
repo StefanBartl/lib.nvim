@@ -48,6 +48,7 @@ local specs = {
   "keymap_registry_spec.lua",
   "count_spec.lua",
   "autocmd_dispatcher_spec.lua",
+  "autocmd_docs_spec.lua",
   "run_argv_spec.lua",
   "run_spec.lua",
   "spawn_env_spec.lua",

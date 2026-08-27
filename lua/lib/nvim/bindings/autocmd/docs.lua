@@ -335,7 +335,11 @@ local function defaults(opts)
     root = (vim.fn.getcwd():gsub("\\", "/"))
   end
 
-  opts.root = opts.root or root
+  -- Normalized, not just defaulted. Every path this module compares against is
+  -- forward-slashed (`r.src` is normalized on the way in), so a caller handing
+  -- in a Windows path -- `vim.fn.fnamemodify(...)` returns one -- would match
+  -- nothing and silently produce an empty document rather than an error.
+  opts.root = (opts.root or root):gsub("\\", "/")
 
   if not plugin and opts.root then
     -- One directory under `<root>/lua` is the plugin; more than one and we

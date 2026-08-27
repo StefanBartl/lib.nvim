@@ -62,6 +62,14 @@ Both used to be reasons to call `nvim_create_autocmd` directly, which cost the
 call site its record and its row in the generated table. `raw` keeps the record
 and gives up only the wrapper.
 
+`opts.src` overrides the recorded `file:line`. It exists for wrappers that
+create an autocmd on someone else's behalf: the recorded site is derived from
+the call stack, so without it a wrapper's autocmds are all attributed to the
+wrapper. `docs.write()` filters records by source, so that is not cosmetic —
+the owning plugin's page would omit them. (A wrapper that can `return
+autocmd.create(...)` as a tail call needs nothing: Lua drops the frame and the
+caller is found on its own.)
+
 `pattern` and `buffer` are mutually exclusive in the underlying API — passing
 `opts.buffer` here routes to buffer-local scoping and `opts.pattern` is
 ignored, rather than both being merged (which would silently downgrade a

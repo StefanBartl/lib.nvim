@@ -129,6 +129,12 @@ function M.new(opts)
   --- What this dispatcher is called in generated docs and introspection.
   local name = opts.name or opts.group or "dispatcher"
 
+  --- Where this dispatcher was created, recorded onto the autocmds `attach()`
+  --- makes. Without it they are attributed to this file -- and `docs` filters
+  --- records by source, so the owning plugin's page would omit its own
+  --- dispatcher, or refuse to render at all if the dispatcher is all it has.
+  local created_at = caller_site()
+
   ---@type Lib.Autocmd.Dispatcher.Registration[]
   local registrations = {}
   local next_id = 0
@@ -343,6 +349,7 @@ function M.new(opts)
       group = opts.group,
       pattern = opts.pattern or "*",
       desc = opts.desc or ("Dispatch %s to its registered handlers"):format(name),
+      src = created_at,
     })
 
     cleanup_id = autocmd.create("BufWipeout", function(args)
@@ -351,6 +358,7 @@ function M.new(opts)
       group = opts.group,
       pattern = "*",
       desc = ("Drop %s's once-per-buffer bookkeeping for a wiped buffer"):format(name),
+      src = created_at,
     })
 
     return handle

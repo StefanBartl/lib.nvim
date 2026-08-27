@@ -262,7 +262,12 @@ function M.create(event, callback, opts)
     buffer = native_opts.buffer,
     desc = opts.desc ~= "" and opts.desc or nil,
     once = native_opts.once,
-    src = caller_site(),
+    -- `opts.src` lets a wrapper that creates an autocmd on someone else's
+    -- behalf say whose it is. Without it the dispatcher's own autocmd is
+    -- attributed to this file, so a plugin that routes everything through a
+    -- dispatcher owns no records at all and `docs.write()` refuses with
+    -- "nothing registered".
+    src = opts.src or caller_site(),
   }
 
   return id

@@ -23,6 +23,7 @@
 ---@field desc? string
 ---@field once? boolean
 ---@field nested? boolean
+---@field src? string  # Override the recorded `file:line`; for a wrapper creating an autocmd on a caller's behalf.
 ---@field raw? boolean  # Install the callback unwrapped, so `error()` and a `true` return keep their native meaning. See `create()`.
 
 ---@class Lib.AutoCmd
