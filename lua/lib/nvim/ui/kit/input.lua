@@ -30,6 +30,7 @@ local surface = require("lib.nvim.ui.kit.surface")
 local expand_path = require("lib.nvim.cross.fs.expand_path")
 
 local api = vim.api
+local autocmd = require("lib.nvim.bindings.autocmd")
 local fn = vim.fn
 
 local M = {}
@@ -111,11 +112,11 @@ function M.open(opts)
     local ns = api.nvim_create_namespace("lib_kit_input_secret_" .. bufnr)
     local mask = opts.mask or "*"
     apply_mask(bufnr, ns, mask)
-    api.nvim_create_autocmd({ "TextChangedI", "TextChanged" }, {
+    autocmd.create({ "TextChangedI", "TextChanged" }, function()
+      apply_mask(bufnr, ns, mask)
+    end, {
+      group = autocmd.group("lib_kit_input", true),
       buffer = bufnr,
-      callback = function()
-        apply_mask(bufnr, ns, mask)
-      end,
       desc = "lib.nvim.ui.kit.input: re-mask secret input",
     })
   end

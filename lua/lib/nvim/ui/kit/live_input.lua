@@ -12,6 +12,7 @@
 local surface = require("lib.nvim.ui.kit.surface")
 
 local api = vim.api
+local autocmd = require("lib.nvim.bindings.autocmd")
 
 local M = {}
 
@@ -99,9 +100,9 @@ function M.open(opts)
     end
   end
 
-  api.nvim_create_autocmd({ "TextChangedI", "TextChanged" }, {
+  autocmd.create({ "TextChangedI", "TextChanged" }, schedule_change, {
+    group = autocmd.group("lib_kit_live_input", true),
     buffer = bufnr,
-    callback = schedule_change,
     desc = "lib.nvim.ui.kit.live_input: query changed",
   })
 

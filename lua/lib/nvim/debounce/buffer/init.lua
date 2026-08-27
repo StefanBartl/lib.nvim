@@ -72,12 +72,15 @@ local function new(fn, opts)
       return
     end
     watched[bufnr] = true
-    pcall(api.nvim_create_autocmd, cleanup_events, {
+    -- Not a cleared group: one of these exists per watched buffer at a time,
+    -- and clearing would take the other buffers' cleanups with it.
+    pcall(require("lib.nvim.bindings.autocmd").create, cleanup_events, function()
+      cancel(bufnr)
+      watched[bufnr] = nil
+    end, {
+      group = "lib_nvim_debounce_buffer",
       buffer = bufnr,
-      callback = function()
-        cancel(bufnr)
-        watched[bufnr] = nil
-      end,
+      desc = "lib.nvim.debounce.buffer: cancel a pending call when its buffer goes away",
     })
   end
 

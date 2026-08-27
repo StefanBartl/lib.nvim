@@ -13,6 +13,7 @@
 local theme = require("lib.nvim.ui.kit.theme")
 
 local api = vim.api
+local autocmd = require("lib.nvim.bindings.autocmd")
 
 local M = {}
 
@@ -239,13 +240,12 @@ function M.open()
   api.nvim_set_option_value("wrap", false, { win = preview_win })
 
   -- Live re-render as the config changes.
-  local group = api.nvim_create_augroup("lib_kit_preview_" .. config_buf, { clear = true })
-  api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+  local group = autocmd.group("lib_kit_preview_" .. config_buf, true)
+  autocmd.create({ "TextChanged", "TextChangedI" }, function()
+    M.render(config_buf, preview_buf)
+  end, {
     group = group,
     buffer = config_buf,
-    callback = function()
-      M.render(config_buf, preview_buf)
-    end,
     desc = "lib.nvim.ui.kit.preview: live re-render",
   })
 

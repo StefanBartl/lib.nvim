@@ -119,14 +119,14 @@ function M.open(opts)
   }, Surface)
 
   -- Fire on_close callbacks when the window closes for any reason.
-  local group = api.nvim_create_augroup("lib_ui_kit_surface_" .. winid, { clear = true })
-  api.nvim_create_autocmd("WinClosed", {
+  local autocmd = require("lib.nvim.bindings.autocmd")
+  local group = autocmd.group("lib_ui_kit_surface_" .. winid, true)
+  autocmd.create("WinClosed", function()
+    self:fire_close()
+  end, {
     group = group,
     pattern = tostring(winid),
     once = true,
-    callback = function()
-      self:fire_close()
-    end,
     desc = "lib.nvim.ui.kit.surface: lifecycle",
   })
 

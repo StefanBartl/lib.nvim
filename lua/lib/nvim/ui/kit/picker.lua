@@ -13,6 +13,7 @@ local layout = require("lib.nvim.ui.kit.layout")
 local map = require("lib.nvim.bindings.keymap")
 
 local api = vim.api
+local autocmd = require("lib.nvim.bindings.autocmd")
 
 local M = {}
 
@@ -143,9 +144,9 @@ function M.open(opts)
     )
   end
 
-  api.nvim_create_autocmd({ "TextChangedI", "TextChanged" }, {
+  autocmd.create({ "TextChangedI", "TextChanged" }, schedule_change, {
+    group = autocmd.group("lib_kit_picker", true),
     buffer = prompt.bufnr,
-    callback = schedule_change,
     desc = "lib.nvim.ui.kit.picker: query changed",
   })
 

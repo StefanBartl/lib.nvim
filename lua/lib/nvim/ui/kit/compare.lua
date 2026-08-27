@@ -55,6 +55,7 @@ local map = require("lib.nvim.bindings.keymap")
 local notify = require("lib.nvim.notify").create("[lib.nvim.ui.kit.compare]")
 
 local api = vim.api
+local autocmd = require("lib.nvim.bindings.autocmd")
 
 local M = {}
 
@@ -349,11 +350,11 @@ function M.open(opts)
       api.nvim_buf_set_lines(pbuf, 0, 1, false, { query_text })
     end
 
-    api.nvim_create_autocmd({ "TextChangedI", "TextChanged" }, {
+    autocmd.create({ "TextChangedI", "TextChanged" }, function()
+      schedule_change(pbuf)
+    end, {
+      group = autocmd.group("lib_kit_compare", true),
       buffer = pbuf,
-      callback = function()
-        schedule_change(pbuf)
-      end,
       desc = "lib.nvim.ui.kit.compare: query changed",
     })
 

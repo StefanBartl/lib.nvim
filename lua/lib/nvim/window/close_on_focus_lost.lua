@@ -33,22 +33,21 @@ local function close_on_focus_lost(winid, opts)
   local events = opts.events or DEFAULT_EVENTS
   local force = opts.force ~= false
 
-  local augroup =
-    api.nvim_create_augroup(string.format("LibNvimWindowFocusClose_%d", winid), { clear = true })
+  local autocmd = require("lib.nvim.bindings.autocmd")
+  local augroup = autocmd.group(string.format("LibNvimWindowFocusClose_%d", winid), true)
 
-  api.nvim_create_autocmd(events, {
+  autocmd.create(events, function()
+    -- Defer: closing a window from inside its own WinLeave is unsafe.
+    vim.schedule(function()
+      if api.nvim_win_is_valid(winid) then
+        pcall(api.nvim_win_close, winid, force)
+      end
+    end)
+  end, {
     group = augroup,
     buffer = bufnr,
     once = true,
     desc = "lib.nvim: close window on focus lost",
-    callback = function()
-      -- Defer: closing a window from inside its own WinLeave is unsafe.
-      vim.schedule(function()
-        if api.nvim_win_is_valid(winid) then
-          pcall(api.nvim_win_close, winid, force)
-        end
-      end)
-    end,
   })
 
   return augroup

@@ -249,6 +249,9 @@ function M.create(event, callback, opts)
     native_opts.pattern = opts.pattern
   end
 
+  -- Counting this one would report lib.nvim itself as having an
+  -- undocumented autocmd forever: it IS the registering call.
+  -- lib-docs: fallback
   local id = vim.api.nvim_create_autocmd(event, native_opts)
 
   records[#records + 1] = {
