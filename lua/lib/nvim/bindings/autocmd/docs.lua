@@ -77,17 +77,24 @@ local FAMILIES = {
 }
 
 ---@internal
---- Which family a record belongs to, by its first event.
----@param record Lib.Autocmd.Record
+--- Which family an event belongs to.
+---@param event string
 ---@return integer index into FAMILIES
-local function family_of(record)
-  local first = record.events[1] or ""
+local function family_index(event)
   for i, fam in ipairs(FAMILIES) do
-    if fam.match(first) then
+    if fam.match(event) then
       return i
     end
   end
   return #FAMILIES
+end
+
+---@internal
+--- Which family a record belongs to, by its first event.
+---@param record Lib.Autocmd.Record
+---@return integer index into FAMILIES
+local function family_of(record)
+  return family_index(record.events[1] or "")
 end
 
 ---@internal
@@ -105,6 +112,96 @@ local function relativize(abs, root)
     return path:sub(#prefix + 1)
   end
   return path
+end
+
+---@internal
+--- Was this source path produced inside `root`?
+---
+--- The registry is global: one session holds records and dispatcher handlers
+--- from every plugin that loaded. Writing one repo's docs means keeping only
+--- what came out of that repo.
+---@param abs string
+---@param root string|nil
+---@return boolean
+local function is_under(abs, root)
+  if not root or root == "" then
+    return true
+  end
+  local path = (abs or ""):gsub("\\", "/")
+  local prefix = root:gsub("\\", "/"):gsub("/+$", "") .. "/"
+  return path:sub(1, #prefix) == prefix
+end
+
+---@internal
+--- List the handlers behind every dispatcher whose events land in this family.
+---
+--- A dispatcher is one autocmd fanning out to N handlers, so the record table
+--- above can only ever show a single row for it. Left at that, a generated
+--- page would say "one autocmd on BufEnter" for a plugin where ten features
+--- are listening -- the same failure this whole generator exists to prevent,
+--- just one level down. So the handlers get their own table, with the file
+--- that registered each one.
+---@param lines string[]
+---@param title string
+---@param opts Lib.Autocmd.Docs.Opts
+---@return nil
+local function render_dispatchers(lines, title, opts)
+  local ok, dispatcher = pcall(require, "lib.nvim.bindings.autocmd.dispatcher")
+  if not ok or type(dispatcher.registry) ~= "function" then
+    return
+  end
+
+  ---@type { entry: Lib.Autocmd.Dispatcher.Entry, handlers: Lib.Autocmd.Dispatcher.HandlerInfo[] }[]
+  local shown = {}
+  for _, entry in ipairs(dispatcher.registry()) do
+    -- A dispatcher belongs to a family the same way a record does: by its
+    -- first event. `docs` writes one repo at a time, so handlers registered
+    -- from elsewhere are filtered out by source path, not by dispatcher --
+    -- two plugins may legitimately share one.
+    local fam = FAMILIES[family_index(entry.events[1] or "")]
+    if fam and fam.title == title then
+      local mine = {}
+      for _, h in ipairs(entry.handlers) do
+        if is_under(h.src, opts.root) then
+          mine[#mine + 1] = h
+        end
+      end
+      if #mine > 0 then
+        shown[#shown + 1] = { entry = entry, handlers = mine }
+      end
+    end
+  end
+
+  if #shown == 0 then
+    return
+  end
+
+  lines[#lines + 1] = "## Dispatched handlers"
+  lines[#lines + 1] = ""
+  lines[#lines + 1] = "One autocmd per dispatcher, fanning out to the handlers below"
+  lines[#lines + 1] = "(`lib.nvim.bindings.autocmd.dispatcher`). They run in the order shown."
+  lines[#lines + 1] = ""
+
+  for _, d in ipairs(shown) do
+    lines[#lines + 1] = ("### `%s` — `%s`%s"):format(
+      d.entry.name,
+      table.concat(d.entry.events, "`, `"),
+      d.entry.attached and "" or " _(registered, not attached)_"
+    )
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = "| Key | What | Priority | Once | Source |"
+    lines[#lines + 1] = "| --- | --- | ---: | --- | --- |"
+    for _, h in ipairs(d.handlers) do
+      lines[#lines + 1] = ("| `%s` | %s | %d | %s | `%s` |"):format(
+        table.concat(h.keys, "`, `"),
+        h.desc or "_(no desc)_",
+        h.priority,
+        h.once and "per buffer" or "-",
+        relativize(h.src, opts.root)
+      )
+    end
+    lines[#lines + 1] = ""
+  end
 end
 
 ---@internal
@@ -181,6 +278,9 @@ local function render(records, title, opts)
   end
 
   lines[#lines + 1] = ""
+
+  render_dispatchers(lines, title, opts)
+
   return lines
 end
 

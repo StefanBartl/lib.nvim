@@ -106,8 +106,44 @@ end)
 
 ft.attach()    -- creates the underlying autocmd; idempotent
 ft.stats()     -- { total_keys, total_handlers, keys, attached }
+ft.handlers()  -- every registration, in dispatch order, with desc and call site
 ft.detach()    -- removes it; idempotent, registry survives for a later attach()
 ```
+
+## `owner`, and why a shared dispatcher needs it
+
+```lua
+ft.register("lua", { load = fn, owner = "my_feature", desc = "what it does" })
+ft.unregister("my_feature")   -- returns how many registrations it dropped
+```
+
+A plain autocmd is un-registered by re-creating its augroup with
+`clear = true`, and that is exactly what an idempotent `setup()` relies on:
+tear down, set up again, still one handler. Hand the same handler to a
+*shared* dispatcher a second time and it runs twice per event — and there is
+no way back short of `detach()`, which takes every other feature's handlers
+down with it.
+
+So anything with a setup/teardown cycle must pass `owner` and call
+`unregister(owner)` before re-registering. `unregister` also forgets the
+`once`-per-buffer bookkeeping for the handlers it drops, so a re-registered
+owner starts clean instead of inheriting "already ran" from the cycle before.
+
+## `desc`, and the documentation this would otherwise cost
+
+A dispatcher collapses N handlers into **one** autocmd. That means
+`lib.nvim.bindings.autocmd`'s registry — and therefore the generated
+`bindings/autocmd/*.md` — can only ever show a single row for it. Left at
+that, a page would claim one listener on `BufEnter` for a plugin where ten
+features are listening: the same failure the generator exists to prevent, one
+level down.
+
+So `dispatcher.registry()` reports every dispatcher with its handler list, and
+`docs` renders a **Dispatched handlers** table underneath the record table —
+key, `desc`, priority, `once`, and the file:line of the `register()` call.
+Give every handler a `desc`; it is that table's "What" column.
+
+`opts.name` is what the dispatcher is called there (default: `opts.group`).
 
 ## The `FileType` wrapper
 

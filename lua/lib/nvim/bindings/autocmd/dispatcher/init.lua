@@ -40,6 +40,51 @@ end
 
 M.filetype = require("lib.lua.lazy").require("lib.nvim.bindings.autocmd.dispatcher.filetype")
 
+--- Every dispatcher created in this session, in creation order.
+---
+--- A dispatcher collapses N handlers into ONE autocmd, so the autocmd registry
+--- can only ever show one row for it -- and a generated table that says "one
+--- autocmd on BufEnter" where ten features are listening is worse than no
+--- table. `docs` reads this back to list the handlers underneath their
+--- dispatcher, so collapsing them costs nothing in what the reader can see.
+---@type Lib.Autocmd.Dispatcher.Entry[]
+local live = {}
+
+---Every dispatcher created in this session, newest last.
+---
+---For `docs` and for `:checkhealth`-style introspection: what fans out from
+---which autocmd, and which file registered each handler.
+---@return Lib.Autocmd.Dispatcher.Entry[]
+function M.registry()
+  local out = {}
+  for _, entry in ipairs(live) do
+    out[#out + 1] = {
+      name = entry.name,
+      events = vim.deepcopy(entry.events),
+      group = entry.group,
+      attached = entry.handle.stats().attached,
+      handlers = entry.handle.handlers(),
+    }
+  end
+  return out
+end
+
+---@internal
+--- Where `register()` was called from, as `file:line`.
+---
+--- The same reasoning as in `lib.nvim.bindings.autocmd`: "something re-renders
+--- the tree on BufEnter" is only half an answer without the file to open.
+--- Level 3: getinfo -> this function -> handle.register -> the caller.
+---@return string
+local function caller_site()
+  local info = debug.getinfo(3, "Sl")
+  if not info then
+    return "?"
+  end
+  local src = (info.source or "?"):gsub("^@", "")
+  return ("%s:%d"):format(src, info.currentline or -1)
+end
+
 ---@internal
 --- Convert a glob-ish key pattern ("noice*") to an anchored Lua pattern.
 ---@param glob string
@@ -77,6 +122,12 @@ function M.new(opts)
   ---@field priority integer
   ---@field once boolean
   ---@field id integer
+  ---@field owner string|nil
+  ---@field desc string|nil
+  ---@field src string
+
+  --- What this dispatcher is called in generated docs and introspection.
+  local name = opts.name or opts.group or "dispatcher"
 
   ---@type Lib.Autocmd.Dispatcher.Registration[]
   local registrations = {}
@@ -150,6 +201,13 @@ function M.new(opts)
   local handle = {}
 
   --- Register one handler for one or more keys.
+  ---
+  --- `spec.owner` names whoever registered it, so it can be taken back out
+  --- again with `unregister(owner)`; `spec.desc` is what the generated
+  --- bindings table prints for it. Both are optional and both are worth
+  --- giving: without an owner a handler can only ever be removed by tearing
+  --- the whole dispatcher down, and without a desc the table says
+  --- `_(no desc)_`.
   ---@param key_or_keys string|string[]
   ---@param spec Lib.Autocmd.Dispatcher.Handler
   ---@return Lib.Autocmd.Dispatcher.Handle
@@ -157,7 +215,7 @@ function M.new(opts)
     local keys = type(key_or_keys) == "table" and key_or_keys or { key_or_keys }
     assert(#keys > 0, "dispatcher.register: at least one key is required")
 
-    local fn, priority, once
+    local fn, priority, once, owner, desc
     if type(spec) == "function" then
       fn, priority, once = spec, 0, false
     else
@@ -166,14 +224,92 @@ function M.new(opts)
         "dispatcher.register: handler must be a function or { load = fn }"
       )
       fn, priority, once = spec.load, spec.priority or 0, spec.once == true
+      owner, desc = spec.owner, spec.desc
     end
 
     next_id = next_id + 1
-    registrations[#registrations + 1] =
-      { keys = keys, fn = fn, priority = priority, once = once, id = next_id }
+    registrations[#registrations + 1] = {
+      keys = keys,
+      fn = fn,
+      priority = priority,
+      once = once,
+      id = next_id,
+      owner = owner,
+      desc = desc,
+      src = caller_site(),
+    }
     resolved_cache = {} -- one new registration can change any key's resolution
 
     return handle
+  end
+
+  --- Take every handler registered under `owner` back out again.
+  ---
+  --- Without this a shared dispatcher cannot be used by anything with a
+  --- `setup()`/`teardown()` cycle. A plain autocmd is cleared by re-creating
+  --- its augroup with `clear = true`, and that is exactly what a feature's
+  --- idempotent re-setup relies on; handing the same handler to a shared
+  --- dispatcher a second time would instead run it twice per event, and there
+  --- would be no way to stop it short of `detach()`, which takes every other
+  --- feature's handlers down with it.
+  ---
+  --- Also forgets the `once`-per-buffer bookkeeping for the removed handlers,
+  --- so re-registering the same owner starts clean rather than inheriting
+  --- "already ran" from the previous cycle.
+  ---@param owner string
+  ---@return integer removed  # how many registrations were dropped
+  function handle.unregister(owner)
+    assert(type(owner) == "string" and owner ~= "", "dispatcher.unregister: owner is required")
+
+    local kept, dropped = {}, {}
+    for _, reg in ipairs(registrations) do
+      if reg.owner == owner then
+        dropped[#dropped + 1] = reg.id
+      else
+        kept[#kept + 1] = reg
+      end
+    end
+
+    if #dropped == 0 then
+      return 0
+    end
+
+    registrations = kept
+    resolved_cache = {}
+    for _, seen in pairs(once_seen) do
+      for _, id in ipairs(dropped) do
+        seen[id] = nil
+      end
+    end
+
+    return #dropped
+  end
+
+  --- Every handler currently registered, in dispatch order.
+  ---
+  --- What `docs` renders underneath the dispatcher's single autocmd, so
+  --- collapsing N handlers into one autocmd does not cost the reader the list
+  --- of what actually listens.
+  ---@return Lib.Autocmd.Dispatcher.HandlerInfo[]
+  function handle.handlers()
+    local out = {}
+    for _, reg in ipairs(registrations) do
+      out[#out + 1] = {
+        keys = vim.deepcopy(reg.keys),
+        owner = reg.owner,
+        desc = reg.desc,
+        priority = reg.priority,
+        once = reg.once,
+        src = reg.src,
+      }
+    end
+    table.sort(out, function(a, b)
+      if a.priority ~= b.priority then
+        return a.priority < b.priority
+      end
+      return (a.keys[1] or "") < (b.keys[1] or "")
+    end)
+    return out
   end
 
   --- Create the underlying autocmd(s). Idempotent -- a second call is a no-op.
@@ -203,11 +339,19 @@ function M.new(opts)
           reg.fn({ ev = ev, buf = ev.buf, key = concrete_key, context = ctx_value })
         end
       end
-    end, { group = opts.group, pattern = opts.pattern or "*" })
+    end, {
+      group = opts.group,
+      pattern = opts.pattern or "*",
+      desc = opts.desc or ("Dispatch %s to its registered handlers"):format(name),
+    })
 
     cleanup_id = autocmd.create("BufWipeout", function(args)
       once_seen[args.buf] = nil
-    end, { pattern = "*" })
+    end, {
+      group = opts.group,
+      pattern = "*",
+      desc = ("Drop %s's once-per-buffer bookkeeping for a wiped buffer"):format(name),
+    })
 
     return handle
   end
@@ -244,6 +388,13 @@ function M.new(opts)
       attached = autocmd_id ~= nil,
     }
   end
+
+  live[#live + 1] = {
+    name = name,
+    events = vim.iter({ opts.event }):flatten():totable(),
+    group = opts.group,
+    handle = handle,
+  }
 
   ---@type Lib.Autocmd.Dispatcher.Handle
   return handle
