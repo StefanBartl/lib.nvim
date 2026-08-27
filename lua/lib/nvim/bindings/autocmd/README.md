@@ -4,6 +4,33 @@ Standardized autocommand creation on top of `vim.api.nvim_create_autocmd` —
 automatic augroup handling, a defensive callback wrapper, and event/pattern
 normalization helpers.
 
+### The count in the generated header
+
+A generated file says how many autocmds the repository creates *without* going
+through this module, because those cannot appear in the table and a reader who
+is not told assumes the table is the whole list. That count is a static scan —
+those call sites leave no runtime trace, which is precisely the problem with
+them.
+
+Two things it does *not* count, both learned from being wrong about them:
+
+- **String literals and comments.** `debugging.nvim` names
+  `nvim_create_autocmd` thirteen times and creates none; it is a module that
+  *scans* for them. A plain substring count named the two cleanest repositories
+  as the two worst offenders.
+- **Lines marked `lib-docs: fallback`** (on the line or the one above it). The
+  soft-dependency pattern — prefer this module, fall back to `vim.api` when lib
+  is not installed — has a native call site that is *correct*. Mark it and it
+  stops being reported:
+
+  ```lua
+  -- lib-docs: fallback
+  vim.api.nvim_create_autocmd(event, opts)
+  ```
+
+It does not require a call parenthesis, so `local au = vim.api.nvim_create_autocmd`
+is counted once rather than missed.
+
 ## Usage
 
 ```lua

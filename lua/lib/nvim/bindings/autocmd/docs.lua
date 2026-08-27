@@ -389,12 +389,61 @@ function M.check(opts)
 end
 
 ---@internal
+--- One line with comments and string literals removed.
+---
+--- Both matter, and both were found the hard way. `debugging.nvim` mentions
+--- `nvim_create_autocmd` thirteen times and creates none -- it is a module
+--- that *scans* for them, so every occurrence is a string literal.
+--- `buffer-ctx.nvim` emits one inside a boilerplate template. A plain
+--- substring count called those repositories the two worst offenders; they
+--- are the two cleanest.
+---@param line string
+---@return string
+local function code_only(line)
+  line = line:gsub("%-%-.*$", "")
+  local out, i, n = {}, 1, #line
+  while i <= n do
+    local ch = line:sub(i, i)
+    if ch == '"' or ch == "'" then
+      local quote, j = ch, i + 1
+      while j <= n do
+        local c = line:sub(j, j)
+        if c == "\\" then
+          j = j + 2
+        elseif c == quote then
+          break
+        else
+          j = j + 1
+        end
+      end
+      i = j + 1
+    else
+      out[#out + 1] = ch
+      i = i + 1
+    end
+  end
+  return table.concat(out)
+end
+
+--- Marker a plugin can put on a line to say "this one is deliberate".
+---
+--- Needed for the soft-dependency pattern: a wrapper that prefers this module
+--- and falls back to `vim.api` when lib is not installed has a native call
+--- site that is *correct*. Counting it would tell the reader a document is
+--- incomplete when it is not.
+local IGNORE = "lib%-docs: fallback"
+
+---@internal
 --- How many autocmds this repository creates without going through the module.
 ---
 --- A static scan, deliberately: those call sites leave no runtime trace to
 --- count, which is the whole problem with them. Cheap enough (one pass over
 --- the repo's own `lua/`) to run on every write, and the number is only used
 --- to warn.
+---
+--- No call-parenthesis is required, so that
+--- `local au = vim.api.nvim_create_autocmd` followed by `au(...)` is counted
+--- once rather than missed entirely.
 ---@param root string
 ---@return integer
 local function count_unregistered(root)
@@ -403,11 +452,18 @@ local function count_unregistered(root)
   for _, file in ipairs(files) do
     local fd = io.open(file, "r")
     if fd then
-      local text = fd:read("*a")
-      fd:close()
-      for _ in text:gmatch("nvim_create_autocmd") do
-        n = n + 1
+      local previous = ""
+      for line in fd:lines() do
+        if
+          code_only(line):find("nvim_create_autocmd", 1, true)
+          and not line:find(IGNORE)
+          and not previous:find(IGNORE)
+        then
+          n = n + 1
+        end
+        previous = line
       end
+      fd:close()
     end
   end
   return n
