@@ -16,6 +16,13 @@ M.dispatcher = require("lib.lua.lazy").require("lib.nvim.bindings.autocmd.dispat
 ---@type table<string, integer>
 local groups = {}
 
+--- id -> name, so a record can name its group even when the caller passed
+--- the id. Most callers do: they take `group(name)` once into a local and
+--- hand the integer to every `create()` after it, which is the documented
+--- shape of `nvim_create_autocmd` and not something to talk them out of.
+---@type table<integer, string>
+local group_names = {}
+
 ---@internal
 --- Does this augroup id still exist?
 ---
@@ -140,7 +147,10 @@ function M.group(name, clear)
       -- Re-requesting with `clear` must still clear: the caller is rebuilding
       -- its autocommands, and leaving the old ones would double them up.
       forget_group(name)
-      return vim.api.nvim_create_augroup(name, { clear = true })
+      local id = vim.api.nvim_create_augroup(name, { clear = true })
+      groups[name] = id
+      group_names[id] = name
+      return id
     end
     return cached
   end
@@ -149,6 +159,7 @@ function M.group(name, clear)
     forget_group(name)
   end
   groups[name] = vim.api.nvim_create_augroup(name, { clear = clear == true })
+  group_names[groups[name]] = name
   return groups[name]
 end
 
@@ -186,8 +197,12 @@ function M.create(event, callback, opts)
   end
 
   local group = opts.group
+  local group_name = nil
   if type(group) == "string" then
+    group_name = group
     group = M.group(group)
+  elseif type(group) == "number" then
+    group_name = group_names[group]
   end
 
   local user_cb = callback
@@ -220,7 +235,7 @@ function M.create(event, callback, opts)
   records[#records + 1] = {
     id = id,
     events = vim.iter({ event }):flatten():totable(),
-    group = type(opts.group) == "string" and opts.group or nil,
+    group = group_name,
     pattern = native_opts.pattern,
     buffer = native_opts.buffer,
     desc = opts.desc ~= "" and opts.desc or nil,
