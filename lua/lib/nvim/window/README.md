@@ -96,8 +96,8 @@ local winid, bufnr = window.make_scratch({
 | Option        | Type                                  | Default      | Meaning                                                |
 | ------------- | ------------------------------------- | ------------ | ------------------------------------------------------ |
 | `lines`       | `string[]`                            | `{}`         | initial content                                        |
-| `width`       | `integer`                             | content      | width; otherwise derived from content, clamped to editor |
-| `height`      | `integer`                             | line count   | height; clamped to editor                              |
+| `width`       | `number`                              | content      | strictly between 0 and 1 = fraction of `vim.o.columns`, larger = cells; otherwise derived from content, clamped to editor |
+| `height`      | `number`                              | line count   | strictly between 0 and 1 = fraction of `vim.o.lines`, larger = cells (so `1` is one row, what a prompt wants); clamped to editor |
 | `relative`    | `"editor"\|"cursor"\|"win"`           | `"editor"`   | anchor of the float                                    |
 | `row` / `col` | `integer`                             | centered     | explicit position (otherwise editor-centered)          |
 | `border`      | `string\|string[]`                    | `"rounded"`  | border style                                           |

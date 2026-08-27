@@ -48,6 +48,37 @@ local function clamp(value, lo, hi)
 end
 
 ---@internal
+---A size given as a fraction of the editor, or as absolute cells.
+---
+---Strictly between 0 and 1 is a fraction of the editor; anything else is
+---cells. Nearly the convention `lib.nvim.ui.kit.layout` already uses, which
+---existed there while every caller of this function wrote
+---`math.floor(vim.o.columns * 0.8)` by hand -- nine plugins, twenty-six call
+---sites, the same arithmetic each time.
+---
+---The one difference is deliberate and load-bearing: `layout` treats `1` as
+---"the whole thing", this treats it as one cell. A pane one cell tall is
+---meaningless, so `layout` can spend the value on the fraction; a *float* one
+---cell tall is every prompt in this library -- `kit.input`, `kit.live_input`,
+---both progress styles and the statusline all pass `height = 1` and mean it.
+---Reading that as 100% would open a full-height window for a one-line prompt.
+---
+---`0` is not a fraction either: it returns nil, so the caller falls back to
+---sizing from the content rather than opening something invisible.
+---@param size number|nil
+---@param total integer
+---@return integer|nil
+local function resolve_size(size, total)
+  if type(size) ~= "number" or size <= 0 then
+    return nil
+  end
+  if size < 1 then
+    return math.floor(size * total)
+  end
+  return math.floor(size)
+end
+
+---@internal
 ---Resolve width/height from opts and content, clamped to the editor size.
 ---@param lines string[]
 ---@param opts Lib.Window.MakeScratchOpts
@@ -58,12 +89,12 @@ local function resolve_dimensions(lines, opts)
   local max_h = math.max(1, vim.o.lines - 4)
 
   -- +2 leaves room for a border; fall back to a comfortable default when empty.
-  local want_w = opts.width or (content_width(lines) + 2)
+  local want_w = resolve_size(opts.width, vim.o.columns) or (content_width(lines) + 2)
   if want_w <= 2 then
     want_w = math.min(60, max_w)
   end
 
-  local want_h = opts.height or #lines
+  local want_h = resolve_size(opts.height, vim.o.lines) or #lines
   if want_h < 1 then
     want_h = 1
   end

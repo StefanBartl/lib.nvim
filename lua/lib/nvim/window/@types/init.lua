@@ -24,8 +24,8 @@
 
 ---@class Lib.Window.MakeScratchOpts
 ---@field lines? string[] Initial buffer content (default empty)
----@field width? integer Float width; default sizes to content, clamped to editor
----@field height? integer Float height; default is line count, clamped to editor
+---@field width? number Float width: a value strictly between 0 and 1 is a fraction of `vim.o.columns`, anything larger is cells (so `1` is one cell, not full width). Default sizes to content, clamped to the editor.
+---@field height? number Float height: a value strictly between 0 and 1 is a fraction of `vim.o.lines`, anything larger is cells (so `1` is one cell -- what every one-line prompt passes). Default is the line count, clamped to the editor.
 ---@field relative? "editor"|"cursor"|"win" Anchor for the float (default `"editor"`)
 ---@field row? integer Explicit row; default centers on the editor
 ---@field col? integer Explicit column; default centers on the editor
