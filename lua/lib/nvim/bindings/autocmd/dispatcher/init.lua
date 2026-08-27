@@ -63,10 +63,57 @@ function M.registry()
       events = vim.deepcopy(entry.events),
       group = entry.group,
       attached = entry.handle.stats().attached,
+      mode = entry.handle.stats().mode,
       handlers = entry.handle.handlers(),
     }
   end
   return out
+end
+
+--- Global default for `opts.dispatch`, read at every `attach()`.
+---
+--- `vim.g.lib_nvim_autocmd_dispatch = false` puts EVERY dispatcher into bypass
+--- mode -- one plain autocmd per handler instead of one for all of them. Two
+--- reasons it exists:
+---
+--- * **An escape hatch.** A dispatcher makes N features share one object. If
+---   it misbehaves, the alternative used to be editing all N call sites. Now
+---   it is a flag plus `reattach_all()`.
+--- * **Checking the claim.** The README argues the shared dispatch costs a
+---   flat ~30 us and that this should not decide anything. An argument you
+---   cannot re-measure in your own config is one you have to take on faith.
+---
+--- Read at `attach()`, not at `new()`, so `detach()` -> flip -> `attach()`
+--- switches a live dispatcher without rebuilding it.
+---@return "dispatch"|"bypass"
+local function resolve_mode(opts)
+  if opts.dispatch ~= nil then
+    return opts.dispatch == false and "bypass" or "dispatch"
+  end
+  if vim.g.lib_nvim_autocmd_dispatch == false then
+    return "bypass"
+  end
+  return "dispatch"
+end
+
+---Re-attach every dispatcher that is currently attached.
+---
+---What makes the global switch usable: flipping `vim.g.lib_nvim_autocmd_dispatch`
+---only takes effect at the next `attach()`, and nothing re-attaches on its own.
+---Dispatchers that were never attached, or were explicitly detached, stay that
+---way -- re-attaching those would turn something off back on behind the
+---caller's back.
+---@return integer reattached
+function M.reattach_all()
+  local n = 0
+  for _, entry in ipairs(live) do
+    if entry.handle.stats().attached then
+      entry.handle.detach()
+      entry.handle.attach()
+      n = n + 1
+    end
+  end
+  return n
 end
 
 ---@internal
@@ -154,8 +201,29 @@ function M.new(opts)
   ---@type table<integer, table<integer, boolean>>
   local once_seen = {}
 
+  --- The single dispatch autocmd. `nil` in bypass mode.
   local autocmd_id = nil ---@type integer|nil
+  --- Bypass mode: registration id -> its own autocmd id. Empty in dispatch mode.
+  ---@type table<integer, integer>
+  local per_handler = {}
   local cleanup_id = nil ---@type integer|nil
+  --- Whichever mode `attach()` resolved. `nil` while detached.
+  ---@type "dispatch"|"bypass"|nil
+  local mode = nil
+
+  ---@internal
+  --- Does any of this registration's key patterns match the concrete key?
+  ---@param reg Lib.Autocmd.Dispatcher.Registration
+  ---@param concrete_key string
+  ---@return boolean
+  local function reg_matches(reg, concrete_key)
+    for _, pat in ipairs(reg.keys) do
+      if key_matches(pat, concrete_key) then
+        return true
+      end
+    end
+    return false
+  end
 
   ---@internal
   ---@param concrete_key string
@@ -168,11 +236,8 @@ function M.new(opts)
 
     local matched = {}
     for _, reg in ipairs(registrations) do
-      for _, pat in ipairs(reg.keys) do
-        if key_matches(pat, concrete_key) then
-          matched[#matched + 1] = reg
-          break
-        end
+      if reg_matches(reg, concrete_key) then
+        matched[#matched + 1] = reg
       end
     end
 
@@ -202,6 +267,62 @@ function M.new(opts)
     once_seen[bufnr] = seen or {}
     once_seen[bufnr][reg.id] = true
     return true
+  end
+
+  ---@internal
+  --- Registrations in dispatch order: priority, then registration id.
+  ---@return Lib.Autocmd.Dispatcher.Registration[]
+  local function sorted_regs()
+    local out = {}
+    for _, reg in ipairs(registrations) do
+      out[#out + 1] = reg
+    end
+    table.sort(out, function(a, b)
+      if a.priority ~= b.priority then
+        return a.priority < b.priority
+      end
+      return a.id < b.id
+    end)
+    return out
+  end
+
+  ---@internal
+  --- Bypass mode: give one registration its own plain autocmd.
+  ---
+  --- It still runs `opts.key(ev)` and matches in Lua -- the key is arbitrary
+  --- Lua and generally cannot be expressed as an autocmd `pattern`. That means
+  --- N handlers do the key work N times, which is exactly the shape this
+  --- module replaced, and therefore the honest thing to measure against.
+  ---
+  --- `src` is the registration's own call site, so these show up in a
+  --- generated bindings table attributed to the feature that owns them rather
+  --- than to whoever built the dispatcher.
+  ---@param reg Lib.Autocmd.Dispatcher.Registration
+  ---@return integer autocmd_id
+  local function create_bypass(reg)
+    return get_autocmd().create(opts.event, function(ev)
+      local concrete_key = opts.key(ev)
+      if concrete_key == nil or not reg_matches(reg, concrete_key) then
+        return
+      end
+      if not should_run(reg, ev.buf) then
+        return
+      end
+      reg.fn({
+        ev = ev,
+        buf = ev.buf,
+        key = concrete_key,
+        -- Per matching handler here, once per event in dispatch mode. The one
+        -- observable difference a caller with an expensive or side-effecting
+        -- `context` has to know about.
+        context = opts.context and opts.context(ev) or nil,
+      })
+    end, {
+      group = opts.group,
+      pattern = opts.pattern or "*",
+      desc = reg.desc or ("%s handler: %s"):format(name, table.concat(reg.keys, ", ")),
+      src = reg.src,
+    })
   end
 
   local handle = {}
@@ -246,6 +367,16 @@ function M.new(opts)
     }
     resolved_cache = {} -- one new registration can change any key's resolution
 
+    -- Bypass mode builds one autocmd per registration up front, so a handler
+    -- that arrives after attach() needs its own here. Note that it lands at
+    -- the END of the event's autocmd list whatever its `priority` says --
+    -- native autocmds fire in creation order and there is no way to insert.
+    -- Register before attach() if the order matters, which is what the
+    -- setup/install lifecycle this module is built for already does.
+    if mode == "bypass" then
+      per_handler[registrations[#registrations].id] = create_bypass(registrations[#registrations])
+    end
+
     return handle
   end
 
@@ -287,6 +418,12 @@ function M.new(opts)
         seen[id] = nil
       end
     end
+    for _, id in ipairs(dropped) do
+      if per_handler[id] then
+        get_autocmd().delete(per_handler[id])
+        per_handler[id] = nil
+      end
+    end
 
     return #dropped
   end
@@ -319,13 +456,35 @@ function M.new(opts)
   end
 
   --- Create the underlying autocmd(s). Idempotent -- a second call is a no-op.
+  ---
+  --- Resolves the mode here rather than in `new()`, so `detach()` -> flip
+  --- `vim.g.lib_nvim_autocmd_dispatch` -> `attach()` switches a live
+  --- dispatcher between one shared autocmd and one per handler.
   ---@return Lib.Autocmd.Dispatcher.Handle
   function handle.attach()
-    if autocmd_id then
+    if mode then
       return handle
     end
 
     local autocmd = get_autocmd()
+    mode = resolve_mode(opts)
+
+    if mode == "bypass" then
+      -- Created in dispatch order: native autocmds fire in creation order, so
+      -- this is the only point at which `priority` can be honoured at all.
+      for _, reg in ipairs(sorted_regs()) do
+        per_handler[reg.id] = create_bypass(reg)
+      end
+      cleanup_id = autocmd.create("BufWipeout", function(args)
+        once_seen[args.buf] = nil
+      end, {
+        group = opts.group,
+        pattern = "*",
+        desc = ("Drop %s's once-per-buffer bookkeeping for a wiped buffer"):format(name),
+        src = created_at,
+      })
+      return handle
+    end
 
     autocmd_id = autocmd.create(opts.event, function(ev)
       local concrete_key = opts.key(ev)
@@ -368,14 +527,23 @@ function M.new(opts)
   --- registry -- a later attach() dispatches to the same handlers again.
   ---@return Lib.Autocmd.Dispatcher.Handle
   function handle.detach()
+    -- `delete`, not `nvim_del_autocmd`: the latter leaves the record behind,
+    -- so a detached dispatcher would go on being listed in the generated
+    -- bindings table as if it still fired.
+    local autocmd = get_autocmd()
     if autocmd_id then
-      pcall(vim.api.nvim_del_autocmd, autocmd_id)
+      autocmd.delete(autocmd_id)
       autocmd_id = nil
     end
+    for id, au_id in pairs(per_handler) do
+      autocmd.delete(au_id)
+      per_handler[id] = nil
+    end
     if cleanup_id then
-      pcall(vim.api.nvim_del_autocmd, cleanup_id)
+      autocmd.delete(cleanup_id)
       cleanup_id = nil
     end
+    mode = nil
     return handle
   end
 
@@ -393,7 +561,9 @@ function M.new(opts)
       total_keys = vim.tbl_count(key_set),
       total_handlers = #registrations,
       keys = vim.tbl_keys(key_set),
-      attached = autocmd_id ~= nil,
+      attached = mode ~= nil,
+      mode = mode,
+      autocmds = autocmd_id and 1 or vim.tbl_count(per_handler),
     }
   end
 

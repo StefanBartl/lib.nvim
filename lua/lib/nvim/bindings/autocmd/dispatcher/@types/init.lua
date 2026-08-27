@@ -35,6 +35,7 @@
 ---@field events string[]
 ---@field group string|nil
 ---@field attached boolean
+---@field mode "dispatch"|"bypass"|nil
 ---@field handlers Lib.Autocmd.Dispatcher.HandlerInfo[]
 
 --- Either a plain function (called directly on match) or a `{ load = … }`
@@ -44,6 +45,7 @@
 ---@class Lib.Autocmd.Dispatcher.Opts
 ---@field event string|string[] Autocmd event(s) to dispatch on
 ---@field name? string Name used in generated docs and `registry()`; defaults to `group`
+---@field dispatch? boolean `false` builds one plain autocmd per handler instead of one for all of them; overrides `vim.g.lib_nvim_autocmd_dispatch`. Read at `attach()`.
 ---@field desc? string `desc` of the dispatcher's own autocmd; a default is derived from `name`
 ---@field group? string Augroup name, created/looked up via `lib.nvim.bindings.autocmd`
 ---@field pattern? string|string[] Autocmd pattern; default `"*"` — matching happens in Lua via `key`
@@ -55,6 +57,8 @@
 ---@field total_handlers integer Total `register()` calls made
 ---@field keys string[] Every registered key pattern
 ---@field attached boolean Whether `attach()` has been called (and not yet `detach()`d)
+---@field mode "dispatch"|"bypass"|nil Which shape `attach()` built; nil while detached
+---@field autocmds integer How many autocmds back the handlers: 1 in dispatch mode, one per handler in bypass
 
 --- Handle returned by `dispatcher.new()`. Every field is a plain function
 --- (not a method) — call as `handle.register(...)`, not `handle:register(...)`.
@@ -69,6 +73,7 @@
 ---@class Lib.Autocmd.Dispatcher
 ---@field new fun(opts: Lib.Autocmd.Dispatcher.Opts): Lib.Autocmd.Dispatcher.Handle
 ---@field registry fun(): Lib.Autocmd.Dispatcher.Entry[]
+---@field reattach_all fun(): integer
 ---@field filetype Lib.Autocmd.Dispatcher.FileType
 
 ---@class Lib.Autocmd.Dispatcher.FileType

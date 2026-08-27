@@ -62,6 +62,12 @@ Both used to be reasons to call `nvim_create_autocmd` directly, which cost the
 call site its record and its row in the generated table. `raw` keeps the record
 and gives up only the wrapper.
 
+`delete(id)` removes an autocmd **and** forgets its record.
+`vim.api.nvim_del_autocmd` alone leaves the record behind, so the generated
+table goes on listing something that no longer fires — the precise failure this
+registry exists to prevent. Clearing an augroup through `group(name, true)`
+already forgets its records; this is the same guarantee for one autocmd by id.
+
 `opts.src` overrides the recorded `file:line`. It exists for wrappers that
 create an autocmd on someone else's behalf: the recorded site is derived from
 the call stack, so without it a wrapper's autocmds are all attributed to the

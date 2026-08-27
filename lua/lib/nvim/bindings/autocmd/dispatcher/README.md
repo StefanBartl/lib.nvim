@@ -105,10 +105,59 @@ ft.register("markdown", function(ctx)
 end)
 
 ft.attach()    -- creates the underlying autocmd; idempotent
-ft.stats()     -- { total_keys, total_handlers, keys, attached }
+ft.stats()     -- { total_keys, total_handlers, keys, attached, mode, autocmds }
 ft.handlers()  -- every registration, in dispatch order, with desc and call site
 ft.detach()    -- removes it; idempotent, registry survives for a later attach()
 ```
+
+## Turning it off: `dispatch = false`
+
+```lua
+-- per dispatcher, decided by its author
+dispatcher.new({ …, dispatch = false })
+
+-- or globally, for a whole session
+vim.g.lib_nvim_autocmd_dispatch = false
+require("lib.nvim.bindings.autocmd.dispatcher").reattach_all()
+```
+
+Bypass mode builds **one plain autocmd per handler** instead of one for all of
+them. Everything else is unchanged: the same `key` function runs, the same
+globs match, `once` is still per buffer, `unregister(owner)` still works, and
+handlers still receive the same `ctx`.
+
+Two reasons it exists:
+
+- **An escape hatch.** A dispatcher makes N features share one object. Before
+  this, undoing that meant editing all N call sites. Now it is a flag.
+- **Checking the claim.** The cost table at the top of this file is one
+  machine and one synthetic benchmark. An argument you cannot re-measure in
+  your own config is one you have to take on faith.
+
+The mode is resolved at `attach()`, not at `new()`, so `detach()` → flip →
+`attach()` switches a live dispatcher. `reattach_all()` does that for every
+dispatcher that is currently attached — dispatchers you had deliberately
+detached stay detached. `stats()` and `registry()` report `mode` and how many
+autocmds are actually behind the handlers.
+
+### Where bypass is not a perfect A/B
+
+It reproduces the *shape* this module replaced — N autocmds, each doing its own
+key work — but not byte-for-byte. Four differences, all of which matter more
+for "am I measuring the same program" than for day-to-day use:
+
+| | dispatch | bypass |
+| --- | --- | --- |
+| a handler that throws | aborts the rest of that event's handlers | the others still run |
+| `opts.context` | built once per event | built once per *matching handler* |
+| `priority` | honoured on every dispatch | honoured at `attach()`; anything registered later lands last regardless |
+| events | one autocmd on the dispatcher's event list | every handler on the **whole** event list, even if its keys only name one event |
+
+The last one is why a bypass measurement is a slight over-estimate of the
+pre-dispatcher world: before, a feature listened only to the events it cared
+about. Everything the callers here depend on is asserted in both modes from one
+suite in `TESTS/autocmd_dispatcher_spec.lua` — a second code path nobody
+exercises rots.
 
 ## `owner`, and why a shared dispatcher needs it
 

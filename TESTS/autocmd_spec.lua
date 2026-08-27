@@ -172,4 +172,33 @@ return function(H)
 
     vim.api.nvim_del_augroup_by_name(name)
   end
+
+  -- `delete(id)` drops the autocmd AND its record. `nvim_del_autocmd` alone
+  -- leaves the record, so the generated table goes on listing something that
+  -- no longer fires -- the precise failure this registry exists to prevent.
+  do
+    local name = "lib_nvim_spec_delete_" .. tostring(vim.uv.hrtime())
+    local id = autocmd.group(name, true)
+
+    local a = autocmd.create("User", function() end, { group = id, pattern = "SpecDelA" })
+    autocmd.create("User", function() end, { group = id, pattern = "SpecDelB" })
+    H.eq(#autocmd.registered({ group = name }), 2, "two autocmds recorded")
+
+    H.eq(autocmd.delete(a), true, "delete() reports success for a live id")
+    H.eq(#autocmd.registered({ group = name }), 1, "delete() forgets the record too")
+    H.eq(#vim.api.nvim_get_autocmds({ group = id }), 1, "delete() removed the autocmd itself")
+    H.eq(
+      autocmd.registered({ group = name })[1].pattern,
+      "SpecDelB",
+      "the surviving record is the other one"
+    )
+
+    -- nvim tolerates deleting an id it already dropped, and refuses one it
+    -- never issued. `delete` reports that verdict rather than raising either
+    -- way, so a teardown can be as unconditional as it wants to be.
+    H.eq(autocmd.delete(a), true, "deleting an already-deleted id is tolerated")
+    H.eq(autocmd.delete(2 ^ 30), false, "deleting an id nvim never issued reports false")
+
+    vim.api.nvim_del_augroup_by_name(name)
+  end
 end

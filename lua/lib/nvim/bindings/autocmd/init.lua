@@ -138,6 +138,31 @@ function M.by_event()
   return out
 end
 
+---Delete an autocmd **and** forget its record.
+---
+---`nvim_del_autocmd` alone leaves the record behind: the autocmd stops firing
+---and the generated bindings table goes on listing it, which is the precise
+---failure this registry exists to prevent. Clearing an augroup through
+---`group(name, true)` already forgets its records; this is the same guarantee
+---for deleting one autocmd by id.
+---
+---Found from the dispatcher's `detach()`: flipping a dispatcher between shared
+---and per-handler mode twice left sixteen records describing fourteen real
+---autocmds.
+---@param id integer
+---@return boolean deleted  # false when nvim did not know the id
+function M.delete(id)
+  local deleted = pcall(vim.api.nvim_del_autocmd, id)
+  local kept = {}
+  for _, r in ipairs(records) do
+    if r.id ~= id then
+      kept[#kept + 1] = r
+    end
+  end
+  records = kept
+  return deleted
+end
+
 ---@param name string
 ---@param clear boolean|nil
 ---@return integer

@@ -396,4 +396,190 @@ return function(H)
     d.detach()
     vim.api.nvim_del_augroup_by_name("spec.dispatcher.desc")
   end
+
+  -- ------------------------------------------------------------ bypass mode
+  -- `dispatch = false` builds one plain autocmd per handler instead of one for
+  -- all of them: an escape hatch if a shared dispatcher misbehaves (N features
+  -- hang off one object, and editing all N was the only way out), and a way to
+  -- re-measure the README's cost claim in a real config rather than take it on
+  -- faith.
+  --
+  -- A second code path nobody exercises rots, so the behaviour every caller
+  -- depends on is asserted in BOTH modes below, from one suite.
+  ---@param label string
+  ---@param dispatch boolean
+  local function shared_suite(label, dispatch)
+    local group = ("spec.dispatcher.%s"):format(label)
+    local calls, order = {}, {}
+    local d = dispatcher.new({
+      event = "User",
+      name = "spec_" .. label,
+      group = group,
+      dispatch = dispatch,
+      key = function(ev)
+        return ev.match
+      end,
+    })
+
+    d.register("Exact", {
+      load = function(ctx)
+        calls[#calls + 1] = ctx.key
+        order[#order + 1] = "late"
+      end,
+      owner = "a",
+      desc = "exact key",
+      priority = 10,
+    })
+    d.register("Ex*", {
+      load = function()
+        order[#order + 1] = "early"
+      end,
+      owner = "b",
+      desc = "glob key",
+      priority = 1,
+    })
+    d.register({ "Multi1", "Multi2" }, {
+      load = function()
+        calls[#calls + 1] = "multi"
+      end,
+      owner = "c",
+      desc = "two keys, one once-slot",
+      once = true,
+    })
+    d.attach()
+
+    eq(d.stats().mode, dispatch and "dispatch" or "bypass", label .. ": stats() names the mode")
+
+    vim.api.nvim_exec_autocmds("User", { pattern = "Exact" })
+    eq(#calls, 1, label .. ": an exact key fires its handler")
+    eq(calls[1], "Exact", label .. ": ctx.key is the concrete key that matched")
+    eq(table.concat(order, ","), "early,late", label .. ": handlers run in priority order")
+
+    vim.api.nvim_exec_autocmds("User", { pattern = "NoMatch" })
+    eq(#calls, 1, label .. ": a key with no handler fires nothing")
+
+    -- One `once` slot across both of a registration's keys, per buffer.
+    vim.api.nvim_exec_autocmds("User", { pattern = "Multi1" })
+    vim.api.nvim_exec_autocmds("User", { pattern = "Multi2" })
+    eq(#calls, 2, label .. ": once = true spans every key of one registration")
+
+    -- Registering after attach() still works (it needs its own autocmd in
+    -- bypass mode, where the others were built up front).
+    local late = 0
+    d.register("Late", {
+      load = function()
+        late = late + 1
+      end,
+      owner = "d",
+      desc = "registered after attach",
+    })
+    vim.api.nvim_exec_autocmds("User", { pattern = "Late" })
+    eq(late, 1, label .. ": a handler registered after attach() fires")
+
+    eq(d.unregister("d"), 1, label .. ": unregister() reports what it dropped")
+    vim.api.nvim_exec_autocmds("User", { pattern = "Late" })
+    eq(late, 1, label .. ": an unregistered handler stops firing")
+
+    vim.api.nvim_exec_autocmds("User", { pattern = "Exact" })
+    eq(#calls, 3, label .. ": the other owners are untouched by an unregister")
+
+    d.detach()
+    eq(d.stats().attached, false, label .. ": detach() clears the attach state")
+    vim.api.nvim_exec_autocmds("User", { pattern = "Exact" })
+    eq(#calls, 3, label .. ": nothing fires after detach()")
+
+    -- Found by flipping filetree between the two modes twice: sixteen records
+    -- describing fourteen real autocmds, because detach() used
+    -- nvim_del_autocmd directly and the registry never heard about it.
+    eq(
+      #require("lib.nvim.bindings.autocmd").registered({ group = group }),
+      0,
+      label .. ": detach() leaves no record behind"
+    )
+
+    pcall(vim.api.nvim_del_augroup_by_name, group)
+    return d
+  end
+
+  shared_suite("dispatch_mode", true)
+  shared_suite("bypass_mode", false)
+
+  -- The one thing that must DIFFER: how many autocmds back the handlers.
+  do
+    ---@param dispatch boolean
+    ---@param label string
+    ---@return integer  # how many autocmds three handlers ended up behind
+    local function count_autocmds(dispatch, label)
+      local group = ("spec.dispatcher.count_%s"):format(label)
+      local d2 = dispatcher.new({
+        event = "User",
+        name = "spec_count_" .. label,
+        group = group,
+        dispatch = dispatch,
+        key = function(ev)
+          return ev.match
+        end,
+      })
+      for i = 1, 3 do
+        d2.register("K" .. i, { load = function() end, owner = "o", desc = "h" .. i })
+      end
+      d2.attach()
+
+      local recs = require("lib.nvim.bindings.autocmd").registered({ group = group })
+      d2.detach()
+      pcall(vim.api.nvim_del_augroup_by_name, group)
+      return #recs
+    end
+
+    local n_dispatch = count_autocmds(true, "dispatch")
+    local n_bypass = count_autocmds(false, "bypass")
+    eq(n_dispatch, 2, "dispatch mode: one autocmd for all handlers, plus the BufWipeout cleanup")
+    eq(n_bypass, 4, "bypass mode: one autocmd per handler, plus the BufWipeout cleanup")
+  end
+
+  -- The global switch, and the re-attach that makes it usable.
+  do
+    local group = "spec.dispatcher.global"
+    local d = dispatcher.new({
+      event = "User",
+      name = "spec_global",
+      group = group,
+      key = function(ev)
+        return ev.match
+      end,
+    })
+    d.register("G", { load = function() end, owner = "o", desc = "g" })
+    d.attach()
+    eq(d.stats().mode, "dispatch", "no opt and no global: dispatch mode")
+
+    vim.g.lib_nvim_autocmd_dispatch = false
+    eq(d.stats().mode, "dispatch", "the global does not take effect until the next attach()")
+
+    ok(dispatcher.reattach_all() >= 1, "reattach_all() re-attaches what is attached")
+    eq(d.stats().mode, "bypass", "after reattach_all() the global has taken effect")
+
+    vim.g.lib_nvim_autocmd_dispatch = nil
+    dispatcher.reattach_all()
+    eq(d.stats().mode, "dispatch", "clearing the global goes back to shared dispatch")
+
+    -- An explicit opt outranks the global in both directions.
+    vim.g.lib_nvim_autocmd_dispatch = false
+    local forced = dispatcher.new({
+      event = "User",
+      name = "spec_forced",
+      group = "spec.dispatcher.forced",
+      dispatch = true,
+      key = function(ev)
+        return ev.match
+      end,
+    })
+    forced.attach()
+    eq(forced.stats().mode, "dispatch", "an explicit dispatch = true beats the global")
+    forced.detach()
+    vim.g.lib_nvim_autocmd_dispatch = nil
+
+    d.detach()
+    pcall(vim.api.nvim_del_augroup_by_name, group)
+    pcall(vim.api.nvim_del_augroup_by_name, "spec.dispatcher.forced")
+  end
 end
