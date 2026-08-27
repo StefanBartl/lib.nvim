@@ -12,6 +12,7 @@ local M = {}
 
 M.augroup = require("lib.lua.lazy").require("lib.nvim.bindings.autocmd.augroup")
 M.dispatcher = require("lib.lua.lazy").require("lib.nvim.bindings.autocmd.dispatcher")
+M.docs = require("lib.lua.lazy").require("lib.nvim.bindings.autocmd.docs")
 
 ---@type table<string, integer>
 local groups = {}

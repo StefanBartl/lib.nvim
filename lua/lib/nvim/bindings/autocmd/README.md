@@ -72,6 +72,36 @@ registrations, and nothing anywhere said so. Clearing an augroup
 (`group(name, true)`) drops that group's records with it, so a re-`setup()`
 does not make the list grow.
 
+## Writing it into `bindings/` — `docs.write()`
+
+If you want the overview as files in the repo rather than a runtime call —
+"everything the plugin binds lives under `bindings/`" — `docs` renders the
+registry as markdown, one file per event family:
+
+```lua
+require("lib.nvim.bindings.autocmd").docs.write({
+  dir    = repo .. "/lua/myplugin/bindings/autocmd",
+  root   = repo,                       -- source paths become repo-relative
+  filter = function(r)                 -- only this plugin's records
+    return type(r.group) == "string" and r.group:match("^myplugin") ~= nil
+  end,
+  note   = "Generated with the default configuration.",
+})
+```
+
+`docs.check(opts)` compares against what is on disk without writing, for CI —
+a generated file nobody verifies goes stale, which is the failure this whole
+registry exists to end. Pass it the *same* opts as `write`.
+
+Markdown, not Lua: a `.lua` file that is really a listing pretends to be code
+that runs, and the next reader goes looking for its callers.
+
+**Never call this from `setup()`.** Writing files is a side effect a plugin
+should not perform unasked, and the directory it would write into is the
+*installed* plugin directory — your own repo while developing, somebody else's
+plugin-manager-owned tree in every other case. Put it behind a command of your
+own, or run it from CI.
+
 ## Normalization helpers
 
 ```lua
