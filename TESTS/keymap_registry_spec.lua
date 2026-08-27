@@ -430,6 +430,22 @@ return function(H)
   local hidden = vim.fn.maparg("<Plug>(libspec-hidden)", "n", false, true)
   eq(hidden.desc, "which_key_ignore", "which_key = false marks the mapping hidden")
 
+  -- ------------------------------------------- set() leaves opts untouched
+  -- One options table reused across two calls must not carry the first
+  -- binding's `desc` into the second: that is how documentation.nvim ended up
+  -- with every key in its browser labelled "close".
+  local shared = { buffer = false }
+  keymap("n", "<Plug>(libspec-opts1)", function() end, shared, "first")
+  keymap("n", "<Plug>(libspec-opts2)", function() end, shared)
+
+  eq(shared.desc, nil, "set() does not write desc into the caller's opts")
+  eq(shared.noremap, nil, "set() does not write noremap into the caller's opts")
+  eq(
+    vim.fn.maparg("<Plug>(libspec-opts2)", "n", false, true).desc,
+    "",
+    "the second binding does not inherit the first one's desc"
+  )
+
   -- ----------------------------------------------------------- clean up
   for _, lhs in ipairs({
     "<Plug>(libspec-callable)",
@@ -443,6 +459,8 @@ return function(H)
     "<Plug>(libspec-k5)",
     "<Plug>(libspec-k6)",
     "<Plug>(libspec-both-moved)",
+    "<Plug>(libspec-opts1)",
+    "<Plug>(libspec-opts2)",
   }) do
     pcall(vim.keymap.del, "n", lhs)
   end

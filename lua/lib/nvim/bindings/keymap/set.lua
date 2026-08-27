@@ -79,7 +79,14 @@ end
 ---@param desc string?
 ---@type Lib.Map
 return function(modes, lhs, rhs, opts, desc)
-  opts = opts or {}
+  -- A COPY, never the caller's own table. Everything below writes into
+  -- `opts` -- `desc`, `noremap`, `silent`, the normalised `buffer` -- and
+  -- writing that back into the table the caller handed over means one options
+  -- table reused across several calls silently carries the previous binding's
+  -- `desc` into the next one. documentation.nvim hit exactly that: every key
+  -- in its browser showed up in which-key labelled "close", and it had to
+  -- build a fresh table per binding to work around it.
+  opts = opts and vim.tbl_extend("force", {}, opts) or {}
 
   ---@type Lib.Map.ErrorFlags
   local flags = {
