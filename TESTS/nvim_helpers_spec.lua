@@ -46,6 +46,7 @@ return function(H)
     "lib.nvim.safe_api",
     "lib.nvim.neotree.node",
     "lib.nvim.neotree.watch",
+    "lib.nvim.health",
   }) do
     ok(require(mod) ~= nil, "loads: " .. mod)
   end
@@ -86,6 +87,41 @@ return function(H)
     "core.first_available: skips missing candidates"
   )
   eq(core.first_available({ "nope_xyz_abc" }), nil, "core.first_available: none available -> nil")
+
+  -- -------------------------------------------------------------- lib.nvim.health
+  local health_mod = require("lib.nvim.health")
+  local nv = vim.version()
+  ok(
+    health_mod.version_ok({ nv.major, nv.minor, nv.patch }),
+    "health.version_ok: exactly the running version is OK"
+  )
+  ok(health_mod.version_ok({ 0, 0, 0 }), "health.version_ok: floor of 0.0.0 is always OK")
+  ok(
+    not health_mod.version_ok({ nv.major + 1, 0, 0 }),
+    "health.version_ok: a future major version is not OK"
+  )
+
+  -- health.check_require just proxies to vim.health.{ok,warn,info} — assert it
+  -- doesn't error for a real and a fake module at each level, since the
+  -- report itself isn't capturable headlessly.
+  ok(
+    select(1, pcall(health_mod.check_require, "lib.nvim.health", "self", "warn")),
+    "health.check_require: does not error for a module that loads"
+  )
+  ok(
+    select(
+      1,
+      pcall(health_mod.check_require, "definitely_not_a_real_module_xyz", "missing", "info")
+    ),
+    "health.check_require: does not error for a missing module (info level)"
+  )
+  ok(
+    select(
+      1,
+      pcall(health_mod.check_require, "definitely_not_a_real_module_xyz", "missing", "warn")
+    ),
+    "health.check_require: does not error for a missing module (warn level)"
+  )
 
   -- ---------------------------------------------------------- lib.nvim.normalize
   local norm = require("lib.nvim.normalize")

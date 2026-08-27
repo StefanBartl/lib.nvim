@@ -213,6 +213,9 @@ Neovim adapters.
                            render, format_lines/_buffer/_at_cursor/_file);
                            extracted from markdown.nvim and buffer-ctx.nvim,
                            see lua/lib/nvim/markdown/table/README.md
+    lib.nvim.health         :checkhealth authoring helpers: version_ok(min),
+                           check_require(mod, label, level); see
+                           lua/lib/nvim/health/README.md
     (telemetry)            opt-in call counting / usage statistics moved to
                            runtime-analysis.telemetry (runtime-analysis.nvim,
                            a sibling plugin; see that plugin's README.md and

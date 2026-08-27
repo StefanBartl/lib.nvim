@@ -13,6 +13,8 @@ local h_info = H.info or H.report_info
 
 local MIN_NVIM = { 0, 10, 0 }
 
+local version_ok = require("lib.nvim.health").version_ok
+
 ---@type string[] One representative module per namespace; each must load.
 local PROBE = {
   "lib.lua.tables.array",
@@ -31,27 +33,13 @@ local PROBE = {
   "lib.nvim.bindings.autocmd.dispatcher",
 }
 
----@internal
----Checks whether the running Neovim version meets MIN_NVIM.
----@return boolean
-local function version_ok()
-  local v = vim.version()
-  if v.major ~= MIN_NVIM[1] then
-    return v.major > MIN_NVIM[1]
-  end
-  if v.minor ~= MIN_NVIM[2] then
-    return v.minor > MIN_NVIM[2]
-  end
-  return v.patch >= MIN_NVIM[3]
-end
-
 ---Runs all lib.nvim health checks and reports via vim.health.
 function M.check()
   -- Neovim version --------------------------------------------------------
   h_start("lib.nvim: environment")
   local v = vim.version()
   local vstr = ("%d.%d.%d"):format(v.major, v.minor, v.patch)
-  if version_ok() then
+  if version_ok(MIN_NVIM) then
     h_ok(("Neovim %s (>= %d.%d.%d)"):format(vstr, MIN_NVIM[1], MIN_NVIM[2], MIN_NVIM[3]))
   else
     h_warn(
