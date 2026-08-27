@@ -67,7 +67,10 @@ function M.build(scope, level, msg, ctx, opts, want_src, redact, src_level)
     level_name = M.level_name(level),
     scope = scope,
     msg = msg,
-    ctx = serialize.sanitize_ctx(raw_ctx, redact),
+    -- The two caps are per call, not per logger: the right width for one
+    -- line is a property of what is being logged. A call that knows it is
+    -- dumping something wide says so at the call site.
+    ctx = serialize.sanitize_ctx(raw_ctx, redact, opts),
     tags = opts and opts.tags or nil,
   }
 

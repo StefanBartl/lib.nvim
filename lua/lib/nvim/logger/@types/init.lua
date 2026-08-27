@@ -32,6 +32,8 @@
 ---@field tags? string[]   # tags for this call (for later enable/disable)
 ---@field to? string       # write this call to a different file (per-call override)
 ---@field notify? boolean  # force (true) or suppress (false) the notify sink for this call
+---@field max_depth? integer  # nesting levels kept in `ctx` before "<max-depth>" (default 8)
+---@field max_items? integer  # entries kept per table in `ctx` before "<truncated>" (default 200)
 
 ---A logger instance (returned by `.new`).
 --- Every `<level>` method's `ctx` may be a table OR a thunk returning one

@@ -9,8 +9,18 @@
 
 local M = {}
 
+--- Defaults for the two caps `sanitize` applies, overridable per call.
+---
+--- Per call rather than through a library-wide setting: this is a library,
+--- and the right width for one log line is a property of what is being
+--- logged, not of the process doing it. `lib.lua.dump.to_lines` takes
+--- `max_depth` the same way.
 local MAX_DEPTH = 8
 local MAX_ITEMS = 200 -- per table, guards against dumping a whole buffer table
+
+---@class Lib.Logger.SanitizeOpts
+---@field max_depth? integer  # Nesting levels kept before `"<max-depth>"` (default 8).
+---@field max_items? integer  # Entries kept per table before `"<truncated>"` (default 200).
 
 ---@internal
 ---Recursively convert `value` into something `vim.json.encode` accepts.
@@ -18,8 +28,9 @@ local MAX_ITEMS = 200 -- per table, guards against dumping a whole buffer table
 ---@param redact table<string, true>|nil  # keys to replace with "<redacted>"
 ---@param depth integer
 ---@param seen table   # identity set for cycle detection
+---@param limits { max_depth: integer, max_items: integer }
 ---@return any
-local function sanitize(value, redact, depth, seen)
+local function sanitize(value, redact, depth, seen, limits)
   local t = type(value)
 
   if t == "string" or t == "boolean" then
@@ -46,7 +57,7 @@ local function sanitize(value, redact, depth, seen)
   if seen[value] then
     return "<cycle>"
   end
-  if depth >= MAX_DEPTH then
+  if depth >= limits.max_depth then
     return "<max-depth>"
   end
   seen[value] = true
@@ -66,16 +77,16 @@ local function sanitize(value, redact, depth, seen)
   if is_array then
     for i = 1, #value do
       count = count + 1
-      if count > MAX_ITEMS then
+      if count > limits.max_items then
         out[#out + 1] = "<truncated>"
         break
       end
-      out[i] = sanitize(value[i], redact, depth + 1, seen)
+      out[i] = sanitize(value[i], redact, depth + 1, seen, limits)
     end
   else
     for k, v in pairs(value) do
       count = count + 1
-      if count > MAX_ITEMS then
+      if count > limits.max_items then
         out["<truncated>"] = true
         break
       end
@@ -83,7 +94,7 @@ local function sanitize(value, redact, depth, seen)
       if redact and redact[key] then
         out[key] = "<redacted>"
       else
-        out[key] = sanitize(v, redact, depth + 1, seen)
+        out[key] = sanitize(v, redact, depth + 1, seen, limits)
       end
     end
   end
@@ -95,13 +106,22 @@ end
 ---Sanitize a context table for safe logging.
 ---@param ctx table|nil
 ---@param redact string[]|nil
+---@param opts Lib.Logger.SanitizeOpts|nil  # Per-call caps; see the defaults above.
 ---@return table|nil
-function M.sanitize_ctx(ctx, redact)
+function M.sanitize_ctx(ctx, redact, opts)
+  opts = opts or {}
+  local limits = {
+    max_depth = (type(opts.max_depth) == "number" and opts.max_depth > 0) and opts.max_depth
+      or MAX_DEPTH,
+    max_items = (type(opts.max_items) == "number" and opts.max_items > 0) and opts.max_items
+      or MAX_ITEMS,
+  }
+
   if ctx == nil then
     return nil
   end
   if type(ctx) ~= "table" then
-    return { value = sanitize(ctx, nil, 0, {}) }
+    return { value = sanitize(ctx, nil, 0, {}, limits) }
   end
   local redact_set
   if redact and #redact > 0 then
@@ -110,7 +130,7 @@ function M.sanitize_ctx(ctx, redact)
       redact_set[key] = true
     end
   end
-  return sanitize(ctx, redact_set, 0, {})
+  return sanitize(ctx, redact_set, 0, {}, limits)
 end
 
 ---Encode a record to a single JSONL line (no trailing newline).
