@@ -137,6 +137,9 @@ Editor-independent Lua helpers. No `vim` API; usable/testable outside Neovim.
     lib.lua.dump        recursive Lua value dumper (vim.inspect alternative)
     lib.lua.memo        memoization
     lib.lua.lazy        lazy-require proxy
+    lib.lua.config      the "defaults + user overrides" store pattern:
+                        deep_merge (non-mutating, arrays replaced wholesale)
+                        + get(tbl, path) dot-path accessor
 
 ------------------------------------------------------------------------------
 lib.nvim                                                    *lib.nvim-lib.nvim*

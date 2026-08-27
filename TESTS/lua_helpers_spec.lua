@@ -259,6 +259,27 @@ return function(H)
   tables.deep_merge(scalar_dst, { k = "now a string" })
   eq(scalar_dst.k, "now a string", "tables.deep_merge: scalar in src replaces a table in dst")
 
+  -- -------------------------------------------------------------- lib.lua.config
+  local config = require("lib.lua.config")
+
+  -- Unlike tables.deep_merge above, this one does not mutate its arguments
+  -- and does not merge into list-like tables — it replaces them wholesale,
+  -- which is the config-store behaviour cascade.nvim/spotlight.nvim need.
+  local base = { a = 1, nested = { x = 1, y = 2 }, groups = { "a", "b", "c" } }
+  local merged = config.deep_merge(base, { b = 2, nested = { y = 99 }, groups = { "x" } })
+  eq(base.b, nil, "config.deep_merge: base is not mutated")
+  eq(merged.a, 1, "config.deep_merge: untouched key survives")
+  eq(merged.b, 2, "config.deep_merge: new top-level key added")
+  eq(merged.nested.x, 1, "config.deep_merge: nested key not in override survives")
+  eq(merged.nested.y, 99, "config.deep_merge: nested key in override overwrites")
+  eq(#merged.groups, 1, "config.deep_merge: a list-like override replaces wholesale")
+  eq(merged.groups[1], "x", "config.deep_merge: ...instead of merging index-by-index")
+
+  eq(config.get({ a = { b = { c = 42 } } }, "a.b.c"), 42, "config.get: nested dot-path")
+  eq(config.get({ a = 1 }, "a.b"), nil, "config.get: descending into a non-table -> nil")
+  eq(config.get({ a = 1 }, "missing"), nil, "config.get: missing key -> nil")
+  eq(config.get({ a = 1 }, nil), nil, "config.get: non-string path -> nil")
+
   -- --------------------------------------------------------------- lib.lua.dump
   local dump = require("lib.lua.dump")
 
