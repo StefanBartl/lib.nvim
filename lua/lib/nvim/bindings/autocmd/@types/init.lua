@@ -34,3 +34,16 @@
 ---@field dispatcher Lib.Autocmd.Dispatcher
 
 return {}
+
+--- One autocmd as it was actually created, recorded by
+--- `lib.nvim.bindings.autocmd.create`. Read it back with `registered()` or
+--- `by_event()`.
+---@class Lib.Autocmd.Record
+---@field id integer          # nvim_create_autocmd's id
+---@field events string[]     # always a list, even for a single event
+---@field group string|nil    # augroup name, when one was given by name
+---@field pattern string|string[]|nil
+---@field buffer integer|nil  # set instead of `pattern` for a buffer-local autocmd
+---@field desc string|nil
+---@field once boolean
+---@field src string          # "file:line" of the call site, so the answer says where to look

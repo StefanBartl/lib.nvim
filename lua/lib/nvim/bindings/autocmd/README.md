@@ -48,6 +48,30 @@ the same name return the same augroup id without recreating it.
 one-off: `autocmd.augroup.create.clear(name)` always creates (or clears) a
 namespaced augroup unconditionally, with no caching.
 
+## What fires when — `registered()` / `by_event()`
+
+Every autocmd created through `create()` is recorded, so a plugin never has
+to maintain its own list of "what fires when":
+
+```lua
+local au = require("lib.nvim.bindings.autocmd")
+
+au.registered()                          -- every record, creation order
+au.registered({ event = "BufWritePost" })
+au.registered({ group = "filetree_preview" })
+au.by_event()                            -- grouped: { FileType = { … }, … }
+```
+
+Each record carries `events`, `group`, `pattern`/`buffer`, `desc`, `once` and
+`src` — the `file:line` of the call site, because "something re-highlights on
+CursorMoved" is only half an answer; the other half is which file to open.
+
+Recorded rather than catalogued by hand, because a hand-written mirror
+drifts: filetree's claimed fourteen entries against forty-six real
+registrations, and nothing anywhere said so. Clearing an augroup
+(`group(name, true)`) drops that group's records with it, so a re-`setup()`
+does not make the list grow.
+
 ## Normalization helpers
 
 ```lua

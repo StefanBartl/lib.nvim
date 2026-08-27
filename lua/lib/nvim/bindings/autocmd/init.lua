@@ -35,6 +35,100 @@ end
 --- the next `group()` for that name handed back an id Neovim no longer knew and
 --- every `create()` against it failed with "Invalid 'group'". Found from
 --- lsp.nvim, whose `bindings/autocmds.clear()` does exactly that.
+--- Every autocmd this module created, in creation order.
+---
+--- Recorded rather than catalogued by hand. A plugin's own list of "what
+--- fires when" is a mirror, and mirrors drift: filetree's hand-written one
+--- claimed fourteen entries against forty-six real registrations, and nothing
+--- anywhere said so. This one cannot be wrong about what exists, because it
+--- *is* what exists.
+---
+--- The source location is part of the answer. "Something re-highlights on
+--- CursorMoved" is only half of what a reader wants; the other half is which
+--- file to open.
+---@type Lib.Autocmd.Record[]
+local records = {}
+
+---@internal
+--- Where `create()` was called from, as `file:line`.
+---
+--- Level 3: getinfo -> this function -> M.create -> the caller.
+---@return string
+local function caller_site()
+  local info = debug.getinfo(3, "Sl")
+  if not info then
+    return "?"
+  end
+  local src = (info.source or "?"):gsub("^@", "")
+  return ("%s:%d"):format(src, info.currentline or -1)
+end
+
+---@internal
+--- Forget every record belonging to `group_name`.
+---
+--- Called when an augroup is cleared: Neovim drops the autocmds, so keeping
+--- their records would make the list grow on every `setup()` and describe
+--- autocmds that no longer fire -- the exact failure the hand-written
+--- catalogues had.
+---@param group_name string
+---@return nil
+local function forget_group(group_name)
+  local kept = {}
+  for _, r in ipairs(records) do
+    if r.group ~= group_name then
+      kept[#kept + 1] = r
+    end
+  end
+  records = kept
+end
+
+---Every autocmd created through this module, newest last.
+---
+---What `:checkhealth`, a generated bindings page and a "what fires on
+---BufWritePost" question all need, without any of them re-deriving it from
+---source.
+---@param filter { event?: string, group?: string }|nil
+---@return Lib.Autocmd.Record[]
+function M.registered(filter)
+  if not filter then
+    return vim.deepcopy(records)
+  end
+  local out = {}
+  for _, r in ipairs(records) do
+    local ok = true
+    if filter.group and r.group ~= filter.group then
+      ok = false
+    end
+    if ok and filter.event then
+      ok = false
+      for _, e in ipairs(r.events) do
+        if e == filter.event then
+          ok = true
+          break
+        end
+      end
+    end
+    if ok then
+      out[#out + 1] = vim.deepcopy(r)
+    end
+  end
+  return out
+end
+
+---The same records grouped by event, which is how the question is usually
+---asked: "what happens on FileType?"
+---@return table<string, Lib.Autocmd.Record[]>
+function M.by_event()
+  local out = {}
+  for _, r in ipairs(records) do
+    for _, e in ipairs(r.events) do
+      out[e] = out[e] or {}
+      out[e][#out[e] + 1] = vim.deepcopy(r)
+    end
+  end
+  return out
+end
+
 ---@param name string
 ---@param clear boolean|nil
 ---@return integer
@@ -44,11 +138,15 @@ function M.group(name, clear)
     if clear == true then
       -- Re-requesting with `clear` must still clear: the caller is rebuilding
       -- its autocommands, and leaving the old ones would double them up.
+      forget_group(name)
       return vim.api.nvim_create_augroup(name, { clear = true })
     end
     return cached
   end
 
+  if clear == true then
+    forget_group(name)
+  end
   groups[name] = vim.api.nvim_create_augroup(name, { clear = clear == true })
   return groups[name]
 end
@@ -116,7 +214,20 @@ function M.create(event, callback, opts)
     native_opts.pattern = opts.pattern
   end
 
-  return vim.api.nvim_create_autocmd(event, native_opts)
+  local id = vim.api.nvim_create_autocmd(event, native_opts)
+
+  records[#records + 1] = {
+    id = id,
+    events = vim.iter({ event }):flatten():totable(),
+    group = type(opts.group) == "string" and opts.group or nil,
+    pattern = native_opts.pattern,
+    buffer = native_opts.buffer,
+    desc = opts.desc ~= "" and opts.desc or nil,
+    once = native_opts.once,
+    src = caller_site(),
+  }
+
+  return id
 end
 
 -- Normalize event configuration to a non-empty list.
