@@ -248,9 +248,10 @@ call is `pcall`ed, because a wrong label is never worth taking a plugin's
 ## Reading the registry back
 
 ```lua
-keymap.registered()            -- every plugin's actions
+keymap.registered()            -- every plugin's actions AND its plain set() maps
 keymap.registered("spotlight") -- one plugin's
-keymap.conflicts()             -- lhs values claimed by more than one plugin
+keymap.conflicts()             -- lhs values claimed more than once
+keymap.forget("spotlight")     -- drop a plugin's direct records before a re-setup
 ```
 
 This is what makes it a registry rather than a binder. The same list is what a
@@ -258,6 +259,33 @@ This is what makes it a registry rather than a binder. The same list is what a
 reachable as a user command?" audit each need — and each of them re-deriving it
 from source is how those drift apart.
 
-`conflicts()` is deliberately *not* checked during registration: a plugin
-cannot know what a later one will bind, so the answer is only meaningful once
-everything has loaded.
+### Plain `set()` calls count too
+
+A plain `keymap.set(...)` used to record **nothing**, and that is the call
+almost everybody actually makes. The gap was not small: in the author's config,
+59 registered actions against 305 real keymaps. A page generated from this
+registry was over eighty percent blind, and `conflicts()` could not see a
+collision between two `set()` keymaps *even in principle* — which is most of
+them.
+
+So `set()` records as well. Such an entry is marked `direct = true`, carries the
+`file:line` it was called from, and lands in a bucket derived from that path (the
+directory holding the `lua/` it sits under), so a plugin's direct calls group
+under the plugin without anyone passing a name. Pass `record = false` to opt out
+— `register()` does, because it writes its own richer entry.
+
+Direct records are kept in `keymap.records`, not in the same table, because
+`register()` replaces a plugin's array wholesale and would otherwise wipe them;
+`registered()` merges the two and returns a copy. A `setup()` that rebinds the
+same keys should call `forget(plugin)` first, or the list grows on every call.
+
+### `conflicts()`
+
+Deliberately *not* checked during registration: a plugin cannot know what a
+later one will bind, so the answer is only meaningful once everything has
+loaded.
+
+Buffer scope is part of the identity. A buffer-local binding and a global one on
+the same key are not a conflict — the local one shadows the global one inside
+its buffer, and that is the point of it. Bucketing them together would report
+every buffer-local preset, and a report that cries wolf is one nobody reads.

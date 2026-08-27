@@ -300,6 +300,11 @@ function M.register(plugin, spec, user, opts)
             rhs = rhs,
             which_key = action.which_key,
             bound = false,
+            -- Recorded so `conflicts()` can tell a buffer-local binding apart
+            -- from a global one. A buffer-local preset re-registers per
+            -- buffer, so without this every one of them would look like it
+            -- collides with the global map of the same key.
+            buffer = opts.buffer,
           }
 
           if lhs and binding_enabled and rhs ~= nil then
@@ -318,6 +323,10 @@ function M.register(plugin, spec, user, opts)
             else
               map_opts.desc = desc
             end
+            -- `record = false`: the richer entry below goes into the
+            -- registry instead, and without this every registered action
+            -- would also appear as a direct one.
+            map_opts.record = false
             set(entry.mode, lhs, rhs, map_opts)
             entry.bound = true
           end
@@ -346,13 +355,56 @@ end
 ---`:checkhealth`, a generated bindings page, and a "reachable as a command too?"
 ---audit all need, and reading it back beats each of them re-deriving it from
 ---source.
+---
+---Includes plain `keymap.set(...)` keymaps, which are recorded separately (see
+---`keymap.records`) and merged here. They used to be absent entirely, and that
+---was most of them: 59 registered actions against 305 real keymaps in the
+---author's config. Merged rather than stored together because `register()`
+---replaces a plugin's array wholesale and would otherwise wipe them.
+---
+---Returns a **copy**, for that same reason -- mutating it does not reach either
+---store.
 ---@param plugin string|nil
 ---@return table<string, Lib.Keymap.Registered[]>|Lib.Keymap.Registered[]
 function M.registered(plugin)
+  local direct = require("lib.nvim.bindings.keymap.records").all()
+
   if plugin then
-    return registered[plugin] or {}
+    local out = {}
+    for _, e in ipairs(registered[plugin] or {}) do
+      out[#out + 1] = e
+    end
+    for _, e in ipairs(direct[plugin] or {}) do
+      out[#out + 1] = e
+    end
+    return out
   end
-  return registered
+
+  local out = {}
+  for key, entries in pairs(registered) do
+    out[key] = {}
+    for _, e in ipairs(entries) do
+      out[key][#out[key] + 1] = e
+    end
+  end
+  for key, entries in pairs(direct) do
+    out[key] = out[key] or {}
+    for _, e in ipairs(entries) do
+      out[key][#out[key] + 1] = e
+    end
+  end
+  return out
+end
+
+---Forget a plugin's direct `set()` records, or all of them.
+---
+---For a re-`setup()` that rebinds the same keys: `register()` replaces its own
+---array on every call, but direct records would otherwise accumulate and
+---describe each keymap as many times as setup has run.
+---@param plugin string|nil
+---@return integer removed
+function M.forget(plugin)
+  return require("lib.nvim.bindings.keymap.records").forget(plugin)
 end
 
 ---Actions whose `lhs` is claimed by more than one registered plugin.
@@ -364,14 +416,25 @@ end
 function M.conflicts()
   ---@type table<string, Lib.Keymap.Registered[]>
   local by_lhs = {}
-  for _, entries in pairs(registered) do
+  -- Over `M.registered()`, not the raw table: a collision between two plain
+  -- `set()` keymaps was previously invisible here *in principle*, and those
+  -- are the majority.
+  for _, entries in
+    pairs(M.registered() --[[@as table<string, Lib.Keymap.Registered[]> ]])
+  do
     for _, e in ipairs(entries) do
       if e.bound and e.lhs then
         local modes = type(e.mode) == "table" and e.mode or { e.mode }
+        -- Buffer scope is part of the identity. A buffer-local `p` and a
+        -- global `p` do not collide -- the local one shadows the global one
+        -- inside its buffer and that is the point of it. Bucketing them
+        -- together would report every buffer-local preset as a conflict, and
+        -- a report that cries wolf is one nobody reads.
+        local scope = e.buffer == nil and "*" or tostring(e.buffer)
         for _, mode in
           ipairs(modes --[[@as string[] ]])
         do
-          local key = mode .. " " .. e.lhs
+          local key = mode .. " " .. scope .. " " .. e.lhs
           by_lhs[key] = by_lhs[key] or {}
           table.insert(by_lhs[key], e)
         end
@@ -383,7 +446,7 @@ function M.conflicts()
   local out = {}
   for key, entries in pairs(by_lhs) do
     if #entries > 1 then
-      local mode, lhs = key:match("^(%S+) (.*)$")
+      local mode, lhs = key:match("^(%S+) %S+ (.*)$")
       out[#out + 1] = { mode = mode, lhs = lhs, claimants = entries }
     end
   end

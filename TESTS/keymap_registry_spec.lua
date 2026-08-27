@@ -464,4 +464,93 @@ return function(H)
   }) do
     pcall(vim.keymap.del, "n", lhs)
   end
+
+  -- ------------------------------------------- direct set() calls are recorded
+  -- `register()` recorded what it bound; a plain `keymap.set(...)` recorded
+  -- nothing -- and that is the call almost everybody makes. In the author's
+  -- config it was 59 registered actions against 305 real keymaps, so a page
+  -- generated from this registry was over eighty percent blind and
+  -- `conflicts()` could not see a collision between two `set()` keymaps even
+  -- in principle.
+  do
+    keymap.forget()
+
+    keymap("n", "<Plug>SpecDirectA", function() end, { desc = "direct A" })
+    keymap({ "n", "x" }, "<Plug>SpecDirectB", function() end, nil, "direct B")
+
+    local all = keymap.registered()
+    local direct_by_lhs = {}
+    for _, entries in pairs(all) do
+      for _, e in ipairs(entries) do
+        if e.direct then
+          direct_by_lhs[e.lhs] = e
+        end
+      end
+    end
+
+    H.ok(direct_by_lhs["<Plug>SpecDirectA"] ~= nil, "a plain set() is recorded")
+    H.eq(direct_by_lhs["<Plug>SpecDirectA"].desc, "direct A", "its desc is recorded")
+    H.eq(
+      direct_by_lhs["<Plug>SpecDirectB"].desc,
+      "direct B",
+      "the positional `desc` argument is recorded too"
+    )
+    H.ok(
+      direct_by_lhs["<Plug>SpecDirectA"].src:find("keymap_registry_spec") ~= nil,
+      "the call site is recorded, which is what a generated page is for"
+    )
+
+    -- Two plain set() calls on the same key: the case conflicts() was blind to.
+    keymap("n", "<Plug>SpecDirectA", function() end, { desc = "collides" })
+    local seen = false
+    for _, c in ipairs(keymap.conflicts()) do
+      if c.lhs == "<Plug>SpecDirectA" then
+        seen = true
+        H.eq(#c.claimants, 2, "both claimants are listed")
+      end
+    end
+    H.ok(seen, "a collision between two plain set() keymaps is reported")
+
+    -- Buffer scope is part of the identity: a buffer-local binding shadows the
+    -- global one on purpose, so reporting that as a conflict cries wolf.
+    keymap.forget()
+    keymap("n", "<Plug>SpecScoped", function() end, { desc = "global" })
+    keymap("n", "<Plug>SpecScoped", function() end, { desc = "local", buffer = 0 })
+    local scoped = false
+    for _, c in ipairs(keymap.conflicts()) do
+      if c.lhs == "<Plug>SpecScoped" then
+        scoped = true
+      end
+    end
+    H.ok(not scoped, "a buffer-local binding does not collide with the global one")
+
+    -- register() must not be double-recorded: it writes its own richer entry
+    -- and passes `record = false` down to set().
+    keymap.forget()
+    keymap.register("spec_direct_probe", {
+      actions = {
+        go = { default = "<Plug>SpecRegistered", rhs = function() end, desc = "registered" },
+      },
+    })
+    local direct_count = 0
+    for _, entries in pairs(keymap.registered()) do
+      for _, e in ipairs(entries) do
+        if e.direct and e.lhs == "<Plug>SpecRegistered" then
+          direct_count = direct_count + 1
+        end
+      end
+    end
+    H.eq(direct_count, 0, "a registered action is not also recorded as a direct one")
+    H.eq(#keymap.registered("spec_direct_probe"), 1, "it is recorded once, by register()")
+
+    keymap.forget()
+    for _, lhs in ipairs({
+      "<Plug>SpecDirectA",
+      "<Plug>SpecDirectB",
+      "<Plug>SpecScoped",
+      "<Plug>SpecRegistered",
+    }) do
+      pcall(vim.keymap.del, "n", lhs)
+    end
+  end
 end

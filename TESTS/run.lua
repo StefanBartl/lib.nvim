@@ -49,6 +49,7 @@ local specs = {
   "count_spec.lua",
   "autocmd_dispatcher_spec.lua",
   "autocmd_docs_spec.lua",
+  "usercmd_registry_spec.lua",
   "run_argv_spec.lua",
   "run_spec.lua",
   "spawn_env_spec.lua",

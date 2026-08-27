@@ -15,6 +15,7 @@
 ---@field expr? boolean
 ---@field nowait? boolean
 ---@field remap? boolean
+---@field record? boolean # `false` suppresses the registry entry; `registry.register` passes it, since it writes its own.
 
 ---@class Lib.Map
 ---@field _call fun(modes: string|string[], lhs: string, rhs: string|function, opts: Lib.Map.Opts|nil, desc: string?): nil
@@ -69,13 +70,16 @@
 --- One resolved action, as recorded in the registry.
 ---@class Lib.Keymap.Registered
 ---@field plugin string
----@field name string
+---@field name string                     # The action name; the `lhs` for a direct `set()`, which has none.
 ---@field lhs string|nil                  # nil = disabled or no default.
 ---@field mode string|string[]
 ---@field desc string|nil
 ---@field rhs string|function|nil
 ---@field which_key? Lib.Keymap.WhichKey|false
 ---@field bound boolean                   # False when disabled, preset off, or no rhs.
+---@field direct? boolean                 # Came from a plain `set()` rather than `register()`.
+---@field buffer? integer|boolean         # Buffer-local scope, for a direct entry.
+---@field src? string                     # "file:line" of the call, for a direct entry.
 
 --- One `lhs` claimed by more than one registered plugin.
 ---@class Lib.Keymap.Conflict
@@ -88,5 +92,6 @@
 ---@field register fun(plugin: string, spec: Lib.Keymap.Spec, user: table|false|nil, opts?: Lib.Keymap.RegisterOpts): Lib.Keymap.Registered[]
 ---@field registered fun(plugin: string|nil): table<string, Lib.Keymap.Registered[]>|Lib.Keymap.Registered[]
 ---@field conflicts fun(): Lib.Keymap.Conflict[]
+---@field forget fun(plugin: string|nil): integer
 
 return {}

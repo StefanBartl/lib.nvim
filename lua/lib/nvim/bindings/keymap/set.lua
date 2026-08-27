@@ -72,6 +72,10 @@ local function notify_caller(flags, modes, lhs, rhs, opts)
 end
 
 ---Convenience wrapper for vim.keymap.set with defaults.
+---
+---Records what it bound, unless `opts.record` is `false`. `registry.register()`
+---passes that, because it writes its own richer entry -- without it every
+---registered action would be listed twice.
 ---@param modes string|string[]
 ---@param lhs string
 ---@param rhs string|function
@@ -128,5 +132,16 @@ return function(modes, lhs, rhs, opts, desc)
     opts.buffer = 0
   end
 
+  -- A lib option, not a native one: strip it before nvim sees it.
+  local record = opts.record ~= false
+  opts.record = nil
+
   vim.keymap.set(modes, lhs, rhs, opts)
+
+  -- After the real call, so a keymap that nvim refused is not recorded as
+  -- bound. `vim.keymap.set` raises rather than returning a verdict, so an
+  -- error here means no record either -- which is the honest outcome.
+  if record then
+    require("lib.nvim.bindings.keymap.records").add(modes, lhs, rhs, opts)
+  end
 end

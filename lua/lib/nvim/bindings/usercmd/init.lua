@@ -5,8 +5,24 @@
 --- defensive execution and LuaLS annotations.
 
 local notify = require("lib.nvim.notify").create("[lib.nvim.bindings.usercmd]")
+local util = require("lib.nvim.bindings.docs_util")
 
 local M = {}
+
+--- Every user command this module created, in creation order.
+---
+--- Recorded rather than catalogued by hand, for the reason
+--- `lib.nvim.bindings.autocmd` spells out at its own registry: a hand-kept list
+--- is a mirror, and mirrors drift.
+---
+--- `nvim_get_commands()` already answers "what commands exist", so the point
+--- here is the half it cannot: **where each one was created**. "Something
+--- defines `:CwdHere`" is not an answer a reader can act on without the file.
+---
+--- The composer keeps its own registry for verb trees (`:Verb sub ARG`); this
+--- one is for the plain `create()` calls, which had nothing.
+---@type Lib.UserCommand.Record[]
+local records = {}
 
 --- Register a user command with sane defaults (`force = true`, pcall-wrapped
 --- callback, `desc`/`nargs` defaults) and optional buffer-local registration.
@@ -39,6 +55,13 @@ function M.create(name, callback, opts)
   local bufnr = opts.buffer
   opts.buffer = nil
 
+  -- Also a lib option, not a native one: `nvim_create_user_command` rejects an
+  -- unknown key outright ("invalid key: src"). It lets a wrapper that creates
+  -- a command on a caller's behalf say whose it is -- without it, every
+  -- command such a wrapper makes is recorded at the wrapper's own line.
+  local src = opts.src
+  opts.src = nil
+
   if type(callback) == "function" then
     local user_cb = callback
     callback = function(args)
@@ -55,7 +78,88 @@ function M.create(name, callback, opts)
   else
     vim.api.nvim_create_user_command(name, callback, opts)
   end
+
+  -- After the real call: a command nvim refused is not recorded as existing.
+  --
+  -- `force = true` is the default here, so re-creating a command is normal and
+  -- must replace its record rather than add a second one -- otherwise a
+  -- re-`setup()` would describe every command as many times as setup has run.
+  for i, r in ipairs(records) do
+    if r.name == name and r.buffer == bufnr then
+      table.remove(records, i)
+      break
+    end
+  end
+
+  records[#records + 1] = {
+    name = name,
+    desc = opts.desc ~= "" and opts.desc or nil,
+    nargs = opts.nargs,
+    bang = opts.bang == true,
+    range = opts.range ~= nil and opts.range ~= false,
+    complete = type(opts.complete) == "string" and opts.complete
+      or (opts.complete ~= nil and "<function>" or nil),
+    buffer = bufnr,
+    -- Level 3: getinfo -> caller_site -> M.create -> the caller.
+    src = src or util.caller_site(3),
+  }
 end
+
+---Every user command created through this module, newest last.
+---
+---What `:checkhealth`, a generated bindings page and "who defines `:Foo`?" all
+---need, without any of them re-deriving it from source.
+---@param filter { name?: string, buffer?: integer|boolean }|nil
+---@return Lib.UserCommand.Record[]
+function M.registered(filter)
+  if not filter then
+    return vim.deepcopy(records)
+  end
+  local out = {}
+  for _, r in ipairs(records) do
+    local ok = true
+    if filter.name and r.name ~= filter.name then
+      ok = false
+    end
+    if ok and filter.buffer ~= nil and r.buffer ~= filter.buffer then
+      ok = false
+    end
+    if ok then
+      out[#out + 1] = vim.deepcopy(r)
+    end
+  end
+  return out
+end
+
+---Delete a user command **and** forget its record.
+---
+---`nvim_del_user_command` alone leaves the record behind, so a generated page
+---goes on listing a command that no longer exists -- the same failure
+---`lib.nvim.bindings.autocmd.delete` exists to prevent for autocmds.
+---@param name string
+---@param bufnr integer|nil  # Delete a buffer-local command instead.
+---@return boolean deleted
+function M.delete(name, bufnr)
+  local deleted
+  if bufnr then
+    deleted = pcall(vim.api.nvim_buf_del_user_command, bufnr, name)
+  else
+    deleted = pcall(vim.api.nvim_del_user_command, name)
+  end
+
+  local kept = {}
+  for _, r in ipairs(records) do
+    if r.name ~= name then
+      kept[#kept + 1] = r
+    end
+  end
+  records = kept
+
+  return deleted
+end
+
+--- Generated `bindings/usercmd/` markdown, from the registry above.
+M.docs = require("lib.lua.lazy").require("lib.nvim.bindings.usercmd.docs")
 
 -- Subcommand composer (`:Verb sub sub ARG` + completion + docgen). Exposed
 -- lazily to avoid a require cycle: the composer needs `usercmd.create`, so it

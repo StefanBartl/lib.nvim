@@ -60,6 +60,13 @@ function M.registered(plugin)
   return require("lib.nvim.bindings.keymap.registry").registered(plugin)
 end
 
+--- Forget direct `set()` records. See `registry.forget`.
+---@param plugin string|nil
+---@return integer
+function M.forget(plugin)
+  return require("lib.nvim.bindings.keymap.registry").forget(plugin)
+end
+
 --- `lhs` values claimed by more than one plugin. See `registry.conflicts`.
 ---@return Lib.Keymap.Conflict[]
 function M.conflicts()

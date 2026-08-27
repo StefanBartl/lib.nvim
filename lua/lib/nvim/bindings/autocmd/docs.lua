@@ -26,6 +26,9 @@
 --- records the run's own settings where the caller passes them. Treat it as a
 --- snapshot of one configuration, not as the plugin's full surface.
 
+local util = require("lib.nvim.bindings.docs_util")
+local relativize, is_under, repo_of = util.relativize, util.is_under, util.repo_of
+
 local M = {}
 
 --- Event families, in output order. First match wins, so the specific
@@ -95,41 +98,6 @@ end
 ---@return integer index into FAMILIES
 local function family_of(record)
   return family_index(record.events[1] or "")
-end
-
----@internal
---- A path relative to `root`, with forward slashes, when it is inside it.
----@param abs string
----@param root string|nil
----@return string
-local function relativize(abs, root)
-  local path = (abs or "?"):gsub("\\", "/")
-  if not root or root == "" then
-    return path
-  end
-  local prefix = root:gsub("\\", "/"):gsub("/+$", "") .. "/"
-  if path:sub(1, #prefix) == prefix then
-    return path:sub(#prefix + 1)
-  end
-  return path
-end
-
----@internal
---- Was this source path produced inside `root`?
----
---- The registry is global: one session holds records and dispatcher handlers
---- from every plugin that loaded. Writing one repo's docs means keeping only
---- what came out of that repo.
----@param abs string
----@param root string|nil
----@return boolean
-local function is_under(abs, root)
-  if not root or root == "" then
-    return true
-  end
-  local path = (abs or ""):gsub("\\", "/")
-  local prefix = root:gsub("\\", "/"):gsub("/+$", "") .. "/"
-  return path:sub(1, #prefix) == prefix
 end
 
 ---@internal
@@ -298,36 +266,6 @@ local function render(records, title, opts)
 end
 
 ---@internal
---- The repository root a path belongs to: the directory holding the `lua/`
---- that the path sits under.
----
---- Derived from a source path rather than from `cwd`, because the answer has
---- to be right when the call comes from a plugin's own command while the
---- editor's cwd is some unrelated project.
----@param path string
----@return string|nil root
----@return string|nil plugin  # the first directory under `lua/`
-local function repo_of(path)
-  local p = (path or ""):gsub("\\", "/")
-  local root, rest = p:match("^(.*)/lua/(.+)$")
-  if not root then
-    return nil, nil
-  end
-  local plugin = rest:match("^([^/]+)")
-  return root, plugin
-end
-
----@internal
---- Where the caller of `write`/`check` lives.
----
---- Level 4: getinfo -> this -> defaults() -> write/check -> the caller.
----@return string
-local function caller_file()
-  local info = debug.getinfo(4, "S")
-  return ((info and info.source) or ""):gsub("^@", "")
-end
-
----@internal
 --- Fill in what was not given.
 ---
 --- Every field has one sensible answer in almost every case, and spelling all
@@ -339,7 +277,7 @@ end
 local function defaults(opts)
   opts = vim.deepcopy(opts or {})
 
-  local root, plugin = repo_of(caller_file())
+  local root, plugin = repo_of(util.caller_file(4))
   -- A caller outside any `lua/` tree -- the user command below, a scratch
   -- buffer, `nvim -l` -- has no source path to derive from. The editor's cwd
   -- is where a developer running this by hand is sitting; the plugin name
