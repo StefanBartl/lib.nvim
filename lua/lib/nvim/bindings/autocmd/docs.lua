@@ -130,6 +130,21 @@ local function render(records, title, opts)
   lines[#lines + 1] = "setup, not the plugin's full surface."
   lines[#lines + 1] = ""
 
+  -- The registry only knows what went through this module. Autocmds created
+  -- straight from `vim.api` are real, they fire, and they are invisible here.
+  -- Saying so is the difference between an incomplete document and a wrong
+  -- one: a reader who is not told assumes the table is the whole list.
+  if opts.unregistered and opts.unregistered > 0 then
+    lines[#lines + 1] = ("> **Incomplete.** This repository also calls `nvim_create_autocmd` directly in %d place(s)."):format(
+      opts.unregistered
+    )
+    lines[#lines + 1] =
+      "> Those autocmds fire but are not registered through `lib.nvim.bindings.autocmd`,"
+    lines[#lines + 1] =
+      "> so they cannot appear below. Route them through the module to have them listed."
+    lines[#lines + 1] = ""
+  end
+
   if #records == 0 then
     lines[#lines + 1] = "_None._"
     lines[#lines + 1] = ""
@@ -265,6 +280,7 @@ end
 ---@field filter? fun(record: Lib.Autocmd.Record): boolean  # Default: every record created from a file inside `root`.
 ---@field root? string        # Repo root. Default: derived from the caller's own source path, else cwd.
 ---@field note? string        # An extra paragraph for the header, e.g. which config produced this.
+---@field unregistered? integer # Direct `nvim_create_autocmd` call sites in the repo; rendered as a warning. Counted automatically when `root` is known.
 
 ---@internal
 --- The rendered files as `{ [filename] = content }`, without touching disk.
@@ -370,6 +386,117 @@ function M.check(opts)
   end
   table.sort(stale)
   return #stale == 0, stale
+end
+
+---@internal
+--- How many autocmds this repository creates without going through the module.
+---
+--- A static scan, deliberately: those call sites leave no runtime trace to
+--- count, which is the whole problem with them. Cheap enough (one pass over
+--- the repo's own `lua/`) to run on every write, and the number is only used
+--- to warn.
+---@param root string
+---@return integer
+local function count_unregistered(root)
+  local n = 0
+  local files = vim.fn.globpath(root .. "/lua", "**/*.lua", false, true) or {}
+  for _, file in ipairs(files) do
+    local fd = io.open(file, "r")
+    if fd then
+      local text = fd:read("*a")
+      fd:close()
+      for _ in text:gmatch("nvim_create_autocmd") do
+        n = n + 1
+      end
+    end
+  end
+  return n
+end
+
+---@class Lib.Autocmd.Docs.AllOpts
+---@field under? string   # Only repositories inside this directory. Without it, every repo that registered anything -- including plugins you did not write.
+---@field note? string    # Passed through to every repo's header.
+---@field dry_run? boolean # Report what would be written, write nothing.
+
+---@class Lib.Autocmd.Docs.AllResult
+---@field root string
+---@field plugin string
+---@field dir string
+---@field written string[]
+---@field records integer
+---@field unregistered integer
+---@field err string|nil
+
+---Write `bindings/autocmd` for **every** repository that registered something
+---in this session.
+---
+---The set of repositories comes from the records themselves -- each one knows
+---the file it was created from -- and not from scanning a directory. That
+---distinction is the point: a directory scan would find repositories that are
+---installed but never loaded, and writing their docs would produce an empty
+---or truncated file where a correct one already sits. A plugin that did not
+---load simply does not appear, which is the honest outcome.
+---
+---For the same reason this is not a substitute for running it per repo: a
+---lazy-loaded plugin whose trigger has not fired yet has registered nothing.
+---Load what you want documented first.
+---@param opts Lib.Autocmd.Docs.AllOpts|nil
+---@return Lib.Autocmd.Docs.AllResult[]  # One entry per repository, sorted by name.
+function M.write_all(opts)
+  vim.validate("opts", opts, { "table", "nil" })
+  opts = opts or {}
+
+  local under = opts.under and (opts.under:gsub("\\", "/"):gsub("/+$", "") .. "/") or nil
+  local au = require("lib.nvim.bindings.autocmd")
+
+  ---@type table<string, { plugin: string, n: integer }>
+  local repos = {}
+  for _, r in ipairs(au.registered()) do
+    local root, plugin = repo_of(r.src or "")
+    if root and plugin and (not under or root:sub(1, #under) == under) then
+      repos[root] = repos[root] or { plugin = plugin, n = 0 }
+      repos[root].n = repos[root].n + 1
+    end
+  end
+
+  local roots = vim.tbl_keys(repos)
+  table.sort(roots)
+
+  local results = {}
+  for _, root in ipairs(roots) do
+    local info = repos[root]
+    local dir = ("%s/lua/%s/bindings/autocmd"):format(root, info.plugin)
+    local prefix = root .. "/"
+    local per_repo = {
+      dir = dir,
+      root = root,
+      note = opts.note,
+      unregistered = count_unregistered(root),
+      filter = function(r)
+        return ((r.src or ""):gsub("\\", "/")):sub(1, #prefix) == prefix
+      end,
+    }
+
+    local ok, err, written = true, nil
+    if opts.dry_run then
+      written = vim.tbl_keys(build(per_repo))
+      table.sort(written)
+    else
+      ok, err, written = M.write(per_repo)
+    end
+
+    results[#results + 1] = {
+      root = root,
+      plugin = info.plugin,
+      dir = dir,
+      written = written,
+      records = info.n,
+      unregistered = per_repo.unregistered,
+      err = (not ok) and err or nil,
+    }
+  end
+
+  return results
 end
 
 ---Register `:LibAutocmdDocs` (write) and `:LibAutocmdDocsCheck` (verify).
