@@ -36,7 +36,16 @@ local log = require("lib.nvim.logger").new({
   capture      = true,        -- flush ring on VimLeavePre (default true)
   history      = 200,         -- ring-buffer size
   redact       = { "token" }, -- context keys to scrub before any sink
+  max_depth    = 8,           -- nesting levels kept in `ctx` (default 8)
+  max_items    = 200,         -- entries kept per table in `ctx` (default 200)
 })
+```
+
+`max_depth`/`max_items` are this logger's defaults; a single call can override
+them where it knows it is dumping something wide:
+
+```lua
+log.info("workspace", { files = huge_list }, { max_items = 20 })
 ```
 
 Levels accept a number (`vim.log.levels`) or a name: `"trace"`, `"debug"`,
@@ -96,8 +105,8 @@ M.run = log.wrap(M.run, "run")
 
 Appends JSONL (one JSON object per line). Default:
 `stdpath("log")/lib-logger/<name>.jsonl`. Context is sanitized before encoding
-(functions/userdata stringified, cycles broken, depth/width capped, redacted
-keys scrubbed).
+(functions/userdata stringified, cycles broken, depth/width capped per
+`max_depth`/`max_items`, redacted keys scrubbed).
 
 ## `:LibLogger` command
 

@@ -26,14 +26,16 @@
 ---@field history? integer             # ring-buffer size (default 200)
 ---@field src? boolean                 # capture "file:line" per record (small cost) (default false)
 ---@field redact? string[]             # context keys to scrub before logging
+---@field max_depth? integer           # default nesting levels kept in `ctx` (default 8); a call may override
+---@field max_items? integer           # default entries kept per table in `ctx` (default 200); a call may override
 
 ---Per-call options (3rd argument to log.<level>).
 ---@class Lib.Logger.CallOpts
 ---@field tags? string[]   # tags for this call (for later enable/disable)
 ---@field to? string       # write this call to a different file (per-call override)
 ---@field notify? boolean  # force (true) or suppress (false) the notify sink for this call
----@field max_depth? integer  # nesting levels kept in `ctx` before "<max-depth>" (default 8)
----@field max_items? integer  # entries kept per table in `ctx` before "<truncated>" (default 200)
+---@field max_depth? integer  # nesting levels kept in `ctx` before "<max-depth>"; overrides the logger's own default
+---@field max_items? integer  # entries kept per table in `ctx` before "<truncated>"; overrides the logger's own default
 
 ---A logger instance (returned by `.new`).
 --- Every `<level>` method's `ctx` may be a table OR a thunk returning one

@@ -126,6 +126,12 @@ function M.new(opts)
     file = resolve_file(name, opts.file),
     src = opts.src == true,
     redact = opts.redact,
+    -- Instance defaults for the two `ctx` caps, in the same place `history`
+    -- and `redact` already live: a plugin that routinely logs wide tables
+    -- says so once here rather than at every call site. A call may still
+    -- override them for the one record that needs it.
+    max_depth = opts.max_depth,
+    max_items = opts.max_items,
     ring = Ring.new(opts.history),
     _notify_sink = sinks.notifier(name),
     _once = {},
@@ -140,7 +146,17 @@ function M.new(opts)
       return
     end
 
-    local record = Record.build(name, level, msg, ctx, call_opts, inst.src, inst.redact, 4)
+    -- The instance's caps are the floor the call sits on: `call_opts` wins
+    -- where it says something, the logger's own default applies otherwise.
+    local limits = call_opts
+    if inst.max_depth ~= nil or inst.max_items ~= nil then
+      limits = vim.tbl_extend("keep", call_opts or {}, {
+        max_depth = inst.max_depth,
+        max_items = inst.max_items,
+      })
+    end
+
+    local record = Record.build(name, level, msg, ctx, call_opts, inst.src, inst.redact, 4, limits)
     inst.ring:push(record)
 
     -- notify sink

@@ -50,8 +50,9 @@ end
 ---@param want_src boolean
 ---@param redact string[]|nil
 ---@param src_level integer  # debug.getinfo stack level of the original caller
+---@param limits Lib.Logger.SanitizeOpts|nil  # `ctx` caps, already resolved against the instance's defaults
 ---@return Lib.Logger.Record
-function M.build(scope, level, msg, ctx, opts, want_src, redact, src_level)
+function M.build(scope, level, msg, ctx, opts, want_src, redact, src_level, limits)
   if type(msg) ~= "string" then
     msg = tostring(msg)
   end
@@ -67,10 +68,10 @@ function M.build(scope, level, msg, ctx, opts, want_src, redact, src_level)
     level_name = M.level_name(level),
     scope = scope,
     msg = msg,
-    -- The two caps are per call, not per logger: the right width for one
-    -- line is a property of what is being logged. A call that knows it is
-    -- dumping something wide says so at the call site.
-    ctx = serialize.sanitize_ctx(raw_ctx, redact, opts),
+    -- The two caps come resolved: `logger.new` supplies the instance
+    -- default, a call may override it. Falls back to `opts` so a direct
+    -- `record.build` call (tests, other callers) still honours `CallOpts`.
+    ctx = serialize.sanitize_ctx(raw_ctx, redact, limits or opts),
     tags = opts and opts.tags or nil,
   }
 
