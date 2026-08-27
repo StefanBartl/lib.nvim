@@ -178,15 +178,28 @@ local function render_dispatchers(lines, title, opts)
 
   lines[#lines + 1] = "## Dispatched handlers"
   lines[#lines + 1] = ""
-  lines[#lines + 1] = "One autocmd per dispatcher, fanning out to the handlers below"
-  lines[#lines + 1] = "(`lib.nvim.bindings.autocmd.dispatcher`). They run in the order shown."
+  lines[#lines + 1] = "Handlers registered with a dispatcher"
+  lines[#lines + 1] = "(`lib.nvim.bindings.autocmd.dispatcher`), in the order they run. In dispatch"
+  lines[#lines + 1] = "mode they share one autocmd; in bypass mode each has its own and appears in"
+  lines[#lines + 1] = "the table above as well."
   lines[#lines + 1] = ""
 
   for _, d in ipairs(shown) do
+    ---@type string
+    local note = " _(registered, not attached)_"
+    if d.entry.attached then
+      -- In bypass mode each handler already has its own row in the record
+      -- table above. Saying so is the difference between "why is this listed
+      -- twice" and a reader who knows what shape the session was running in.
+      note = d.entry.mode == "bypass"
+          and " _(bypass mode: each handler below is its own autocmd above)_"
+        or ""
+    end
+
     lines[#lines + 1] = ("### `%s` — `%s`%s"):format(
       d.entry.name,
       table.concat(d.entry.events, "`, `"),
-      d.entry.attached and "" or " _(registered, not attached)_"
+      note
     )
     lines[#lines + 1] = ""
     lines[#lines + 1] = "| Key | What | Priority | Once | Source |"
