@@ -18,7 +18,10 @@
 --- directly still works and stays friendlier to tree-shaking.
 ---
 --- The former paths (`lib.nvim.map`, `lib.nvim.usercmd`, `lib.nvim.autocmd`)
---- still resolve through deprecation shims -- see each old module's README.
+--- are **gone** (2026-08-27). They resolved through deprecation shims while
+--- the plugins were migrated one repo at a time; every repo is on the new
+--- paths now, and lib.nvim is pre-1.0 with a breaking-changes notice in the
+--- first line of its README, so carrying them further buys nothing.
 
 local cache = {}
 
