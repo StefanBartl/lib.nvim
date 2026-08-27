@@ -79,19 +79,44 @@ If you want the overview as files in the repo rather than a runtime call —
 registry as markdown, one file per event family:
 
 ```lua
+require("lib.nvim.bindings.autocmd").docs.write()
+```
+
+That is the whole call. Everything is inferred, and one of the guesses is
+better than what you would write by hand:
+
+| | inferred from |
+| --- | --- |
+| `root` | the caller's own source path (`…/lua/…` → the directory holding `lua/`), else cwd |
+| `dir` | `<root>/lua/<plugin>/bindings/autocmd` |
+| `filter` | records whose **source file** lies inside `root` |
+| `note` | omitted; the header already states the snapshot caveat |
+
+The filter is the interesting one. The obvious hand-written version tests the
+augroup name (`r.group:match("^myplugin")`) and is quietly wrong for every
+group that does not follow that convention — and nothing tells you, the rows
+are simply missing. "Was this autocmd created from a file in this repo" is the
+actual question and does not care what the groups are called.
+
+Pass a field only where the guess is wrong — a repo with several plugins under
+`lua/`, or a note recording which configuration produced the run:
+
+```lua
 require("lib.nvim.bindings.autocmd").docs.write({
-  dir    = repo .. "/lua/myplugin/bindings/autocmd",
-  root   = repo,                       -- source paths become repo-relative
-  filter = function(r)                 -- only this plugin's records
-    return type(r.group) == "string" and r.group:match("^myplugin") ~= nil
-  end,
-  note   = "Generated with the default configuration.",
+  note = "Generated with the default configuration.",
 })
 ```
 
-`docs.check(opts)` compares against what is on disk without writing, for CI —
-a generated file nobody verifies goes stale, which is the failure this whole
-registry exists to end. Pass it the *same* opts as `write`.
+`docs.check()` compares against what is on disk without writing, for CI — a
+generated file nobody verifies goes stale, which is the failure this whole
+registry exists to end. Pass it the *same* opts as `write`, since `note` and
+`root` are part of the rendered output.
+
+`docs.create_usercmd()` registers `:LibAutocmdDocs` and
+`:LibAutocmdDocsCheck`. Put that one line in **your own config**, not in a
+plugin: it is a tool for whoever is editing the repo, and a plugin shipping it
+would put an identical command in every user's editor. Then, sitting in the
+repo with the plugin loaded, the whole workflow is `:LibAutocmdDocs`.
 
 Markdown, not Lua: a `.lua` file that is really a listing pretends to be code
 that runs, and the next reader goes looking for its callers.

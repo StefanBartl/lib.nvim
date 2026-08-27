@@ -169,10 +169,101 @@ local function render(records, title, opts)
   return lines
 end
 
+---@internal
+--- The repository root a path belongs to: the directory holding the `lua/`
+--- that the path sits under.
+---
+--- Derived from a source path rather than from `cwd`, because the answer has
+--- to be right when the call comes from a plugin's own command while the
+--- editor's cwd is some unrelated project.
+---@param path string
+---@return string|nil root
+---@return string|nil plugin  # the first directory under `lua/`
+local function repo_of(path)
+  local p = (path or ""):gsub("\\", "/")
+  local root, rest = p:match("^(.*)/lua/(.+)$")
+  if not root then
+    return nil, nil
+  end
+  local plugin = rest:match("^([^/]+)")
+  return root, plugin
+end
+
+---@internal
+--- Where the caller of `write`/`check` lives.
+---
+--- Level 4: getinfo -> this -> defaults() -> write/check -> the caller.
+---@return string
+local function caller_file()
+  local info = debug.getinfo(4, "S")
+  return ((info and info.source) or ""):gsub("^@", "")
+end
+
+---@internal
+--- Fill in what was not given.
+---
+--- Every field has one sensible answer in almost every case, and spelling all
+--- four out at each call site is four chances to get one subtly wrong -- the
+--- `filter` especially, which people write as a group-name prefix and which
+--- is then quietly wrong for any group that does not follow the convention.
+---@param opts Lib.Autocmd.Docs.Opts|nil
+---@return Lib.Autocmd.Docs.Opts
+local function defaults(opts)
+  opts = vim.deepcopy(opts or {})
+
+  local root, plugin = repo_of(caller_file())
+  -- A caller outside any `lua/` tree -- the user command below, a scratch
+  -- buffer, `nvim -l` -- has no source path to derive from. The editor's cwd
+  -- is where a developer running this by hand is sitting; the plugin name
+  -- then comes from reading `<root>/lua` a few lines down.
+  if not root then
+    root = (vim.fn.getcwd():gsub("\\", "/"))
+  end
+
+  opts.root = opts.root or root
+
+  if not plugin and opts.root then
+    -- One directory under `<root>/lua` is the plugin; more than one and we
+    -- cannot pick, so the caller has to say.
+    local entries = vim.fn.readdir(opts.root .. "/lua") or {}
+    local dirs = {}
+    for _, e in ipairs(entries) do
+      if vim.fn.isdirectory(opts.root .. "/lua/" .. e) == 1 then
+        dirs[#dirs + 1] = e
+      end
+    end
+    if #dirs == 1 then
+      plugin = dirs[1]
+    end
+  end
+
+  if not opts.dir and opts.root and plugin then
+    opts.dir = ("%s/lua/%s/bindings/autocmd"):format(opts.root, plugin)
+  end
+
+  -- Filter by SOURCE, not by group name. A record belongs to this repo if it
+  -- was created from a file inside it -- which is exactly the question, and
+  -- true regardless of what the plugin calls its augroups. The group-prefix
+  -- version everyone writes by hand silently drops every group that does not
+  -- happen to start with the plugin's name.
+  if not opts.filter and opts.root then
+    local prefix = opts.root:gsub("/+$", "") .. "/"
+    opts.filter = function(r)
+      local src = (r.src or ""):gsub("\\", "/")
+      return src:sub(1, #prefix) == prefix
+    end
+  end
+
+  return opts
+end
+
+--- Every field is optional; see `defaults()` for what each is inferred from.
+--- Pass one only where the guess would be wrong -- a repo with several plugins
+--- under `lua/`, say, or a note recording which configuration was used.
 ---@class Lib.Autocmd.Docs.Opts
----@field dir string          # Target directory, e.g. "<repo>/lua/<plugin>/bindings/autocmd".
----@field filter? fun(record: Lib.Autocmd.Record): boolean  # Which records belong to this plugin. Default: all.
----@field root? string        # Repo root; source paths are written relative to it.
+---@field dir? string         # Target directory. Default: `<root>/lua/<plugin>/bindings/autocmd`.
+---@field filter? fun(record: Lib.Autocmd.Record): boolean  # Default: every record created from a file inside `root`.
+---@field root? string        # Repo root. Default: derived from the caller's own source path, else cwd.
 ---@field note? string        # An extra paragraph for the header, e.g. which config produced this.
 
 ---@internal
@@ -208,13 +299,16 @@ local function build(opts)
 end
 
 ---Write the files. Creates `opts.dir` if needed.
----@param opts Lib.Autocmd.Docs.Opts
+---@param opts Lib.Autocmd.Docs.Opts|nil
 ---@return boolean ok
 ---@return string|nil err
 ---@return string[] written  # Filenames, for a caller that wants to report them.
 function M.write(opts)
-  vim.validate("opts", opts, "table")
-  vim.validate("dir", opts.dir, "string")
+  vim.validate("opts", opts, { "table", "nil" })
+  opts = defaults(opts)
+  if type(opts.dir) ~= "string" then
+    return false, "could not infer the target directory — pass `dir`", {}
+  end
 
   local files = build(opts)
   if vim.tbl_isempty(files) then
@@ -250,12 +344,15 @@ end
 ---Pass the **same** `opts` you passed to `write` -- `note` and `root` are part
 ---of the rendered output, so a check with different ones reports drift that
 ---is not there.
----@param opts Lib.Autocmd.Docs.Opts
+---@param opts Lib.Autocmd.Docs.Opts|nil
 ---@return boolean up_to_date
 ---@return string[] stale  # Filenames that differ or are missing.
 function M.check(opts)
-  vim.validate("opts", opts, "table")
-  vim.validate("dir", opts.dir, "string")
+  vim.validate("opts", opts, { "table", "nil" })
+  opts = defaults(opts)
+  if type(opts.dir) ~= "string" then
+    return false, { "could not infer the target directory — pass `dir`" }
+  end
 
   local files = build(opts)
   local stale = {}
@@ -273,6 +370,44 @@ function M.check(opts)
   end
   table.sort(stale)
   return #stale == 0, stale
+end
+
+---Register `:LibAutocmdDocs` (write) and `:LibAutocmdDocsCheck` (verify).
+---
+---Opt-in, and meant for a **developer's own config**, not for a plugin to
+---ship: it is a tool for the person editing the repo, and every plugin
+---registering its own copy would put N identical commands in everyone's
+---editor. One line in your config gives you the command in every session:
+---
+---```lua
+---require("lib.nvim.bindings.autocmd").docs.create_usercmd()
+---```
+---
+---Run it with the repo as cwd, after the plugin has loaded.
+---@param name string|nil  # Base name, default "LibAutocmdDocs".
+---@return nil
+function M.create_usercmd(name)
+  local base = name or "LibAutocmdDocs"
+  local usercmd = require("lib.nvim.bindings.usercmd")
+  local notify = require("lib.nvim.notify").create("[lib.autocmd.docs]")
+
+  usercmd.create(base, function()
+    local ok, err, written = M.write()
+    if not ok then
+      notify.warn(err or "could not write")
+      return
+    end
+    notify.info(("wrote %d file(s): %s"):format(#written, table.concat(written, ", ")))
+  end, { desc = "Write the registered autocmds into bindings/autocmd as markdown" })
+
+  usercmd.create(base .. "Check", function()
+    local up_to_date, stale = M.check()
+    if up_to_date then
+      notify.info("bindings/autocmd is up to date")
+    else
+      notify.warn("stale: " .. table.concat(stale, ", "))
+    end
+  end, { desc = "Check bindings/autocmd against what is registered" })
 end
 
 return M
