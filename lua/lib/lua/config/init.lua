@@ -48,7 +48,7 @@ end
 ---A missing intermediate key, or a non-table where a table was expected,
 ---returns `nil` rather than erroring.
 ---@param tbl table
----@param path string
+---@param path string?
 ---@return any
 function M.get(tbl, path)
   if type(path) ~= "string" then

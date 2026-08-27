@@ -1,7 +1,18 @@
 ---@module 'lib.lua.strings.encoding'
---- Percent-encoding (URL) and base64 encode/decode, pure Lua.
+--- Percent-encoding (URL), base64 encode/decode, and HTML-escaping, pure Lua.
 
 local M = {}
+
+---HTML-escape text destined for markup: `& < > "`. `nil` and `""` both
+---return `""`.
+---@param s string?
+---@return string
+function M.html_escape(s)
+  if not s or s == "" then
+    return ""
+  end
+  return (s:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;"):gsub('"', "&quot;"))
+end
 
 local B64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 

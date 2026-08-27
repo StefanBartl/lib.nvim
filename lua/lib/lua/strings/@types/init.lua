@@ -97,6 +97,7 @@
 ---@field url_decode fun(str: string): string # Decode a percent-encoded string.
 ---@field base64_encode fun(data: string): string
 ---@field base64_decode fun(data: string): string
+---@field html_escape fun(s: string?): string # Escape & < > " for HTML markup; nil/"" -> "".
 -- =========================================================
 -- lib.lua.strings.distance
 -- =========================================================
@@ -140,6 +141,7 @@
 ---@field url_decode fun(str: string): string
 ---@field base64_encode fun(data: string): string
 ---@field base64_decode fun(data: string): string
+---@field html_escape fun(s: string?): string
 
 ---@class Lib.Strings.Distance
 ---@field levenshtein fun(a: string, b: string): integer

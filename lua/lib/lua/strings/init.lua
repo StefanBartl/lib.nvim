@@ -54,6 +54,7 @@ M.url_encode = require("lib.lua.strings.encoding").url_encode
 M.url_decode = require("lib.lua.strings.encoding").url_decode
 M.base64_encode = require("lib.lua.strings.encoding").base64_encode
 M.base64_decode = require("lib.lua.strings.encoding").base64_decode
+M.html_escape = require("lib.lua.strings.encoding").html_escape
 
 -- distance module
 M.levenshtein = require("lib.lua.strings.distance").levenshtein

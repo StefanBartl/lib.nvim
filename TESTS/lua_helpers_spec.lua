@@ -145,6 +145,13 @@ return function(H)
     "any carnal pleasure",
     "strings.encoding: base64 round-trip"
   )
+  eq(
+    enc.html_escape([[<a href="x">Tom & Jerry</a>]]),
+    "&lt;a href=&quot;x&quot;&gt;Tom &amp; Jerry&lt;/a&gt;",
+    'strings.encoding: html_escape covers & < > "'
+  )
+  eq(enc.html_escape(nil), "", 'strings.encoding: html_escape(nil) -> ""')
+  eq(enc.html_escape(""), "", 'strings.encoding: html_escape("") -> ""')
 
   local dist = require("lib.lua.strings.distance")
   eq(dist.levenshtein("kitten", "sitting"), 3, "strings.distance: classic kitten/sitting = 3")

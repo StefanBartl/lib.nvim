@@ -117,7 +117,7 @@ Editor-independent Lua helpers. No `vim` API; usable/testable outside Neovim.
                         deep_merge (mutating recursive merge)
     lib.lua.strings     trim, split/join, case conversion, padding, slugify, …;
                         utf8 (codepoint encode/decode/iter), encoding
-                        (percent-encode, base64), distance (levenshtein,
+                        (percent-encode, base64, html_escape), distance (levenshtein,
                         similarity), format (format_bytes, format_number),
                         location (parse "path:line:col" and friends), case
                         (case_shape/apply_shape, change_case), wrap
