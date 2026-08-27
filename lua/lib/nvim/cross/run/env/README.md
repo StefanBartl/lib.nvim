@@ -100,6 +100,19 @@ Returns `nil` on native Windows: there is no login-shell initialisation
 step there — a Windows process receives its environment from the user
 profile at creation time, which Neovim already inherited.
 
+### `array(vars?) -> string[]`
+
+The completed environment as `"KEY=VALUE"` strings, ready for
+`lib.nvim.cross.uv.spawn_capture`'s `opts.env`: raw libuv `uv.spawn` wants
+an array, but `build()` returns the `{ [key] = value }` dict shape
+`vim.system`/`jobstart` want. Extracted from two byte-identical copies
+(pdfport.nvim, reposcope.nvim) that each did this dict → array conversion
+by hand.
+
+```lua
+spawn_capture({ "gh", "api", "/user" }, { env = env.array() }, on_done)
+```
+
 ### `apply(spawn_opts?, opts?) -> table`
 
 A copy of `spawn_opts` with `env` filled in by `build()`, everything else

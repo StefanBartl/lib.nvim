@@ -162,6 +162,25 @@ return function(H)
   eq(type(spawn_opts.env.LIB_NVIM_SPEC_CALLER), "string", "apply: the input table is not mutated")
   eq(spawn_opts.env.PATH, nil, "apply: the input env table is not mutated")
 
+  -- -------------------------------------------------------------------- array
+
+  -- The dict -> array conversion raw uv.spawn's opts.env needs: extracted
+  -- from pdfport.nvim's and reposcope.nvim's byte-identical copies.
+  local arr = env.array({ LIB_NVIM_SPEC_ARRAY = "yes" })
+  eq(type(arr), "table", "array: returns a table")
+  local found_entry, path_entries = false, 0
+  for _, kv in ipairs(arr) do
+    ok(kv:match("^[^=]+=") ~= nil, "array: every entry is KEY=VALUE — got " .. kv)
+    if kv == "LIB_NVIM_SPEC_ARRAY=yes" then
+      found_entry = true
+    end
+    if kv:match("^[Pp][Aa][Tt][Hh]=") then
+      path_entries = path_entries + 1
+    end
+  end
+  ok(found_entry, "array: vars override lands as one KEY=VALUE entry")
+  eq(path_entries, 1, "array: exactly one PATH entry, no case-duplicate on Windows")
+
   -- ------------------------------------------------------------ login_shell_env
 
   if is_windows then

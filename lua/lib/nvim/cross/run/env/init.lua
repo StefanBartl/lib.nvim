@@ -443,6 +443,23 @@ function M.build(opts)
   return env
 end
 
+---Build the completed environment as an array of `"KEY=VALUE"` strings,
+---ready for `lib.nvim.cross.uv.spawn_capture`'s `opts.env`: raw libuv
+---`uv.spawn` wants an array, but `build()` returns a `{ [key] = value }`
+---dict (the shape `vim.system`/`jobstart` want), so this is the one place
+---that does the dict -> array conversion instead of every `uv.spawn` caller
+---hand-rolling it.
+---@param vars? table<string, string> Explicit overrides, applied last
+---@return string[]
+function M.array(vars)
+  local env = M.build({ vars = vars })
+  local out = {}
+  for k, v in pairs(env) do
+    out[#out + 1] = k .. "=" .. v
+  end
+  return out
+end
+
 ---Return a spawn options table with `env` filled in by `build()`, leaving
 ---every other key of `spawn_opts` untouched. Convenience for the common
 ---`vim.system(argv, env.apply({ cwd = … }))` shape; the input table is not

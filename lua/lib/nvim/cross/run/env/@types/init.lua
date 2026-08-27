@@ -21,6 +21,7 @@
 ---@field login_shell_env fun(timeout_ms?: integer): table<string,string>|nil # Environment of `$SHELL -lc env`; nil on native Windows (cached)
 ---@field path fun(opts?: Lib.Cross.Run.Env.Opts): string # `PATH` with every known binary directory guaranteed present
 ---@field build fun(opts?: Lib.Cross.Run.Env.Opts): table<string,string> # Completed environment table for a spawn call
+---@field array fun(vars?: table<string,string>): string[] # Completed environment as `"KEY=VALUE"` strings, for raw `uv.spawn`'s array-shaped `env`
 ---@field apply fun(spawn_opts?: table, opts?: Lib.Cross.Run.Env.Opts): table # Copy of `spawn_opts` with `env` filled in by `build`
 ---@field clear fun(): nil # Drop the cached directory scan and login-shell probe
 
