@@ -35,6 +35,7 @@ end
 --- the next `group()` for that name handed back an id Neovim no longer knew and
 --- every `create()` against it failed with "Invalid 'group'". Found from
 --- lsp.nvim, whose `bindings/autocmds.clear()` does exactly that.
+
 --- Every autocmd this module created, in creation order.
 ---
 --- Recorded rather than catalogued by hand. A plugin's own list of "what
