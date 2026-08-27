@@ -9,6 +9,76 @@ more work per event than native dispatch, and the honest reasons to reach
 for it anyway (uniform lazy-loading, deterministic `priority` ordering,
 per-buffer `once`).
 
+## What it costs — measured
+
+The paragraph above says this does more work per event than native dispatch.
+Here is how much, so the decision is a number and not a feeling.
+
+**Caveat first:** one machine (Windows 11, LuaJIT, Neovim run with `--clean`),
+one synthetic benchmark, 2000 events per sample, median of 5 runs. Treat the
+*shape* as the finding and the absolute microseconds as indicative. The script
+is `docs/ROADMAP/tools/autocmd_dispatch_bench.lua` in the author's config repo;
+it is short enough to re-run wherever it matters.
+
+Two cases differ, and only one of them matters:
+
+- **hit** — the event carries a key that has handlers. Both variants must run
+  them.
+- **miss** — the event carries a key that has none. A native autocmd with a
+  `pattern` is filtered in C and never enters Lua; this dispatcher always does.
+
+| handlers | native hit | dispatcher hit | native **miss** | dispatcher **miss** |
+| ---: | ---: | ---: | ---: | ---: |
+| 1  | 32.9 µs | 31.1 µs | **0.9 µs** | **30.9 µs** |
+| 5  | 31.4 µs | 29.2 µs | 2.0 µs | 29.5 µs |
+| 20 | 40.0 µs | 30.1 µs | 6.3 µs | 30.0 µs |
+| 50 | 52.6 µs | 32.3 µs | 14.0 µs | 30.0 µs |
+
+### The control measurement, which is the actual finding
+
+Read alone, "33× slower on a miss" sounds like this module is expensive. It is
+not. The same benchmark, with no dispatcher involved at all:
+
+| | per event |
+| --- | ---: |
+| no autocmd registered | 0.23 µs |
+| 1 autocmd, pattern does **not** match (filtered in C) | 0.96 µs |
+| 1 autocmd, **empty** Lua callback runs | **29.0 µs** |
+
+Entering Lua costs ~29 µs. That is the entire difference. The dispatcher's own
+work — one `key(ev)` call, one cached table lookup, an early return — is the
+0.9 µs between 29.0 and 30.9.
+
+So the honest statement is not "the dispatcher is slow". It is: **a native
+autocmd that does not match never enters Lua, and this one always does.**
+
+### Reading the table
+
+- **Misses cost a flat ~30 µs**, whatever the handler count. Native costs
+  ~0.3 µs per *registered* autocmd on that event, so the two meet at roughly
+  100 autocmds on one event.
+- **Hits are a wash below ~20 handlers**, and the dispatcher pulls ahead above
+  that: Neovim pays its ~29 µs Lua entry once either way, but native also walks
+  and pattern-checks every registered autocmd.
+
+### Is 30 µs a problem?
+
+For anything firing at human speed — `BufEnter`, `FileType`, `BufWritePost` —
+no, by orders of magnitude. Fifty buffer switches a minute with ten handlers
+costs about 1.4 ms *per minute*.
+
+For continuously firing events — `CursorMoved`, `TextChangedI` — the cost is
+paid unconditionally where native pays almost nothing. Even there the arithmetic
+stays small: 200 events per second, a rate you only reach by holding a key down,
+is 6 ms/s, i.e. well under one percent. An editor is not a game loop, and there
+is no frame budget to blow.
+
+The conclusion the author drew, and it is a judgement rather than a
+measurement: the flat cost is small enough that it should not decide anything.
+Choose this module for what it actually gives you — deterministic ordering,
+uniform lazy-loading, per-buffer `once` — and not against it for a number you
+will never perceive.
+
 ## Usage
 
 ```lua

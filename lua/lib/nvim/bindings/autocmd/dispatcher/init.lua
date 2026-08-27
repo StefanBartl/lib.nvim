@@ -14,8 +14,15 @@
 --- C-side and already filters by event/pattern; this replaces that with one
 --- autocmd that fires for every occurrence and does the matching in Lua, so
 --- for a buffer with no registered handlers it does *more* work than native
---- autocmds would, not less. See this module's own README.md for the full
---- reasoning it was built from.
+--- autocmds would, not less.
+---
+--- Measured, so the trade is a number: a non-matching event costs ~30us here
+--- against ~1us native -- but a native autocmd with an *empty* Lua callback
+--- already costs ~29us, so what is being paid for is entering Lua at all, not
+--- this module's own work (that is the remaining ~1us). Hits are a wash below
+--- ~20 handlers and cheaper above. Full table, method and caveats in
+--- README.md; benchmark script in the author's config repo under
+--- `docs/ROADMAP/tools/autocmd_dispatch_bench.lua`.
 
 require("lib.nvim.bindings.autocmd.dispatcher.@types")
 
