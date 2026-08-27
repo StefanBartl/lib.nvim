@@ -46,10 +46,21 @@ end, {
 })
 ```
 
-`create`'s callback is always wrapped in `pcall`; an error inside it is
-reported via `require("lib.nvim.notify")` (tagged `[lib.nvim.bindings.autocmd]`)
-instead of aborting whatever fired the autocmd. `opts.desc` defaults to `""`
-when omitted.
+`create`'s callback is wrapped in `pcall`; an error inside it is reported via
+`require("lib.nvim.notify")` (tagged `[lib.nvim.bindings.autocmd]`) instead of
+aborting whatever fired the autocmd. `opts.desc` defaults to `""` when omitted.
+
+Pass `raw = true` to install the callback unwrapped. Two behaviours live in
+that wrapper and are worth knowing before you reach for it:
+
+- a callback that returns `true` deletes its own autocmd — wrapped, the return
+  value is discarded and it fires forever;
+- an erroring `BufWritePre` callback **cancels the write** — wrapped, the error
+  becomes a notification and the write goes through.
+
+Both used to be reasons to call `nvim_create_autocmd` directly, which cost the
+call site its record and its row in the generated table. `raw` keeps the record
+and gives up only the wrapper.
 
 `pattern` and `buffer` are mutually exclusive in the underlying API — passing
 `opts.buffer` here routes to buffer-local scoping and `opts.pattern` is

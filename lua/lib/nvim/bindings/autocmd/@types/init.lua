@@ -23,6 +23,7 @@
 ---@field desc? string
 ---@field once? boolean
 ---@field nested? boolean
+---@field raw? boolean  # Install the callback unwrapped, so `error()` and a `true` return keep their native meaning. See `create()`.
 
 ---@class Lib.AutoCmd
 ---@field norm_events fun(ev: any, fallback: string[]): string[] # Normalize event configuration to a non-empty list.

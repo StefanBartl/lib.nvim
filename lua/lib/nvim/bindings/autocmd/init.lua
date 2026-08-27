@@ -186,6 +186,10 @@ function M.get_augroup(name, opts)
   return cache[full_name]
 end
 
+---Create an autocmd and record it.
+---
+---The callback is wrapped in `pcall` unless `opts.raw` is true; see the note
+---at that wrapper for the two cases that need it off.
 ---@param event string|string[]
 ---@param callback fun(args:Lib.Autocmd.Args)
 ---@param opts LibAutocmdOpts|nil
@@ -206,12 +210,26 @@ function M.create(event, callback, opts)
     group_name = group_names[group]
   end
 
-  local user_cb = callback
-  callback = function(args)
-    local ok, err = pcall(user_cb, args)
-    if not ok then
-      local event_names = table.concat(vim.iter({ event }):flatten():totable(), ", ")
-      notify.error(("Autocmd failed (%s):\n%s"):format(event_names, err))
+  -- The pcall wrapper turns a crashing callback into one notification instead
+  -- of a stack trace on every event, which is what almost every caller wants.
+  -- Two callbacks want the opposite, and both are load-bearing:
+  --
+  --   * a `BufWritePre` guard that calls `error()` to CANCEL the write --
+  --     wrapped, the write goes through and the guard silently does nothing;
+  --   * a callback that returns `true` to delete its own autocmd -- wrapped,
+  --     the return value is discarded and it fires forever.
+  --
+  -- Those used to be reasons to bypass this module altogether, which cost them
+  -- their record and their row in the generated table. `raw` keeps the record
+  -- and gives up only the wrapper.
+  if opts.raw ~= true then
+    local user_cb = callback
+    callback = function(args)
+      local ok, err = pcall(user_cb, args)
+      if not ok then
+        local event_names = table.concat(vim.iter({ event }):flatten():totable(), ", ")
+        notify.error(("Autocmd failed (%s):\n%s"):format(event_names, err))
+      end
     end
   end
 

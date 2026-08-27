@@ -138,4 +138,38 @@ return function(H)
 
     vim.api.nvim_del_augroup_by_name(name)
   end
+
+  -- `raw = true` hands the callback to Neovim unwrapped, so the two things
+  -- the pcall wrapper eats keep working: a `true` return deletes the autocmd,
+  -- and an `error()` reaches Neovim -- which is what a BufWritePre guard needs
+  -- in order to cancel the write. Both used to force such callers off this
+  -- module entirely, which cost them their record and their row in the
+  -- generated table. Asserted on the self-delete, because that one is
+  -- observable without depending on how a given setup surfaces errors.
+  do
+    local name = "lib_nvim_spec_raw_" .. tostring(vim.uv.hrtime())
+    local id = autocmd.group(name, true)
+
+    autocmd.create("User", function()
+      return true
+    end, { group = id, pattern = "LibNvimSpecWrapped" })
+
+    autocmd.create("User", function()
+      return true
+    end, { group = id, pattern = "LibNvimSpecRaw", raw = true })
+
+    H.eq(#autocmd.registered({ group = name }), 2, "both are recorded")
+
+    vim.api.nvim_exec_autocmds("User", { pattern = "LibNvimSpecWrapped" })
+    vim.api.nvim_exec_autocmds("User", { pattern = "LibNvimSpecRaw" })
+
+    local left = {}
+    for _, a in ipairs(vim.api.nvim_get_autocmds({ group = id })) do
+      left[#left + 1] = a.pattern
+    end
+    H.eq(#left, 1, "one of the two deleted itself")
+    H.eq(left[1], "LibNvimSpecWrapped", "the wrapped one survived; the raw one honored its `true`")
+
+    vim.api.nvim_del_augroup_by_name(name)
+  end
 end
