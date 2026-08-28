@@ -51,6 +51,39 @@ If *nothing* could produce a hover — no source registered and
 `bare_paths = false` — `attach()` installs no autocmd at all rather than one
 that wakes on every `CursorHold` to find it has nothing to say.
 
+## Turning it on
+
+Nothing here installs autocmds by itself — a library that started previewing
+things the moment it was on the runtimepath would be overstepping. One call
+switches it on globally:
+
+```lua
+require("lib.nvim.hover").enable()
+```
+
+It installs the `FileType` trigger, attaches to buffers that are already
+open, and is idempotent (call it from two plugins and you still get one
+autocmd).
+
+**Put it somewhere that is not lazy-loaded.** markdown.nvim calls it too, but
+that plugin is normally `ft`-lazy on markdown — so in a session that never
+opens a `.md` file, nothing would ever turn the hover on, and paths in a
+`.txt` or a code comment would silently do nothing. The natural home is your
+`lib.nvim` spec, which is already eager:
+
+```lua
+{
+  "StefanBartl/lib.nvim",
+  lazy = false,
+  config = function()
+    require("lib.nvim.hover").enable()
+  end,
+}
+```
+
+`enable(opts)` also accepts the config table below, so you can turn it on and
+configure it in one call.
+
 ## Turning it off
 
 lib.nvim has no `setup()` of its own, so the global switch is a variable,

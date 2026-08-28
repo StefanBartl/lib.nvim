@@ -432,6 +432,54 @@ local function anything_to_show()
   return require("lib.nvim.hover.registry").has_sources()
 end
 
+--- Switch the hover on globally: install the `FileType` autocmd that attaches
+--- it to every buffer matching `filetypes`, and attach it to the buffers that
+--- are already open.
+---
+--- **Why the library installs its own trigger.** The framework lives here,
+--- but for a while the only thing that turned it on was `markdown.nvim`'s
+--- `FileType` autocmd — and that plugin is lazy-loaded on markdown filetypes.
+--- Open a `.txt` in a fresh session and markdown.nvim never loads, so nothing
+--- ever attached: the hover worked in other filetypes only after some markdown
+--- file had been opened first, which reads as "it randomly doesn't work".
+--- A feature that is explicitly not about markdown cannot have its trigger
+--- gated on a markdown plugin loading.
+---
+--- Callable from anywhere: a plugin's `config`, or a user's own `init` for
+--- `lib.nvim` itself. Idempotent — the augroup is cleared on each call, so
+--- calling it from two plugins leaves one autocmd, not two.
+---
+--- Already-open buffers are attached directly, because `FileType` has long
+--- since fired for them and would otherwise leave the very buffer the user is
+--- sitting in without a hover until they reopen it.
+---@param opts Lib.HoverConfig|nil merged via `M.setup` before attaching
+---@return nil
+function M.enable(opts)
+  if type(opts) == "table" then
+    M.setup(opts)
+  end
+
+  local c = cfg()
+  if c.enabled == false then
+    return
+  end
+
+  local group = autocmd.group("LibNvimHoverEnable", true)
+  autocmd.create("FileType", function(ev)
+    M.attach(ev.buf)
+  end, {
+    group = group,
+    pattern = c.filetypes or "*",
+    desc = "[lib.nvim.hover] attach the path/link hover to this buffer",
+  })
+
+  for _, buf in ipairs(api.nvim_list_bufs()) do
+    if api.nvim_buf_is_loaded(buf) then
+      pcall(M.attach, buf)
+    end
+  end
+end
+
 --- Install the hover autocmds for `bufnr`.
 ---
 --- Hosts typically attach on every filetype (a path is not a markdown
