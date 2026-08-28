@@ -438,34 +438,63 @@ function M.pdf(target, opts, on_result)
     return metadata("(no image provider installed)")
   end
 
-  local key = page_key(target.path)
+  local page = math.max(1, math.floor(opts.page or 1))
+  local key = page_key(target.path, page)
   local cached = key and _pages[key]
   -- `fs_stat`: a temp sweeper may have taken the file since. Then it is not a
   -- cache entry any more, it is a dangling path.
   if cached and vim.uv.fs_stat(cached) then
-    return M.canvas_for(cached, opts)
+    local content = M.canvas_for(cached, opts)
+    content.scroll = { page = page, step = 1, more = true }
+    -- Page 1 stays untitled, as every image preview does: a filename over a
+    -- picture the reader is already looking at is noise. From page 2 on the
+    -- number is the one thing the picture cannot say about itself.
+    if page > 1 then
+      content.title = ("p%d"):format(page)
+    end
+    return content
   end
   if cached then
     _pages[key] = nil
   end
 
-  pdfport.render_page(target.path, 1, nil, function(png_path, err)
+  pdfport.render_page(target.path, page, nil, function(png_path, err)
     -- pdftoppm's exit lands in a fast event context, where neither
     -- `nvim_create_autocmd` nor the ImageMagick fallback's `vim.system():wait()`
     -- may be called. Everything downstream of here runs on the main loop.
     vim.schedule(function()
       if not png_path then
-        on_result(metadata("(page render failed: " .. (err or "unknown error") .. ")"))
+        -- A failed render past page 1 is almost always "there is no such
+        -- page", which is how the page count is discovered: pdfport reports
+        -- no total, so paging walks until it stops. Reported as an end rather
+        -- than an error so the caller can step back instead of showing a
+        -- failure for a document it has simply reached the end of.
+        if page > 1 then
+          on_result(vim.tbl_extend("force", metadata(("(no page %d)"):format(page)), {
+            scroll = { page = page, step = 1, more = false, past_end = true },
+          }))
+        else
+          on_result(metadata("(page render failed: " .. (err or "unknown error") .. ")"))
+        end
         return
       end
       if key then
         remember_page(key, png_path)
       end
-      on_result(M.canvas_for(png_path, opts))
+      local content = M.canvas_for(png_path, opts)
+      content.scroll = { page = page, step = 1, more = true }
+      if page > 1 then
+        content.title = ("p%d"):format(page)
+      end
+      on_result(content)
     end)
   end)
 
-  return vim.tbl_extend("force", metadata("rendering page 1…"), { pending = true })
+  return vim.tbl_extend(
+    "force",
+    metadata(("rendering page %d…"):format(page)),
+    { pending = true }
+  )
 end
 
 return M

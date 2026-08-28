@@ -302,6 +302,66 @@ local function build(target, bufnr, opts, emit)
   end
 end
 
+--- What the currently open hover is showing, so it can be re-rendered at a
+--- different position without re-resolving the cursor. Cleared on close.
+---@type { target: Lib.Hover.Target, bufnr: integer, offset: integer, page: integer, keys: string[] }|nil
+local _open = nil
+
+---@internal
+--- Drop the scroll keymaps this module installed globally.
+---
+--- Global rather than buffer-local because the float is `focusable = false`
+--- and can never receive a mapping of its own — and buffer-local on the
+--- *document* would leak into buffers that have no hover open. They exist
+--- only while a scrollable hover is on screen, and `float`'s close hook is
+--- what takes them away again.
+---@return nil
+local function unbind_scroll()
+  if not (_open and _open.keys) then
+    return
+  end
+  for _, lhs in ipairs(_open.keys) do
+    pcall(vim.keymap.del, "n", lhs)
+  end
+  _open.keys = nil
+end
+
+---@internal
+--- Bind the scroll keys for a hover that has more to show.
+---
+--- Deliberately does nothing when the content is not scrollable: an image, or
+--- a file that fits in the float, must leave `<M-PageUp>`/`<M-PageDown>`
+--- alone so they keep whatever meaning they have elsewhere.
+---@param content Lib.Hover.Content
+---@param rerender fun(delta: integer)
+---@return nil
+local function bind_scroll(content, rerender)
+  unbind_scroll()
+  local s = content and content.scroll
+  if not (s and _open) then
+    return
+  end
+  -- Nothing below and nothing above: not scrollable in either direction.
+  local at_start = (s.offset or 0) == 0 and (s.page or 1) == 1
+  if not s.more and at_start then
+    return
+  end
+
+  local keys = {}
+  local function bind(lhs, delta, desc)
+    local ok = pcall(vim.keymap.set, "n", lhs, function()
+      rerender(delta)
+    end, { desc = desc, nowait = true, silent = true })
+    if ok then
+      keys[#keys + 1] = lhs
+    end
+  end
+
+  bind("<M-PageDown>", 1, "lib.nvim.hover: scroll preview down")
+  bind("<M-PageUp>", -1, "lib.nvim.hover: scroll preview up")
+  _open.keys = keys
+end
+
 --- Show the hover for the link under the cursor. No-op when there is none.
 ---@param opts? { force?: boolean } `force` ignores the enabled flag.
 ---@return boolean shown
@@ -315,6 +375,11 @@ function M.show(opts)
   local bufnr = api.nvim_get_current_buf()
   local link = M.link_under_cursor(bufnr)
   if not link then
+    -- Closing here without unbinding would leave `<M-PageUp>`/`<M-PageDown>`
+    -- mapped after the hover is gone — the most common exit, since moving the
+    -- cursor off a link comes back through this branch.
+    unbind_scroll()
+    _open = nil
     float.close()
     return false
   end
@@ -324,6 +389,9 @@ function M.show(opts)
 
   local source = api.nvim_buf_get_name(bufnr)
   local target = classify.classify(link.target, source ~= "" and source or nil)
+
+  unbind_scroll()
+  _open = { target = target, bufnr = bufnr, offset = 0, page = 1 }
 
   local preview_opts = {
     max_lines = c.max_lines or 20,
@@ -362,6 +430,8 @@ function M.show(opts)
         end
       end
     end
+
+    bind_scroll(content, M.scroll)
   end
 
   if cached and not cached.pending then
@@ -379,8 +449,98 @@ function M.show(opts)
   return true
 end
 
+--- Scroll the open hover's content by `delta` steps.
+---
+--- A page for a PDF, a screenful of lines for a file. Re-renders the same
+--- target at a new position; it does **not** re-resolve the cursor, so the
+--- hover keeps showing what it was showing even if the cursor has since moved
+--- off the link.
+---
+--- Bound to `<M-PageUp>`/`<M-PageDown>` while a scrollable hover is open (see
+--- `bind_scroll`), and public so a host can offer its own keys. Deliberately
+--- no image case: there is nothing to scroll in a picture.
+---@param delta integer positive scrolls forward, negative back
+---@return boolean scrolled
+function M.scroll(delta)
+  -- Also the safety net for a mapping that outlived its float by any route
+  -- the explicit teardowns do not cover: it takes itself away rather than
+  -- silently swallowing the key from then on.
+  if not (_open and float.win()) then
+    unbind_scroll()
+    _open = nil
+    return false
+  end
+  local target = _open.target
+  local c = cfg()
+
+  local preview_opts = {
+    max_lines = c.max_lines or 20,
+    max_width = c.max_width or 80,
+    inline_images = c.inline_images,
+    url_fetch = c.url and c.url.fetch == true,
+    url_timeout_ms = c.url and c.url.timeout_ms or 2000,
+  }
+
+  if target.type == "pdf" then
+    local next_page = math.max(1, (_open.page or 1) + delta)
+    if next_page == _open.page then
+      return false
+    end
+    _open.page = next_page
+    preview_opts.page = next_page
+  else
+    local step = c.max_lines or 20
+    local next_offset = math.max(0, (_open.offset or 0) + delta * step)
+    if next_offset == _open.offset then
+      return false
+    end
+    _open.offset = next_offset
+    preview_opts.offset = next_offset
+  end
+
+  -- Bypass the cache: it is keyed by target identity, not by position, so a
+  -- cached entry would answer with the page the hover already shows.
+  _generation = _generation + 1
+  local generation = _generation
+
+  build(target, _open.bufnr, preview_opts, function(content)
+    if generation ~= _generation or not content or content.pending then
+      return
+    end
+    -- Paged past the last PDF page: step back and leave what is on screen.
+    if content.scroll and content.scroll.past_end then
+      _open.page = math.max(1, (_open.page or 1) - delta)
+      return
+    end
+
+    float.open(content.lines, {
+      title = content.title,
+      filetype = content.filetype,
+      canvas = content.canvas,
+      highlight = content.highlight,
+      max_width = c.max_width or 80,
+      max_height = c.max_lines or 20,
+      border = c.border,
+    })
+    if content.image_path then
+      local win = float.win()
+      if win then
+        local on_close = require("lib.nvim.hover.preview.media").draw_into(content.image_path, win)
+        if on_close then
+          float.set_on_close(on_close)
+        end
+      end
+    end
+    bind_scroll(content, M.scroll)
+  end)
+
+  return true
+end
+
 --- Close any open hover.
 function M.hide()
+  unbind_scroll()
+  _open = nil
   float.close()
 end
 --- Debounced entry point used by the CursorHold/mouse autocmds.

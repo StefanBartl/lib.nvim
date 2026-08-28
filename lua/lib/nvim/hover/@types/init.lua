@@ -54,6 +54,8 @@
 ---@field inline_images? boolean
 ---@field url_fetch? boolean
 ---@field url_timeout_ms? integer
+---@field offset? integer # Text previews: lines to skip. Set by `lib.nvim.hover.scroll`.
+---@field page? integer # PDF previews: 1-based page to render. Set by `lib.nvim.hover.scroll`.
 
 ---@class Lib.Hover.Content
 ---@field lines string[]
@@ -62,7 +64,18 @@
 ---@field image_path? string # Draw this image into the float, if a provider can.
 ---@field canvas? Lib.Hover.Canvas # Size the float to this instead of to `lines`, and show no text or title: the float is a frame for the picture, not a caption for it.
 ---@field highlight? string # Highlight group applied to the first line (the `missing` preview's ✗ marker).
+---@field scroll? Lib.Hover.Scroll # Present when the preview has more to show; drives `<M-PageUp>`/`<M-PageDown>`.
 ---@field pending? boolean # Provisional; an async result replaces it (and it is not cached).
+
+--- Where a scrollable preview currently is, and whether more follows.
+--- Absent means "not scrollable" — an image, or a file that fits — and the
+--- scroll keys are then not bound at all.
+---@class Lib.Hover.Scroll
+---@field offset? integer # Lines skipped, for text previews.
+---@field page? integer # 1-based page, for PDF previews.
+---@field step integer # How much one scroll step advances.
+---@field more boolean # Whether anything follows the current position.
+---@field past_end? boolean # The requested position does not exist (paged past the last PDF page).
 
 --- Exact float size in cells, for a preview that is a picture rather than text.
 ---@class Lib.Hover.Canvas

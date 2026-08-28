@@ -15,30 +15,41 @@
 local M = {}
 
 ---@internal
---- Read at most `limit` lines from `path`. Uses `io.lines` rather than
---- `fs.read` + split so a huge file is not slurped into memory just to show
---- its first 20 lines.
+--- Read at most `limit` lines from `path`, starting after `skip` lines. Uses
+--- `io.lines` rather than `fs.read` + split so a huge file is not slurped
+--- into memory just to show 20 lines of it — which is also why scrolling
+--- re-reads from the start rather than keeping the file open: a hover is a
+--- glance, and holding a handle across an unbounded lifetime to save a
+--- fraction of a millisecond is the wrong trade.
 ---@param path string
 ---@param limit integer
+---@param skip integer|nil lines to drop before collecting (0-based offset)
 ---@return string[] lines
----@return boolean truncated
-local function head(path, limit)
+---@return boolean truncated more lines follow
+---@return integer available how many lines were skippable, capped at `skip`
+local function head(path, limit, skip)
+  skip = math.max(0, skip or 0)
   local out = {}
   local f = io.open(path, "r")
   if not f then
-    return out, false
+    return out, false, 0
   end
+
+  local seen = 0
   local truncated = false
   for line in f:lines() do
-    if #out >= limit then
-      truncated = true
-      break
+    seen = seen + 1
+    if seen > skip then
+      if #out >= limit then
+        truncated = true
+        break
+      end
+      -- Strip a CR left by a CRLF file so the float does not render `^M`.
+      out[#out + 1] = (line:gsub("\r$", ""))
     end
-    -- Strip a CR left by a CRLF file so the float does not render `^M`.
-    out[#out + 1] = (line:gsub("\r$", ""))
   end
   f:close()
-  return out, truncated
+  return out, truncated, math.min(skip, seen)
 end
 
 ---@internal
@@ -58,7 +69,15 @@ end
 ---@return Lib.Hover.Content
 function M.file(target, opts)
   local limit = opts.max_lines or 20
-  local lines, truncated = head(target.path, limit)
+  local offset = math.max(0, opts.offset or 0)
+  local lines, truncated, skipped = head(target.path, limit, offset)
+
+  -- Scrolled past the end (the file shrank, or the offset overshot): fall
+  -- back to the last readable window rather than showing an empty float.
+  if #lines == 0 and offset > 0 then
+    offset = math.max(0, skipped - limit)
+    lines, truncated, skipped = head(target.path, limit, offset)
+  end
 
   if #lines == 0 then
     return {
@@ -71,13 +90,22 @@ function M.file(target, opts)
     lines[#lines + 1] = "…"
   end
 
+  local title = vim.fs.basename(target.path)
+  if offset > 0 then
+    title = ("%s  ↓%d"):format(title, offset)
+  end
+
   return {
     lines = lines,
     -- Markdown gets its own filetype so the float renders headings/emphasis
     -- with the user's markdown highlighting; anything else is left plain
     -- rather than guessed, since a wrong ftplugin can be slow or noisy.
     filetype = target.type == "markdown" and "markdown" or nil,
-    title = vim.fs.basename(target.path),
+    title = title,
+    -- Consumed by `lib.nvim.hover`'s scroll bindings. `more` is what decides
+    -- whether scrolling down is offered at all — a file that fits needs no
+    -- keys bound and should leave them to whatever else uses them.
+    scroll = { offset = offset, step = limit, more = truncated },
   }
 end
 

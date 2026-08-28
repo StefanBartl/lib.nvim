@@ -135,6 +135,44 @@ require("lib.nvim.hover").setup({
 | `url.fetch` | `false` | Off deliberately: a hover that silently fetches discloses every link you brush past to its host. |
 | `url.timeout_ms` | `2000` | |
 
+## Scrolling a preview
+
+A file's head and a PDF's first page are often not the part you want.
+While a scrollable hover is open:
+
+| Key | Does |
+| --- | --- |
+| `<M-PageDown>` | next screenful of lines, or next PDF page |
+| `<M-PageUp>` | back |
+
+The float stays a **preview**: not focusable, not editable, nothing to
+select or yank. The keys are bound globally while such a hover is on screen
+and removed the moment it closes — so they keep whatever meaning they have
+elsewhere the rest of the time.
+
+They are bound **only when there is something to scroll**. An image, or a
+file that already fits in the float, leaves them alone entirely.
+
+Scrolling does not re-resolve the cursor: the hover keeps showing what it
+was showing, even if the cursor has since moved off the link. The title
+shows where you are — `notes.md  ↓20` for text, `p3` for a PDF (page 1 stays untitled, like
+any image preview).
+
+PDF paging renders each page on demand through `pdfport.render_page`, so
+there is a short delay per page, and pages are cached per file *and* page.
+The document's page count is not known in advance; paging simply stops at
+the last page and stays there.
+
+Bind your own keys instead by calling the API:
+
+```lua
+vim.keymap.set("n", "<C-d>", function() require("lib.nvim.hover").scroll(1) end)
+vim.keymap.set("n", "<C-u>", function() require("lib.nvim.hover").scroll(-1) end)
+```
+
+`scroll(delta)` returns `false` when there is no open hover or nothing to
+scroll, so it is safe to bind unconditionally.
+
 ## Bare paths
 
 A path in prose, a code comment, or a `:messages` dump is a target too:
@@ -185,7 +223,7 @@ Target types a preview can claim: `image`, `pdf`, `markdown`, `file`,
 
 | Module | Job |
 | --- | --- |
-| `lib.nvim.hover` | Orchestration: debounce, LRU cache, async generation counter, `attach`/`show`/`hide` |
+| `lib.nvim.hover` | Orchestration: debounce, LRU cache, async generation counter, `attach`/`show`/`hide`/`scroll` |
 | `lib.nvim.hover.registry` | Plugin sources and previews |
 | `lib.nvim.hover.classify` | Target string → typed target. Pure, no I/O beyond one `fs_stat` |
 | `lib.nvim.hover.bare_path` | Paths with no link syntax; asks gopath.nvim when present |

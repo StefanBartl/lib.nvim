@@ -148,5 +148,51 @@ return function(H)
     vim.fn.delete(tmp, "rf")
   end
 
+  -- ── scrolling a text preview ─────────────────────────────────────────────
+  -- The offset half of `lib.nvim.hover.scroll`. The keymap lifecycle needs a
+  -- live float and is exercised by hand; what is pinned here is the part that
+  -- decides whether keys get bound at all -- `scroll.more` -- and that
+  -- overshooting the end falls back rather than showing an empty float.
+  do
+    local text = require("lib.nvim.hover.preview.text")
+    local tmp = vim.fn.tempname()
+    vim.fn.mkdir(tmp, "p")
+
+    local long = tmp .. "/long.txt"
+    local rows = {}
+    for i = 1, 60 do
+      rows[i] = "line " .. i
+    end
+    vim.fn.writefile(rows, long)
+    local doc = { type = "file", raw = "long.txt", path = long }
+
+    local first = text.file(doc, { max_lines = 10 })
+    eq(first.lines[1], "line 1", "scroll: unscrolled preview starts at the top")
+    ok(first.scroll.more, "scroll: a file longer than the float reports more to come")
+    eq(first.scroll.offset, 0, "scroll: ...at offset 0")
+
+    local second = text.file(doc, { max_lines = 10, offset = 10 })
+    eq(second.lines[1], "line 11", "scroll: an offset skips exactly that many lines")
+    ok(second.title:match("10") ~= nil, "scroll: the title says how far down it is")
+
+    local last = text.file(doc, { max_lines = 10, offset = 55 })
+    eq(last.lines[#last.lines], "line 60", "scroll: the final window reaches the last line")
+    ok(not last.scroll.more, "scroll: ...and reports nothing follows")
+
+    -- Overshooting must not produce an empty float: it falls back to the last
+    -- readable window, which is what a shrinking file would otherwise cause.
+    local past = text.file(doc, { max_lines = 10, offset = 999 })
+    ok(#past.lines > 0, "scroll: overshooting the end still shows content")
+    ok(past.scroll.offset < 999, "scroll: ...having fallen back to a real offset")
+
+    -- A file that fits is not scrollable, so no keys should ever be bound.
+    local short = tmp .. "/short.txt"
+    vim.fn.writefile({ "a", "b" }, short)
+    local fits = text.file({ type = "file", raw = "short.txt", path = short }, { max_lines = 10 })
+    ok(not fits.scroll.more, "scroll: a file that fits reports nothing to scroll")
+
+    vim.fn.delete(tmp, "rf")
+  end
+
   registry.reset()
 end
