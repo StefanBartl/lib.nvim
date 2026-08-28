@@ -85,6 +85,7 @@ local specs = {
   "is_subpath_spec.lua",
   "normkey_spec.lua",
   "globbable_spec.lua",
+  "hover_registry_spec.lua",
 }
 
 --- Straight to stdout rather than through `print`.
