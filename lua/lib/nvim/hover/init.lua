@@ -63,10 +63,12 @@ local _config = {
   -- laptop and 60% layouts often reach PageUp/PageDown only through an Fn
   -- chord, and nothing at runtime can tell us whether this keyboard has
   -- them. The arrows are on every keyboard there is; both pairs are bound,
-  -- and either one scrolls.
+  -- and either one scrolls. Ctrl rather than Alt on the arrows: <M-Up> and
+  -- <M-Down> are a common "move this line" binding, and the borrowing is
+  -- only supposed to last as long as the float.
   scroll_keys = {
-    down = { "<M-PageDown>", "<M-Down>" },
-    up = { "<M-PageUp>", "<M-Up>" },
+    down = { "<M-PageDown>", "<C-Down>" },
+    up = { "<M-PageUp>", "<C-Up>" },
   },
 }
 
@@ -337,7 +339,7 @@ local _open = nil
 --- what takes them away again.
 ---
 --- Restoring matters more since the defaults grew a second, plainer pair:
---- `<M-Up>` is a key a user may well have mapped, and a hover that borrows
+--- `<C-Up>` is a key a user may well have mapped, and a hover that borrows
 --- it for one float must hand it back, not delete it.
 ---@return nil
 local function unbind_scroll()

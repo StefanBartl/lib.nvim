@@ -9,7 +9,7 @@
 -- and a key that was already mapped must come back afterwards rather than be
 -- deleted with the hover.
 --
--- The default list carries a second, Fn-free pair (`<M-Down>`/`<M-Up>`)
+-- The default list carries a second, Fn-free pair (`<C-Down>`/`<C-Up>`)
 -- because PageUp/PageDown do not exist on every keyboard and nothing at
 -- runtime can ask.
 
@@ -35,8 +35,8 @@ return function(H)
 
   -- ── Configuration ───────────────────────────────────────────────────────
   local c = hover.setup()
-  same(c.scroll_keys.down, { "<M-PageDown>", "<M-Down>" }, "both forward keys are on by default")
-  same(c.scroll_keys.up, { "<M-PageUp>", "<M-Up>" }, "…and both back keys")
+  same(c.scroll_keys.down, { "<M-PageDown>", "<C-Down>" }, "both forward keys are on by default")
+  same(c.scroll_keys.up, { "<M-PageUp>", "<C-Up>" }, "…and both back keys")
 
   c = hover.setup({ scroll_keys = { down = { "<C-n>" } } })
   same(
@@ -44,7 +44,7 @@ return function(H)
     { "<C-n>" },
     "a configured list replaces the default, index-merging none of it"
   )
-  same(c.scroll_keys.up, { "<M-PageUp>", "<M-Up>" }, "…and leaves the other direction alone")
+  same(c.scroll_keys.up, { "<M-PageUp>", "<C-Up>" }, "…and leaves the other direction alone")
 
   c = hover.setup({ scroll_keys = { up = "<C-p>" }, max_lines = 3 })
   eq(c.scroll_keys.up, "<C-p>", "a bare string is accepted as one key")
@@ -63,12 +63,12 @@ return function(H)
   vim.fn.writefile({ "see ./long.txt here" }, doc)
 
   hover.setup({
-    scroll_keys = { down = { "<M-PageDown>", "<M-Down>" }, up = { "<M-PageUp>", "<M-Up>" } },
+    scroll_keys = { down = { "<M-PageDown>", "<C-Down>" }, up = { "<M-PageUp>", "<C-Up>" } },
     max_lines = 3,
   })
 
   -- A key of the user's that one of the defaults is about to shadow.
-  vim.keymap.set("n", "<M-Down>", "<Cmd>echo 'mine'<CR>", { desc = "user mapping" })
+  vim.keymap.set("n", "<C-Down>", "<Cmd>echo 'mine'<CR>", { desc = "user mapping" })
 
   vim.cmd.edit(doc)
   vim.api.nvim_win_set_cursor(0, { 1, 6 })
@@ -82,7 +82,7 @@ return function(H)
     "the PageDown key is bound"
   )
   ok(
-    (mapped("<M-Down>") or ""):find("scroll preview down", 1, true) ~= nil,
+    (mapped("<C-Down>") or ""):find("scroll preview down", 1, true) ~= nil,
     "…and so is the Fn-free alternative"
   )
   ok(
@@ -95,15 +95,15 @@ return function(H)
 
   hover.hide()
   eq(mapped("<M-PageDown>"), nil, "closing the hover takes its own key away")
-  eq(mapped("<M-Down>"), "user mapping", "…and hands back the mapping it had borrowed")
+  eq(mapped("<C-Down>"), "user mapping", "…and hands back the mapping it had borrowed")
 
-  pcall(vim.keymap.del, "n", "<M-Down>")
+  pcall(vim.keymap.del, "n", "<C-Down>")
   vim.fn.delete(tmp, "rf")
   vim.cmd("silent! %bwipeout!")
 
   -- Leave the module as the next spec would expect to find it.
   hover.setup({
-    scroll_keys = { down = { "<M-PageDown>", "<M-Down>" }, up = { "<M-PageUp>", "<M-Up>" } },
+    scroll_keys = { down = { "<M-PageDown>", "<C-Down>" }, up = { "<M-PageUp>", "<C-Up>" } },
     max_lines = 20,
   })
 end

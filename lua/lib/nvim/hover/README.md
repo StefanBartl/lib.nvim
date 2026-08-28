@@ -132,8 +132,8 @@ require("lib.nvim.hover").setup({
 | `border` | `"rounded"` | `nvim_open_win` border. |
 | `inline_images` | `true` | Draw pictures / PDF pages into the float when a provider can. |
 | `bare_paths` | `true` | Also hover paths written without link syntax. |
-| `scroll_keys.down` | `{ "<M-PageDown>", "<M-Down>" }` | Keys that scroll a scrollable preview forward. |
-| `scroll_keys.up` | `{ "<M-PageUp>", "<M-Up>" }` | …and back. |
+| `scroll_keys.down` | `{ "<M-PageDown>", "<C-Down>" }` | Keys that scroll a scrollable preview forward. |
+| `scroll_keys.up` | `{ "<M-PageUp>", "<C-Up>" }` | …and back. |
 | `url.fetch` | `false` | Off deliberately: a hover that silently fetches discloses every link you brush past to its host. |
 | `url.timeout_ms` | `2000` | |
 
@@ -144,13 +144,14 @@ While a scrollable hover is open:
 
 | Key | Does |
 | --- | --- |
-| `<M-PageDown>` or `<M-Down>` | next screenful of lines, or next PDF page |
-| `<M-PageUp>` or `<M-Up>` | back |
+| `<M-PageDown>` or `<C-Down>` | next screenful of lines, or next PDF page |
+| `<M-PageUp>` or `<C-Up>` | back |
 
 Both pairs are bound, because a key that is not on the keyboard cannot be
 pressed: laptop and 60% layouts often reach PageUp/PageDown only through an
 Fn chord, and nothing at runtime can tell whether *this* keyboard has them.
-The arrows are on every keyboard there is.
+The arrows are on every keyboard there is. Ctrl rather than Alt on them,
+because `<M-Up>`/`<M-Down>` are a widespread "move this line" binding.
 
 The float stays a **preview**: not focusable, not editable, nothing to
 select or yank. The keys are bound globally while such a hover is on screen

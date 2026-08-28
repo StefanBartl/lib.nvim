@@ -30,8 +30,8 @@
 --- takes a single key or a list; a configured list replaces the default
 --- rather than extending it, and an empty list binds nothing.
 ---@class Lib.Hover.ScrollKeys
----@field down? string|string[] # Default `{ "<M-PageDown>", "<M-Down>" }` — the second pair for keyboards with no PageUp/PageDown.
----@field up? string|string[] # Default `{ "<M-PageUp>", "<M-Up>" }`.
+---@field down? string|string[] # Default `{ "<M-PageDown>", "<C-Down>" }` — the second pair for keyboards with no PageUp/PageDown.
+---@field up? string|string[] # Default `{ "<M-PageUp>", "<C-Up>" }`.
 
 --- One key `lib.nvim.hover` currently holds, with the mapping it displaced.
 ---@class Lib.Hover.BoundKey
