@@ -197,9 +197,41 @@ local function canvas_cells(image_px, opts)
   local max_cols = math.max(10, math.min(opts.max_width or 80, math.max(10, vim.o.columns - 4)))
   local max_rows = math.max(3, math.min(opts.max_lines or 20, math.max(3, vim.o.lines - 4)))
 
+  -- The frame is not the drawing box. `images.anchor` keeps `draw_inset`
+  -- cells free on every side, so a float sized to fit the image exactly is
+  -- then drawn into a box two cells smaller on each axis — and two cells off
+  -- 20 rows is a bigger relative change than two off 77 columns. The ratio
+  -- shifts, `preserveAspectRatio=1` letterboxes what no longer fits, and the
+  -- terminal centres the remainder: measured at ~2.7 cells of empty space on
+  -- the left for a 1200x675 image in a 77x20 frame. That reads as "the image
+  -- is shifted right" and was chased as a placement bug for a long time.
+  --
+  -- So fit the image to the box it will actually be drawn in, then add the
+  -- inset back for the frame. The float ends up slightly larger and the
+  -- picture fills it edge to edge.
+  local inset = 0
+  do
+    local ok_cfg, images_cfg = pcall(require, "images.config")
+    if ok_cfg then
+      local configured = (images_cfg.get().display or {}).draw_inset
+      if type(configured) == "number" and configured > 0 then
+        inset = math.floor(configured)
+      end
+    end
+  end
+
   local ok, scale = pcall(require, "images.scale")
   if ok and type(scale.fit_cells) == "function" then
-    return scale.fit_cells(max_cols, max_rows, image_px)
+    -- Never let the inset eat the box: on a very small frame keep at least
+    -- one cell to fit into, and drop the inset instead.
+    local inner_cols = max_cols - 2 * inset
+    local inner_rows = max_rows - 2 * inset
+    if inner_cols < 1 or inner_rows < 1 then
+      inset, inner_cols, inner_rows = 0, max_cols, max_rows
+    end
+
+    local cols, rows = scale.fit_cells(inner_cols, inner_rows, image_px)
+    return math.min(cols + 2 * inset, max_cols), math.min(rows + 2 * inset, max_rows)
   end
 
   if not image_px then
