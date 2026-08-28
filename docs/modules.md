@@ -24,6 +24,8 @@ namespace one-liners), split by topic, see [`API/README.md`](API/README.md).
 | [`lib.nvim.notify`](../lua/lib/nvim/notify/README.md) | notify wrapper + log-level resolution |
 | `lib.nvim.bindings.keymap`         | keymap helpers                                      |
 | [`lib.nvim.count`](../lua/lib/nvim/count/README.md) | count-prefix helpers for keymaps: `get`/`raw`/`given`/`clamp`, plus `times` (sync repeat) and `chain` (async repeat gated on a completion signal) |
+| [`lib.nvim.dotrepeat`](../lua/lib/nvim/dotrepeat/README.md) | wire a Lua function into native `.`-repeat via `operatorfunc`, no `vim-repeat` dependency |
+| [`lib.nvim.lastcmd`](../lua/lib/nvim/lastcmd/README.md) | repeat the last *real* command — mapping or native change — skipping pure motions; nothing needs wrapping, since mappings are read off the key stream (`on_key` + `maparg`/`mapcheck`) and native changes are delegated to `.` via a `changedtick` comparison. Closes the gap that `.` cannot repeat Lua-callback mappings |
 | [`lib.nvim.bindings.usercmd`](../lua/lib/nvim/bindings/usercmd/composer/README.md) | user-command helpers: `create` + [`composer`](../lua/lib/nvim/bindings/usercmd/composer/README.md) (subcommand verbs, completion, docgen — [`:help`](../doc/lib.nvim-composer.txt)) |
 | `lib.nvim.bindings.autocmd`     | autocmd / augroup helpers                           |
 | `lib.nvim.buffer`      | buffer helpers (`insert_lines`, `is_markdown_buf`, `open_background`) |
@@ -78,6 +80,7 @@ and are generated on install by your plugin manager (see [Help docs](help.md)).
 - [`lib.nvim.bindings.usercmd.composer`](../lua/lib/nvim/bindings/usercmd/composer/README.md)
 - [`lib.nvim.deps`](../lua/lib/nvim/deps/README.md)
 - [`lib.nvim.async`](../lua/lib/nvim/async/README.md) · [`lib.nvim.fs.watch`](../lua/lib/nvim/fs/watch/README.md) · [`lib.nvim.json`](../lua/lib/nvim/json/README.md)
+- [`lib.nvim.dotrepeat`](../lua/lib/nvim/dotrepeat/README.md) · [`lib.nvim.lastcmd`](../lua/lib/nvim/lastcmd/README.md)
 - [`lib.lua.class`](../lua/lib/lua/class/README.md) · [`lib.lua.context_manager`](../lua/lib/lua/context_manager/README.md)
 
 **`:help` pages**
