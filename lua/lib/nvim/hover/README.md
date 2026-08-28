@@ -219,6 +219,58 @@ on every hover. A source that throws is skipped and the next one still runs.
 Target types a preview can claim: `image`, `pdf`, `markdown`, `file`,
 `directory`, `url`, `anchor`, `missing`.
 
+## Two things that must not be changed casually
+
+Both were bugs, both took a long time to find, and both are easy to
+reintroduce with a change that looks obviously correct.
+
+### The float is positioned `relative = "editor"`, not `"cursor"`
+
+Even though "one line below the cursor" is exactly what is wanted.
+
+`nvim_win_get_position` reports a **wrong column** for a cursor-relative
+float when the editor window does not start at column 0 — it adds the
+window's origin to a cursor position that already contains it. Measured with
+a 26-column file tree: a float whose frame is drawn at column ~59 reports
+**83**. Neovim draws it correctly; only the self-report is wrong.
+
+That is fatal here, because this float's geometry *is* the drawing box handed
+to the terminal for an image. Everything downstream computes a correct offset
+from a wrong origin, and the picture lands beside its own frame by the
+sidebar's width.
+
+So `float.open` takes the cursor's true grid position from `screenpos()` and
+opens an editor-relative float, which reports back exactly what it was given.
+**Reverting that to `relative = "cursor"` brings the bug straight back**, and
+it only shows with a sidebar open.
+
+### The image is fitted to the drawing box, not to the frame
+
+`canvas_cells` subtracts `draw_inset` before asking `fit_cells`, then adds it
+back for the frame. That looks like an off-by-two and is not.
+
+`images.anchor` keeps `draw_inset` cells free on every side, so a float sized
+to fit the image exactly is drawn into a box two cells smaller per axis. Two
+cells off 20 rows is a bigger relative change than two off 77 columns, so the
+ratio moves — and `preserveAspectRatio=1` letterboxes the difference and
+centres it. Measured: ~2.7 cells of empty space on the left for a 1200x675
+image in a 77x20 frame, which reads as "the image is shifted right".
+
+### If a placement problem appears again
+
+`images.nvim` ships the measurements as `:Image debug` (`report`, `columns`,
+`float`); the failure modes are written up in that plugin's
+`docs/ROADMAP/TERMINALS.md`. Two traps, both of which cost days:
+
+- **A consistency check passing proves nothing about the origin.** Sent
+  coordinates matching the reported float position held throughout both bugs
+  above. Compare the report against reality — `:Image debug float` draws a
+  marker at the reported corner for exactly that.
+- **A generated test card cannot reveal an aspect-ratio problem**, because
+  `images.testcard` builds it to whatever box it is handed. Reproduce with a
+  real image; a probe that also passes `inset = 0` bypasses the second bug by
+  construction.
+
 ## Modules
 
 | Module | Job |
