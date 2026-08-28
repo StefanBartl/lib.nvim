@@ -167,10 +167,47 @@ function M.open(lines, opts)
     width, height = measure(lines, opts)
   end
 
+  -- Positioned against the editor grid, not the cursor — even though "one
+  -- line below the cursor" is exactly what is wanted here.
+  --
+  -- **Why.** With `relative = "cursor"`, `nvim_win_get_position` reports a
+  -- column that is too large by the width of whatever sits left of the
+  -- editor window (a file tree, a sidebar). Measured: a tree 26 columns wide
+  -- makes a float whose frame is drawn at column ~59 report column 83.
+  -- Neovim draws it correctly; only the reported number is wrong.
+  --
+  -- That matters because this float's geometry is not decoration: it *is*
+  -- the box handed to the terminal for the image (`images.anchor` reads it
+  -- back with `nvim_win_get_position`). Every consumer then computes a
+  -- correct offset from a wrong origin, and the picture lands beside its own
+  -- frame by the tree's width — which is precisely the bug this replaces.
+  --
+  -- `screenpos()` gives the cursor's true position on the editor grid, and
+  -- an `editor`-relative float reports back exactly the coordinates it was
+  -- given. The float lands in the same place as before; only the number it
+  -- reports afterwards becomes trustworthy.
+  local anchor_row, anchor_col
+  do
+    local cur_win = api.nvim_get_current_win()
+    local cursor = api.nvim_win_get_cursor(cur_win)
+    -- screenpos() is 1-based and returns {row=0, col=0} when the position is
+    -- not currently visible (folded, scrolled away).
+    local sp = vim.fn.screenpos(cur_win, cursor[1], cursor[2] + 1)
+    if type(sp) == "table" and (sp.row or 0) > 0 and (sp.col or 0) > 0 then
+      anchor_row, anchor_col = sp.row, sp.col - 1
+    else
+      -- Fall back to the window's own origin rather than to cursor-relative
+      -- positioning: a slightly misplaced float still reports honestly, and
+      -- an honest origin is what the image needs.
+      local wp = api.nvim_win_get_position(cur_win)
+      anchor_row, anchor_col = wp[1] + 1, wp[2]
+    end
+  end
+
   local ok, win = pcall(api.nvim_open_win, buf, false, {
-    relative = "cursor",
-    row = 1,
-    col = 0,
+    relative = "editor",
+    row = anchor_row,
+    col = anchor_col,
     width = width,
     height = height,
     style = "minimal",
