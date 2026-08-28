@@ -111,6 +111,26 @@ function M.open(lines, opts)
     return nil, nil
   end
 
+  -- `nvim_buf_set_lines` rejects any element containing a newline
+  -- ("'replacement string' item contains newlines") and throws, which in an
+  -- async previewer's callback surfaces as a bare stack trace with no hover.
+  -- Previewers assemble their lines from file contents, error strings and
+  -- external tool output, so an embedded "\n" is a question of when, not if
+  -- -- flattening here is one guard instead of one per previewer. Tabs are
+  -- left alone; only the split is required.
+  local flat = {}
+  for _, line in ipairs(lines) do
+    local text = type(line) == "string" and line or tostring(line)
+    if text:find("\n", 1, true) then
+      for _, part in ipairs(vim.split(text, "\n", { plain = true })) do
+        flat[#flat + 1] = (part:gsub("\r$", ""))
+      end
+    else
+      flat[#flat + 1] = text
+    end
+  end
+  lines = flat
+
   local buf = api.nvim_create_buf(false, true)
   api.nvim_buf_set_lines(buf, 0, -1, false, lines)
 
