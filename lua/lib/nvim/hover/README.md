@@ -69,12 +69,13 @@ autocmd).
 that plugin is normally `ft`-lazy on markdown — so in a session that never
 opens a `.md` file, nothing would ever turn the hover on, and paths in a
 `.txt` or a code comment would silently do nothing. The natural home is your
-`lib.nvim` spec, which is already eager:
+`lib.nvim` spec:
 
 ```lua
 {
   "StefanBartl/lib.nvim",
   lazy = false,
+  priority = 1000,
   config = function()
     require("lib.nvim.hover").enable()
   end,
@@ -83,6 +84,13 @@ opens a `.md` file, nothing would ever turn the hover on, and paths in a
 
 `enable(opts)` also accepts the config table below, so you can turn it on and
 configure it in one call.
+
+`lazy = false` here is not a hover requirement — it is what
+[installation.md](../../../../docs/installation.md) already recommends for
+lib.nvim generally, since a config that uses `lib.*` in its own modules
+bootstraps the library before `lazy.setup()` anyway and the spec then only
+keeps it updatable. If your lib.nvim is lazy-loaded on first `require`,
+`enable()` needs a home that actually runs at startup instead.
 
 ## Turning it off
 
