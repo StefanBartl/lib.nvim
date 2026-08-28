@@ -132,7 +132,11 @@ Two reasons it exists:
   this, undoing that meant editing all N call sites. Now it is a flag.
 - **Checking the claim.** The cost table at the top of this file is one
   machine and one synthetic benchmark. An argument you cannot re-measure in
-  your own config is one you have to take on faith.
+  your own config is one you have to take on faith — so re-measure it:
+  `nvim --clean -u NONE -c "set rtp+=." -l scripts/bench_dispatcher.lua` from
+  the repo root reproduces the hit/miss table above at 1/5/20/50 handlers,
+  plus the control that isolates how much of the cost is "entering Lua at
+  all" versus the dispatcher's own matching.
 
 The mode is resolved at `attach()`, not at `new()`, so `detach()` → flip →
 `attach()` switches a live dispatcher. `reattach_all()` does that for every

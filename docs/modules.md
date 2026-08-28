@@ -26,6 +26,7 @@ namespace one-liners), split by topic, see [`API/README.md`](API/README.md).
 | [`lib.nvim.count`](../lua/lib/nvim/count/README.md) | count-prefix helpers for keymaps: `get`/`raw`/`given`/`clamp`, plus `times` (sync repeat) and `chain` (async repeat gated on a completion signal) |
 | [`lib.nvim.bindings.usercmd`](../lua/lib/nvim/bindings/usercmd/composer/README.md) | user-command helpers: `create` + [`composer`](../lua/lib/nvim/bindings/usercmd/composer/README.md) (subcommand verbs, completion, docgen — [`:help`](../doc/lib.nvim-composer.txt)) |
 | `lib.nvim.bindings.autocmd`     | autocmd / augroup helpers                           |
+| [`lib.nvim.bindings.audit`](../lua/lib/nvim/bindings/README.md) | keymap actions vs. command routes registered in the current session: `keymap_actions`/`command_routes`/`gaps`, `:LibBindingsAudit[Gaps] [path]` |
 | `lib.nvim.buffer`      | buffer helpers (`insert_lines`, `is_markdown_buf`, `open_background`) |
 | `lib.nvim.buf_win_tab` | buffer / window / tab utilities                     |
 | [`lib.nvim.window`](../lua/lib/nvim/window/README.md) | overlay/float helpers: `make_scratch`, `open_named_scratch`, `open_scratch_split`, `tag` (find by `vim.w[win].custom_tag`), `nice_quit`, `set_title`, `close_on_focus_lost`, `center`, `attach` ([`:help`](../doc/lib.nvim-window.txt)) |
@@ -46,6 +47,7 @@ namespace one-liners), split by topic, see [`API/README.md`](API/README.md).
 | [`lib.nvim.selection`](../lua/lib/nvim/selection/README.md) | reselect a Visual line/char range after a mapping mutates it: `keep_lines`/`keep_chars` ([`:help`](../doc/lib.nvim-selection.txt)) |
 | [`lib.nvim.async`](../lua/lib/nvim/async/README.md) | coroutine async/await over libuv: `await`/`run`/`wrap`, plus `Semaphore` and `Condvar` — the shared core behind `fs.collect_recursive`'s async walk and `fs.write.async` ([`:help`](../doc/lib.nvim-async.txt)) |
 | [`lib.nvim.harvest`](../lua/lib/nvim/harvest/README.md) | "collect from a scope, then show/export it" building blocks: `scope` (buffer/range/buffers/cwd/path → sources with provenance), `render` (rows → GFM table / CSV / lines), `sink` (clipboard / file / scratch buffer / picker), `emit` ([`:help`](../doc/lib.nvim-harvest.txt)) |
+| [`lib.nvim.dev`](../lua/lib/nvim/dev/README.md) | tooling for developing *across* the ecosystem, not one plugin's runtime: `duplicates` — function bodies shared by two or more sibling repos, candidates for extraction into lib.nvim itself; `:LibDuplicateScan [path]` |
 
 Opt-in call counting / usage statistics (`wrap`/`wrap_loaded`, persistence,
 Markdown/browser reports, `:RATelemetry`) moved to

@@ -50,6 +50,8 @@ local specs = {
   "autocmd_dispatcher_spec.lua",
   "autocmd_docs_spec.lua",
   "usercmd_registry_spec.lua",
+  "bindings_audit_spec.lua",
+  "dev_duplicates_spec.lua",
   "markdown_table_spec.lua",
   "run_argv_spec.lua",
   "run_spec.lua",
