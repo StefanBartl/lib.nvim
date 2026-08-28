@@ -22,7 +22,21 @@
 ---@field inline_images? boolean # Draw images / rasterized PDF pages into the float when a provider can. Default true.
 ---@field bare_paths? boolean # Also hover a path written without link syntax. Default true. See `lib.nvim.hover.bare_path`.
 ---@field filetypes? string|string[] # Which buffers a host attaches the hover to. Interpreted by the host, not here.
+---@field scroll_keys? Lib.Hover.ScrollKeys # Which keys scroll a scrollable preview.
 ---@field url? Lib.HoverUrlConfig
+
+--- Keys bound globally while a scrollable hover is on screen, and unbound
+--- (restoring whatever they shadowed) the moment it closes. Each direction
+--- takes a single key or a list; a configured list replaces the default
+--- rather than extending it, and an empty list binds nothing.
+---@class Lib.Hover.ScrollKeys
+---@field down? string|string[] # Default `{ "<M-PageDown>", "<M-Down>" }` — the second pair for keyboards with no PageUp/PageDown.
+---@field up? string|string[] # Default `{ "<M-PageUp>", "<M-Up>" }`.
+
+--- One key `lib.nvim.hover` currently holds, with the mapping it displaced.
+---@class Lib.Hover.BoundKey
+---@field lhs string
+---@field saved? table # `maparg(..., true)` dict of the mapping that was there, restored on unbind.
 
 ---@class Lib.HoverUrlConfig
 ---@field fetch? boolean # Fetch the page for its title/description. Default false: a hover that silently fetches discloses every link brushed past.
@@ -64,7 +78,7 @@
 ---@field image_path? string # Draw this image into the float, if a provider can.
 ---@field canvas? Lib.Hover.Canvas # Size the float to this instead of to `lines`, and show no text or title: the float is a frame for the picture, not a caption for it.
 ---@field highlight? string # Highlight group applied to the first line (the `missing` preview's ✗ marker).
----@field scroll? Lib.Hover.Scroll # Present when the preview has more to show; drives `<M-PageUp>`/`<M-PageDown>`.
+---@field scroll? Lib.Hover.Scroll # Present when the preview has more to show; drives the `scroll_keys`.
 ---@field pending? boolean # Provisional; an async result replaces it (and it is not cached).
 
 --- Where a scrollable preview currently is, and whether more follows.

@@ -59,6 +59,15 @@ local _config = {
   inline_images = true,
   bare_paths = true,
   url = { fetch = false, timeout_ms = 2000 },
+  -- Two pairs, because a key that is not on the keyboard cannot be pressed:
+  -- laptop and 60% layouts often reach PageUp/PageDown only through an Fn
+  -- chord, and nothing at runtime can tell us whether this keyboard has
+  -- them. The arrows are on every keyboard there is; both pairs are bound,
+  -- and either one scrolls.
+  scroll_keys = {
+    down = { "<M-PageDown>", "<M-Down>" },
+    up = { "<M-PageUp>", "<M-Up>" },
+  },
 }
 
 --- Configure the hover. Merged over the current values, so a host can set
@@ -68,6 +77,16 @@ local _config = {
 function M.setup(opts)
   if type(opts) == "table" then
     _config = vim.tbl_deep_extend("force", _config, opts)
+    -- `tbl_deep_extend` merges lists by index, so `{ down = { "<C-n>" } }`
+    -- would leave the default's second key sitting at index 2 and bind both.
+    -- A configured key list replaces the default outright.
+    if type(opts.scroll_keys) == "table" then
+      for _, dir in ipairs({ "down", "up" }) do
+        if opts.scroll_keys[dir] ~= nil then
+          _config.scroll_keys[dir] = opts.scroll_keys[dir]
+        end
+      end
+    end
   end
   return _config
 end
@@ -304,34 +323,57 @@ end
 
 --- What the currently open hover is showing, so it can be re-rendered at a
 --- different position without re-resolving the cursor. Cleared on close.
----@type { target: Lib.Hover.Target, bufnr: integer, offset: integer, page: integer, keys: string[] }|nil
+---@type { target: Lib.Hover.Target, bufnr: integer, offset: integer, page: integer, keys: Lib.Hover.BoundKey[] }|nil
 local _open = nil
 
 ---@internal
---- Drop the scroll keymaps this module installed globally.
+--- Drop the scroll keymaps this module installed globally, and put back
+--- whatever each of them shadowed.
 ---
 --- Global rather than buffer-local because the float is `focusable = false`
 --- and can never receive a mapping of its own — and buffer-local on the
 --- *document* would leak into buffers that have no hover open. They exist
 --- only while a scrollable hover is on screen, and `float`'s close hook is
 --- what takes them away again.
+---
+--- Restoring matters more since the defaults grew a second, plainer pair:
+--- `<M-Up>` is a key a user may well have mapped, and a hover that borrows
+--- it for one float must hand it back, not delete it.
 ---@return nil
 local function unbind_scroll()
   if not (_open and _open.keys) then
     return
   end
-  for _, lhs in ipairs(_open.keys) do
-    pcall(vim.keymap.del, "n", lhs)
+  for _, k in ipairs(_open.keys) do
+    pcall(vim.keymap.del, "n", k.lhs)
+    if k.saved then
+      pcall(vim.fn.mapset, "n", false, k.saved)
+    end
   end
   _open.keys = nil
 end
 
 ---@internal
---- Bind the scroll keys for a hover that has more to show.
+--- Normalize one configured key list. A bare string is a single key; a
+--- missing entry is no key at all, which is how a host turns one direction
+--- (or both) off.
+---@param v string|string[]|nil
+---@return string[]
+local function keylist(v)
+  if type(v) == "string" then
+    return { v }
+  elseif type(v) == "table" then
+    return v
+  end
+  return {}
+end
+
+---@internal
+--- Bind the configured scroll keys for a hover that has more to show.
 ---
 --- Deliberately does nothing when the content is not scrollable: an image, or
---- a file that fits in the float, must leave `<M-PageUp>`/`<M-PageDown>`
---- alone so they keep whatever meaning they have elsewhere.
+--- a file that fits in the float, must leave those keys alone so they keep
+--- whatever meaning they have elsewhere.
 ---@param content Lib.Hover.Content
 ---@param rerender fun(delta: integer)
 ---@return nil
@@ -347,18 +389,36 @@ local function bind_scroll(content, rerender)
     return
   end
 
+  local c = cfg()
+  local sk = type(c.scroll_keys) == "table" and c.scroll_keys or {}
   local keys = {}
+  local seen = {}
   local function bind(lhs, delta, desc)
+    -- The same key configured for both directions would, on unbind, restore
+    -- one of our own mappings as if it had been the user's — and then it
+    -- would outlive the float forever.
+    if type(lhs) ~= "string" or lhs == "" or seen[lhs] then
+      return
+    end
+    seen[lhs] = true
+    local saved = vim.fn.maparg(lhs, "n", false, true)
+    if type(saved) ~= "table" or saved.lhs == nil then
+      saved = nil
+    end
     local ok = pcall(vim.keymap.set, "n", lhs, function()
       rerender(delta)
     end, { desc = desc, nowait = true, silent = true })
     if ok then
-      keys[#keys + 1] = lhs
+      keys[#keys + 1] = { lhs = lhs, saved = saved }
     end
   end
 
-  bind("<M-PageDown>", 1, "lib.nvim.hover: scroll preview down")
-  bind("<M-PageUp>", -1, "lib.nvim.hover: scroll preview up")
+  for _, lhs in ipairs(keylist(sk.down)) do
+    bind(lhs, 1, "lib.nvim.hover: scroll preview down")
+  end
+  for _, lhs in ipairs(keylist(sk.up)) do
+    bind(lhs, -1, "lib.nvim.hover: scroll preview up")
+  end
   _open.keys = keys
 end
 
@@ -375,8 +435,8 @@ function M.show(opts)
   local bufnr = api.nvim_get_current_buf()
   local link = M.link_under_cursor(bufnr)
   if not link then
-    -- Closing here without unbinding would leave `<M-PageUp>`/`<M-PageDown>`
-    -- mapped after the hover is gone — the most common exit, since moving the
+    -- Closing here without unbinding would leave the scroll keys mapped
+    -- after the hover is gone — the most common exit, since moving the
     -- cursor off a link comes back through this branch.
     unbind_scroll()
     _open = nil
@@ -456,7 +516,7 @@ end
 --- hover keeps showing what it was showing even if the cursor has since moved
 --- off the link.
 ---
---- Bound to `<M-PageUp>`/`<M-PageDown>` while a scrollable hover is open (see
+--- Bound to `scroll_keys` while a scrollable hover is open (see
 --- `bind_scroll`), and public so a host can offer its own keys. Deliberately
 --- no image case: there is nothing to scroll in a picture.
 ---@param delta integer positive scrolls forward, negative back

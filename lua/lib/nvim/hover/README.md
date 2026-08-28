@@ -132,6 +132,8 @@ require("lib.nvim.hover").setup({
 | `border` | `"rounded"` | `nvim_open_win` border. |
 | `inline_images` | `true` | Draw pictures / PDF pages into the float when a provider can. |
 | `bare_paths` | `true` | Also hover paths written without link syntax. |
+| `scroll_keys.down` | `{ "<M-PageDown>", "<M-Down>" }` | Keys that scroll a scrollable preview forward. |
+| `scroll_keys.up` | `{ "<M-PageUp>", "<M-Up>" }` | …and back. |
 | `url.fetch` | `false` | Off deliberately: a hover that silently fetches discloses every link you brush past to its host. |
 | `url.timeout_ms` | `2000` | |
 
@@ -142,16 +144,35 @@ While a scrollable hover is open:
 
 | Key | Does |
 | --- | --- |
-| `<M-PageDown>` | next screenful of lines, or next PDF page |
-| `<M-PageUp>` | back |
+| `<M-PageDown>` or `<M-Down>` | next screenful of lines, or next PDF page |
+| `<M-PageUp>` or `<M-Up>` | back |
+
+Both pairs are bound, because a key that is not on the keyboard cannot be
+pressed: laptop and 60% layouts often reach PageUp/PageDown only through an
+Fn chord, and nothing at runtime can tell whether *this* keyboard has them.
+The arrows are on every keyboard there is.
 
 The float stays a **preview**: not focusable, not editable, nothing to
 select or yank. The keys are bound globally while such a hover is on screen
 and removed the moment it closes — so they keep whatever meaning they have
-elsewhere the rest of the time.
+elsewhere the rest of the time. A key that was already mapped is *restored*,
+not deleted, when the hover goes away.
 
 They are bound **only when there is something to scroll**. An image, or a
 file that already fits in the float, leaves them alone entirely.
+
+Different keys, without touching the API:
+
+```lua
+require("lib.nvim.hover").setup({
+  scroll_keys = { down = "<C-n>", up = "<C-p>" },   -- a string or a list
+})
+```
+
+A configured list *replaces* the default rather than extending it, so
+`{ down = { "<C-n>" } }` binds `<C-n>` and nothing else. An empty list
+(`{ down = {}, up = {} }`) binds nothing at all — the way to keep the hover
+and do the scrolling from your own mappings.
 
 Scrolling does not re-resolve the cursor: the hover keeps showing what it
 was showing, even if the cursor has since moved off the link. The title
@@ -163,7 +184,8 @@ there is a short delay per page, and pages are cached per file *and* page.
 The document's page count is not known in advance; paging simply stops at
 the last page and stays there.
 
-Bind your own keys instead by calling the API:
+Or call the API from your own mapping, which works whether or not a hover
+happens to be open:
 
 ```lua
 vim.keymap.set("n", "<C-d>", function() require("lib.nvim.hover").scroll(1) end)
