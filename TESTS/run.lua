@@ -63,6 +63,7 @@ local specs = {
   "wslpath_spec.lua",
   "system_job_spec.lua",
   "ui_kit_spec.lua",
+  "ui_list_spec.lua",
   "statusline_spec.lua",
   "lua_helpers_spec.lua",
   "nvim_helpers_spec.lua",

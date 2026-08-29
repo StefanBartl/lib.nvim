@@ -258,6 +258,23 @@ M.namespace(name: string): integer   -- cached nvim_create_namespace
 M.set(group: string, opts: Lib.Highlight.Opts, ns?: string|integer|nil)   -- wraps nvim_set_hl
 ```
 
+### `lib.nvim.ui.list` (see README)
+Quickfix and location lists: entries + title in one call, with the stack,
+open and focus policy made explicit instead of implicit.
+
+```
+M.set(opts?: Lib.UI.List.Opts): integer count
+M.qf(items: Lib.UI.List.Item[], title?: string, opts?: Lib.UI.List.Opts): integer count
+M.loc(items: Lib.UI.List.Item[], title?: string, opts?: Lib.UI.List.Opts): integer count
+```
+`opts`: `items` (default `{}`, which clears the list), `title`, `loclist`
+(`false` | `true` = current window | window id), `action` (default `" "` pushes
+a new list; `"r"` replaces the current one; `"a"` appends), `open` (default
+`true`; `"auto"` opens only when non-empty; `false` never), `focus` (default
+`"list"`, as bare `:copen`; `"source"` hands the cursor back), `height`.
+Does **not** wrap `vim.diagnostic.setqflist`/`setloclist` -- different API,
+own severity handling, version-dependent signature.
+
 ### `lib.nvim.ui.statusline` (see README)
 A short status badge pinned to one row of one window, auto-choosing
 between window-local `&statusline` and a float depending on `laststatus`.
