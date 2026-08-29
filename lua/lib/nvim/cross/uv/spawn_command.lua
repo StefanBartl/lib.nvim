@@ -62,6 +62,9 @@ local function spawn_project_command(cmd, opts)
 
   -- Spawn the process asynchronously
   local handle
+  -- luv's own meta declares every uv.spawn option required (cwd, env, uid,
+  -- gid, verbatim, detached, hide), which no real caller passes.
+  ---@diagnostic disable-next-line: missing-fields
   handle = uv.spawn(shell, {
     args = shell_args,
     cwd = cwd,

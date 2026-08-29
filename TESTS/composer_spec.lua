@@ -1,3 +1,6 @@
+---@diagnostic disable: missing-fields
+-- The command-callback tables built here carry only the fields the composer
+-- actually reads; a full Lib.UserCommand.Args per case would be noise.
 -- TESTS/composer_spec.lua — lib.nvim.bindings.usercmd.composer
 --
 -- Covers the whole pipeline headlessly: tree build/walk, argument coercion,

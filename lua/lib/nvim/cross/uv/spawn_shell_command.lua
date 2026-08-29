@@ -28,6 +28,9 @@ return function(cmd, args, opts)
   end
 
   local handle
+  -- luv's own meta declares every uv.spawn option required (cwd, env, uid,
+  -- gid, verbatim, detached, hide), which no real caller passes.
+  ---@diagnostic disable-next-line: missing-fields
   handle = uv.spawn(shell, {
     args = args,
     stdio = opts.stdio or { nil, 1, 2 }, -- default: inherit stdout/stderr

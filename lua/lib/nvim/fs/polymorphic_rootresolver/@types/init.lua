@@ -2,8 +2,8 @@
 ---@module 'lib.nvim.fs.polymorphic_rootresolver.@types'
 
 ---@class RootResolverCfg
----@field markers string[] List of filenames/folders that indicate project root.
----@field include_stdpath_config boolean If true, uses Neovim's stdpath("config") as fallback.
+---@field markers? string[] List of filenames/folders that indicate project root.
+---@field include_stdpath_config? boolean If true, uses Neovim's stdpath("config") as fallback.
 ---@field resolve nil|fun(dir: string, cfg: RootResolverCfg): string|nil
 --- Replaces the default upward marker search. Receives the normalized starting
 --- directory (the file's directory, or the cwd for an unnamed buffer) and

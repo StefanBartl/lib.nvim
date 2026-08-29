@@ -23,7 +23,7 @@ local M = {}
 ---@class Lib.Strategies.Registration
 ---@field name string
 ---@field table table                  # the aggregate itself
----@field keys fun(): string[]         # every key the aggregate can resolve
+---@field keys? fun(): string[]        # every key the aggregate can resolve; `M.keys` falls back to pairs() without it
 ---@field reset_cache? fun(): nil      # drop memoized key -> value entries
 
 ---@type Lib.Strategies.Registration|nil

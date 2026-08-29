@@ -4,7 +4,7 @@
 ---Options for a directory guard. The scope fields are passed straight to
 ---`lib.nvim.fs.chdir`, so the guard watches and restores exactly that scope.
 ---@class Lib.Fs.DirGuard.Opts : Lib.Fs.Chdir.Opts
----@field on_violation fun(new_cwd: string, held: string): boolean? # Called when foreign code changed the cwd, before it is undone. Return `false` to accept the change and release the guard instead.
+---@field on_violation? fun(new_cwd: string, held: string): boolean? # Called when foreign code changed the cwd, before it is undone. Return `false` to accept the change and release the guard instead.
 ---@field on_error     fun(err: string)? # Called when restoring the held directory failed (e.g. it was deleted meanwhile).
 
 ---A live guard. All methods use dot syntax — the state lives in a closure,
