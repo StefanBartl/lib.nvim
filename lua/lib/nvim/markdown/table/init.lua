@@ -334,8 +334,10 @@ end
 
 local format_row = M.format_row
 
----Re-render one parsed table.
----@param parsed Lib.Markdown.Table
+---Re-render one table. Takes the content half: `render` never looks at where
+---the table sat, so a table assembled in memory is as valid an input as a
+---parsed one.
+---@param parsed Lib.Markdown.Table.Content
 ---@param opts Lib.Markdown.Table.RenderOpts|nil
 ---@return string[] lines
 function M.render(parsed, opts)

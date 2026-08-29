@@ -6,12 +6,19 @@
 --- `start_line`/`end_line` are 1-based and inclusive, and span the whole run
 --- of table lines including the separator row — which is *not* in `rows`,
 --- because it is regenerated from the column widths rather than kept.
----@class Lib.Markdown.Table
----@field start_line integer
----@field end_line integer
+--- The content half: everything `M.render` needs, and nothing about where the
+--- table sat. Split out because rendering a table that was never parsed out of
+--- a buffer -- one assembled from rows in memory -- is a legitimate call, and
+--- demanding a start and end line for it would be asking for a lie.
+---@class Lib.Markdown.Table.Content
 ---@field rows string[][]                        # Header first, then the body rows.
 ---@field col_count integer                      # Widest row wins; short rows are padded out.
 ---@field separator_style "spaced"|"compact"     # `| --- |` vs `|---|`, preserved from the source.
+
+--- A table as `M.parse` found it: content plus its position in the buffer.
+---@class Lib.Markdown.Table : Lib.Markdown.Table.Content
+---@field start_line integer
+---@field end_line integer
 
 --- One column-alignment override.
 ---
