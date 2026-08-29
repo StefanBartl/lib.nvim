@@ -18,15 +18,17 @@
 ---@field visual? Lib.Lastcmd.Visual # Present only for `x`-mode entries
 
 ---@class Lib.Lastcmd.Opts
+---@field experimental? boolean|string # Opt-in. `nil`/`false` off (and undoes an earlier setup), `true` on at the default lhs (`<M-.>`), a string on at that lhs.
 ---@field ignore? string[] # Extra mapping lhs values to treat as motions (never recorded), in `keytrans` notation.
 ---@field motions? boolean # `false` drops the built-in motion denylist entirely. Default `true`.
 
 ---@class Lib.Lastcmd
----@field setup fun(opts?: Lib.Lastcmd.Opts) # Install the `on_key` tracker. Idempotent.
+---@field setup fun(opts?: Lib.Lastcmd.Opts): boolean # Enable the feature and bind its trigger. Off unless `opts.experimental`. Idempotent.
 ---@field repeat_last fun(): boolean # Re-run the last real command. Returns whether anything ran.
 ---@field peek fun(): Lib.Lastcmd.Entry|nil # The recorded mapping entry, if any -- inspection/tests.
 ---@field clear fun() # Forget the recorded mapping and all per-buffer tick bookkeeping.
 ---@field enabled fun(): boolean # Whether the tracker is currently installed.
----@field teardown fun() # Remove the `on_key` tracker.
+---@field trigger_key fun(): string|nil # The lhs the trigger is bound to, or `nil` when off.
+---@field teardown fun() # Remove the `on_key` tracker and the trigger keymap.
 
 return {}

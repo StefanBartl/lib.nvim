@@ -79,12 +79,29 @@ return function(H)
   -- ------------------------------------------------------------- setup
 
   eq(lastcmd.enabled(), false, "enabled(): false before setup")
-  lastcmd.setup({ ignore = { "<F7>" } })
+
+  -- The feature is opt-in: without `experimental` nothing is installed.
+  eq(lastcmd.setup(), false, "setup(): returns false without `experimental`")
+  eq(lastcmd.enabled(), false, "setup(): installs nothing without `experimental`")
+  eq(lastcmd.trigger_key(), nil, "setup(): binds no trigger without `experimental`")
+
+  eq(
+    lastcmd.setup({ experimental = "gzt", ignore = { "<F7>" } }),
+    true,
+    "setup(): returns true when opted in"
+  )
   ok(lastcmd.enabled(), "setup(): installs the tracker")
-  lastcmd.setup()
+  eq(lastcmd.trigger_key(), "gzt", "setup(): binds the requested lhs")
+  ok(vim.fn.maparg("gzt", "n") ~= "", "setup(): the trigger is a real keymap")
+
+  lastcmd.setup({ experimental = "gzt", ignore = { "<F7>" } })
   ok(lastcmd.enabled(), "setup(): idempotent, no second handler")
-  -- re-apply the ignore entry the second setup() just reset
-  lastcmd.setup({ ignore = { "<F7>" } })
+
+  -- switching the key moves the binding rather than leaving both live
+  lastcmd.setup({ experimental = "gzu", ignore = { "<F7>" } })
+  eq(lastcmd.trigger_key(), "gzu", "setup(): re-binds when the lhs changes")
+  eq(vim.fn.maparg("gzt", "n"), "", "setup(): drops the previous trigger")
+  lastcmd.setup({ experimental = "gzt", ignore = { "<F7>" } })
 
   vim.cmd("enew")
   vim.api.nvim_buf_set_lines(0, 0, -1, false, { "a1", "a2", "a3", "a4", "a5", "a6" })
@@ -143,7 +160,11 @@ return function(H)
 
   vim.api.nvim_win_set_cursor(0, { 2, 0 })
   repeat_last()
-  eq(indent_calls, calls_before, "repeat_last(): did NOT replay the mapping once a native change was newer")
+  eq(
+    indent_calls,
+    calls_before,
+    "repeat_last(): did NOT replay the mapping once a native change was newer"
+  )
   eq(lines()[2], "yyy", "repeat_last(): repeated the native change via `normal! .`")
 
   -- a mapping afterwards takes the lead back
@@ -154,17 +175,48 @@ return function(H)
   eq(indent_calls, calls2 + 1, "repeat_last(): a mapping run after a native change wins again")
 
   -- ------------------------------------------ the repeat key is not tracked
+  --
+  -- Regression: the guard used to compare the resolved mapping's callback
+  -- against `M.repeat_last`, which only matched when the key was bound to
+  -- that function *directly*. Every documented binding wraps it in a closure
+  -- instead, so the trigger recorded itself and then replayed itself --
+  -- feeding its own lhs back through `on_key` forever, hanging the editor.
+  -- `gzw` below is that wrapper form; `gzt` is the one `setup` installed.
 
-  vim.keymap.set("n", "gzr", lastcmd.repeat_last)
+  local wrapper_calls = 0
+  vim.keymap.set("n", "gzw", function()
+    wrapper_calls = wrapper_calls + 1
+    if wrapper_calls > 20 then
+      error("lastcmd: the repeat trigger ran away (self-reference)")
+    end
+    require("lib.nvim.lastcmd").repeat_last()
+  end)
+
   vim.cmd("enew")
   vim.api.nvim_buf_set_lines(0, 0, -1, false, { "p1", "p2", "p3" })
   lastcmd.clear()
   vim.api.nvim_win_set_cursor(0, { 1, 0 })
   press("<F6>")
   local b = bullet_calls
-  press("gzr") -- the repeat mapping itself
-  eq(bullet_calls, b + 1, "the repeat key replays the tracked mapping")
-  eq(peeked_keys(), "<F6>", "the repeat key never records itself (no self-reference)")
+  press("gzt") -- the trigger `setup` bound
+  eq(bullet_calls, b + 1, "the trigger replays the tracked mapping")
+  eq(peeked_keys(), "<F6>", "the trigger never records itself (no self-reference)")
+
+  vim.api.nvim_win_set_cursor(0, { 1, 0 })
+  press("gzw") -- a hand-rolled trigger wrapping repeat_last in a closure
+  eq(wrapper_calls, 1, "a wrapped trigger fires once, not in a loop")
+  eq(bullet_calls, b + 2, "a wrapped trigger replays the tracked mapping too")
+  eq(peeked_keys(), "<F6>", "a wrapped trigger does not record itself either")
+
+  -- Regression: pressing the trigger repeatedly must keep replaying. The
+  -- replay is fed with "t" so it counts as typed; without that `on_key` never
+  -- sees it, `seen` is never credited with the edit the replay just made, and
+  -- from the second press on every repeat silently degrades to `normal! .`.
+  vim.api.nvim_win_set_cursor(0, { 1, 0 })
+  press("gzt")
+  vim.api.nvim_win_set_cursor(0, { 1, 0 })
+  press("gzt")
+  eq(bullet_calls, b + 4, "the trigger keeps replaying when pressed repeatedly")
 
   -- ------------------------------------------------ ignore list & prefixes
 
@@ -209,8 +261,21 @@ return function(H)
 
   lastcmd.teardown()
   eq(lastcmd.enabled(), false, "teardown(): removes the tracker")
+  eq(lastcmd.trigger_key(), nil, "teardown(): forgets the trigger")
+  eq(vim.fn.maparg("gzt", "n"), "", "teardown(): removes the trigger keymap it installed")
 
-  for _, k in ipairs({ "<F5>", "<F6>", "<F7>", "gzq", "gzr" }) do
+  -- `experimental = false` is the runtime off switch, not just an omission
+  lastcmd.setup({ experimental = "gzt" })
+  ok(lastcmd.enabled(), "setup(): back on")
+  eq(
+    lastcmd.setup({ experimental = false }),
+    false,
+    "setup(): `experimental = false` returns false"
+  )
+  eq(lastcmd.enabled(), false, "setup(): `experimental = false` tears the tracker down")
+  eq(vim.fn.maparg("gzt", "n"), "", "setup(): `experimental = false` unbinds the trigger")
+
+  for _, k in ipairs({ "<F5>", "<F6>", "<F7>", "gzq", "gzw" }) do
     pcall(vim.keymap.del, "n", k)
   end
   pcall(vim.keymap.del, "x", "<F8>")

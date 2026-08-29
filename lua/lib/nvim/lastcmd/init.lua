@@ -33,16 +33,19 @@
 --- happens to be a motion needs naming, which is what `DEFAULT_IGNORE` and
 --- `opts.ignore` are for.
 ---
+--- **Experimental, and off unless asked for.** The tracker sees every keypress
+--- in the session, so it does not install itself just because the library is
+--- on the runtimepath. `opts.experimental` is the opt-in, and it also carries
+--- the key, because the module binds the trigger itself -- see `M.setup`.
+---
 --- Usage:
 --- ```lua
---- require("lib.nvim.lastcmd").setup()
---- vim.keymap.set({ "n", "x" }, "<leader>.", function()
----   require("lib.nvim.lastcmd").repeat_last()
---- end, { desc = "repeat last real command" })
+--- require("lib.nvim.lastcmd").setup({ experimental = true })      -- default lhs
+--- require("lib.nvim.lastcmd").setup({ experimental = "<M-r>" })   -- your own
 --- ```
 ---
---- `3<M-Right>` then `5j` then `<leader>.` re-runs `3<M-Right>`. A later
---- `<M-c>` then `jjj` then `<leader>.` re-runs `<M-c>`. A native `dw` in
+--- `3<M-Right>` then `5j` then the trigger re-runs `3<M-Right>`. A later
+--- `<M-c>` then `jjj` then the trigger re-runs `<M-c>`. A native `dw` in
 --- between wins over both, because it happened last.
 
 require("lib.nvim.lastcmd.@types")
@@ -51,10 +54,25 @@ local selection = require("lib.nvim.selection")
 
 local M = {}
 
+--- Default trigger, used when `experimental = true` rather than a string.
+---
+--- Deliberately *not* `<C-#>`: outside the kitty keyboard protocol a terminal
+--- has no encoding for Ctrl with a non-alphabetic key, so it sends a bare `#`
+--- and the mapping can never fire. `<M-.>` survives the legacy ESC-prefix
+--- encoding every terminal implements, and keeps `.`'s "repeat" mnemonic.
+local DEFAULT_LHS = "<M-.>"
+
+--- Modes the trigger is bound in. Visual is included because Visual-mode
+--- mappings are tracked (by selection shape) and must be replayable.
+local TRIGGER_MODES = { "n", "x" }
+
 --- Mapped keys that are pure motions, so they never become "the last
 --- command". Unmapped motions need no entry -- they match no mapping, and
 --- they never move `changedtick`, so both halves already ignore them. This
 --- list only matters when something has actually *mapped* one of these.
+-- stylua: ignore
+-- Grouped by kind, one family per line: stylua would spread this to 34 lines
+-- and lose exactly the grouping that makes it reviewable.
 local DEFAULT_IGNORE = {
   "h", "j", "k", "l",
   "<Left>", "<Right>", "<Up>", "<Down>",
@@ -77,6 +95,26 @@ local count = ""
 
 ---@type Lib.Lastcmd.Entry|nil
 local last = nil
+
+--- Entry recorded by `on_key` but not yet promoted to `last`.
+---
+--- `on_key` runs *before* the mapping's rhs, so at the moment the trigger's
+--- own keys are read it looks like any other mapping and would overwrite
+--- `last` with itself -- after which `repeat_last` replays the trigger, which
+--- replays the trigger, forever. Promotion is therefore deferred by one
+--- `vim.schedule` tick, which puts it *after* the rhs has run, and
+--- `repeat_last` cancels whatever is in flight when it starts. That holds for
+--- any lhs and any wrapper around `repeat_last`, which comparing the resolved
+--- callback against `M.repeat_last` did not: the documented binding wraps it
+--- in a closure, so the identity never matched and the runaway was reachable
+--- from the README's own example.
+---@type Lib.Lastcmd.Entry|nil
+local pending = nil
+
+--- The lhs `setup` bound the trigger to, so `teardown` can remove exactly
+--- that and a re-`setup` with a different key does not leave the old one.
+---@type string|nil
+local installed_lhs = nil
 
 --- `changedtick` already accounted for, per buffer. A tick above the stored
 --- value means the buffer changed without a mapping of ours being credited
@@ -132,7 +170,7 @@ local function capture_visual(realmode)
 end
 
 ---@param keys string
----@param mode "m"|"n"
+---@param mode "mt"|"m"|"n" `mt` = remapped *and* counted as typed (see `replay`)
 local function feed(keys, mode)
   vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), mode, false)
 end
@@ -174,10 +212,17 @@ local function replay(entry)
     restore_visual(entry.visual)
   end
   -- "m" so the fed keys go through mappings -- the whole point is to trigger
-  -- the mapping again. This also re-enters `on_key`, which re-records the
-  -- same entry and refreshes `seen`, keeping the arbitration consistent
+  -- the mapping again -- and "t" so they count as *typed*.
+  --
+  -- "t" is load-bearing, not cosmetic. `on_key`'s second argument is empty
+  -- for keys fed without it, and this module ignores those, so a replay fed
+  -- with "m" alone is invisible to the tracker: `seen` never gets credited
+  -- with the edit the replay just made, that edit reads as a native change on
+  -- the next repeat, and every repeat after the first silently falls through
+  -- to `normal! .`. With "t" the replay re-enters `on_key`, re-records the
+  -- same entry and refreshes `seen`, which keeps the arbitration consistent
   -- without a second bookkeeping path.
-  feed(entry.count .. entry.keys, "m")
+  feed(entry.count .. entry.keys, "mt")
 end
 
 ---@param keys string
@@ -189,13 +234,19 @@ local function record(keys, mapmode, realmode)
   if mapmode == "x" then
     entry.visual = capture_visual(realmode)
   end
-  last = entry
+  pending = entry
 
-  -- `on_key` runs *before* the mapping's callback, so the post-mapping tick
-  -- is only knowable a tick later. Crediting the mapping with the change it
-  -- is about to make is what stops that change from later reading as a
-  -- native one.
+  -- `on_key` runs *before* the mapping's callback, so both halves of this are
+  -- only knowable a tick later: the post-mapping tick, and whether the key
+  -- turned out to be the repeat trigger (which cancels `pending` from its
+  -- rhs). Crediting the mapping with the change it is about to make is what
+  -- stops that change from later reading as a native one.
   vim.schedule(function()
+    if pending ~= entry then
+      return -- superseded, or cancelled by `repeat_last`
+    end
+    pending = nil
+    last = entry
     local buf = vim.api.nvim_get_current_buf()
     seen[buf] = tick_of(buf)
   end)
@@ -248,11 +299,11 @@ local function on_key(_, typed)
   local prefix = vim.fn.mapcheck(cand, mapmode) ~= ""
 
   if exact then
-    -- Never record the repeat key itself -- that would make it replay
-    -- itself forever. Identity is checked against the resolved callback, so
-    -- this holds whatever lhs the user chose and needs no configuration.
-    local is_self = type(map) == "table" and map.callback == M.repeat_last
-    if not is_self and not ignore[cand] then
+    -- The repeat trigger is not special-cased here: it records like anything
+    -- else and its rhs cancels the record before it is promoted (see
+    -- `pending`). Its lhs is on the ignore list too, which costs nothing and
+    -- covers a trigger whose rhs defers before calling `repeat_last`.
+    if not ignore[cand] then
       record(cand, mapmode, realmode)
     end
     seq, count = "", ""
@@ -263,11 +314,79 @@ local function on_key(_, typed)
   end
 end
 
----Install the key tracker. Idempotent -- calling it again re-reads `opts`
----rather than stacking a second handler.
+---Remove the trigger this module bound, if any.
+local function unbind()
+  if installed_lhs then
+    for _, mode in ipairs(TRIGGER_MODES) do
+      pcall(vim.keymap.del, mode, installed_lhs)
+    end
+    installed_lhs = nil
+  end
+end
+
+---Bind the trigger, through `lib.nvim.bindings.keymap` so it lands in the
+---keymap registry like every other binding and `conflicts()` can see it.
+---Required lazily: this module is loadable without the bindings tree.
+---@param lhs string
+---@return boolean ok
+local function bind(lhs)
+  local ok, err = pcall(function()
+    require("lib.nvim.bindings.keymap").set(TRIGGER_MODES, lhs, function()
+      M.repeat_last()
+    end, { silent = true }, "repeat last real command (lib.nvim.lastcmd)")
+  end)
+  if not ok then
+    vim.notify(
+      "lib.nvim.lastcmd: could not bind " .. lhs .. ": " .. tostring(err),
+      vim.log.levels.WARN
+    )
+    return false
+  end
+  installed_lhs = lhs
+  return true
+end
+
+---Turn the feature on, and bind its trigger.
+---
+---Opt-in on purpose. The tracker is a session-wide `vim.on_key` listener and
+---the arbitration is new, so nothing happens until `opts.experimental` says
+---so:
+---
+---  * `nil`/`false` -- off. An earlier `setup` is undone, so this is also how
+---    you switch it back off at runtime.
+---  * `true` -- on, bound to the default lhs (`<M-.>`).
+---  * `"<lhs>"` -- on, bound to that key instead.
+---
+---Idempotent: calling it again re-reads `opts`, re-binds only if the key
+---changed, and never stacks a second `on_key` handler.
 ---@param opts? Lib.Lastcmd.Opts
+---@return boolean enabled
 function M.setup(opts)
   opts = opts or {}
+
+  local exp = opts.experimental
+  if exp ~= nil and exp ~= false and exp ~= true and type(exp) ~= "string" then
+    vim.notify(
+      "lib.nvim.lastcmd: `experimental` must be true, false or a keymap lhs, got " .. type(exp),
+      vim.log.levels.WARN
+    )
+    exp = false
+  end
+
+  if not exp then
+    M.teardown()
+    return false
+  end
+
+  local lhs = type(exp) == "string" and exp or DEFAULT_LHS
+  if lhs == "" then
+    vim.notify(
+      "lib.nvim.lastcmd: `experimental` is an empty string, expected a keymap lhs",
+      vim.log.levels.WARN
+    )
+    M.teardown()
+    return false
+  end
 
   ignore = {}
   if opts.motions ~= false then
@@ -278,20 +397,31 @@ function M.setup(opts)
   for _, k in ipairs(opts.ignore or {}) do
     ignore[k] = true
   end
+  ignore[lhs] = true
 
-  if ns then
-    return
+  if installed_lhs ~= lhs then
+    unbind()
+    if not bind(lhs) then
+      M.teardown()
+      return false
+    end
   end
-  ns = vim.on_key(on_key)
+
+  if not ns then
+    ns = vim.on_key(on_key)
+  end
+  return true
 end
 
----Remove the key tracker.
+---Remove the key tracker and the trigger this module bound.
 function M.teardown()
   if ns then
     vim.on_key(nil, ns)
     ns = nil
   end
+  unbind()
   seq, count = "", ""
+  pending = nil
 end
 
 ---@return boolean
@@ -306,6 +436,10 @@ end
 ---it. Motions move neither, so they never decide this.
 ---@return boolean ran
 function M.repeat_last()
+  -- Whatever key got us here is mid-record; cancel it before reading `last`,
+  -- or the trigger becomes the thing it repeats.
+  pending = nil
+
   local buf = vim.api.nvim_get_current_buf()
   local accounted = seen[buf]
   local native_newer = accounted ~= nil and tick_of(buf) > accounted
@@ -330,8 +464,15 @@ end
 ---Forget the recorded mapping and all per-buffer tick bookkeeping.
 function M.clear()
   last = nil
+  pending = nil
   seq, count = "", ""
   seen = {}
+end
+
+---The lhs the trigger is currently bound to, or `nil` when off.
+---@return string|nil
+function M.trigger_key()
+  return installed_lhs
 end
 
 ---@type Lib.Lastcmd

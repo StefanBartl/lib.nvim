@@ -3,17 +3,37 @@
 Repeat the last *real* command — mapping or native change — skipping pure
 motions. Nothing has to be wrapped.
 
-```lua
-require("lib.nvim.lastcmd").setup()
+> **Experimental, and off until you ask for it.** The tracker listens to every
+> keypress in the session, so it does not switch itself on just because the
+> library is on the runtimepath. `experimental` is both the opt-in and the key.
 
-vim.keymap.set({ "n", "x" }, "<leader>.", function()
-  require("lib.nvim.lastcmd").repeat_last()
-end, { desc = "repeat last real command" })
+```lua
+require("lib.nvim.lastcmd").setup({ experimental = true })     -- default: <M-.>
+require("lib.nvim.lastcmd").setup({ experimental = "<M-r>" })  -- your own key
 ```
 
-`3<M-Right>` then `5j` then `<leader>.` re-runs `3<M-Right>`. A later `<M-c>`
-then `jjj` then `<leader>.` re-runs `<M-c>`. A native `dw` in between wins
-over both, because it happened last.
+The module binds the trigger itself (in normal and Visual mode, through
+`lib.nvim.bindings.keymap`, so it shows up in the keymap registry like any
+other binding). `setup({ experimental = false })` is the off switch and undoes
+an earlier call; `setup()` with no `experimental` does nothing at all.
+
+`3<M-Right>` then `5j` then `<M-.>` re-runs `3<M-Right>`. A later `<M-c>` then
+`jjj` then `<M-.>` re-runs `<M-c>`. A native `dw` in between wins over both,
+because it happened last.
+
+## Why `<M-.>` and not `<C-#>`
+
+Outside the kitty keyboard protocol a terminal has no encoding for Ctrl with a
+non-alphabetic key. Legacy encoding only covers `Ctrl` + `@ A-Z [ \ ] ^ _ ?`;
+press `Ctrl+#` anywhere else and the terminal sends a bare `#`, so a `<C-#>`
+mapping is never reached — and `#` does its usual backwards word search
+instead. Neovim can *represent* the key (`nvim_replace_termcodes("<C-#>")`
+yields a real modified-key sequence), which is why binding it appears to
+succeed and then silently never fires.
+
+`<M-.>` survives the ESC-prefix encoding every terminal implements, and keeps
+`.`'s "repeat" mnemonic. Pass `experimental = "<C-#>"` anyway if your terminal
+speaks the kitty protocol and you have enabled it.
 
 ## Why native `.` is not enough
 
@@ -80,16 +100,17 @@ therefore measured and rebuilt through
 [`lib.nvim.selection`](../selection/README.md).
 
 ```
-Vj<F8>   at line 1   ->  lines 1-2 acted on, shape recorded as "V, 2 lines"
-<leader>. at line 4  ->  lines 4-5 acted on
+Vj<F8>  at line 1  ->  lines 1-2 acted on, shape recorded as "V, 2 lines"
+<M-.>   at line 4  ->  lines 4-5 acted on
 ```
 
 ## Options
 
 ```lua
 lastcmd.setup({
-  ignore  = { "<M-j>", "<M-k>" },  -- mapped keys to treat as motions
-  motions = true,                   -- false drops the built-in list entirely
+  experimental = true,              -- required opt-in: true | "<lhs>" | false
+  ignore       = { "<M-j>", "<M-k>" }, -- mapped keys to treat as motions
+  motions      = true,              -- false drops the built-in list entirely
 })
 ```
 
@@ -97,15 +118,31 @@ lastcmd.setup({
 
 | | |
 | --- | --- |
-| `setup(opts?)` | Install the tracker. Idempotent. |
+| `setup(opts?)` | Enable and bind the trigger. Returns whether it is on. Idempotent. |
 | `repeat_last()` | Re-run the last real command. Returns whether anything ran. |
 | `peek()` | The recorded mapping entry, or `nil` — inspection/tests. |
 | `clear()` | Forget the recorded mapping and the per-buffer tick bookkeeping. |
 | `enabled()` | Whether the tracker is installed. |
-| `teardown()` | Remove the tracker. |
+| `trigger_key()` | The lhs the trigger is bound to, or `nil` when off. |
+| `teardown()` | Remove the tracker and the trigger keymap. |
 
-The repeat key never records itself. Identity is checked against the resolved
-mapping's callback, so that holds whatever lhs you pick and needs no config.
+## How the trigger avoids repeating itself
+
+`on_key` runs *before* a mapping's rhs, so when the trigger's own keys are read
+it looks like any other mapping and would be recorded as the thing to repeat —
+after which repeating it repeats the trigger, which repeats the trigger, until
+the editor stops responding.
+
+Recording is therefore two-stage: `on_key` stores a *pending* entry and
+promotes it one `vim.schedule` tick later, which lands after the rhs has run,
+and `repeat_last` cancels whatever is in flight when it starts. That holds for
+any lhs and for any wrapper around `repeat_last`.
+
+Comparing the resolved mapping's callback against `repeat_last` — the obvious
+guard, and the one this module shipped with — does **not**: every binding that
+wraps the call in a closure (including the one this README used to recommend)
+never matches, and the runaway was reachable straight from the documented
+example.
 
 ## Known limits
 
@@ -118,3 +155,9 @@ mapping's callback, so that holds whatever lhs you pick and needs no config.
   `timeoutlen`.
 - **Insert- and cmdline-mode** keys are not tracked; native `.` already
   repeats insert-mode edits correctly.
+- **Operator-pending** is indistinguishable here: `mode()` still reports `n`
+  from inside `on_key` while an operator waits for its motion (measured), so
+  the `w` of a `dw` is looked up as a normal-mode mapping. Harmless in
+  practice — the built-in ignore list already covers the motion keys an
+  operator takes — but a *mapped, non-motion* key used as an operator target
+  would be recorded.
