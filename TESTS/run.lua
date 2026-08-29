@@ -48,6 +48,7 @@ local specs = {
   "keymap_registry_spec.lua",
   "count_spec.lua",
   "lastcmd_spec.lua",
+  "keymap_modifier_spec.lua",
   "autocmd_dispatcher_spec.lua",
   "autocmd_docs_spec.lua",
   "usercmd_registry_spec.lua",
