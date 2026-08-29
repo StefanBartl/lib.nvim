@@ -19,7 +19,7 @@
 ---
 --- Point 3 is why this doesn't use `jobstart`/`vim.system`: a backgrounded
 --- privileged install with its prompt swallowed is precisely the failure mode
---- worth designing out. See docs/ROADMAP/dependency-installer.md.
+--- worth designing out.
 
 local core = require("lib.nvim.core")
 local pm = require("lib.nvim.deps.pm")

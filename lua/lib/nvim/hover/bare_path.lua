@@ -6,7 +6,7 @@
 --- at all — a path sitting in prose, in a code comment, in a `:messages` dump:
 ---
 ---     ./assets/pdf_inline_hover.png
----     ../ROADMAP/ROADMAP.md
+---     ../docs/BINDINGS.md
 ---     ...AppData/Local/nvim/init.lua:42
 ---
 --- Everything downstream is unchanged: the raw string produced here goes into

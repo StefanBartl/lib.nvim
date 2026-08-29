@@ -2,7 +2,7 @@
 --- --flag / --flag=value / -x parsing, shared by dispatch and completion so a
 --- route's flags stay one declaration read by both (same principle as the
 --- route tree itself). Modeled on replacer.nvim's BOOL_FLAGS/VALUE_FLAGS
---- tokenizer split (see docs/ROADMAP/usrcmd_builder.md Phase 6).
+--- tokenizer split.
 ---
 --- Strictly opt-in per route: every function here is a no-op passthrough when
 --- `route.flags` is nil/empty, so a route that never declares flags keeps its

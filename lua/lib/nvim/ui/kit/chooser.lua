@@ -2,7 +2,7 @@
 --- Native themed list chooser. Built on the kit surface; replaces the Phase-2
 --- delegation to lib.nvim.ui.hover_select and is a superset of
 --- `Lib.HoverSelect.Options`, so hover_select can shim over it with no feature
---- gaps (see docs/ROADMAP/UI-KIT-CONCEPT.md §10).
+--- gaps.
 ---
 --- Navigation matches the original hover_select: j/k/arrows move (wrap-around),
 --- <CR> selects, <Esc>/q close, h/l (and other horizontal motions) blocked;
@@ -12,7 +12,7 @@
 --- Items are plain strings (one buffer line each) by default, or "rich"
 --- tables — `{ lines = {...}, highlights? = {...}, anchor? = 0 }` — for a
 --- multi-line entry with per-column highlight groups (see
---- docs/ROADMAP/UI-KIT-CONCEPT.md §13b). Navigation moves by logical item,
+--- rich items). Navigation moves by logical item,
 --- not raw buffer line, so this is transparent to plain-string callers
 --- (every item is 1 line, anchor 0 — identical to the old behavior).
 

@@ -1,9 +1,8 @@
 ---@module 'lib.nvim.deps'
 --- External-tool detection, declared-dependency spec parsing, and an opt-in
 --- `:Lib deps` surface, for plugins that degrade gracefully without optional
---- CLI tools (pandoc, ImageMagick, tesseract, poppler-utils, …). See
---- docs/ROADMAP/dependency-installer.md in this repo for the full design and
---- the `docs/INSTALL.md` / `docs/install.json` spec formats.
+--- CLI tools (pandoc, ImageMagick, tesseract, poppler-utils, …). The spec
+--- formats are `docs/INSTALL.md` and `docs/install.json`.
 ---
 --- Requiring this module registers nothing and touches nothing. `setup()`
 --- registers the `:Lib deps` routes and still executes no install command —

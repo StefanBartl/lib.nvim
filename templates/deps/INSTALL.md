@@ -5,8 +5,7 @@ Copy this file to <your-plugin>/docs/INSTALL.md and fill it in — one
 ```install-tool fenced block per tool your plugin can use but doesn't
 require to load. Parsed by lib.nvim.deps.spec.parse_markdown /
 lib.nvim.deps.spec.load; see lua/lib/nvim/deps/README.md in lib.nvim for
-the full field reference, and docs/ROADMAP/dependency-installer.md for the
-design this template implements.
+the full field reference.
 
 Prefer install.json instead (see ../deps/install.json in this same
 templates/ directory) if you want multi-line `why` text, extra metadata

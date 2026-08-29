@@ -5,8 +5,7 @@
 --- locate either file for a named plugin on `runtimepath`.
 ---
 --- `why` is validated as a required, non-empty field, not just documented as
---- a convention — see docs/ROADMAP/dependency-installer.md "Describing
---- tools" for the reasoning: a manifest entry that doesn't say why a tool
+--- a convention. The reasoning: a manifest entry that doesn't say why a tool
 --- matters is treated the same as one with a malformed `pkg` map, both fail
 --- validation rather than silently produce a nameless "tool missing" report.
 ---

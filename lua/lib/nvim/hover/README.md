@@ -202,7 +202,7 @@ A path in prose, a code comment, or a `:messages` dump is a target too:
 
 ```
 ./assets/diagram.png                → the picture
-../ROADMAP/ROADMAP.md               → its first lines, markdown-highlighted
+../docs/BINDINGS.md                 → its first lines, markdown-highlighted
 ...AppData/Local/nvim/init.lua:42   → the file, found despite the truncation
 ```
 
@@ -282,8 +282,8 @@ image in a 77x20 frame, which reads as "the image is shifted right".
 ### If a placement problem appears again
 
 `images.nvim` ships the measurements as `:Image debug` (`report`, `columns`,
-`float`); the failure modes are written up in that plugin's
-`docs/ROADMAP/TERMINALS.md`. Two traps, both of which cost days:
+`float`); the failure modes are written up in that plugin. Two traps, both of
+which cost days:
 
 - **A consistency check passing proves nothing about the origin.** Sent
   coordinates matching the reported float position held throughout both bugs

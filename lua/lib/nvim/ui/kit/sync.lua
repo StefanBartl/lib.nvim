@@ -2,7 +2,7 @@
 --- Bridge one of kit's async, callback-based components (`input`/`form`/
 --- `live_input` — anything using the `on_submit`/`on_cancel` contract) back
 --- to a plain synchronous return value, via `vim.wait()`. See
---- docs/ROADMAP/UI-KIT-CONCEPT.md §13a for the design rationale and caveats.
+--- the kit design for the rationale and caveats.
 ---
 --- Not a generic wrapper over every kit component: `confirm` and `select`
 --- have different callback shapes (`on_answer`, and a silent close with no

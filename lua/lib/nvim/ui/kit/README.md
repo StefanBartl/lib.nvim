@@ -15,9 +15,8 @@ coordinated, or override colors/borders per call. Built in layers on top of
 
 > **Phases 1–2** (this release): theme/preset engine + `surface` primitive +
 > components `note`, `toast`, `input`, `select` (delegates to hover_select) and
-> `prompt` (confirm/text). The full design (layout engine, templates, native
-> select chooser, button-confirm) lives in
-> [`docs/ROADMAP/UI-KIT-CONCEPT.md`](../../../../../docs/ROADMAP/UI-KIT-CONCEPT.md).
+> `prompt` (confirm/text). The layout engine, templates, native select chooser
+> and button-confirm follow.
 
 ## Themes & presets
 
@@ -155,8 +154,7 @@ kit.confirm({ question = "Pick", choices = { "Keep", "Discard", "Cancel" },
 ```
 
 `h`/`l`/arrows/`<Tab>` move focus (the focused button uses `KitSelection`),
-`<CR>` confirms, `<Esc>`/`q` cancels (default → `false`, custom → `nil`). See
-[assets/ui-kit/confirm-buttons.svg](../../../../../docs/ROADMAP/assets/ui-kit/confirm-buttons.svg).
+`<CR>` confirms, `<Esc>`/`q` cancels (default → `false`, custom → `nil`).
 
 **Mouse:** a left click on a button focuses *and* confirms it in one action
 (needs `:set mouse=a`, as any mouse interaction does). Clicking blank space
@@ -254,9 +252,7 @@ bridges one of them back to a plain return value via `vim.wait()`, for call
 chains built around a blocking `vim.fn.input()` that can't easily be recast
 to callback style. Only safe to call from a normal call stack (a command
 handler, keymap callback, ...) — never from a fast-event/libuv callback
-context, the same restriction `vim.wait()` itself has. See
-[UI-KIT-CONCEPT.md §13a](../../../../../docs/ROADMAP/UI-KIT-CONCEPT.md) for
-the design rationale.
+context, the same restriction `vim.wait()` itself has.
 
 ```lua
 local values, cancelled, timed_out = kit.sync(kit.form, {

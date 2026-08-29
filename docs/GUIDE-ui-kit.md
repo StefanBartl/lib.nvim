@@ -4,7 +4,6 @@ A themed, composable UI toolkit for Neovim plugins. Pick a preset once and every
 popup is visually coordinated; or override colors/borders per call. Everything
 is cross-platform (pure `nvim_open_win` + highlights).
 
-- Design rationale: [UI-KIT-CONCEPT.md](ROADMAP/UI-KIT-CONCEPT.md)
 - Vimhelp: `:help lib.nvim-kit`
 - **Live playground:** `:KitPreview` (see [§6](#6-live-preview-playground))
 
@@ -100,11 +99,9 @@ is correct in any colorscheme. Override any of the seven semantic keys:
 
 **note** — `kit.note({ title, message, timeout? })`
 
-![note](ROADMAP/assets/ui-kit/note.svg)
 
 **toast** — `kit.toast({ message, timeout? })`
 
-![toast](ROADMAP/assets/ui-kit/toast.svg)
 
 **confirm** — `kit.confirm({ question, choices?, on_answer })`. Default
 `Yes`/`No` yields a boolean; a custom `choices` list yields the chosen string
@@ -112,7 +109,6 @@ is correct in any colorscheme. Override any of the seven semantic keys:
 cancels. A left click on a button focuses and confirms it directly (needs
 `mouse=a`); clicking blank space in the dialog is a no-op, not a cancel.
 
-![confirm](ROADMAP/assets/ui-kit/confirm-buttons.svg)
 
 ```lua
 kit.confirm({ question = "Pick", choices = { "Keep", "Discard", "Cancel" },
@@ -130,7 +126,6 @@ perfectly", no gaps, recomputed on resize.
 `kit.layout.template("picker", …)` gives you a prompt (full width, top), a
 result list (bottom-left, 40%) and a preview (bottom-right, 60%):
 
-![picker layout](ROADMAP/assets/ui-kit/picker.svg)
 
 ```lua
 -- Mount the template as-is, then fill the slots yourself:
@@ -190,9 +185,9 @@ kit.compare({
 
 `render(item, surface)` is the only rendering contract, so it isn't limited
 to text: images.nvim's `:Image compare` draws a terminal-overlay image into
-`surface.winid`'s screen coordinates instead of setting buffer lines. See
-`docs/ROADMAP/UI-KIT-CONCEPT.md` §13e for the three-state flow
-(SEARCH → MARKED → COMPARE) in full, and `docs/EXAMPLES/kit-compare.lua`.
+`surface.winid`s screen coordinates instead of setting buffer lines. See
+`docs/EXAMPLES/kit-compare.lua` for the three-state flow
+(SEARCH → MARKED → COMPARE) in full.
 
 ## 6. Live preview playground
 

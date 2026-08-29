@@ -209,7 +209,7 @@ why: "No pkg given, should fail."
   end
 
   -- `find`/`plugins` must NOT recurse into a plugin's subdirectories — see
-  -- docs/ROADMAP/dependency-installer.md's "Runtime lookup" correction:
+  -- the "Runtime lookup" correction:
   -- nvim_get_runtime_file("**/docs/install.json", true) did not return
   -- within a minute against a real plugin (mdview.nvim) carrying a
   -- 17k-file node_modules/. Proven here without timing: a spec file nested

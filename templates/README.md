@@ -92,9 +92,8 @@ Example: `migrate.nvim/TESTS/run.lua` excludes `migrate.opt` /
 
 Two starting points for a plugin's `docs/INSTALL.md` or `docs/install.json`
 — the declared-dependency spec `lib.nvim.deps.spec` parses (see
-[`lua/lib/nvim/deps/README.md`](../lua/lib/nvim/deps/README.md) and
-[`docs/ROADMAP/dependency-installer.md`](../docs/ROADMAP/dependency-installer.md)
-for the full design). Unlike the test-runner boilerplate above, these two
+[`lua/lib/nvim/deps/README.md`](../lua/lib/nvim/deps/README.md) for the full
+design). Unlike the test-runner boilerplate above, these two
 *are* meant to be copied verbatim into a consuming plugin's own `docs/`
 directory and filled in, not adapted:
 

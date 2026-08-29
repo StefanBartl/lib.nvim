@@ -17,8 +17,7 @@ and `scan_roots` — is synchronous: `uv.fs_scandir`/`uv.fs_stat` called
 fine for a handful of directories, but stalls Neovim's entire main loop
 (input, redraws, everything) for the duration of a large tree — a
 `node_modules`, a monorepo. This was the single concrete, confirmed gap
-that came out of the plenary/libuv research
-(`docs/ROADMAP/personal/lib_nvim.nvim/plenary-libuv-research.md`, §2.1),
+that came out of the plenary/libuv research,
 flagged there as the largest real, measurable win available: everything
 else in that research was either already covered or not worth building
 without a concrete consumer.
@@ -97,7 +96,5 @@ unchanged onto their `_async` counterparts.
 
 ## Related
 
-- `docs/ROADMAP/personal/lib_nvim.nvim/plenary-libuv-research.md` — the
-  research this closes out (§2, "Async-Filesystem fehlt")
 - [subprocess-env.md](subprocess-env.md) — the other item from the same
   roadmap priority list, `cross.run`'s default environment enrichment

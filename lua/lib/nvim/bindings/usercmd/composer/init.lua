@@ -4,7 +4,7 @@
 ---
 --- Turns the `:VerbFeatureA` / `:VerbFeatureB` anti-pattern into
 --- `:Verb feature-a` / `:Verb feature-b` with completion and validation for
---- free. See docs/ROADMAP/usrcmd_builder.md for the full design.
+--- free.
 ---
 ---   local composer = require("lib.nvim.bindings.usercmd.composer")
 ---

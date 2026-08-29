@@ -2,7 +2,7 @@
 --- Layout / composition engine: turn a declarative region spec into concrete,
 --- aligned `nvim_open_win` geometry for several coordinated floats, then mount
 --- themed surfaces into those slots. This is the "three windows that line up
---- perfectly" primitive (see docs/ROADMAP/UI-KIT-CONCEPT.md §7).
+--- perfectly" primitive.
 ---
 --- `compute` is pure geometry math (no I/O), hence unit-testable; `mount` and
 --- the templates build on it.

@@ -5,8 +5,7 @@
 --- with its own default" pattern that got hand-rolled independently (e.g.
 --- sandbox.nvim's `container_commands.lua` chaining Image/Name/Ports/Volumes/
 --- Env prompts by hand, buffer_ctx.nvim's own `boilerplate/templates/utils.lua`
---- `process_prompts` helper) — see docs/ROADMAP/personal/lib_nvim/
---- ui_kit_migration.md §6.2.
+--- `process_prompts` helper).
 ---
 --- Field contract: `{ name, label|prompt, default?, required?, expand_env?,
 --- theme?, width?, relative? }`. `name` is the key the field's answer is

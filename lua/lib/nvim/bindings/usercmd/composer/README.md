@@ -6,8 +6,7 @@ tree, so behavior and docs can never drift.
 
 Turns the `:VerbFeatureA` / `:VerbFeatureB` anti-pattern into
 `:Verb feature-a` / `:Verb feature-b`, where `{Verb}` is the central action
-(`:Replace`, `:File`, `:Markdown`). Full design:
-[docs/ROADMAP/usrcmd_builder.md](../../../../../docs/ROADMAP/usrcmd_builder.md).
+(`:Replace`, `:File`, `:Markdown`).
 
 Built on [`lib.nvim.bindings.usercmd.create`](../init.lua) (defensive registration),
 [`lib.nvim.normalize.validators`](../../normalize/validators.lua) (arg

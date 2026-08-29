@@ -3,8 +3,7 @@
 External-tool detection, declared-dependency spec parsing, and a
 confirmation-gated install handoff, for plugins that degrade gracefully
 without optional CLI tools (pandoc, ImageMagick, tesseract, poppler-utils,
-…). Full design and rationale:
-[`docs/ROADMAP/dependency-installer.md`](../../../../docs/ROADMAP/dependency-installer.md).
+…).
 
 **Nothing here executes an install command.** `:Lib deps install` composes
 the correct command for the host's package manager, asks first, then opens

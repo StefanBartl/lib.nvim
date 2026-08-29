@@ -16,8 +16,7 @@
 --- cascade.nvim's word_cycle) used to call `vim.ui.select` directly instead
 --- of kit.select specifically to respect the user's configured picker
 --- backend -- `respect_override = true` gets that same behavior plus kit's
---- nicer default chooser for free when nothing else is installed. See
---- docs/ROADMAP/personal/lib_nvim/ui_kit_migration.md §2 for the audit.
+--- nicer default chooser for free when nothing else is installed.
 ---
 --- Callback contract (identical on both paths, so a call site behaves the
 --- same whether or not the user has an override installed):

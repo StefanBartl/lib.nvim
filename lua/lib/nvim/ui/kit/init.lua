@@ -3,7 +3,7 @@
 ---
 --- Phase 1 surface: a theme/preset engine, a single-float `surface` primitive,
 --- and the `note` component. `setup()` registers user presets and picks the
---- active default. See docs/ROADMAP/UI-KIT-CONCEPT.md for the full design.
+--- active default.
 ---
 ---   local kit = require("lib.nvim.ui.kit")
 ---   kit.popup({ type = "note", title = "Saved", message = "Wrote 3 files" })
@@ -159,7 +159,7 @@ end
 
 --- Block (via vim.wait) until an on_submit/on_cancel-shaped async component
 --- (input/form/live_input) resolves, returning its result as a plain value
---- instead of via callback. See docs/ROADMAP/UI-KIT-CONCEPT.md §13a. Only
+--- instead of via callback. Only
 --- safe to call from a normal call stack, never a fast-event context.
 ---@param open_fn fun(opts: table): any
 ---@param opts table

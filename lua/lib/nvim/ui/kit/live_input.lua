@@ -5,8 +5,7 @@
 --- preview on every keystroke, not just on submit. This is the floating
 --- prompt-buffer + `TextChangedI`-debounce pattern that got hand-rolled
 --- independently in filetree.nvim's `features/search/live_search/init.lua`
---- and `features/search/filter/init.lua` (see docs/ROADMAP/personal/
---- lib_nvim/ui_kit_migration.md §5.3). The debounce timer itself is the same
+--- and `features/search/filter/init.lua`. The debounce timer itself is the same
 --- one `kit.picker`'s prompt slot uses internally.
 
 local surface = require("lib.nvim.ui.kit.surface")

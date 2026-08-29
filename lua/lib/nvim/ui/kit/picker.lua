@@ -4,7 +4,7 @@
 --- the results slot), moves the selection in the results slot with
 --- <C-n>/<C-p>/arrows, submits the highlighted result with <CR>, and closes on
 --- <Esc>. This is the "works like Telescope out of the box" behavior from
---- docs/ROADMAP/UI-KIT-CONCEPT.md §7a.
+--- the layout engine.
 ---
 --- `opts.prompt = "plain"` falls back to a bare `kit.layout.template("picker")`
 --- whose prompt slot the caller wires itself.

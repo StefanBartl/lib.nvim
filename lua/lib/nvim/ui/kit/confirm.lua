@@ -7,7 +7,7 @@
 --- extmark, is exactly the per-button screen geometry a click needs to hit-
 --- test against, so this is additive over existing state, not new state).
 --- The focused button is highlighted with the theme's `KitSelection` group.
---- This is the Phase-4 "cherry on top" from docs/ROADMAP/UI-KIT-CONCEPT.md
+--- This is the Phase-4 "cherry on top" of the UI-kit design
 --- §9; sketch: assets/ui-kit/confirm-buttons.svg.
 ---
 --- Answer contract (matches the list-based confirm in prompt.lua):

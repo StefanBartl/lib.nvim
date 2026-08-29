@@ -7,8 +7,7 @@
 --- composed command in front of the user, and even that only ever hands it
 --- to a terminal buffer the user submits themselves.
 ---
---- Two deliberate omissions, both safety-motivated (see
---- docs/ROADMAP/dependency-installer.md):
+--- Two deliberate omissions, both safety-motivated:
 ---
 --- * **No `-y`/`--noconfirm`.** The composed commands keep the package
 ---   manager's own confirmation prompt. The user is going to run this in a
