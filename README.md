@@ -92,3 +92,7 @@ is built on, lives here too — see
 - [Test-runner templates](templates/README.md) — copy-paste patterns for resolving `lib.nvim` in a dependent plugin's own headless test suite.
 
 `:help lib.nvim` is also available once installed — see [docs/help.md](docs/help.md) for details.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
