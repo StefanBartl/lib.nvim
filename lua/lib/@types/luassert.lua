@@ -1,0 +1,85 @@
+---@meta
+---@module 'lib.@types.luassert'
+---
+--- Types the global `assert` as luassert, so `assert.are.same(...)` and its
+--- siblings resolve inside test files.
+---
+--- ## Why this is needed at all
+---
+--- Nothing here is new information for LuaLS -- it ships the luassert
+--- definitions, and `${3rd}/busted/library` (which lsp.nvim injects into every
+--- Lua workspace at runtime) already wires the global itself, in its very
+--- first line:
+---
+---     assert = require("luassert")
+---
+--- That `require` is resolved through `runtime.path`. Every `.luarc.json` in
+--- these repos overrides `runtime.path` with `{"lua/?.lua", "lua/?/init.lua"}`
+--- and thereby drops the default `?.lua` -- the only pattern that matches the
+--- meta's own `luassert.lua`, which sits at the root of its library folder. So
+--- the wiring fails silently, the global keeps Lua's stdlib `assert` type, and
+--- every assertion in every spec reads as a field access on a function.
+---
+--- ## Why not just fix `runtime.path`
+---
+--- Because that was measured to be the more invasive route. Putting `?.lua`
+--- back does fix the assertions, but it also changes module resolution for the
+--- whole workspace: in lsp.nvim alone it produced 54 new `undefined-field`
+--- (`cfg.keymaps`, `cfg.servers`, ...) in code that had been clean, including
+--- production code. Declaring the type here fixes the same thing and touches
+--- nothing else.
+---
+--- Note that this does not shadow the stdlib call: `assert(cond, "msg")` in
+--- production code keeps working and stays type-checked -- verified against a
+--- probe workspace carrying both usages.
+---
+--- ## What the consumer still has to do
+---
+--- Carry `${3rd}/luassert/library` in `workspace.library`. That library is
+--- what defines the `luassert` class referenced below; without it the type
+--- name is undefined and nothing improves. lsp.nvim injects busted but not
+--- luassert, so this stays a per-repo `.luarc.json` entry.
+---
+--- ## The widened signatures below
+---
+--- Two gaps in the shipped luassert definitions, both of which turn correct
+--- test code into warnings once the type above starts applying:
+---
+---   * every assertion takes an optional failure message -- `assert.is_true(x,
+---     "why this matters")` is the documented luassert call -- but the shipped
+---     definitions declare a single parameter, so the message reads as
+---     `redundant-parameter`;
+---   * `equals` and `errors` are missing outright, so `assert.are.equals(...)`
+---     and `assert.has_no.errors(...)` read as `undefined-field`.
+---
+--- Reopening `luassert.internal` here overrides both. The list is exactly the
+--- names these repos actually call that way -- measured, not guessed. If a new
+--- assertion starts reporting `redundant-parameter` after being called with a
+--- message, add it here in the same shape; nothing else is needed.
+
+---@class luassert.internal
+---@field equals fun(expected: any, actual: any, message?: any, ...: any): any
+---@field errors fun(fn: fun(), expected?: any, message?: any, ...: any): any
+---@field is_true fun(value: any, message?: any, ...: any): any
+---@field is_false fun(value: any, message?: any, ...: any): any
+---@field is_nil fun(value: any, message?: any, ...: any): any
+---@field is_not_nil fun(value: any, message?: any, ...: any): any
+---@field is_truthy fun(value: any, message?: any, ...: any): any
+---@field is_falsy fun(value: any, message?: any, ...: any): any
+
+--- The assignment exists only to hang the type off the global name; a
+--- `---@meta` file is not meant to be executed. It is nonetheless written as a
+--- self-assignment rather than the more obvious `assert = nil`, because this
+--- file sits inside `lua/` and is therefore physically requirable -- `@types`
+--- modules are `require`d for real elsewhere in this library. A stray
+--- `require("lib.@types.luassert")` must not be able to delete the global
+--- `assert`; `assert = assert` cannot hurt anyone, `assert = nil` could.
+---
+--- The suppression below is the price of that choice, and the finding it
+--- silences is an artifact rather than a defect: LuaLS widens the right hand
+--- side to `function|luassert` precisely because busted's own wiring failed
+--- (see above), and then reports that union against the annotation that is
+--- there to repair it.
+---@type luassert
+---@diagnostic disable-next-line: assign-type-mismatch
+assert = assert
