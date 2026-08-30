@@ -64,7 +64,7 @@ end
 ---Validate one decoded entry (from either the YAML block body or a JSON
 ---`tools[]` element) into a `Lib.Deps.Tool`, or a list of field errors.
 ---`bin`, non-empty `why`, and a non-empty `pkg` map are all required;
----`required` defaults to `false`; `see` is optional.
+---`required` defaults to `false`; `see` and `bin_alternatives` are optional.
 ---@internal
 ---@param data table
 ---@param index integer
@@ -102,12 +102,38 @@ local function validate_entry(data, index)
       { index = index, field = "required", message = "'required' must be true/false" }
   end
 
+  -- A bare string here is the obvious way to get it wrong, and the one that
+  -- would otherwise pass silently: `bin_alternatives = "gswin64c"` iterates as
+  -- an empty list, so the alternative would simply never be probed and the
+  -- tool would keep reporting missing on the platform it was added for.
+  if data.bin_alternatives ~= nil then
+    if not vim.islist(data.bin_alternatives) then
+      errors[#errors + 1] = {
+        index = index,
+        field = "bin_alternatives",
+        message = "'bin_alternatives' must be a list of executable names",
+      }
+    else
+      for _, alt in ipairs(data.bin_alternatives) do
+        if type(alt) ~= "string" or alt == "" then
+          errors[#errors + 1] = {
+            index = index,
+            field = "bin_alternatives",
+            message = "'bin_alternatives' entries must be non-empty strings",
+          }
+          break
+        end
+      end
+    end
+  end
+
   if #errors > 0 then
     return nil, errors
   end
 
   return {
     bin = data.bin,
+    bin_alternatives = data.bin_alternatives,
     required = data.required == true,
     why = data.why,
     see = (type(data.see) == "string" and data.see ~= "") and data.see or nil,

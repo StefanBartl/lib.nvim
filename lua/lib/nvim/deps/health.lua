@@ -6,6 +6,7 @@
 --- install hint. Detection only — nothing here installs anything.
 
 local core = require("lib.nvim.core")
+local detect = require("lib.nvim.deps.detect")
 
 local M = {}
 
@@ -21,8 +22,10 @@ local function report_one(entry)
   local label = entry.label or entry.bin or entry.python_module or "?"
 
   local found
+  local found_as
   if entry.bin then
-    found = core.has_exec(entry.bin)
+    found_as = detect.found_as(entry)
+    found = found_as ~= nil
   elseif entry.python_module then
     local python = core.first_available({ "python3", "python", "py" })
     if not python then
@@ -37,7 +40,14 @@ local function report_one(entry)
   end
 
   if found then
-    h_ok(label .. " found")
+    -- Naming the spelling that answered matters exactly when it is not the
+    -- one asked for: "gs found" on a host that has `gswin64c` and no `gs` is
+    -- true and misleading in the same line.
+    if found_as and found_as ~= label then
+      h_ok(("%s found (as %s)"):format(label, found_as))
+    else
+      h_ok(label .. " found")
+    end
     return
   end
 
@@ -68,6 +78,7 @@ function M.from_tools(tools)
   for _, tool in ipairs(tools) do
     entries[#entries + 1] = {
       bin = tool.bin,
+      bin_alternatives = tool.bin_alternatives,
       required = tool.required,
       label = tool.bin,
       hint = tool.why,

@@ -25,6 +25,7 @@
 --- managers that don't need elevation (brew, scoop, most winget) install
 --- inline, with output streamed live into the popup.
 
+local detect = require("lib.nvim.deps.detect")
 local pm = require("lib.nvim.deps.pm")
 local install = require("lib.nvim.deps.install")
 
@@ -247,7 +248,7 @@ local function run_inline(tool, plan, ui, rerender, is_valid)
       -- Without this, the header stays on `[missing]`: `render` classifies
       -- present/missing via `install.plan` -> `core.has_exec`, which
       -- memoizes "not found" — a fact that just changed.
-      require("lib.nvim.core").forget_exec(tool.bin)
+      detect.forget(tool)
     end
     if is_valid() then
       rerender()
@@ -272,7 +273,7 @@ end
 ---@param rerender fun()
 ---@param is_valid fun(): boolean
 local function install_under_cursor(tool, opts, ui, rerender, is_valid)
-  if vim.fn.executable(tool.bin) == 1 then
+  if detect.found(tool) then
     notify().info(tool.bin .. " is already installed.")
     return
   end

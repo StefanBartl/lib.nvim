@@ -12,7 +12,8 @@
 ---One tool requirement, parsed from either a ```install-tool fenced block
 ---(`docs/INSTALL.md`) or a `tools[]` array entry (`docs/install.json`).
 ---@class Lib.Deps.Tool
----@field bin string executable name, probed via `lib.nvim.core.has_exec`
+---@field bin string canonical executable name: the tool's identity, its display label, the key its install state is stored under, and what `pkg` maps from
+---@field bin_alternatives string[]|nil other names the SAME tool is installed as on some platform (`gs` -> `gswin64c`, `gswin32c`). Detection only -- see `lib.nvim.deps.detect`. Not a list of substitutes: a different program that would also do the job is a different tool.
 ---@field required boolean true when the plugin cannot function at all without it
 ---@field why string one-sentence reason this tool matters (validation requires non-empty)
 ---@field see string|nil optional anchor/link into the plugin's own docs for more detail
@@ -31,6 +32,7 @@
 
 ---@class Lib.Deps.HealthEntry
 ---@field bin? string executable name, probed via `has_exec` (mutually exclusive with `python_module`)
+---@field bin_alternatives? string[] other names the same executable goes by on some platform; only meaningful alongside `bin`
 ---@field python_module? string Python module name, probed via `python -c "import <module>"` (mutually exclusive with `bin`)
 ---@field required? boolean reported as an error (not a warning) when missing; defaults to false
 ---@field label? string display label; defaults to `bin`/`python_module`
@@ -79,6 +81,14 @@
 ---@field is_root fun(): boolean
 ---@field needs_terminal fun(manager: Lib.Deps.Manager): boolean
 
+---`lib.nvim.deps.detect` module surface: does a declared tool exist on this
+---host, under any of the names it goes by?
+---@class Lib.Deps.Detect
+---@field names fun(tool: Lib.Deps.Tool|Lib.Deps.HealthEntry): string[] every name the tool may be found under, canonical first
+---@field found_as fun(tool: Lib.Deps.Tool|Lib.Deps.HealthEntry): string|nil the name it was found under, nil when absent
+---@field found fun(tool: Lib.Deps.Tool|Lib.Deps.HealthEntry): boolean
+---@field forget fun(tool: Lib.Deps.Tool|Lib.Deps.HealthEntry): nil drop the memoized PATH result for every one of its names
+
 ---`lib.nvim.deps.install` module surface: plan computation + confirmed terminal handoff.
 ---@class Lib.Deps.Install
 ---@field plan fun(tools: Lib.Deps.Tool[], opts?: { manager?: Lib.Deps.Manager }): Lib.Deps.Plan
@@ -111,6 +121,7 @@
 ---`lib.nvim.deps` module surface.
 ---@class Lib.Deps
 ---@field spec Lib.Deps.Spec
+---@field detect Lib.Deps.Detect
 ---@field health Lib.Deps.Health
 ---@field pm Lib.Deps.Pm
 ---@field install Lib.Deps.Install

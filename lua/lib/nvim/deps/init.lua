@@ -13,6 +13,7 @@
 local M = {}
 
 M.spec = require("lib.nvim.deps.spec")
+M.detect = require("lib.nvim.deps.detect")
 M.health = require("lib.nvim.deps.health")
 M.pm = require("lib.nvim.deps.pm")
 M.install = require("lib.nvim.deps.install")

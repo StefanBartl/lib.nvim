@@ -21,7 +21,7 @@
 --- privileged install with its prompt swallowed is precisely the failure mode
 --- worth designing out.
 
-local core = require("lib.nvim.core")
+local detect = require("lib.nvim.deps.detect")
 local pm = require("lib.nvim.deps.pm")
 
 local M = {}
@@ -49,7 +49,7 @@ function M.plan(tools, opts)
   local seen_pkg = {}
 
   for _, tool in ipairs(tools) do
-    if core.has_exec(tool.bin) then
+    if detect.found(tool) then
       present[#present + 1] = tool
     else
       missing[#missing + 1] = tool

@@ -6,6 +6,12 @@
 -- command composition, install-plan computation, the report renderer, and
 -- health.report / health.from_tools not erroring.
 --
+-- `bin_alternatives` (one tool, several spellings -- `gs` / `gswin64c`) is
+-- covered on both sides: the parser accepting and rejecting it, and
+-- `deps.detect` resolving through it. `nvim` is the stand-in for "installed"
+-- throughout, since it is the one binary a headless spec run can be certain
+-- of.
+--
 -- Package-manager assertions pass an explicit manager rather than using
 -- whatever this host has installed, so the suite behaves identically on a
 -- CI container and a dev machine. `install.run` is only exercised on its
@@ -17,6 +23,7 @@ return function(H)
 
   local spec = require("lib.nvim.deps.spec")
   local health = require("lib.nvim.deps.health")
+  local detect = require("lib.nvim.deps.detect")
 
   -- ------------------------------------------------------------- parse_markdown
   do
@@ -139,6 +146,84 @@ why: "No pkg given, should fail."
     eq(#result.errors, 0, "parse_json: well-formed -> no errors")
     eq(result.tools[1].bin, "magick", "parse_json: bin")
     eq(result.tools[1].pkg.brew, "imagemagick", "parse_json: nested pkg map")
+  end
+
+  -- bin_alternatives: accepted as a list, and rejected as anything else.
+  do
+    local result = spec.parse_json(vim.json.encode({
+      tools = {
+        {
+          bin = "gs",
+          bin_alternatives = { "gswin64c", "gswin32c" },
+          why = "Ghostscript is spelled differently on Windows.",
+          pkg = { apt = "ghostscript" },
+        },
+      },
+    }))
+    eq(#result.errors, 0, "parse_json: bin_alternatives list -> no errors")
+    eq(#result.tools, 1, "parse_json: bin_alternatives list -> tool produced")
+    eq(
+      table.concat(result.tools[1].bin_alternatives, ","),
+      "gswin64c,gswin32c",
+      "parse_json: bin_alternatives carried through in order"
+    )
+  end
+
+  -- A bare string is the way this gets written by mistake, and the one that
+  -- would otherwise pass: it iterates as an empty list, so the alternative
+  -- would silently never be probed and the tool would keep reporting missing
+  -- on the exact platform the field was added for.
+  do
+    local result = spec.parse_json(vim.json.encode({
+      tools = {
+        {
+          bin = "gs",
+          bin_alternatives = "gswin64c",
+          why = "Written as a string by mistake.",
+          pkg = { apt = "ghostscript" },
+        },
+      },
+    }))
+    eq(#result.tools, 0, "parse_json: bin_alternatives as a string -> no tool produced")
+    eq(#result.errors, 1, "parse_json: bin_alternatives as a string -> one error")
+    eq(
+      result.errors[1].field,
+      "bin_alternatives",
+      "parse_json: the error names the offending field"
+    )
+  end
+
+  eq(#spec.parse_json(vim.json.encode({
+    tools = {
+      {
+        bin = "gs",
+        bin_alternatives = { "gswin64c", "" },
+        why = "One alternative is empty.",
+        pkg = { apt = "ghostscript" },
+      },
+    },
+  })).tools, 0, "parse_json: an empty string among the alternatives -> rejected")
+
+  -- The Markdown variant carries it too: the YAML subset does block lists,
+  -- so this is not a JSON-only field.
+  do
+    local result = spec.parse_markdown([[
+```install-tool
+bin: gs
+bin_alternatives:
+  - gswin64c
+  - gswin32c
+why: Ghostscript is spelled differently on Windows.
+pkg:
+  apt: ghostscript
+```
+]])
+    eq(#result.errors, 0, "parse_markdown: bin_alternatives block list -> no errors")
+    eq(
+      table.concat(result.tools[1].bin_alternatives, ","),
+      "gswin64c,gswin32c",
+      "parse_markdown: bin_alternatives carried through in order"
+    )
   end
 
   eq(
@@ -789,6 +874,83 @@ why: "No pkg given, should fail."
     vim.opt.rtp:remove(plugin_dir)
   end
 
+  -- -------------------------------------------------------------------- detect
+  do
+    -- Names, canonical first: the order decides which spelling a report
+    -- names on a host that happens to have both.
+    eq(
+      table.concat(detect.names({ bin = "gs", bin_alternatives = { "gswin64c", "gswin32c" } }), ","),
+      "gs,gswin64c,gswin32c",
+      "detect.names: canonical bin first, then the alternatives in order"
+    )
+    eq(
+      table.concat(detect.names({ bin = "gs" }), ","),
+      "gs",
+      "detect.names: no alternatives declared -> just the canonical name"
+    )
+    eq(
+      table.concat(detect.names({ bin = "gs", bin_alternatives = { "", "gswin64c" } }), ","),
+      "gs,gswin64c",
+      "detect.names: an empty alternative is dropped rather than probed"
+    )
+
+    -- The case the field exists for: the canonical name is absent and an
+    -- alternative is present. Reported as found, and found *as* the name
+    -- that actually answered.
+    eq(
+      detect.found_as({
+        bin = "a-binary-name-that-should-not-exist-anywhere",
+        bin_alternatives = { "nvim" },
+      }),
+      "nvim",
+      "detect.found_as: falls through to the alternative that exists"
+    )
+    ok(
+      detect.found({
+        bin = "a-binary-name-that-should-not-exist-anywhere",
+        bin_alternatives = { "nvim" },
+      }),
+      "detect.found: true when only an alternative is on PATH"
+    )
+    eq(
+      detect.found_as({ bin = "nvim", bin_alternatives = { "also-not-a-real-binary-xyz" } }),
+      "nvim",
+      "detect.found_as: the canonical name wins when it is there"
+    )
+    ok(not detect.found({
+      bin = "a-binary-name-that-should-not-exist-anywhere",
+      bin_alternatives = { "also-not-a-real-binary-xyz" },
+    }), "detect.found: false when neither the canonical name nor an alternative exists")
+    ok(
+      not detect.found({ bin = "a-binary-name-that-should-not-exist-anywhere" }),
+      "detect.found: still false with no alternatives declared"
+    )
+
+    -- `forget` has to clear every name, not just the canonical one: after an
+    -- install it is the alternative that may have appeared.
+    detect.forget({ bin = "nvim", bin_alternatives = { "also-not-a-real-binary-xyz" } })
+    ok(
+      detect.found({ bin = "nvim", bin_alternatives = { "also-not-a-real-binary-xyz" } }),
+      "detect.forget: re-probing after a forget still finds the tool"
+    )
+  end
+
+  -- An install plan has to route through the same detection, or a tool
+  -- present under its Windows spelling would be planned for installation.
+  do
+    local plan = require("lib.nvim.deps.install").plan({
+      {
+        bin = "a-binary-name-that-should-not-exist-anywhere",
+        bin_alternatives = { "nvim" },
+        required = false,
+        why = "Present under its alternative name.",
+        pkg = { brew = "irrelevant" },
+      },
+    }, { manager = require("lib.nvim.deps.pm").get("brew") })
+    eq(#plan.present, 1, "plan: a tool found under an alternative name counts as present")
+    eq(#plan.missing, 0, "plan: and is therefore not planned for installation")
+  end
+
   -- -------------------------------------------------------------------- health
   -- No dedicated assertions on :checkhealth output (no other module in this
   -- suite unit-tests health.lua rendering either) — just confirm neither
@@ -823,6 +985,15 @@ why: "No pkg given, should fail."
       bin = "a-binary-name-that-should-not-exist-anywhere",
       required = false,
       why = "test",
+      pkg = { apt = "x" },
+    },
+    -- Same shape pdfport's ghostscript entry has: reported as found, under
+    -- the name that answered.
+    {
+      bin = "a-binary-name-that-should-not-exist-anywhere",
+      bin_alternatives = { "nvim" },
+      required = false,
+      why = "test alternative",
       pkg = { apt = "x" },
     },
   })

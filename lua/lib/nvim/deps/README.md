@@ -16,6 +16,7 @@ Requiring this module registers nothing and touches nothing.
 |---|---|
 | `deps.health` | `:checkhealth` reporting for executables / Python modules — replaces the hand-rolled `check_exe` loop |
 | `deps.spec` | Parse + validate `docs/INSTALL.md` / `docs/install.json`; locate them for any plugin |
+| `deps.detect` | Is a declared tool here, under any of the names it goes by? (`gs` / `gswin64c`) -- shared by health, install and view |
 | `deps.pm` | Package-manager detection + install-command composition |
 | `deps.install` | Install-plan computation (pure) and the confirmed terminal handoff |
 | `deps.view` | Render a plugin's tool report into lines / a popup with install keymaps |
@@ -146,6 +147,63 @@ pkg:
   ]
 }
 ```
+
+### One tool, several spellings — `bin_alternatives`
+
+Ghostscript is `gs` on Linux and macOS and `gswin64c` (or `gswin32c`) on
+Windows. Same program, same package, same reason to want it — but a spec that
+can only name one of them reports the tool as **missing** on the platform
+where it is spelled differently, right next to a capability check that found
+it. One `:checkhealth` run, two answers.
+
+```json
+{
+  "bin": "gs",
+  "bin_alternatives": ["gswin64c", "gswin32c"],
+  "why": "Last-resort PDF merge fallback when neither qpdf nor pdftk is present.",
+  "pkg": { "apt": "ghostscript", "choco": "ghostscript" }
+}
+```
+
+The Markdown form carries it too — the YAML subset does block lists:
+
+````markdown
+```install-tool
+bin: gs
+bin_alternatives:
+  - gswin64c
+  - gswin32c
+why: Last-resort PDF merge fallback when neither qpdf nor pdftk is present.
+pkg:
+  apt: ghostscript
+```
+````
+
+**`bin` stays canonical for everything except detection**: it is the tool's
+identity, its display label, the key its install state is stored under, and
+what `pkg` maps from. `bin_alternatives` only widens the question *is it
+here*, and the report names the spelling that answered:
+
+```
+gs found (as gswin64c)
+```
+
+It is **not** a list of substitutes. A different program that would also do
+the job is a different tool with its own `why` and its own `pkg` — `qpdf` and
+`pdftk` both merge PDFs and are two entries, not alternatives of each other.
+The test is whether one `pkg` map is honest for all of them.
+
+A bare string (`"bin_alternatives": "gswin64c"`) is **rejected** at
+validation rather than accepted. It is the obvious way to write it wrong, and
+it is the one that would otherwise pass silently: a string iterates as an
+empty list, so the alternative would never be probed and the tool would keep
+reporting missing on exactly the platform the field was added for.
+
+Detection lives in `lib.nvim.deps.detect` and is shared by all three callers
+that ask "is it here" — `health` (the `:checkhealth` line), `install.plan`
+(don't plan an install for something already present) and `view` (the `i`
+key's already-installed refusal, and clearing the memoized PATH result after
+an install, for *every* name rather than just the canonical one).
 
 ## `lib.nvim.deps.health.report_for` — the `:checkhealth` hook
 
