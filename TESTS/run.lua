@@ -53,6 +53,7 @@ local specs = {
   "autocmd_docs_spec.lua",
   "usercmd_registry_spec.lua",
   "bindings_audit_spec.lua",
+  "keymap_portability_spec.lua",
   "dev_duplicates_spec.lua",
   "markdown_table_spec.lua",
   "run_argv_spec.lua",

@@ -60,6 +60,13 @@ local M = {}
 --- has no encoding for Ctrl with a non-alphabetic key, so it sends a bare `#`
 --- and the mapping can never fire. `<M-.>` survives the legacy ESC-prefix
 --- encoding every terminal implements, and keeps `.`'s "repeat" mnemonic.
+---
+--- That reasoning is now a module: `bindings.keymap.portability` classifies
+--- any `lhs` the same way (`<C-#>` fragile, `<M-.>` common), and
+--- `bindings.audit.key_risks` reports which registered actions still rest on
+--- one -- so the next such choice does not depend on someone remembering
+--- this comment.
+---@see lib.nvim.bindings.keymap.portability
 local DEFAULT_LHS = "<M-.>"
 
 --- Modes the trigger is bound in. Visual is included because Visual-mode

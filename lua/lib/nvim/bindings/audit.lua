@@ -27,6 +27,10 @@ local util = require("lib.nvim.bindings.docs_util")
 
 local M = {}
 
+---@internal
+--- Tier order, worst last. Mirrors `keymap.portability`'s own ranking.
+local RANK = { portable = 1, common = 2, fragile = 3 }
+
 ---@class Lib.Bindings.Audit.KeyAction
 ---@field surface string
 ---@field name string
@@ -38,6 +42,18 @@ local M = {}
 ---@field name string
 ---@field path string
 ---@field desc string
+
+---@class Lib.Bindings.Audit.KeyTier
+---@field lhs string
+---@field tier Lib.Keymap.Portability.Tier
+---@field reason string
+
+---@class Lib.Bindings.Audit.KeyRisk
+---@field surface string
+---@field name string
+---@field keys Lib.Bindings.Audit.KeyTier[]  # every lhs the action binds, classified
+---@field best Lib.Keymap.Portability.Tier   # the most reliable one it has
+---@field desc string|nil
 
 ---@internal
 --- The plugin name a root resolves to: the single subdirectory under its
@@ -132,6 +148,134 @@ function M.command_routes(root)
     return a.name < b.name
   end)
   return routes
+end
+
+---@internal
+--- Every registered action with *all* of its `lhs` values, unlike
+--- `keymap_actions`, which keeps one. The distinction is the whole point
+--- here: an action bound to a fragile key and a portable alias is fine, and
+--- collapsing the two would hide exactly the thing being checked.
+---@param root string|nil
+---@return table<string, { surface: string, name: string, desc: string|nil, lhs: string[] }>
+local function actions_with_keys(root)
+  local keymap = require("lib.nvim.bindings.keymap")
+  local plugin = root and plugin_of(root) or nil
+  local buckets = plugin and { [plugin] = keymap.registered(plugin) } or keymap.registered()
+
+  local out = {}
+  for surface, entries in pairs(buckets) do
+    for _, e in ipairs(entries) do
+      if e.bound and e.lhs then
+        local id = surface .. "." .. e.name
+        local rec = out[id]
+        if not rec then
+          rec = { surface = surface, name = e.name, desc = e.desc, lhs = {} }
+          out[id] = rec
+        end
+        if not vim.tbl_contains(rec.lhs, e.lhs) then
+          rec.lhs[#rec.lhs + 1] = e.lhs
+        end
+      end
+    end
+  end
+  return out
+end
+
+---Actions with no `lhs` a terminal is guaranteed to deliver.
+---
+---The lint half of `keymap.portability`: that module says what a key notation
+---costs, this one says who is *exposed* to it -- an action is only reported
+---when **none** of its keys classifies `portable`. An action bound to
+---`<C-M-y>` and `<leader>cy` never appears here; one bound to `<C-M-y>` alone
+---does.
+---
+---Two tiers surface, and they are not the same finding:
+---
+---  - `fragile` -- the key needs "CSI u"/modifyOtherKeys or a GUI. On a
+---    terminal without it, the action is simply unreachable. Fix it.
+---  - `common` -- the key arrives nearly everywhere, but through a mechanism
+---    with an off switch (Alt as ESC prefix, Ctrl+Space as NUL) or an
+---    ambiguity (`<C-i>` is `<Tab>`'s byte). Worth an alias, not an alarm.
+---
+---The fix is always the same shape, and the registry has always supported it:
+---put a portable key in the action's `default` list next to the fancy one.
+---Detection is not an option -- see `keymap.portability` for why.
+---@param root string|nil  same scope `keymap_actions` takes
+---@return Lib.Bindings.Audit.KeyRisk[] # `fragile` first, then `common`.
+function M.key_risks(root)
+  local portability = require("lib.nvim.bindings.keymap.portability")
+
+  local risks = {}
+  for _, rec in pairs(actions_with_keys(root)) do
+    local keys, best = {}, "fragile"
+    for _, lhs in ipairs(rec.lhs) do
+      local tier, reason = portability.classify(lhs)
+      keys[#keys + 1] = { lhs = lhs, tier = tier, reason = reason }
+      if RANK[tier] < RANK[best] then
+        best = tier
+      end
+    end
+    if best ~= "portable" then
+      risks[#risks + 1] =
+        { surface = rec.surface, name = rec.name, keys = keys, best = best, desc = rec.desc }
+    end
+  end
+
+  table.sort(risks, function(a, b)
+    if a.best ~= b.best then
+      return RANK[a.best] > RANK[b.best]
+    end
+    if a.surface ~= b.surface then
+      return a.surface < b.surface
+    end
+    return a.name < b.name
+  end)
+  return risks
+end
+
+---`key_risks` as printable lines.
+---@param root string|nil
+---@return string[]
+function M.key_risk_lines(root)
+  local risks = M.key_risks(root)
+  if #risks == 0 then
+    return { "every registered action has at least one key a terminal is sure to deliver." }
+  end
+
+  local fragile = 0
+  for _, r in ipairs(risks) do
+    if r.best == "fragile" then
+      fragile = fragile + 1
+    end
+  end
+
+  local out = {
+    ('%d action(s) with no portable key -- %d unreachable without "CSI u", %d layout-sensitive:'):format(
+      #risks,
+      fragile,
+      #risks - fragile
+    ),
+    "",
+  }
+  for _, r in ipairs(risks) do
+    local shown = {}
+    for _, k in ipairs(r.keys) do
+      shown[#shown + 1] = k.lhs
+    end
+    out[#out + 1] = ("  %-8s %-28s %s"):format(
+      r.best,
+      r.surface .. "." .. r.name,
+      table.concat(shown, " ")
+    )
+    for _, k in ipairs(r.keys) do
+      if k.reason ~= "" then
+        out[#out + 1] = ("           %s: %s"):format(k.lhs, k.reason)
+      end
+    end
+  end
+  out[#out + 1] = ""
+  out[#out + 1] = "fix: add a portable lhs to the action's `default` list -- it accepts several."
+  return out
 end
 
 ---@internal
@@ -310,6 +454,15 @@ function M.create_usercmd(name)
     nargs = "?",
     complete = "dir",
     desc = "Keymap actions vs. command routes, registered in this session (optional: scope to a repo path)",
+  })
+
+  usercmd.create(base .. "Keys", function(opts)
+    local root = opts.args ~= "" and vim.fn.fnamemodify(opts.args, ":p"):gsub("/$", "") or nil
+    show(" " .. base .. "Keys ", M.key_risk_lines(root))
+  end, {
+    nargs = "?",
+    complete = "dir",
+    desc = "Actions whose every key needs an extended terminal encoding (optional: scope to a repo path)",
   })
 
   usercmd.create(base .. "Gaps", function(opts)
