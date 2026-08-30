@@ -10,11 +10,11 @@
  |_|_|_.__(_)_| |_|\_/ |_|_| |_| |_|
 ```
 
-![version](https://img.shields.io/badge/version-0.1.0-blue.svg)
-![status](https://img.shields.io/badge/status-early-orange.svg)
-![Neovim](https://img.shields.io/badge/Neovim-0.10%2B-success.svg)
-![Lua](https://img.shields.io/badge/language-Lua-yellow.svg)
-![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Neovim](https://img.shields.io/badge/Neovim-0.10%2B-57A143?logo=neovim&logoColor=white)](https://neovim.io)
+[![Lua](https://img.shields.io/badge/Lua-5.1%2FLuaJIT-2C2D72?logo=lua&logoColor=white)](https://www.lua.org)
+![Status](https://img.shields.io/badge/status-alpha-red)
+![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)
 
 > Looking for a plugin to use alongside your own `lib.nvim`-based setup? Check out
 > [insights.nvim](https://github.com/StefanBartl/insights.nvim), a project-analysis
