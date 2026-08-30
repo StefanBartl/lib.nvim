@@ -74,12 +74,13 @@ port.classify("<leader>x")   --> "portable", ""
 port.classify("<A-Right>")   --> "portable", ""   (xterm sequence, no ESC prefix)
 port.classify("<C-M-y>")     --> "common",   "Alt is sent as an ESC prefix ..."
 port.classify("<C-CR>")      --> "fragile",  "Ctrl+CR is the same byte as CR"
+port.classify("<C-m>")       --> "fragile",  "<C-m> is <CR>'s byte ... never fires"
 ```
 
 | tier | meaning |
 | --- | --- |
 | `portable` | a plain byte or a terminfo/xterm sequence — arrives everywhere |
-| `common` | arrives nearly everywhere, through a mechanism with a known off switch (Alt as ESC prefix, Ctrl+Space as NUL) or a known ambiguity (`<C-i>` *is* `<Tab>`'s byte). Fine as the everyday key, not as the only one |
+| `common` | arrives nearly everywhere, through a mechanism with a known off switch (Alt as an ESC prefix, Ctrl+Space as NUL). Fine as the everyday key, not as the only one |
 | `fragile` | needs "CSI u"/modifyOtherKeys or a GUI — silently never arrives otherwise |
 
 `audit.key_risks()` is the lint on top: it reports every registered action

@@ -48,8 +48,6 @@ return function(H)
   eq(tier("<C-M-y>"), "common", "Ctrl+Alt+letter is ESC plus a control byte")
   eq(tier("<A-->"), "common", "Alt+punctuation parses as alt + '-', not as a stray modifier")
   eq(tier("<C-Space>"), "common", "Ctrl+Space is NUL, which not every terminal sends")
-  eq(tier("<C-i>"), "common", "<C-i> arrives, but on <Tab>'s byte")
-  eq(tier("<C-[>"), "common", "<C-[> arrives, but on <Esc>'s byte")
 
   local _, why = port.classify("<C-M-y>")
   ok(why:find("AltGr", 1, true), "the Alt reason names the layout trap, not just the terminal")
@@ -63,6 +61,19 @@ return function(H)
   eq(tier("<C-S-x>"), "fragile", "Ctrl+Shift+letter is Ctrl+letter's byte")
   eq(tier("<C-A-S-p>"), "fragile", "Alt cannot rescue a combination that is already ambiguous")
   eq(tier("<D-s>"), "fragile", "Super/Command exists only in a GUI")
+
+  -- <C-m>/<C-i>/<C-[> share a byte with <CR>/<Tab>/<Esc>. Neovim keeps both
+  -- spellings as separate mappings, so it is tempting to call this mere
+  -- shadowing -- but measured on 0.12, the shared byte resolves to the plain
+  -- key in either bind order, and still does with the plain key unmapped. The
+  -- Ctrl entry needs a distinct sequence, i.e. an extended encoding: fragile,
+  -- not common.
+  eq(tier("<C-m>"), "fragile", "<C-m> only fires under an extended encoding")
+  eq(tier("<C-i>"), "fragile", "<C-i> likewise -- the byte resolves to <Tab>")
+  eq(tier("<C-[>"), "fragile", "<C-[> likewise -- the byte resolves to <Esc>")
+
+  local _, cm = port.classify("<C-m>")
+  ok(cm:find("never fires", 1, true), "and says the mapping is dead, not shadowed")
 
   -- The worst token in a sequence decides.
   eq(tier("<leader><C-#>"), "fragile", "a portable prefix does not redeem a fragile key")

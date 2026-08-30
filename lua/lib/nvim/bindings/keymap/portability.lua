@@ -35,6 +35,7 @@
 --- port.classify("<leader>x")  --> "portable", ""
 --- port.classify("<C-M-y>")    --> "common",   "Alt is sent as an ESC prefix ..."
 --- port.classify("<C-CR>")     --> "fragile",  "Ctrl+CR is the same byte as CR ..."
+--- port.classify("<C-m>")      --> "fragile",  "<C-m> is <CR>'s byte ..."
 --- ```
 ---@see lib.nvim.bindings.audit
 
@@ -45,9 +46,8 @@ local M = {}
 ---  - `portable` -- a plain byte or a terminfo/xterm sequence. Arrives
 ---    everywhere; nothing to think about.
 ---  - `common` -- arrives in nearly every terminal, but through a mechanism
----    with a known off switch (Alt as an ESC prefix, Ctrl+Space as NUL) or
----    with a known ambiguity (`<C-i>` *is* `<Tab>`'s byte). Fine as the
----    everyday key, not fine as the *only* key.
+---    with a known off switch (Alt as an ESC prefix, Ctrl+Space as NUL). Fine
+---    as the everyday key, not fine as the *only* key.
 ---  - `fragile` -- needs an extended encoding ("CSI u"/modifyOtherKeys) or a
 ---    GUI. On a terminal without it, the key silently never arrives.
 ---@alias Lib.Keymap.Portability.Tier "portable"|"common"|"fragile"
@@ -110,9 +110,14 @@ local CTRL_PUNCT = {
 }
 
 ---@internal
---- The four Ctrl combinations that *do* arrive but land on another key's
---- byte: mapping them also remaps the key named here, unless the terminal
---- speaks an extended encoding.
+--- Ctrl combinations that share a byte with a key of their own name. Neovim
+--- keeps both spellings as separate mappings, so nothing is "shadowed" -- but
+--- the shared byte always resolves to the plain key, and it does so even when
+--- nothing maps the plain key at all. Reaching the Ctrl entry needs the
+--- terminal to send a *distinct* sequence for it, i.e. an extended encoding.
+--- Measured on 0.12: with both `<CR>` and `<C-m>` mapped, the mapping table
+--- holds two entries in either bind order, and feeding 0x0D fires `<CR>`;
+--- delete the `<CR>` mapping and 0x0D fires nothing at all.
 local COLLIDES = { i = "<Tab>", m = "<CR>", j = "<NL>", ["["] = "<Esc>" }
 
 ---@internal
@@ -189,8 +194,12 @@ local function classify_token(inner)
       tier, reason = "fragile", ("Ctrl+Shift+%s is the same byte as Ctrl+%s"):format(base, base)
     elseif COLLIDES[b] then
       tier, reason =
-        "common",
-        ("<C-%s> is %s's byte: mapping it also remaps %s"):format(base, COLLIDES[b], COLLIDES[b])
+        "fragile",
+        ("<C-%s> is %s's byte: without an extended encoding that byte always resolves to %s, so this never fires"):format(
+          base,
+          COLLIDES[b],
+          COLLIDES[b]
+        )
     elseif b:match("^%a$") or CTRL_PUNCT[b] then
       tier = "portable"
     elseif b == "space" then
