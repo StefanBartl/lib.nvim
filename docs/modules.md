@@ -56,7 +56,8 @@ namespace one-liners), split by topic, see [`API/README.md`](API/README.md).
 Opt-in call counting / usage statistics (`wrap`/`wrap_loaded`, persistence,
 Markdown/browser reports, `:RATelemetry`) moved to
 [`runtime-analysis.telemetry`](https://github.com/StefanBartl/runtime-analysis.nvim/blob/main/lua/runtime-analysis/telemetry/README.md)
-— `docs/ECOSYSTEM.md` step 7 in that plugin's sibling, documentation.nvim.
+— [`documentation.nvim/docs/ECOSYSTEM.md`](https://github.com/StefanBartl/documentation.nvim/blob/main/docs/ECOSYSTEM.md)
+step 7, in that plugin's sibling.
 This repo keeps a thin caller, `lib.strategies.telemetry_wrap`, for
 instrumenting `require("lib")`'s own metatable-hidden aggregate specifically.
 

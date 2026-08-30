@@ -82,6 +82,7 @@ is built on, lives here too — see
 ## Documentation
 
 - [Architecture](docs/architecture.md) — the `lib.lua.*` / `lib.nvim.*` namespace split and its guiding rule.
+- [Ecosystem architecture](https://github.com/StefanBartl/documentation.nvim/blob/main/docs/ECOSYSTEM.md) — **not in this repository.** Where docs, static analysis and runtime each belong across the four pieces this library is the bottom of (`lib.nvim`, `documentation.nvim`, `runtime-analysis.nvim`, `mdview.nvim`), and the rule that decides what moves down here and what does not. One document, three pointers.
 - [Installation](docs/installation.md) — installing as a plugin dependency vs. config-wide bootstrap.
 - [Usage](docs/usage.md) — requiring modules directly or via the aggregator.
 - [Namespaces & modules](docs/modules.md) — full module reference for `lib.lua.*` and `lib.nvim.*`, plus links to per-module docs.
