@@ -30,7 +30,13 @@ directory listings, file heads and URL fetching. So it moved here, where
 neither the markdown nor the image half is privileged, and both arrive
 through a registry.
 
-**This module knows none of those plugins by name.** They register into it.
+**A capability registers itself; a renderer is asked for by name.**
+markdown.nvim hands over a function and is never named here. images.nvim,
+pdfport.nvim and gopath.nvim are `pcall(require, …)`-ed by name from inside
+the previews, because the hover has to negotiate geometry and timing with
+them rather than just call them — which also means their names appear in code
+they did not run. Both mechanisms, and which one owns which symptom, are laid
+out in [INTEGRATIONS.md](INTEGRATIONS.md).
 
 ## Who contributes what
 
@@ -46,6 +52,10 @@ to work**. With none installed you still get: file heads, directory listings,
 URL details, image and PDF metadata, and the "this target does not exist"
 answer. Install one and that row upgrades from a description to the thing
 itself.
+
+The long version — every entry point, what a planned reposcope.nvim hover
+would look like, and a table reading each symptom back to the plugin that
+owns it — is [INTEGRATIONS.md](INTEGRATIONS.md).
 
 If *nothing* could produce a hover — no source registered and
 `bare_paths = false` — `attach()` installs no autocmd at all rather than one
@@ -209,12 +219,31 @@ A path in prose, a code comment, or a `:messages` dump is a target too:
 Two rules keep this from firing constantly:
 
 - **It must look like a path** — a separator, an extension, or a `...`
-  truncation. `helper` is a word; `helper.lua` is a path.
-- **A missing path is reported only when it cannot have been anything else** —
-  it carries a separator (`docs/gone.md`) or a truncation. Those get a red ✗.
-  A bare `name.ext` that resolves to nothing stays silent, because that is
-  exactly how `vim.api`, `string.format` and every other identifier is
-  spelled, and a ✗ on half the tokens in a Lua file is noise.
+  truncation, *and* at least one alphanumeric character somewhere. `helper` is
+  a word; `helper.lua` is a path; `/` and `--%` are punctuation out of a
+  table.
+- **A missing path is reported only when it cannot have been anything else.**
+  That one gets a red ✗; everything else stays silent.
+
+Silent is the default because prose is full of things that resolve to
+nothing and were never a path: `vim.api` and `string.format` (a bare
+`name.ext` is how every Lua module is spelled), but equally `and/or`, a table
+header `Actual/Insgesamt`, a ratio `60% / 27%`, a word given a trailing slash
+(`sortiert/`). A separator on its own does not settle it. Something prose
+does not write has to be there too:
+
+| Evidence | Example |
+| --- | --- |
+| a truncation | `...nvim/init.lua`, `…/lua/config` |
+| an explicit relative prefix | `./docs/a`, `../docs/a`, `~/notes` |
+| a drive or UNC prefix | `C:\Users\x`, `\\server\share` |
+| a component carrying an extension | `docs/gone.md` |
+| three or more components | `lua/lib/nvim/hover` |
+| two components under an absolute root | `/etc/hosts` |
+
+None of this touches a target that **exists** — `docs/` and `and/or` both
+hover normally the moment something of that name is on disk. The rules only
+decide whether *absence* is worth asserting.
 
 ## Contributing from a plugin
 

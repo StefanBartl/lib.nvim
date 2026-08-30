@@ -37,6 +37,23 @@ local M = {}
 local api = vim.api
 
 ---@internal
+--- The `/`- and `\`-separated components of `str`, empties dropped.
+---
+--- `a/b` and `C:\a\b` both come back as two components, `sortiert/` as one,
+--- `/` as none. Nearly everything the two tests below want to know about a
+--- string turns out to be a question about its components rather than about
+--- the characters in it.
+---@param str string
+---@return string[]
+local function segments(str)
+  local out = {}
+  for seg in str:gmatch("[^/\\]+") do
+    out[#out + 1] = seg
+  end
+  return out
+end
+
+---@internal
 --- Whether `str` is shaped like a path rather than an ordinary word.
 ---
 --- Deliberately stricter than gopath's own heuristic: this runs on every
@@ -50,6 +67,16 @@ local function looks_like_path(str)
     return false
   end
   if #str > 512 then
+    return false
+  end
+
+  -- Punctuation on its own is never a path. A table cell writes `--% / --%`,
+  -- a ratio writes `60% / 27%`, and `<cfile>` reads `/` or `/--%` out of
+  -- those -- each carrying a separator, which the very next test accepts.
+  -- One alphanumeric character anywhere is the cheapest way to ask "is there
+  -- a name in here at all", and it costs a single pattern match to keep
+  -- gopath's whole resolver pipeline out of a punctuation table.
+  if not str:match("%w") then
     return false
   end
 
@@ -78,16 +105,74 @@ end
 --- puts under the cursor. Reporting those as broken paths would put a red ✗
 --- on half the identifiers in every Lua file.
 ---
---- A separator or a `...` truncation is different: no identifier is spelled
---- `docs/setup.md` or `...nvim/init.lua`. Those were meant as paths, so if
---- they do not resolve, saying so is the useful answer rather than noise.
+--- **A separator alone is not the evidence it looks like.** It was the whole
+--- test here once, on the reasoning that no identifier is spelled `docs/a.md`
+--- — which is true, and beside the point, because prose is full of separators
+--- that were never a path either: `and/or`, a table header
+--- `Actual/Insgesamt`, a ratio `60% / 27%`, a word given a trailing slash
+--- (`sortiert/`). Every one of those opened a confident "✗ no such file" for
+--- a directory nobody had mentioned. So the separator now has to arrive with
+--- something prose does not write:
+---
+--- | Evidence | Example |
+--- | --- | --- |
+--- | a truncation | `...nvim/init.lua`, `…/lua/config` |
+--- | an explicit relative prefix | `./docs/a`, `../docs/a`, `~/notes` |
+--- | a drive or UNC prefix | `C:\Users\x`, `\\server\share` |
+--- | a component carrying an extension | `docs/gone.md` |
+--- | three or more components | `lua/lib/nvim/hover` |
+--- | two components under an absolute root | `/etc/hosts` |
+---
+--- Anything else stays silent — the same answer a bare `name.ext` already
+--- gets, and for the same reason. Silence is not "this target is fine", it is
+--- "not confident enough to put a red mark on it". Nothing that *exists* is
+--- affected: a resolved target never reaches this test at all.
 ---@param str string
 ---@return boolean
 local function is_unambiguous_path(str)
   if type(str) ~= "string" or str == "" then
     return false
   end
-  return str:match("[/\\]") ~= nil or str:match("^%.%.%.") ~= nil or str:match("^…") ~= nil
+  if not str:match("%w") then
+    return false
+  end
+
+  -- Nothing but a path is spelled with a leading `...` or `…`.
+  if str:match("^%.%.%.") or str:match("^…") then
+    return true
+  end
+  -- Explicit path syntax: `./a`, `../a`, `~/a`, `C:\a`, `\\server\share`.
+  if str:match("^%.%.?[/\\]") or str:match("^~[/\\]") then
+    return true
+  end
+  if str:match("^%a:[/\\]") or str:match("^[/\\][/\\]") then
+    return true
+  end
+
+  -- One component is one word, whatever punctuation is stuck to it: the
+  -- trailing slash in `sortiert/` says no more about intent than the dot in
+  -- `vim.api` does.
+  local segs = segments(str)
+  if #segs < 2 then
+    return false
+  end
+
+  -- `docs/gone.md` — an extension on a component, which needs the separator
+  -- to be meaningful: on its own, `vim.api` has one too.
+  for _, seg in ipairs(segs) do
+    if seg:match("%.[%w]+$") then
+      return true
+    end
+  end
+
+  -- `lua/lib/nvim/hover`. Prose writes `and/or`; it does not write a
+  -- three-deep alternative.
+  if #segs >= 3 then
+    return true
+  end
+
+  -- `/etc/hosts` — two components, but rooted, which `and/or` never is.
+  return str:match("^[/\\]") ~= nil
 end
 
 ---@internal
@@ -235,10 +320,14 @@ function M.under_cursor(bufnr)
   -- it into a `missing` target and the preview marks it with a red ✗, the
   -- same answer a broken *link* already gets.
   if not resolved then
-    if not is_unambiguous_path(token) then
+    -- Tested without the `:line[:col]` suffix: `docs/gone.md:42` is as
+    -- unambiguously a path as `docs/gone.md`, but only one of the two ends
+    -- in an extension, and that is what the test looks for.
+    local path_token = (split_location(token))
+    if not is_unambiguous_path(path_token) then
       return nil
     end
-    resolved = (split_location(token))
+    resolved = path_token
   end
 
   return {
