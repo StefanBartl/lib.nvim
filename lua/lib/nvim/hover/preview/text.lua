@@ -76,7 +76,7 @@ function M.file(target, opts)
   -- back to the last readable window rather than showing an empty float.
   if #lines == 0 and offset > 0 then
     offset = math.max(0, skipped - limit)
-    lines, truncated, skipped = head(target.path, limit, offset)
+    lines, truncated = head(target.path, limit, offset)
   end
 
   if #lines == 0 then
