@@ -166,6 +166,15 @@ need is therefore already local: the natural feature is resting the cursor on
 `owner/repo` — in a repo list, a plugin spec, a lockfile, a note — and getting
 that README's head in the float.
 
+> **Not to be confused with what reposcope shipped on 2026-08-29.** It gained
+> `<C-p>` in its own prompt: draw the image a repository's README references
+> over its own preview pane, through `images.browse.draw_in_window` and
+> `images.remote`. That is a reposcope-to-images.nvim crossing that never
+> touches this library — no float, no registry, no `classify`. It is mentioned
+> here only because "reposcope draws a picture now" and "reposcope is wired to
+> the hover" are easy to conflate, and this file exists to keep exactly that
+> kind of question answerable. The section below is still unbuilt.
+
 **Not wired today.** No reposcope module calls into `lib.nvim.hover`, and the
 hover names no reposcope module. When it is built it belongs on door 1, and
 needs no change to lib.nvim:
