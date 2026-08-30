@@ -13,6 +13,43 @@ return function(H)
 
   local modifier = require("lib.nvim.bindings.keymap.modifier")
 
+  -- Every capture assertion below reads register `+`. A bare CI runner has no
+  -- clipboard provider, so writes to `+` are dropped there and the whole spec
+  -- would fail for a reason that has nothing to do with the modifier. An
+  -- in-process provider makes `+` behave the same on a developer machine and
+  -- on a runner -- and it keeps the spec from touching the real clipboard of
+  -- whoever runs it. Restored at the end: the runner shares one Neovim
+  -- process across all spec files.
+  local prev_clipboard = vim.g.clipboard
+  local clip_lines = { "" }
+
+  local function reload_clipboard()
+    vim.cmd("unlet! g:loaded_clipboard_provider")
+    vim.cmd("runtime autoload/provider/clipboard.vim")
+  end
+
+  vim.g.clipboard = {
+    name = "keymap-modifier-spec",
+    copy = {
+      ["+"] = function(lines)
+        clip_lines = lines
+      end,
+      ["*"] = function(lines)
+        clip_lines = lines
+      end,
+    },
+    paste = {
+      ["+"] = function()
+        return clip_lines, "v"
+      end,
+      ["*"] = function()
+        return clip_lines, "v"
+      end,
+    },
+    cache_enabled = 0,
+  }
+  reload_clipboard()
+
   local function press(keys)
     vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "mtx", false)
     vim.wait(30)
@@ -190,4 +227,7 @@ return function(H)
     pcall(vim.keymap.del, "n", k, { buffer = buf })
   end
   pcall(vim.keymap.del, "n", "[r", { buffer = buf2 })
+
+  vim.g.clipboard = prev_clipboard
+  reload_clipboard()
 end
