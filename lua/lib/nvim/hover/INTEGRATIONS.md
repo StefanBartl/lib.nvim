@@ -217,7 +217,9 @@ Two things to settle first, and they are why this is not done yet:
 | an image shows as text | no provider installed, or one that is not images.nvim on a terminal without Kitty graphics |
 | the picture lands beside its own frame | placement — see the two invariants in [README.md](README.md#two-things-that-must-not-be-changed-casually) |
 | a PDF shows its size but no page | pdfport.nvim missing, or `pdftoppm` not on `PATH` |
-| nothing hovers anywhere | `enable()` never ran from a non-lazy spec, or `vim.g.lib_nvim_hover_disable` is set |
+| nothing hovers anywhere | `enable()` never ran from a non-lazy spec, `:Lib hover off` was typed and forgotten, or `vim.g.lib_nvim_hover_disable` is set |
+| one path stopped hovering while everything else still works | it was dismissed with `q`/`<Esc>`. It re-arms at the next target the cursor resolves, or immediately via `show({ force = true })` |
+| `q` starts no macro, or `<Esc>` does nothing | a hover is on screen and has borrowed that key — **lib.nvim**, and only until the float closes, which hands it back rather than deleting it |
 
 ## Direction of dependency
 
