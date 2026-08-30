@@ -70,6 +70,13 @@ local _config = {
     down = { "<M-PageDown>", "<C-Down>" },
     up = { "<M-PageUp>", "<C-Up>" },
   },
+  -- `q` and `<Esc>` are what a reader reaches for, and neither can reach the
+  -- float itself: it is `focusable = false`, so it never holds a mapping and
+  -- never receives a keystroke. They are borrowed globally for as long as a
+  -- hover is on screen, exactly like the scroll keys, and handed back the
+  -- moment it closes -- which costs `q` its macro recording for the lifetime
+  -- of one float and nothing beyond it.
+  dismiss_keys = { "q", "<Esc>" },
 }
 
 --- Configure the hover. Merged over the current values, so a host can set
@@ -88,6 +95,11 @@ function M.setup(opts)
           _config.scroll_keys[dir] = opts.scroll_keys[dir]
         end
       end
+    end
+    -- The same trap one level shallower: `{ "<C-c>" }` deep-extended over
+    -- `{ "q", "<Esc>" }` leaves `<Esc>` sitting at index 2 and still bound.
+    if opts.dismiss_keys ~= nil then
+      _config.dismiss_keys = opts.dismiss_keys
     end
   end
   return _config
@@ -156,6 +168,24 @@ local function cache_key(target)
     "|"
   )
 end
+
+---@internal
+--- Identity of a target for a *dismissal* -- "is this still the same thing
+--- the reader waved away?"
+---
+--- Deliberately not `cache_key`: that carries the file's mtime, so saving the
+--- file you are standing in would end the dismissal and pop the float back.
+--- Deliberately not the line either -- a dismissed hover has to survive its
+--- path sliding down the buffer as you edit above it, which is precisely the
+--- situation the dismissal exists for.
+---@param target Lib.Hover.Target
+---@return string
+local function identity(target)
+  return table.concat({ target.type, target.raw, target.path or "", target.anchor or "" }, "|")
+end
+
+---@type string|nil Identity of a target dismissed by `M.dismiss`, until the cursor leaves it.
+local _suppressed = nil
 
 --- The target under the cursor in `bufnr`, or nil.
 ---
@@ -329,20 +359,20 @@ end
 local _open = nil
 
 ---@internal
---- Drop the scroll keymaps this module installed globally, and put back
---- whatever each of them shadowed.
+--- Drop every keymap this module installed globally for the hover on screen,
+--- and put back whatever each of them shadowed.
 ---
 --- Global rather than buffer-local because the float is `focusable = false`
 --- and can never receive a mapping of its own — and buffer-local on the
 --- *document* would leak into buffers that have no hover open. They exist
---- only while a scrollable hover is on screen, and `float`'s close hook is
---- what takes them away again.
+--- only while a hover is on screen, and `float`'s close hook is what takes
+--- them away again.
 ---
---- Restoring matters more since the defaults grew a second, plainer pair:
---- `<C-Up>` is a key a user may well have mapped, and a hover that borrows
---- it for one float must hand it back, not delete it.
+--- Restoring rather than deleting is not a nicety: `<C-Up>` and `q` are keys
+--- a user may well have mapped, and a hover that borrows one for a single
+--- float must hand it back.
 ---@return nil
-local function unbind_scroll()
+local function unbind_keys()
   if not (_open and _open.keys) then
     return
   end
@@ -371,34 +401,33 @@ local function keylist(v)
 end
 
 ---@internal
---- Bind the configured scroll keys for a hover that has more to show.
+--- Bind the keys the hover on screen borrows: the dismiss keys always, the
+--- scroll keys only when there is something to scroll.
 ---
---- Deliberately does nothing when the content is not scrollable: an image, or
---- a file that fits in the float, must leave those keys alone so they keep
---- whatever meaning they have elsewhere.
+--- The asymmetry is the point. Every hover can be waved away, so `q` and
+--- `<Esc>` are bound for all of them. Scrolling an image or a file that
+--- already fits is meaningless, so those keys are left alone entirely and
+--- keep whatever they mean elsewhere.
 ---@param content Lib.Hover.Content
 ---@param rerender fun(delta: integer)
 ---@return nil
-local function bind_scroll(content, rerender)
-  unbind_scroll()
-  local s = content and content.scroll
-  if not (s and _open) then
-    return
-  end
-  -- Nothing below and nothing above: not scrollable in either direction.
-  local at_start = (s.offset or 0) == 0 and (s.page or 1) == 1
-  if not s.more and at_start then
+local function bind_keys(content, rerender)
+  unbind_keys()
+  if not _open then
     return
   end
 
   local c = cfg()
-  local sk = type(c.scroll_keys) == "table" and c.scroll_keys or {}
   local keys = {}
   local seen = {}
-  local function bind(lhs, delta, desc)
-    -- The same key configured for both directions would, on unbind, restore
-    -- one of our own mappings as if it had been the user's — and then it
-    -- would outlive the float forever.
+  ---@param lhs any
+  ---@param rhs fun()
+  ---@param desc string
+  local function borrow(lhs, rhs, desc)
+    -- The same key listed twice — both scroll directions, or a dismiss key
+    -- that is also a scroll key — would, on unbind, restore one of our own
+    -- mappings as if it had been the user's, and then it would outlive the
+    -- float forever.
     if type(lhs) ~= "string" or lhs == "" or seen[lhs] then
       return
     end
@@ -407,20 +436,37 @@ local function bind_scroll(content, rerender)
     if type(saved) ~= "table" or saved.lhs == nil then
       saved = nil
     end
-    local ok = pcall(vim.keymap.set, "n", lhs, function()
-      rerender(delta)
-    end, { desc = desc, nowait = true, silent = true })
+    local ok = pcall(vim.keymap.set, "n", lhs, rhs, { desc = desc, nowait = true, silent = true })
     if ok then
       keys[#keys + 1] = { lhs = lhs, saved = saved }
     end
   end
 
-  for _, lhs in ipairs(keylist(sk.down)) do
-    bind(lhs, 1, "lib.nvim.hover: scroll preview down")
+  -- Dismiss first, so a key configured for both wins as a dismissal: the one
+  -- that always works beats the one that only sometimes applies.
+  for _, lhs in ipairs(keylist(c.dismiss_keys)) do
+    borrow(lhs, function()
+      M.dismiss()
+    end, "lib.nvim.hover: dismiss this hover")
   end
-  for _, lhs in ipairs(keylist(sk.up)) do
-    bind(lhs, -1, "lib.nvim.hover: scroll preview up")
+
+  local s = content and content.scroll
+  -- Nothing below and nothing above: not scrollable in either direction.
+  local at_start = s and (s.offset or 0) == 0 and (s.page or 1) == 1
+  if s and (s.more or not at_start) then
+    local sk = type(c.scroll_keys) == "table" and c.scroll_keys or {}
+    for _, lhs in ipairs(keylist(sk.down)) do
+      borrow(lhs, function()
+        rerender(1)
+      end, "lib.nvim.hover: scroll preview down")
+    end
+    for _, lhs in ipairs(keylist(sk.up)) do
+      borrow(lhs, function()
+        rerender(-1)
+      end, "lib.nvim.hover: scroll preview up")
+    end
   end
+
   _open.keys = keys
 end
 
@@ -437,22 +483,38 @@ function M.show(opts)
   local bufnr = api.nvim_get_current_buf()
   local link = M.link_under_cursor(bufnr)
   if not link then
-    -- Closing here without unbinding would leave the scroll keys mapped
-    -- after the hover is gone — the most common exit, since moving the
-    -- cursor off a link comes back through this branch.
-    unbind_scroll()
-    _open = nil
-    float.close()
+    -- The most common exit by far, since moving the cursor off a link comes
+    -- back through here. `hide` rather than `float.close`, for the two things
+    -- it does besides closing: hand back the borrowed keys, and bump the
+    -- generation. Without the bump a PDF still rasterizing for the link that
+    -- was just left would land afterwards, match the unchanged generation and
+    -- open a float over a line the reader has moved past.
+    M.hide()
+    -- The cursor is on nothing at all, so it has left whatever was dismissed:
+    -- going back to that target should show it again.
+    _suppressed = nil
     return false
+  end
+
+  local source = api.nvim_buf_get_name(bufnr)
+  local target = classify.classify(link.target, source ~= "" and source or nil)
+
+  if _suppressed then
+    if opts.force or _suppressed ~= identity(target) then
+      -- Either the cursor reached a different target, or a caller asked for
+      -- this one outright. Both end the dismissal.
+      _suppressed = nil
+    else
+      -- Still standing on the thing that was waved away. Nothing to close —
+      -- `dismiss` already did that — and nothing to open.
+      return false
+    end
   end
 
   _generation = _generation + 1
   local generation = _generation
 
-  local source = api.nvim_buf_get_name(bufnr)
-  local target = classify.classify(link.target, source ~= "" and source or nil)
-
-  unbind_scroll()
+  unbind_keys()
   _open = { target = target, bufnr = bufnr, offset = 0, page = 1 }
 
   local preview_opts = {
@@ -481,6 +543,12 @@ function M.show(opts)
       max_width = c.max_width or 80,
       max_height = c.max_lines or 20,
       border = c.border,
+      -- The float dismisses itself on the next cursor move, through an
+      -- autocmd this module never hears about. Without a hook there, the
+      -- keys it borrowed would stay bound until the next `CursorHold` — up
+      -- to `updatetime` in which `q` records no macro and `<Esc>` does
+      -- nothing, long after the float they belonged to is gone.
+      on_close = unbind_keys,
     })
     -- An image target draws over the float it just opened.
     if content.image_path then
@@ -493,7 +561,7 @@ function M.show(opts)
       end
     end
 
-    bind_scroll(content, M.scroll)
+    bind_keys(content, M.scroll)
   end
 
   if cached and not cached.pending then
@@ -519,7 +587,7 @@ end
 --- off the link.
 ---
 --- Bound to `scroll_keys` while a scrollable hover is open (see
---- `bind_scroll`), and public so a host can offer its own keys. Deliberately
+--- `bind_keys`), and public so a host can offer its own keys. Deliberately
 --- no image case: there is nothing to scroll in a picture.
 ---@param delta integer positive scrolls forward, negative back
 ---@return boolean scrolled
@@ -528,7 +596,7 @@ function M.scroll(delta)
   -- the explicit teardowns do not cover: it takes itself away rather than
   -- silently swallowing the key from then on.
   if not (_open and float.win()) then
-    unbind_scroll()
+    unbind_keys()
     _open = nil
     return false
   end
@@ -583,6 +651,12 @@ function M.scroll(delta)
       max_width = c.max_width or 80,
       max_height = c.max_lines or 20,
       border = c.border,
+      -- The float dismisses itself on the next cursor move, through an
+      -- autocmd this module never hears about. Without a hook there, the
+      -- keys it borrowed would stay bound until the next `CursorHold` — up
+      -- to `updatetime` in which `q` records no macro and `<Esc>` does
+      -- nothing, long after the float they belonged to is gone.
+      on_close = unbind_keys,
     })
     if content.image_path then
       local win = float.win()
@@ -593,17 +667,139 @@ function M.scroll(delta)
         end
       end
     end
-    bind_scroll(content, M.scroll)
+    bind_keys(content, M.scroll)
   end)
 
   return true
 end
 
 --- Close any open hover.
+---
+--- Bumps the generation counter as well: a PDF page still rasterizing when
+--- this is called would otherwise land afterwards and open a float for a
+--- hover that has already been closed.
 function M.hide()
-  unbind_scroll()
+  unbind_keys()
   _open = nil
+  _generation = _generation + 1
   float.close()
+end
+
+--- Close the hover on screen and keep it closed for as long as the cursor
+--- stays on the same target.
+---
+--- **Why closing alone is not enough.** `CursorHold` fires again after any
+--- keystroke followed by `updatetime` of quiet — cursor movement or not. A
+--- key bound to `hide()` would make the float disappear and then bring it
+--- straight back, while the reader is still standing on the path they wanted
+--- out of the way.
+---
+--- The suppression ends by itself: the next target the cursor resolves —
+--- another path, or none at all — clears it. That is the whole difference
+--- between this and `toggle(false)`, and why both exist. This one is for
+--- "not now, I am reading this line"; the toggle is for "not for a while",
+--- and only the toggle has to be remembered and undone.
+---@return boolean dismissed false when no hover was open
+function M.dismiss()
+  if not _open then
+    return false
+  end
+  _suppressed = identity(_open.target)
+  M.hide()
+  return true
+end
+
+--- Whether a hover would open at all right now.
+---
+--- Reads the same effective config the trigger does, so it accounts for both
+--- the `vim.g` kill switch and whatever a host configured.
+---@return boolean
+function M.is_enabled()
+  return cfg().enabled ~= false
+end
+
+--- Turn the hover off for the rest of the session, or back on.
+---
+--- The state lives in `vim.g.lib_nvim_hover_disable` — the switch this module
+--- already documents — so toggling at runtime and setting it in a plugin spec
+--- are one setting rather than two that can disagree.
+---
+--- Two things this has to do beyond flipping the flag:
+---
+---  * **Re-`enable()` on the way back on.** `attach()` installs nothing while
+---    the hover is off, so every buffer opened during that time has no
+---    autocmd of its own. Flipping the flag alone would leave those buffers
+---    silently dead, which reads as "the toggle only half works". `enable()`
+---    is idempotent and re-attaches every loaded buffer.
+---  * **Outrank a host's `enabled = false`.** That was a default; a user
+---    asking for the hover at runtime is not. Without this the command would
+---    do nothing at all in exactly the configuration where someone is most
+---    likely to reach for it.
+---@param on? boolean explicit state; omitted flips the current one
+---@return boolean on the state now in effect
+function M.toggle(on)
+  if on == nil then
+    on = not M.is_enabled()
+  end
+
+  -- A dismissal is scoped to "the target the cursor is on right now", and
+  -- throwing the session switch is not that. Left standing, it would survive
+  -- an off/on cycle as invisible state and make the hover look like it came
+  -- back only half on.
+  _suppressed = nil
+
+  if on then
+    vim.g.lib_nvim_hover_disable = false
+    _config.enabled = true
+    M.enable()
+  else
+    vim.g.lib_nvim_hover_disable = true
+    M.hide()
+  end
+
+  -- Announced, because "off" is invisible: nothing on screen tells a hover
+  -- that is switched off apart from a line that simply has no target on it,
+  -- and a switch whose state cannot be seen gets reported as a broken
+  -- feature days later.
+  require("lib.nvim.notify").create("[lib.nvim.hover]").info(on and "hover on" or "hover off")
+
+  return on
+end
+
+--- Composer routes for `:Lib hover …`, in the shape
+--- `lib.nvim.bindings.usercmd.composer` expects. Wired up by
+--- `lib.nvim_usrcmds`, next to `:Lib deps …`.
+---
+--- A command and not a keymap: `lib.nvim_usrcmds` states that a library other
+--- plugins depend on has no business claiming a key on their behalf, and a
+--- session-wide switch is not something that needs to be one keystroke away
+--- anyway. The per-hover dismissal is the one that does, and it has its keys
+--- only for as long as there is a float to dismiss.
+---@return table[]
+function M.routes()
+  return {
+    {
+      path = { "hover", "toggle" },
+      desc = "Turn the path/link hover off for this session, or back on",
+      run = function()
+        M.toggle()
+      end,
+    },
+    {
+      path = { "hover", "on" },
+      desc = "Turn the path/link hover on",
+      run = function()
+        M.toggle(true)
+      end,
+    },
+    {
+      path = { "hover", "off" },
+      desc = "Turn the path/link hover off",
+      run = function()
+        M.toggle(false)
+      end,
+    },
+  }
 end
 --- Debounced entry point used by the CursorHold/mouse autocmds.
 function M.trigger()

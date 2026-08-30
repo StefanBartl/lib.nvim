@@ -13,4 +13,7 @@ lib.nvim utility commands
 | `:Lib deps reset-first-run [{plugin:DEPS_PLUGIN}]` | Forget that a plugin's (or every plugin's) first-run popup was already shown |
 | `:Lib deps show [{plugin:DEPS_PLUGIN}]` | List a plugin's declared external tools, why each matters, and what's missing |
 | `:Lib helptags` | Regenerate all helptags now |
+| `:Lib hover off` | Turn the path/link hover off |
+| `:Lib hover on` | Turn the path/link hover on |
+| `:Lib hover toggle` | Turn the path/link hover off for this session, or back on |
 | `:Lib ps-profile` | Open the active PowerShell profile |

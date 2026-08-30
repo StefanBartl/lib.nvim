@@ -59,6 +59,8 @@ action the flat set would also omit.
 | `:Lib deps show [{plugin}]` | List a plugin's declared external tools, why each matters, and what is missing |
 | `:Lib deps install {plugin}` | Offer to install a plugin's missing external tools (asks first) |
 | `:Lib deps reset-first-run [{plugin}]` | Forget that a plugin's (or every plugin's) first-run popup was already shown |
+| `:Lib hover toggle` | Turn the path/link hover off for this session, or back on |
+| `:Lib hover on` / `:Lib hover off` | Say which, rather than flipping |
 
 `{plugin}` completes from the `DEPS_PLUGIN` argument type — the set of plugins
 that declare a dependency spec, computed at completion time.
@@ -67,6 +69,13 @@ The `deps` routes live under `:Lib deps …` rather than a separate `:LibDeps`
 command on purpose: a second top-level name for a subordinate feature is
 exactly the `:VerbFeatureA`/`:VerbFeatureB` shape the composer exists to
 replace.
+
+The `hover` routes are a command and not a keymap for the reason this
+namespace has no keymaps module at all: a library its dependents load has no
+business claiming a key on their behalf. The hover's *own* dismiss keys (`q`,
+`<Esc>`) are the exception that proves it — they exist only for as long as a
+float is on screen, and hand back whatever they shadowed when it closes. See
+[`lib.nvim.hover`](../lua/lib/nvim/hover/README.md).
 
 The generated table is also kept at
 [`BINDINGS/Usercmds.md`](BINDINGS/Usercmds.md).
@@ -107,6 +116,7 @@ require("lib.nvim_usrcmds").setup({
   powershell_profile = vim.fn.has("win32") == 1,
   lib_verb           = true,   -- the :Lib verb itself
   deps               = true,   -- the :Lib deps … routes
+  hover              = true,   -- the :Lib hover … routes
 })
 ```
 

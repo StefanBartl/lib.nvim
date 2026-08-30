@@ -67,6 +67,18 @@ function M.lib_verb(o)
     end
   end
 
+  -- `:Lib hover off` and not a keymap: this namespace sets no keys (see the
+  -- module header), and the hover's own dismiss keys already cover the case
+  -- that wants a keystroke. Registered unconditionally with the verb rather
+  -- than only when a host has switched the hover on, because `:Lib hover on`
+  -- has to be reachable from the state where the hover is off — which is
+  -- also the state a user typing it is most likely to be in.
+  if o.hover then
+    for _, route in ipairs(require("lib.nvim.hover").routes()) do
+      routes[#routes + 1] = route
+    end
+  end
+
   require("lib.nvim.bindings.usercmd.composer").verb("Lib", {
     desc = "lib.nvim utility commands",
     routes = routes,

@@ -102,10 +102,75 @@ bootstraps the library before `lazy.setup()` anyway and the spec then only
 keeps it updatable. If your lib.nvim is lazy-loaded on first `require`,
 `enable()` needs a home that actually runs at startup instead.
 
+## Waving one hover away
+
+Sometimes the float is over the thing you are trying to read, and you have to
+stay on the path. `q` or `<Esc>` takes it away and *keeps* it away for as
+long as the cursor stays on that target:
+
+| Key | Does |
+| --- | --- |
+| `q` or `<Esc>` | dismiss this hover; re-arms by itself at the next target |
+
+**Closing alone would not do**, which is why this is a dismissal and not a
+close. `CursorHold` fires again after any keystroke followed by `updatetime`
+of quiet — cursor movement or not — so a key bound to `hide()` makes the
+float vanish and then brings it straight back, while you are still standing
+where you wanted it gone.
+
+The dismissal ends by itself: the next target the cursor resolves, another
+path or none at all, clears it. Nothing has to be remembered and undone, and
+coming back to the same path hovers normally again. That is the whole
+difference between this and the session switch below — this one is "not now",
+that one is "not for a while".
+
+Like the scroll keys they are bound globally only while a hover is on screen,
+and handed back the moment it closes; a key that was already mapped is
+*restored*, not deleted. Unlike the scroll keys they are bound for **every**
+hover, because anything can be waved away — including a picture, which has
+nothing to scroll. The price is that `q` records no macro for as long as one
+float is up, and none after it.
+
+Other keys, or none at all:
+
+```lua
+require("lib.nvim.hover").setup({
+  dismiss_keys = { "<C-c>" },   -- a string or a list; replaces the default
+  -- dismiss_keys = {},         -- bind nothing, and call hover.dismiss() yourself
+})
+```
+
+`hover.dismiss()` is public and returns `false` when no hover was open, so it
+is safe to bind unconditionally.
+
 ## Turning it off
 
-lib.nvim has no `setup()` of its own, so the global switch is a variable,
-set from your plugin spec before anything loads:
+For the rest of the session, from wherever you are:
+
+| Command | Does |
+| --- | --- |
+| `:Lib hover toggle` | off if it is on, on if it is off |
+| `:Lib hover off` / `:Lib hover on` | say which |
+
+A command and not a key, because lib.nvim claims no keymaps on its
+dependents' behalf — `lib.nvim_usrcmds` says exactly that — and a switch you
+throw a few times a week does not need to be one keystroke away. The
+dismissal above is the one that does.
+
+Each toggle is announced, because "off" is otherwise invisible: nothing on
+screen tells a switched-off hover apart from a line that simply has no target
+on it, and a switch whose state you cannot see gets reported as a broken
+feature a week later. `hover.is_enabled()` answers the same question for a
+statusline, and `hover.toggle(true|false|nil)` is the API under the command.
+
+`:Lib hover on` also re-runs `enable()`, so it works from a session where
+nothing had switched the hover on at all — and so that buffers you opened
+while it was off get their autocmds when you turn it back on, instead of
+staying quietly dead.
+
+The state lives in `vim.g.lib_nvim_hover_disable`, which is also where you
+say it from a plugin spec, before anything loads — one setting rather than
+two that can disagree:
 
 ```lua
 {
@@ -144,6 +209,7 @@ require("lib.nvim.hover").setup({
 | `bare_paths` | `true` | Also hover paths written without link syntax. |
 | `scroll_keys.down` | `{ "<M-PageDown>", "<C-Down>" }` | Keys that scroll a scrollable preview forward. |
 | `scroll_keys.up` | `{ "<M-PageUp>", "<C-Up>" }` | …and back. |
+| `dismiss_keys` | `{ "q", "<Esc>" }` | Keys that dismiss the hover on screen until the cursor reaches another target. |
 | `url.fetch` | `false` | Off deliberately: a hover that silently fetches discloses every link you brush past to its host. |
 | `url.timeout_ms` | `2000` | |
 
@@ -327,7 +393,7 @@ which cost days:
 
 | Module | Job |
 | --- | --- |
-| `lib.nvim.hover` | Orchestration: debounce, LRU cache, async generation counter, `attach`/`show`/`hide`/`scroll` |
+| `lib.nvim.hover` | Orchestration: debounce, LRU cache, async generation counter, `attach`/`show`/`hide`/`scroll`/`dismiss`/`toggle` |
 | `lib.nvim.hover.registry` | Plugin sources and previews |
 | `lib.nvim.hover.classify` | Target string → typed target. Pure, no I/O beyond one `fs_stat` |
 | `lib.nvim.hover.bare_path` | Paths with no link syntax; asks gopath.nvim when present |

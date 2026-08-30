@@ -70,6 +70,7 @@ a few commands directly, opt-in via `require("lib.nvim_usrcmds").setup(opts)`:
 | `:Lib ps-profile` (= `:PowershellProfile`, Windows) | Open the active PowerShell profile in Neovim |
 | `:Lib deps show <plugin.nvim>` | Report which of a dependent plugin's optional external tools are missing, and why they matter |
 | `:Lib deps install <plugin.nvim>` | Compose and confirm an install command for what's missing |
+| `:Lib hover toggle` (also `on` / `off`) | Switch the path/link hover off for the session, or back on |
 
 The `deps` system is what every sibling plugin's "declared, installable
 external tools" popup and `:Lib deps show <plugin>` come from — see

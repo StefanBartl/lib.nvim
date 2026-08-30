@@ -23,6 +23,7 @@
 ---@field bare_paths? boolean # Also hover a path written without link syntax. Default true. See `lib.nvim.hover.bare_path`.
 ---@field filetypes? string|string[] # Which buffers a host attaches the hover to. Interpreted by the host, not here.
 ---@field scroll_keys? Lib.Hover.ScrollKeys # Which keys scroll a scrollable preview.
+---@field dismiss_keys? string|string[] # Which keys wave the hover on screen away. Default `{ "q", "<Esc>" }`; a configured list replaces the default, and an empty one binds nothing.
 ---@field url? Lib.HoverUrlConfig
 
 --- Keys bound globally while a scrollable hover is on screen, and unbound
@@ -34,6 +35,8 @@
 ---@field up? string|string[] # Default `{ "<M-PageUp>", "<C-Up>" }`.
 
 --- One key `lib.nvim.hover` currently holds, with the mapping it displaced.
+--- Covers both the scroll keys and the dismiss keys: they are borrowed and
+--- returned by the same mechanism, and differ only in when they are bound.
 ---@class Lib.Hover.BoundKey
 ---@field lhs string
 ---@field saved? table # `maparg(..., true)` dict of the mapping that was there, restored on unbind.
