@@ -2,7 +2,6 @@
 --- Bijective base-26 conversion (spreadsheet-column style): 1 -> "a",
 --- 26 -> "z", 27 -> "aa", 28 -> "ab", … Pure Lua.
 
----@type LibNumeralAlpha
 local M = {}
 
 ---Convert an integer (>= 1) to a lowercase bijective base-26 string.
@@ -50,4 +49,5 @@ function M.to_int(s)
   return total
 end
 
+---@type LibNumeralAlpha
 return M

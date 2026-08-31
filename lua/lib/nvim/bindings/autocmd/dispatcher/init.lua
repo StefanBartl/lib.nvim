@@ -47,7 +47,7 @@ M.filetype = require("lib.lua.lazy").require("lib.nvim.bindings.autocmd.dispatch
 --- autocmd on BufEnter" where ten features are listening is worse than no
 --- table. `docs` reads this back to list the handlers underneath their
 --- dispatcher, so collapsing them costs nothing in what the reader can see.
----@type Lib.Autocmd.Dispatcher.Entry[]
+---@type Lib.Autocmd.Dispatcher.LiveEntry[]
 local live = {}
 
 ---Every dispatcher created in this session, newest last.

@@ -73,7 +73,6 @@ function M.get(winid)
   local topline = view.topline or 1
   local botline = topline + height - 1
 
-  ---@type Lib.Window.Context.Ctx
   local ctx = {
     winid = winid,
     is_valid = true,

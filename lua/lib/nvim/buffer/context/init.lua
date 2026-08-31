@@ -100,7 +100,6 @@ function M.get(bufnr)
   local name = api.nvim_buf_get_name(bufnr)
   local line_count = api.nvim_buf_line_count(bufnr)
 
-  ---@type Lib.Buffer.Context.Ctx
   local ctx = {
     bufnr = bufnr,
     is_valid = true,

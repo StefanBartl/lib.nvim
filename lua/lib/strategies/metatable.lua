@@ -2,7 +2,6 @@
 --- Ultra-lazy aggregator using metatable-based module proxy.
 --- Nothing is loaded until first access.
 
----@type Lib
 local LIB = {}
 
 -- ============================================================================

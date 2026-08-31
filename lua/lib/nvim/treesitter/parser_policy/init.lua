@@ -100,7 +100,6 @@ local function decline(lang)
   persist_declined()
 end
 
----@type Lib.Treesitter.ParserPolicy
 local M = {}
 
 ---@param opts? Lib.Treesitter.ParserPolicy.SetupOpts
@@ -311,5 +310,6 @@ function M.ensure(lang, opts)
   open_prompt(lang, opts)
 end
 
+---@type Lib.Treesitter.ParserPolicy
 ---@type Lib.Treesitter.ParserPolicy
 return M

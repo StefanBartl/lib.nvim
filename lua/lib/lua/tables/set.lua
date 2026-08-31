@@ -1,7 +1,6 @@
 ---@module 'lib.lua.tables.set'
 --- Simple generic Set<T> implemented as table<T, true> with helper functions.
 
----@type TablesSet
 local M = {}
 
 --- Create a set from an array.
@@ -21,7 +20,7 @@ end
 ---@param s table<T, true>
 ---@return T[]
 function M.to_array(s)
-  ---@type T[]
+  ---@type any[]
   local out = {}
   local i = 0
   for k in pairs(s) do
@@ -114,7 +113,7 @@ end
 ---@param t table<K, V>
 ---@return table<K, true>
 function M.from_keys(t)
-  local out = {} ---@type table<K, true>
+  local out = {} ---@type table<any, true>
   for k, _ in pairs(t) do
     out[k] = true
   end

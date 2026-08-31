@@ -142,8 +142,8 @@ return function(H)
   ok(fresh:score("/from/elsewhere.lua") > 0, "frecency: a seeded store persists like any other")
 
   -- ------------------------------------------------------------- guardrails
-  ---@diagnostic disable-next-line: missing-fields
   eq(
+    ---@diagnostic disable-next-line: missing-fields
     pcall(frecency.store, { dir = dir }),
     false,
     "frecency: a store without a namespace is refused, not silently shared"

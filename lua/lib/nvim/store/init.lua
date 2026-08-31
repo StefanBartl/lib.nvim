@@ -9,7 +9,6 @@
 
 require("lib.nvim.store.@types")
 
----@type Lib.Store
 local M = {}
 
 M.project = require("lib.nvim.store.project")

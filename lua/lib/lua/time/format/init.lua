@@ -2,7 +2,6 @@
 --- Format a unix timestamp using a small set of named style presets, pure
 --- Lua (`os.date`), no `vim.*`.
 
----@type LibTimeFormat
 local M = {}
 
 ---@type table<string, string>
@@ -36,4 +35,5 @@ function M.format_timestamp(ts, fmt, opts)
   return os.date(pattern, ts)
 end
 
+---@type LibTimeFormat
 return M

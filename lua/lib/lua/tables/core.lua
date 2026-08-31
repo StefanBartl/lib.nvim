@@ -5,7 +5,6 @@
 ---   * No globals; defensive parameter checks.
 ---   * EmmyLua-typed for strong LuaLS hints.
 
----@type LibTablesCore
 local M = {}
 
 ---@nodiscard
@@ -293,7 +292,7 @@ function M.binary_search(list, cmp, x)
 end
 
 ---@nodiscard
----@generic T
+---@generic T, K
 ---@param list T[]
 ---@param key fun(item:T):K
 ---@return table<K, T[]>
@@ -338,7 +337,7 @@ end
 ---@param key fun(item:T):K
 ---@return table<K, integer>
 function M.count_by(list, key)
-  local out = {} ---@type table<K, integer>
+  local out = {} ---@type table<any, integer>
   for i = 1, #list do
     local k = key(list[i])
     out[k] = (out[k] or 0) + 1

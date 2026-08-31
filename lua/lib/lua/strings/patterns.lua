@@ -1,7 +1,6 @@
 ---@module 'lib.lua.strings.patterns'
 --- Pattern utilities: escaping, plain find/replace, surrounding helpers.
 
----@type LibStringsPatterns
 local P = {}
 
 ---@nodiscard

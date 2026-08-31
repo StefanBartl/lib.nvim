@@ -2,7 +2,6 @@
 --- Lazy-loaded aggregator for lib utilities.
 --- Modules are only loaded when first accessed.
 
----@type Lib
 local LIB = {}
 
 -- ============================================================================
@@ -332,5 +331,5 @@ LIB.system_info = lazy_module("lib.nvim.system.info")
 -- resolved-key cache to invalidate (each proxy memoizes its own module).
 require("lib.strategies.control").register({ name = "lazy", table = LIB })
 
----@type Lib
+---@type Lib.Strategy.Lazy
 return LIB

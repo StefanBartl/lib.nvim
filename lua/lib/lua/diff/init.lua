@@ -3,9 +3,9 @@
 --- diff) and `myers` (full DP LCS-based edit script).
 
 ---@type LibDiff
-local M = {}
-
-M.lines = require("lib.lua.diff.lines")
-M.myers = require("lib.lua.diff.myers")
+local M = {
+  lines = require("lib.lua.diff.lines"),
+  myers = require("lib.lua.diff.myers"),
+}
 
 return M

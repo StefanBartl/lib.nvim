@@ -2,7 +2,6 @@
 --- Cheap common-prefix/common-suffix line diff producing a single splice
 --- region, pure Lua.
 
----@type LibDiffLines
 local M = {}
 
 ---Compute the minimal splice region turning line array `a` into `b`.
@@ -50,4 +49,5 @@ function M.diff(a, b)
   }
 end
 
+---@type LibDiffLines
 return M

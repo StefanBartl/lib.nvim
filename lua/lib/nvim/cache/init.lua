@@ -12,7 +12,6 @@
 
 require("lib.nvim.cache.@types")
 
----@type Lib.Cache
 local M = {}
 
 M.disk = require("lib.nvim.cache.disk")

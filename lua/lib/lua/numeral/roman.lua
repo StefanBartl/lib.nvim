@@ -1,7 +1,6 @@
 ---@module 'lib.lua.numeral.roman'
 --- Roman numeral conversion (1-3999), pure Lua.
 
----@type LibNumeralRoman
 local M = {}
 
 ---@type { [1]: integer, [2]: string }[]
@@ -92,4 +91,5 @@ function M.to_int(s)
   return total
 end
 
+---@type LibNumeralRoman
 return M

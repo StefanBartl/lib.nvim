@@ -2,7 +2,6 @@
 --- Functional-style helpers over arrays: map, filter, reduce, etc.
 --- All functions are pure and return new arrays where applicable.
 
----@type LibTablesFn
 local F = {}
 
 ---@nodiscard

@@ -2,7 +2,6 @@
 --- High-performance helpers for Array<T> (contiguous 1..n lists).
 --- All functions avoid reallocation when possible and pre-size outputs.
 
----@type TablesArray
 local M = {}
 
 --- Return length using # (assumes dense array).

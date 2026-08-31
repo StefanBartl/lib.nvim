@@ -27,7 +27,6 @@
 --- or "explicitly null" — callers that care about the distinction cannot
 --- rely on `simple_parse`'s output alone.
 
----@type LibYaml
 local M = {}
 
 ---@internal
@@ -231,4 +230,5 @@ function M.simple_parse(text)
   return result, nil
 end
 
+---@type LibYaml
 return M

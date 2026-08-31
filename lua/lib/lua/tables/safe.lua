@@ -1,7 +1,6 @@
 ---@module 'lib.lua.tables.safe'
 --- Safe, defensive mutators and iteration guards for tables.
 
----@type LibTablesSafe
 local S = {}
 
 ---@nodiscard

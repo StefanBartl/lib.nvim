@@ -1,7 +1,6 @@
 ---@module 'lib.lua.strings.core'
 --- String helpers: trimming, splitting, joining, casing, padding, indenting.
 
----@type LibStringsCore
 local S = {}
 
 ---@nodiscard

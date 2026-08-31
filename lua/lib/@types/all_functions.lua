@@ -11,10 +11,10 @@
 
 ---@class Lib
 --- === Namespaces (whole submodules) ===
----@field array TablesArray
----@field core LibTablesCore
----@field dict TablesDict
----@field functional LibTablesFn
+---@field array Lib.Tables.Array
+---@field core Lib.Tables.Core
+---@field dict Lib.Tables.Dict
+---@field functional Lib.Tables.Functional
 ---@field unique_table Lib.Tables.UniqueTable
 ---@field strings Lib.Strings
 ---@field notify Lib.Notify
@@ -27,6 +27,7 @@
 ---@field lazy Lib.Lazy
 ---@field hl Lib.UI.HL
 ---@field kit Lib.UI.Kit # Themed, composable UI toolkit (theme/preset engine, surface primitive, popup components)
+---@field deps Lib.Deps # External-tool detection, dependency-spec parsing, `:Lib deps`
 ---@field logger Lib.Logger # Structured logging / diagnostics / crash dumps (factory via `.new`)
 ---@field cache Lib.Cache # Disk (persistent JSON, TTL) + memory (namespace, TTL/tick, opt-in auto-invalidation) caching
 ---@field buffer_context Lib.Buffer.Context # Changedtick-cached buffer metadata accessor
@@ -112,3 +113,17 @@
 ---@field json_decode_to_string_array fun(value: any): string[]
 ---@field json_encode fun(value: any, opts?: Lib.JSON.EncodeOpts): string|nil, string|nil # Pure-Lua JSON encoder; returns JSON string or nil + error message
 ---@field system_info Lib.System.Info # Cross-platform system information (get lines, float + clipboard, :SystemInfo usercmd)
+
+--- Keys the *lazy* strategy exports on top of `Lib`.
+--- They are declared here rather than on `Lib` because the default
+--- (`metatable`) strategy does not register them: promising them on `Lib`
+--- would trade an injected field for a phantom one.
+---@class Lib.Strategy.Lazy : Lib
+---@field augroup Lib.AutoCmd.AuGroup # Namespaced augroup registry
+---@field augroup_create_clear fun(name: string): integer # `augroup.create.clear`, flattened
+---@field unique fun(list: Lib.Tables.UniqueTable.List<any>): Lib.Tables.UniqueTable.List<any>
+---@field unique_by fun(list: Lib.Tables.UniqueTable.List<any>, key_fn: Lib.Tables.UniqueTable.KeyFn<any>): Lib.Tables.UniqueTable.List<any>
+---@field is_unique fun(list: Lib.Tables.UniqueTable.List<any>): boolean
+---@field json_is_array_like fun(v: any): boolean
+---@field json_ensure_string_array fun(v: any): string[]
+---@field json_table_to_string_array fun(tbl: table): string[]

@@ -42,6 +42,15 @@
 --- table for the lazy-require case.
 ---@alias Lib.Autocmd.Dispatcher.Handler Lib.Autocmd.Dispatcher.HandlerSpec|Lib.Autocmd.Dispatcher.HandlerFn
 
+-- One dispatcher as `create()` files it away, which is not the shape
+-- `registry()` reports: `attached`, `mode` and `handlers` are read off the
+-- handle at call time rather than stored.
+---@class Lib.Autocmd.Dispatcher.LiveEntry
+---@field name string
+---@field events string[]
+---@field group string|nil
+---@field handle Lib.Autocmd.Dispatcher.Handle
+
 ---@class Lib.Autocmd.Dispatcher.Opts
 ---@field event string|string[] Autocmd event(s) to dispatch on
 ---@field name? string Name used in generated docs and `registry()`; defaults to `group`

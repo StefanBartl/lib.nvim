@@ -6,7 +6,6 @@
 --- ops) rather than the greedy O(ND) Myers algorithm — DP is simpler to get
 --- right and perfectly adequate for typical buffer/line-array sizes.
 
----@type LibDiffMyers
 local M = {}
 
 ---Diff two line arrays into an ordered edit script.
@@ -76,4 +75,5 @@ function M.diff(a, b)
   return script
 end
 
+---@type LibDiffMyers
 return M

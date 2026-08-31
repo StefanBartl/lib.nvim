@@ -173,17 +173,3 @@
 ---@field is_unique fun(list: Lib.Tables.UniqueTable.List<any>): boolean # Check whether a list already contains only unique elements.
 
 return {}
-
----@class LibTablesSafe
-
----@class TablesSet
-
----@class LibTablesFn
-
----@class TablesDict
-
----@class TablesArray
----@class Array<T>: { [integer]: T }
-
----@class LibTablesCore
----@alias K any

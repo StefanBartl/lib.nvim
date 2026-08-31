@@ -1,7 +1,6 @@
 ---@module 'lib.lua.tables.dict'
 --- Helpers for dictionary-like tables (non-array).
 
----@type TablesDict
 local M = {}
 
 --- Shallow copy of a dictionary.
@@ -67,7 +66,7 @@ function M.keys(t)
   for _ in pairs(t) do
     n = n + 1
   end
-  ---@type K[]
+  ---@type any[]
   local out = { [n] = false }
   local i = 0
   for k in pairs(t) do

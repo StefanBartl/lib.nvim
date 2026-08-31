@@ -8,7 +8,6 @@
 --- success (all of `fn`'s return values preserved) or
 --- `false, <structured error>` on failure.
 
----@type LibError
 local M = {}
 
 ---Build a structured error table.
@@ -74,4 +73,5 @@ function M.safe_call(fn, ...)
   return true, unpack_fn(outcome, 2, outcome.n)
 end
 
+---@type LibError
 return M

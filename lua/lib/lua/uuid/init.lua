@@ -10,7 +10,6 @@
 
 math.randomseed(os.time() + math.floor(os.clock() * 1000000))
 
----@type LibUuid
 local M = {}
 
 local HEX = "0123456789abcdef"
@@ -80,4 +79,5 @@ function M.get(style)
   return M.format(M.generate(), style)
 end
 
+---@type LibUuid
 return M

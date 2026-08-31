@@ -10,7 +10,6 @@
 --- local lines = dump.to_lines(some_value, { max_depth = 10 })
 --- ```
 
----@type LibDump
 local M = {}
 
 ---@type integer Default hard recursion-depth limit.
@@ -85,4 +84,5 @@ function M.to_string(value, opts)
   return table.concat(M.to_lines(value, opts), "\n")
 end
 
+---@type LibDump
 return M

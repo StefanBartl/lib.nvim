@@ -10,7 +10,6 @@
 --- (i.e. `[today-7d 00:00, today 00:00)`), not the previous Mon-Sun
 --- calendar week — documented here since either reading is defensible.
 
----@type LibTimePresets
 local M = {}
 
 local SECONDS_PER_DAY = 86400
@@ -106,4 +105,5 @@ function M.custom(from, to)
   return { from = from, to = to }
 end
 
+---@type LibTimePresets
 return M
