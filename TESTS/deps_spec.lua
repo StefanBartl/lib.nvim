@@ -414,19 +414,19 @@ pkg:
     -- Composition is asserted against explicit manager definitions rather
     -- than whatever this machine happens to have installed, so the spec
     -- behaves the same on a CI container and a dev laptop.
-    local brew = pm.get("brew")
+    local brew = assert(pm.get("brew"), "brew is a known manager id")
     local cmds = pm.commands(brew, { "poppler", "tesseract" })
     eq(#cmds, 1, "pm.commands: multi-capable manager -> one combined command")
     eq(pm.render(cmds[1]), "brew install poppler tesseract", "pm.commands: brew argv")
 
-    local winget = pm.get("winget")
+    local winget = assert(pm.get("winget"), "winget is a known manager id")
     local wcmds = pm.commands(winget, { "A.One", "B.Two" })
     eq(#wcmds, 2, "pm.commands: winget cannot batch -> one command per package")
     eq(pm.render(wcmds[1]), "winget install A.One", "pm.commands: winget first argv")
 
     eq(#pm.commands(brew, {}), 0, "pm.commands: no packages -> no commands")
 
-    local pac = pm.commands(pm.get("pacman"), { "poppler" })[1]
+    local pac = pm.commands(assert(pm.get("pacman")), { "poppler" })[1]
     ok(
       table.concat(pac, " "):match("pacman %-S %-%-needed poppler$") ~= nil,
       "pm.commands: pacman keeps its own confirmation prompt (no --noconfirm)"
@@ -442,7 +442,7 @@ pkg:
     )
     if not pm.is_root() then
       eq(
-        pm.needs_terminal(pm.get("apt")),
+        pm.needs_terminal(assert(pm.get("apt"))),
         true,
         "pm.needs_terminal: a root-requiring manager needs a terminal when not already root"
       )

@@ -176,7 +176,7 @@ return function(H)
     -- is about the *target*, not about which slash the platform prefers.
     local unify_slashes = require("lib.nvim.cross.fs.separators.unify_slashes")
     eq(
-      unify_slashes((vim.uv or vim.loop).fs_readlink(dir .. "/link_sym.txt")),
+      unify_slashes(assert((vim.uv or vim.loop).fs_readlink(dir .. "/link_sym.txt"))),
       unify_slashes(link_src),
       "symlink: created link points at the target"
     )

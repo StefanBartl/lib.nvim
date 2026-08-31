@@ -63,7 +63,9 @@ function M.build(scope, level, msg, ctx, opts, want_src, redact, src_level, limi
   local record = {
     ts = os.time(),
     mono = vim.uv and vim.uv.hrtime() or 0,
-    iso = os.date("%Y-%m-%d %H:%M:%S"),
+    -- `os.date` returns an `osdate` only for a "*t" format; every other
+    -- pattern yields a string, which the annotation cannot express.
+    iso = os.date("%Y-%m-%d %H:%M:%S") --[[@as string]],
     level = level,
     level_name = M.level_name(level),
     scope = scope,

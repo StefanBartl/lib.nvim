@@ -62,6 +62,8 @@ return function(H)
 
   do
     eq(contextmenu.submenu("Label", {}), nil, "submenu: nil for empty items")
+    -- The non-table argument is the case.
+    ---@diagnostic disable-next-line: param-type-mismatch
     eq(contextmenu.submenu("Label", "not-a-table"), nil, "submenu: nil for non-table items")
 
     local items = { { name = "A" } }

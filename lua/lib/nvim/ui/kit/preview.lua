@@ -277,7 +277,9 @@ function M.open()
     if orig_scheme and orig_scheme ~= vim.g.colors_name then
       pcall(vim.cmd.colorscheme, orig_scheme)
     end
-    pcall(vim.cmd, "tabclose")
+    pcall(function()
+      vim.cmd("tabclose")
+    end)
   end
   for _, b in ipairs({ config_buf, preview_buf }) do
     vim.keymap.set("n", "q", close, { buffer = b, nowait = true })

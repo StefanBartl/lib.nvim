@@ -108,7 +108,7 @@ end
 ---Load the cached value for `namespace`, or `nil` if missing, unreadable, or
 ---expired (per `opts.ttl_seconds`).
 ---@param namespace string
----@param opts? Lib.Cache.LoadOpts
+---@param opts? Lib.Cache.LoadOpts|Lib.Cache.Opts
 ---@return any|nil data
 function M.load(namespace, opts)
   opts = opts or {}

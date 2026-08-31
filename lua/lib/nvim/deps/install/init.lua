@@ -34,7 +34,7 @@ local M = {}
 ---`opts.manager` overrides detection (mainly so this is testable without
 ---depending on what the test machine happens to have installed).
 ---@param tools Lib.Deps.Tool[]
----@param opts? { manager?: Lib.Deps.Manager }
+---@param opts? Lib.Deps.ManagerOpts
 ---@return Lib.Deps.Plan
 function M.plan(tools, opts)
   opts = opts or {}

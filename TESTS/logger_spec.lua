@@ -156,6 +156,7 @@ return function(H)
   eq(seen[#seen], "after a bad sink", "the healthy sink still ran")
 
   -- A non-function is ignored rather than blowing up at emit time.
+  ---@diagnostic disable-next-line: param-type-mismatch
   slog.add_sink("not a function")
   eq(pcall(slog.info, "still fine"), true, "add_sink ignores a non-function")
 end

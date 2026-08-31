@@ -24,4 +24,10 @@
 ---@field clear fun(self: Lib.Frecency.Store): nil Forget everything, in memory and on disk.
 ---@field reset fun(self: Lib.Frecency.Store): nil Test-only: drop the in-memory copy so the next call re-reads from disk. Leaves the file alone.
 
+--- `lib.nvim.frecency` module surface. Referenced by the `Lib` facade as
+--- `lib.frecency` long before it was declared anywhere.
+---@class Lib.Frecency
+---@field store fun(opts: Lib.Frecency.Opts): Lib.Frecency.Store Handle for `opts.namespace`, created on first call and reused afterwards.
+---@field _reset_handles fun(): nil Test-only: forget every live handle. Touches nothing on disk.
+
 return {}

@@ -24,7 +24,9 @@ local order = {}
 ---@internal
 local function request_redraw()
   vim.schedule(function()
-    pcall(vim.cmd, "redrawstatus")
+    pcall(function()
+      vim.cmd("redrawstatus")
+    end)
   end)
 end
 

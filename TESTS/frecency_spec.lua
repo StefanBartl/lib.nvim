@@ -120,6 +120,8 @@ return function(H)
   eq(
     fresh:seed({
       ["/from/elsewhere.lua"] = { count = 3, last = os.time() },
+      -- Deliberately malformed: `seed` must reject this entry, not adopt it.
+      ---@diagnostic disable-next-line: assign-type-mismatch
       ["/bad/entry.lua"] = { count = "not a number", last = 0 },
       [""] = { count = 1, last = 0 },
     }),

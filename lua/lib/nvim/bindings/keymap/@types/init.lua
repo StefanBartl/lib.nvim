@@ -90,6 +90,9 @@
 ---@class Lib.Keymap : Lib.Map
 ---@field set fun(modes: string|string[], lhs: string, rhs: string|function, opts: Lib.Map.Opts|nil, desc: string?): nil
 ---@field register fun(plugin: string, spec: Lib.Keymap.Spec, user: table|false|nil, opts?: Lib.Keymap.RegisterOpts): Lib.Keymap.Registered[]
+--- A `@field` cannot carry an overload, so this keeps the union; the real
+--- surface is the overloaded `registered` in `bindings.keymap`, which is
+--- what `require()` resolves to.
 ---@field registered fun(plugin: string|nil): table<string, Lib.Keymap.Registered[]>|Lib.Keymap.Registered[]
 ---@field conflicts fun(): Lib.Keymap.Conflict[]
 ---@field forget fun(plugin: string|nil): integer

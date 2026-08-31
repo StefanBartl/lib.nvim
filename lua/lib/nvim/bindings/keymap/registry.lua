@@ -364,8 +364,12 @@ end
 ---
 ---Returns a **copy**, for that same reason -- mutating it does not reach either
 ---store.
----@param plugin string|nil
----@return table<string, Lib.Keymap.Registered[]>|Lib.Keymap.Registered[]
+---The two shapes are declared as an overload rather than one union return:
+---with a union, `pairs(registered())` sees a `Registered[]` branch it cannot
+---rule out, and every field read off an entry becomes an `undefined-field`.
+---@param plugin string
+---@return Lib.Keymap.Registered[]
+---@overload fun(): table<string, Lib.Keymap.Registered[]>
 function M.registered(plugin)
   local direct = require("lib.nvim.bindings.keymap.records").all()
 
@@ -419,9 +423,7 @@ function M.conflicts()
   -- Over `M.registered()`, not the raw table: a collision between two plain
   -- `set()` keymaps was previously invisible here *in principle*, and those
   -- are the majority.
-  for _, entries in
-    pairs(M.registered() --[[@as table<string, Lib.Keymap.Registered[]> ]])
-  do
+  for _, entries in pairs(M.registered()) do
     for _, e in ipairs(entries) do
       if e.bound and e.lhs then
         local modes = type(e.mode) == "table" and e.mode or { e.mode }

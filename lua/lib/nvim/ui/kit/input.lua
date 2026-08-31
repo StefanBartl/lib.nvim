@@ -128,7 +128,9 @@ function M.open(opts)
     done = true
     local line = api.nvim_buf_get_lines(bufnr, 0, 1, false)[1] or ""
     -- Leave insert mode before closing to avoid a lingering mode state.
-    pcall(vim.cmd, "stopinsert")
+    pcall(function()
+      vim.cmd("stopinsert")
+    end)
     surf:close()
     if submit then
       if opts.expand_env then

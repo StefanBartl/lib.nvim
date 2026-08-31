@@ -39,26 +39,22 @@ local M = {}
 local WHY_TOO_SHORT = 20
 
 ---@internal
----@return Lib.Notify+
+---@return Lib.Notify.Notifier
 local function notify()
   return require("lib.nvim.notify").create("[lib.nvim.deps]")
 end
 
----One tool's live install state, keyed by `tool.bin` in the `ui` table
----`render`/`show` pass around.
----@class Lib.Deps.View.ToolUiState
----@field lines string[] streamed stdout/stderr lines, in arrival order
----@field running boolean
----@field done boolean
----@field exit_code integer|nil
----@field collapsed boolean
+-- `Lib.Deps.View.ToolUiState` -- one tool's live install state, keyed by
+-- `tool.bin` in the `ui` table `render`/`show` pass around -- is declared
+-- once, in `lib.nvim.deps.@types`. It used to be declared here as well,
+-- which made every field a `duplicate-doc-field` in both files.
 
 ---Render the report for one plugin's parsed spec, optionally overlaying
 ---live install state from `ui` (keyed by `tool.bin`; omit or pass `{}` for
 ---the plain, non-interactive report — this is what `lines()` does).
 ---@param plugin_name string
 ---@param result Lib.Deps.ParseResult
----@param opts? { manager?: Lib.Deps.Manager }
+---@param opts? Lib.Deps.ManagerOpts
 ---@param ui? table<string, Lib.Deps.View.ToolUiState>
 ---@return { lines: string[], line_tools: (Lib.Deps.Tool|nil)[] } line_tools is one entry per line, the tool that line belongs to (or nil)
 function M.render(plugin_name, result, opts, ui)
@@ -189,7 +185,7 @@ end
 ---an empty `ui` table.
 ---@param plugin_name string
 ---@param result Lib.Deps.ParseResult
----@param opts? { manager?: Lib.Deps.Manager }
+---@param opts? Lib.Deps.ManagerOpts
 ---@return string[] lines
 function M.lines(plugin_name, result, opts)
   return M.render(plugin_name, result, opts, {}).lines
@@ -268,7 +264,7 @@ end
 ---already running / nothing this manager can do), hand off to a terminal
 ---when elevation is needed, or start an inline stream otherwise.
 ---@param tool Lib.Deps.Tool
----@param opts { manager?: Lib.Deps.Manager }|nil
+---@param opts? Lib.Deps.ManagerOpts
 ---@param ui table<string, Lib.Deps.View.ToolUiState>
 ---@param rerender fun()
 ---@param is_valid fun(): boolean
@@ -321,7 +317,7 @@ end
 ---`nice_quit`, or `open_named_scratch`'s own split).
 ---@param plugin_name string
 ---@param result Lib.Deps.ParseResult
----@param opts? { manager?: Lib.Deps.Manager }
+---@param opts? Lib.Deps.ManagerOpts
 ---@return integer bufnr
 ---@return integer winid
 function M.show(plugin_name, result, opts)

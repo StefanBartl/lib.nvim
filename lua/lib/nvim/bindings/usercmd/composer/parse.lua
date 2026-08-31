@@ -20,8 +20,8 @@ local M = {}
 --- failed — a `require` error, or the loaded module having the wrong shape —
 --- so callers that want to report *why* (dispatch's error message, check.lua's
 --- pre-flight validation) don't have to redo the require themselves.
----@param run fun(ctx)|string
----@return fun(ctx)|nil fn
+---@param run (fun(ctx): any)|string
+---@return (fun(ctx): any)|nil fn
 ---@return string|nil err
 function M.resolve_run(run)
   if type(run) == "function" then
@@ -126,7 +126,10 @@ function M.dispatch(cmd_name, spec, root, opts, notify)
 
   local node, consumed = tree.walk(root, fargs)
 
-  if not node.route then
+  -- Bound before the guard, not after it: the narrowing has to land on a
+  -- local for the rest of this function to see a plain `Route`.
+  local route = node.route
+  if not route then
     -- Either the first unmatched token is a bad subcommand, or a valid group
     -- prefix was given without a leaf. Point at the offending token.
     local bad = fargs[consumed + 1]
@@ -143,21 +146,29 @@ function M.dispatch(cmd_name, spec, root, opts, notify)
     return
   end
 
-  local route = node.route
   local rest = {}
   for i = consumed + 1, #fargs do
     rest[#rest + 1] = fargs[i]
   end
 
+  -- `err` and the parsed tokens are mutually exclusive, but only the value
+  -- can be narrowed -- checking both keeps the tail free of nil handling.
   local after_flags, flag_values, ferr = flags.split(route, rest)
-  if ferr then
-    notify.error(("%s\n  %s"):format(ferr, format.invocation(cmd_name, route)))
+  if ferr or not after_flags then
+    notify.error(
+      ("%s\n  %s"):format(ferr or "could not parse flags", format.invocation(cmd_name, route))
+    )
     return
   end
 
   local positionals, kv_values, kverr = kv.split(route, after_flags)
-  if kverr then
-    notify.error(("%s\n  %s"):format(kverr, format.invocation(cmd_name, route)))
+  if kverr or not positionals then
+    notify.error(
+      ("%s\n  %s"):format(
+        kverr or "could not parse key=value pairs",
+        format.invocation(cmd_name, route)
+      )
+    )
     return
   end
 

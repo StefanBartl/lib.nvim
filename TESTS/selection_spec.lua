@@ -155,6 +155,7 @@ return function(H)
     local called = false
     local nret, napplicable = selection.keep_chars(function()
       called = true
+      return nil
     end)
     eq(napplicable, false, "keep_chars: not applicable outside Visual mode")
     eq(called, false, "keep_chars: fn not called when not applicable")
@@ -283,6 +284,7 @@ return function(H)
     local called = false
     local nret, napplicable = selection.keep_chars_multiline(function()
       called = true
+      return nil
     end)
     eq(napplicable, false, "keep_chars_multiline: not applicable for a same-line selection")
     eq(called, false, "keep_chars_multiline: fn not called when not applicable")

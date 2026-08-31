@@ -21,14 +21,16 @@ return function(H)
   ---canned response.
   ---@param response string
   ---@return integer port
-  ---@return uv_tcp_t server
+  ---@return uv.uv_tcp_t server
   local function start_server(response)
-    local server = uv.new_tcp()
+    -- `assert`, not a check: a spec that cannot open a socket has nothing
+    -- left to test, and libuv answers nil rather than raising.
+    local server = assert(uv.new_tcp())
     assert(server:bind("127.0.0.1", 0))
     local port = server:getsockname().port
     server:listen(128, function(listen_err)
       assert(not listen_err, listen_err)
-      local client = uv.new_tcp()
+      local client = assert(uv.new_tcp())
       server:accept(client)
       -- Respond as soon as anything arrives — a canned response does not
       -- need the request's own content, only proof the client is ready to
@@ -54,16 +56,16 @@ return function(H)
   ---body) rather than just the response.
   ---@param response string
   ---@return integer port
-  ---@return uv_tcp_t server
+  ---@return uv.uv_tcp_t server
   ---@return { data: string|nil } captured `captured.data` is set once the request arrives.
   local function start_capturing_server(response)
-    local server = uv.new_tcp()
+    local server = assert(uv.new_tcp())
     assert(server:bind("127.0.0.1", 0))
     local port = server:getsockname().port
     local captured = { data = nil }
     server:listen(128, function(listen_err)
       assert(not listen_err, listen_err)
-      local client = uv.new_tcp()
+      local client = assert(uv.new_tcp())
       server:accept(client)
       client:read_start(function(_, chunk)
         captured.data = (captured.data or "") .. (chunk or "")

@@ -28,7 +28,9 @@ function M.set(group, opts, ns)
     ns_id = ns
   end
 
-  vim.api.nvim_set_hl(ns_id, group, opts)
+  -- `Lib.Highlight.Opts` is the documented subset of
+  -- `vim.api.keyset.highlight`: the same table, a different name.
+  vim.api.nvim_set_hl(ns_id, group, opts --[[@as vim.api.keyset.highlight]])
 end
 
 ---@type Lib.UI.HL

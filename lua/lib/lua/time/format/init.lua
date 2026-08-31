@@ -32,7 +32,8 @@ function M.format_timestamp(ts, fmt, opts)
     pattern = "!" .. pattern
   end
 
-  return os.date(pattern, ts)
+  -- Only a "*t" pattern makes `os.date` return a table; these never do.
+  return os.date(pattern, ts) --[[@as string]]
 end
 
 ---@type LibTimeFormat

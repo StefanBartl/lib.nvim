@@ -53,8 +53,13 @@ end
 ---@param mode Lib.UI.Statusline.Mode?
 ---@return "statusline"|"float"
 function M.resolve_mode(mode)
-  if mode == "statusline" or mode == "float" then
-    return mode
+  -- Returned as literals: comparing an optional against two strings does
+  -- not turn the variable itself into the narrower return type.
+  if mode == "statusline" then
+    return "statusline"
+  end
+  if mode == "float" then
+    return "float"
   end
   return M.is_global() and "float" or "statusline"
 end

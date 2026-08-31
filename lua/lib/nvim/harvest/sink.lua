@@ -126,7 +126,9 @@ function M.select(items, opts, on_choose)
     prompt = opts.prompt or "Select",
     format_item = format,
   }, function(choice, idx)
-    if choice then
+    -- Both or neither: `vim.ui.select` reports the index alongside the item
+    -- and nothing at all on cancel.
+    if choice and idx then
       on_choose(choice, idx)
     end
   end)

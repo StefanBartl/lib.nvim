@@ -8,7 +8,11 @@
 ---@class Lib.Cache.Opts
 ---@field dir? string Override the cache directory (default `stdpath("cache") .. "/lib.nvim/cache"`)
 
----@class Lib.Cache.SaveOpts : Lib.Cache.Opts
+--- `save`/`clear`/`stats` accept nothing beyond `Lib.Cache.Opts`. An alias
+--- rather than an empty subclass, so a caller holding a plain
+--- `Lib.Cache.Opts` can hand it to `save` -- as a sibling class it could
+--- not, and `deps.first_run` passes one option table to both calls.
+---@alias Lib.Cache.SaveOpts Lib.Cache.Opts
 
 ---@class Lib.Cache.LoadOpts : Lib.Cache.Opts
 ---@field ttl_seconds? integer Treat entries older than this as expired (returns `nil`, does not delete)
@@ -22,7 +26,7 @@
 --- `lib.nvim.cache.disk` module surface: persistent JSON disk cache.
 ---@class Lib.Cache.Disk
 ---@field save fun(namespace: string, data: any, opts?: Lib.Cache.SaveOpts): boolean, string?
----@field load fun(namespace: string, opts?: Lib.Cache.LoadOpts): any
+---@field load fun(namespace: string, opts?: Lib.Cache.LoadOpts|Lib.Cache.Opts): any
 ---@field clear fun(namespace: string, opts?: Lib.Cache.Opts): boolean
 ---@field stats fun(namespace: string, opts?: Lib.Cache.Opts): Lib.Cache.Stats
 

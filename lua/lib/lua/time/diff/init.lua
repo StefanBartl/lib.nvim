@@ -267,6 +267,10 @@ local function create_timer()
     end
 
     local stddev_ns = stats_module.calculate_stddev(stats)
+    -- No spread, no coefficient of variation to divide by it.
+    if not stddev_ns then
+      return nil
+    end
     return stats_module.calculate_cv(stats, stddev_ns)
   end
 

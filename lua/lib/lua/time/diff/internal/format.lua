@@ -134,18 +134,20 @@ local function format_stats_section(stats, unit, has_stddev)
 
   if has_stddev then
     local stddev = stats_module.calculate_stddev(stats)
-    local cv = stats_module.calculate_cv(stats, stddev)
-
+    -- The CV is derived from the spread, so it only exists where the
+    -- spread does -- computing it first meant handing `nil` to a
+    -- parameter that takes a number.
     if stddev then
       local stddev_conv = convert.convert_time(stddev, unit)
       table.insert(
         lines,
         string.format("│ Std Dev:   %11.3f%2s                │", stddev_conv, suffix)
       )
-    end
 
-    if cv then
-      table.insert(lines, string.format("│ CV:        %11.2f%%                   │", cv))
+      local cv = stats_module.calculate_cv(stats, stddev)
+      if cv then
+        table.insert(lines, string.format("│ CV:        %11.2f%%                   │", cv))
+      end
     end
   end
 

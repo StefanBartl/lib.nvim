@@ -328,6 +328,9 @@ return function(H)
   do
     local p, f, err = flags.split(no_flags_route, { "--looks-like-a-flag" })
     eq(err, nil, "flags.split: no declared flags -> no error, ever")
+    -- `split` returns the parsed halves or an error, never both and never
+    -- neither; asserting that here is what lets the rest read them plainly.
+    assert(p and f)
     eq(#p, 1, "flags.split: no declared flags -> tokens pass through untouched")
     eq(p[1], "--looks-like-a-flag", "flags.split: '--' token treated as an ordinary positional")
     eq(next(f), nil, "flags.split: no declared flags -> empty flags table")
@@ -349,6 +352,7 @@ return function(H)
       flag_route,
       { "foo", "bar", "--dry", "--type=lua", "--type", "go", "--engine=fzf" }
     )
+    assert(p and f)
     eq(
       table.concat(p, ","),
       "foo,bar",
@@ -366,6 +370,7 @@ return function(H)
   do
     -- flags may appear anywhere, including before positionals
     local p, f = flags.split(flag_route, { "--dry", "foo", "bar" })
+    assert(p and f)
     eq(
       table.concat(p, ","),
       "foo,bar",
@@ -377,6 +382,7 @@ return function(H)
   do
     -- literal "--" stops flag parsing; everything after is positional even if flag-shaped
     local p, f = flags.split(flag_route, { "foo", "--", "--dry", "bar" })
+    assert(p and f)
     eq(
       table.concat(p, ","),
       "foo,--dry,bar",
@@ -495,6 +501,7 @@ return function(H)
 
     local p, f, err = flags.split(opt_route, { "foo", "--changed", "cwd" })
     eq(err, nil, "optional_value: a bare flag is not an error")
+    assert(p and f)
     eq(f.changed, true, "optional_value: bare form binds true, not a string")
     eq(
       table.concat(p, ","),
@@ -503,6 +510,7 @@ return function(H)
     )
 
     local p2, f2 = flags.split(opt_route, { "foo", "--changed=staged,modified", "cwd" })
+    assert(p2 and f2)
     eq(f2.changed, "staged,modified", "optional_value: inline =value binds the value")
     eq(table.concat(p2, ","), "foo,cwd", "optional_value: inline form leaves positionals alone")
 
@@ -512,6 +520,7 @@ return function(H)
     plain_route.flags[1].optional_value = nil
     local p3, f3, err3 = flags.split(plain_route, { "foo", "--changed", "cwd" })
     eq(err3, nil, "control: a plain value flag accepts a space-separated value")
+    assert(p3 and f3)
     eq(f3.changed, "cwd", "control: ... by consuming the next token")
     eq(table.concat(p3, ","), "foo", "control: ... which is why the positional is gone")
 
@@ -873,7 +882,9 @@ return function(H)
     composer.verb("ComposerSpecRouteCount", {
       routes = { { path = { "go" }, count = 3, run = function() end } },
     })
-    local ok_call = pcall(vim.cmd, "7ComposerSpecRouteCount go")
+    local ok_call = pcall(function()
+      vim.cmd("7ComposerSpecRouteCount go")
+    end)
     ok(
       ok_call,
       "route.count=3 (no spec.count) still propagates to the real user command (wants_count)"

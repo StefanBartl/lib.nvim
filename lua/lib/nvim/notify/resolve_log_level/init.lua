@@ -3,8 +3,8 @@
 --- Handles numeric levels (0-5), string level names, and vim.log.levels table values.
 require("lib.nvim.notify.@types")
 
----@param level? LogLevel User-provided log level (number or string level name)
----@param default? LogLevelNumber Default level to use if resolution fails (defaults to vim.log.levels.WARN)
+---@param level? Lib.Notify.LogLevel User-provided log level (number or string level name)
+---@param default? Lib.Notify.LogLevelNumber Default level to use if resolution fails (defaults to vim.log.levels.WARN)
 ---@return integer resolved_level A valid vim.log.levels integer value
 return function(level, default)
   local default_level = default or vim.log.levels.WARN

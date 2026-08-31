@@ -18,7 +18,11 @@ local M = {}
 ---@param bufnr? integer Buffer number (0 or nil = current buffer)
 ---@return boolean
 function M.is_normal_file_buffer(bufnr)
-  bufnr = (bufnr == nil or bufnr == 0) and api.nvim_get_current_buf() or bufnr
+  -- An `if`, not an `and`/`or` chain: the chain leaves the result optional
+  -- for the type system even though it never is.
+  if bufnr == nil or bufnr == 0 then
+    bufnr = api.nvim_get_current_buf()
+  end
 
   if not api.nvim_buf_is_valid(bufnr) then
     return false

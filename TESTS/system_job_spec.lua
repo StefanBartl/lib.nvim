@@ -15,9 +15,17 @@ return function(H)
   ---@return string[]
   local function collect(script, key)
     local lines = {}
+    ---@type Lib.System.Job.Opts
     local opts = { command = "sh", args = { "-c", script } }
-    opts[key] = function(_, line)
+    -- Named rather than indexed by `key`: a computed key makes the target
+    -- every field of the class at once.
+    local function record(_, line)
       lines[#lines + 1] = line
+    end
+    if key == "on_stdout" then
+      opts.on_stdout = record
+    else
+      opts.on_stderr = record
     end
     local handle = job.start(opts)
     handle:wait()

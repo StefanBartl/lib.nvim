@@ -56,6 +56,8 @@ return function(H)
     local file_ok = chdir(root)
     H.ok(file_ok, "chdir back to the tree root")
 
+    -- The invalid scope is the point of the case.
+    ---@diagnostic disable-next-line: assign-type-mismatch
     local scope_ok, scope_err = chdir(root, { scope = "nope" })
     H.eq(scope_ok, false, "unknown scope is rejected")
     H.ok(scope_err and scope_err:match("unknown scope"), "unknown scope is reported")

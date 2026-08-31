@@ -216,7 +216,7 @@ end
 ---The callback is wrapped in `pcall` unless `opts.raw` is true; see the note
 ---at that wrapper for the two cases that need it off.
 ---@param event string|string[]
----@param callback fun(args:Lib.Autocmd.Args)
+---@param callback fun(args:Lib.Autocmd.Args): boolean|nil  # a `true` return deletes the autocmd (native behaviour; needs `opts.raw`)
 ---@param opts LibAutocmdOpts|nil
 ---@return integer autocmd_id
 function M.create(event, callback, opts)

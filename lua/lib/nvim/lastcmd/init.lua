@@ -459,7 +459,9 @@ function M.repeat_last()
   -- Deliberately does not refresh `seen`: the native change stays the most
   -- recent real command until a tracked mapping actually runs again, so a
   -- second repeat repeats it too.
-  local ok = pcall(vim.cmd, "normal! .")
+  local ok = pcall(function()
+    vim.cmd("normal! .")
+  end)
   return ok
 end
 

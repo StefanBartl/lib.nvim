@@ -67,6 +67,17 @@
 ---@field path string # Log file path.
 ---@field active boolean # Whether tracing is active after the call.
 
+--- What `proc_trace` puts aside while it is active: the four functions it
+--- replaces, plus the open log handle. Declared because the table used to
+--- be a `table<string, function>`, which made the handle an
+--- `assign-type-mismatch` and every method call on it an undefined field.
+---@class Lib.System.ProcTrace.Saved
+---@field fn_system function
+---@field fn_systemlist function
+---@field fn_jobstart function
+---@field vim_system? function
+---@field __fd? file*
+
 --- `lib.nvim.system.proc_trace` module surface (blocking-call instrumentation).
 ---@class Lib.System.ProcTrace
 ---@field start fun(opts?: Lib.System.ProcTrace.StartOptions): Lib.System.ProcTrace.Result # Wrap vim.fn.system/systemlist, vim.system, vim.fn.jobstart; idempotent.

@@ -91,6 +91,28 @@ return function(argv, opts, on_line, on_exit)
 
   local stdout_pipe = loop.new_pipe(false)
   local stderr_pipe = loop.new_pipe(false)
+  -- libuv returns nil instead of raising when it cannot allocate a handle.
+  -- Same answer as a failed spawn: no kill function, and `on_exit` told why.
+  if not stdout_pipe or not stderr_pipe then
+    if stdout_pipe then
+      pcall(stdout_pipe.close, stdout_pipe)
+    end
+    if stderr_pipe then
+      pcall(stderr_pipe.close, stderr_pipe)
+    end
+    if on_exit then
+      vim.schedule(function()
+        on_exit({
+          ok = false,
+          code = -1,
+          signal = 0,
+          timed_out = false,
+          spawn_error = "failed to create a pipe for: " .. tostring(argv[1]),
+        })
+      end)
+    end
+    return nil
+  end
   local handle
   local timer
   local done = false
@@ -201,12 +223,17 @@ return function(argv, opts, on_line, on_exit)
 
   if opts.timeout_ms then
     timer = loop.new_timer()
-    timer:start(opts.timeout_ms, 0, function()
-      if not done and handle then
-        pcall(handle.kill, handle, "sigkill")
-        finish(-1, 0, true)
-      end
-    end)
+    -- No timer means no timeout: the child is already running, and killing a
+    -- working process because libuv ran out of handles would be the worse
+    -- outcome of the two.
+    if timer then
+      timer:start(opts.timeout_ms, 0, function()
+        if not done and handle then
+          pcall(handle.kill, handle, "sigkill")
+          finish(-1, 0, true)
+        end
+      end)
+    end
   end
 
   return function()

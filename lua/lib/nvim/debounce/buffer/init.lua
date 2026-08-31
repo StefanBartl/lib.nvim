@@ -42,7 +42,7 @@ local function new(fn, opts)
   local adaptive = opts.adaptive or false
   local cleanup_events = opts.cleanup_events or DEFAULT_CLEANUP_EVENTS
 
-  ---@type table<integer, userdata>
+  ---@type table<integer, uv.uv_timer_t>
   local timers = {}
   ---@type table<integer, boolean>
   local watched = {}
@@ -107,7 +107,16 @@ local function new(fn, opts)
 
     local timer = timers[bufnr]
     if not timer then
-      timer = uv.new_timer()
+      -- libuv returns nil rather than raising when it cannot allocate a
+      -- handle. Losing the debounce is bad; losing the call is worse.
+      local fresh = uv.new_timer()
+      if not fresh then
+        vim.schedule(function()
+          fn(bufnr, unpack(args, 1, n))
+        end)
+        return
+      end
+      timer = fresh
       timers[bufnr] = timer
     else
       pcall(timer.stop, timer)

@@ -310,6 +310,11 @@ function M.open(opts)
       debounce_timer = nil
     end
     debounce_timer = vim.uv.new_timer()
+    -- libuv returns nil rather than raising when it cannot allocate a
+    -- handle; without a timer the query simply is not re-run.
+    if not debounce_timer then
+      return
+    end
     debounce_timer:start(
       80,
       0,
@@ -404,28 +409,38 @@ function M.open(opts)
     current_state = "search"
     unmount()
     local geo = geo_search()
-    surfaces.prompt = surface.open(vim.tbl_extend("force", geo.prompt, {
+    -- Opened into locals and published only once all of them are there:
+    -- `surfaces` holds open surfaces, and a half-filled mount is what the
+    -- check below rejects.
+    local prompt = surface.open(vim.tbl_extend("force", geo.prompt, {
       theme = theme,
       enter = true,
       modifiable = true,
       filetype = "lib-kit-compare-prompt",
       title = title,
     }))
-    surfaces.results = surface.open(vim.tbl_extend("force", geo.results, {
+    local results = surface.open(vim.tbl_extend("force", geo.results, {
       theme = theme,
       filetype = "lib-kit-compare-results",
       wo = { cursorline = true },
     }))
-    surfaces.preview = surface.open(vim.tbl_extend("force", geo.preview, {
+    local preview = surface.open(vim.tbl_extend("force", geo.preview, {
       theme = theme,
       filetype = "lib-kit-compare-preview",
       title = "preview",
     }))
-    if not (surfaces.prompt and surfaces.results and surfaces.preview) then
+    if not (prompt and results and preview) then
+      -- `pairs` over a literal skips the nil slots, so this closes exactly
+      -- the ones that did open -- they are not in `surfaces` for `unmount`
+      -- to find.
+      for _, s in pairs({ prompt = prompt, results = results, preview = preview }) do
+        s:close()
+      end
       notify.error("failed to open the compare picker")
       teardown_and_close(nil, nil)
       return
     end
+    surfaces.prompt, surfaces.results, surfaces.preview = prompt, results, preview
 
     wire_group_close(function()
       teardown_and_close(nil, nil)
@@ -440,33 +455,38 @@ function M.open(opts)
     local frozen = marked_item
     unmount()
     local geo = geo_marked()
-    surfaces.prompt = surface.open(vim.tbl_extend("force", geo.prompt, {
+    local prompt = surface.open(vim.tbl_extend("force", geo.prompt, {
       theme = theme,
       enter = true,
       modifiable = true,
       filetype = "lib-kit-compare-prompt",
       title = title,
     }))
-    surfaces.results = surface.open(vim.tbl_extend("force", geo.results, {
+    local results = surface.open(vim.tbl_extend("force", geo.results, {
       theme = theme,
       filetype = "lib-kit-compare-results",
       wo = { cursorline = true },
     }))
-    surfaces.marked = surface.open(vim.tbl_extend("force", geo.marked, {
+    local marked = surface.open(vim.tbl_extend("force", geo.marked, {
       theme = theme,
       filetype = "lib-kit-compare-marked",
       title = "marked",
     }))
-    surfaces.preview = surface.open(vim.tbl_extend("force", geo.preview, {
+    local preview = surface.open(vim.tbl_extend("force", geo.preview, {
       theme = theme,
       filetype = "lib-kit-compare-preview",
       title = "preview",
     }))
-    if not (surfaces.prompt and surfaces.results and surfaces.marked and surfaces.preview) then
+    if not (prompt and results and marked and preview) then
+      for _, s in pairs({ p = prompt, r = results, m = marked, v = preview }) do
+        s:close()
+      end
       notify.error("failed to open the compare picker")
       teardown_and_close(frozen, nil)
       return
     end
+    surfaces.prompt, surfaces.results = prompt, results
+    surfaces.marked, surfaces.preview = marked, preview
 
     wire_group_close(function()
       teardown_and_close(frozen, nil)
@@ -487,22 +507,26 @@ function M.open(opts)
     confirmed_b = b
     unmount()
     local geo = geo_compare()
-    surfaces.a = surface.open(vim.tbl_extend("force", geo.a, {
+    local sa = surface.open(vim.tbl_extend("force", geo.a, {
       theme = theme,
       enter = true,
       filetype = "lib-kit-compare-a",
       title = "A",
     }))
-    surfaces.b = surface.open(vim.tbl_extend("force", geo.b, {
+    local sb = surface.open(vim.tbl_extend("force", geo.b, {
       theme = theme,
       filetype = "lib-kit-compare-b",
       title = "B",
     }))
-    if not (surfaces.a and surfaces.b) then
+    if not (sa and sb) then
+      for _, s in pairs({ a = sa, b = sb }) do
+        s:close()
+      end
       notify.error("failed to open the compare view")
       teardown_and_close(a, b)
       return
     end
+    surfaces.a, surfaces.b = sa, sb
 
     local function close_compare()
       teardown_and_close(a, b)

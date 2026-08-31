@@ -26,7 +26,7 @@ local M = {}
 ---@internal
 ---Resolve the argv list for the current platform.
 ---@param url string
----@param cfg AutoCmds.General.MD.GotoFile.Cfg
+---@param cfg Lib.Fs.Open.Url.SystemOpener.Cfg
 ---@return string[]|nil
 local function resolve_opener(url, cfg)
   if vim.fn.has("macunix") == 1 then
@@ -63,7 +63,7 @@ end
 --- and skips `vim.ui.open` (whose handle would have to be waited on
 --- synchronously).
 ---@param url string
----@param cfg? AutoCmds.General.MD.GotoFile.Cfg
+---@param cfg? Lib.Fs.Open.Url.SystemOpener.Cfg
 ---@return boolean opened
 function M.open(url, cfg)
   cfg = cfg or {}
@@ -124,9 +124,9 @@ end
 
 --- Deprecated misspelling of `is_like`, kept as an alias so existing call
 --- sites keep working. Prefer `M.is_like`.
+--- Signature and hover come from `M.is_like` itself -- `@param`/`@return`
+--- on a plain assignment have no function to bind to.
 ---@deprecated use `M.is_like` instead
----@param s string
----@return boolean
 M.is_ike = M.is_like
 
 return M

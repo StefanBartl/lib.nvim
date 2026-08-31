@@ -63,6 +63,12 @@ composer.verb("Diff", {
       },
       run = function(ctx)
         -- ctx.kv.target, ctx.kv.view (default applied when the key is omitted)
+        --
+        -- diff.nvim's own module. Inside *this* workspace the bare name
+        -- resolves to `lib.lua.diff` instead, which is why LuaLS reads the
+        -- line as a second name for a file it already knows; for a reader
+        -- who has diff.nvim installed it is simply the right call.
+        ---@diagnostic disable-next-line: different-requires, undefined-field
         require("diff").open(ctx.kv.target, ctx.kv.view)
       end,
     },

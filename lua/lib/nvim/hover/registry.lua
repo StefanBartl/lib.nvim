@@ -42,7 +42,7 @@
 local M = {}
 
 ---@class Lib.Hover.Contribution
----@field sources? fun(bufnr: integer, row: integer, col: integer): string|nil, table|nil # Return the raw target under the cursor, or nil. A second return value is merged into the source record (e.g. `col`/`col_end` for highlighting).
+---@field sources? (fun(bufnr: integer, row: integer, col: integer): string|nil, table|nil)[] # Each returns the raw target under the cursor, or nil. A second return value is merged into the source record (e.g. `col`/`col_end` for highlighting).
 ---@field previews? table<string, fun(target: Lib.Hover.Target, opts: Lib.Hover.PreviewOpts, bufnr: integer): Lib.Hover.Content|nil>
 
 ---@type { name: string, fn: function }[]

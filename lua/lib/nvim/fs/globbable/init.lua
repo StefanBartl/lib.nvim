@@ -25,7 +25,9 @@
 
 local uv = vim.uv or vim.loop
 
----@param root string  directory path the caller is about to glob under
+--- `root` is deliberately optional: the guard below answers `""` for
+--- anything that is not a non-empty string.
+---@param root string|nil  directory path the caller is about to glob under
 ---@return string  the same directory, spelled so glob can read it
 return function(root)
   if type(root) ~= "string" or root == "" then

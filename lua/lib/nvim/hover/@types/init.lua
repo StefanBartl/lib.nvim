@@ -57,6 +57,14 @@
 ---@field reason? string # Why it is `missing`.
 
 --- What a source reported under the cursor.
+--- Pixel dimensions of an image. Structurally identical to images.nvim's
+--- `Images.Scale.Dims`, declared here because images.nvim is a soft
+--- dependency (`pcall(require, ...)`) and its types are not on this
+--- workspace's library path.
+---@class Lib.Hover.Preview.Dims
+---@field width integer
+---@field height integer
+
 ---@class Lib.Hover.Source
 ---@field target string # Raw target string, handed to `classify`.
 ---@field lnum integer # 1-based line it was found on.

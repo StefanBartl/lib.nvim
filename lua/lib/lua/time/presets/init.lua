@@ -18,7 +18,9 @@ local SECONDS_PER_DAY = 86400
 ---@param ts integer
 ---@return osdate
 local function to_date_table(ts)
-  return os.date("*t", ts)
+  -- "*t" is exactly the pattern that makes `os.date` return a table; the
+  -- annotation covers both shapes at once and cannot narrow on the literal.
+  return os.date("*t", ts) --[[@as osdate]]
 end
 
 ---Start-of-day timestamp for the calendar day containing `ts`.

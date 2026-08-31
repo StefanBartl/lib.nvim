@@ -36,6 +36,18 @@ local function contains(list, v)
   return false
 end
 
+---@internal
+--- `getbufinfo()` does not report a filetype -- it never has, for any of
+--- the shapes it returns. Reading `b.filetype` off one of its entries was
+--- therefore always nil, which silently turned every filetype exclusion
+--- below into a no-op. Read the option off the buffer instead.
+---@param bufnr integer
+---@return string
+local function buf_filetype(bufnr)
+  local ok, ft = pcall(vim.api.nvim_get_option_value, "filetype", { buf = bufnr })
+  return ok and ft or ""
+end
+
 -- Get info for all listed buffers and return their count.
 ---@return integer
 function M.count_listed_buffers()
@@ -56,7 +68,7 @@ function M.count_real_listed_buffers(exclude_filetypes)
   local listed = vim.fn.getbufinfo({ buflisted = 1 })
   local cnt = 0
   for _, b in ipairs(listed) do
-    local ft = b.filetype or ""
+    local ft = buf_filetype(b.bufnr)
     local name = b.name or ""
     if not contains(exclude_filetypes, ft) and name ~= "" then
       cnt = cnt + 1
@@ -137,7 +149,7 @@ function M.list_listed_buffers_info()
     table.insert(out, {
       id = b.bufnr,
       name = b.name or "",
-      filetype = b.filetype or "",
+      filetype = buf_filetype(b.bufnr),
       buflisted = true,
       modified = b.changed == 1,
       lines = b.linecount or 0,

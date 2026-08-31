@@ -250,4 +250,5 @@ function M._reset_handles()
   handles = {}
 end
 
+---@type Lib.Frecency
 return M

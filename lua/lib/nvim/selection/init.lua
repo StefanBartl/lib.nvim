@@ -130,7 +130,9 @@ end
 ---@return T|nil ret, boolean applicable
 function M.keep_chars(fn)
   local row, scol, ecol = M.chars()
-  if not row then
+  -- All three or none -- but the type system only learns that from three
+  -- checks, and `fn`/`reselect_chars` take plain integers.
+  if not row or not scol or not ecol then
     return nil, false
   end
   local ret = fn(row, scol, ecol)
@@ -202,7 +204,8 @@ end
 ---@return T|nil ret, boolean applicable
 function M.keep_chars_multiline(fn)
   local srow, scol, erow, ecol = M.chars_multiline()
-  if not srow then
+  -- Same all-or-nothing contract as in `keep_chars`.
+  if not srow or not scol or not erow or not ecol then
     return nil, false
   end
   local ret = fn(srow, scol, erow, ecol)

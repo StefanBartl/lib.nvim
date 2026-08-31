@@ -69,7 +69,11 @@ local function sanitize(value, redact, depth, seen, limits)
   local is_array
   if vim.islist then
     is_array = vim.islist(value)
+  -- The deprecation is why this branch is guarded: it only runs on builds
+  -- too old to have `vim.islist`.
+  ---@diagnostic disable-next-line: deprecated
   elseif vim.tbl_islist then
+    ---@diagnostic disable-next-line: deprecated
     is_array = vim.tbl_islist(value)
   else
     is_array = false

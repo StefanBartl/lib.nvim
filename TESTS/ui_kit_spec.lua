@@ -524,7 +524,9 @@ return function(H)
     ok(not cancelled, "kit.sync: cancelled stays false on timeout")
     ok(timed_out, "kit.sync: timed_out=true when the timeout elapses with no resolution")
     -- The float never got submitted/cancelled — close it so it doesn't leak into later specs.
-    pcall(vim.cmd, "stopinsert")
+    pcall(function()
+      vim.cmd("stopinsert")
+    end)
     for _, w in ipairs(vim.api.nvim_list_wins()) do
       if vim.api.nvim_win_get_config(w).relative ~= "" then
         pcall(vim.api.nvim_win_close, w, true)
@@ -1081,7 +1083,9 @@ return function(H)
   P.render(cfg_buf, prev_buf)
   local rendered3 = table.concat(vim.api.nvim_buf_get_lines(prev_buf, 0, -1, false), "\n")
   ok(rendered3:find("config error", 1, true), "a broken config shows an error, no throw")
-  pcall(vim.cmd, "tabclose")
+  pcall(function()
+    vim.cmd("tabclose")
+  end)
 
   -- popup dispatch: unknown types return nil without throwing
   eq(kit.popup({ type = "does-not-exist" }), nil, "unknown type returns nil (no throw)")

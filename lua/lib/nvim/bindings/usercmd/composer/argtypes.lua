@@ -55,7 +55,7 @@ end
 
 --- Validate a raw token against an arg spec (honoring `enum` first).
 ---@param raw string
----@param spec Lib.UserCmd.Composer.ArgSpec
+---@param spec Lib.UserCmd.Composer.TypedSpec
 ---@return boolean ok, any value, string|nil err
 function M.validate(raw, spec)
   if spec.enum then
@@ -79,7 +79,7 @@ end
 --- when the caller has no command line to give: flag/kv *value* completion, and
 --- direct calls from tests.
 ---@param arg_lead string
----@param spec Lib.UserCmd.Composer.ArgSpec
+---@param spec Lib.UserCmd.Composer.TypedSpec
 ---@param cmd_line? string
 ---@return string[]
 function M.complete(arg_lead, spec, cmd_line)

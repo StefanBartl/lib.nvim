@@ -53,8 +53,10 @@ function M.split(route, tokens)
   local positionals, values = {}, {}
   for _, tok in ipairs(tokens) do
     local key, raw = parse_kv_token(tok)
-    local spec = key and find_spec(route, key)
-    if spec then
+    local spec = key and find_spec(route, key) or nil
+    -- `raw` is tested alongside `spec` only to narrow it: parse_kv_token
+    -- returns both halves of the pair or neither.
+    if spec and key and raw then
       local ok, value, verr = argtypes.validate(raw, spec)
       if not ok then
         return nil, nil, ("%s=…: %s"):format(key, verr)
@@ -107,7 +109,7 @@ function M.candidates(route, arg_lead)
   end
 
   local key, value_lead = parse_kv_token(arg_lead)
-  if key then
+  if key and value_lead then
     local spec = find_spec(route, key)
     if not spec then
       return {}

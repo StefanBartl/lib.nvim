@@ -1,7 +1,11 @@
 ---@meta
 ---@module 'lib.nvim.fs.open.url.system_opener.@types'
 
----@class AutoCmds.General.MD.GotoFile.Cfg
+--- Named after this module, not after the nvim-config autocmd it was first
+--- written for: the config declares its own `AutoCmds.General.MD.GotoFile.Cfg`,
+--- and two global classes of one name make every shared field a
+--- `duplicate-doc-field` in both files.
+---@class Lib.Fs.Open.Url.SystemOpener.Cfg
 ---@field prefer_ui_open? boolean Try `vim.ui.open` (Neovim 0.10+) before the per-OS argv dispatch (default true). Ignored when `on_exit` is set.
 ---@field enable_windows_opener? boolean Enable the Windows `explorer.exe` opener (default true)
 ---@field open_cmd_mac? string[] Override the macOS open command (default `{ "open", url }`)
@@ -10,6 +14,6 @@
 ---@field on_exit? fun(code: integer) Observe the opener's exit code. Runs the job attached and skips `vim.ui.open`.
 
 ---@class Lib.Fs.Open.Url.SystemOpener
----@field open fun(url: string, cfg?: AutoCmds.General.MD.GotoFile.Cfg): boolean
+---@field open fun(url: string, cfg?: Lib.Fs.Open.Url.SystemOpener.Cfg): boolean
 ---@field is_like fun(s: string): boolean
 ---@field is_ike fun(s: string): boolean Deprecated alias of `is_like`.

@@ -29,7 +29,9 @@ function M.create(prefix)
     prefix = prefix .. " "
   end
 
-  ---@type Lib.Notify.Notifier
+  -- Deliberately not `---@type Lib.Notify.Notifier`: the table is filled
+  -- below, so declaring the class on the empty literal is a `missing-fields`.
+  -- The `@return` above is what checks the finished table.
   local notifier = {}
 
   ---Core notify function

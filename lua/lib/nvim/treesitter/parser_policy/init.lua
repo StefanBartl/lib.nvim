@@ -109,7 +109,7 @@ function M.setup(opts)
   if opts.mode ~= nil then
     local ok, err = M.set_mode(opts.mode)
     if not ok then
-      notify.warn(err)
+      notify.warn(err or ("unsupported parser policy mode: %s"):format(tostring(opts.mode)))
     end
   end
 end

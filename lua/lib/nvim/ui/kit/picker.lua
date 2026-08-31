@@ -79,7 +79,9 @@ function M.open(opts)
   )
 
   local function finish_close()
-    pcall(vim.cmd, "stopinsert")
+    pcall(function()
+      vim.cmd("stopinsert")
+    end)
     group.close()
   end
 
@@ -130,6 +132,11 @@ function M.open(opts)
       timer = nil
     end
     timer = vim.uv.new_timer()
+    -- libuv returns nil rather than raising when it cannot allocate a
+    -- handle; without a timer the query simply is not re-run.
+    if not timer then
+      return
+    end
     timer:start(
       debounce_ms,
       0,

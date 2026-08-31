@@ -188,8 +188,9 @@ function M.who(path, cb)
       local holders = {}
       for _, line in ipairs(vim.split(out, "\n")) do
         local pid, name, app = vim.trim(line):match("^(%d+)\t([^\t]*)\t(.*)$")
-        if pid then
-          holders[#holders + 1] = { pid = tonumber(pid), name = name, app = vim.trim(app) }
+        local pid_n = pid and tonumber(pid) or nil
+        if pid_n then
+          holders[#holders + 1] = { pid = pid_n, name = name, app = vim.trim(app) }
         end
       end
       cb(holders, nil)
@@ -224,7 +225,7 @@ function M.report(path, cb)
     lines[#lines + 1] = "handle holders (Windows Restart Manager):"
     if werr then
       lines[#lines + 1] = "  lookup failed: " .. werr
-    elseif #holders == 0 then
+    elseif not holders or #holders == 0 then
       lines[#lines + 1] = "  none — no process holds this file open right now"
     else
       for _, h in ipairs(holders) do

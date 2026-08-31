@@ -30,12 +30,14 @@
 ---@field max_items? integer           # default entries kept per table in `ctx` (default 200); a call may override
 
 ---Per-call options (3rd argument to log.<level>).
----@class Lib.Logger.CallOpts
+--- Extends `Lib.Logger.SanitizeOpts` (which contributes `max_depth` and
+--- `max_items`) rather than repeating its two fields: `record.build` falls
+--- back to these options when no resolved caps are handed in, so the two
+--- shapes have to be related and not merely look alike.
+---@class Lib.Logger.CallOpts : Lib.Logger.SanitizeOpts
 ---@field tags? string[]   # tags for this call (for later enable/disable)
 ---@field to? string       # write this call to a different file (per-call override)
 ---@field notify? boolean  # force (true) or suppress (false) the notify sink for this call
----@field max_depth? integer  # nesting levels kept in `ctx` before "<max-depth>"; overrides the logger's own default
----@field max_items? integer  # entries kept per table in `ctx` before "<truncated>"; overrides the logger's own default
 
 ---A logger instance (returned by `.new`).
 --- Every `<level>` method's `ctx` may be a table OR a thunk returning one
@@ -44,6 +46,8 @@
 ---@alias Lib.Logger.Ctx table|(fun(): table)
 ---@class Lib.Logger.Instance
 ---@field name string
+---@field level integer            # current level, as `set_level` leaves it (`:checkhealth` reads it)
+---@field file string|nil          # file sink path, nil for a logger with no file
 ---@field trace fun(msg: string, ctx?: Lib.Logger.Ctx, opts?: Lib.Logger.CallOpts)
 ---@field debug fun(msg: string, ctx?: Lib.Logger.Ctx, opts?: Lib.Logger.CallOpts)
 ---@field info  fun(msg: string, ctx?: Lib.Logger.Ctx, opts?: Lib.Logger.CallOpts)

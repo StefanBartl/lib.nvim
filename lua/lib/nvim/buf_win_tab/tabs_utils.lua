@@ -10,7 +10,7 @@ local M = {}
 
 ---@internal
 -- Collect a TabInfo for a given tabpage object.
----@param tabpage userdata
+---@param tabpage integer
 ---@return TabInfo
 local function collect_tab_info(tabpage)
   local tabnr = vim.api.nvim_tabpage_get_number(tabpage)

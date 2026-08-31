@@ -96,6 +96,9 @@ return function(H)
   -- ── The session-wide switch ─────────────────────────────────────────────
   local said = {}
   local orig_notify = vim.notify
+  -- A test double for the duration of this case; the original is restored
+  -- below.
+  ---@diagnostic disable-next-line: duplicate-set-field
   vim.notify = function(msg)
     said[#said + 1] = tostring(msg)
   end

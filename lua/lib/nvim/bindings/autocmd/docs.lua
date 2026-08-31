@@ -241,13 +241,16 @@ local function render(records, title, opts)
   lines[#lines + 1] = "| --- | --- | --- | --- | --- |"
 
   for _, r in ipairs(records) do
+    -- Through a local: a `type(...)` test narrows a variable, not a field
+    -- read off a record.
+    local pattern = r.pattern
     local scope = "-"
     if r.buffer then
       scope = "buffer-local"
-    elseif type(r.pattern) == "table" then
-      scope = table.concat(r.pattern, ", ")
-    elseif r.pattern then
-      scope = tostring(r.pattern)
+    elseif type(pattern) == "table" then
+      scope = table.concat(pattern, ", ")
+    elseif pattern then
+      scope = tostring(pattern)
     end
     lines[#lines + 1] = ("| `%s` | `%s` | %s | %s | `%s` |"):format(
       table.concat(r.events, "`, `"),
@@ -588,7 +591,7 @@ function M.write_all(opts)
       end,
     }
 
-    local ok, err, written = true, nil
+    local ok, err, written = true, nil, nil
     if opts.dry_run then
       written = vim.tbl_keys(build(per_repo))
       table.sort(written)

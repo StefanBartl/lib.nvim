@@ -136,7 +136,10 @@ end
 local function changed_register(before)
   for _, r in ipairs(WATCHED) do
     local ok, now = pcall(vim.fn.getreg, r)
-    if ok and now ~= before[r] and now ~= nil and now ~= "" then
+    -- `getreg` answers with a string for every register this watches; the
+    -- type also covers the list form of `getreg(r, 1, 1)`, which is not
+    -- what is called here.
+    if ok and type(now) == "string" and now ~= before[r] and now ~= "" then
       return now, r
     end
   end

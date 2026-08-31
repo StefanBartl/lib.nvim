@@ -227,6 +227,11 @@ local function decode_result(obj)
   return true, decoded
 end
 
+--- Every `parse_raw_response` failure sets an `err`, but that pairing lives
+--- in prose rather than in the two return slots -- this is what the four
+--- call sites fall back to instead of forwarding a `nil` message.
+local UNPARSEABLE = "unparseable curl output"
+
 ---@internal
 ---Parse curl `-i` output (response headers, then a blank line, then the
 ---body) into status/headers/body. curl's own process exit code says nothing
@@ -307,7 +312,7 @@ function M.fetch_raw(url, opts, cb)
     end
     local response, err = parse_raw_response(obj.stdout)
     if not response then
-      cb(false, err, obj)
+      cb(false, err or UNPARSEABLE, obj)
       return
     end
     cb(true, response, obj)
@@ -337,7 +342,7 @@ function M.fetch_raw_blocking(url, opts)
   end
   local response, err = parse_raw_response(obj.stdout)
   if not response then
-    return false, err, obj
+    return false, err or UNPARSEABLE, obj
   end
   return true, response, obj
 end
@@ -403,7 +408,7 @@ function M.download(url, dest_path, opts, cb)
     end
     local response, err = parse_raw_response(obj.stdout)
     if not response then
-      cb(false, err, obj)
+      cb(false, err or UNPARSEABLE, obj)
       return
     end
     cb(true, response, obj)
@@ -432,7 +437,7 @@ function M.download_blocking(url, dest_path, opts)
   end
   local response, err = parse_raw_response(obj.stdout)
   if not response then
-    return false, err, obj
+    return false, err or UNPARSEABLE, obj
   end
   return true, response, obj
 end

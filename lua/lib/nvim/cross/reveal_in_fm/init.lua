@@ -268,8 +268,10 @@ return function(target, opts)
   -- what the built-in branches do. The Windows raise is skipped too — it
   -- looks the window up as an Explorer folder window, which an arbitrary
   -- third-party manager is not.
-  if opts.command and opts.command ~= "" then
-    local argv = type(opts.command) == "table" and vim.deepcopy(opts.command) or { opts.command }
+  local command = opts.command
+  if command and command ~= "" then
+    -- Through a local, so the `type(...)` test actually narrows it.
+    local argv = type(command) == "table" and vim.deepcopy(command) or { command }
     local arg = (file and not reveal) and parent_of(path) or path
     -- The override may well be explorer.exe itself, which is the one launcher
     -- that insists on backslashes.

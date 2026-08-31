@@ -17,7 +17,9 @@ local END = "<!-- /lib.nvim:composer -->"
 ---@param s string
 ---@return string
 local function cell(s)
-  return (s or ""):gsub("|", "\\|")
+  -- The outer parentheses drop `gsub`'s second return value (the match
+  -- count), which this function does not promise.
+  return ((s or ""):gsub("|", "\\|"))
 end
 
 --- Render one verb section.

@@ -20,12 +20,13 @@ return function(opts)
   -- Resolve buffer
   local bufnr = opts.bufnr or api.nvim_get_current_buf()
 
-  -- Resolve cursor / position
-  local row
-  local col
+  -- Resolve cursor / position. Through a local, so the `~= nil` test
+  -- narrows the value that is actually used.
+  local want_row = opts.row
+  local row, col
 
-  if opts.row ~= nil then
-    row = opts.row
+  if want_row ~= nil then
+    row = want_row
     col = opts.col or 0
   else
     local win = api.nvim_get_current_win()

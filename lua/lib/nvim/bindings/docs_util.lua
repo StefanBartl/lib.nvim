@@ -90,7 +90,9 @@ end
 ---@param s string|nil
 ---@return string
 function M.cell(s)
-  return (s or ""):gsub("|", "\\|")
+  -- The outer parentheses drop `gsub`'s match count, which this function
+  -- does not promise.
+  return ((s or ""):gsub("|", "\\|"))
 end
 
 return M

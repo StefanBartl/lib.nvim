@@ -54,8 +54,12 @@ function M.register(plugin, spec, user, opts)
 end
 
 --- Everything registered so far. See `registry.registered`.
----@param plugin string|nil
----@return table<string, Lib.Keymap.Registered[]>|Lib.Keymap.Registered[]
+---The two shapes are declared as an overload rather than one union return:
+---with a union, `pairs(registered())` sees a `Registered[]` branch it cannot
+---rule out, and every field read off an entry becomes an `undefined-field`.
+---@param plugin string
+---@return Lib.Keymap.Registered[]
+---@overload fun(): table<string, Lib.Keymap.Registered[]>
 function M.registered(plugin)
   return require("lib.nvim.bindings.keymap.registry").registered(plugin)
 end

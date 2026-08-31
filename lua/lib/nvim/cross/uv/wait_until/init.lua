@@ -14,6 +14,15 @@ return function(predicate, opts, cb)
 
   local loop = vim.uv or vim.loop
   local timer = loop.new_timer()
+  -- libuv returns nil instead of raising when it cannot allocate a handle.
+  -- Report that the same way an exhausted poll does, rather than letting a
+  -- caller's callback blow up on a nil timer.
+  if not timer then
+    vim.schedule(function()
+      cb(false)
+    end)
+    return
+  end
   local attempts = 0
 
   local function stop(ok)

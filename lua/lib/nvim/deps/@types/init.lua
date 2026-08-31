@@ -91,7 +91,7 @@
 
 ---`lib.nvim.deps.install` module surface: plan computation + confirmed terminal handoff.
 ---@class Lib.Deps.Install
----@field plan fun(tools: Lib.Deps.Tool[], opts?: { manager?: Lib.Deps.Manager }): Lib.Deps.Plan
+---@field plan fun(tools: Lib.Deps.Tool[], opts?: Lib.Deps.ManagerOpts): Lib.Deps.Plan
 ---@field run fun(plan: Lib.Deps.Plan, opts?: { confirm?: boolean }): boolean
 
 ---Live install state for one tool, keyed by `tool.bin` in `deps.view`'s
@@ -111,12 +111,20 @@
 ---@field reset fun(plugin_name?: string, cache_opts?: Lib.Cache.Opts)
 ---@field show_once fun(plugin_name: string, opts?: { manager?: Lib.Deps.Manager, cache?: Lib.Cache.Opts }): boolean
 
+--- The one option the view and install entry points take: an explicit package
+--- manager instead of the detected one. A named class rather than the
+--- inline `{ manager?: Lib.Deps.Manager }` it used to be written as --
+--- inline table types normalise differently at a declaration and at a
+--- call, and the same spelling stopped matching itself.
+---@class Lib.Deps.ManagerOpts
+---@field manager? Lib.Deps.Manager
+
 ---`lib.nvim.deps.view` module surface: render/show a plugin's tool report.
 ---@class Lib.Deps.View
----@field render fun(plugin_name: string, result: Lib.Deps.ParseResult, opts?: { manager?: Lib.Deps.Manager }, ui?: table<string, Lib.Deps.View.ToolUiState>): { lines: string[], line_tools: (Lib.Deps.Tool|nil)[] }
----@field lines fun(plugin_name: string, result: Lib.Deps.ParseResult, opts?: { manager?: Lib.Deps.Manager }): string[]
+---@field render fun(plugin_name: string, result: Lib.Deps.ParseResult, opts?: Lib.Deps.ManagerOpts, ui?: table<string, Lib.Deps.View.ToolUiState>): { lines: string[], line_tools: (Lib.Deps.Tool|nil)[] }
+---@field lines fun(plugin_name: string, result: Lib.Deps.ParseResult, opts?: Lib.Deps.ManagerOpts): string[]
 ---@field show_split fun(plugin_name: string, result: Lib.Deps.ParseResult): integer, integer
----@field show fun(plugin_name: string, result: Lib.Deps.ParseResult, opts?: { manager?: Lib.Deps.Manager }): integer, integer
+---@field show fun(plugin_name: string, result: Lib.Deps.ParseResult, opts?: Lib.Deps.ManagerOpts): integer, integer
 
 ---`lib.nvim.deps` module surface.
 ---@class Lib.Deps

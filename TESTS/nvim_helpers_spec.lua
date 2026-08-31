@@ -146,6 +146,7 @@ return function(H)
   -- Actually invoke it (not just load-check): this is what caught spawn_capture
   -- passing argv through table.unpack, which LuaJIT does not provide.
   local spawn_capture = require("lib.nvim.cross.uv.spawn_capture")
+  ---@type Lib.Cross.Uv.SpawnCapture.Result|nil
   local spawn_result = nil
   spawn_capture({ vim.v.progpath, "--version" }, {}, function(r)
     spawn_result = r
@@ -157,6 +158,7 @@ return function(H)
   ok(spawn_result.ok, "spawn_capture: nvim --version exits 0")
   ok(spawn_result.stdout:match("NVIM") ~= nil, "spawn_capture: captures stdout")
 
+  ---@type Lib.Cross.Uv.SpawnCapture.Result|nil
   local bad_spawn_result = nil
   spawn_capture({ "definitely_not_a_real_binary_xyz" }, {}, function(r)
     bad_spawn_result = r
@@ -261,6 +263,8 @@ return function(H)
 
   ok(safe_api.is_valid_buffer(buf), "safe_api.is_valid_buffer: real buffer")
   ok(not safe_api.is_valid_buffer(99999), "safe_api.is_valid_buffer: bogus handle")
+  -- The non-number handle is the case.
+  ---@diagnostic disable-next-line: param-type-mismatch
   ok(not safe_api.is_valid_buffer("nope"), "safe_api.is_valid_buffer: non-number")
 
   local win = vim.api.nvim_get_current_win()

@@ -68,6 +68,11 @@ function M.open(opts)
   local function schedule_change()
     stop_timer()
     timer = vim.uv.new_timer()
+    -- libuv returns nil rather than raising when it cannot allocate a
+    -- handle; without a timer the query simply is not re-run.
+    if not timer then
+      return
+    end
     timer:start(
       debounce_ms,
       0,
@@ -88,7 +93,9 @@ function M.open(opts)
     stop_timer()
     local line = query()
     -- Leave insert mode before closing to avoid a lingering mode state.
-    pcall(vim.cmd, "stopinsert")
+    pcall(function()
+      vim.cmd("stopinsert")
+    end)
     surf:close()
     if submit then
       if opts.on_submit then

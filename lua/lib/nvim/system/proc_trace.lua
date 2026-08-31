@@ -43,11 +43,13 @@ local notify = require("lib.nvim.notify").create("[lib.nvim.system.proc_trace]")
 
 local M = {}
 
----@type table<string, function>|nil
+---@type Lib.System.ProcTrace.Saved|nil
 local originals = nil
 ---@type string|nil
 local active_log_path = nil
----@type uv_hrtime|nil
+--- `uv.hrtime()` is nanoseconds as a plain number; `uv_hrtime` was a type
+--- name that never existed.
+---@type integer|nil
 local t0 = nil
 
 ---@internal
@@ -139,8 +141,11 @@ function M.start(opts)
     end
   end
 
-  if vim.system then
-    local orig_system = vim.system
+  local orig_system = vim.system
+  if orig_system then
+    -- Replacing a stdlib function is what this module is: the original is
+    -- saved above and restored by `stop()`.
+    ---@diagnostic disable-next-line: duplicate-set-field
     vim.system = function(cmd, sopts, on_exit)
       local start = uv.hrtime()
       local wrapped_on_exit = on_exit
@@ -155,6 +160,8 @@ function M.start(opts)
   end
 
   local orig_jobstart = vim.fn.jobstart
+  -- Same deliberate replacement as `vim.system` above.
+  ---@diagnostic disable-next-line: duplicate-set-field
   vim.fn.jobstart = function(cmd, jopts)
     jopts = jopts or {}
     local start = uv.hrtime()

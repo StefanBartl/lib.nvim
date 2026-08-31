@@ -44,7 +44,8 @@ end
 ---@param str string
 ---@return string
 local function ps_quote(str)
-  return str:gsub("'", "''")
+  -- The outer parentheses drop `gsub`'s match count.
+  return (str:gsub("'", "''"))
 end
 
 ---@internal

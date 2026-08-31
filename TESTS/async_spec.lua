@@ -15,7 +15,9 @@ return function(H)
   ---@param ms integer
   local function sleep(ms)
     async.await(function(resume)
-      local timer = uv.new_timer()
+      -- `assert`: libuv answers nil rather than raising, and a spec without
+      -- a timer cannot proceed anyway.
+      local timer = assert(uv.new_timer())
       timer:start(ms, 0, function()
         timer:stop()
         timer:close()

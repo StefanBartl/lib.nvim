@@ -365,6 +365,9 @@ return function(H)
 
   local warnings = 0
   local orig = vim.notify
+  -- A test double for the duration of this case; the original is restored
+  -- below.
+  ---@diagnostic disable-next-line: duplicate-set-field
   vim.notify = function(msg, ...)
     if type(msg) == "string" and msg:find("no such keymap action", 1, true) then
       warnings = warnings + 1

@@ -35,6 +35,12 @@ p = kit.picker({
   -- Called (debounced, default 80ms) whenever the prompt's text changes.
   -- You own the filtering; feed the result back via p.set_results().
   on_change = function(query)
+    -- `kit.picker` answers nil when it cannot open; the callback cannot
+    -- fire before the assignment below, but the handle is optional all
+    -- the same.
+    if not p then
+      return
+    end
     p.set_results(fuzzy(query, ALL_ITEMS))
   end,
 

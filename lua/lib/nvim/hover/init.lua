@@ -432,10 +432,12 @@ local function bind_keys(content, rerender)
       return
     end
     seen[lhs] = true
-    local saved = vim.fn.maparg(lhs, "n", false, true)
-    if type(saved) ~= "table" or saved.lhs == nil then
-      saved = nil
-    end
+    local raw = vim.fn.maparg(lhs, "n", false, true)
+    -- A separate local, not an overwrite of `raw`: `maparg`'s dict form is
+    -- typed as a table, and nilling that same variable is a type change
+    -- rather than a narrowing.
+    ---@type table|nil
+    local saved = (type(raw) == "table" and raw.lhs ~= nil) and raw or nil
     local ok = pcall(vim.keymap.set, "n", lhs, rhs, { desc = desc, nowait = true, silent = true })
     if ok then
       keys[#keys + 1] = { lhs = lhs, saved = saved }

@@ -73,7 +73,9 @@ end
 ---Re-enter visual mode over the last selection (the `gv` equivalent).
 ---@return boolean ok
 function M.reselect_visual()
-  local ok = pcall(vim.cmd, "normal! gv")
+  local ok = pcall(function()
+    vim.cmd("normal! gv")
+  end)
   return ok
 end
 

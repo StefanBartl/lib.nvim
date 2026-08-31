@@ -20,7 +20,10 @@ return function(bufnr, name)
     return value
   end
 
-  -- 2) Deprecated but broadly compatible.
+  -- 2) Deprecated but broadly compatible. The deprecation is the point of
+  -- this branch: it exists for builds that predate route 1, and route 1
+  -- has already been tried and failed by the time it runs.
+  ---@diagnostic disable-next-line: deprecated
   ok, value = pcall(vim.api.nvim_buf_get_option, bufnr, name)
   if ok then
     return value

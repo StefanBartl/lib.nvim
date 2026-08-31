@@ -12,7 +12,7 @@ local VERBS = {}
 ---@type string[]
 local ORDER = {}
 
----@type Lib.UserCmd.Composer.DocsOpts
+---@type Lib.UserCmd.Composer.DocsDefaults
 M.docs = {
   path = "docs/BINDINGS/Usercmds.md",
   mode = "replace",
@@ -55,7 +55,7 @@ end
 ---@param opts Lib.UserCmd.Composer.DocsOpts|nil
 function M.configure(opts)
   if opts then
-    M.docs = vim.tbl_extend("force", M.docs, opts)
+    M.docs = vim.tbl_extend("force", M.docs, opts) --[[@as Lib.UserCmd.Composer.DocsDefaults]]
   end
 end
 

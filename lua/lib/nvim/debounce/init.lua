@@ -56,6 +56,15 @@ function M.new(fn, ms)
       pcall(timer.stop, timer)
     end
 
+    -- libuv returns nil rather than raising when it cannot allocate a
+    -- handle. Losing the debounce is bad; losing the call is worse.
+    if not timer then
+      vim.schedule(function()
+        fn(unpack(args, 1, n))
+      end)
+      return
+    end
+
     timer:start(ms, 0, function()
       vim.schedule(function()
         fn(unpack(args, 1, n))

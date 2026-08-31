@@ -23,6 +23,8 @@ return function(H)
   eq(#uuid.format(u, "compact"), 32, "uuid.format: compact strips hyphens")
   eq(uuid.format(u, "upper"), u:upper(), "uuid.format: upper")
   eq(uuid.format(u, "braced"), "{" .. u .. "}", "uuid.format: braced")
+  -- The unknown style is the case.
+  ---@diagnostic disable-next-line: param-type-mismatch
   eq(uuid.format(u, "nonsense"), u, "uuid.format: unknown style passes through")
 
   -- ------------------------------------------------------------ lib.lua.numeral
@@ -121,6 +123,8 @@ return function(H)
   eq(tfmt.format_timestamp(ts, "filename"), "20260714_143205", "time.format: filename is path-safe")
   eq(tfmt.format_timestamp(ts, "unix"), tostring(ts), "time.format: unix")
   eq(
+    -- The unknown style is the case.
+    ---@diagnostic disable-next-line: param-type-mismatch
     tfmt.format_timestamp(ts, "bogus"),
     tfmt.format_timestamp(ts, "iso"),
     "time.format: unknown style falls back to iso"

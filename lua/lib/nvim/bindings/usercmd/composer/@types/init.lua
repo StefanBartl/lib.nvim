@@ -3,7 +3,9 @@
 
 --- Built-in argument type names. Custom types registered via
 --- `composer.register_type` extend this set at runtime.
----@alias Lib.UserCmd.Composer.ArgType
+--- The types `argtypes` ships with. `WINDOW` was registered from the
+--- start and simply missing from this list.
+---@alias Lib.UserCmd.Composer.ArgTypeBuiltin
 ---| "STRING"
 ---| "INT"
 ---| "FLOAT"
@@ -12,6 +14,12 @@
 ---| "DIR"
 ---| "FILE"
 ---| "BUFFER"
+---| "WINDOW"
+
+--- Open on purpose: `composer.register_type(name, def)` is public API, so
+--- a type name this library has never heard of is a legitimate value.
+--- A closed union would reject every custom type its own API invites.
+---@alias Lib.UserCmd.Composer.ArgType Lib.UserCmd.Composer.ArgTypeBuiltin|string
 
 --- A Visual submode, as named in a route's `visual` allowlist. Vim's own raw
 --- spellings ("v"/"V"/"\22") are accepted interchangeably.
@@ -61,7 +69,7 @@
 ---@field args?  Lib.UserCmd.Composer.ArgSpec[]      # positional args accepted after the path
 ---@field flags? Lib.UserCmd.Composer.FlagSpec[]     # --flag / --flag=value accepted anywhere in the tail, in any order
 ---@field kv?    Lib.UserCmd.Composer.KvSpec[]       # bare key=value pairs (no dashes) accepted anywhere in the tail
----@field run    fun(ctx: Lib.UserCmd.Composer.Ctx)|string  # handler, or a module path returning a callable / { run = fn }
+---@field run    (fun(ctx: Lib.UserCmd.Composer.Ctx): any)|string  # handler, or a module path returning a callable / { run = fn }. Whatever it returns is what `dispatch` returns.
 ---@field desc?  string
 ---@field bang?  boolean                             # honor :Verb! for this route
 ---@field range? boolean|integer
@@ -72,7 +80,7 @@
 --- The full spec passed to `composer.verb(name, spec)`.
 ---@class Lib.UserCmd.Composer.Spec
 ---@field desc?    string                                    # verb description (docs + :command listing)
----@field default? fun(ctx: Lib.UserCmd.Composer.Ctx)        # handler for the bare `:Verb` (no tokens)
+---@field default? fun(ctx: Lib.UserCmd.Composer.Ctx): any   # handler for the bare `:Verb` (no tokens); its return value is `dispatch`'s
 ---@field routes?  Lib.UserCmd.Composer.Route[]
 ---@field bang?    boolean                                   # allow the bang form at the command level (default: true if any route uses it)
 ---@field range?   boolean|integer                           # allow a range at the command level
@@ -119,9 +127,16 @@
 ---@field raw    Lib.UserCommand.Args                # the untouched nvim callback args
 
 --- A registered argument type: a validator and a completer.
+--- What `argtypes.validate`/`argtypes.complete` read off a spec: a type
+--- name, an optional closed set, and completion-only hints. All three spec
+--- shapes carry those, which is why all three share the two functions --
+--- flags and kv pairs were passing a `FlagSpec`/`KvSpec` to a parameter
+--- declared as `ArgSpec` long before this alias named the arrangement.
+---@alias Lib.UserCmd.Composer.TypedSpec Lib.UserCmd.Composer.ArgSpec|Lib.UserCmd.Composer.FlagSpec|Lib.UserCmd.Composer.KvSpec
+
 ---@class Lib.UserCmd.Composer.TypeDef
----@field validate fun(raw: string, spec: Lib.UserCmd.Composer.ArgSpec): boolean, any, string|nil  # ok, value, err
----@field complete? fun(arg_lead: string, spec: Lib.UserCmd.Composer.ArgSpec, cmd_line: string|nil): string[]  # cmd_line is the full command line (nil outside a real one) — for types whose candidates depend on tokens typed before this slot
+---@field validate fun(raw: string, spec: Lib.UserCmd.Composer.TypedSpec): boolean, any, string|nil  # ok, value, err
+---@field complete? fun(arg_lead: string, spec: Lib.UserCmd.Composer.TypedSpec, cmd_line: string|nil): string[]  # cmd_line is the full command line (nil outside a real one) — for types whose candidates depend on tokens typed before this slot
 
 --- Handle returned by `composer.verb(...)` / `:build()`.
 ---@class Lib.UserCmd.Composer.Handle
@@ -132,9 +147,17 @@
 --- Fluent builders additionally expose :desc/:default/:route/:bang/:range/:build.
 
 --- Docs configuration (see `composer.setup`).
+--- The partial override a caller hands to `composer.setup{ docs = ... }`.
 ---@class Lib.UserCmd.Composer.DocsOpts
 ---@field path? string                               # default output file (default: docs/BINDINGS/Usercmds.md)
 ---@field mode? "replace"|"section"                  # overwrite whole file, or update a delimited block (default: "replace")
+
+--- The *resolved* defaults `composer.registry.docs` holds. Separate from
+--- `DocsOpts` because both keys are always set here -- one type doing both
+--- jobs made every read of `registry.docs.path` an optional string.
+---@class Lib.UserCmd.Composer.DocsDefaults
+---@field path string
+---@field mode "replace"|"section"
 
 ---@class Lib.UserCmd.Composer.SetupOpts
 ---@field docs? Lib.UserCmd.Composer.DocsOpts

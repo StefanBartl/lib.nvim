@@ -85,7 +85,9 @@ local function realpath_deepest(path)
   return nil
 end
 
----@param p string
+--- `p` is deliberately optional: the guard below answers `""` for anything
+--- that is not a non-empty string, and callers rely on that.
+---@param p string|nil
 ---@param opts? Lib.Fs.NormkeyOpts
 ---@return string
 return function(p, opts)

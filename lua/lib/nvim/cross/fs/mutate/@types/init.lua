@@ -10,7 +10,7 @@
 
 ---@class Lib.Cross.Fs.Mutate
 ---@field defaults Lib.Cross.Fs.Mutate.RetryOpts
----@field retry fun(op: fun(): boolean|nil, string|nil, opts?: Lib.Cross.Fs.Mutate.RetryOpts): boolean, string|nil
+---@field retry fun(op: (fun(): boolean|nil, string|nil), opts?: Lib.Cross.Fs.Mutate.RetryOpts): boolean, string|nil
 ---@field delete_file fun(path: string, opts?: Lib.Cross.Fs.Mutate.RetryOpts): boolean, string|nil
 ---@field copy_file fun(src: string, dst: string, opts?: Lib.Cross.Fs.Mutate.RetryOpts): boolean, string|nil
 ---@field rename_file fun(src: string, dst: string, opts?: Lib.Cross.Fs.Mutate.RetryOpts): boolean, string|nil

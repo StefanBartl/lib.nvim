@@ -4,7 +4,10 @@
 -- Tabpage Inspection and Formatting
 -- =========================================================
 
----@alias TabInfo { tabnr: integer, tabpage: userdata, wins: integer[], bufs: integer[], current_win: integer, current_buf: integer }
+--- `tabpage` is a handle, and every Neovim tabpage handle is an integer --
+--- `userdata` here was a guess that made both directions of the API a
+--- `param-type-mismatch`.
+---@alias TabInfo { tabnr: integer, tabpage: integer, wins: integer[], bufs: integer[], current_win: integer, current_buf: integer }
 --- Complete tabpage metadata structure.
 --- Fields:
 ---   • tabnr: Tab number (1-based display number)

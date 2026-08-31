@@ -62,6 +62,13 @@ function M.create(name, callback, opts)
   local src = opts.src
   opts.src = nil
 
+  -- Resolved here rather than inline in the record below: `type(...)` on a
+  -- field read narrows nothing, so the record would inherit the function
+  -- half of `complete`'s type.
+  local complete = opts.complete
+  local complete_kind = type(complete) == "string" and complete
+    or (complete ~= nil and "<function>" or nil)
+
   if type(callback) == "function" then
     local user_cb = callback
     callback = function(args)
@@ -72,11 +79,16 @@ function M.create(name, callback, opts)
     end
   end
 
+  -- Both lib-only keys are off the table by now, which is what makes this a
+  -- native options table -- `opts` keeps its declared type across the two
+  -- `nil` assignments above, so the annotation cannot say it.
+  local native = opts --[[@as vim.api.keyset.user_command]]
+
   if bufnr then
-    local buf = (bufnr == true) and vim.api.nvim_get_current_buf() or bufnr
-    vim.api.nvim_buf_create_user_command(buf, name, callback, opts)
+    local buf = type(bufnr) == "number" and bufnr or vim.api.nvim_get_current_buf()
+    vim.api.nvim_buf_create_user_command(buf, name, callback, native)
   else
-    vim.api.nvim_create_user_command(name, callback, opts)
+    vim.api.nvim_create_user_command(name, callback, native)
   end
 
   -- After the real call: a command nvim refused is not recorded as existing.
@@ -97,8 +109,7 @@ function M.create(name, callback, opts)
     nargs = opts.nargs,
     bang = opts.bang == true,
     range = opts.range ~= nil and opts.range ~= false,
-    complete = type(opts.complete) == "string" and opts.complete
-      or (opts.complete ~= nil and "<function>" or nil),
+    complete = complete_kind,
     buffer = bufnr,
     -- Level 3: getinfo -> caller_site -> M.create -> the caller.
     src = src or util.caller_site(3),

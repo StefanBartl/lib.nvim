@@ -166,7 +166,7 @@ end
 --- out — worth it for a WebP or SVG the parser cannot read, not worth it for
 --- every PNG.
 ---@param path string
----@return Images.Scale.Dims|nil
+---@return Lib.Hover.Preview.Dims|nil
 local function pixel_size(path)
   local w, h = dimensions(path)
   if w and h and w > 0 and h > 0 then
@@ -189,7 +189,7 @@ end
 --- `images.redact` size their windows with, so a hover, a zen window and a
 --- redaction box all letterbox identically. The local fallback covers an
 --- images.nvim too old to have it.
----@param image_px Images.Scale.Dims|nil
+---@param image_px Lib.Hover.Preview.Dims|nil
 ---@param opts Lib.Hover.PreviewOpts
 ---@return integer cols
 ---@return integer rows
@@ -361,14 +361,19 @@ local _pages = {}
 local _cleanup_hooked = false
 
 ---@internal
+--- The page number is part of the key. It was passed in from the start and
+--- silently dropped, so every page of one PDF shared a single cache slot:
+--- rendering page 2 deleted page 1's PNG, and a later hover on page 1 was
+--- served page 2's image.
 ---@param path string
+---@param page integer
 ---@return string|nil
-local function page_key(path)
+local function page_key(path, page)
   local st = vim.uv.fs_stat(path)
   if not st then
     return nil
   end
-  return path .. " " .. tostring(st.mtime and st.mtime.sec or 0)
+  return path .. " " .. tostring(st.mtime and st.mtime.sec or 0) .. " " .. tostring(page)
 end
 
 ---@internal
@@ -454,7 +459,7 @@ function M.pdf(target, opts, on_result)
     end
     return content
   end
-  if cached then
+  if key and cached then
     _pages[key] = nil
   end
 
