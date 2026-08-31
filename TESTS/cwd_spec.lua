@@ -1,3 +1,7 @@
+-- Test code: when something here comes back nil -- a `pcall(require, ...)`,
+-- a fixture read, a uv handle -- this file must crash and name it. The nil
+-- guards LuaLS asks for below would hide the very failure it exists to report.
+---@diagnostic disable: need-check-nil
 -- TESTS/cwd_spec.lua — lib.nvim.fs.chdir, lib.nvim.fs.dir_guard, and the
 -- skip_dirs / max_depth bounds added to lib.nvim.fs.find_root.
 

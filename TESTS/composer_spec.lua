@@ -1,3 +1,7 @@
+-- Test code: when something here comes back nil -- a `pcall(require, ...)`,
+-- a fixture read, a uv handle -- this file must crash and name it. The nil
+-- guards LuaLS asks for below would hide the very failure it exists to report.
+---@diagnostic disable: need-check-nil
 ---@diagnostic disable: missing-fields
 -- The command-callback tables built here carry only the fields the composer
 -- actually reads; a full Lib.UserCommand.Args per case would be noise.

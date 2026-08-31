@@ -1,3 +1,7 @@
+-- Test code: when something here comes back nil -- a `pcall(require, ...)`,
+-- a fixture read, a uv handle -- this file must crash and name it. The nil
+-- guards LuaLS asks for below would hide the very failure it exists to report.
+---@diagnostic disable: need-check-nil
 -- TESTS/ui_kit_spec.lua — lib.nvim.ui.kit
 -- Phase 1 (theme, surface, note), Phase 2 (toast, input, prompt),
 -- Phase 3 (layout + picker, native chooser + hover_select shim, interactive picker),
