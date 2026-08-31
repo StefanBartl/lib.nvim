@@ -19,6 +19,7 @@
 ---@field record fun(self: Lib.Frecency.Store, key: string): nil Count a visit to `key`. In-memory; persisted by `flush`.
 ---@field score fun(self: Lib.Frecency.Store, key: string): number Frecency score, `0` for a key never recorded. Never touches disk after the first load.
 ---@field lookup fun(self: Lib.Frecency.Store, keys: string[], weight?: number): table<string, number> `key -> score × weight` for exactly the keys given, omitting the ones scoring zero. `weight` (default `1.0`) is an argument rather than a store property because it belongs to the caller's configuration, which can change while a cached handle lives on.
+---@field seed fun(self: Lib.Frecency.Store, incoming: table<string, Lib.Frecency.Entry>): boolean Adopt counts from elsewhere — a store this module did not write, or a consumer's own pre-extraction format. Refused (returns `false`) on a store that already holds anything, so a repeated migration cannot overwrite real history. Entries are validated and copied field by field.
 ---@field flush fun(self: Lib.Frecency.Store): nil Write pending visits. No-op when nothing changed.
 ---@field clear fun(self: Lib.Frecency.Store): nil Forget everything, in memory and on disk.
 ---@field reset fun(self: Lib.Frecency.Store): nil Test-only: drop the in-memory copy so the next call re-reads from disk. Leaves the file alone.

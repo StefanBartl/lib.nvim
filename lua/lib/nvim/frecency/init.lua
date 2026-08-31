@@ -164,6 +164,43 @@ function M.store(opts)
       return out
     end,
 
+    ---@param incoming table<string, Lib.Frecency.Entry>
+    ---@return boolean seeded
+    seed = function(_, incoming)
+      if type(incoming) ~= "table" then
+        return false
+      end
+      local all = entries()
+      -- Never over an existing store. A seed is for adopting counts from
+      -- somewhere else -- a store this module did not write, a plugin's own
+      -- pre-extraction format -- and adopting them *over* real history would
+      -- turn a one-time migration into silent data loss the second time it
+      -- ran.
+      if next(all) ~= nil then
+        return false
+      end
+      local taken = 0
+      for key, entry in pairs(incoming) do
+        if
+          type(key) == "string"
+          and key ~= ""
+          and type(entry) == "table"
+          and type(entry.count) == "number"
+          and type(entry.last) == "number"
+        then
+          -- Copied field by field rather than by reference: the caller's
+          -- table came from somewhere this module does not control, and a
+          -- stray extra field would end up serialised into the store.
+          all[key] = { count = entry.count, last = entry.last }
+          taken = taken + 1
+        end
+      end
+      if taken > 0 then
+        dirty = true
+      end
+      return taken > 0
+    end,
+
     flush = function()
       if not dirty then
         return

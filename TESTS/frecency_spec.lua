@@ -115,6 +115,32 @@ return function(H)
   ok(not rawequal(first, elsewhere), "frecency: dir is part of a store's identity")
   eq(elsewhere:score("/shared.lua"), 0, "frecency: and its entries do not leak across")
 
+  -- ------------------------------------------------------------------- seed
+  local fresh = open("seeded")
+  eq(
+    fresh:seed({
+      ["/from/elsewhere.lua"] = { count = 3, last = os.time() },
+      ["/bad/entry.lua"] = { count = "not a number", last = 0 },
+      [""] = { count = 1, last = 0 },
+    }),
+    true,
+    "frecency: seeding an empty store adopts its counts"
+  )
+  ok(fresh:score("/from/elsewhere.lua") > 0, "frecency: a seeded key scores")
+  eq(fresh:score("/bad/entry.lua"), 0, "frecency: a malformed entry is dropped, not adopted")
+  eq(fresh:score(""), 0, "frecency: and so is an empty key")
+
+  eq(
+    fresh:seed({ ["/second/try.lua"] = { count = 9, last = os.time() } }),
+    false,
+    "frecency: seeding a store that already holds something is refused"
+  )
+  eq(fresh:score("/second/try.lua"), 0, "frecency: a refused seed adopts nothing at all")
+
+  fresh:flush()
+  fresh:reset()
+  ok(fresh:score("/from/elsewhere.lua") > 0, "frecency: a seeded store persists like any other")
+
   -- ------------------------------------------------------------- guardrails
   ---@diagnostic disable-next-line: missing-fields
   eq(

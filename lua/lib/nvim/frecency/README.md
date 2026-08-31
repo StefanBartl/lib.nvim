@@ -83,6 +83,7 @@ the same string means something different in each.
 | `store:record(key)` | –  count a visit (in memory; `flush` persists)                |
 | `store:score(key)`  | `number` — `0` for a key never recorded                       |
 | `store:lookup(keys, weight?)`| `table<string, number>` — scores × `weight` (default `1.0`), zeroes omitted |
+| `store:seed(entries)`| `boolean` — adopt counts from elsewhere; refused on a non-empty store |
 | `store:flush()`     | –  write pending visits; no-op when nothing changed           |
 | `store:clear()`     | –  forget everything, in memory and on disk                   |
 | `store:reset()`     | –  test-only: drop the in-memory copy, leave the file alone   |
@@ -97,6 +98,11 @@ the same string means something different in each.
 - Persistence goes through [`lib.nvim.cache.disk`](../cache/README.md), which
   already owns namespaced, `pcall`-guarded JSON with directory creation. There
   is no second copy of that logic here.
+- **`seed` never writes over an existing store.** It exists so a consumer can
+  adopt counts it kept in its own format before this module existed. Adopting
+  them *over* real history would turn a one-time migration into silent data
+  loss the second time it ran, so a store holding anything refuses the seed
+  and says so.
 - **The weight is an argument, not an option.** It belongs to the caller's
   configuration, which can change while Neovim runs, whereas a handle is
   cached for the whole session and would freeze whatever was configured when
