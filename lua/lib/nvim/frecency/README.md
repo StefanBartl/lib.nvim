@@ -48,8 +48,9 @@ local visits = frecency.store({ namespace = "gopath-alternates" })
 visits:record("/home/me/project/lua/config.lua")
 
 -- Rank a fresh set of candidates. Keys that were never recorded are absent
--- from the result, not present with a zero.
-local bonus = visits:lookup({ "/a/config.lua", "/a/confog.lua" })
+-- from the result, not present with a zero. The optional second argument
+-- scales the scores, so a caller decides how far frecency may move a result.
+local bonus = visits:lookup({ "/a/config.lua", "/a/confog.lua" }, 1.0)
 for path, score in pairs(bonus) do
   -- fold `score` into whatever primary score you already have
 end
@@ -66,7 +67,6 @@ default a `VimLeavePre` autocmd calls it for you.
 | ----------- | --------- | ------------------------------------------ | ------- |
 | `namespace` | `string`  | **required**                               | Names the store and its file. One flat, filesystem-safe identifier — used in the path unsanitised, the same contract `lib.nvim.cache.disk` states for its namespaces. |
 | `dir`       | `string`  | `stdpath("data")/lib.nvim/frecency`        | Parent directory. |
-| `weight`    | `number`  | `1.0`                                      | Multiplier applied by `lookup`, so a consumer decides how far frecency may move a result. |
 | `autoflush` | `boolean` | `true`                                     | Register a `VimLeavePre` flush. |
 
 **Two consumers must not share a namespace.** A picker ranking file paths and
@@ -82,7 +82,7 @@ the same string means something different in each.
 | `store(opts)`       | `Lib.Frecency.Store` — the handle for that namespace          |
 | `store:record(key)` | –  count a visit (in memory; `flush` persists)                |
 | `store:score(key)`  | `number` — `0` for a key never recorded                       |
-| `store:lookup(keys)`| `table<string, number>` — weighted scores, zeroes omitted     |
+| `store:lookup(keys, weight?)`| `table<string, number>` — scores × `weight` (default `1.0`), zeroes omitted |
 | `store:flush()`     | –  write pending visits; no-op when nothing changed           |
 | `store:clear()`     | –  forget everything, in memory and on disk                   |
 | `store:reset()`     | –  test-only: drop the in-memory copy, leave the file alone   |
@@ -97,6 +97,10 @@ the same string means something different in each.
 - Persistence goes through [`lib.nvim.cache.disk`](../cache/README.md), which
   already owns namespaced, `pcall`-guarded JSON with directory creation. There
   is no second copy of that logic here.
+- **The weight is an argument, not an option.** It belongs to the caller's
+  configuration, which can change while Neovim runs, whereas a handle is
+  cached for the whole session and would freeze whatever was configured when
+  it was first opened.
 - `score()` never touches disk after the first load — it is a table lookup,
   cheap enough to call once per candidate while ranking a query.
 - The on-disk form is one entry per key, `{ count, last }`, so a store written

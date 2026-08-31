@@ -82,18 +82,20 @@ return function(H)
   eq(p:score("/kept.lua"), 0, "frecency: clear forgot on disk too")
 
   -- ----------------------------------------------------------------- weight
-  local plain = open("weighted-1")
-  local heavy = open("weighted-2", { weight = 10 })
-  plain:record("/w.lua")
-  heavy:record("/w.lua")
-  local plain_score = plain:lookup({ "/w.lua" })["/w.lua"]
-  local heavy_score = heavy:lookup({ "/w.lua" })["/w.lua"]
-  ok(plain_score and heavy_score, "frecency: both stores scored the key")
+  -- An argument, not a store property: one handle, two weights, and the
+  -- second must not be the first one frozen in. That is the whole reason it
+  -- is not an option -- a handle lives for the session, a config value does
+  -- not.
+  local w = open("weighted")
+  w:record("/w.lua")
+  local plain_score = w:lookup({ "/w.lua" })["/w.lua"]
+  local heavy_score = w:lookup({ "/w.lua" }, 10)["/w.lua"]
+  ok(plain_score and heavy_score, "frecency: the key scored under both weights")
   ok(
     math.abs(heavy_score - plain_score * 10) < 0.001,
-    "frecency: weight multiplies the looked-up score, not the stored one"
+    "frecency: weight scales the looked-up score"
   )
-  eq(plain:lookup({ "/w.lua" })["/w.lua"], plain_score, "frecency: weight left the store alone")
+  eq(w:score("/w.lua"), plain_score, "frecency: and leaves the stored score alone")
 
   -- --------------------------------------------------- one handle, one file
   local first = open("shared")

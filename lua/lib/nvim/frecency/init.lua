@@ -24,6 +24,11 @@
 ---else's machine. `store()` therefore returns the same handle for the same
 ---`dir`/`namespace` pair.
 ---
+---**The weight is an argument, not a property of the store.** It belongs to
+---the caller's configuration, which can change while Neovim runs; a store
+---handle is cached for the whole session and would have frozen whatever
+---weight happened to be configured when it was first opened.
+---
 ---**Nothing here knows what a key means.** File paths, alternate candidates,
 ---command names — the store ranks strings. That is what lets one
 ---implementation serve a picker ranking files and a resolver ranking
@@ -91,7 +96,6 @@ function M.store(opts)
     return existing
   end
 
-  local weight = tonumber(opts.weight) or 1.0
   local disk_opts = { dir = dir }
 
   ---@type table<string, Lib.Frecency.Entry>|nil
@@ -144,15 +148,17 @@ function M.store(opts)
     end,
 
     ---@param keys string[]
+    ---@param weight? number
     ---@return table<string, number>
-    lookup = function(self, keys)
+    lookup = function(self, keys, weight)
+      local factor = tonumber(weight) or 1.0
       local out = {}
       for _, key in ipairs(keys or {}) do
         local s = self:score(key)
         -- Only what actually scores: a table full of zeroes says the same
         -- thing as an absent key and makes every consumer test for both.
         if s > 0 then
-          out[key] = s * weight
+          out[key] = s * factor
         end
       end
       return out
