@@ -27,6 +27,7 @@ local PROBE = {
   "lib.nvim.bindings.keymap",
   "lib.nvim.fs.is_dir",
   "lib.nvim.store.project",
+  "lib.nvim.frecency",
   "lib.nvim.core",
   "lib.nvim.ui.kit",
   "lib.nvim.bindings.usercmd.composer",

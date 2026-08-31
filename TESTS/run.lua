@@ -72,6 +72,7 @@ local specs = {
   "selection_spec.lua",
   "context_spec.lua",
   "cache_spec.lua",
+  "frecency_spec.lua",
   "cwd_spec.lua",
   "project_store_spec.lua",
   "harvest_spec.lua",

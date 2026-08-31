@@ -11,6 +11,7 @@
 ---@field cross Lib.Cross
 ---@field deps Lib.Deps
 ---@field functions Lib.Functions
+---@field frecency Lib.Frecency
 ---@field fs Lib.Fs
 ---@field git Lib.Git
 ---@field json Lib.JSON
