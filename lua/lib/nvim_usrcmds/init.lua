@@ -24,7 +24,6 @@ local defaults = {
   powershell_profile = vim.fn.has("win32") == 1,
   lib_verb = true,
   deps = true,
-  hover = true,
 }
 
 ---Sets up the opt-in utility user commands per `opts`.

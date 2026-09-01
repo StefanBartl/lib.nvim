@@ -70,9 +70,6 @@ a few commands directly, opt-in via `require("lib.nvim_usrcmds").setup(opts)`:
 | `:Lib ps-profile` (= `:PowershellProfile`, Windows) | Open the active PowerShell profile in Neovim |
 | `:Lib deps show <plugin.nvim>` | Report which of a dependent plugin's optional external tools are missing, and why they matter |
 | `:Lib deps install <plugin.nvim>` | Compose and confirm an install command for what's missing |
-| `:Lib hover toggle` (also `on` / `off`) | Switch the path/link hover off for the session, or back on |
-| `:Lib hover web on` (also `off` / `toggle`, and `web fetch …`) | Let links hover too — parsed offline, or fetched for their status code and title |
-| `:Lib hover office on` (also `off` / `toggle`) | Render `.docx`/`.xlsx`/`.pptx` in the hover, via pdfport.nvim → PDF, instead of showing a badge |
 
 The `deps` system is what every sibling plugin's "declared, installable
 external tools" popup and `:Lib deps show <plugin>` come from — see
