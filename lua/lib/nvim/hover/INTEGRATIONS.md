@@ -50,12 +50,13 @@ ran.
 | [markdown.nvim](https://github.com/StefanBartl/markdown.nvim) | registry | link / `<figure>` scanning; `#heading` section previews | only bare paths start a hover; `file.md#frag` shows the file's head, not that section |
 | [gopath.nvim](https://github.com/StefanBartl/gopath.nvim) | named | resolving truncated paths and `:line:col` suffixes | ordinary relative and absolute paths still resolve; truncated ones do not |
 | [images.nvim](https://github.com/StefanBartl/images.nvim) | named | drawing the picture into the float (OSC 1337) | an image target shows format, dimensions and size as text |
-| [pdfport.nvim](https://github.com/StefanBartl/pdfport.nvim) | named | rasterizing a PDF page to PNG | a PDF shows its size and why it could not be rendered |
+| [pdfport.nvim](https://github.com/StefanBartl/pdfport.nvim) | named | rasterizing a PDF page to PNG; converting an office document to a PDF (opt-in) | a PDF shows its size and why it could not be rendered; a `.docx` shows what it is and how big |
 | [reposcope.nvim](https://github.com/StefanBartl/reposcope.nvim) | — | *planned* — see below | no repository hover |
 
 All of them are optional and **none is required**. With none installed the
-hover still gives file heads, directory listings, URL details, image and PDF
-metadata, and the "this target does not exist" answer.
+hover still gives file heads, directory listings, image and PDF metadata, a
+badge for files that hold no text, URL details once the web hover is switched
+on, and the "this target does not exist" answer.
 
 ## markdown.nvim — the only registry contributor today
 
@@ -156,6 +157,31 @@ than none.
 Without pdfport a `.pdf` target still hovers — as its size, plus the reason
 there is no page.
 
+### …and a whole document at a time
+
+```lua
+require("pdfport").can_create("office")   --> is there a producer for this?
+require("pdfport").create({ inputs = { docx }, output = pdf, from = "office", … })
+```
+
+The second crossing to pdfport, and the one that makes an office document
+previewable at all: its `soffice` producer runs LibreOffice headless and hands
+back a PDF, which then goes straight into the page path above. Off unless
+`:Lib hover office on` — the first conversion of each document is a LibreOffice
+start, which is seconds.
+
+Three things worth knowing when this misbehaves, all in
+[`preview/office.lua`](preview/office.lua):
+
+- **`can_create("office")` is asked first**, so "LibreOffice is not installed"
+  is a sentence in the float rather than a failed conversion.
+- **Converted PDFs are kept**, keyed by path *and* mtime, under
+  `stdpath("cache")/lib.nvim/hover-office`, and deleted at `VimLeavePre`. A
+  second hover on the same document does not start LibreOffice again.
+- **One conversion per document at a time.** The hover's own cache never holds
+  a pending result, so without that guard every `CursorHold` during a
+  conversion would start another one.
+
 ## reposcope.nvim — planned
 
 [reposcope.nvim](https://github.com/StefanBartl/reposcope.nvim) searches,
@@ -217,6 +243,10 @@ Two things to settle first, and they are why this is not done yet:
 | an image shows as text | no provider installed, or one that is not images.nvim on a terminal without Kitty graphics |
 | the picture lands beside its own frame | placement — see the two invariants in [README.md](README.md#two-things-that-must-not-be-changed-casually) |
 | a PDF shows its size but no page | pdfport.nvim missing, or `pdftoppm` not on `PATH` |
+| a `.docx` shows a badge instead of its first page | `:Lib hover office on` was never typed — it is opt-in; or pdfport.nvim / `soffice` is missing, which the badge says |
+| a link does not hover at all | `:Lib hover web on` — off by default, in every filetype, for both markdown links and bare URLs |
+| a link hovers but shows no title or status code | that is `web on` without `web fetch on`; the offline preview never touches the network |
+| a fetched link keeps showing an old status | fetch results are cached for the session; `:Lib hover web off` then `on` drops the cache |
 | nothing hovers anywhere | `enable()` never ran from a non-lazy spec, `:Lib hover off` was typed and forgotten, or `vim.g.lib_nvim_hover_disable` is set |
 | one path stopped hovering while everything else still works | it was dismissed with `q`/`<Esc>`. It re-arms at the next target the cursor resolves, or immediately via `show({ force = true })` |
 | `q` starts no macro, or `<Esc>` does nothing | a hover is on screen and has borrowed that key — **lib.nvim**, and only until the float closes, which hands it back rather than deleting it |

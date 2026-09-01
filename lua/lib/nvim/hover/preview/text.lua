@@ -6,6 +6,12 @@
 --- the network. Reading is capped by line count rather than by file size, so
 --- a 300 MB log with one very long line costs the same as a short one.
 ---
+--- "A plain file" is not the same as "a file whose bytes are text", and the
+--- difference is not cosmetic: reading lines out of a container format
+--- produces mojibake with a filename over it. `M.file` therefore asks
+--- `lib.nvim.hover.preview.binary` first, and hands anything that is not text
+--- to its badge instead.
+---
 --- Section previews (`#anchor`, and a markdown file with a fragment) are
 --- deliberately absent: resolving a heading means GFM slugging and heading
 --- parsing, which is markdown knowledge. `markdown.nvim` contributes those
@@ -68,6 +74,18 @@ end
 ---@param opts Lib.Hover.PreviewOpts
 ---@return Lib.Hover.Content
 function M.file(target, opts)
+  -- Before anything is read as lines: are these bytes text at all? This is
+  -- the general catch, and it is a byte test rather than a list of
+  -- extensions precisely because the file that produced the bug — a `.docx`
+  -- rendered as twenty lines of ZIP container — is the sort nobody thinks to
+  -- list. Office documents never arrive here (they have their own type and
+  -- their own preview); archives, executables, media, fonts and every
+  -- unrecognized container do.
+  local binary = require("lib.nvim.hover.preview.binary")
+  if binary.is_binary(target.path) then
+    return binary.badge(target)
+  end
+
   local limit = opts.max_lines or 20
   local offset = math.max(0, opts.offset or 0)
   local lines, truncated, skipped = head(target.path, limit, offset)

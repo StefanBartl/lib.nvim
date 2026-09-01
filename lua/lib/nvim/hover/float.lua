@@ -24,6 +24,22 @@ local _augroup = nil
 ---@type (fun())|nil Teardown for whatever was drawn into the window.
 local _on_close = nil
 
+--- Highlight groups a preview may ask for on its first line, and what each
+--- links to when the user and the colorscheme have said nothing. Defined on
+--- demand (see `open`) rather than at load time, so a colorscheme that comes
+--- later still wins.
+---
+--- Three, not one: "this target does not exist" and "the server answered 500"
+--- are errors, "this file has no text in it" is a statement of fact about a
+--- perfectly healthy file, and colouring the third one red would report a
+--- problem that is not there.
+---@type table<string, string>
+local HL_DEFAULTS = {
+  LibHoverMissing = "DiagnosticError",
+  LibHoverError = "DiagnosticError",
+  LibHoverInfo = "DiagnosticHint",
+}
+
 --- Is a hover window currently open?
 ---@return boolean
 function M.is_open()
@@ -134,15 +150,20 @@ function M.open(lines, opts)
   local buf = api.nvim_create_buf(false, true)
   api.nvim_buf_set_lines(buf, 0, -1, false, lines)
 
-  -- Highlight the first line before the buffer is locked. Used by the
-  -- "missing" preview for its ✗ marker: a filetype cannot express "this one
-  -- line is an error", and the marker is the whole point of that preview.
+  -- Highlight the first line before the buffer is locked. Used wherever the
+  -- first line is a verdict rather than content: the "missing" preview's ✗
+  -- marker, an HTTP error status, a "this file has no text in it" badge. A
+  -- filetype cannot express "this one line means something", and in each of
+  -- those previews that line is the whole point.
   --
   -- `default = true` on the link, set here rather than at setup(): a
   -- colorscheme loaded after us must be able to override it, and a user who
   -- defined the group themselves must not have it overwritten.
   if opts.highlight and opts.highlight ~= "" then
-    pcall(api.nvim_set_hl, 0, "LibHoverMissing", { link = "DiagnosticError", default = true })
+    local link = HL_DEFAULTS[opts.highlight]
+    if link then
+      pcall(api.nvim_set_hl, 0, opts.highlight, { link = link, default = true })
+    end
     pcall(api.nvim_buf_set_extmark, buf, api.nvim_create_namespace("lib.nvim.hover"), 0, 0, {
       end_row = 1,
       hl_group = opts.highlight,

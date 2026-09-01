@@ -57,6 +57,27 @@ local function resolve_path(target, source_path)
   return vim.fs.normalize(base .. "/" .. expanded)
 end
 
+---@internal
+--- Repair a URL written with Windows separators.
+---
+--- `http:\\example.com` is what a Windows keyboard produces when the habit
+--- wins, and it is still perfectly clear what was meant. Normalizing it here
+--- rather than in the preview means everything downstream — the split for
+--- display, the `^https?://` test that decides fetchability — sees one shape
+--- and not two.
+---@param url string
+---@return string
+local function normalize_url(url)
+  -- Only a *backslash* separator is repaired, and only when there is one:
+  -- `mailto:someone@example.com` has no separator at all and must not grow a
+  -- `//`, and a correctly written `http://` needs no help.
+  local scheme, rest = url:match("^(%a[%w+.-]*):\\+(.*)$")
+  if scheme then
+    return scheme .. "://" .. rest
+  end
+  return url
+end
+
 --- Classify a link target.
 ---@param target string Raw target as `link_scan` reported it.
 ---@param source_path string|nil Absolute path of the document the link lives in.
@@ -76,10 +97,16 @@ function M.classify(target, source_path)
   -- A scheme means it is a URL, full stop -- including mailto: and friends,
   -- which get classified but not fetched (see preview/url.lua).
   if raw:match("^%a[%w+.-]*:") and not raw:match("^%a:[\\/]") then
-    return { type = "url", raw = raw, url = raw }
+    return { type = "url", raw = raw, url = normalize_url(raw) }
   end
   if raw:match("^//") then
     return { type = "url", raw = raw, url = "https:" .. raw }
+  end
+  -- `www.example.com` with the scheme left off: a host, written as a host,
+  -- and never a relative path that happens to exist. Assumed https, which is
+  -- what a browser's address bar would do with it too.
+  if raw:match("^www%.[%w%-]") then
+    return { type = "url", raw = raw, url = "https://" .. raw }
   end
 
   -- Local path, possibly with a trailing #anchor.
@@ -114,6 +141,13 @@ function M.classify(target, source_path)
     kind = "pdf"
   elseif ext and MARKDOWN_EXT[ext] then
     kind = "markdown"
+  elseif require("lib.nvim.hover.formats").is_office(ext) then
+    -- Its own type rather than "some binary file", because it is the one
+    -- group with a second answer available: LibreOffice can turn it into a
+    -- PDF, and a PDF is something this hover can actually show. Everything
+    -- else that cannot be read as text is caught by the byte test in
+    -- `preview.binary`, which needs no extension to be listed anywhere.
+    kind = "office"
   end
 
   return {

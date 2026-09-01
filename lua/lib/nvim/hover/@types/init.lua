@@ -25,6 +25,7 @@
 ---@field scroll_keys? Lib.Hover.ScrollKeys # Which keys scroll a scrollable preview.
 ---@field dismiss_keys? string|string[] # Which keys wave the hover on screen away. Default `{ "q", "<Esc>" }`; a configured list replaces the default, and an empty one binds nothing.
 ---@field url? Lib.HoverUrlConfig
+---@field office? Lib.HoverOfficeConfig
 
 --- Keys bound globally while a scrollable hover is on screen, and unbound
 --- (restoring whatever they shadowed) the moment it closes. Each direction
@@ -42,12 +43,21 @@
 ---@field saved? table # `maparg(..., true)` dict of the mapping that was there, restored on unbind.
 
 ---@class Lib.HoverUrlConfig
----@field fetch? boolean # Fetch the page for its title/description. Default false: a hover that silently fetches discloses every link brushed past.
+---@field hover? boolean # Whether a URL opens a hover at all. Default false: documentation is made of links, and a float on every one of them is noise. `:Lib hover web on`.
+---@field fetch? boolean # Fetch the page for its status code, title and description. Default false: a hover that silently fetches discloses every link brushed past. Implies `hover`. `:Lib hover web fetch on`.
 ---@field timeout_ms? integer # Default 2000.
+
+--- Office documents (`.docx`, `.xlsx`, `.pptx`, `.odt`, the legacy binary
+--- formats, …). Off means a badge saying what the file is; on means
+--- `pdfport.nvim` converts it to a PDF and the page is drawn like any other
+--- picture — a LibreOffice start per document, which is why it is opt-in.
+---@class Lib.HoverOfficeConfig
+---@field convert? boolean # Default false. `:Lib hover office on`.
+---@field timeout_ms? integer # How long the conversion may take. Default 60000 — LibreOffice's first start is slow.
 
 --- What a target turned out to be (`lib.nvim.hover.classify`).
 ---@class Lib.Hover.Target
----@field type "image"|"pdf"|"markdown"|"file"|"directory"|"url"|"anchor"|"missing"
+---@field type "image"|"pdf"|"office"|"markdown"|"file"|"directory"|"url"|"anchor"|"missing"
 ---@field raw string # The target exactly as written.
 ---@field path? string # Absolute, normalized path for local targets.
 ---@field anchor? string # Fragment after `#`, without the `#`.
@@ -79,8 +89,10 @@
 ---@field inline_images? boolean
 ---@field url_fetch? boolean
 ---@field url_timeout_ms? integer
+---@field office_convert? boolean # Convert an office document to a PDF for a real page preview, instead of showing a badge.
+---@field office_timeout_ms? integer # Conversion timeout, passed to pdfport.
 ---@field offset? integer # Text previews: lines to skip. Set by `lib.nvim.hover.scroll`.
----@field page? integer # PDF previews: 1-based page to render. Set by `lib.nvim.hover.scroll`.
+---@field page? integer # PDF previews: 1-based page to render. Set by `lib.nvim.hover.scroll`. Office documents page through their converted PDF the same way.
 
 ---@class Lib.Hover.Content
 ---@field lines string[]
@@ -88,7 +100,7 @@
 ---@field title? string # Rendered in the float border.
 ---@field image_path? string # Draw this image into the float, if a provider can.
 ---@field canvas? Lib.Hover.Canvas # Size the float to this instead of to `lines`, and show no text or title: the float is a frame for the picture, not a caption for it.
----@field highlight? string # Highlight group applied to the first line (the `missing` preview's ✗ marker).
+---@field highlight? string # Highlight group for the first line, where that line is a verdict rather than content: `LibHoverMissing` (→ `DiagnosticError`, the ✗ marker), `LibHoverError` (→ `DiagnosticError`, an HTTP 4xx/5xx or an unreachable host), `LibHoverInfo` (→ `DiagnosticHint`, the "no text in this file" badge).
 ---@field scroll? Lib.Hover.Scroll # Present when the preview has more to show; drives the `scroll_keys`.
 ---@field pending? boolean # Provisional; an async result replaces it (and it is not cached).
 
@@ -116,7 +128,7 @@
 ---@field canvas? Lib.Hover.Canvas # Blank float of this exact size; `lines`, `title` and `filetype` are ignored.
 ---@field border? string|string[]
 ---@field focusable? boolean
----@field highlight? string # Highlight group for the first line; `LibHoverMissing` (→ `DiagnosticError`) is defined on demand.
+---@field highlight? string # Highlight group for the first line. `LibHoverMissing`/`LibHoverError` (→ `DiagnosticError`) and `LibHoverInfo` (→ `DiagnosticHint`) are defined on demand, with `default = true` so a colorscheme still wins.
 ---@field on_close? fun()
 
 return {}

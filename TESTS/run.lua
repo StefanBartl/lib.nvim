@@ -93,6 +93,8 @@ local specs = {
   "hover_scroll_keys_spec.lua",
   "hover_bare_path_spec.lua",
   "hover_dismiss_spec.lua",
+  "hover_binary_spec.lua",
+  "hover_url_spec.lua",
 }
 
 --- Straight to stdout rather than through `print`.

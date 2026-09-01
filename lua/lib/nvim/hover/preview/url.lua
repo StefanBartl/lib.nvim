@@ -1,16 +1,28 @@
 ---@module 'lib.nvim.hover.preview.url'
----@brief URL hover preview: the parsed URL always, page metadata only when
----explicitly enabled.
+---@brief URL hover preview: the parsed URL when the web hover is on, the
+---server's answer when fetching is on too.
 ---@description
---- **Fetching is off by default, on purpose.** A hover that silently issues
---- HTTP requests is both a privacy problem (every link you brush past is
---- disclosed to its host) and a practical one (a document with fifty links
---- becomes a request storm while scrolling). The default preview is
---- therefore purely local: scheme, host, path, decoded query — parsed, not
---- fetched.
+--- **Both levels are off by default, for two different reasons.**
 ---
---- With `hover.url.fetch = true`, `<title>` and `<meta name="description">`
---- are fetched through `lib.nvim.net.curl` and cached.
+--- `hover.url.hover` is off because dev documentation is *made* of links. A
+--- hover that opens on every one of them turns reading a README into a
+--- flickering slideshow, and the float lands over the text being read.
+--- `:Lib hover web on` is the reader saying "for the next while, links are
+--- what I am interested in".
+---
+--- `hover.url.fetch` is off on top of that because fetching is a disclosure:
+--- every link the cursor rests on becomes a request from this machine to that
+--- host, and a document with fifty links becomes a request storm while
+--- scrolling. With it on, the response's **status line comes first** — a
+--- `404` or a `500` is the single most useful thing a hover can say about a
+--- link — followed by `<title>`, `<meta name="description">` and the content
+--- type.
+---
+--- Fetching goes through `lib.nvim.net.curl`, and results are cached by the
+--- hover for the session: a URL is not re-fetched every time the cursor
+--- passes it, which also means a server that has since recovered still shows
+--- its old status until the cache is dropped (`:Lib hover web off` / `on`
+--- does that).
 
 local M = {}
 
@@ -22,7 +34,10 @@ local M = {}
 local function split_url(url)
   local scheme, rest = url:match("^(%a[%w+.-]*):/?/?(.*)$")
   if not scheme then
-    return { host = url }
+    -- No scheme at all: `classify` only produces that for a `www.` host, so
+    -- everything before the first `/` is the host.
+    local host, path = url:match("^([^/]*)(.*)$")
+    return { host = host, path = (path ~= "" and path or nil) }
   end
 
   -- mailto: and other non-hierarchical schemes have no host/path split.
@@ -84,6 +99,62 @@ local function extract_meta(body)
   return title, description
 end
 
+---@internal
+--- The reason phrase for a status code the server did not name itself. Only
+--- the ones a link in a document actually produces — this is a hover, not an
+--- HTTP reference.
+---@type table<integer, string>
+local STATUS_TEXT = {
+  [200] = "OK",
+  [201] = "Created",
+  [204] = "No Content",
+  [301] = "Moved Permanently",
+  [302] = "Found",
+  [304] = "Not Modified",
+  [307] = "Temporary Redirect",
+  [308] = "Permanent Redirect",
+  [400] = "Bad Request",
+  [401] = "Unauthorized",
+  [403] = "Forbidden",
+  [404] = "Not Found",
+  [408] = "Request Timeout",
+  [410] = "Gone",
+  [418] = "I'm a teapot",
+  [429] = "Too Many Requests",
+  [500] = "Internal Server Error",
+  [502] = "Bad Gateway",
+  [503] = "Service Unavailable",
+  [504] = "Gateway Timeout",
+}
+
+---@internal
+--- Content type without its parameters, and the body size in bytes if the
+--- server declared one — the two header facts that say what a link *is* when
+--- there is no title to read (a PDF, a tarball, a JSON API).
+---@param headers table<string, string>|nil
+---@param body string|nil
+---@return string|nil
+local function type_line(headers, body)
+  headers = headers or {}
+  local ctype = headers["content-type"]
+  if ctype then
+    ctype = vim.trim(ctype:match("^([^;]+)") or ctype)
+  end
+
+  local length = tonumber(headers["content-length"]) or (body and #body or nil)
+  local size
+  if length then
+    local ok, fmt = pcall(require, "lib.lua.strings.format")
+    size = (ok and fmt and fmt.format_bytes) and fmt.format_bytes(length)
+      or (tostring(length) .. " B")
+  end
+
+  if ctype and size then
+    return ("%s · %s"):format(ctype, size)
+  end
+  return ctype or size
+end
+
 --- The always-available, offline preview: the URL taken apart.
 ---@param target Lib.Hover.Target
 ---@return Lib.Hover.Content
@@ -108,9 +179,14 @@ function M.offline(target)
 end
 
 --- Fetch page metadata. Only called when `hover.url.fetch` is on.
+---
+--- The callback always receives content, never nil: a failed request is an
+--- answer worth showing ("✗ no answer", and the URL that was tried), and a
+--- nil would collapse into "no hover at all", which is indistinguishable from
+--- the feature being off.
 ---@param target Lib.Hover.Target
 ---@param opts Lib.Hover.PreviewOpts
----@param callback fun(content: Lib.Hover.Content|nil, err: string|nil)
+---@param callback fun(content: Lib.Hover.Content)
 function M.fetch(target, opts, callback)
   local url = target.url or target.raw
 
@@ -136,31 +212,62 @@ function M.fetch(target, opts, callback)
     raw_args = { "-L", "--max-filesize", "2000000" },
     headers = { Accept = "text/html,application/xhtml+xml" },
   }, function(ok, response)
-    local content = M.offline(target)
+    local offline = M.offline(target)
 
     if not ok or type(response) ~= "table" then
-      content.lines[#content.lines + 1] = "(fetch failed)"
-      callback(content)
+      -- No status line at all: DNS failure, refused connection, TLS error, or
+      -- the timeout. Distinguished from an HTTP error, because "the server
+      -- said 500" and "there was no server" are different problems and the
+      -- reader is about to act on one of them.
+      local lines = { "✗ no answer" }
+      local reason = type(response) == "string" and vim.trim(response:gsub("%s+", " ")) or nil
+      lines[#lines + 1] = (reason and reason ~= "") and reason
+        or ("unreachable, or slower than " .. tostring(opts.url_timeout_ms or 2000) .. " ms")
+      for _, line in ipairs(offline.lines) do
+        lines[#lines + 1] = line
+      end
+      callback({ lines = lines, title = offline.title, highlight = "LibHoverError" })
       return
     end
 
+    local status = tonumber(response.status) or 0
+    local phrase = response.status_text
+    if not phrase or phrase == "" then
+      phrase = STATUS_TEXT[status] or ""
+    end
+
+    -- The status first, and on its own line. It is the answer to the question
+    -- a reader hovers a link to ask -- "is this still there?" -- and burying
+    -- it under a page title is what made the earlier version of this preview
+    -- only decorative.
+    local lines = { vim.trim(("HTTP %d %s"):format(status, phrase)) }
+
     local title, description = extract_meta(response.body or "")
-    local lines = {}
     if title then
       lines[#lines + 1] = title
     end
     if description then
       lines[#lines + 1] = description
     end
-    if #lines > 0 then
-      lines[#lines + 1] = ""
+
+    local ctype = type_line(response.headers, response.body)
+    if ctype then
+      lines[#lines + 1] = ctype
     end
-    for _, line in ipairs(content.lines) do
+
+    lines[#lines + 1] = ""
+    for _, line in ipairs(offline.lines) do
       lines[#lines + 1] = line
     end
-    lines[#lines + 1] = ("HTTP %s"):format(response.status or "?")
 
-    callback({ lines = lines, title = title and "page" or content.title })
+    callback({
+      lines = lines,
+      title = title and "page" or offline.title,
+      -- 4xx/5xx marked, so a dead link is recognizable without reading the
+      -- number. 3xx is not an error: curl followed it, and what is shown is
+      -- the destination's own status.
+      highlight = (status >= 400 or status == 0) and "LibHoverError" or nil,
+    })
   end)
 end
 

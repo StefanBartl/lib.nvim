@@ -44,13 +44,14 @@ out in [INTEGRATIONS.md](INTEGRATIONS.md).
 | --- | --- | --- |
 | **markdown.nvim** | Finding a link / `<figure>` in a line; `#heading` section previews | Only bare paths start a hover; a `file.md#frag` shows the file's first lines instead of that section |
 | **images.nvim** | Draws the picture into the float (OSC 1337) | An image target shows format, dimensions and size as text |
-| **pdfport.nvim** | Rasterizes page 1 of a PDF | A PDF shows its size and why it could not be rendered |
+| **pdfport.nvim** | Rasterizes page 1 of a PDF; converts an office document to a PDF so it can be shown at all (opt-in) | A PDF shows its size and why it could not be rendered; a `.docx` shows what it is |
 | **gopath.nvim** | Resolves truncated paths (`...nvim/init.lua:42`) and `:line:col` suffixes | Ordinary relative and absolute paths still resolve; truncated ones do not |
 
 Every one of them is optional, and **none of them is required for the hover
 to work**. With none installed you still get: file heads, directory listings,
-URL details, image and PDF metadata, and the "this target does not exist"
-answer. Install one and that row upgrades from a description to the thing
+image and PDF metadata, a badge for anything that has no text in it, the
+"this target does not exist" answer, and — once `:Lib hover web on` — URL
+details. Install one and that row upgrades from a description to the thing
 itself.
 
 The long version — every entry point, what a planned reposcope.nvim hover
@@ -151,6 +152,9 @@ For the rest of the session, from wherever you are:
 | --- | --- |
 | `:Lib hover toggle` | off if it is on, on if it is off |
 | `:Lib hover off` / `:Lib hover on` | say which |
+| `:Lib hover web on` / `off` / `toggle` | whether links hover at all — see [Links](#links-to-the-web) |
+| `:Lib hover web fetch on` / `off` / `toggle` | whether a hovered link is fetched for its status code and title |
+| `:Lib hover office on` / `off` / `toggle` | whether a `.docx` is rendered through a PDF or only described |
 
 A command and not a key, because lib.nvim claims no keymaps on its
 dependents' behalf — `lib.nvim_usrcmds` says exactly that — and a switch you
@@ -210,8 +214,11 @@ require("lib.nvim.hover").setup({
 | `scroll_keys.down` | `{ "<M-PageDown>", "<C-Down>" }` | Keys that scroll a scrollable preview forward. |
 | `scroll_keys.up` | `{ "<M-PageUp>", "<C-Up>" }` | …and back. |
 | `dismiss_keys` | `{ "q", "<Esc>" }` | Keys that dismiss the hover on screen until the cursor reaches another target. |
-| `url.fetch` | `false` | Off deliberately: a hover that silently fetches discloses every link you brush past to its host. |
+| `url.hover` | `false` | Whether a link hovers at all. Off deliberately — see [Links](#links-to-the-web). |
+| `url.fetch` | `false` | Whether the page is fetched for its status code, title and description. Implies `url.hover`. Off deliberately: a hover that silently fetches discloses every link you brush past to its host. |
 | `url.timeout_ms` | `2000` | |
+| `office.convert` | `false` | Whether a `.docx`/`.xlsx`/`.pptx`/… is converted to a PDF and shown as a page, instead of described. Off deliberately: it costs a LibreOffice start per document. |
+| `office.timeout_ms` | `60000` | LibreOffice's first start is slow, and a timeout that fires on it looks like a broken feature. |
 
 ## Scrolling a preview
 
@@ -311,6 +318,137 @@ None of this touches a target that **exists** — `docs/` and `and/or` both
 hover normally the moment something of that name is on disk. The rules only
 decide whether *absence* is worth asserting.
 
+## Links to the web
+
+Off by default. Not because a link preview is a bad idea — it is one of the
+better ones here — but because **documentation is made of links**. Turn it on
+permanently and reading a README becomes a slideshow: every second cursor
+rest opens a float, and the float lands over the paragraph being read.
+
+So it is a switch you throw when links are what you are looking at:
+
+| Command | What you get |
+| --- | --- |
+| `:Lib hover web on` | the URL taken apart: host, path, decoded query. Nothing leaves the machine. |
+| `:Lib hover web fetch on` | that, plus what the server answers. Implies `web on`. |
+| `:Lib hover web off` | back to silence on links |
+
+With fetching on, the **status line comes first**, because "is this link still
+alive" is the question a link hover is actually asked:
+
+```
+┌ page ─────────────────────────────────────┐
+│ HTTP 500 Internal Server Error            │
+│ Example Domain                            │
+│ text/html · 1.2 KB                        │
+│                                           │
+│ example.com                               │
+│ /broken                                   │
+└───────────────────────────────────────────┘
+```
+
+A 4xx or 5xx is marked through `LibHoverError` (linked to `DiagnosticError`),
+so a dead link is recognizable before the number is read. "No answer at all" —
+DNS failure, refused connection, timeout — is a different float from "the
+server said 500", because they are different problems and you are about to act
+on one of them.
+
+Fetching is **off on top of the hover switch** for a reason the volume
+argument does not cover: it is a disclosure. Every link the cursor rests on
+becomes a request from this machine to that host, and a document with fifty
+links becomes a request storm while scrolling. `web on` alone never touches
+the network.
+
+Results are cached for the session. A server that has since recovered keeps
+showing its old status until the cache is dropped — `:Lib hover web off` and
+`on` again does that, as does any of these switches.
+
+**Links are found in every filetype**, not only in markdown. markdown.nvim's
+link scanner covers `[text](url)`, autolinks and bare URLs inside a markdown
+buffer; `bare_url.lua` covers a URL in a Lua comment, a `.txt`, a commit
+message or a `:messages` dump. Both are gated by the same switch, so there is
+one setting and not two that can disagree.
+
+What counts as a URL is decided by shape, on the line — deliberately not
+through `<cfile>`, which stops at whatever `'isfname'` excludes and used to
+cut off `?query=` and `#fragment`:
+
+| Text | Found |
+| --- | --- |
+| `see https://neovim.io/doc?a=b#c now` | the whole URL, query and fragment included |
+| `(https://example.com), and…` | without the wrapping paren or the comma |
+| `https://en.wikipedia.org/wiki/Vim_(text_editor)` | *with* its own bracket — it opened that one itself |
+| `http:\\example.com` | yes, repaired to `http://` — a Windows keyboard produces this constantly |
+| `www.example.com` | yes, read as `https://` |
+| `local p = "C:\\Users\\me"` | no. A one-letter scheme is a drive letter, so schemes must be at least two characters |
+
+`show({ force = true })` ignores the switch: an explicit request for the link
+under the cursor is not the volume problem the switch exists to solve.
+
+## Files with no text in them
+
+Hovering a `.docx` used to open a float holding the first twenty "lines" of a
+ZIP container — mojibake, with the document's name in the border, which reads
+as a preview rather than as garbage. Every binary format did it, because
+reading lines is what a file preview does and a binary file contains newline
+bytes.
+
+Now a file whose bytes are not text gets a badge saying so:
+
+```
+┌ archive.zip ──────────┐
+│ ◆ ZIP archive         │
+│ ZIP · 4.1 MB          │
+└───────────────────────┘
+```
+
+**The test is the bytes, not a list of extensions.** A NUL in the first 4 KB,
+or too many other control characters, and there is nothing to read — which
+covers the formats nobody thought to list, including whatever is invented next
+week. `lib.nvim.hover.formats` is consulted only for a better *word* than
+"binary file" once the decision is already made, and it knows the office
+formats, archives, executables, media, fonts and databases.
+
+The badge is `LibHoverInfo` (→ `DiagnosticHint`), not the red of a broken
+link. Nothing is wrong with the file; it simply has no text in it.
+
+### Office documents can do better than a badge
+
+`.docx`, `.xlsx`, `.pptx`, `.odt` and the legacy `.doc`/`.xls`/`.ppt` are the
+one group with a second answer available: LibreOffice converts them to a PDF,
+and a PDF is something this hover already shows as a picture.
+
+```
+:Lib hover office on
+```
+
+From then on an office document hovers as its **first page, rendered** — and
+`<M-PageDown>` / `<C-Down>` page through it exactly like a PDF, because by
+that point it *is* one.
+
+Opt-in, because the first conversion of each document starts LibreOffice:
+seconds, not milliseconds. That is also why the float says `converting to
+PDF…` while it runs (after `placeholder_grace_ms`, so a fast one shows nothing
+but the finished page), why a second hover on the same document is instant —
+the converted PDF is kept, keyed by file *and* mtime — and why only one
+conversion per document ever runs at a time, however often `CursorHold` fires
+while LibreOffice starts.
+
+Needs [pdfport.nvim](https://github.com/StefanBartl/pdfport.nvim) and
+`soffice` on `PATH`. Without either, the badge says which one is missing
+rather than silently doing nothing:
+
+```
+┌ report.docx ───────────────────────────────┐
+│ ◆ Word document                            │
+│ DOCX · 24.1 KB                             │
+│ (LibreOffice not on PATH — no page preview)│
+└────────────────────────────────────────────┘
+```
+
+Converted PDFs live in `stdpath("cache")/lib.nvim/hover-office` and are
+deleted when Neovim exits — the same bargain the rasterized PDF pages make.
+
 ## Contributing from a plugin
 
 ```lua
@@ -334,8 +472,8 @@ Re-registering under the same name **replaces** that plugin's contribution,
 so a `setup()` that runs twice does not leave two copies of your source firing
 on every hover. A source that throws is skipped and the next one still runs.
 
-Target types a preview can claim: `image`, `pdf`, `markdown`, `file`,
-`directory`, `url`, `anchor`, `missing`.
+Target types a preview can claim: `image`, `pdf`, `office`, `markdown`,
+`file`, `directory`, `url`, `anchor`, `missing`.
 
 ## Two things that must not be changed casually
 
@@ -396,8 +534,12 @@ which cost days:
 | `lib.nvim.hover` | Orchestration: debounce, LRU cache, async generation counter, `attach`/`show`/`hide`/`scroll`/`dismiss`/`toggle` |
 | `lib.nvim.hover.registry` | Plugin sources and previews |
 | `lib.nvim.hover.classify` | Target string → typed target. Pure, no I/O beyond one `fs_stat` |
+| `lib.nvim.hover.formats` | What an extension names, and whether it is convertible. Read by `classify` and by the badge |
 | `lib.nvim.hover.bare_path` | Paths with no link syntax; asks gopath.nvim when present |
+| `lib.nvim.hover.bare_url` | URLs with no link syntax, in any filetype |
 | `lib.nvim.hover.float` | The window |
 | `lib.nvim.hover.preview.text` | File heads, directory listings, the missing marker |
+| `lib.nvim.hover.preview.binary` | Is this text at all, and what to say when it is not |
+| `lib.nvim.hover.preview.office` | Office documents: the badge, or the converted PDF's page |
 | `lib.nvim.hover.preview.url` | URL details, optional fetch |
 | `lib.nvim.hover.preview.media` | Images and PDF pages, via whatever provider is installed |

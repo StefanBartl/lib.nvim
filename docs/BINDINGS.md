@@ -61,6 +61,9 @@ action the flat set would also omit.
 | `:Lib deps reset-first-run [{plugin}]` | Forget that a plugin's (or every plugin's) first-run popup was already shown |
 | `:Lib hover toggle` | Turn the path/link hover off for this session, or back on |
 | `:Lib hover on` / `:Lib hover off` | Say which, rather than flipping |
+| `:Lib hover web on` / `off` / `toggle` | Whether http(s) links hover at all — off by default, because documentation is made of links |
+| `:Lib hover web fetch on` / `off` / `toggle` | Whether a hovered link is fetched for its status code, title and description (implies `web on`) |
+| `:Lib hover office on` / `off` / `toggle` | Whether an office document is rendered through a PDF (pdfport.nvim + LibreOffice) instead of showing a badge |
 
 `{plugin}` completes from the `DEPS_PLUGIN` argument type — the set of plugins
 that declare a dependency spec, computed at completion time.

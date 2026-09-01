@@ -5,7 +5,16 @@
 --- what it points at, whatever that is: an image, a PDF page, a markdown
 --- file's section, a plain file's head, a directory listing, an in-page
 --- anchor, a URL — or, when the target does not exist, *that*, which is often
---- the most useful answer of all.
+--- the most useful answer of all. A file with no text in it (a `.docx`, an
+--- archive, an executable) gets a badge saying so rather than a float full of
+--- its bytes.
+---
+--- **Two previews are opt-in, and both are switches rather than defaults**
+--- (`:Lib hover web on`, `:Lib hover office on`). Links, because
+--- documentation is made of them and a float on every one is noise — with
+--- fetching a second level on top of that, since it discloses each link to
+--- its host. Office documents, because showing one means converting it
+--- through LibreOffice, which is seconds per document.
 ---
 --- **Why this is a library and not a plugin feature.** It began inside
 --- `markdown.nvim`, where the only thing that could start a hover was
@@ -22,7 +31,8 @@
 --- Classification is `lib.nvim.hover.classify`, presentation
 --- `lib.nvim.hover.float`, per-type content `lib.nvim.hover.preview.*`, and
 --- "what is under the cursor with no link syntax at all"
---- `lib.nvim.hover.bare_path`.
+--- `lib.nvim.hover.bare_path` for a path and `lib.nvim.hover.bare_url` for a
+--- URL.
 ---
 --- Asynchronous previews (PDF rasterization, URL fetch) are guarded by a
 --- generation counter: if the cursor moves on before the result lands, the
@@ -58,7 +68,16 @@ local _config = {
   border = "rounded",
   inline_images = true,
   bare_paths = true,
-  url = { fetch = false, timeout_ms = 2000 },
+  -- Both web levels off by default, for two different reasons -- disclosure
+  -- for `fetch`, and sheer volume for `hover`: dev documentation is made of
+  -- links, and a float on every one of them turns reading a README into a
+  -- slideshow. `:Lib hover web on` is the reader saying "for the next while,
+  -- links are what I am interested in". See `preview/url.lua`.
+  url = { hover = false, fetch = false, timeout_ms = 2000 },
+  -- Off because it costs a LibreOffice start per document -- seconds, not
+  -- milliseconds. Without it an office document gets a badge saying what it
+  -- is; with it, its first page as a picture. See `preview/office.lua`.
+  office = { convert = false, timeout_ms = 60000 },
   -- Two pairs, because a key that is not on the keyboard cannot be pressed:
   -- laptop and 60% layouts often reach PageUp/PageDown only through an Fn
   -- chord, and nothing at runtime can tell us whether this keyboard has
@@ -125,6 +144,23 @@ local function cfg()
 end
 
 ---@internal
+--- Whether a URL target may open a float at all.
+---@return boolean
+local function url_hover_enabled()
+  local url = cfg().url
+  return type(url) == "table" and url.hover == true
+end
+
+---@internal
+--- Whether office documents are converted for a real page preview, rather
+--- than described by a badge.
+---@return boolean
+local function office_convert_enabled()
+  local office = cfg().office
+  return type(office) == "table" and office.convert == true
+end
+
+---@internal
 ---@return table
 local function cache()
   if _cache then
@@ -147,6 +183,40 @@ local function cache()
     }
   end
   return _cache
+end
+
+---@internal
+--- Throw away every built preview.
+---
+--- The cache is keyed by what the target *is*, not by how it was previewed —
+--- so a URL cached as "host and path" would still answer that way after
+--- `:Lib hover web fetch on`, and a fetched 500 would keep being shown after
+--- the server recovered. Every switch that changes what a preview would say
+--- calls this; it costs one rebuild per target and removes a whole class of
+--- "the setting did nothing" reports.
+---@return nil
+local function reset_cache()
+  _cache = nil
+end
+
+---@internal
+--- The options every previewer is threaded, from the effective config.
+---
+--- One place rather than two: `show` and `scroll` built this table
+--- separately, and the second one silently lacked whatever the first had
+--- just gained.
+---@param c Lib.HoverConfig
+---@return Lib.Hover.PreviewOpts
+local function preview_opts(c)
+  return {
+    max_lines = c.max_lines or 20,
+    max_width = c.max_width or 80,
+    inline_images = c.inline_images,
+    url_fetch = type(c.url) == "table" and c.url.fetch == true,
+    url_timeout_ms = (type(c.url) == "table" and c.url.timeout_ms) or 2000,
+    office_convert = office_convert_enabled(),
+    office_timeout_ms = (type(c.office) == "table" and c.office.timeout_ms) or 60000,
+  }
 end
 
 ---@internal
@@ -227,6 +297,22 @@ function M.target_under_cursor(bufnr)
     return record
   end
 
+  -- A URL written as plain text -- in a code comment, a `.txt`, a commit
+  -- message, a `:messages` dump. Before the bare-path source, because that
+  -- one would find `https://example.com/a.html` too, by way of `<cfile>` and
+  -- the "a component carries an extension" rule -- and would find it
+  -- truncated at whatever `'isfname'` excludes.
+  --
+  -- Only when the web hover is on: this is the source that would otherwise
+  -- make every link in every document a hover target, which is exactly the
+  -- overload the switch exists to prevent.
+  if url_hover_enabled() then
+    local url = require("lib.nvim.hover.bare_url").under_cursor(bufnr)
+    if url then
+      return url
+    end
+  end
+
   -- Nothing claimed it: the text may be a path carrying no link syntax at all
   -- -- a path in prose, in a code comment, in a `:messages` dump. Same target
   -- shape, so everything downstream (classify/build/preview) is unchanged.
@@ -257,6 +343,55 @@ end
 local function placeholder_grace_ms()
   local n = cfg().placeholder_grace_ms
   return (type(n) == "number" and n >= 0) and n or 250
+end
+
+---@internal
+--- Run a previewer that may answer now or later, and decide when its
+--- provisional content is allowed on screen.
+---
+--- The contract `preview.media.pdf` and `preview.office.preview` share: they
+--- return what to show *now* — final, or marked `pending` — and call
+--- `on_result` when the real thing lands. Two things have to happen around
+--- that, and both were written twice before this existed:
+---
+---  * **A stale result is dropped.** The generation counter moves when the
+---    cursor does; a page that finishes rasterizing afterwards must not open
+---    a float over a line the reader has left. The work is not wasted — the
+---    previewer keeps its page — it simply does not interrupt.
+---  * **A placeholder waits out the grace period.** A render that beats it
+---    shows the finished page and nothing else, with no flash of a
+---    differently sized text float first. One that misses it has a real wait
+---    to explain, and then the placeholder is worth its interruption.
+---@param run fun(on_result: fun(content: Lib.Hover.Content)): Lib.Hover.Content
+---@param emit fun(content: Lib.Hover.Content|nil)
+---@return nil
+local function build_async(run, emit)
+  local generation = _generation
+  local settled = false
+
+  local provisional = run(function(content)
+    settled = true
+    if generation ~= _generation then
+      return
+    end
+    emit(content)
+  end)
+
+  if type(provisional) ~= "table" then
+    return
+  end
+
+  if not provisional.pending then
+    emit(provisional)
+    return
+  end
+
+  vim.defer_fn(function()
+    if settled or generation ~= _generation then
+      return
+    end
+    emit(provisional)
+  end, placeholder_grace_ms())
 end
 
 ---@internal
@@ -302,49 +437,34 @@ local function build(target, bufnr, opts, emit)
   elseif target.type == "image" then
     emit(require("lib.nvim.hover.preview.media").image(target, opts))
   elseif target.type == "pdf" then
-    local media = require("lib.nvim.hover.preview.media")
-    local generation = _generation
-    local settled = false
-
-    local provisional = media.pdf(target, opts, function(content)
-      settled = true
-      -- The cursor moved on while pdftoppm ran: the page is kept for the next
-      -- hover (media owns it now), but nothing opens over the link the reader
-      -- has already left.
-      if generation ~= _generation then
-        return
-      end
-      emit(content)
-    end)
-
-    if not provisional.pending then
-      emit(provisional)
-    else
-      -- Hold the "rendering page 1…" float back. A render that beats the
-      -- grace period shows the finished page and nothing else — no flash of
-      -- a differently sized text float first. One that misses it has a real
-      -- wait to explain, and then the float is worth its interruption.
-      vim.defer_fn(function()
-        if settled or generation ~= _generation then
-          return
-        end
-        emit(provisional)
-      end, placeholder_grace_ms())
-    end
+    build_async(function(on_result)
+      return require("lib.nvim.hover.preview.media").pdf(target, opts, on_result)
+    end, emit)
+  elseif target.type == "office" then
+    -- Same shape as the PDF branch, and for a stronger reason: a LibreOffice
+    -- start is seconds, so the "converting…" placeholder is one the reader
+    -- will actually see. When the conversion is off, `preview` answers with
+    -- a badge synchronously and nothing is deferred at all.
+    build_async(function(on_result)
+      return require("lib.nvim.hover.preview.office").preview(target, opts, on_result)
+    end, emit)
   elseif target.type == "url" then
     local url = require("lib.nvim.hover.preview.url")
     if opts.url_fetch then
-      local generation = _generation
-      url.fetch(target, opts, function(content)
-        if generation ~= _generation then
-          return
-        end
-        vim.schedule(function()
-          if generation == _generation then
-            emit(content)
-          end
+      build_async(function(on_result)
+        url.fetch(target, opts, function(content)
+          -- curl's exit lands in a fast event context, where opening a window
+          -- is not allowed.
+          vim.schedule(function()
+            on_result(content)
+          end)
         end)
-      end)
+        -- The parsed URL, held back for the grace period: a response that
+        -- beats it shows the status line and nothing else, and one that does
+        -- not still leaves something on screen instead of a wait that looks
+        -- like the hover simply failing.
+        return vim.tbl_extend("force", url.offline(target), { pending = true })
+      end, emit)
     else
       emit(url.offline(target))
     end
@@ -501,6 +621,20 @@ function M.show(opts)
   local source = api.nvim_buf_get_name(bufnr)
   local target = classify.classify(link.target, source ~= "" and source or nil)
 
+  -- The web hover is off and the cursor is on a link: nothing opens.
+  --
+  -- Gated here rather than at the source, because a URL reaches this from two
+  -- directions — markdown.nvim's link scanner finds `[text](https://…)` in a
+  -- markdown buffer, `bare_url` finds a URL in anything else — and one switch
+  -- has to answer for both. `force` passes: an explicit `show({ force = true
+  -- })` from a keymap is the user asking for this one link, which is not the
+  -- volume problem the switch exists to solve.
+  if target.type == "url" and not opts.force and not url_hover_enabled() then
+    M.hide()
+    _suppressed = nil
+    return false
+  end
+
   if _suppressed then
     if opts.force or _suppressed ~= identity(target) then
       -- Either the cursor reached a different target, or a caller asked for
@@ -519,13 +653,7 @@ function M.show(opts)
   unbind_keys()
   _open = { target = target, bufnr = bufnr, offset = 0, page = 1 }
 
-  local preview_opts = {
-    max_lines = c.max_lines or 20,
-    max_width = c.max_width or 80,
-    inline_images = c.inline_images,
-    url_fetch = c.url and c.url.fetch == true,
-    url_timeout_ms = c.url and c.url.timeout_ms or 2000,
-  }
+  local opts_for_preview = preview_opts(c)
 
   local key = cache_key(target)
   local cached = cache():get(key)
@@ -571,7 +699,7 @@ function M.show(opts)
     return true
   end
 
-  build(target, bufnr, preview_opts, function(content)
+  build(target, bufnr, opts_for_preview, function(content)
     if content and not content.pending then
       cache():put(key, content)
     end
@@ -583,8 +711,9 @@ end
 
 --- Scroll the open hover's content by `delta` steps.
 ---
---- A page for a PDF, a screenful of lines for a file. Re-renders the same
---- target at a new position; it does **not** re-resolve the cursor, so the
+--- A page for a PDF (and for an office document, which has become one by the
+--- time there is anything to page through), a screenful of lines for a file.
+--- Re-renders the same target at a new position; it does **not** re-resolve the cursor, so the
 --- hover keeps showing what it was showing even if the cursor has since moved
 --- off the link.
 ---
@@ -605,21 +734,18 @@ function M.scroll(delta)
   local target = _open.target
   local c = cfg()
 
-  local preview_opts = {
-    max_lines = c.max_lines or 20,
-    max_width = c.max_width or 80,
-    inline_images = c.inline_images,
-    url_fetch = c.url and c.url.fetch == true,
-    url_timeout_ms = c.url and c.url.timeout_ms or 2000,
-  }
+  local opts_for_preview = preview_opts(c)
 
-  if target.type == "pdf" then
+  -- Paged, not scrolled: a PDF, and an office document, which *is* a PDF by
+  -- the time anything is drawn — the conversion is cached, so paging through
+  -- a `.docx` costs one rasterize per page and no second LibreOffice start.
+  if target.type == "pdf" or target.type == "office" then
     local next_page = math.max(1, (_open.page or 1) + delta)
     if next_page == _open.page then
       return false
     end
     _open.page = next_page
-    preview_opts.page = next_page
+    opts_for_preview.page = next_page
   else
     local step = c.max_lines or 20
     local next_offset = math.max(0, (_open.offset or 0) + delta * step)
@@ -627,7 +753,7 @@ function M.scroll(delta)
       return false
     end
     _open.offset = next_offset
-    preview_opts.offset = next_offset
+    opts_for_preview.offset = next_offset
   end
 
   -- Bypass the cache: it is keyed by target identity, not by position, so a
@@ -635,7 +761,7 @@ function M.scroll(delta)
   _generation = _generation + 1
   local generation = _generation
 
-  build(target, _open.bufnr, preview_opts, function(content)
+  build(target, _open.bufnr, opts_for_preview, function(content)
     if generation ~= _generation or not content or content.pending then
       return
     end
@@ -768,6 +894,138 @@ function M.toggle(on)
   return on
 end
 
+--- Whether URLs hover at all right now.
+---@return boolean
+function M.is_web_enabled()
+  return url_hover_enabled()
+end
+
+--- Whether a hovered URL is fetched for the server's answer.
+---@return boolean
+function M.is_web_fetch_enabled()
+  local url = cfg().url
+  return type(url) == "table" and url.fetch == true
+end
+
+--- Whether office documents are converted to a PDF for a real page preview.
+---@return boolean
+function M.is_office_enabled()
+  return office_convert_enabled()
+end
+
+--- Turn the URL hover on for the session, or off.
+---
+--- **Why this is a switch and not just a default.** A README is made of
+--- links. With URLs hovering, resting the cursor anywhere in a line of
+--- documentation opens a float — and it lands over the text being read. So
+--- the reader says when links are the interesting thing: `:Lib hover web on`
+--- while chasing a broken link, off again afterwards.
+---
+--- Off does not touch `url.fetch`: turning the hover back on restores
+--- whatever fetch state was configured, rather than quietly demoting it.
+---@param on? boolean explicit state; omitted flips the current one
+---@return boolean on
+function M.toggle_web(on)
+  if on == nil then
+    on = not M.is_web_enabled()
+  end
+
+  _config.url = type(_config.url) == "table" and _config.url or {}
+  _config.url.hover = on
+  if not on then
+    M.hide()
+  end
+  reset_cache()
+
+  local note = (on and M.is_web_fetch_enabled()) and "web hover on (fetching)"
+    or (on and "web hover on (offline: host, path, query)")
+    or "web hover off"
+  require("lib.nvim.notify").create("[lib.nvim.hover]").info(note)
+
+  return on
+end
+
+--- Turn fetching on for the session, or off.
+---
+--- Fetching is the level that answers the question a broken link raises —
+--- `HTTP 404 Not Found`, `HTTP 500 Internal Server Error` — and the level
+--- that discloses every link the cursor rests on to its host. Hence its own
+--- switch on top of `toggle_web`.
+---
+--- Switching it on implies the hover itself: fetching with no float to show
+--- it in would do the disclosure and none of the good.
+---@param on? boolean explicit state; omitted flips the current one
+---@return boolean on
+function M.toggle_web_fetch(on)
+  if on == nil then
+    on = not M.is_web_fetch_enabled()
+  end
+
+  _config.url = type(_config.url) == "table" and _config.url or {}
+  _config.url.fetch = on
+  if on then
+    _config.url.hover = true
+  end
+  reset_cache()
+
+  require("lib.nvim.notify")
+    .create("[lib.nvim.hover]")
+    .info(on and "web hover on, fetching page titles and status codes" or "web fetching off")
+
+  return on
+end
+
+--- Turn the office-document page preview on for the session, or off.
+---
+--- On means: an office document is converted to a PDF through
+--- `pdfport.nvim`/LibreOffice, and its first page is drawn like any other
+--- picture. That is a LibreOffice start per document — seconds — which is why
+--- it is not the default. Off means the badge: what the file is, how big, and
+--- no pretence of a preview.
+---@param on? boolean explicit state; omitted flips the current one
+---@return boolean on
+function M.toggle_office(on)
+  if on == nil then
+    on = not M.is_office_enabled()
+  end
+
+  _config.office = type(_config.office) == "table" and _config.office or {}
+  _config.office.convert = on
+  reset_cache()
+
+  require("lib.nvim.notify").create("[lib.nvim.hover]").info(
+    on and "office documents render via PDF (first use starts LibreOffice)"
+      or "office documents show a badge only"
+  )
+
+  return on
+end
+
+---@internal
+--- The three `on` / `off` / `toggle` routes every feature switch needs, built
+--- from one function so a fourth switch is three lines and not thirty.
+---@param path string[] route prefix, e.g. `{ "hover", "web" }`
+---@param what string what the switch turns on, for the descriptions
+---@param set fun(on: boolean|nil): boolean
+---@return table[]
+local function switch_routes(path, what, set)
+  local function route(token, state, verb)
+    local full = vim.list_extend(vim.list_slice(path), { token })
+    return {
+      path = full,
+      desc = ("%s %s"):format(verb, what),
+      run = function()
+        set(state)
+      end,
+    }
+  end
+  return {
+    route("on", true, "Turn on"),
+    route("off", false, "Turn off"),
+    route("toggle", nil, "Toggle"),
+  }
+end
+
 --- Composer routes for `:Lib hover …`, in the shape
 --- `lib.nvim.bindings.usercmd.composer` expects. Wired up by
 --- `lib.nvim_usrcmds`, next to `:Lib deps …`.
@@ -779,7 +1037,7 @@ end
 --- only for as long as there is a float to dismiss.
 ---@return table[]
 function M.routes()
-  return {
+  local routes = {
     {
       path = { "hover", "toggle" },
       desc = "Turn the path/link hover off for this session, or back on",
@@ -802,6 +1060,37 @@ function M.routes()
       end,
     },
   }
+
+  -- The two opt-in previews, each with the same on/off/toggle triple. They
+  -- are commands for the same reason the master switch is: a setting you
+  -- throw a few times a week while chasing something, from wherever you
+  -- happen to be, and never at startup.
+  vim.list_extend(
+    routes,
+    switch_routes(
+      { "hover", "web" },
+      "the hover for http(s) links (off by default: documentation is made of links)",
+      M.toggle_web
+    )
+  )
+  vim.list_extend(
+    routes,
+    switch_routes(
+      { "hover", "web", "fetch" },
+      "fetching a hovered link for its status code and page title (implies `web on`)",
+      M.toggle_web_fetch
+    )
+  )
+  vim.list_extend(
+    routes,
+    switch_routes(
+      { "hover", "office" },
+      "rendering office documents through a PDF instead of showing a badge",
+      M.toggle_office
+    )
+  )
+
+  return routes
 end
 --- Debounced entry point used by the CursorHold/mouse autocmds.
 function M.trigger()
