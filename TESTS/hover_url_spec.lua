@@ -134,7 +134,11 @@ return function(H)
   eq(hover.show({}), true, "web hover on: the same position now resolves")
   ok(float.is_open(), "and the float is up")
 
-  local shown = api.nvim_buf_get_lines(api.nvim_win_get_buf(float.win()), 0, -1, false)
+  -- `ok(float.is_open())` above already settled this; the assert is what
+  -- carries that to the checker, and names the failure if it ever stops
+  -- being true.
+  local hover_win = assert(float.win(), "the hover float reported open without a window")
+  local shown = api.nvim_buf_get_lines(api.nvim_win_get_buf(hover_win), 0, -1, false)
   eq(shown[1], "example.com", "showing the parsed URL, with nothing fetched")
 
   hover.hide()
