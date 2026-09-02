@@ -167,6 +167,35 @@ local function make_handle(name, spec, root)
 end
 
 ---@internal
+--- Where the verb was declared, for `usercmd.create`'s registry.
+---
+--- `create` records `caller_site(3)` by default, which for a verb is always
+--- one line of THIS file: the composer creates the command on the caller's
+--- behalf. That is precisely the case `create`'s `src` option was added for,
+--- and nothing ever passed it -- measured in one real session, 12 of 139
+--- records pointed at `composer/init.lua` instead of at their owner, and a
+--- consumer asking "who registers `:Lsp`?" got the library back.
+---
+--- Walked, not counted: `register` is reached from `M.verb(name, spec)` AND
+--- from `builder:build()`, so no single stack level is right for both, and
+--- another wrapper layer would move it again without anything failing. The
+--- first frame outside this file is the declaration, whichever path got here.
+---@return string
+local function declaration_site()
+  local self_src = debug.getinfo(1, "S").source
+  for level = 2, 12 do
+    local info = debug.getinfo(level, "Sl")
+    if not info then
+      break
+    end
+    if info.source ~= self_src then
+      return ("%s:%d"):format((info.source or "?"):gsub("^@", ""), info.currentline or -1)
+    end
+  end
+  return "?"
+end
+
+---@internal
 --- Build the route tree, register the user command, record the verb.
 ---@param name string
 ---@param spec Lib.UserCmd.Composer.Spec
@@ -192,6 +221,10 @@ local function register(name, spec)
       return root
     end),
     desc = spec.desc or ("composer verb :" .. name),
+    -- `spec.src` first: the composer walks past itself, but a consumer's own
+    -- wrapper around `verb()` has the same problem one layer further out and
+    -- needs a way to say so.
+    src = spec.src or declaration_site(),
   })
 
   local handle = make_handle(name, spec, root)

@@ -376,6 +376,26 @@ composer.notify_check_all()   -- "all 12 route(s) OK", or a per-failure list
 number — a buffer-local verb (`spec.buffer`) checked from a different buffer is
 indistinguishable from a global one.
 
+## Who registered this verb (`spec.src`)
+
+A verb ends up in `usercmd.registered()` like any other command, with a
+`file:line` saying where it was created. Until 2026-09-02 that line was always
+one line of `composer/init.lua`: the composer creates the command on your
+behalf, so `create()`'s default call-site capture named the library rather than
+you. Twelve verbs in one measured session, all recorded at the same place, and
+every consumer that reads the field — `:checkhealth`, generated bindings pages,
+the nvim-config's `:Bindings check` — got "lib.nvim" for all of them.
+
+The declaring file is now found by walking out of this module rather than by
+counting stack levels, because `register` is reached both from
+`verb(name, spec)` and from `builder:build()` and no single level is right for
+both. Pass `spec.src` when you wrap `verb()` in something of your own — the
+same problem then sits one layer further out, and this is the way out of it:
+
+```lua
+composer.verb("Foo", { routes = {...}, src = "my_plugin/verbs.lua:12" })
+```
+
 ## Access
 
 ```lua

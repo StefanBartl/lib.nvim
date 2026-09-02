@@ -1354,4 +1354,57 @@ return function(H)
     vim.health = real
     package.loaded["lib.nvim.bindings.usercmd.composer.check"] = nil
   end
+
+  -- ------------------------------------------------- registry attribution
+  --
+  -- A verb is created BY the composer FOR its caller, so `usercmd.create`'s
+  -- default call site records this library rather than the owner. Everything
+  -- that asks "who registers :Foo?" -- checkhealth, generated docs, the
+  -- nvim-config's `:Bindings check` -- reads that field, and got the answer
+  -- "lib.nvim" for every verb in the process until `register` passed `src`.
+  do
+    local usercmd = require("lib.nvim.bindings.usercmd")
+
+    ---@param name string
+    ---@return string
+    local function src_of(name)
+      local r = usercmd.registered({ name = name })[1]
+      ok(r ~= nil, "registry has a record for :" .. name)
+      return (r.src or ""):gsub("\\", "/")
+    end
+
+    composer.verb("ComposerSpecSrcDirect", { routes = {} })
+    local direct = src_of("ComposerSpecSrcDirect")
+    ok(
+      direct:find("composer_spec") ~= nil,
+      "verb(): the record names the declaring file, not the composer -- got " .. direct
+    )
+    ok(
+      direct:find("composer/init%.lua") == nil,
+      "verb(): the record does not name lib.nvim's own composer"
+    )
+
+    -- The builder reaches `register` one frame deeper than `verb(name, spec)`
+    -- does. A counted stack level would be right for exactly one of the two;
+    -- this is why the site is walked.
+    composer.verb("ComposerSpecSrcBuilder"):build()
+    local built = src_of("ComposerSpecSrcBuilder")
+    ok(
+      built:find("composer_spec") ~= nil,
+      "builder:build(): same answer through the longer path -- got " .. built
+    )
+
+    -- An explicit `src` still wins: a consumer's own wrapper has the same
+    -- problem one layer further out, and this is its way out.
+    composer.verb("ComposerSpecSrcExplicit", { routes = {}, src = "owner.lua:1" })
+    eq(src_of("ComposerSpecSrcExplicit"), "owner.lua:1", "an explicit spec.src is not overridden")
+
+    for _, n in ipairs({
+      "ComposerSpecSrcDirect",
+      "ComposerSpecSrcBuilder",
+      "ComposerSpecSrcExplicit",
+    }) do
+      usercmd.delete(n)
+    end
+  end
 end
