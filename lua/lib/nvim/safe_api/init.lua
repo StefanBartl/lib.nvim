@@ -76,13 +76,19 @@ local function validate_window(winnr)
   return true, nil
 end
 
----@param bufnr integer
+--- Both take `any`, and that is the point rather than looseness: the body
+--- checks the type before it checks the handle, so `nil` -- a handle that was
+--- never opened, or one already cleared -- is a legitimate argument answering
+--- false. Declaring `integer` contradicted that and made every honest caller
+--- (`is_valid_window(maybe_nil_win)`) a type error at the call site, which is
+--- exactly the guard this function exists to replace.
+---@param bufnr any
 ---@return boolean valid
 function M.is_valid_buffer(bufnr)
   return type(bufnr) == "number" and bufnr >= 0 and api.nvim_buf_is_valid(bufnr)
 end
 
----@param winnr integer
+---@param winnr any
 ---@return boolean valid
 function M.is_valid_window(winnr)
   return type(winnr) == "number" and winnr >= 0 and api.nvim_win_is_valid(winnr)
