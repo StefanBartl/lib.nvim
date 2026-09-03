@@ -58,7 +58,11 @@ The short version: **modules.md** to find it, **FEATURES/** for the why,
 |---|---|
 | [conventions.md](conventions.md) | Module layout rules, and the steps for documenting a new module. |
 | [../templates/README.md](../templates/README.md) | Resolving `lib.nvim` in a dependent plugin's own headless test suite. |
-| [map/](map/overview.md) | Generated module map — regenerate with `:DocMap`, don't edit by hand. |
+
+There is no module map in this repository. `:DocMap` builds one from the
+current tree in seconds (`:DocMap full` for LuaLS-enriched detail), which is
+why the generated output is gitignored rather than committed: it would be
+stale by the next commit.
 
 ## Not in this repository
 
