@@ -103,6 +103,36 @@
 ---@field exit_code integer|nil
 ---@field collapsed boolean
 
+---What `lib.nvim.deps.status.collect` found across every plugin shipping a spec.
+---@class Lib.Deps.Status.Collected
+---@field tools Lib.Deps.Tool[] one entry per distinct `bin`, merged across declarers
+---@field sources table<string, string[]> which plugins declared each `bin`, in encounter order
+---@field plugins string[] plugins whose spec was read successfully
+---@field failed string[] plugins listed by `spec.plugins()` whose spec could not be read
+
+---`lib.nvim.deps.status` module surface: every declared tool, across every
+---plugin, in one report.
+---@class Lib.Deps.Status
+---@field collect fun(): Lib.Deps.Status.Collected the merge (reads spec files, touches nothing else)
+---@field lines fun(opts?: Lib.Deps.ManagerOpts): string[] the aggregate report as lines
+---@field show fun(opts?: Lib.Deps.ManagerOpts): boolean the aggregate report as a popup, with install keymaps
+---@field install fun(opts?: Lib.Deps.ManagerOpts): boolean plan + confirm + hand off everything missing
+
+---Options for one `require_tool` check.
+---@class Lib.Deps.RequireTool.Opts
+---@field silent? boolean answer the question without reporting; for a caller with its own error path
+---@field throttle_ms? integer how long this (plugin, tool) pair stays quiet after a report; `<= 0` disables the guard
+---@field manager? Lib.Deps.Manager package manager to compose the install line for, instead of the detected one
+
+---`lib.nvim.deps.require_tool` module surface: the failure-moment check —
+---is this tool here, and if not, say so with the spec's own `why` and the
+---install command for this host.
+---@class Lib.Deps.RequireTool
+---@field check fun(plugin_name: string, bin: string, opts?: Lib.Deps.RequireTool.Opts): string|nil the name it was found under, nil when missing
+---@field message fun(plugin_name: string, tool: Lib.Deps.Tool, opts?: Lib.Deps.ManagerOpts): string[] the reported lines (pure)
+---@field lines fun(plugin_name: string, bin: string, opts?: Lib.Deps.ManagerOpts): string[] the same lines by binary name, reporting nothing — for callback/result error paths
+---@field reset fun(plugin_name?: string): nil forget throttle state and memoized specs
+
 ---`lib.nvim.deps.first_run` module surface: show a plugin's deps popup once
 ---ever, persisted across restarts.
 ---@class Lib.Deps.FirstRun
@@ -135,7 +165,9 @@
 ---@field install Lib.Deps.Install
 ---@field view Lib.Deps.View
 ---@field first_run Lib.Deps.FirstRun
+---@field status Lib.Deps.Status
 ---@field show_once fun(plugin_name: string, opts?: { manager?: Lib.Deps.Manager, cache?: Lib.Cache.Opts }): boolean
+---@field require_tool fun(plugin_name: string, bin: string, opts?: Lib.Deps.RequireTool.Opts): string|nil is this tool here — and if not, report it usefully
 ---@field plugins fun(): string[] every plugin on runtimepath shipping a deps spec
 ---@field show fun(plugin_name: string): boolean render one plugin's tool report in a scratch split
 ---@field install_for fun(plugin_name: string): boolean plan + confirm + hand off to a terminal
