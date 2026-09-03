@@ -1,4 +1,4 @@
-> **Active development.** This repository is in its development phase — breaking changes are to be expected at any time. Pin a commit or tag if you depend on it.
+> **Alpha stage — active development.** This repository is in its development phase — breaking changes are to be expected at any time. Pin a commit or tag if you depend on it.
 
 # lib.nvim
 
@@ -69,7 +69,8 @@ a few commands directly, opt-in via `require("lib.nvim_usrcmds").setup(opts)`:
 | `:Lib cwd-here` (= `:CwdHere`) | `lcd` to the current buffer's directory |
 | `:Lib ps-profile` (= `:PowershellProfile`, Windows) | Open the active PowerShell profile in Neovim |
 | `:Lib deps show <plugin.nvim>` | Report which of a dependent plugin's optional external tools are missing, and why they matter |
-| `:Lib deps install <plugin.nvim>` | Compose and confirm an install command for what's missing |
+| `:Lib deps status` | The same across **every** plugin at once — the view for a freshly rolled-out config |
+| `:Lib deps install [plugin.nvim]` | Compose and confirm an install command for what's missing — one plugin's, or everything |
 
 The `deps` system is what every sibling plugin's "declared, installable
 external tools" popup and `:Lib deps show <plugin>` come from — see
@@ -80,19 +81,29 @@ is built on, lives here too — see
 
 ## Documentation
 
-- [Architecture](docs/architecture.md) — the `lib.lua.*` / `lib.nvim.*` namespace split and its guiding rule.
-- [Ecosystem architecture](https://github.com/StefanBartl/documentation.nvim/blob/main/docs/ECOSYSTEM.md) — **not in this repository.** Where docs, static analysis and runtime each belong across the four pieces this library is the bottom of (`lib.nvim`, `documentation.nvim`, `runtime-analysis.nvim`, `mdview.nvim`), and the rule that decides what moves down here and what does not. One document, three pointers.
-- [Installation](docs/installation.md) — installing as a plugin dependency vs. config-wide bootstrap.
-- [Usage](docs/usage.md) — requiring modules directly or via the aggregator.
-- [Namespaces & modules](docs/modules.md) — full module reference for `lib.lua.*` and `lib.nvim.*`, plus links to per-module docs.
-- [Features](docs/FEATURES/README.md) — cross-cutting capabilities written up as problem → solution (e.g. the [subprocess environment](docs/guides/subprocess-env.md) a spawned CLI actually sees).
-- [Configuration](docs/configuration.md) — the `require("lib")` aggregator strategies and their defaults.
-- [Health](docs/health.md) — using `:checkhealth lib` to verify your setup.
-- [Help docs](docs/help.md) — how the `:help lib.nvim*` vimdoc tags are generated and indexed.
-- [Conventions](docs/conventions.md) — module layout rules and the steps for documenting a new module.
-- [Test-runner templates](templates/README.md) — copy-paste patterns for resolving `lib.nvim` in a dependent plugin's own headless test suite.
+Start at the [documentation index](docs/README.md) — `lib.nvim` describes the
+same module at several depths, and the index says which one answers which
+question.
+
+- [Documentation index](docs/README.md) — the full map, and which layer to read for what.
+- [Namespaces & modules](docs/modules.md) — every `lib.lua.*` / `lib.nvim.*` module, one line each, with links to per-module docs.
+- [Features](docs/FEATURES/README.md) — cross-cutting capabilities, written up per theme: why each exists and when to reach for it.
+- [API reference](docs/API/README.md) — function signatures across a whole theme, without opening dozens of files.
+- [Examples](docs/EXAMPLES/README.md) — runnable scenarios for the larger modules.
+- [Guides](docs/guides/README.md) — ecosystem-wide findings this library absorbed so nobody has to re-solve them.
+- [Installation](docs/installation.md) — plugin dependency vs. config-wide bootstrap.
+- [Workflow](docs/WORKFLOW.md) — building a plugin on top: which module for which job.
+- [Test-runner templates](templates/README.md) — resolving `lib.nvim` in a dependent plugin's own headless test suite.
 
 `:help lib.nvim` is also available once installed — see [docs/help.md](docs/help.md) for details.
+
+### Not in this repository
+
+[Ecosystem architecture](https://github.com/StefanBartl/documentation.nvim/blob/main/docs/ECOSYSTEM.md)
+— where docs, static analysis and runtime each belong across the four pieces
+this library is the bottom of (`lib.nvim`, `documentation.nvim`,
+`runtime-analysis.nvim`, `mdview.nvim`), and the rule that decides what moves
+down here and what does not.
 
 ## License
 

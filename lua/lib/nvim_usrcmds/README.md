@@ -8,7 +8,7 @@ never drift apart — both dispatch to the exact same action function:
 
 - **Flat commands** (kept for muscle memory): `:CwdHere`, `:PowershellProfile`
 - **The `:Lib` verb** (composer-built, `<Tab>`-completable, dogfoods
-  [`lib.nvim.bindings.usercmd.composer`](../nvim/usercmd/composer/README.md)): `:Lib cwd-here`,
+  [`lib.nvim.bindings.usercmd.composer`](../nvim/bindings/usercmd/composer/README.md)): `:Lib cwd-here`,
   `:Lib ps-profile`, `:Lib helptags`
 
 ## Usage

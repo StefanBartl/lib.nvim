@@ -9,11 +9,11 @@ Turns the `:VerbFeatureA` / `:VerbFeatureB` anti-pattern into
 (`:Replace`, `:File`, `:Markdown`).
 
 Built on [`lib.nvim.bindings.usercmd.create`](../init.lua) (defensive registration),
-[`lib.nvim.normalize.validators`](../../normalize/validators.lua) (arg
-coercion), and [`lib.nvim.fs`](../../fs) (`PATH`/`DIR`/`FILE` args + docgen
+[`lib.nvim.normalize.validators`](../../../normalize/validators.lua) (arg
+coercion), and [`lib.nvim.fs`](../../../fs) (`PATH`/`DIR`/`FILE` args + docgen
 writing).
 
-Runnable scenarios: [docs/EXAMPLES](../../../../../docs/EXAMPLES) —
+Runnable scenarios: [docs/EXAMPLES](../../../../../../docs/EXAMPLES) —
 `composer-basic-verb.lua`, `composer-flags-and-kv.lua`,
 `composer-buffer-local-and-count.lua`.
 
