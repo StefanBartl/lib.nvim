@@ -1001,4 +1001,214 @@ pkg:
       pkg = { apt = "x" },
     },
   })
+
+  -- -------------------------------------------------------------------- status
+  -- The aggregate view. Two fixture plugins on rtp declare one tool each
+  -- plus one they share, which is the case the merge exists for.
+  do
+    local status = require("lib.nvim.deps.status")
+    local base = vim.fn.tempname()
+
+    local function fixture(name, tools)
+      local dir = base .. "/" .. name
+      vim.fn.mkdir(dir .. "/docs", "p")
+      local fh = io.open(dir .. "/docs/install.json", "w")
+      fh:write(vim.json.encode({ tools = tools }))
+      fh:close()
+      vim.opt.rtp:prepend(dir)
+      return dir
+    end
+
+    local dir_a = fixture("status-fixture-a.nvim", {
+      { bin = "shared-tool-fx", why = "A's reason for it.", pkg = { apt = "shared-pkg" } },
+      { bin = "only-a-fx", why = "Only A wants this one.", pkg = { apt = "a-pkg" } },
+    })
+    local dir_b = fixture("status-fixture-b.nvim", {
+      {
+        bin = "shared-tool-fx",
+        required = true,
+        why = "B's reason for it.",
+        bin_alternatives = { "shared-tool-fx2" },
+        pkg = { apt = "shared-pkg", brew = "shared-brew" },
+      },
+    })
+
+    local collected = status.collect()
+
+    ---@param bin string
+    local function tool_named(bin)
+      for _, t in ipairs(collected.tools) do
+        if t.bin == bin then
+          return t
+        end
+      end
+    end
+
+    local shared = tool_named("shared-tool-fx")
+    ok(shared, "collect: a tool declared by two plugins is present")
+    eq(
+      #collected.sources["shared-tool-fx"],
+      2,
+      "collect: and remembers both declarers rather than the last one"
+    )
+    -- One line per tool, not per (tool, plugin) pair: a report listing curl
+    -- three times buries what else is missing.
+    local occurrences = 0
+    for _, t in ipairs(collected.tools) do
+      if t.bin == "shared-tool-fx" then
+        occurrences = occurrences + 1
+      end
+    end
+    eq(occurrences, 1, "collect: merged into a single entry")
+    eq(shared.required, true, "collect: required is the strictest claim of any declarer")
+    eq(shared.why, "A's reason for it.", "collect: why keeps the first declarer's sentence")
+    eq(shared.pkg.brew, "shared-brew", "collect: pkg maps are unioned across declarers")
+    eq(shared.pkg.apt, "shared-pkg", "collect: a key declared twice keeps the first")
+    ok(
+      shared.bin_alternatives and #shared.bin_alternatives == 1,
+      "collect: alternatives are unioned — the same program, whoever asked for it"
+    )
+    ok(shared.see:find("status-fixture-a.nvim", 1, true), "collect: see names the declarers")
+    ok(shared.see:find("status-fixture-b.nvim", 1, true), "collect: ... all of them")
+    ok(tool_named("only-a-fx"), "collect: a tool only one plugin wants still appears")
+
+    -- The report renders through deps.view unchanged, so this asserts the
+    -- wiring rather than the layout.
+    local lines = status.lines({ manager = require("lib.nvim.deps.pm").get("apt") })
+    local joined = table.concat(lines, "\n")
+    ok(joined:find("shared-tool-fx", 1, true), "lines: the merged tool reaches the report")
+    ok(joined:find("apt install", 1, true), "lines: with an install command for the given manager")
+
+    vim.opt.rtp:remove(dir_a)
+    vim.opt.rtp:remove(dir_b)
+  end
+
+  -- -------------------------------------------------------------- require_tool
+  -- The failure-moment check. `message` is pure, so the wording is asserted
+  -- directly rather than through a notification; `check` runs against a
+  -- fixture spec on rtp, with `nvim` again standing in for "installed".
+  local require_tool = require("lib.nvim.deps.require_tool")
+
+  do
+    local brew = require("lib.nvim.deps.pm").get("brew")
+
+    local lines = require_tool.message("fx.nvim", {
+      bin = "some-missing-tool",
+      required = false,
+      why = "Enables the fast path.",
+      pkg = { brew = "some-pkg" },
+    }, { manager = brew })
+    ok(lines[1]:find("Enables the fast path.", 1, true), "message: leads with the spec's own why")
+    ok(
+      lines[2]:find("brew install some-pkg", 1, true),
+      "message: names the command composed for this host"
+    )
+    ok(
+      lines[3]:find(":Lib deps install fx.nvim", 1, true),
+      "message: points at the confirmed install route"
+    )
+
+    -- A tool the plugin never declared: still a better line than the
+    -- hand-written strings this replaces, just with no reason to give.
+    local bare =
+      require_tool.message("fx.nvim", { bin = "x", required = false, why = "", pkg = {} })
+    eq(#bare, 1, "message: nothing to add when there is no spec entry")
+    ok(bare[1]:find("x not found on PATH", 1, true), "message: falls back to a plain line")
+
+    -- Declared, but not for this host's manager. An absent install line
+    -- would read as "cannot be installed"; the truth is narrower.
+    local elsewhere = require_tool.message("fx.nvim", {
+      bin = "y",
+      required = false,
+      why = "Reason.",
+      pkg = { apt = "y-pkg" },
+    }, { manager = brew })
+    ok(
+      elsewhere[2]:find("no package known", 1, true),
+      "message: 'no package here' is not 'no package anywhere'"
+    )
+  end
+
+  do
+    local plugin_dir = vim.fn.tempname() .. "/require-tool-fixture.nvim"
+    vim.fn.mkdir(plugin_dir .. "/docs", "p")
+    local f = io.open(plugin_dir .. "/docs/install.json", "w")
+    f:write(vim.json.encode({
+      tools = {
+        { bin = "nvim", why = "Always present.", pkg = { apt = "neovim" } },
+        {
+          bin = "a-binary-name-that-should-not-exist-anywhere",
+          bin_alternatives = { "nvim" },
+          why = "Present under its alternative name.",
+          pkg = { apt = "irrelevant" },
+        },
+        {
+          bin = "another-missing-tool-fx",
+          why = "Missing everywhere.",
+          pkg = { apt = "some-pkg" },
+        },
+      },
+    }))
+    f:close()
+    vim.opt.rtp:prepend(plugin_dir)
+    require_tool.reset()
+
+    eq(
+      require_tool.check("require-tool-fixture.nvim", "nvim"),
+      "nvim",
+      "check: a present tool answers with the name it was found under"
+    )
+    -- The reason this returns a name rather than a boolean: the caller has
+    -- to know which spelling to spawn.
+    eq(
+      require_tool.check(
+        "require-tool-fixture.nvim",
+        "a-binary-name-that-should-not-exist-anywhere"
+      ),
+      "nvim",
+      "check: bin_alternatives decide the name handed back"
+    )
+    eq(
+      require_tool.check("require-tool-fixture.nvim", "another-missing-tool-fx", { silent = true }),
+      nil,
+      "check: a missing tool answers nil"
+    )
+
+    -- The throttle is a burst guard, not a mute: a second check inside the
+    -- window still answers, it just doesn't report twice.
+    local notified = 0
+    local real_notify = vim.notify
+    vim.notify = function()
+      notified = notified + 1
+    end
+    require_tool.reset()
+    require_tool.check("require-tool-fixture.nvim", "another-missing-tool-fx")
+    require_tool.check("require-tool-fixture.nvim", "another-missing-tool-fx")
+    eq(notified, 1, "check: a burst of identical failures reports once")
+    require_tool.reset("require-tool-fixture.nvim")
+    require_tool.check("require-tool-fixture.nvim", "another-missing-tool-fx")
+    eq(notified, 2, "check: reset makes the pair reportable again")
+    require_tool.check("require-tool-fixture.nvim", "another-missing-tool-fx", { throttle_ms = 0 })
+    eq(notified, 3, "check: throttle_ms = 0 disables the guard")
+    vim.notify = real_notify
+
+    -- `lines` is the same wording by binary name and without notifying, for
+    -- the failure paths that hand their error upwards instead of showing it.
+    local by_name = require_tool.lines("require-tool-fixture.nvim", "another-missing-tool-fx")
+    ok(
+      by_name[1]:find("Missing everywhere.", 1, true),
+      "lines: resolves the spec entry from a bare bin name"
+    )
+
+    -- Before a plugin ships a spec at all: still answers, still no error —
+    -- so a call site can move over first and declare its tools afterwards.
+    eq(
+      require_tool.check("a-plugin-with-absolutely-no-spec-fx", "nvim", { silent = true }),
+      "nvim",
+      "check: works without any spec"
+    )
+
+    vim.opt.rtp:remove(plugin_dir)
+    require_tool.reset()
+  end
 end

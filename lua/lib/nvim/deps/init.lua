@@ -19,6 +19,7 @@ M.pm = require("lib.nvim.deps.pm")
 M.install = require("lib.nvim.deps.install")
 M.view = require("lib.nvim.deps.view")
 M.first_run = require("lib.nvim.deps.first_run")
+M.status = require("lib.nvim.deps.status")
 
 ---Show `plugin_name`'s declared-tools popup once, ever — call from the
 ---consuming plugin's own `setup()`. See `lib.nvim.deps.first_run` for the
@@ -28,6 +29,30 @@ M.first_run = require("lib.nvim.deps.first_run")
 ---@return boolean shown
 function M.show_once(plugin_name, opts)
   return M.first_run.show_once(plugin_name, opts)
+end
+
+---Is `bin` available for `plugin_name` right now — and if not, report it
+---with the plugin's own `why` and the install command for this host.
+---
+---For the moment a command fails, where every other entry point here is
+---read *before* anything breaks. Returns the name to spawn (which differs
+---from `bin` when the spec declares `bin_alternatives` and this host
+---spells it the other way), or nil:
+---
+---  local curl = require("lib.nvim.deps").require_tool("language.nvim", "curl")
+---  if not curl then return end
+---
+---Exposed as the function rather than the module — deliberately unlike the
+---`M.first_run` / `M.show_once` pair above, since here the call *is* the
+---module's purpose and `deps.require_tool(...)` is how it reads at the call
+---site. `require("lib.nvim.deps.require_tool")` still reaches `message`
+---and `reset`.
+---@param plugin_name string
+---@param bin string
+---@param opts? Lib.Deps.RequireTool.Opts
+---@return string|nil found_as
+function M.require_tool(plugin_name, bin, opts)
+  return require("lib.nvim.deps.require_tool").check(plugin_name, bin, opts)
 end
 
 ---Every plugin on `runtimepath` shipping a deps spec. Convenience re-export
@@ -132,11 +157,25 @@ function M.routes()
       end,
     },
     {
+      path = { "deps", "status" },
+      args = {},
+      desc = "Every declared tool across every plugin, and what's missing here",
+      run = function()
+        M.status.show()
+      end,
+    },
+    {
       path = { "deps", "install" },
-      args = { { name = "plugin", type = "DEPS_PLUGIN" } },
-      desc = "Offer to install a plugin's missing external tools (asks first)",
+      args = { { name = "plugin", type = "DEPS_PLUGIN", optional = true } },
+      desc = "Offer to install missing external tools — one plugin's, or every plugin's (asks first)",
       run = function(ctx)
-        M.install_for(ctx.args.plugin)
+        -- No plugin named: the whole config's worth. Same confirmation and
+        -- the same terminal handoff either way; only the tool list differs.
+        if ctx.args.plugin then
+          M.install_for(ctx.args.plugin)
+        else
+          M.status.install()
+        end
       end,
     },
     {

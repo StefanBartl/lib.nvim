@@ -21,6 +21,8 @@ Requiring this module registers nothing and touches nothing.
 | `deps.install` | Install-plan computation (pure) and the confirmed terminal handoff |
 | `deps.view` | Render a plugin's tool report into lines / a popup with install keymaps |
 | `deps.first_run` | Show a plugin's tool report once, ever — for a consuming plugin's own `setup()` |
+| `deps.require_tool` | The failure moment: is this tool here *right now*, and if not, say why it mattered and how to get it |
+| `deps.status` | Every declared tool across **every** plugin, merged into one report |
 
 ## `:Lib deps` — the user-facing surface
 
@@ -31,7 +33,9 @@ second top-level command:
 ```vim
 :Lib deps show <plugin>      " tools + why + present/missing + install commands
 :Lib deps show               " which plugins ship a spec at all
+:Lib deps status             " every plugin's tools at once — what's missing HERE
 :Lib deps install <plugin>   " compose, confirm, hand off to a terminal
+:Lib deps install            " ... for everything missing, across every plugin
 ```
 
 `<Tab>` completes plugin names that actually ship a spec.
@@ -220,6 +224,132 @@ Locates and parses the plugin's own spec, reports each tool the same way
 <plugin>` for the fuller report. Silently does nothing if the plugin ships
 no spec — a `:checkhealth` section for a plugin that declares nothing
 shouldn't print anything.
+
+## `lib.nvim.deps.status` — all of it at once
+
+`:Lib deps show <plugin>` answers *"what does this plugin want"*, which is
+the right question once you already suspect a plugin. It is the wrong one
+after cloning a config onto a new machine, where the question is **"what is
+missing here"** and the old answer was to run `show` once per plugin and
+hold the results in your head. `:Lib deps show` with no argument didn't help
+either — it lists which plugins ship a spec, not what any of them lacks.
+
+```lua
+local status = require("lib.nvim.deps.status")
+
+status.collect()   --> { tools, sources, plugins, failed } — the merge, pure
+status.lines()     --> string[]
+status.show()      --> the same popup `:Lib deps show` opens, with `i` / `I`
+status.install()   --> plan + confirm + terminal, for everything missing
+```
+
+**It also fixes a timing problem it doesn't look like it fixes.** The
+first-run popup rides on a plugin's `setup()`, so a lazy-loaded plugin shows
+it whenever it first happens to load — for a plugin bound to a rare filetype,
+possibly weeks after installation. Measured against the config this library
+was extracted from: **120 plugins configured, 44 loaded at startup, 76
+pending.** `spec.find` already reads lazy.nvim's registry, so all 76 are
+reachable from here without waiting for any of them to load.
+
+### The merge
+
+One tool, several declarers — `curl` is wanted by five plugins here, `rg` by
+six. It has to appear **once** (a report listing curl five times buries what
+else is missing) while still saying who wants it, so merging is per-field
+rather than last-one-wins:
+
+| Field | Rule | Why |
+|---|---|---|
+| `required` | true if **any** declarer requires it | Installing it satisfies everyone; skipping it breaks at least that one plugin outright |
+| `pkg` | unioned, first declaration wins a key | Two plugins naming different packages for one binary is a bug in one of them — silently preferring the later would hide it |
+| `bin_alternatives` | unioned | A spelling that counts as "found" for one plugin counts for all: it is the same program |
+| `why` | the first declarer's sentence | Concatenating several would produce a paragraph per tool and bury the list |
+| `see` | rewritten to `wanted by a.nvim, b.nvim` | Answers "who wants this?" without a renderer change |
+
+**Rendering is `deps.view`'s, unchanged.** The merge produces one tool list
+and one `Lib.Deps.ParseResult` — exactly what `view.show` already takes — so
+the popup, the `i` / `I` install keymaps, the live output streaming and the
+`[missing]` → `[ok]` flip all work here for free instead of existing twice in
+slightly different forms.
+
+A plugin that `spec.plugins()` lists but whose spec cannot be read lands in
+`failed` and is named in a warning, rather than being dropped: "absent from
+the report" and "declares nothing" would otherwise look identical.
+
+## `lib.nvim.deps.require_tool` — the failure moment
+
+Everything else here is forward-looking. `:checkhealth`, the first-run popup
+and `:Lib deps show` all answer *"what might I need?"* — read before anything
+breaks, which usually means not read at all. The moment that actually reaches
+a user is the one where a command does nothing, and that moment used to be
+served by whatever string each call site happened to have written by hand:
+
+```
+"curl not found"                            -- language.nvim
+"curl executable not found on PATH"         -- diff.nvim
+"tesseract not found — see :checkhealth images"
+```
+
+The third is the best of them and still only points at *another plugin's*
+health check. Meanwhile that plugin's own `docs/install.json` holds a
+one-sentence `why`, a package name for nine managers, and everything
+`deps.pm` needs to compose the exact command for this host — all of it unused
+at precisely the moment it answers the question the user now has.
+
+```lua
+local curl = require("lib.nvim.deps").require_tool("language.nvim", "curl")
+if not curl then return end
+-- ... spawn `curl`
+```
+
+```
+[language.nvim] curl not found — Enables the google/deepl translate engines.
+  install:  sudo apt install curl
+  or run:   :Lib deps install language.nvim
+```
+
+**It returns the name, not a boolean.** A tool declaring `bin_alternatives`
+is `gs` on Linux and `gswin64c` on Windows, and a caller that has just been
+told "yes, it's here" still has to know which spelling to spawn. Returning
+the found name answers both questions at once and stays truthy for the
+`if not … then return end` guard that is the point.
+
+**Nothing here installs anything.** The message names the command and points
+at `:Lib deps install`, which remains the only route that touches the system.
+Offering to install *at* the failure moment would answer a question the user
+did not ask — they wanted to translate a paragraph, not administer their
+machine.
+
+| Option | Effect |
+|---|---|
+| `silent` | Answer without reporting — for a caller collecting several failures into one summary |
+| `throttle_ms` | How long this (plugin, tool) pair stays quiet after a report (default 5000; `<= 0` disables) |
+| `manager` | Compose the install line for this manager instead of the detected one |
+
+The throttle is a **burst guard, not a mute**: a caller checking one tool per
+file across a 200-file batch would otherwise produce 200 identical
+notifications, while a user who runs `:Translate`, reads the message and runs
+it again a minute later has deliberately asked twice and should be told
+twice. A short window separates those without having to tell them apart.
+
+**Works before the plugin ships a spec.** With no spec entry the check still
+runs and still reports — it just has no `why` and no install command to add.
+A plugin can therefore move its call sites over first and declare its tools
+afterwards, rather than needing both at once.
+
+**Not every failure path notifies.** A callback taking `(value, err)`, a
+`result.errors` list, an `on_done({ ok = false, err = … })` — those hand the
+error *upwards*, and there `check`'s notification would be a second message
+next to the one the caller is already about to show. `lines` gives the same
+wording with nothing attached:
+
+```lua
+local rt = require("lib.nvim.deps.require_tool")
+on_done({ ok = false, err = table.concat(rt.lines("nvim", "pandoc"), " ") })
+```
+
+`require_tool.reset(plugin?)` forgets the throttle state and the memoized
+specs behind it — for tests, and after an install has changed the answer.
 
 ## `lib.nvim.deps.first_run` — "tell me on first install, not from the README"
 
