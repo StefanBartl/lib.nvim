@@ -2,7 +2,7 @@
 
 ## Table of content
 
-- [`lib.lua.time.diff` – Time measurement with checkpoint tracking](#libtimediff-time-measurement-with-checkpoint-tracking)
+- [`lib.lua.time.diff` – Time measurement with checkpoint tracking](#libluatimediff--time-measurement-with-checkpoint-tracking)
   - [Overview](#overview)
   - [Statistics functions](#statistics-functions)
     - [Basic functions](#basic-functions)

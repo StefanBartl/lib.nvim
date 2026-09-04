@@ -2,11 +2,11 @@
 
 ## Table of content
 
-- [`lib.nvim.notify`](#libnotify)
+- [`lib.nvim.notify`](#libnvimnotify)
   - [Example: usage in a module](#example-usage-in-a-module)
   - [Example: another module, another prefix](#example-another-module-another-prefix)
-  - [`lib.nvim.notify.safe`](#libnotifysafe)
-    - [When is `lib.nvim.notify.safe` needed](#when-is-libnotifysafe-needed)
+  - [`lib.nvim.notify.safe`](#libnvimnotifysafe)
+    - [When is `lib.nvim.notify.safe` needed](#when-is-libnvimnotifysafe-needed)
     - [`safe.schedule`](#safeschedule)
     - [`safe.defer`](#safedefer)
     - [`safe.wrap`](#safewrap)

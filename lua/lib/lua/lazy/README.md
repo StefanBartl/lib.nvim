@@ -10,7 +10,7 @@ only when they are actually needed.
 
 ## Table of content
 
-- [lib.lua.lazy – Reusable lazy loading for Neovim](#liblazy-reusable-lazy-loading-for-neovim)
+- [lib.lua.lazy – Reusable lazy loading for Neovim](#liblualazy--reusable-lazy-loading-for-neovim)
   - [Motivation](#motivation)
     - [Load and cache behavior](#load-and-cache-behavior)
     - [Consequences](#consequences)

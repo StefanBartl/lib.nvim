@@ -3,9 +3,9 @@
 ## Table of content
 
   - [ASCII overview](#ascii-overview)
-  - [lib.nvim.buf_win_tab.buffer_utils](#libbuf_win_tabbuffer_utils)
-  - [lib.nvim.buf_win_tab.windows_utils](#libbuf_win_tabwindows_utils)
-  - [lib.nvim.buf_win_tab.tabs_utils](#libbuf_win_tabtabs_utils)
+  - [lib.nvim.buf_win_tab.buffer_utils](#libnvimbuf_win_tabbuffer_utils)
+  - [lib.nvim.buf_win_tab.windows_utils](#libnvimbuf_win_tabwindows_utils)
+  - [lib.nvim.buf_win_tab.tabs_utils](#libnvimbuf_win_tabtabs_utils)
 
 ---
 
