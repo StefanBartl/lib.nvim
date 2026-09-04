@@ -2,7 +2,7 @@
 
 Small grab-bag of path helpers that don't warrant their own module. For a
 chainable, `plenary.Path`-style OOP wrapper, see
-[`lib.nvim.fs.path.object`](#lib.nvim.fs.path.object) below — additive,
+[`lib.nvim.fs.path.object`](#libnvimfspathobject) below — additive,
 not a replacement for the flat API on this page.
 
 ## Usage
