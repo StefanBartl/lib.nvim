@@ -591,7 +591,8 @@ function M.write_all(opts)
       end,
     }
 
-    local ok, err, written = true, nil
+    local ok = true
+    local err, written
     if opts.dry_run then
       written = vim.tbl_keys(build(per_repo))
       table.sort(written)
