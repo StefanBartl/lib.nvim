@@ -80,10 +80,15 @@ Windows → `explorer.exe <target>` (not `cmd.exe /C start`, which truncates
 URLs with unescaped `&`); WSL → URL straight to `explorer.exe`, a
 filesystem path converted via `wslpath -w` first, falling back to
 `xdg-open`; macOS → `open`; Linux → `xdg-open`. Upstreamed from
-open.nvim's `handlers/default.lua`.
+open.nvim's `handlers/default.lua`. `target` is passed through `expand_path`
+(`~`, `$VAR`, `%VAR%`) first.
+
+Detached and fire-and-forget by default (`ok` = "dispatched"). Pass
+`opts.on_exit` to run it attached and observe the exit code — the one bit
+absorbed from the now-deprecated `lib.nvim.fs.open.url.system_opener`.
 
 ```
-return function(target: string): boolean ok, string|nil err
+return function(target: string, opts?: { on_exit?: fun(code: integer) }): boolean ok, string|nil err
 ```
 
 ### `lib.nvim.cross.reveal_in_fm` (see README)

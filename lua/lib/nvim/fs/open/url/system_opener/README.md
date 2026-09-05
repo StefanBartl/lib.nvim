@@ -1,73 +1,44 @@
-# `lib.nvim.fs.open.url.system_opener`
+# `lib.nvim.fs.open.url.system_opener` — **deprecated**
 
-Open a path or URL with the OS default handler — the per-OS dispatch
-(`open` / `xdg-open` / `wslview` / `explorer.exe`) that several plugins were
-reimplementing independently before this module existed as a real shared
-utility.
+> **Use [`lib.nvim.cross.open_default`](../../../../cross/open_default/README.md) instead.**
+> This module is now a thin compatibility shim over it, kept only so existing
+> `.open(url)` call sites keep working while they migrate.
 
-## Dispatch order
+The two modules solved the same problem — "open a path/URL with the OS
+default handler" — twice, independently. `open_default` is the more complete
+one:
 
-1. **`vim.ui.open`** (Neovim 0.10+) — the shell-independent, upstream-maintained
-   path. Used unless `cfg.prefer_ui_open == false` or `cfg.on_exit` is set.
-   If it errors or reports no usable opener, dispatch falls through to (2).
-2. **A per-OS argv list**, never a shell string. The list form is deliberate:
-   the string form goes through `&shell` + `shellescape`, which quotes paths
-   containing spaces incorrectly under `shell=pwsh` on Windows.
-3. **WSL** gets `wslview` (which hands the URL to the Windows host) ahead of
-   `xdg-open`, since a WSL distro usually has no desktop for `xdg-open` to talk
-   to. Only used when `wslview` is actually executable.
+- it runs `expand_path` (`~`, `$VAR`, `%VAR%`), which this module never did;
+- on WSL it translates a Linux path to its Windows equivalent via `wslpath`
+  before handing it to `explorer.exe`, so a `/home/...` or `~/...` path
+  actually opens. This module handed the raw Linux path straight to the
+  opener.
 
-`cfg` is entirely optional. Windows support is **on by default**; pass
-`cfg.enable_windows_opener = false` to opt back out.
+No caller was using this module's extra `cfg` surface (`prefer_ui_open`,
+`enable_windows_opener`, `open_cmd_*`) or its `vim.ui.open`-first dispatch, so
+the shim drops them. Only `cfg.on_exit` is still honored — it is forwarded to
+`open_default`'s own `opts.on_exit`.
 
-## Usage
+## Migration
 
 ```lua
-local system_opener = require("lib.nvim.fs.open.url.system_opener")
+-- before
+require("lib.nvim.fs.open.url.system_opener").open(url)
+require("lib.nvim.fs.open.url.system_opener").open(url, { on_exit = f })
 
-system_opener.open("https://github.com")
-system_opener.open("/path/to/file.pdf")
-
--- Force the argv dispatch, bypassing vim.ui.open:
-system_opener.open(url, { prefer_ui_open = false })
-
--- Disable the Windows opener explicitly, or override a command:
-system_opener.open(url, { enable_windows_opener = false })
-system_opener.open(url, { open_cmd_unix = { "gio", "open", "<url>" } })
-
--- Observe the real exit code (runs attached, skips vim.ui.open):
-system_opener.open(url, {
-  on_exit = function(code)
-    if code ~= 0 then
-      vim.notify("opener exited " .. code, vim.log.levels.WARN)
-    end
-  end,
-})
-
-if system_opener.is_like("www.example.com") then
-  -- looks like a URL
-end
+-- after
+require("lib.nvim.cross.open_default")(url)
+require("lib.nvim.cross.open_default")(url, { on_exit = f })
 ```
 
-In a custom command array, the literal `"<url>"` is substituted with the URL.
+`is_like` / `is_ike` have no replacement yet — keep requiring this module for
+those, or inline the pattern match.
 
-## Config — `AutoCmds.General.MD.GotoFile.Cfg`
-
-| Field                   | Type              | Default              | Meaning                                                        |
-|-------------------------|-------------------|----------------------|----------------------------------------------------------------|
-| `prefer_ui_open`        | `boolean?`        | `true`               | Try `vim.ui.open` first. Ignored when `on_exit` is set.         |
-| `enable_windows_opener` | `boolean?`        | `true`               | Enable the `explorer.exe` opener.                                |
-| `open_cmd_mac`          | `string[]?`       | `{ "open", url }`    | Override the macOS command.                                     |
-| `open_cmd_unix`         | `string[]?`       | `{ "xdg-open", url }`| Override the Linux command.                                     |
-| `open_cmd_wsl`          | `string[]?`       | `{ "wslview", url }` | Override the WSL command.                                       |
-| `on_exit`               | `fun(code)?`      | none                 | Observe the exit code; runs attached, skips `vim.ui.open`.      |
-
-## Returns
+## Returns (shim)
 
 `M.open(url, cfg?)` returns `true` when an opener was **dispatched**, `false`
-when the platform has no known opener (or the caller disabled it). Without
-`cfg.on_exit` the job is detached and fire-and-forget, so `true` says nothing
-about whether the target actually opened — use `on_exit` when that matters.
+otherwise. Without `cfg.on_exit` the job is detached and fire-and-forget, so
+`true` says nothing about whether the target actually opened.
 
 `M.is_like(s)` is a quick heuristic predicate: true for `http(s)://`, `file://`,
 `www.`-prefixed, or bare `name.tld`-shaped strings.

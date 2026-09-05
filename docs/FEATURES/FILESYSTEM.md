@@ -185,11 +185,15 @@ callback, a spawn callback) where `vim.fn.mkdir` would abort with `E5560`.
 
 ## Opening files and URLs with the OS default handler
 
-Two independent implementations of the same underlying problem, kept
-because one predates the other: `fs.open.url.system_opener` (`vim.ui.open`
-first, then a per-OS argv list) and the newer, more complete
-`lib.nvim.cross.open_default` (adds WSL `wslpath` translation). Prefer
-`cross.open_default` for new code.
+`lib.nvim.cross.open_default` is the single implementation: per-OS argv
+dispatch (`explorer.exe` / `open` / `xdg-open`), `expand_path` on the target,
+and WSL `wslpath` translation so a Linux path actually opens on the Windows
+host. Detached by default; pass `opts.on_exit` to run it attached and see the
+exit code.
 
-- **Module:** `lib.nvim.fs.open.url.system_opener`,
-  `lib.nvim.cross.open_default`
+`fs.open.url.system_opener` was a second, less complete take on the same
+problem (no `expand_path`, no `wslpath`). It is now a **deprecated** shim over
+`open_default` — `.open(url)` and `.open(url, { on_exit = f })` still work;
+the old `cfg` fields do not. Use `cross.open_default` directly in new code.
+
+- **Module:** `lib.nvim.cross.open_default` (`lib.nvim.fs.open.url.system_opener` = deprecated shim)

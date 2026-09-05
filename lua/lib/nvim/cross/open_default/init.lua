@@ -39,13 +39,22 @@ local function wsl_to_win_path(unix_path)
 end
 
 ---Open `target` (a filesystem path or URL) with the system default handler.
+---
+---`opts.on_exit`, when given, runs the opener **attached** (via `jobstart`)
+---and reports its exit code — the opposite of the default fire-and-forget
+---`run_detached` path, whose `ok` return says only that a command was
+---dispatched. Absorbed from `lib.nvim.fs.open.url.system_opener`, which is
+---now a deprecated shim over this function.
 ---@param target string
+---@param opts? { on_exit?: fun(code: integer) }
 ---@return boolean ok
 ---@return string|nil err
-return function(target)
+return function(target, opts)
   if type(target) ~= "string" or target == "" then
     return false, "empty target"
   end
+
+  opts = opts or {}
 
   local is_windows = require("lib.nvim.cross.platform.is_windows")()
   local is_wsl = require("lib.nvim.cross.platform.is_wsl")()
@@ -81,6 +90,18 @@ return function(target)
       return false, "xdg-open not found — install xdg-utils"
     end
     cmd = { "xdg-open", expand_path(target) }
+  end
+
+  if opts.on_exit then
+    local jid = vim.fn.jobstart(cmd, {
+      on_exit = function(_, code)
+        opts.on_exit(code)
+      end,
+    })
+    if jid <= 0 then
+      return false, "jobstart failed"
+    end
+    return true
   end
 
   return run.run_detached(cmd)
