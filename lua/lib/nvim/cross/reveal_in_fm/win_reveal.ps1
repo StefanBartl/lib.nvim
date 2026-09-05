@@ -25,9 +25,12 @@
 
   Invoked detached by `lib.nvim.cross.reveal_in_fm`; never blocks Neovim.
 
-  Exit codes: 0 = a window was raised, 1 = Explorer was launched but no
-  window could be located within -TimeoutMs (nothing is retried; the window,
-  if it appears late, is simply left unraised).
+  Exit codes: 0 = a window was raised, 1 = either Explorer was launched but
+  no window could be located within -TimeoutMs (nothing is retried; the
+  window, if it appears late, is simply left unraised), or -Path contained a
+  literal double quote and was refused before Explorer was ever launched
+  (see the check right below -- a WSL-sourced path can carry one, and this
+  script has no way to escape it for explorer.exe safely).
 #>
 [CmdletBinding()]
 param(
@@ -47,6 +50,24 @@ param(
 
 $ErrorActionPreference = 'SilentlyContinue'
 $ProgressPreference    = 'SilentlyContinue'
+
+if ($Path -like '*"*') {
+  # A native Windows path can never contain a literal `"` (Win32 rejects it
+  # in a filename), but $Path can arrive here already translated from a WSL
+  # path via wslpath -w, which does not filter anything -- Linux happily
+  # allows `"` in a filename. Left as-is, that quote would close the
+  # manually-built -ArgumentList string below early and let the rest of the
+  # filename smuggle extra tokens onto explorer.exe's command line.
+  # explorer.exe's own quote-escaping convention for a literal quote inside
+  # a quoted token is not documented rigorously enough to trust a hand-rolled
+  # unescape here, so this fails closed instead of attempting one: the
+  # caller (lib.nvim.cross.reveal_in_fm) never reads this process's exit code
+  # or output -- it is fire-and-forget by design -- so the visible effect is
+  # simply no window raised, the same as any other silent failure this
+  # script already exits 1 on below.
+  [Console]::Error.WriteLine("win_reveal: refusing a path containing a double quote: $Path")
+  exit 1
+}
 
 Add-Type @'
 using System;
