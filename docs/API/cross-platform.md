@@ -85,7 +85,8 @@ open.nvim's `handlers/default.lua`. `target` is passed through `expand_path`
 
 Detached and fire-and-forget by default (`ok` = "dispatched"). Pass
 `opts.on_exit` to run it attached and observe the exit code — the one bit
-absorbed from the now-deprecated `lib.nvim.fs.open.url.system_opener`.
+absorbed from this repo's former, less complete URL-opener module (removed
+2026-09-06).
 
 ```
 return function(target: string, opts?: { on_exit?: fun(code: integer) }): boolean ok, string|nil err

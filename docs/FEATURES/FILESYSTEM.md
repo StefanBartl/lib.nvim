@@ -192,8 +192,7 @@ host. Detached by default; pass `opts.on_exit` to run it attached and see the
 exit code.
 
 `fs.open.url.system_opener` was a second, less complete take on the same
-problem (no `expand_path`, no `wslpath`). It is now a **deprecated** shim over
-`open_default` — `.open(url)` and `.open(url, { on_exit = f })` still work;
-the old `cfg` fields do not. Use `cross.open_default` directly in new code.
+problem (no `expand_path`, no `wslpath`). It was removed 2026-09-06 once
+every caller had migrated to `cross.open_default` directly.
 
-- **Module:** `lib.nvim.cross.open_default` (`lib.nvim.fs.open.url.system_opener` = deprecated shim)
+- **Module:** `lib.nvim.cross.open_default`
