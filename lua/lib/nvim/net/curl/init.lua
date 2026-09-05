@@ -233,6 +233,20 @@ end
 local UNPARSEABLE = "unparseable curl output"
 
 ---@internal
+---Best-effort delete of a `download`/`download_blocking` destination after
+---curl itself failed (non-zero exit -- a network error, a timeout, `-D -`
+---getting killed mid-transfer). curl's `-o` writes as it streams, so a
+---failed transfer routinely leaves a truncated file behind; silently
+---keeping it around would let a caller that doesn't check `ok` mistake a
+---partial file for a complete one. Never called after a *parse* failure
+--- (curl exited 0, i.e. the transfer itself completed) -- only a failed
+---request discards what it wrote.
+---@param dest_path string
+local function remove_partial(dest_path)
+  pcall(os.remove, dest_path)
+end
+
+---@internal
 ---Parse curl `-i` output (response headers, then a blank line, then the
 ---body) into status/headers/body. curl's own process exit code says nothing
 ---about the HTTP status — it is 0 for a successful *request* regardless of
@@ -402,6 +416,7 @@ function M.download(url, dest_path, opts, cb)
 
   vim.system(argv, { text = true, stdin = stdin, timeout = opts.timeout_ms }, function(obj)
     if obj.code ~= 0 then
+      remove_partial(dest_path)
       local err = (obj.stderr and obj.stderr ~= "") and obj.stderr or ("curl exited " .. obj.code)
       cb(false, err, obj)
       return
@@ -432,6 +447,7 @@ function M.download_blocking(url, dest_path, opts)
 
   local obj = vim.system(argv, { text = true, stdin = stdin }):wait(opts.timeout_ms)
   if obj.code ~= 0 then
+    remove_partial(dest_path)
     local err = (obj.stderr and obj.stderr ~= "") and obj.stderr or ("curl exited " .. obj.code)
     return false, err, obj
   end
