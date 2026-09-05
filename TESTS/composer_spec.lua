@@ -572,10 +572,17 @@ return function(H)
       body:find("[--type=<value> ...]", 1, true),
       "docgen: repeatable value flag rendered with trailing ..."
     )
+    -- Escaped, because this string lands in a table CELL. GitHub splits a row
+    -- on its pipes before it parses inline code, so an unescaped member list
+    -- would end the invocation cell mid-word and push the description past the
+    -- header's column count, where it is dropped. This assertion used to
+    -- expect the unescaped form and so protected the bug.
     ok(
-      body:find("[--engine=<fzf|telescope>]", 1, true),
-      "docgen: enum flag renders its member list inline"
+      body:find("[--engine=<fzf\\|telescope>]", 1, true),
+      "docgen: enum flag renders its member list inline, pipes escaped for the table"
     )
+    -- The note line sits BELOW the table, not in a cell, so it keeps the
+    -- readable spelling.
     ok(
       body:find("`--engine` ∈ `fzf | telescope`", 1, true),
       "docgen: enum flag gets its own note line"
@@ -975,7 +982,12 @@ return function(H)
     local body = docgen.render({
       { name = "ShortFlagDoc", spec = { routes = { short_route } }, root = short_doc_root },
     })
-    ok(body:find("[--replace|-r]", 1, true), "docgen: short flag rendered alongside the long name")
+    -- `\|`, not `|`: this is the exact shape that cost sandbox.nvim sixteen
+    -- command descriptions -- present in the file, dropped by the renderer.
+    ok(
+      body:find("[--replace\\|-r]", 1, true),
+      "docgen: short flag rendered alongside the long name, pipe escaped"
+    )
   end
 
   -- --------------------------------------------------------------- kv (key=value)
