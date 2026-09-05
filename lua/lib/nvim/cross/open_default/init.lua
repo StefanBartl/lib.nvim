@@ -43,8 +43,8 @@ end
 ---`opts.on_exit`, when given, runs the opener **attached** (via `jobstart`)
 ---and reports its exit code — the opposite of the default fire-and-forget
 ---`run_detached` path, whose `ok` return says only that a command was
----dispatched. Absorbed from `lib.nvim.fs.open.url.system_opener`, which is
----now a deprecated shim over this function.
+---dispatched. Absorbed from this repo's former, less complete URL-opener
+---module (removed 2026-09-06 once every caller migrated to this function).
 ---@param target string
 ---@param opts? { on_exit?: fun(code: integer) }
 ---@return boolean ok

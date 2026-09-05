@@ -167,8 +167,7 @@ Neovim adapters.
                            like *.rockspec, opt-in chain caching), relpath,
                            create_entry, mkdirp (mkdir -p on libuv only, safe
                            in a fast event context), normkey, project_key,
-                           path_shorten, open.url.system_opener (vim.ui.open
-                           first, then per-OS argv, wslview under WSL),
+                           path_shorten,
                            collect_recursive / scan_cached / scan_roots
                            (recursive scanning, in-memory or on-disk TTL
                            cache; each has a coroutine-driven *_async

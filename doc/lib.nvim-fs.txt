@@ -46,7 +46,6 @@ CONTENTS                                              *lib.nvim-fs-contents*
   8. Ignore patterns ................................. |lib.nvim-fs-ignore|
        ignore.list ................................ |lib.nvim-fs-ignore.list|
   9. System ........................................... |lib.nvim-fs-system|
-       open.url.system_opener .. |lib.nvim-fs-open.url.system_opener|
        trash ...................................... |lib.nvim-fs-trash|
 
 ==============================================================================
@@ -454,31 +453,6 @@ Fields / functions ~
 
 ==============================================================================
 9. SYSTEM                                              *lib.nvim-fs-system*
-
-------------------------------------------------------------------------------
-open.url.system_opener({url}, {cfg})   *lib.nvim-fs-open.url.system_opener*
-
-Table `M`. Open a path/URL with the OS default handler: `vim.ui.open` first
-(unless `cfg.on_exit` is set or `prefer_ui_open = false`), then a per-OS
-argv dispatch (never a shell string). WSL tries `wslview` before
-`xdg-open`. >lua
-
-    local system_opener = require("lib.nvim.fs.open.url.system_opener")
-    system_opener.open("https://github.com")
-    system_opener.open("/path/to/file.pdf", { prefer_ui_open = false })
-
-    system_opener.is_like("www.example.com") -- true (URL-shaped heuristic)
-<
-Options (`cfg`) ~
-    prefer_ui_open           boolean    try vim.ui.open first (default true;
-                                         ignored when on_exit is set)
-    enable_windows_opener     boolean    enable the explorer.exe opener
-                                          (default true)
-    open_cmd_mac              string[]   override macOS argv
-    open_cmd_unix              string[]   override Linux argv
-    open_cmd_wsl                string[]   override WSL argv
-    on_exit                    fun(code: integer)  observe exit code; runs
-                                         attached, skips vim.ui.open
 
 ------------------------------------------------------------------------------
 trash({path}, {cb})                                      *lib.nvim-fs-trash*

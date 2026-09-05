@@ -64,5 +64,6 @@ open_default(url, {
 })
 ```
 
-This is the one piece of surface absorbed from the now-deprecated
-`lib.nvim.fs.open.url.system_opener`, which is a thin shim over this function.
+This is the one piece of surface absorbed from this repo's former, less
+complete URL-opener module, removed 2026-09-06 once every caller had
+migrated to this function directly.

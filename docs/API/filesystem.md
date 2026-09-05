@@ -315,16 +315,7 @@ M.trash_blocking(path: string): boolean ok, string|nil err
 
 ## Opening files / URLs
 
-### `lib.nvim.fs.open.url.system_opener` (see README) — **deprecated**
-Use [`lib.nvim.cross.open_default`](cross-platform.md) instead. This module is
-now a thin shim over it: `.open(url)` → `open_default(url)`, `.open(url, {
-on_exit = f })` → `open_default(url, { on_exit = f })`. The old `cfg` fields
-(`prefer_ui_open`, `enable_windows_opener`, `open_cmd_*`) and the
-`vim.ui.open`-first dispatch are gone — no caller used them, and `open_default`
-adds `expand_path` + WSL `wslpath` translation that this module lacked.
-
-```
-M.open(url: string, cfg?: table): boolean opened   -- shim: forwards only cfg.on_exit
-M.is_like(s: string): boolean                        -- heuristic: http(s)://, file://, www., or bare name.tld (no replacement yet)
-M.is_ike                                              -- deprecated misspelled alias of is_like
-```
+See [`lib.nvim.cross.open_default`](cross-platform.md) — open a path or URL
+with the OS default handler. This used to live under `lib.nvim.fs` as
+`open.url.system_opener`; that module was removed 2026-09-06 once every
+caller had migrated to `cross.open_default` directly.
