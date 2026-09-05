@@ -1,4 +1,4 @@
-*lib.nvim.txt*            Reusable Lua/Neovim helper library
+*lib.nvim.txt*            Reusable Lua/Neovim helper library        *lib.nvim*
 
 ==============================================================================
 CONTENTS                                                    *lib.nvim-contents*
