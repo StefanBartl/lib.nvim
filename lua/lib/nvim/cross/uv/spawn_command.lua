@@ -27,6 +27,17 @@
 --- - stdout/stderr piping and callback mechanism make this suitable for asynchronous usage
 ---   in Neovim or CLI utilities.
 ---
+--- SECURITY: `cmd`/`args` are flattened and joined with spaces, then handed
+--- to a real shell (`cmd.exe /c` / `sh -c`) — on purpose, since that is what
+--- makes shell syntax (`&&`, pipes, env-var expansion) work. That also means
+--- neither may ever be built from a value this process does not already
+--- trust (search text, a filename, a branch name, anything an external
+--- source produced): a shell metacharacter in it changes what actually
+--- runs, exactly the pattern SEC-01/SEC-03 exist to rule out. A caller that
+--- only needs a fixed argv with no shell features should reach for
+--- `lib.nvim.cross.uv.spawn_capture`/`spawn_stream` (argv, no shell)
+--- instead.
+---
 
 local uv = vim.loop
 
