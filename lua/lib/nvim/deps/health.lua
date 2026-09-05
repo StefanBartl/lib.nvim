@@ -50,10 +50,14 @@ local function report_one(entry)
     return
   end
 
-  local suffix = entry.hint and ("  (" .. entry.hint .. ")") or ""
   if entry.required then
-    h_err(label .. " NOT found (required)" .. suffix)
+    -- `error`/`warn` take an advice list, rendered as its own bullet;
+    -- `info` (the optional branch below) does not take a second argument at
+    -- all -- LuaLS flags one as `redundant-parameter` for good reason, since
+    -- `:checkhealth` never renders it.
+    h_err(label .. " NOT found (required)", entry.hint and { entry.hint } or nil)
   else
+    local suffix = entry.hint and ("  (" .. entry.hint .. ")") or ""
     h_info(label .. " NOT found (optional)" .. suffix)
   end
 end
