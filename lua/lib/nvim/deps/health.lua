@@ -12,7 +12,6 @@ local M = {}
 
 local health = vim.health or require("health")
 local h_ok = health.ok or health.report_ok
-local h_warn = health.warn or health.report_warn
 local h_err = health.error or health.report_error
 local h_info = health.info or health.report_info
 
@@ -55,7 +54,7 @@ local function report_one(entry)
   if entry.required then
     h_err(label .. " NOT found (required)" .. suffix)
   else
-    h_warn(label .. " NOT found (optional)" .. suffix)
+    h_info(label .. " NOT found (optional)" .. suffix)
   end
 end
 
