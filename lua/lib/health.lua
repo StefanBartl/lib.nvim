@@ -56,7 +56,7 @@ function M.check()
   if vim.uv or vim.loop then
     h_ok("libuv bridge available (vim.uv)")
   else
-    h_error("vim.uv / vim.loop missing")
+    h_error("vim.uv / vim.loop missing", { "Upgrade to a Neovim build with libuv support" })
   end
 
   -- Configuration ---------------------------------------------------------
@@ -111,7 +111,7 @@ function M.check()
   if not ok_logger then
     h_error("lib.nvim.logger failed to load: " .. tostring(logger))
   elseif not logger.is_enabled() then
-    h_warn("logging is globally disabled (logger.set_enabled(false))")
+    h_info("logging is globally disabled (logger.set_enabled(false))")
   else
     local loggers = logger.loggers()
     if #loggers == 0 then
