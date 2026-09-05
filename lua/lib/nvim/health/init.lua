@@ -26,15 +26,18 @@ function M.version_ok(min)
 end
 
 ---Report whether `mod` can be `require`d, through `vim.health`.
----@param mod string                   module path to probe with `require`
----@param label string                 human-readable name shown in the report
----@param level "ok"|"warn"|"info"     how loud a missing module should be
+---@param mod string                          module path to probe with `require`
+---@param label string                        human-readable name shown in the report
+---@param level "error"|"warn"|"info"         how loud a missing module should be
+---@param advice? string[]                    rendered under the message; ignored at "info" (vim.health.info takes no second argument, LLS-29)
 ---@return nil
-function M.check_require(mod, label, level)
+function M.check_require(mod, label, level, advice)
   if pcall(require, mod) then
     vim.health.ok(label .. " (" .. mod .. ")")
+  elseif level == "error" then
+    vim.health.error(label .. " missing (" .. mod .. ")", advice)
   elseif level == "warn" then
-    vim.health.warn(label .. " missing (" .. mod .. ")")
+    vim.health.warn(label .. " missing (" .. mod .. ")", advice)
   else
     vim.health.info(label .. " not found (" .. mod .. ")")
   end
