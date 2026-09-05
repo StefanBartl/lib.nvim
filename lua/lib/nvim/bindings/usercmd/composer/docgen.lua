@@ -13,7 +13,12 @@ local BEGIN = "<!-- lib.nvim:composer -->"
 local END = "<!-- /lib.nvim:composer -->"
 
 ---@internal
---- Escape a pipe so a description never breaks a Markdown table row.
+--- Escape a pipe so a cell never breaks the Markdown table row it sits in.
+---
+--- Backticks do not help here: GitHub splits a table row on its pipes before
+--- it parses inline code, so `` `[--buffer|-b]` `` becomes two cells and every
+--- cell past the header's column count is dropped -- silently, and only when
+--- rendered. Locally the file still looks right.
 ---@param s string
 ---@return string
 local function cell(s)
@@ -43,8 +48,13 @@ function M.section(name, spec, root)
 
   local notes = {}
   tree.each_route(root, function(route)
+    -- The invocation needs `cell` as much as the description does, and needed
+    -- it more in practice: an alternation flag like `[--buffer|-b]` only ever
+    -- appears in this column. It went unescaped from the day this was written,
+    -- which cost sandbox.nvim 16 command descriptions and casedesk.nvim 11 --
+    -- all of them present in the file, none of them rendered.
     lines[#lines + 1] = ("| `%s` | %s |"):format(
-      format.invocation(name, route),
+      cell(format.invocation(name, route)),
       cell(route.desc or "")
     )
     for _, n in ipairs(format.enum_notes(route)) do
