@@ -5,14 +5,19 @@
 --- written for: the config declares its own `AutoCmds.General.MD.GotoFile.Cfg`,
 --- and two global classes of one name make every shared field a
 --- `duplicate-doc-field` in both files.
+---
+--- **Deprecated** along with the module. Since it became a shim over
+--- `lib.nvim.cross.open_default`, only `on_exit` is still honored; the other
+--- fields are kept for source compatibility but ignored.
 ---@class Lib.Fs.Open.Url.SystemOpener.Cfg
----@field prefer_ui_open? boolean Try `vim.ui.open` (Neovim 0.10+) before the per-OS argv dispatch (default true). Ignored when `on_exit` is set.
----@field enable_windows_opener? boolean Enable the Windows `explorer.exe` opener (default true)
----@field open_cmd_mac? string[] Override the macOS open command (default `{ "open", url }`)
----@field open_cmd_unix? string[] Override the Linux open command (default `{ "xdg-open", url }`)
----@field open_cmd_wsl? string[] Override the WSL open command (default `{ "wslview", url }`, used only when `wslview` is executable)
----@field on_exit? fun(code: integer) Observe the opener's exit code. Runs the job attached and skips `vim.ui.open`.
+---@field prefer_ui_open? boolean **Ignored** (shim). Was: try `vim.ui.open` before the argv dispatch.
+---@field enable_windows_opener? boolean **Ignored** (shim). Was: enable the Windows `explorer.exe` opener.
+---@field open_cmd_mac? string[] **Ignored** (shim). Was: override the macOS open command.
+---@field open_cmd_unix? string[] **Ignored** (shim). Was: override the Linux open command.
+---@field open_cmd_wsl? string[] **Ignored** (shim). Was: override the WSL open command.
+---@field on_exit? fun(code: integer) Observe the opener's exit code — forwarded to `open_default`'s `opts.on_exit`.
 
+---@deprecated Use `lib.nvim.cross.open_default` instead.
 ---@class Lib.Fs.Open.Url.SystemOpener
 ---@field open fun(url: string, cfg?: Lib.Fs.Open.Url.SystemOpener.Cfg): boolean
 ---@field is_like fun(s: string): boolean

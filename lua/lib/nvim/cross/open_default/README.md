@@ -46,3 +46,23 @@ end
 ```
 
 Returns `false, "empty target"` if `target` is not a non-empty string.
+
+## `opts.on_exit`
+
+By default the opener is spawned detached (via `lib.nvim.cross.run.run_detached`)
+and the `ok` return says only that a command was *dispatched*. Pass
+`opts.on_exit` to run it **attached** (via `jobstart`) and observe the real
+exit code:
+
+```lua
+open_default(url, {
+  on_exit = function(code)
+    if code ~= 0 then
+      vim.notify("opener exited " .. code, vim.log.levels.WARN)
+    end
+  end,
+})
+```
+
+This is the one piece of surface absorbed from the now-deprecated
+`lib.nvim.fs.open.url.system_opener`, which is a thin shim over this function.

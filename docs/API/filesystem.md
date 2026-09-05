@@ -315,16 +315,16 @@ M.trash_blocking(path: string): boolean ok, string|nil err
 
 ## Opening files / URLs
 
-### `lib.nvim.fs.open.url.system_opener` (see README)
-Open a path or URL with the OS default handler (`vim.ui.open` first, then
-per-OS argv list). See also `lib.nvim.cross.open_default` — the same
-problem solved with more per-OS completeness (WSL `wslpath` translation);
-that one is the newer, more complete implementation.
+### `lib.nvim.fs.open.url.system_opener` (see README) — **deprecated**
+Use [`lib.nvim.cross.open_default`](cross-platform.md) instead. This module is
+now a thin shim over it: `.open(url)` → `open_default(url)`, `.open(url, {
+on_exit = f })` → `open_default(url, { on_exit = f })`. The old `cfg` fields
+(`prefer_ui_open`, `enable_windows_opener`, `open_cmd_*`) and the
+`vim.ui.open`-first dispatch are gone — no caller used them, and `open_default`
+adds `expand_path` + WSL `wslpath` translation that this module lacked.
 
 ```
-M.open(url: string, cfg?: table): boolean opened   -- dispatched, not necessarily succeeded (unless cfg.on_exit given)
-M.is_like(s: string): boolean                        -- heuristic: http(s)://, file://, www., or bare name.tld
+M.open(url: string, cfg?: table): boolean opened   -- shim: forwards only cfg.on_exit
+M.is_like(s: string): boolean                        -- heuristic: http(s)://, file://, www., or bare name.tld (no replacement yet)
 M.is_ike                                              -- deprecated misspelled alias of is_like
 ```
-`cfg`: `prefer_ui_open` (default `true`), `enable_windows_opener` (default `true`),
-`open_cmd_mac`/`open_cmd_unix`/`open_cmd_wsl`, `on_exit: fun(code)`.

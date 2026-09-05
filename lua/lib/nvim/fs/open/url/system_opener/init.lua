@@ -1,109 +1,36 @@
 ---@module 'lib.nvim.fs.open.url.system_opener'
---- Open a path/URL with the OS default handler — the shared per-OS dispatch
---- every plugin that shells out to `open`/`xdg-open`/`start` was reimplementing
---- independently (see the `lib_NEW_MODULES.md`/`replace_moduls.md` survey).
+---@deprecated Use `lib.nvim.cross.open_default` instead.
+--- Thin compatibility shim over `lib.nvim.cross.open_default`, kept so the
+--- existing `.open(url)` / `.open(url, { on_exit = … })` call sites keep
+--- working while they migrate.
 ---
---- Dispatch order:
----   1. `vim.ui.open` (Neovim 0.10+) unless `cfg.prefer_ui_open == false` or
----      `cfg.on_exit` was passed. This is the shell-independent, upstream-
----      maintained path and should win whenever it exists.
----   2. A per-OS **argv list** — never a shell string. The list form matters:
----      the string form goes through `&shell` + `shellescape`, which quotes
----      paths containing spaces incorrectly under `shell=pwsh` on Windows.
----   3. WSL gets `wslview` (which hands the URL to the Windows host) before
----      falling back to `xdg-open`, since a WSL distro usually has no desktop
----      for `xdg-open` to talk to.
----
---- `cfg` is entirely optional. Windows support is enabled by default (via
---- `explorer.exe`); pass `cfg.enable_windows_opener = false` to opt back
---- out. `cfg.open_cmd_mac`/`open_cmd_unix`/`open_cmd_wsl` override the
---- respective command.
+--- The two modules solved the same problem twice. `open_default` is the more
+--- complete one — it runs `expand_path` (`~`, `$VAR`, `%VAR%`) and, on WSL,
+--- translates a Linux path to its Windows equivalent via `wslpath` before
+--- handing it to `explorer.exe`; this module did neither, so a `~/x.pdf` or a
+--- `/home/...` path under WSL opened wrong or not at all. No caller was using
+--- the extra `cfg` surface (`prefer_ui_open`, `enable_windows_opener`,
+--- `open_cmd_*`) or the `vim.ui.open`-first dispatch, so the shim drops them:
+--- only `cfg.on_exit` is forwarded. `is_like` / `is_ike` stay as-is.
 
 require("lib.nvim.fs.open.url.system_opener.@types")
 
 local M = {}
 
----@internal
----Resolve the argv list for the current platform.
----@param url string
----@param cfg Lib.Fs.Open.Url.SystemOpener.Cfg
----@return string[]|nil
-local function resolve_opener(url, cfg)
-  if vim.fn.has("macunix") == 1 then
-    return cfg.open_cmd_mac or { "open", url }
-  end
-
-  if vim.fn.has("unix") == 1 then
-    -- WSL: `xdg-open` typically has no desktop to hand the URL to, while
-    -- `wslview` (from wslu) forwards it to the Windows host's default handler.
-    if require("lib.nvim.cross.platform.is_wsl")() and vim.fn.executable("wslview") == 1 then
-      return cfg.open_cmd_wsl or { "wslview", url }
-    end
-    return cfg.open_cmd_unix or { "xdg-open", url }
-  end
-
-  if cfg.enable_windows_opener ~= false and vim.fn.has("win32") == 1 then
-    -- explorer.exe hands the target straight to the registered protocol/file
-    -- handler with no cmd.exe re-tokenizing in between. `cmd.exe /c start`
-    -- silently truncates a URL/path containing an unescaped `&` (any link
-    -- with 2+ query params) because cmd.exe's own tokenizer treats a bare
-    -- `&` outside quotes as a command separator, and libuv/vim.system only
-    -- quote an argv entry that contains whitespace.
-    return { "explorer.exe", url }
-  end
-
-  return nil
-end
-
---- In-place "open URL" via system opener.
+--- In-place "open URL" via the system opener.
 ---
---- The return value reports whether an opener was *dispatched*, not whether
---- it succeeded — the default path is detached and fire-and-forget. Pass
---- `cfg.on_exit` to observe the actual exit code; that keeps the job attached
---- and skips `vim.ui.open` (whose handle would have to be waited on
---- synchronously).
+--- Deprecated alias for `require("lib.nvim.cross.open_default")(url,
+--- { on_exit = cfg.on_exit })`. The return value reports whether an opener
+--- was *dispatched*, not whether it succeeded — pass `cfg.on_exit` to observe
+--- the actual exit code.
+---@deprecated Use `require("lib.nvim.cross.open_default")(url)` instead.
 ---@param url string
----@param cfg? Lib.Fs.Open.Url.SystemOpener.Cfg
+---@param cfg? Lib.Fs.Open.Url.SystemOpener.Cfg  Only `on_exit` is honored; the rest are ignored.
 ---@return boolean opened
 function M.open(url, cfg)
   cfg = cfg or {}
-
-  if cfg.prefer_ui_open ~= false and not cfg.on_exit and vim.ui and vim.ui.open then
-    local ok, handle = pcall(vim.ui.open, url)
-    if ok and handle then
-      return true
-    end
-    -- Fall through to the argv dispatch: either `vim.ui.open` errored, or it
-    -- reported that it found no usable opener on this system.
-  end
-
-  local opener = resolve_opener(url, cfg)
-  if not opener then
-    return false
-  end
-
-  -- Replace placeholder if custom arrays were provided like {"open", "<url>"}.
-  for i, v in ipairs(opener) do
-    if v == "<url>" then
-      opener[i] = url
-    end
-  end
-
-  if cfg.on_exit then
-    -- Exit-code reporting requires keeping the job attached.
-    local jid = vim.fn.jobstart(opener, {
-      on_exit = function(_, code)
-        cfg.on_exit(code)
-      end,
-    })
-    if jid <= 0 then
-      return false
-    end
-    return true
-  end
-
-  vim.fn.jobstart(opener, { detach = true })
-  return true
+  local ok = require("lib.nvim.cross.open_default")(url, { on_exit = cfg.on_exit })
+  return ok
 end
 
 --- Quick predicate: looks like a web/URI target.
@@ -124,8 +51,6 @@ end
 
 --- Deprecated misspelling of `is_like`, kept as an alias so existing call
 --- sites keep working. Prefer `M.is_like`.
---- Signature and hover come from `M.is_like` itself -- `@param`/`@return`
---- on a plain assignment have no function to bind to.
 ---@deprecated use `M.is_like` instead
 M.is_ike = M.is_like
 

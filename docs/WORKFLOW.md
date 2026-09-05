@@ -135,9 +135,10 @@ branch.
   until you switch to an argv runner for a good reason (no shell
   interpolation) and lose the auto-wiring silently.
 - **Opening a path or revealing it in a file manager are different
-  actions** (`cross.open_default` vs. `cross.reveal_in_fm`) — don't reach
-  for the older `fs.open.url.system_opener` for new code; `cross.open_default`
-  is the more complete implementation (adds WSL `wslpath` translation).
+  actions** (`cross.open_default` vs. `cross.reveal_in_fm`).
+  `fs.open.url.system_opener` is a **deprecated** shim over `cross.open_default`
+  now — always call `cross.open_default` directly (it adds `expand_path` + WSL
+  `wslpath` translation the old module lacked).
 - **File mutation on an untrusted/user-controlled path**: use
   `cross.fs.mutate` (delete/copy/rename/mkdir), not `os.remove`/`io.open`
   directly — it retries transient `EPERM`/`EACCES`/`EBUSY` errors (a file
