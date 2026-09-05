@@ -1382,7 +1382,7 @@ return function(H)
     local function src_of(name)
       local r = usercmd.registered({ name = name })[1]
       ok(r ~= nil, "registry has a record for :" .. name)
-      return (r.src or ""):gsub("\\", "/")
+      return ((r.src or ""):gsub("\\", "/"))
     end
 
     composer.verb("ComposerSpecSrcDirect", { routes = {} })
