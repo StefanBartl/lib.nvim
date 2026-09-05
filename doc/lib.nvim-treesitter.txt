@@ -100,7 +100,7 @@ MODES                          *lib.nvim-treesitter-parser_policy-modes*
 
 A "Never for `<lang>`" answer is remembered via |lib.nvim-cache| (disk
 backend) and survives restarts, so the same language never re-prompts.
-"No" is *not* remembered — it asks again next time.
+"No" is not remembered — it asks again next time.
 
 ------------------------------------------------------------------------------
 FUNCTIONS                   *lib.nvim-treesitter-parser_policy-functions*
