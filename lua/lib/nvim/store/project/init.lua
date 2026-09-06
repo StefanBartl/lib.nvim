@@ -46,8 +46,8 @@ local function short_hash(s)
   return string.format("%08x", h)
 end
 
----Directory `lib.nvim.cache.disk` should use for the project resolved from
 ---@internal
+---Directory `lib.nvim.cache.disk` should use for the project resolved from
 ---`opts.path` (default cwd).
 ---@param opts? Lib.Store.Project.Opts
 ---@return string dir

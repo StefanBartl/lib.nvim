@@ -29,7 +29,7 @@
 
 local M = {}
 
----@alias Markdown.ImageProvider "images.nvim"|"snacks"|"image.nvim"
+---@alias Lib.ImagePreview.Provider "images.nvim"|"snacks"|"image.nvim"
 
 ---Which in-Neovim preview provider is available, if any.
 ---
@@ -37,7 +37,7 @@ local M = {}
 ---the three that draws anything on native Windows Neovim in WezTerm (see
 ---module doc above) — snacks/image.nvim are kept as the fallback for setups
 ---where they do work (Kitty-capable terminals).
----@return Markdown.ImageProvider|nil
+---@return Lib.ImagePreview.Provider|nil
 function M.detect()
   local ok_images, images = pcall(require, "images")
   if ok_images and type(images) == "table" and images.show then
@@ -108,10 +108,10 @@ local function wire_close(buf, win, on_close)
       pcall(on_close)
     end
   end, {
-    group = "MarkdownNvimImagePreview",
+    group = "lib_nvim_image_preview",
     pattern = tostring(win),
     once = true,
-    desc = "[markdown.nvim] image preview: clear the placement when its window closes",
+    desc = "lib.nvim.image_preview: clear the placement when its window closes",
   })
 end
 

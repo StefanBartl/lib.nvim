@@ -169,6 +169,10 @@ function M.scan(root)
   return groups
 end
 
+--- CDX: rendered output uses German labels ("Zeilen", "Plugins", "identische
+--- Funktionskoerper...") while every other lib.nvim user-facing string is
+--- English; a leftover from the nvim-config Python-tool origin mentioned in
+--- the module header.
 ---`scan()`, rendered as printable lines.
 ---@param root string|nil
 ---@return string[]

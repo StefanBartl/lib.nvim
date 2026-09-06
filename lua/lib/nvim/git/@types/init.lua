@@ -2,7 +2,7 @@
 ---@module 'lib.nvim.git.@types'
 
 ---@class Lib.Git
----@field in_git_repo fun(git_cmd: string): boolean # Check if current directory is inside a Git work-tree.
+---@field in_git_repo fun(git_cmd?: string): boolean # Check if current directory is inside a Git work-tree.
 ---@field repo_root fun(git_cmd?:string):string|nil # Get the absolute path to the repository root.
 ---@field current_branch fun(git_cmd?:string):string|nil # Get the current branch name. Returns nil in detached HEAD state.
 ---@field is_detached_head fun(git_cmd?:string):boolean # Check whether the repository is in a detached HEAD state.

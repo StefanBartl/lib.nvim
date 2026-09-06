@@ -23,51 +23,17 @@ function M.safe(name)
   return true, mod
 end
 
----Load all modules in a directory
+---Load all `*.lua` files directly inside `lua/<dir>` (non-recursive,
+---`init.lua` skipped) and dispatch `calls` on each loaded module. The
+---calling module itself is skipped (detected via `debug.getinfo`), so a
+---module inside `<dir>` that calls this on its own parent directory does
+---not re-require itself into infinite recursion. All requires and
+---function calls are `pcall`-wrapped; failures are reported via notify
+---rather than raised.
 ---@param dir string Directory relative to lua/
----@param calls? string|string[]|"" Functions to call on loaded modules
+---@param calls? string|string[]|"" Which function(s) to call on each loaded module: nil calls `setup({})` if present (default); a string calls exactly that function; a table calls each in order; `""` calls nothing, modules are only required.
 ---@return nil
 function M.dir(dir, calls)
-  --[[
-This utility loads all Lua modules located directly inside a given directory
-under `lua/<dir>` and optionally invokes well-defined lifecycle functions
-on each loaded module.
-
-Key features:
-
-1. Directory-based module loading
-   All `*.lua` files inside `lua/<dir>` are required non-recursively.
-   The module name is derived as `<dir>.<filename_without_extension>`.
-
-2. Self-skip protection
-   The module that calls `require_dir` is automatically skipped.
-   This prevents infinite recursion in setups like:
-     lua/lib/func.lua  -> require_dir("lib")
-   where `lib.func` would otherwise re-require itself.
-
-3. Optional function dispatch
-   A second argument controls which functions are invoked on each module:
-     - nil:
-         Calls `setup({})` if present (default behavior).
-     - string:
-         Calls exactly that function name, e.g. "apply".
-     - string[]:
-         Calls all listed function names in order.
-     - empty string (""):
-         Calls nothing at all; modules are only required.
-
-   Only functions that exist and are callable are invoked.
-   Errors during require or function execution are reported via `vim.notify`.
-
-4. Defensive execution
-   All requires and function calls are wrapped in `pcall` to ensure
-   robustness during startup and partial failures.
-
-The function itself is exported directly (not wrapped in a table) to allow
-simple re-export patterns.
-]]
-  --
-
   -- Normalize `dir` (strip leading/trailing slashes and trailing dots)
   dir = tostring(dir):gsub("^/*", ""):gsub("/*$", ""):gsub("%.+$", "")
 
@@ -162,6 +128,10 @@ simple re-export patterns.
   end
 end
 
+--- CDX: reimplements `lib.lua.lazy`'s `LAZY.module(name).get` (cache-on-first-
+--- access require) rather than delegating to it; the two now have to be kept
+--- behaviorally in sync by hand. Real caller: `LIB.require_lazy` in
+--- `lib/strategies/eager.lua`/`lazy.lua`.
 ---Lazy-loading wrapper
 ---@param module_name string
 ---@return fun(): table

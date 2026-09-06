@@ -65,4 +65,5 @@ function M.run(fn)
   vim.cmd("normal! g@l")
 end
 
+---@type Lib.Dotrepeat
 return M
