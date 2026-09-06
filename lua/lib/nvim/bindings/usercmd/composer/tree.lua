@@ -1,11 +1,9 @@
 ---@module 'lib.nvim.bindings.usercmd.composer.tree'
 --- The route tree: the single source of truth read by dispatch, completion, and
 --- docgen. A node has literal `children` and an optional terminal `route`.
+--- (`Lib.UserCmd.Composer.Node` is defined in `@types`.)
 
----@class Lib.UserCmd.Composer.Node
----@field children table<string, Lib.UserCmd.Composer.Node>
----@field route?   Lib.UserCmd.Composer.Route
----@field token?   string   # the literal token that reaches this node (nil at root)
+require("lib.nvim.bindings.usercmd.composer.@types")
 
 local M = {}
 

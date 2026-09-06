@@ -1,10 +1,8 @@
 ---@meta
 ---@module 'lib.nvim.bindings.usercmd.composer.@types'
 
---- Built-in argument type names. Custom types registered via
+--- The argument type names `argtypes` ships with. Custom types registered via
 --- `composer.register_type` extend this set at runtime.
---- The types `argtypes` ships with. `WINDOW` was registered from the
---- start and simply missing from this list.
 ---@alias Lib.UserCmd.Composer.ArgTypeBuiltin
 ---| "STRING"
 ---| "INT"
@@ -61,6 +59,13 @@
 ---@field enum?   string[]                        # closed set for the value; validated + completed (see argtypes.validate)
 ---@field values? string[]                        # completion-only hints for a STRING value (not enforced, unlike enum) — same argtypes.STRING.complete a plain ArgSpec uses
 ---@field default? any                            # value bound when the key is never passed
+
+--- One node of the route tree (see `composer.tree`): literal `children` and an
+--- optional terminal `route`.
+---@class Lib.UserCmd.Composer.Node
+---@field children table<string, Lib.UserCmd.Composer.Node>
+---@field route?   Lib.UserCmd.Composer.Route
+---@field token?   string   # the literal token that reaches this node (nil at root)
 
 --- A single command route: a literal token path, an optional positional arg
 --- schema, optional flags, and the handler.
@@ -145,10 +150,10 @@
 ---@field spec     fun(self: Lib.UserCmd.Composer.Handle): Lib.UserCmd.Composer.Spec
 ---@field document fun(self: Lib.UserCmd.Composer.Handle, path?: string): boolean, string|nil
 ---@field check    fun(self: Lib.UserCmd.Composer.Handle): Lib.UserCmd.Composer.CheckResult[]
---- Fluent builders additionally expose :desc/:default/:route/:bang/:range/:build.
+--- Fluent builders additionally expose
+--- :desc/:default/:route/:bang/:range/:count/:buffer/:build.
 
---- Docs configuration (see `composer.setup`).
---- The partial override a caller hands to `composer.setup{ docs = ... }`.
+--- The partial docs override a caller hands to `composer.setup{ docs = ... }`.
 ---@class Lib.UserCmd.Composer.DocsOpts
 ---@field path? string                               # default output file (default: docs/BINDINGS/Usercmds.md)
 ---@field mode? "replace"|"section"                  # overwrite whole file, or update a delimited block (default: "replace")

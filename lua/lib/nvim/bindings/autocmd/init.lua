@@ -1,10 +1,7 @@
 ---@module 'lib.nvim.bindings.autocmd'
--- =========================================================
--- Autocommand helper utilities.
---
--- Provides standardized autocmd creation with automatic
--- augroup handling and defensive callbacks.
--- =========================================================
+--- Autocommand helpers: standardized creation with automatic augroup handling,
+--- defensive (pcall-wrapped) callbacks, and a registry read back by the
+--- generated-docs writers.
 
 local notify = require("lib.nvim.notify").create("[lib.nvim.bindings.autocmd]")
 
@@ -34,15 +31,6 @@ local group_names = {}
 local function group_exists(id)
   return (pcall(vim.api.nvim_get_autocmds, { group = id }))
 end
-
---- Create (or look up) an augroup, memoized by name.
----
---- The cache is verified, not trusted. `nvim_del_augroup_by_name` is a normal
---- thing for a consumer to call -- a plugin that owns a group and wants to stop
---- owning it has no other way -- and the deleted id stayed in this cache, so
---- the next `group()` for that name handed back an id Neovim no longer knew and
---- every `create()` against it failed with "Invalid 'group'". Found from
---- lsp.nvim, whose `bindings/autocmds.clear()` does exactly that.
 
 --- Every autocmd this module created, in creation order.
 ---
@@ -163,6 +151,14 @@ function M.delete(id)
   return deleted
 end
 
+--- Create (or look up) an augroup, memoized by name.
+---
+--- The cache is verified, not trusted. `nvim_del_augroup_by_name` is a normal
+--- thing for a consumer to call -- a plugin that owns a group and wants to stop
+--- owning it has no other way -- and the deleted id stayed in this cache, so
+--- the next `group()` for that name handed back an id Neovim no longer knew and
+--- every `create()` against it failed with "Invalid 'group'". Found from
+--- lsp.nvim, whose `bindings/autocmds.clear()` does exactly that.
 ---@param name string
 ---@param clear boolean|nil
 ---@return integer
@@ -191,10 +187,10 @@ end
 
 ---@type table<string, integer>
 local cache = {}
--- Augroup registry.
---
--- Centralized augroup creation with optional prefixing
--- and deduplication.
+
+--- Augroup registry: create or look up an augroup, optionally namespaced with
+--- `opts.prefix` and deduplicated by the resulting full name. Unlike `group()`
+--- above, the cache here is not re-verified against Neovim.
 ---@param name string
 ---@param opts { clear?: boolean, prefix?: string }|nil
 ---@return integer

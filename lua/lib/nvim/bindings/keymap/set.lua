@@ -1,21 +1,8 @@
 ---@module 'lib.nvim.bindings.keymap.set'
--- =========================================================
--- The single-keymap wrapper.
---
--- Reached as `keymap(...)` (the module is callable) or
--- `keymap.set(...)`. `keymap.register()` builds on this.
---
--- Convenience wrapper around vim.keymap.set with defaults
--- and deferred debug diagnostics for invalid argument types.
--- - optional buffer scoping
--- =========================================================
-
--- ---@param flags Lib.Map.ErrorFlags
--- ---@param modes? string|string[]
--- ---@param lhs? string
--- ---@param rhs? string|function
--- ---@param opts? Lib.Map.Opts
--- ---@return nil
+--- The single-keymap wrapper: `vim.keymap.set` with defaults, optional buffer
+--- scoping, and deferred debug diagnostics for invalid argument types. Reached
+--- as `keymap(...)` (the module is callable) or `keymap.set(...)`;
+--- `keymap.register()` builds on this.
 
 local notify = require("lib.nvim.notify").create("[lib.nvim.bindings.keymap]")
 
