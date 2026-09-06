@@ -1,31 +1,8 @@
 ---@module 'lib.nvim.cross.uv.spawn_command'
---- Cross-platform shell command runner for Neovim/Lua.
----
---- This module provides a helper function `spawn_project_command` that executes shell commands
---- in a way that works reliably across platforms (Windows, Linux, macOS) and correctly handles
---- project-relative paths, especially in Node.js projects.
----
---- Features:
---- 1. Detects platform and automatically selects the appropriate shell:
----    - Windows: `cmd.exe /c`
----    - Linux/macOS: `/bin/sh -c`
---- 2. Supports absolute or project-relative paths for the working directory.
---- 3. Pipes stdout/stderr to Neovim by default, but allows custom `stdio` configuration.
---- 4. Provides an `on_exit` callback for asynchronous process completion handling.
----
---- Usage scenarios:
---- - Running `npm run dev` inside a Node.js project folder, with cwd automatically resolved.
---- - Executing shell commands relative to a project root (absolute or relative path).
---- - Cross-platform scripting without needing to manually handle Windows `.cmd` files or shell specifics.
----
---- Design decisions:
---- - On Windows, `uv.spawn` cannot execute batch files or shell syntax directly. Wrapping commands
----   with `cmd.exe /c` ensures that scripts and shell features work.
---- - On Unix systems, many executables are direct binaries or scripts with shebangs, so they
----   can often be executed directly. Wrapping with `/bin/sh -c` provides consistency.
---- - cwd handling allows commands to be run relative to a project root or Neovim buffer directory.
---- - stdout/stderr piping and callback mechanism make this suitable for asynchronous usage
----   in Neovim or CLI utilities.
+--- Cross-platform shell-command runner on raw `uv.spawn`: wraps the command
+--- with `cmd.exe /c` on Windows (needed for batch files and shell syntax) or
+--- `/bin/sh -c` elsewhere. `cwd` defaults to Neovim's cwd; stdout/stderr are
+--- inherited unless `opts.stdio` overrides; `opts.on_exit` observes completion.
 ---
 --- SECURITY: `cmd`/`args` are flattened and joined with spaces, then handed
 --- to a real shell (`cmd.exe /c` / `sh -c`) — on purpose, since that is what
@@ -98,9 +75,6 @@ local function spawn_project_command(cmd, opts)
   return handle
 end
 
--- Example usage:
--- spawn_project_command("npm run dev", { cwd = "/path/to/project", on_exit = function(code) print(code) end })
--- spawn_project_command("echo", { args = { "Hello World" } })
 return {
   spawn_project_command = spawn_project_command,
 }

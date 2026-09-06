@@ -1,6 +1,6 @@
 ---@module 'lib.nvim.cross.fs._cwd'
+--- Resolve the current working directory via libuv, compatible across Neovim versions.
 
--- Resolve the current working directory via libuv, compatible across NVIM versions.
 ---@return string
 return function()
   -- Prefer vim.uv on newer Neovim; fall back to vim.loop for older builds.

@@ -60,7 +60,3 @@ return function(cmd, args, opts)
 
   return handle
 end
-
--- Usage example:
--- spawn_shell_command("npm", { "run", "dev:server" })
--- spawn_shell_command("echo", { "Hello World" }, { on_exit = function(code) print(code) end })

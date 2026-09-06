@@ -1,6 +1,6 @@
 ---@module 'lib.nvim.cross.fs.expand_path'
---- Expand `~`, `$VAR` (POSIX) and `%VAR%` (Windows) references in a raw path
---- string. Pure string expansion — does not normalize separators or resolve
+--- Expand `~`, `$VAR`/`${VAR}` (POSIX) and `%VAR%` (Windows) references in a raw
+--- path string. Pure string expansion — does not normalize separators or resolve
 --- `.`/`..` (see `lib.nvim.cross.fs.separators` / `lib.nvim.fs.path` for that).
 
 ---@param path string

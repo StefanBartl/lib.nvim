@@ -1,24 +1,33 @@
 ---@meta
 ---@module 'lib.nvim.cross.@types'
 
+---Shape of the `lib.nvim.cross` aggregate table (see `cross/init.lua`).
 ---@class Lib.Cross
----@field platform Lib.Cross.Platform
+---@field is_windows fun(): boolean
+---@field is_wsl fun(): boolean
+---@field is_macos fun(): boolean
+---@field is_linux fun(): boolean
+---@field is fun(platform?: Lib.Cross.Platform.PlatformName): boolean|Lib.Cross.Platform.PlatformName
+---@field executable table # PATH / Mason binary lookup: exists / path / find / mason_bin / clear.
 ---@field run Lib.Cross.Run
----@field clipboard Lib.Cross.Clipboard
 ---@field fs Lib.Cross.Fs
 ---@field separators Lib.Cross.Separators
 ---@field uv Lib.Cross.Uv
----@field open_default fun(target: string): boolean, string|nil # Open a path/URL with the OS default application.
+---@field open_default fun(target: string, opts?: { on_exit?: fun(code: integer) }): boolean, string|nil # Open a path/URL with the OS default application.
 ---@field reveal_in_fm fun(target: string, opts?: Lib.Cross.RevealInFm.Opts): boolean, string|nil # Show a path in the system file manager.
 
----Libuv-backed process helpers.
+---Libuv-backed process helpers (the `cross.uv` sub-table).
 ---@class Lib.Cross.Uv
----@field spawn_command fun(argv: string[], opts?: table): any # Fire-and-forget spawn with inherited stdio.
----@field spawn_shell_command fun(cmd: string, opts?: table): any # Same, but through the platform shell.
+---@field spawn_command { spawn_project_command: fun(cmd: string, opts?: table): uv.uv_process_t? } # Shell-string runner on raw uv.spawn.
+---@field spawn_shell_command fun(cmd: string, args: string[], opts?: table): uv.uv_process_t? # Same, cmd/args passed separately.
 ---@field spawn_capture Lib.Cross.Uv.SpawnCapture # Async argv spawn, output buffered, one callback at exit.
 ---@field spawn_stream Lib.Cross.Uv.SpawnStream # Async argv spawn, output streamed line by line.
----@field wait_until fun(predicate: (fun(): boolean), opts?: table): any
+---@field wait_until Lib.Cross.Uv.WaitUntil # Poll a predicate on a libuv timer until true or max attempts.
 
+--- CDX: `Lib.Cross.ALL` has no `---@type` referent anywhere in the repo, listed
+--- CDX: `run_blocking` twice (the second entry is `run_argv.run_blocking`), and is
+--- CDX: superseded by `Lib` in `lua/lib/@types/all_functions.lua`. Left as-is
+--- CDX: pending an external-consumer check, mirroring `Lib.Modules`.
 ---@class Lib.Cross.ALL
 ---@field is_windows fun(): boolean
 ---@field is_wsl fun(): boolean

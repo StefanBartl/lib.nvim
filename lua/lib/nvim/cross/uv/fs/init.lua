@@ -1,5 +1,7 @@
 ---@module 'lib.nvim.cross.uv.fs'
--- Resolve the current working directory via libuv, compatible across NVIM versions.
+--- Resolve the current working directory via libuv, compatible across Neovim
+--- versions. Same body as `lib.nvim.cross.fs._cwd`; kept separate because it is
+--- not wired into the `cross` aggregate table (require it directly).
 
 ---@return string
 return function()
