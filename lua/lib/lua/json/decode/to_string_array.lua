@@ -1,6 +1,10 @@
 ---@module 'lib.lua.json.decode.to_string_array'
---- Wrapper utilities to coerce various preset outputs into a string array
---- and to call downstream presets that expect string[].
+--- Coerce assorted values (array-like tables, maps, strings, scalars) into a
+--- `string[]`, for callers that require line-array input.
+---
+--- CDX: uses `vim.split` / `vim.inspect`, so this module depends on the `vim`
+--- CDX: API despite living under `lib.lua.*` (architecture.md: editor-independent).
+--- CDX: The sibling `lib.lua.json.encode` deliberately avoids that.
 
 local M = {}
 

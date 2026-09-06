@@ -53,7 +53,9 @@ local function default_keyer(...)
     local t = type(arg)
 
     if t == "table" then
-      -- Deep serialize tables (simple implementation)
+      --- CDX: `vim.inspect` here makes `lib.lua.memo` depend on the `vim` API,
+      --- CDX: which architecture.md says `lib.lua.*` must not. Only reached by
+      --- CDX: `memoize2` without a custom keyer.
       parts[i] = vim.inspect(arg)
     elseif t == "function" then
       -- Functions: use tostring (address)
@@ -69,12 +71,10 @@ local function default_keyer(...)
   return table.concat(parts, "\31") -- unit separator
 end
 
--- ---@field memoize2 fun(fn: fun(...): any, cap: integer|nil, keyer: fun(...): string|nil): fun(...): any # Memoize a pure function by its argument tuple. Keys are created from tostring(...) which is fine for primitives/strings. This fixes the string-concat bug with complex arguments For complex keys, pass a keyer that returns a unique string.
-
 --- Memoize a pure function by its argument tuple.
---- Note: keys are created from tostring(...) which is fine for primitives/strings.
----   - This fixes the string-concat bug with complex arguments
--- For complex keys, pass a keyer that returns a unique string.
+--- Like `memoize`, but the default key generator serializes table arguments
+--- (via `vim.inspect`) instead of relying on `table.concat`, which drops them.
+--- Pass a `keyer` to override.
 ---@param fn fun(...): any # Function to memoize
 ---@param cap integer|nil # Cache capacity (default: 128)
 ---@param keyer fun(...): string|nil # Optional custom key generator

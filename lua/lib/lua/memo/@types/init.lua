@@ -27,6 +27,7 @@
 
 ---@class Lib.Memo.Memo
 ---@field memoize fun(fn: fun(...): any, cap: integer|nil, keyer: fun(...): string|nil): fun(...): any
+---@field memoize2 fun(fn: fun(...): any, cap: integer|nil, keyer: fun(...): string|nil): fun(...): any # As `memoize`, but the default keyer serializes table arguments
 
 ---@class Lib.Memo
 ---@field lru table # LRU cache constructor module

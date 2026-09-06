@@ -2,8 +2,13 @@
 ---@brief High-precision time measurement and interval tracking module.
 ---@description
 --- Provides a lightweight, reusable timer object for measuring elapsed time
---- between code sections. Each call to `require("lib.lua.time.diff")` returns a
---- fresh timer instance with independent state.
+--- between code sections. The module is a factory: `require` returns it cached
+--- as usual, and *calling* it (`require("lib.lua.time.diff")()`) yields a fresh
+--- timer instance with independent state.
+---
+--- CDX: depends on `vim.uv.hrtime()`, so this module needs the `vim` API even
+--- CDX: though it lives under `lib.lua.*` (architecture.md: editor-independent).
+--- CDX: The sibling `lib.lua.time.format` / `.presets` stay pure `os.*`.
 ---
 --- Key features:
 --- - Nanosecond precision via `vim.uv.hrtime()` (default output)
@@ -16,7 +21,7 @@
 --- - Type-safe input validation
 ---
 --- Usage:
----   local diff = require("lib.lua.time.diff")
+---   local diff = require("lib.lua.time.diff")()
 ---   diff.start()
 ---   -- ... code block 1 ...
 ---   local t1 = diff.check()         -- First interval (nanoseconds)
@@ -427,8 +432,8 @@ local function create_timer()
     return format.format_pretty(instance._checks, instance._start, validated_unit)
   end
 
-  --- Metatable: Makes the instance callable and supports dynamic properties.
-  ---@return string summary
+  --- Metatable: `diff(unit)` / `tostring(diff)` return the summary; `__index`
+  --- serves the ordinal properties (first..tenth, last).
   setmetatable(instance, {
     __call = function(_, unit)
       return instance.results(unit)

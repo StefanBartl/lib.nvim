@@ -1,21 +1,12 @@
 ---@module 'lib.lua.lazy'
---- Provides reusable helpers for safe and explicit lazy-loading of Lua modules in Neovim.
---
---- Design goals:
----   Avoid eager requires at file scope
----   Load modules exactly once, on first actual use
----   Keep hot-path overhead minimal and predictable
----   Be copyable across personal Neovim plugins without dependencies
---
----      local lazy = require("lib.lua.lazy")
---
----  Usage 'module': Returns the loaded module. Loads it exactly once on first invocation.
----      local mymod = lazy.module("mymodule")
----      mymod.get().do_work()
---
----  Usage 'fn': Creates a lazy function wrapper. The target module is required on first call and the function is rebound.
----      local do_work = lazy.fn("mymodule", "do_work")
----      do_work(42)
+--- Reusable helpers for explicit lazy-`require` of Lua modules: defer the
+--- `require` to first use, load exactly once, keep hot-path overhead minimal.
+--- Pure Lua, no dependencies. See README for the full rationale.
+---
+---   local lazy = require("lib.lua.lazy")
+---   local mymod = lazy.module("mymodule")   -- wrapper; call .get() for the module
+---   local other = lazy.require("othermod")  -- the module itself, cached (recommended)
+---   local do_work = lazy.fn("mymodule", "do_work")  -- rebinds after first call
 
 local LAZY = {}
 
@@ -82,10 +73,8 @@ end
 ---Creates a lazy module with type casting for LSP support.
 ---Returns the actual module (not the wrapper) for better type inference.
 ---
----Usage:
----```lua
----local mod = lazy.require("my.module", "MyModule.Type")
----```
+---Usage: put a `---@type MyModule.Type` annotation on the call site so the
+---language server treats the result as that module.
 ---
 ---@generic T
 ---@param module_name string
@@ -94,15 +83,16 @@ function LAZY.require(module_name)
   return LAZY.module(module_name).get()
 end
 
----Creates a lazy module wrapper with type casting.
----Use this when you need LSP support for the loaded module.
----
+--- CDX: `LAZY.typed` is byte-equivalent to `LAZY.require`, has no callers in
+--- CDX: this repo, and is absent from README / docs/API / doc. Candidate for
+--- CDX: removal; kept pending an external-consumer check.
+---Resolve `module_name` lazily and return the module itself (not the wrapper).
+---Equivalent to `LAZY.require`.
 ---@generic T
 ---@param module_name string The module name passed to require()
 ---@return T
 function LAZY.typed(module_name)
-  local lazy = LAZY.module(module_name)
-  return lazy.get()
+  return LAZY.module(module_name).get()
 end
 
 ---@type Lib.Lazy
