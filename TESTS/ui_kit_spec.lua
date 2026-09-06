@@ -535,8 +535,8 @@ return function(H)
   end
 
   do
-    -- Works with kit.form too — buffer_ctx.nvim's motivating use case (§13a):
-    -- a multi-field prompt whose caller wants a plain return value, not a callback.
+    -- Works with kit.form too — buffer_ctx.nvim's motivating use case: a
+    -- multi-field prompt whose caller wants a plain return value, not a callback.
     -- Both fields' floats open synchronously within this one deferred callback
     -- (the second field's kit.input opens inside the first field's on_submit).
     vim.defer_fn(function()
@@ -628,7 +628,7 @@ return function(H)
   kit.chooser.close()
   eq(kit.chooser.current_item(), nil, "current_item() is nil once closed")
 
-  -- --------------------------------------------------------------- chooser: rich items (§13b)
+  -- --------------------------------------------------------------- chooser: rich items
   -- Multi-line entries with per-span highlights (recommender.nvim's
   -- motivating use case: a 3-line suggestion with per-column highlight
   -- groups) mixed with a plain string, exercising navigation-by-item,
