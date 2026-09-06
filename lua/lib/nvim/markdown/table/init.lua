@@ -1,22 +1,12 @@
 ---@module 'lib.nvim.markdown.table'
 --- Parse and re-render GFM pipe tables.
 ---@description
---- Extracted from **two** copies of the same engine — `markdown.nvim`'s
---- `core/table_fmt.lua` and `buffer-ctx.nvim`'s `format/table_fmt.lua`. Of the
---- seventeen functions they shared, four were byte-identical and nine more
---- differed only in line breaks. That is not a coincidence to tidy up later:
---- the two had already drifted, and each copy carried a fix the other lacked.
----
---- | | who was ahead |
---- | --- | --- |
---- | `parse_row` | buffer-ctx: split with `gmatch` rather than a char-by-char `..` accumulator, which is O(n²) in the row length |
---- | `trim` | markdown: delegated to `lib.lua.strings.core` |
---- | `resolve_overrides` | buffer-ctx: collected warnings instead of dropping them |
---- | `format_file` | markdown: honoured `col_overrides` |
----
---- This module takes the better half of each. That is the whole argument for
---- extracting it: a second copy does not merely cost the lines twice, it
---- quietly keeps one caller on the older behaviour.
+--- Extracted from two duplicated implementations — `markdown.nvim`'s
+--- `core/table_fmt.lua` and `buffer-ctx.nvim`'s `format/table_fmt.lua` — that
+--- had already drifted, each carrying a fix the other lacked. This module
+--- takes the better half of each (see the individual function docs below for
+--- which fix came from where); a second copy does not merely cost the lines
+--- twice, it quietly keeps one caller on the older behaviour.
 ---
 --- **Width, deliberately `vim.fn.strdisplaywidth`.** `lib.lua.strings.width`
 --- has a pure-Lua `display_width`, and it is not the same function: it decides

@@ -4,43 +4,8 @@
 --- Provides helpers using vim.schedule, vim.defer_fn and vim.schedule_wrap to avoid
 --- calling vim.notify directly from contexts where it might cause issues (e.g., during
 --- TextChanged, CursorMoved, or other high-frequency events).
--- FIX: Anchließenden text auf englisch pbersetzten
---[[
-lib.nvim.notify.safe
 
-Dieses Modul stellt sichere Wrapper um `vim.notify` bereit, die speziell für
-Fast-Event-Kontexte in Neovim gedacht sind.
-
-Problem:
-`vim.notify` darf nicht zuverlässig aus allen Kontexten direkt aufgerufen werden.
-In Autocommands, LSP-Callbacks oder anderen hochfrequenten Events kann dies zu
-Fehlern, UI-Problemen oder undefiniertem Verhalten führen.
-
-Lösung:
-Dieses Modul kapselt bewährte Neovim-Mechanismen (`vim.schedule`, `vim.defer_fn`,
-`vim.schedule_wrap`) hinter einer konsistenten API und stellt mehrere Strategien
-bereit:
-
-- schedule:
-  Plant die Benachrichtigung sofort im nächsten Main-Loop-Tick ein.
-  Empfohlener Standardfall.
-
-- defer:
-  Verzögert die Benachrichtigung um eine definierte Zeitspanne.
-  Geeignet für UI-Übergänge oder Debouncing.
-
-- wrap:
-  Liefert eine bereits geschedulte Funktion für wiederholte, effiziente Aufrufe.
-
-Zusätzlich bietet `create_safe(prefix)` eine sichere Variante von
-`lib.nvim.notify.create`, die automatisch Prefixing und Scheduling kombiniert.
-
-Ziel:
-- keine direkten `vim.notify`-Aufrufe aus unsicheren Kontexten
-- klare, wiederverwendbare API
-- identisches Nutzungsgefühl wie bei normalen Notifiern
-]]
---
+require("lib.nvim.notify.@types")
 
 local M = {}
 

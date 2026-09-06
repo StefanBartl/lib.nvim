@@ -37,3 +37,5 @@
 ---@field fetch_raw_blocking fun(url: string, opts: Lib.Net.Curl.FetchOpts|nil): boolean, Lib.Net.Curl.RawResponse|string, vim.SystemCompleted
 ---@field download fun(url: string, dest_path: string, opts: Lib.Net.Curl.FetchOpts|nil, cb: fun(ok: boolean, response_or_err: Lib.Net.Curl.RawResponse|string, raw_obj: vim.SystemCompleted))
 ---@field download_blocking fun(url: string, dest_path: string, opts: Lib.Net.Curl.FetchOpts|nil): boolean, Lib.Net.Curl.RawResponse|string, vim.SystemCompleted
+---@field config_quote fun(value: string): string  Escape a value for a curl config file's quoted-string form; public so a caller building its own argv shares this instead of a second copy.
+---@field is_secret_header fun(name: string): boolean  Whether a header name carries a credential and must go through the config-file path rather than argv.
