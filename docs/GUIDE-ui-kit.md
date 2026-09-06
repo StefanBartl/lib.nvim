@@ -89,9 +89,11 @@ is correct in any colorscheme. Override any of the seven semantic keys:
 | `note`     | centered title + message float; optional `timeout` auto-dismiss | ↓ |
 | `toast`    | ephemeral top-right message; stacks; never steals focus | ↓ |
 | `input`    | single-line insert-mode prompt (`<CR>` submit, `<Esc>` cancel) | |
+| `live_input` | `input` plus debounced `on_change(query)` as the user types | |
 | `select`   | native themed list chooser (`j`/`k`, `<CR>`, `<Tab>` marks in multi) | |
 | `prompt`   | ask: `answer_type = "confirm"` (yes/no → boolean) or `"text"` | |
 | `confirm`  | horizontal-button dialog (`h`/`l` move, `<CR>` confirm, click confirms) | ↓ |
+| `form`     | sequential multi-field prompt, chained into one keyed result table | |
 | `menu`     | cursor-anchored action list (`{ label, action }`) | |
 | `picker`   | interactive prompt + results + preview (see §5) | ↓ |
 | `compare`  | pick two items out of one picker, view them side by side (see §5) | |

@@ -21,8 +21,9 @@ with worked examples.
   dependency on the `vim` global anywhere except one flagged exception.
 - **[filesystem.md](filesystem.md)** — `lib.nvim.fs.*`: working-directory
   management, root/project detection, path resolution, stat checks,
-  directory creation/scanning, ignore lists, file read/write/mutation,
-  opening files and URLs. The single largest namespace (28 submodules).
+  directory creation/scanning, ignore lists, file read/write/mutation/
+  watching, opening files and URLs. The single largest namespace (26
+  submodules).
 - **[cross-platform.md](cross-platform.md)** — `lib.nvim.cross.*`: OS
   detection, executable/Mason lookup, clipboard, open-with-default-app,
   reveal-in-file-manager, path separator normalization, WSL path
@@ -34,8 +35,8 @@ with worked examples.
   `lib.nvim.terminal`, `lib.nvim.buffer.*`.
 - **[commands-and-infra.md](commands-and-infra.md)** — `lib.nvim.bindings.usercmd`
   and the **`composer`** subsystem (the most widely-used module in the
-  library — 30+ consuming plugins), plus `autocmd`, `map`, `dotrepeat`,
-  `debounce`, `deps`, `treesitter`, `store`, `logger`, `progress`,
+  library — 30+ consuming plugins), plus `autocmd` (incl. `autocmd.dispatcher`),
+  `map`, `dotrepeat`, `debounce`, `deps`, `treesitter`, `store`, `logger`, `progress`,
   `harvest`, `git`, `net.curl`, `lua_ls`, `cache`, `core`, `normalize`,
   `require`, `safe_api`, `system`, `token`, `neotree`.
 

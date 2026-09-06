@@ -48,15 +48,24 @@ local composer = require("lib.nvim.bindings.usercmd.composer")
 
 composer.verb("Replace", {
   desc    = "Text replacement operations",
-  default = function(ctx) require("replacer").replace_prompt() end,
+  default = function(ctx) require("myplugin").prompt() end,
   routes  = {
     { path = { "buffer" }, desc = "Replace within the current buffer",
-      run = function(ctx) require("replacer").buffer() end },
+      run = function(ctx) require("myplugin").buffer() end },
     { path = { "cwd" }, args = { { name = "root", type = "DIR", optional = true } },
-      run  = function(ctx) require("replacer").cwd(ctx.args.root) end },
+      run  = function(ctx) require("myplugin").cwd(ctx.args.root) end },
   },
 })
 ```
+
+**CDX:** `require("myplugin")` above is a stand-in. replacer.nvim's real
+`:Replace`/`:Surround` registration (`command.lua`, `surround.lua`) does use
+this composer module, but only single `path = {}` root routes that forward
+`ctx.raw` into its pre-existing parser — it never declares a
+`buffer`/`cwd`/`surround` subcommand tree, and the module has no
+`replace_prompt()`/`.buffer()`/`.cwd()`/`.surround()` functions (its real
+public API is just `setup()`/`run()`). See `lib.nvim-composer.txt` for the
+same note against its own USAGE example.
 
 `:Replace <Tab>` completes `buffer | cwd`, bad input is reported with the
 route's own usage instead of a raw command error. A fluent builder form

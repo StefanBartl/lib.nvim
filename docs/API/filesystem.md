@@ -1,9 +1,10 @@
 # API Reference — `lib.nvim.fs.*` (filesystem / path helpers)
 
-Part of the [lib.nvim API reference](README.md). 28 submodules covering
+Part of the [lib.nvim API reference](README.md). 26 submodules covering
 path resolution, root/project detection, directory creation and scanning,
-file reading/writing, ignore lists, and opening files/URLs. All built on
-`vim.fs`/`vim.uv` (or `vim.loop` fallback), not shell commands, unless noted.
+file reading/writing/watching, ignore lists, and opening files/URLs. All
+built on `vim.fs`/`vim.uv` (or `vim.loop` fallback), not shell commands,
+unless noted.
 
 ---
 
@@ -145,6 +146,18 @@ nil/non-string/empty/whitespace-only.
 
 ```
 return function(name: string|nil): boolean ok, string|nil err
+```
+
+### `lib.nvim.fs.globbable` (see README)
+Spells a directory path so it is safe to hand to `vim.fn.glob`/`globpath`.
+On Windows, `~` in a glob *pattern* is a home-directory reference, so an
+8.3 short name in the path (`C:/Users/STEFAN~1/...`, common under `%TEMP%`)
+silently globs to an empty list instead of erroring. Resolves via
+`uv.fs_realpath`; a root with no `~` is returned untouched (no syscall), a
+missing root is returned unchanged.
+
+```
+return function(root: string): string
 ```
 
 ---
@@ -310,6 +323,23 @@ fallback otherwise).
 M.trash(path: string, cb: fun(ok: boolean, err: string|nil))   -- async
 M.trash_blocking(path: string): boolean ok, string|nil err
 ```
+
+---
+
+## Watching for changes
+
+### `lib.nvim.fs.watch` (see README)
+Generic "watch this path, debounced, call me on change" primitive:
+`uv.new_fs_event()` plus `lib.nvim.debounce`, since one filesystem change
+can fire the raw event several times in quick succession.
+
+```
+M.start(path: string, on_change: fun(path, filename, events), opts?: { debounce_ms?: integer, recursive?: boolean }): Lib.Fs.Watch.Handle|nil handle, string|nil err
+  -- handle.stop(): nil   -- safe to call more than once
+```
+`opts.debounce_ms` default `200`; `opts.recursive` default `false` (ignored
+by Linux's `inotify` backend — a recursive watch there needs one `M.start`
+per subdirectory).
 
 ---
 

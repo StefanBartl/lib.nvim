@@ -34,7 +34,7 @@ below, one entry each, each linking out to its long version.
   lazy-loaded, prioritized handlers), `map`, `dotrepeat`, `debounce`.
 - **[WINDOW_BUFFER.md](WINDOW_BUFFER.md)** — overlay/floating window helpers,
   cached window/buffer context, Visual-selection restoration, statusline
-  segments, terminal-buffer helpers.
+  segments, quickfix/location lists, terminal-buffer helpers.
 - **[FILESYSTEM.md](FILESYSTEM.md)** — working-directory management,
   root/project detection, path resolution, directory scanning (sync and
   async), ignore lists, file read/write/mutation.
@@ -48,6 +48,7 @@ below, one entry each, each linking out to its long version.
   external-dependency detection, treesitter gating, progress reporting, Git
   queries, HTTP, count-prefixed keymaps, and
   config-normalization/validated-API helpers.
+
 ## Deep dives
 
 Two topics have a long-form write-up beside their catalogue entry, in
