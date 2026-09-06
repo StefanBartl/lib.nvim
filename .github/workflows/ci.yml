@@ -54,3 +54,19 @@ jobs:
           neovim: true
           version: stable
       - run: nvim --headless -u NONE -l TESTS/run.lua
+
+  # Consumers across the fleet checkout this repo as a CI dependency. Pointing
+  # them at `main` directly means a broken commit here goes red in ~30 other
+  # repos before anyone notices it's this repo's fault. `ci-verified` only
+  # ever moves once stylua+luacheck+tests have passed, so consumers pinning
+  # `ref: ci-verified` always test against a known-good commit.
+  publish-ci-verified:
+    name: publish ci-verified branch
+    needs: [stylua, luacheck, tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - run: git push origin HEAD:refs/heads/ci-verified --force

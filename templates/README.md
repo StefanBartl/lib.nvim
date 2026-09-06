@@ -88,6 +88,29 @@ Example: `migrate.nvim/TESTS/run.lua` excludes `migrate.opt` /
    existing copy agrees on (a couple of older copies used `$REPOS_DIR`
    instead; prefer `$LIB_NVIM_PATH` for new ones).
 
+## Pinning `lib.nvim` in CI (`ci-verified`)
+
+A consumer's GitHub Actions checkout of `lib.nvim` should not point at
+`main`. `main` can go red between commits (WIP push, a fix still in
+flight) — pointed there, a consumer's CI turns red for a bug that isn't
+in the consumer at all, and whoever's debugging it looks in the wrong repo.
+
+`ci-verified` is a branch this repo's own CI force-pushes to, but only
+*after* `stylua` + `luacheck` + `tests` have all passed on `main` — so it
+always names a commit that was actually green here. Point consumer
+checkouts at it instead:
+
+```yaml
+- uses: actions/checkout@v5
+  with:
+    repository: StefanBartl/lib.nvim
+    path: lib.nvim
+    ref: ci-verified
+```
+
+Same convention for `hover.nvim` and `lsp.nvim` if a plugin checks those
+out too.
+
 ## `deps/` — declaring optional external tools
 
 Two starting points for a plugin's `docs/INSTALL.md` or `docs/install.json`
