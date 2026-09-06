@@ -43,6 +43,12 @@ end)
 When `opts.ignore(abs_path, is_dir)` returns `true` for a directory, that
 directory entry is skipped **and** its subtree is not recursed into.
 
+A symlinked directory is still listed like any other directory, but the
+walk never recurses into it — a symlink can point at an ancestor (or
+itself), and following it would recurse forever, bounded in practice only
+by an OS path-length error or a Lua stack overflow, neither of which is a
+real base case.
+
 ## `collect_async(root, opts, on_done)`
 
 Non-blocking counterpart to `collect`, same result and same `opts` (`kind`,

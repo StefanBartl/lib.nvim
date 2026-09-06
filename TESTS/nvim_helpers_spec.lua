@@ -452,6 +452,36 @@ return function(H)
   eq(#filtered, 1, "collect_recursive: ignore predicate prunes the whole subtree")
   ok(filtered[1]:match("a%.txt") ~= nil, "collect_recursive: the surviving file is the right one")
 
+  -- ERR-34: a symlinked directory that cycles back to an ancestor must not
+  -- be recursed into -- following it would walk forever (in practice bounded
+  -- only by an OS path-length error or a Lua stack overflow, not a real base
+  -- case). Skipped on platforms/permissions where creating a symlink fails
+  -- (e.g. Windows without dev mode or elevation) rather than failing the
+  -- whole suite over an environment limitation unrelated to the bug.
+  local cyc_root = tmp .. "/cycle"
+  vim.fn.mkdir(cyc_root .. "/sub", "p")
+  vim.fn.writefile({ "x" }, cyc_root .. "/sub/file.txt")
+  local link_ok = uv.fs_symlink(cyc_root, cyc_root .. "/sub/loop", { dir = true })
+  if link_ok then
+    local cyc_result = collect.collect(cyc_root)
+    eq(
+      #cyc_result,
+      3,
+      "collect_recursive: does not recurse into a symlinked directory that cycles back to an ancestor"
+    )
+    local saw_loop = false
+    for _, cyc_path in ipairs(cyc_result) do
+      ok(
+        not cyc_path:match("loop[/\\]sub"),
+        "collect_recursive: never descends past the symlink into the cycle"
+      )
+      if cyc_path:match("loop$") then
+        saw_loop = true
+      end
+    end
+    ok(saw_loop, "collect_recursive: the symlink itself is still listed as a directory entry")
+  end
+
   local mutate = require("lib.nvim.cross.fs.mutate")
   ok(mutate.mkdir_p(tmp .. "/mut"), "cross.fs.mutate.mkdir_p")
   vim.fn.writefile({ "data" }, tmp .. "/mut/src.txt")

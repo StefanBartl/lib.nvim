@@ -26,7 +26,48 @@ local uv = vim.uv or vim.loop
 local M = {}
 
 ---@internal
+---Classify one scanned entry without ever following a symlink into a
+---directory recursion: `is_dir` says whether it should be listed/filtered
+---as a directory (a symlink pointing at a directory still counts, so
+---callers collecting "dirs" still see it), `is_symlink` says whether the
+---entry itself is a symlink -- see the ERR-34 note on `walk` below for why
+---that second flag exists.
+---@param abs_path string
+---@param kind_hint string|nil
+---@return boolean is_dir
+---@return boolean is_symlink
+local function classify(abs_path, kind_hint)
+  if kind_hint == "directory" then
+    return true, false
+  elseif kind_hint == "file" then
+    return false, false
+  elseif kind_hint == "link" then
+    -- `fs_stat` follows the symlink, purely to classify what it points at;
+    -- the caller must not use that to recurse (see `walk`).
+    local st = uv.fs_stat(abs_path)
+    return (st and st.type == "directory") or false, true
+  end
+
+  -- `kind_hint` isn't always reliable across platforms/filesystems (missing
+  -- on some, e.g. older XFS/NFS without dirent d_type support). `fs_lstat`
+  -- reports the entry's own type without following it, so a symlink is
+  -- still caught here rather than silently falling through to `fs_stat`.
+  local lst = uv.fs_lstat(abs_path)
+  if lst and lst.type == "link" then
+    local st = uv.fs_stat(abs_path)
+    return (st and st.type == "directory") or false, true
+  end
+  return (lst and lst.type == "directory") or false, false
+end
+
+---@internal
 ---Recursively walk `dir`, appending matching absolute paths into `out`.
+---
+---ERR-34: a symlinked directory is listed like any other directory (so
+---"collect dirs" callers still see it) but the walk never recurses into
+---it -- a symlink can point at an ancestor (or itself), and following it
+---would recurse forever (bounded in practice only by OS path-length limits
+---or a Lua stack overflow, both bad outcomes, not a real base case).
 ---@param dir string
 ---@param opts Lib.Fs.CollectRecursive.Opts
 ---@param out string[]
@@ -43,18 +84,7 @@ local function walk(dir, opts, out)
     end
 
     local abs_path = dir .. "/" .. name
-
-    -- `kind_hint` isn't always reliable across platforms/filesystems;
-    -- fall back to `fs_stat` when it's missing or ambiguous.
-    local is_dir
-    if kind_hint == "directory" then
-      is_dir = true
-    elseif kind_hint == "file" then
-      is_dir = false
-    else
-      local st = uv.fs_stat(abs_path)
-      is_dir = (st and st.type == "directory") or false
-    end
+    local is_dir, is_symlink = classify(abs_path, kind_hint)
 
     if is_dir then
       local ignored = opts.ignore ~= nil and opts.ignore(abs_path, true) or false
@@ -62,7 +92,9 @@ local function walk(dir, opts, out)
         if opts.kind ~= "files" then
           out[#out + 1] = abs_path
         end
-        walk(abs_path, opts, out)
+        if not is_symlink then
+          walk(abs_path, opts, out)
+        end
       end
     else
       local ignored = opts.ignore ~= nil and opts.ignore(abs_path, false) or false
@@ -112,8 +144,41 @@ local async = require("lib.nvim.async")
 local await = async.await
 
 ---@internal
----Async counterpart to `walk()`. Same traversal/ignore/kind semantics;
----every `uv.fs_scandir`/`uv.fs_stat` call is awaited instead of blocking.
+---Async classify, mirroring `classify()` above: every stat call is
+---awaited instead of blocking. See `classify()` for the ERR-34 rationale.
+---@param abs_path string
+---@param kind_hint string|nil
+---@return boolean is_dir
+---@return boolean is_symlink
+local function classify_async(abs_path, kind_hint)
+  if kind_hint == "directory" then
+    return true, false
+  elseif kind_hint == "file" then
+    return false, false
+  elseif kind_hint == "link" then
+    local _, st = await(function(resume)
+      uv.fs_stat(abs_path, resume)
+    end)
+    return (st and st.type == "directory") or false, true
+  end
+
+  local _, lst = await(function(resume)
+    uv.fs_lstat(abs_path, resume)
+  end)
+  if lst and lst.type == "link" then
+    local _, st = await(function(resume)
+      uv.fs_stat(abs_path, resume)
+    end)
+    return (st and st.type == "directory") or false, true
+  end
+  return (lst and lst.type == "directory") or false, false
+end
+
+---@internal
+---Async counterpart to `walk()`. Same traversal/ignore/kind semantics,
+---including never recursing into a symlinked directory (ERR-34) -- every
+---`uv.fs_scandir`/`uv.fs_stat`/`uv.fs_lstat` call is awaited instead of
+---blocking.
 ---@param dir string
 ---@param opts Lib.Fs.CollectRecursive.Opts
 ---@param out string[]
@@ -141,18 +206,7 @@ local function walk_async(dir, opts, out, is_cancelled)
     end
 
     local abs_path = dir .. "/" .. name
-
-    local is_dir
-    if kind_hint == "directory" then
-      is_dir = true
-    elseif kind_hint == "file" then
-      is_dir = false
-    else
-      local _, st = await(function(resume)
-        uv.fs_stat(abs_path, resume)
-      end)
-      is_dir = (st and st.type == "directory") or false
-    end
+    local is_dir, is_symlink = classify_async(abs_path, kind_hint)
 
     if is_dir then
       local ignored = opts.ignore ~= nil and opts.ignore(abs_path, true) or false
@@ -160,7 +214,9 @@ local function walk_async(dir, opts, out, is_cancelled)
         if opts.kind ~= "files" then
           out[#out + 1] = abs_path
         end
-        walk_async(abs_path, opts, out, is_cancelled)
+        if not is_symlink then
+          walk_async(abs_path, opts, out, is_cancelled)
+        end
       end
     else
       local ignored = opts.ignore ~= nil and opts.ignore(abs_path, false) or false
