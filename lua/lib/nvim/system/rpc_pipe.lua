@@ -16,9 +16,11 @@ local M = {}
 function M.setup(opts)
   opts = opts or {}
   local debug = opts.debug or false
-  local allow_override = opts.allow_override ~= false -- ✅ Default: true
+  local allow_override = opts.allow_override ~= false
 
-  -- Only attempt the Windows named-pipe behavior on Windows-like OS
+  --- CDX: duplicates Windows detection instead of reusing
+  --- `lib.nvim.cross.platform.is_windows`, which the sibling `system.env`
+  --- module uses for exactly this so detection logic stays in one place.
   local is_windows = package.config:sub(1, 1) == "\\"
   if not is_windows then
     if debug then
@@ -27,7 +29,7 @@ function M.setup(opts)
     return
   end
 
-  -- CRITICAL: Check if we're in a test environment
+  -- Test environments must not get a real pipe wired in.
   local is_test_env = vim.env.NEOTEST_RUNNING == "1"
     or vim.env.PLENARY_TEST_TIMEOUT ~= nil
     or vim.v.progname:match("nvim%-test")
@@ -76,7 +78,6 @@ function M.setup(opts)
     end
   end)
 
-  -- Only set if not in test environment
   if not is_test_env then
     vim.env.NVIM_LISTEN_ADDRESS = pipe
     dbg("exported NVIM_LISTEN_ADDRESS=" .. pipe)
