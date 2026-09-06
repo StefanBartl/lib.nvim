@@ -9,7 +9,7 @@ jobs:
   stylua:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: JohnnyMorganz/stylua-action@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -24,7 +24,7 @@ jobs:
   luacheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # PUC Lua, not "luajit-2.1": that value made the setup step fail with a
       # 404 on every run for weeks (LuaJIT stopped publishing the 2.1 tarball
       # this action downloads), so luacheck was never actually reached. Which
@@ -34,18 +34,18 @@ jobs:
         with:
           luaVersion: "5.4"
       - uses: leafo/gh-actions-luarocks@v4
-      - run: luarocks install luacheck
+      - run: luarocks install luacheck 1.2.0
       - run: luacheck lua TESTS
 
   tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # telemetry_wrap_spec.lua exercises lib.strategies.telemetry_wrap
       # against the real runtime-analysis.telemetry module (moved there from
       # this repo) — without this, that one spec would only ever hit its own
       # soft-`pcall` no-op branch, never the real integration.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: StefanBartl/runtime-analysis.nvim
           path: .deps/runtime-analysis.nvim
