@@ -1,7 +1,8 @@
 ---@module 'lib.nvim.buf_win_tab.windows_utils'
 --- Utility library to inspect buffers, tabs and windows on Windows (also works on Linux/macOS).
 
----FIX: LSP
+--- CDX: stray "FIX: LSP" marker, no further context on what LSP issue this
+--- pointed at or whether it was ever resolved; investigate or drop.
 
 local notify = require("lib.nvim.notify").create("[lib.nvim.buf_win_tab.windows_utils]")
 local buffer_utils = require("lib.nvim.buf_win_tab.buffer_utils")

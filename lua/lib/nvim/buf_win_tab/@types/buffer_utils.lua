@@ -26,19 +26,8 @@
 
 ---@class Lib.BufWinTab.BufferUtils
 --- Utility library for inspecting and analyzing Neovim buffers.
---- All functions are read-only and do not mutate buffer state.
---- Compatible with all platforms (Windows, Linux, macOS).
----
---- Design principles:
----   • Non-destructive: No buffer modifications
----   • Safe: Uses pcall for API calls that may fail
----   • Efficient: Preallocates arrays where size is known
----   • Consistent: Normalizes vim.fn.getbufinfo and nvim_buf_* outputs
----
---- Performance notes:
----   • list_all_buffers_info(): O(n) where n = buffer count
----   • format_buffers_table(): O(n) string concatenation
----   • count_real_listed_buffers(): O(n) with filetype filtering
+--- All functions are read-only and do not mutate buffer state; every
+--- potentially-failing API call is wrapped in `pcall`.
 ---
 ---@field DEFAULT_EXCLUDE_FILETYPES string[] # Standard list of filetypes to exclude when counting "real" user buffers. Includes: neo-tree, NvimTree, qf, TelescopePrompt, alpha, startify, packer, help, notify. Modifiable list for custom filtering logic.
 ---
@@ -59,45 +48,5 @@
 ---@field collect_all_buffer_info fun(): BufCollectedInfo # High-level collector: gathers all buffer information in one call. Includes: listed count, real listed count, listed buffer array, all buffer array, formatted table string. Returns comprehensive BufCollectedInfo structure. Useful for status displays and debugging.
 ---
 ---@field print_summary fun(): nil # Print compact buffer summary to command line. Shows: listed count, real listed count, formatted table of listed buffers. Uses nvim_echo for terminal output. Returns nothing.
-
--- =========================================================
--- Technical Notes
--- =========================================================
-
---- Buffer Type Detection:
---- - Listed: Appears in :ls, typically user-editable files
---- - Unlisted: Hidden buffers (help, terminal, plugins)
---- - "Real" buffers: Listed buffers excluding DEFAULT_EXCLUDE_FILETYPES
----
---- Safe API Access:
---- - All nvim_buf_* calls wrapped in pcall
---- - Invalid buffers return normalized empty/nil values
---- - No errors thrown for unloaded/deleted buffers
----
---- Filetype Filtering:
---- - DEFAULT_EXCLUDE_FILETYPES is mutable (can be modified by caller)
---- - count_real_listed_buffers() accepts custom exclusion list
---- - Empty name ("") buffers excluded from "real" count
----
---- Window Tracking:
---- - get_buffer_info() collects all windows displaying buffer
---- - windows field: integer[] of valid window IDs
---- - Useful for multi-window scenarios
----
---- Formatting:
---- - format_buffers_table() uses fixed-width columns
---- - Modified buffers marked with "*"
---- - Unnamed buffers shown as "[no name]"
---- - Filetypes shown as "<noft>" if empty
----
---- Performance:
---- - list_all_buffers_info(): Iterates all buffers once
---- - format_buffers_table(): O(n) string concatenation via table.concat
---- - collect_all_buffer_info(): Calls multiple functions (not optimized for speed)
----
---- Platform Compatibility:
---- - No OS-specific code
---- - Works on Windows, Linux, macOS
---- - No external dependencies
 
 return {}
