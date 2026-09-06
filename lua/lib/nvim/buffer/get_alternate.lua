@@ -1,7 +1,5 @@
 ---@module 'lib.nvim.buffer.get_alternate'
 
---- AUDIT: Implementiere in lib
-
 --- Get the alternate buffer (like :e #)
 ---@return integer|nil bufnr Buffer number of alternate buffer
 ---@return string|nil filepath Full path of the alternate buffer

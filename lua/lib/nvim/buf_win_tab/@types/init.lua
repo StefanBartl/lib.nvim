@@ -1,34 +1,18 @@
 ---@meta
 ---@module 'lib.nvim.buf_win_tab.@types'
--- =========================================================
--- Buffer/Window/Tab Utilities - Main Type Export
--- =========================================================
 
+--- CDX: this class (and `Lib.BufWinTab.All` below) documents a
+--- `require("lib.nvim.buf_win_tab")` aggregator module that does not exist in
+--- the tree — there is no `buf_win_tab/init.lua`. Each submodule is consumed
+--- directly via its own require path instead (see e.g. `buffer_utils.lua`'s
+--- own `---@type Lib.BufWinTab.BufferUtils` annotation). Same stale-aggregator
+--- pattern already flagged on `Lib.Modules` in `lib/@types/init.lua`; left
+--- as-is pending an external-consumer check.
 ---@class Lib.BufWinTab
---- Complete buffer, window, and tabpage utility library.
---- Provides comprehensive inspection, analysis, and manipulation tools.
----
---- Module Organization:
----   • buffer_utils: Buffer inspection and counting
----   • windows_utils: Window and state aggregation
----   • tabs_utils: Tabpage inspection and formatting
----   • resize_guarded: Safe window resize with terminal forwarding
----   • capture: Deterministic capture of buffers/windows after Ex commands
----   • safe_adjacent_buffer: Force-save utilities for file buffers
----
---- Design Philosophy:
----   • Read-only by default (no destructive operations unless explicit)
----   • Platform-agnostic (Windows, Linux, macOS)
----   • Safe API usage (pcall for all potentially-failing operations)
----   • Performance-conscious (preallocations, O(n) algorithms)
----   • Comprehensive (both fine-grained and aggregated views)
----
---- Common Use Cases:
----   • Debugging: Inspect buffer/window/tab state
----   • Status lines: Display buffer counts, tab info
----   • Conditional logic: "Close last buffer", "open NeoTree if empty"
----   • Safe operations: Exclude terminals from mappings
----   • UI creation: Capture windows/buffers after plugin commands
+--- Buffer, window, and tabpage utility library: buffer_utils (buffer
+--- inspection), windows_utils (window/state aggregation), tabs_utils
+--- (tabpage inspection), resize_guarded (guarded resize), capture (Ex-command
+--- buffer/window capture), safe_adjacent_buffer (force-save adjacent buffer).
 ---
 ---@field buffer_utils Lib.BufWinTab.BufferUtils # Buffer inspection and utilities (count, list, filter, format)
 ---@field windows_utils Lib.BufWinTab.WindowsUtils # Window and state aggregation (platform detection, grouping, reports)
@@ -38,24 +22,9 @@
 ---@field safe_adjacent_buffer Lib.BufWinTab.SafeAdjacentBuffer # Force-save utilities for adjacent file buffers
 ---@field move_buffer_to_new_tab Lib.BufWinTab.MoveBufToTab
 
--- =========================================================
--- Complete Flattened API (All Modules)
--- =========================================================
-
+--- Flattened API combining all sub-modules for convenience (same
+--- nonexistent-aggregator caveat as `Lib.BufWinTab` above).
 ---@class Lib.BufWinTab.All
---- Flattened API combining all sub-modules for convenience.
---- Allows direct access without navigating module structure.
----
---- Usage:
----   local buf_win_tab = require("lib.nvim.buf_win_tab")
----   local all = buf_win_tab.all  -- Access flattened API
----   local count = all.count_listed_buffers()
----   local tabs = all.list_tabs()
---
--- =========================================================
--- Buffer Utils (Flattened)
--- =========================================================
---
 ---@field DEFAULT_EXCLUDE_FILETYPES string[] # Standard exclusion list for "real" buffer counting
 ---@field count_listed_buffers fun(): integer # Count all listed buffers
 ---@field get_buffer_info fun(bufnr: number): BufInfo # Get metadata for single buffer
@@ -66,11 +35,6 @@
 ---@field print_buffers_table fun(buftable: BufInfo[]): nil # Print buffer table to command line
 ---@field collect_all_buffer_info fun(): BufCollectedInfo # Aggregate all buffer information
 ---@field print_summary fun(): nil # Print buffer summary to command line
---
--- =========================================================
--- Window Utils (Flattened)
--- =========================================================
---
 ---@field count_listed_buffers_win fun(): integer # Count listed buffers (windows_utils version)
 ---@field list_all_buffers_info_win fun(): WinInfo[] # Get extended metadata for all buffers
 ---@field get_listed_buffer_ids fun(): integer[] # Get array of listed buffer IDs
@@ -81,11 +45,6 @@
 ---@field collect_all_state fun(): AggregatedState # Collect comprehensive state
 ---@field show_aggregated_state fun(silent?: boolean): string|nil # Print or return state
 ---@field collect_win_report fun(winid?: integer): WinReport # Collect window inspection report
---
--- =========================================================
--- Tab Utils (Flattened)
--- =========================================================
---
 ---@field list_tabs fun(): TabInfo[] # List all tabpages with metadata
 ---@field format_tab_one_line fun(info: TabInfo): string # Format tabpage to one line
 ---@field print_tabs fun(tabs?: TabInfo[]): nil # Pretty-print tabpages
@@ -93,30 +52,9 @@
 ---@field get_tab_by_number fun(tabnr: integer): TabInfo|nil # Find tabpage by number
 ---@field is_single_tab fun(): boolean # Check if only one tab open
 ---@field collect_report fun(): TabReport # Collect tabpage report
---
--- =========================================================
--- Resize Guarded (Flattened)
--- =========================================================
---
 ---@field create_resize_callback fun(cmd: string, exclude_filetypes?: string[], exclude_names?: string[], lhs?: string): ResizeCallback # Create guarded resize callback
---
--- =========================================================
--- Capture (Flattened)
--- =========================================================
---
 ---@field capture_buf_win fun(cmd: string, opts?: BufWinCapture.Opts, cb?: fun(result: BufWinCapture.Results)): BufWinCapture.Results|nil # Capture buffers/windows after command
---
--- =========================================================
--- Safe Adjacent Buffer (Flattened)
--- =========================================================
---
 ---@field save_last_normal_buffer fun(): nil # Force-save last normal file buffer
---
--- =========================================================
--- Move current buffer to new tab
--- =========================================================
---
 ---@field move_current_buffer_to_new_tab Lib.BufWinTab.MoveBufToTab
---
 
 return {}

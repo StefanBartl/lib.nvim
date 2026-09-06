@@ -9,6 +9,11 @@
 
 ---@alias Lib.Buffer.OpenBackground fun(path: string, opts?: { load?: boolean }): boolean, integer|string
 
+--- CDX: `Lib.Buffer`/`Lib.Buffer.ALL` document a `require("lib.nvim.buffer")`
+--- aggregator that does not exist in the tree (no `buffer/init.lua`); the
+--- real `Lib` aggregate flattens these functions directly instead (see
+--- `lib/@types/all_functions.lua`). Same stale-aggregator pattern already
+--- flagged on `Lib.Modules` in `lib/@types/init.lua`.
 ---@class Lib.Buffer
 ---@field query Lib.Buffer.Query
 ---@field modify Lib.Buffer.Modify
@@ -18,8 +23,6 @@
 ---@field is_markdown_buf fun(bufnr_arg: integer|nil): integer|nil
 ---@field insert_lines fun(lines: string[], pos?: Lib.Buf.InsertLinesPos): nil
 ---@field open_background Lib.Buffer.OpenBackground
-
-return {}
 
 ---@class Lib.Buf.InsertLinesPosCursor
 ---@field cursor true
@@ -40,3 +43,5 @@ return {}
 ---| Lib.Buf.InsertLinesPosRowCol
 ---| Lib.Buf.InsertLinesPosColRow
 ---| Lib.Buf.InsertLinesPosKeyword
+
+return {}
