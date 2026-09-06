@@ -1,6 +1,7 @@
 ---@module 'lib.nvim.fs.is_readable_file'
+--- True when `filepath` is a readable file **or** an existing directory
+--- (despite the name).
 
--- Ensure the path is valid
 ---@param filepath string
 ---@return boolean
 return function(filepath)

@@ -10,6 +10,9 @@
 ---@field style? '"fit"'|'"label"' `"fit"` (default) fits a width budget; `"label"` always shows `<root>/<ellipsis>/<parent>/<file>`, ignoring `max_len`.
 ---@field ellipsis? string Marker for collapsed segments. Defaults to "…" for `"fit"`, "...." for `"label"`.
 
+--- CDX: fictional grouping — there is no `lib.nvim.fs.transform` module, and
+--- CDX: `dedup` names nothing. Only the stale `Lib.Fs` aggregate references
+--- CDX: it. `Lib.Fs.NormkeyOpts` / `Lib.Fs.PathShortenOpts` above are real.
 ---@class Lib.Fs.Transform
 ---@field dedup fun(entries: string[]): string[]
 ---@field globbable fun(root: string): string

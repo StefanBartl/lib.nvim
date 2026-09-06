@@ -6,13 +6,9 @@
 --- so the raw event feeds a debounce handle instead of calling `on_change`
 --- directly.
 ---
---- The only prior art for `fs_event` lifecycle in this codebase is
---- `lib.nvim.neotree.watch`, which manages handles *neo-tree itself*
---- creates and starts — this module is the first to create/start one from
---- scratch, generically. It reuses that module's guarded-close idiom
---- (`is_closing()` check + `pcall` before `:close()`, since closing is
---- asynchronous — a handle may still report itself open for one loop tick
---- after `:close()`).
+--- Closing an `fs_event` handle is asynchronous: it may still report itself
+--- open for one loop tick after `:close()`, so `stop()` guards with an
+--- `is_closing()` check and a `pcall` before closing.
 ---
 ---```lua
 --- local watch = require("lib.nvim.fs.watch")

@@ -9,6 +9,10 @@
 ---
 --- `cb` is invoked on the main loop (wrapped in `vim.schedule`), so it is
 --- safe to touch `vim.api.*` from inside it.
+---
+--- CDX: unlike its sync "counterpart" `to_file` (and `append`), this does not
+--- CDX: append a trailing newline when `content` lacks one — `batch` inherits
+--- CDX: that. Divergence looks unintentional given the "counterpart" framing.
 
 require("lib.nvim.fs.write.async.@types")
 
