@@ -40,6 +40,22 @@ end
 
 ---@internal
 ---Read and JSON-decode the cache file for `namespace`, if any.
+---
+---A decode failure on non-empty content is not the same situation as no
+---file existing at all: every `M.save` call overwrites the WHOLE file, so a
+---caller built on top of this module (e.g. `lib.nvim.store.project`, whose
+---own docs describe holding curated per-project state like anchors, not
+---just regenerable cache entries) can easily have a load-modify-save cycle
+---where a decode failure collapses straight to an empty/default in-memory
+---value -- and the very next unrelated write then silently replaces the
+---corrupt file with that near-empty value, destroying whatever real data
+---was in it with no trace it ever existed. The original bytes are backed up
+---once per corruption (a `.corrupt` file next to the cache file, not
+---re-written if it already exists — so a caller retrying a decode after an
+---earlier backup does not clobber it with, say, an even-more-truncated
+---read), so "the file was briefly unreadable" never turns into "the data is
+---gone". Bug pattern found and fixed the same way three times already
+---across the plugin fleet before landing here at the shared root.
 ---@param namespace string
 ---@param opts Lib.Cache.Opts|nil
 ---@return { saved_at: integer, data: any }|nil
@@ -61,6 +77,16 @@ local function read_entry(namespace, opts)
 
   local ok_decode, decoded = pcall(vim.json.decode, content)
   if not ok_decode or type(decoded) ~= "table" then
+    if content ~= "" then
+      local backup_path = path .. ".corrupt"
+      if uv.fs_stat(backup_path) == nil then
+        local fh = io.open(backup_path, "wb")
+        if fh then
+          fh:write(content)
+          fh:close()
+        end
+      end
+    end
     return nil
   end
 

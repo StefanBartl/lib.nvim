@@ -50,6 +50,46 @@ return function(H)
     "cache.disk: clear on an already-absent namespace is still ok"
   )
 
+  -- A decode failure on an existing, non-empty file is not the same as no
+  -- file at all: a caller built on top of this (lib.nvim.store.project, and
+  -- through it e.g. spotlight.nvim's persisted spotlights/exceptions) can
+  -- have a load-modify-save cycle where a corrupt load collapses to an
+  -- empty in-memory value, and the very next unrelated save then silently
+  -- replaces the corrupt file with that near-empty value -- destroying
+  -- whatever real data was in it. The original bytes must survive as a
+  -- `.corrupt` backup once, not be silently discarded.
+  disk.save("gadgets", { { id = 9 } }, opts)
+  local gadgets_path = dir .. "/gadgets.json"
+  local corrupt_backup_path = gadgets_path .. ".corrupt"
+  vim.fn.delete(corrupt_backup_path)
+  vim.fn.writefile({ "{not valid json" }, gadgets_path)
+
+  eq(disk.load("gadgets", opts), nil, "cache.disk: corrupt file loads as nil, not an error")
+  eq(
+    vim.fn.filereadable(corrupt_backup_path),
+    1,
+    "cache.disk: corrupt file backed up to <namespace>.json.corrupt"
+  )
+  eq(
+    table.concat(vim.fn.readfile(corrupt_backup_path), "\n"),
+    "{not valid json",
+    "cache.disk: backup preserves the original corrupt bytes"
+  )
+
+  -- A second load must not clobber an existing backup — mark it, then load
+  -- again (the source file is still corrupt) and confirm the mark survives;
+  -- an overwrite would replace it with the source file's own bytes again.
+  vim.fn.writefile({ "{not valid json -- MARKED" }, corrupt_backup_path)
+  disk.load("gadgets", opts)
+  eq(
+    table.concat(vim.fn.readfile(corrupt_backup_path), "\n"),
+    "{not valid json -- MARKED",
+    "cache.disk: an existing backup is not rewritten by a later load"
+  )
+
+  disk.clear("gadgets", opts)
+  vim.fn.delete(corrupt_backup_path)
+
   -- A namespace may contain slashes to group related entries — the form
   -- store.project's own documentation uses. Only the cache *root* used to be
   -- created, so every nested namespace failed to write with ENOENT, reporting
