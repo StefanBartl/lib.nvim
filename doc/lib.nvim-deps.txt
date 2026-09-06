@@ -28,6 +28,7 @@ CONTENTS                                            *lib.nvim-deps-contents*
        deps.first_run ........................ |lib.nvim-deps-first_run|
        deps.status ........................... |lib.nvim-deps-status|
        deps.require_tool ..................... |lib.nvim-deps-require_tool|
+       deps.detect ........................... |lib.nvim-deps-detect|
   5. Resolution ............................... |lib.nvim-deps-resolution|
   6. Integrating a plugin ...................... |lib.nvim-deps-integrating|
 
@@ -52,7 +53,7 @@ missing" report, which is what the hand-rolled hint strings already did.
 docs/INSTALL.md                                      *lib.nvim-deps-markdown*
 
 Ordinary Markdown prose, plus one fenced `install-tool` block per tool. The
-block body is decoded with |lib.lua.yaml|'s minimal subset — no anchors, no
+block body is decoded with `lib.lua.yaml`'s minimal subset — no anchors, no
 flow style, no block scalars, so keep `why` on one line. Renders as normal
 documentation on GitHub, which is this variant's reason to exist. >
 
@@ -114,7 +115,7 @@ top-level command name.
 
 `<Tab>` completes plugin names that actually ship a spec.
 
-`:Lib deps show` opens a popup (via |lib.nvim.ui.kit|'s `viewer`, when
+`:Lib deps show` opens a popup (via |lib.nvim-kit|'s `viewer`, when
 installed — falls back to a read-only scratch split otherwise) with three
 keymaps:
 
@@ -164,7 +165,7 @@ Two further omissions, both deliberate:
 deps.health                                            *lib.nvim-deps-health*
 
 Replaces the hand-rolled `check_exe`/`probe` loop in a plugin's own
-`health.lua`. Probes executables via |lib.nvim.core|'s memoized `has_exec`,
+`health.lua`. Probes executables via `lib.nvim.core`'s memoized `has_exec`,
 and Python modules by shelling out to the first of python3/python/py. >lua
 
     require("lib.nvim.deps.health").report({
@@ -240,7 +241,7 @@ deps.first_run                                      *lib.nvim-deps-first_run*
     require("lib.nvim.deps").show_once("pdfport.nvim")
 <
 Shows a plugin's declared-tools popup once, ever — persisted across
-restarts via |lib.nvim.cache.disk| (namespace `lib.nvim.deps.first_run`).
+restarts via `lib.nvim.cache.disk` (namespace `lib.nvim.deps.first_run`).
 No-op on every call after the first, including when there was nothing to
 show (no spec, empty spec, or nothing declared is missing) — those still
 mark the plugin seen, since this is a one-time welcome, not an ongoing
@@ -362,6 +363,29 @@ Nothing here installs anything: the message names the command and points at
 `:Lib deps install`. Offering to install AT the failure moment would answer
 a question the user did not ask.
 
+Convenience wrappers on `require("lib.nvim.deps")` itself: `plugins()`
+(re-export of `spec.plugins()`), `show(plugin_name)` (resolve + `view.show`)
+and `install_for(plugin_name)` (resolve + `install.plan`/`run`) — each
+notifies and returns `false`/nil rather than throwing when the plugin
+ships no spec or its spec file cannot be read.
+
+------------------------------------------------------------------------------
+deps.detect                                            *lib.nvim-deps-detect*
+
+Is a declared tool present on this host, under any of the names it goes
+by? A tool does not always have one binary name (Ghostscript is `gs` on
+Linux/macOS, `gswin64c`/`gswin32c` on Windows) — `bin` stays canonical for
+display and for the `pkg` map key; `bin_alternatives` only widens the
+"is it here" probe. Used internally by `deps.health`, `deps.install` and
+`deps.view`. >lua
+
+    local detect = require("lib.nvim.deps.detect")
+
+    detect.names(tool)     --> { bin, ...bin_alternatives } (canonical first)
+    detect.found(tool)     --> boolean
+    detect.found_as(tool)  --> the name it was actually found under, or nil
+    detect.forget(tool)    --> drop the memoized PATH probe for this tool
+<
 ==============================================================================
 5. RESOLUTION                                      *lib.nvim-deps-resolution*
 

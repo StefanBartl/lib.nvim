@@ -140,6 +140,9 @@ Editor-independent Lua helpers. No `vim` API; usable/testable outside Neovim.
     lib.lua.config      the "defaults + user overrides" store pattern:
                         deep_merge (non-mutating, arrays replaced wholesale)
                         + get(tbl, path) dot-path accessor
+    lib.lua.class       prototype OOP: new/extend/include, pure Lua
+    lib.lua.context_manager  try/finally as one composable primitive (with);
+                        built on lib.lua.error.safe_call
 
 ------------------------------------------------------------------------------
 lib.nvim                                                    *lib.nvim-lib.nvim*
@@ -200,11 +203,10 @@ Neovim adapters.
                            + proc_trace (blocking-call instrumentation for
                            freeze diagnosis, see lua/lib/nvim/system/README.md)
     lib.nvim.selection     reselect a Visual line/char range after a mapping
-                           mutates it (keep_lines, keep_chars)
+                           mutates it (keep_lines, keep_chars) |lib.nvim-selection|
     lib.nvim.cache         disk: persistent JSON cache with TTL; memory:
                            namespace cache with TTL/changedtick validation
                            and opt-in, toggleable autocmd auto-invalidation
-                           |lib.nvim-selection|
     lib.nvim.store         project: persistent state keyed by project root
                            (git root, else cwd), built on cache.disk +
                            fs.project_key |lib.nvim-store|
@@ -233,6 +235,29 @@ Neovim adapters.
     lib.nvim.contextmenu   nvzone/menu context-menu item builder (entry/
                            group/submenu, self-gating) + mouse-trigger binder
                            (bind_buffer, soft dependency) |lib.nvim-contextmenu|
+    lib.nvim.async         coroutine async/await over libuv (await/run/wrap),
+                           Semaphore + Condvar |lib.nvim-async|
+    lib.nvim.count         count-prefix helpers for keymaps (count1 vs count
+                           vs "no count" disambiguation)
+    lib.nvim.debounce      generic debounce primitive: new(fn, ms) returns a
+                           { call, cancel } handle
+    lib.nvim.dotrepeat     wire native `.`-repeat through `operatorfunc`,
+                           no vim-repeat dependency
+    lib.nvim.frecency      frequency x recency ranking for anything a user
+                           picks repeatedly
+    lib.nvim.image_preview  in-Neovim image preview via images.nvim/
+                           snacks.nvim/image.nvim (soft deps, auto-detected)
+    lib.nvim.json          decode/encode arbitrary JSON strings (not just
+                           files -- see lib.nvim.fs.json for that)
+    lib.nvim.lastcmd       repeat the last real command (mapping or native
+                           change), skipping pure motions
+    lib.nvim.net.curl      async/blocking HTTP via curl (JSON / raw /
+                           download-to-file tiers)
+    lib.nvim.safe_api      validated, pcall-wrapped vim.api accessors for
+                           buffers/windows (never raises on a deleted
+                           buffer / closed window)
+    lib.nvim.token         ephemeral session-nonce / token generator (NOT
+                           cryptographically secure)
 
 ==============================================================================
 5. CONFIGURATION                                              *lib.nvim-config*

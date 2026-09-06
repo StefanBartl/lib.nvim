@@ -25,6 +25,7 @@ CONTENTS                                              *lib.nvim-fs-contents*
        relpath .................................... |lib.nvim-fs-relpath|
        normkey .................................... |lib.nvim-fs-normkey|
        project_key .............................. |lib.nvim-fs-project_key|
+       globbable .................................. |lib.nvim-fs-globbable|
   5. Root discovery .................................. |lib.nvim-fs-roots|
        find_root ................................ |lib.nvim-fs-find_root|
        find_upward_dir ....................... |lib.nvim-fs-find_upward_dir|
@@ -47,6 +48,11 @@ CONTENTS                                              *lib.nvim-fs-contents*
        ignore.list ................................ |lib.nvim-fs-ignore.list|
   9. System ........................................... |lib.nvim-fs-system|
        trash ...................................... |lib.nvim-fs-trash|
+  10. Watching ........................................ |lib.nvim-fs-watching|
+       watch ...................................... |lib.nvim-fs-watch|
+  11. Working directory ............................... |lib.nvim-fs-cwd|
+       chdir ....................................... |lib.nvim-fs-chdir|
+       dir_guard ................................ |lib.nvim-fs-dir_guard|
 
 ==============================================================================
 1. DESIGN                                               *lib.nvim-fs-design*
@@ -190,6 +196,22 @@ on every call. >lua
     local key = project_key()          -- current project
     local key2 = project_key("/repo")  -- explicit path
 <
+------------------------------------------------------------------------------
+globbable({root})                                    *lib.nvim-fs-globbable*
+
+Function. Returns `root` spelled so `vim.fn.glob`/`globpath` reads it as a
+path, not a pattern. On Windows, a `~` in a glob pattern is a
+home-directory reference — an 8.3 short name like `C:/Users/STEFAN~1/...`
+(what `%TEMP%`/`vim.fn.tempname()` expand to for long profile names) makes
+glob silently return an empty list. Resolves via `uv.fs_realpath` (skipped
+when there is no `~` to resolve, and when `root` does not exist). Other
+glob metacharacters (`[`, `]`, `*`, `?`) in a directory name are not
+handled -- not portably escapable. >lua
+
+    local globbable = require("lib.nvim.fs.globbable")
+    local safe_root = globbable(vim.fn.tempname())
+    vim.fn.glob(safe_root .. "/*")
+<
 ==============================================================================
 5. ROOT DISCOVERY                                       *lib.nvim-fs-roots*
 
@@ -237,6 +259,13 @@ either a buffer number or a filename. >lua
 Options ~
     markers                   string[]   root markers passed to `vim.fs.root`
                                           (default {".git", ".hg", ".svn"})
+    resolve                   fun(dir, cfg): string|nil
+                                          replaces the marker search entirely,
+                                          for servers whose root is more than
+                                          "nearest marker"; pcall'd, and a nil/
+                                          error result falls back to `dir`
+                                          itself. Takes precedence over
+                                          `markers` when set.
     include_stdpath_config    boolean    snap the root to `stdpath("config")`
                                           when it falls under it (default true)
 
@@ -473,6 +502,80 @@ PowerShell `FileSystem` API on Windows, Finder via `osascript` on macOS,
 `M.trash` is async (result via `cb`); `M.trash_blocking` blocks and returns
 `ok, err` directly. The fallback path does not write `.trashinfo`
 metadata, so "restore from trash" UIs may not show the original location.
+
+==============================================================================
+10. WATCHING                                        *lib.nvim-fs-watching*
+
+------------------------------------------------------------------------------
+watch.start({path}, {on_change}, {opts})                *lib.nvim-fs-watch*
+
+Function. Watch a file or directory for filesystem changes via
+`uv.new_fs_event()`, debounced through `lib.nvim.debounce` so one change
+(a save-via-rename, a build tool touching several files) does not fire
+`on_change` several times in quick succession. >lua
+
+    local watch = require("lib.nvim.fs.watch")
+    local handle, err = watch.start("/repo/lua", function(path, filename, events)
+      vim.notify(filename .. " changed under " .. path)
+    end, { debounce_ms = 200 })
+
+    handle.stop()  -- safe to call more than once
+<
+Options ~
+    debounce_ms   integer   debounce window in ms (default 200)
+
+==============================================================================
+11. WORKING DIRECTORY                                     *lib.nvim-fs-cwd*
+
+------------------------------------------------------------------------------
+chdir({path}, {opts})                                    *lib.nvim-fs-chdir*
+
+Function. Scope-aware working-directory change: global (`:cd`), tab-local
+(`:tcd`) or window-local (`:lcd`) -- explicit where `vim.fn.chdir()` is
+implicit (its scope depends on what the current window happens to have).
+`path` is canonicalized through |lib.nvim-fs-normkey|; a path that is
+missing or not a directory is rejected before the command runs. Never
+throws. >lua
+
+    local chdir = require("lib.nvim.fs.chdir")
+    chdir("~/projects/app")                        -- global
+    chdir("/repo", { scope = "tab" })               -- :tcd in the current tab
+    chdir("/repo", { scope = "win", win = winid })  -- :lcd in that window
+<
+Returns `ok, err`; the resolved path is not returned -- read it back with
+`vim.fn.getcwd()`.
+
+Options ~
+    scope   "global"|"tab"|"win"   default "global"
+    win     integer   window to run the change in (scope "win"), default
+                       the current window
+    tab     integer   tabpage whose current window is borrowed (scope
+                       "tab"); ignored when `win` is set
+
+------------------------------------------------------------------------------
+dir_guard.hold({path}, {opts})                       *lib.nvim-fs-dir_guard*
+
+Function. Hold the working directory on `path` until released, undoing any
+foreign change via `DirChanged` (a picker `:lcd`-ing into a result, a
+session restore, an LSP root-dir hook). Built on |lib.nvim-fs-chdir|; a
+hold watches exactly the scope it holds. Releasing does NOT restore the
+previous directory -- the guard holds a position, it does not own a
+stack. >lua
+
+    local dir_guard = require("lib.nvim.fs.dir_guard")
+
+    local held = dir_guard.hold("/repo")
+    vim.cmd.cd("/tmp")                                -- undone: cwd is /repo again
+    held.bypass(function() vim.cmd.cd("/tmp") end)    -- allowed, then restored
+    held.update("/other")                             -- move the pin
+    held.release()
+<
+Returns `handle, err` (`handle` is nil when the initial change failed).
+`handle` exposes `path()`, `is_held()`, `bypass(fn)`, `update(new_path)`,
+and `release()`. `opts` also takes an `on_violation(new_cwd, held)` hook
+(return `false` to accept a foreign change and release the guard instead
+of undoing it) and `on_error(err)` for a failed restore, plus every
+|lib.nvim-fs-chdir| scope option (`scope`, `win`, `tab`).
 
 ==============================================================================
 vim:tw=78:ts=8:ft=help:norl:

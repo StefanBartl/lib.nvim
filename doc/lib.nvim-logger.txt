@@ -1,5 +1,7 @@
 *lib.nvim-logger.txt*        Structured logging, diagnostics & crash dumps
 
+lib.nvim.logger                                            *lib.nvim-logger*
+
 ==============================================================================
 CONTENTS                                            *lib.nvim-logger-contents*
 
@@ -14,7 +16,7 @@ CONTENTS                                            *lib.nvim-logger-contents*
 ==============================================================================
 1. INTRODUCTION                                        *lib.nvim-logger-intro*
 
-lib.nvim.logger is a richer sibling of |lib.nvim-notify|. Next to a normal
+lib.nvim.logger is a richer sibling of `lib.nvim.notify`. Next to a normal
 notify it records a message plus a structured context table into a bounded
 in-memory ring buffer, optionally streams JSONL to a file, and can dump that
 ring when a guarded entrypoint fails.
@@ -72,13 +74,22 @@ Global (affect every logger; the master switch is checked first in the hot
 path, so a disabled logger costs one comparison): >lua
     local L = require("lib.nvim.logger")
     L.set_enabled(false)          -- master kill switch (zero-cost when off)
+    L.is_enabled()                -- current master-switch state
     L.set_level("warn")           -- global min-level override; nil clears
     L.disable_tag("net")          -- drop every record carrying tag "net"
     L.enable_tag("net")
     L.only_tags({ "cache" })      -- whitelist: keep only these tags; nil clears
+    L.tags()                      -- { disabled = {...}, only = {...}|nil }
+    L.setup({ level = "info" })   -- merge into every FUTURE logger's defaults
+    L.loggers()                   -- every logger created so far (the registry)
 <
+`setup(opts)` also accepts `enabled`/`min_level` shorthand for the global
+switches above; every other key becomes a new default merged into options
+passed to future `new()` calls (does not touch already-created loggers).
+
 Per-logger: >lua
     log.set_enabled(false)
+    log.is_enabled()
     log.set_level("error")
 <
 
