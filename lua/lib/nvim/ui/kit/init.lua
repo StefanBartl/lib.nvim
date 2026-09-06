@@ -191,8 +191,8 @@ local COMPONENTS = {
 }
 
 --- Friendly front door: dispatch on `opts.type` (default "note"). Supported
---- types: note, toast, input, live_input, form, select, prompt, picker, confirm,
---- menu, compare, progress.
+--- types: note, viewer, toast, input, live_input, form, select, prompt, picker,
+--- confirm, menu, compare, progress.
 ---@param opts table
 ---@return any
 function M.popup(opts)
