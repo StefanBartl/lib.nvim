@@ -4,7 +4,7 @@
 ---
 --- This submodule owns a small internal registry of the currently visible
 --- toasts (needed to stack them). That state is confined here and exposed only
---- through `active()` — no shared global window state (see UI-KIT-CONCEPT §14.3).
+--- through `active()` — no shared global window state.
 
 local surface = require("lib.nvim.ui.kit.surface")
 
