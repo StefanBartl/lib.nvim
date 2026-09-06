@@ -1,12 +1,13 @@
 -- TESTS/git_spec.lua — lib.nvim.git
 --
 -- Covers `M.info(dir)` only, the one function this module gained alongside
--- telemetry's `info` field (see telemetry_spec.lua). The other ten functions
--- predate this spec file and are read-cwd helpers for editor features
--- (autocommands, status integrations) — real, but not part of this pass;
--- `M.info` is the one worth a real assertion here because it is the one a
--- consumer plugin calls programmatically against an arbitrary directory,
--- not just from inside this editor session.
+-- runtime-analysis.telemetry's `info` field (which tags a report with the
+-- branch/version of the plugin it was collected from). The other ten
+-- functions predate this spec file and are read-cwd helpers for editor
+-- features (autocommands, status integrations) — real, but not part of
+-- this pass; `M.info` is the one worth a real assertion here because it is
+-- the one a consumer plugin calls programmatically against an arbitrary
+-- directory, not just from inside this editor session.
 
 return function(H)
   local git = require("lib.nvim.git")
