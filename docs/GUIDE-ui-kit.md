@@ -87,6 +87,7 @@ is correct in any colorscheme. Override any of the seven semantic keys:
 | Type       | What it is | Sketch |
 | ---------- | ---------- | ------ |
 | `note`     | centered title + message float; optional `timeout` auto-dismiss | ↓ |
+| `viewer`   | read-only info panel; auto-sized to content; closes on `q`/`<Esc>` or when focus leaves it | |
 | `toast`    | ephemeral top-right message; stacks; never steals focus | ↓ |
 | `input`    | single-line insert-mode prompt (`<CR>` submit, `<Esc>` cancel) | |
 | `live_input` | `input` plus debounced `on_change(query)` as the user types | |
