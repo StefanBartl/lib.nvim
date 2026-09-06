@@ -19,7 +19,11 @@ CONTENTS                                          *lib.nvim-window-contents*
        close_on_focus_lost ..................... |lib.nvim-window-close_on_focus_lost|
        center .................................. |lib.nvim-window-center|
        open_scratch_split ...................... |lib.nvim-window-open_scratch_split|
+       open_named_scratch ...................... |lib.nvim-window-open_named_scratch|
        tag ...................................... |lib.nvim-window-tag|
+       is_usable_window/target_window .......... |lib.nvim-window-find_usable|
+       ensure_bottom/make_focusable/force_focus/
+         focus_and_bottom ....................... |lib.nvim-window-focus_helpers|
        attach .................................. |lib.nvim-window-attach|
 
 ==============================================================================
@@ -163,10 +167,10 @@ the editor size. A safe no-op on non-floats and invalid ids. >lua
 open_scratch_split({lines}, {opts})      *lib.nvim-window-open_scratch_split*
 
 Open a fresh scratch buffer (`nofile`, `bufhidden=wipe`, no swapfile) in a
-plain split. Every call opens its own window — unlike |lib.nvim-window|
-`open_named_scratch`, there is no de-duplication by buffer name, which is the
-right behaviour for report/audit-style output where a second invocation
-should produce its own buffer. Returns `bufnr, winid`. >lua
+plain split. Every call opens its own window — unlike
+|lib.nvim-window-open_named_scratch|, there is no de-duplication by buffer
+name, which is the right behaviour for report/audit-style output where a
+second invocation should produce its own buffer. Returns `bufnr, winid`. >lua
 
     local bufnr, winid = window.open_scratch_split(report_lines, {
       filetype = "my-plugin-report",
@@ -176,6 +180,32 @@ Options ~
     filetype      string    buffer filetype
     split         string    "above" | "below" | "left" | "right";
                              unset honors 'splitbelow'/'splitright'
+    modifiable    boolean   keep buffer writable (default false, read-only)
+
+------------------------------------------------------------------------------
+open_named_scratch({name}, {lines}, {opts})
+                                       *lib.nvim-window-open_named_scratch*
+
+Find-or-create a named scratch buffer (`nofile`, `bufhidden=hide`, no
+swapfile) shown in a split. Complements `make_scratch` (always a float) and
+`open_scratch_split` (always a new window): identified by a stable buffer
+`name`, so a second call reuses the same buffer/window — for a log viewer
+or list view — instead of piling up duplicates. Returns `bufnr, winid`. >lua
+
+    local bufnr, winid = window.open_named_scratch("MyPlugin://log", lines, {
+      filetype = "my-plugin-log",
+      split = "below",
+    })
+<
+If a window already shows the buffer (in any tab), that window is focused
+and its content replaced rather than opening a second one; otherwise a new
+split is opened per `opts.split`.
+
+Options ~
+    filetype      string    buffer filetype
+    split         string    "above" | "below" | "left" | "right"
+                             (default "below")
+    size          integer   window height (or width, for "left"/"right")
     modifiable    boolean   keep buffer writable (default false, read-only)
 
 ------------------------------------------------------------------------------
@@ -194,6 +224,39 @@ option, so windows tagged by either can be found by the other. >lua
 `tag.find` only matches live, real content windows (not hidden or degenerate
 floats with width/height <= 1).
 
+------------------------------------------------------------------------------
+is_usable_window({winid}), target_window({opts})
+                                             *lib.nvim-window-find_usable*
+
+`is_usable_window(winid)` is true for a normal, non-floating window that
+isn't a well-known sidebar (neo-tree, NvimTree, aerial, Outline, qf by
+filetype) — for a plugin that wants to reuse an existing normal split
+instead of always opening a new one. `target_window(opts)` returns the
+first such window, preferring the current one, or nil if none qualifies. >lua
+
+    local target = window.target_window({ current_tab_only = true })
+    if target then vim.api.nvim_win_set_buf(target, bufnr) end
+<
+Options (`target_window`) ~
+    current_tab_only   boolean   search only the current tabpage's windows
+                                  (default false: every window)
+
+------------------------------------------------------------------------------
+ensure_bottom({winid}), make_focusable({winid}),
+force_focus({winid}), focus_and_bottom({winid})
+                                           *lib.nvim-window-focus_helpers*
+
+Small helpers for log/output-style windows. `ensure_bottom` moves the
+cursor to the last line, retrying on the next tick if the window isn't
+valid yet (e.g. right after creation). `make_focusable` flips a floating
+window created with `focusable = false` to focusable; a no-op returning
+`false` on a non-floating window. `force_focus` makes the window focusable
+first, then focuses it. `focus_and_bottom` does both: focus, then scroll
+to bottom. All but `ensure_bottom` return `ok` (boolean). >lua
+
+    local h = window.make_scratch({ lines = {}, focusable = false })
+    window.focus_and_bottom(h)  -- streamed output: focus + follow the tail
+<
 ------------------------------------------------------------------------------
 attach({winid})                                       *lib.nvim-window-attach*
 

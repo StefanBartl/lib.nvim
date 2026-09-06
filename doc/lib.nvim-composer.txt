@@ -29,10 +29,10 @@ CONTENTS                                       *lib.nvim-composer-contents*
 
     composer.verb("Replace", {
       desc    = "Text replacement operations",
-      default = function(ctx) require("replacer").prompt() end,  -- bare :Replace
+      default = function(ctx) require("myplugin").prompt() end,  -- bare :Replace
       routes  = {
         { path = { "buffer" }, desc = "Replace in the current buffer",
-          run = function(ctx) require("replacer").buffer() end },
+          run = function(ctx) require("myplugin").buffer() end },
         { path = { "surround" },
           args = {
             { name = "kind",   type = "STRING", enum = { "quote", "paren" } },
@@ -40,11 +40,19 @@ CONTENTS                                       *lib.nvim-composer-contents*
           },
           desc = "Wrap TARGET with KIND surroundings",
           run  = function(ctx)
-            require("replacer").surround(ctx.args.kind, ctx.args.target)
+            require("myplugin").surround(ctx.args.kind, ctx.args.target)
           end },
       },
     })
 <
+CDX: replacer.nvim's real :Replace/:Surround registration (command.lua,
+surround.lua) does use this module, but only single `path = {}` root
+routes that forward ctx.raw into its pre-existing parser -- it never
+declares a `buffer`/`surround` subcommand tree. Judgment call whether the
+USAGE example should instead be trimmed straight from that real
+registration (less illustrative of subcommand routing) or stay a
+`require("myplugin")` stand-in (current fix: no longer implies a
+replacer.nvim API that doesn't exist).
 `:Replace <Tab>` completes `buffer | surround`; `:Replace surround <Tab>`
 completes `quote | paren`; bad input is reported with the route's usage.
 
@@ -75,7 +83,7 @@ Each `run` receives a context table:
 Each type carries validation and completion. Built-ins: STRING, INT, FLOAT,
 BOOL, PATH, DIR, FILE, BUFFER, WINDOW, plus `enum = {...}` on any ArgSpec (closed set,
 case-insensitive, completed from the members). Coercion reuses
-|lib.nvim.normalize| validators; PATH/DIR/FILE completion uses Neovim's own
+`lib.nvim.normalize` validators; PATH/DIR/FILE completion uses Neovim's own
 file completion. Register a custom type once: >lua
     composer.register_type("HIGHLIGHT_GROUP", {
       validate = function(raw) return true, raw, nil end,
@@ -238,6 +246,19 @@ composer.register_type({name}, {def})       *lib.nvim-composer-register_type*
 
 composer.registry()                              *lib.nvim-composer-registry*
     The name->handle map of every verb built in this process.
+
+composer.check_all()                            *lib.nvim-composer-check_all*
+    Pre-flight check for every verb registered in this process, keyed by
+    name.
+
+composer.checkhealth({name_or_handle})       *lib.nvim-composer-checkhealth*
+    Report one verb's route checks through `vim.health`. Call this from
+    your plugin's own health.lua -- composer cannot register a
+    discoverable `:checkhealth` target on your behalf.
+
+composer.notify_check_all()            *lib.nvim-composer-notify_check_all*
+    Notification-based alternative to `checkhealth`, for plugins with no
+    health.lua to hook into. Returns `ok_overall`.
 
 Access: `require("lib.nvim.bindings.usercmd.composer")` (direct),
 `require("lib").composer`, or `require("lib").usercmd.composer`.

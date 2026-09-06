@@ -1,5 +1,7 @@
 *lib.nvim-kit.txt*         Themed, composable UI toolkit (lib.nvim.ui.kit)
 
+lib.nvim.ui.kit                                                *lib.nvim-kit*
+
 ==============================================================================
 CONTENTS                                               *lib.nvim-kit-contents*
 
@@ -75,7 +77,8 @@ returns the handle, or nil on failure.
 4. COMPONENTS                                        *lib.nvim-kit-components*
 
 `kit.popup(opts)` dispatches on `opts.type`. Implemented: note, viewer, toast,
-input, live_input, form, select, prompt, confirm, menu, picker, progress. >lua
+input, live_input, form, select, prompt, confirm, menu, picker, compare,
+progress. >lua
 
     kit.popup({ type = "note",  title = "Saved", message = "Wrote 3 files", timeout = 2000 })
     kit.popup({ type = "viewer", title = "Node Info",
@@ -99,7 +102,7 @@ input, live_input, form, select, prompt, confirm, menu, picker, progress. >lua
                 on_answer = function(yes) end })
     -- convenience aliases: kit.note / kit.viewer / kit.toast / kit.input /
     -- kit.live_input / kit.form / kit.select / kit.prompt / kit.confirm /
-    -- kit.menu / kit.picker
+    -- kit.menu / kit.picker / kit.compare / kit.progress
 <
   note    centered title + message float; optional `timeout` (ms) auto-dismiss.
   viewer  read-only info panel; auto-sized to content; q/<Esc> closes, and
@@ -134,6 +137,22 @@ input, live_input, form, select, prompt, confirm, menu, picker, progress. >lua
           picking an item runs its callback.
   progress passthrough to |lib.nvim-progress| (lib.nvim.progress.create);
           returns its handle (:update / :finish / :cancel).
+  compare pick two items out of one picker, view them side by side:
+          SEARCH (prompt + results + live preview) -> MARKED (mark_key,
+          default <M-c>, or <CR>, freezes the first pick while search
+          continues) -> COMPARE (<CR> again: two full-height preview
+          panes). `{ items, render(item, surface), format_item?, query?,
+          on_compare?(a, b), on_close?(a, b) }`. Engine-independent: the
+          caller's `render` paints each item (buffer text, a diff,
+          images.nvim's terminal-drawn images, …), so nothing here is
+          content-specific.
+
+`kit.sync(open_fn, opts, timeout_ms?)` blocks (via `vim.wait`) until an
+on_submit/on_cancel-shaped async component (input/form/live_input) resolves,
+returning its result as a plain value instead of via callback — for call
+chains built around a blocking `vim.fn.input()` that can't easily be recast
+to callback style. Returns `result, cancelled, timed_out`. Only safe to call
+from a normal call stack, never a fast-event context.
 
 ==============================================================================
 5. STATUS / ROADMAP                                      *lib.nvim-kit-status*
@@ -163,10 +182,16 @@ Phase 10: `kit.input({ secret = true })` — masked entry, a vim.fn.inputsecret
 replacement. Each character is concealed behind `mask` (default "*"),
 re-derived from the buffer on every edit; the real text still reaches
 on_submit.
-Phase 11 (this release): `kit.input({ completion = "file" })` — file-path
-(or any getcompletion() type) completion via <Tab>, a vim.fn.input
+Phase 11: `kit.input({ completion = "file" })` — file-path (or any
+getcompletion() type) completion via <Tab>, a vim.fn.input
 completion="file" replacement built on real ins-completion
 (vim.fn.complete()), not a custom picker.
+Phase 12: `kit.compare` — pick two items out of one picker, view them side
+by side (SEARCH -> MARKED -> COMPARE), motivated by images.nvim's "browse,
+pick two, compare" roadmap item but content-agnostic by construction.
+Phase 13 (this release): `kit.sync`, the `vim.wait` bridge described above
+— for call chains built around a blocking vim.fn.input() that can't easily
+be recast to callback style.
 
 The layout engine turns a declarative region spec into aligned nvim_open_win
 geometry for several coordinated floats: >lua

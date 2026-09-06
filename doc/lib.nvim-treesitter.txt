@@ -98,7 +98,7 @@ MODES                          *lib.nvim-treesitter-parser_policy-modes*
             (|lib.nvim-kit|): Yes / No / Never for this language.
 "auto"      Install immediately, no prompt — just a short notify.
 
-A "Never for `<lang>`" answer is remembered via |lib.nvim-cache| (disk
+A "Never for `<lang>`" answer is remembered via `lib.nvim.cache` (disk
 backend) and survives restarts, so the same language never re-prompts.
 "No" is not remembered — it asks again next time.
 

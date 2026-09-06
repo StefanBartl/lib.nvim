@@ -118,6 +118,18 @@ env.path({opts})                                              *spawn_env.path()*
     `string` - `;`-separated on Windows, `:`-separated elsewhere; duplicates
     removed case- and separator-insensitively on Windows
 
+env.array({vars})                                            *spawn_env.array()*
+  Build the completed environment as an array of `"KEY=VALUE"` strings,
+  ready for `lib.nvim.cross.uv.spawn_capture`'s `opts.env` -- raw libuv
+  `uv.spawn` wants an array where `build()` returns a `{ [key] = value }`
+  dict (the shape `vim.system`/`jobstart` want).
+
+  Parameters: ~
+    {vars} `table<string,string>|nil` - explicit overrides, applied last
+
+  Returns: ~
+    `string[]`
+
 env.apply({spawn_opts}, {opts})                              *spawn_env.apply()*
   A copy of {spawn_opts} with `env` filled in by `build()`, every other key
   untouched. An `env` already present in {spawn_opts} is folded in as
@@ -225,7 +237,7 @@ No login shell on Windows ~
   the user profile at creation time, which Neovim already inherited.
 
 Related ~
-  |lib.nvim-lib.nvim| for the namespace overview;
+  |lib.nvim-modules| for the namespace overview;
   `lua/lib/nvim/cross/run/env/README.md` for the same content with examples;
   `lib.nvim.cross.run` (shell-string runners), `lib.nvim.cross.run_argv`
   (argv runners, no shell), `lib.nvim.cross.executable` (is the binary
