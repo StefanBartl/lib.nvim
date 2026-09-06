@@ -181,6 +181,10 @@ local function capture(map, seq)
   local before = snapshot_registers()
   local returned = execute(map, seq)
 
+  --- CDX: only tier-1 declarations registered under mode "n" are ever consulted
+  --- here, though `M.declare` accepts and stores an arbitrary mode. The whole
+  --- feature is normal-mode only (resolve_target and setup both hardcode "n"),
+  --- so a `declare("i"/"x", ...)` silently never matches.
   local declared = declarations[declkey("n", seq)]
   if declared then
     local ok, value = pcall(declared)

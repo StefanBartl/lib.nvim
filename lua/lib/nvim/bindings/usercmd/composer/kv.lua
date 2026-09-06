@@ -1,7 +1,7 @@
 ---@module 'lib.nvim.bindings.usercmd.composer.kv'
 --- key=value (no dashes) parsing, shared by dispatch and completion — the
 --- same one-declaration-two-readers principle as flags.lua. Opt-in per route
---- via Route.kv. Unlike -- flags, an unrecognized key=value-shaped token
+--- via Route.kv. Unlike `--` flags, an unrecognized key=value-shaped token
 --- (key not declared) is left as an ordinary positional rather than an
 --- error — "=" shows up in too many legitimate positional values (URLs, env
 --- assignments passed through, ...) to treat every match as intentional.

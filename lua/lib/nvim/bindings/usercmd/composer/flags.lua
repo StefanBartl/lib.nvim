@@ -5,9 +5,9 @@
 --- tokenizer split.
 ---
 --- Strictly opt-in per route: every function here is a no-op passthrough when
---- `route.flags` is nil/empty, so a route that never declares flags keeps its
---- pre-Phase-6 behavior exactly — a leading "--" or "-" in one of its
---- positional values is not treated specially.
+--- `route.flags` is nil/empty, so a route that never declares flags behaves
+--- exactly as it always has — a leading "--" or "-" in one of its positional
+--- values is not treated specially.
 
 local argtypes = require("lib.nvim.bindings.usercmd.composer.argtypes")
 

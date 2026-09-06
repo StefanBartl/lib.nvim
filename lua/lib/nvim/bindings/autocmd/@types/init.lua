@@ -32,9 +32,12 @@
 ---@field group fun(name: string, clear: boolean|nil): integer # Create autocommand group
 ---@field create fun(event: string|string[], callback: (fun(args:Lib.Autocmd.Args): boolean|nil), opts: LibAutocmdOpts|nil): integer # Create autocommand, returns its id. A `true` return from the callback deletes the autocmd (native behaviour; needs `opts.raw`).
 ---@field delete fun(id: integer): boolean # Delete an autocommand AND forget its record
----@field get_augroup fun(name: string, opts: { clear?: boolean, prefix?: string }|nil): integer # Augroup registry: Centralized augroup creation with optional prefixing and deduplication.
+---@field registered fun(filter: { event?: string, group?: string }|nil): Lib.Autocmd.Record[] # Every autocmd created through this module, newest last.
+---@field by_event fun(): table<string, Lib.Autocmd.Record[]> # The same records grouped by event.
+---@field get_augroup fun(name: string, opts: { clear?: boolean, prefix?: string }|nil): integer # Augroup registry with optional prefixing and deduplication.
 ---@field augroup Lib.AutoCmd.AuGroup
 ---@field dispatcher Lib.Autocmd.Dispatcher
+---@field docs table # Generated `bindings/autocmd/` markdown writers (`write`/`check`/`write_all`/`create_usercmd`).
 
 return {}
 
