@@ -249,5 +249,6 @@
 ---@field border_glyphs fun(resolved: Lib.UI.Kit.Theme): table|nil  # box-drawing glyph set, or nil (borderless)
 ---@field setup fun(opts?: Lib.UI.Kit.SetupOpts)
 ---@field presets fun(): string[]
+---@field default fun(): string  # name of the currently active default preset
 
 return {}
