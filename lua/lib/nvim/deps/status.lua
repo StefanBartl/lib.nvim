@@ -109,7 +109,7 @@ end
 ---
 ---Pure apart from reading the spec files: no window, no notification, no
 ---PATH probing (that is `install.plan`'s job, on the result of this).
----@return { tools: Lib.Deps.Tool[], sources: table<string, string[]>, plugins: string[], failed: string[] }
+---@return Lib.Deps.Status.Collected
 function M.collect()
   local spec = require("lib.nvim.deps.spec")
 
