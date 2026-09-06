@@ -1,14 +1,12 @@
 ---@module 'lib.nvim.fs.path_shorten'
--- Utility module to shorten file paths for display.
---
--- Two styles, selected via `opts.style`:
---   "fit"   (default) preserves the path start (drive/root) and the filename
---           at the end, replacing a variable-length middle section with an
---           ellipsis ("…" by default) until the result fits `max_len`.
---   "label" always renders "<root>/<ellipsis>/<parent>/<file>" ("...." by
---           default), ignoring `max_len` — ported from Harpoon's menu-label
---           formatter. Independent algorithm; only dispatch and the ellipsis
---           marker are shared with "fit".
+--- Shorten a filesystem path for display. Two styles, selected via `opts.style`:
+---   "fit"   (default) preserves the path start (drive/root) and the filename
+---           at the end, replacing a variable-length middle section with an
+---           ellipsis ("…" by default) until the result fits `max_len`.
+---   "label" always renders "<root>/<ellipsis>/<parent>/<file>" ("...." by
+---           default), ignoring `max_len` — ported from Harpoon's menu-label
+---           formatter. Independent algorithm; only dispatch and the ellipsis
+---           marker are shared with "fit".
 
 local uv = vim.uv or vim.loop
 
@@ -175,7 +173,8 @@ local function join(parts, sep)
 end
 
 ---@internal
---- Return length in characters (tries utf8.len, falls back to byte length).
+--- Length used for the width budget: byte length, not display width — so a
+--- multibyte ellipsis or path segment counts as its byte size.
 --- @param s string
 --- @return integer
 local function strlen(s)

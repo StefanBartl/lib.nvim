@@ -1,11 +1,9 @@
 ---@module 'lib.nvim.fs.is_subpath'
 
--- `vim.fs.normalize` always returns forward-slash paths (on every OS, including
--- Windows) — so the separator used below must be "/" too. An earlier version used
--- `package.config:sub(1,1)` (the native separator, "\" on Windows) to append the
--- trailing separator, which meant the appended "\" never matched the
--- forward-slash-normalized path prefix: `is_subpath` returned false for every
--- genuine subpath on Windows.
+-- `vim.fs.normalize` always returns forward-slash paths on every OS, so the
+-- separator appended to `base` below must be "/" too — not the native
+-- `package.config:sub(1,1)`, which would never match the normalized prefix on
+-- Windows.
 local norm = vim.fs.normalize
 local normkey = require("lib.nvim.fs.normkey")
 

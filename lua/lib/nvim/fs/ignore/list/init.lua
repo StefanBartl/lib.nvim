@@ -59,6 +59,8 @@ M.basenames = {
 --- Lua-style patterns (used by Telescope / grep-like tools).
 --- @type string[]
 M.patterns = {
+  --- CDX: matches literal "package.lock.json" — npm's lockfile is
+  --- "package-lock.json", so this pattern never fires. Likely `package%-lock%.json`.
   "package%.lock.json",
   "pnpm%-lock.yaml",
   "yarn.lock",

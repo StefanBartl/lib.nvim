@@ -102,27 +102,11 @@ function M.dirs(root, opts)
   return M.collect(root, vim.tbl_extend("force", opts or {}, { kind = "dirs" }))
 end
 
--- ============================================================================
--- Async walk — same result as `collect()`, without blocking the main loop.
---
--- `walk()` above is synchronous: `uv.fs_scandir`/`fs_stat` without a
--- callback block the caller until the syscall returns, which is fine for a
--- handful of directories but stalls Neovim's UI on a large tree (a
--- `node_modules`, a monorepo). The libuv calls below take a callback instead
--- and become genuinely async — the event loop keeps servicing input/redraws
--- while a scan is in flight — but chaining raw callbacks through recursive
--- directory descent produces exactly the callback-pyramid mess `fs/write/
--- async` was flagged for in the plenary/libuv research this was born from.
---
--- `lib.nvim.async` provides a minimal coroutine-based async/await:
--- `walk_async` below reads like the synchronous `walk()` above (plain
--- recursive calls, one `await()` per libuv call) while every `await()`
--- actually yields control back to the event loop.
---
--- That helper used to live here as a private copy (and a second, slightly
--- diverged one in `fs/write/async`); both were extracted into
--- `lib.nvim.async` once the duplication was real rather than hypothetical.
--- ============================================================================
+-- Async walk — same result as `collect()`, without blocking the main loop on
+-- a large tree (a `node_modules`, a monorepo). `walk_async` below mirrors the
+-- synchronous `walk()` structurally: plain recursive calls, one `await()` per
+-- libuv call, with `lib.nvim.async` yielding to the event loop at each await
+-- instead of nesting raw callbacks.
 
 local async = require("lib.nvim.async")
 local await = async.await
@@ -194,7 +178,7 @@ end
 ---This walks one directory at a time (async, not blocking, but not
 ---parallel either) — the fix for main-loop stalls on a large tree, not a
 ---wall-clock speedup; concurrent sibling scanning was left out to keep the
----coroutine driver simple (see the module-level comment above `await`).
+---coroutine driver simple.
 ---@param root string
 ---@param opts? Lib.Fs.CollectRecursive.Opts
 ---@param on_done fun(paths: string[])

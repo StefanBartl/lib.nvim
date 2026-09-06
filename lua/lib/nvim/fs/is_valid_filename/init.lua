@@ -8,11 +8,9 @@
 --- technically permit. Also rejects an embedded NUL, an empty string, and a
 --- whitespace-only string.
 ---
---- Upstreamed from reposcope.nvim's `utils.protection.is_valid_filename`
---- (same rules), to close a gap in `lib.nvim.fs.create_entry`: that module
---- previously only checked for a non-empty string, so a name containing one
---- of these characters failed at the raw `mkdirp`/`io.open` syscall instead
---- of with a clean message before attempting it.
+--- Used by `lib.nvim.fs.create_entry` to reject a bad name with a clean
+--- message before it reaches a raw `mkdirp`/`io.open` syscall. Ported from
+--- reposcope.nvim's `utils.protection.is_valid_filename` (same rules).
 
 local INVALID_CHARS = '[\\/:*?"<>|%z]'
 

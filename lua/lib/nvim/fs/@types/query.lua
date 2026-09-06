@@ -9,6 +9,9 @@
 ---@class Lib.Fs.IsSubpathOpts
 ---@field realpath? boolean Resolve symlinks and Windows 8.3 short names via `uv.fs_realpath`. Default true.
 
+--- CDX: fictional grouping — there is no `lib.nvim.fs.query` module. Only the
+--- CDX: stale `Lib.Fs` aggregate references it. `Lib.Fs.IsSubpathOpts` above
+--- CDX: is real and stays.
 ---@class Lib.Fs.Query
 ---@field is_subpath fun(path: string, base: string, opts?: Lib.Fs.IsSubpathOpts): boolean
 ---@field is_dir fun(p: string): boolean

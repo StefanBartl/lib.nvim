@@ -1,6 +1,9 @@
 ---@meta
 ---@module 'lib.nvim.fs.polymorphic_rootresolver.@types'
 
+--- CDX: unprefixed class name — every other fs type is `Lib.Fs.*`
+--- (e.g. `Lib.Fs.FindRoot.Opts`). Public (docs/API/filesystem.md names it), so
+--- a rename would ripple; flagged, not changed.
 ---@class RootResolverCfg
 ---@field markers? string[] List of filenames/folders that indicate project root.
 ---@field include_stdpath_config? boolean If true, uses Neovim's stdpath("config") as fallback.
