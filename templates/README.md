@@ -108,8 +108,8 @@ checkouts at it instead:
     ref: ci-verified
 ```
 
-Same convention for `hover.nvim` and `lsp.nvim` if a plugin checks those
-out too.
+Same convention for `hover.nvim`, `lsp.nvim` and `runtime-analysis.nvim`
+if a plugin checks those out too.
 
 ## `deps/` — declaring optional external tools
 
