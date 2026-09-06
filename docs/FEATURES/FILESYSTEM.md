@@ -1,11 +1,11 @@
 # Filesystem
 
-`lib.nvim.fs.*` — the single largest namespace in the library (28
+`lib.nvim.fs.*` — the single largest namespace in the library (26
 submodules): working-directory management, root/project detection, path
 resolution, stat checks, directory creation/scanning (sync and async),
-ignore lists, file read/write/mutation, and opening files/URLs. Built on
-`vim.fs`/`vim.uv` (or the `vim.loop` fallback), not shell commands, unless
-explicitly noted.
+ignore lists, file read/write/mutation/watching, and opening files/URLs.
+Built on `vim.fs`/`vim.uv` (or the `vim.loop` fallback), not shell commands,
+unless explicitly noted.
 
 ## Scope-aware working-directory change
 
@@ -182,6 +182,29 @@ cross-platform filename rules before anything touches disk.
 `mkdirp` is built purely on `vim.uv`/`vim.loop` (no `vim.fn`), which makes
 it safe to call from a fast-event context (a uv timer, an `fs_event`
 callback, a spawn callback) where `vim.fn.mkdir` would abort with `E5560`.
+
+## Glob-safe path spelling
+
+`vim.fn.glob`/`globpath` read their argument as a pattern, not a path — a
+`~` in it is a home-directory reference. On Windows an 8.3 short name
+(`C:/Users/STEFAN~1/...`, common under `%TEMP%`) trips this silently: glob
+resolves `~1` as a nonexistent user and returns an empty list, no error.
+Found in production in two backends that globbed a temp directory and
+concluded it was empty. The fix is `uv.fs_realpath`, which gives back the
+long form.
+
+- **Module:** `lib.nvim.fs.globbable`
+
+## Debounced filesystem watching
+
+A generic "watch this path, call me on change" primitive on top of
+`uv.new_fs_event()` — debounced, since one real change (a save-via-rename,
+a build tool touching several files) can fire the raw event several times
+in quick succession.
+
+- **Module:** `lib.nvim.fs.watch` (`start`)
+- **Config:** `opts.debounce_ms` (default `200`), `opts.recursive` (default
+  `false` — ignored by Linux's `inotify` backend)
 
 ## Opening files and URLs with the OS default handler
 

@@ -45,15 +45,24 @@ that is meant to run headless at require-time).
   corner notifications.
 - [kit-input.lua](kit-input.lua) — themed single-line prompt, a `vim.ui.input`
   replacement.
+- [kit-live-input.lua](kit-live-input.lua) — filter/search box that refreshes
+  a results list on every (debounced) keystroke rather than on submit.
 - [kit-select.lua](kit-select.lua) — themed list chooser, single and
   multi-select.
 - [kit-prompt.lua](kit-prompt.lua) — ask a yes/no-or-custom-choice or
   free-text question, one answer back.
 - [kit-confirm.lua](kit-confirm.lua) — the same question, answered with
   horizontal buttons instead of a list.
+- [kit-form.lua](kit-form.lua) — sequential multi-field prompt (one
+  `kit.input` per field, chained into one keyed result table).
 - [kit-menu.lua](kit-menu.lua) — cursor-anchored action list, each item
   runs its own callback.
 - [kit-picker.lua](kit-picker.lua) — Telescope-style interactive picker
   (prompt drives a results list) without a fuzzy-finder dependency.
+- [kit-compare.lua](kit-compare.lua) — pick two files out of a scanned list
+  and view their contents side by side.
 - [kit-layout.lua](kit-layout.lua) — hand-build a coordinated multi-float
   layout with `compute`/`mount`, for UI shapes no ready-made template fits.
+- [kit-sync.lua](kit-sync.lua) — bridge an async kit component
+  (input/form/live_input) back to a plain synchronous return value via
+  `vim.wait()`.

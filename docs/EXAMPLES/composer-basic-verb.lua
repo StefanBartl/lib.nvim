@@ -13,6 +13,14 @@
 -- there is no second place that needs to stay in sync by hand.
 --
 -- Call this once, e.g. from your plugin's setup()/plugin file.
+--
+-- CDX: replacer.nvim's real :Replace/:Surround registration (command.lua,
+-- surround.lua) does use this composer module, but only single `path = {}`
+-- root routes that forward ctx.raw into its pre-existing parser -- it never
+-- declares a `buffer`/`cwd`/`surround` subcommand tree, and the module has
+-- no `replace_prompt()`/`.buffer()`/`.cwd()`/`.surround()` functions (its
+-- real public API is just `setup()`/`run()`). The `require("myplugin")`
+-- stand-in below is illustrative of subcommand routing only.
 
 local composer = require("lib.nvim.bindings.usercmd.composer")
 
@@ -21,7 +29,7 @@ composer.verb("Replace", {
 
   -- Bare `:Replace` with no subcommand at all falls through to `default`.
   default = function(ctx)
-    require("replacer").replace_prompt()
+    require("myplugin").prompt()
   end,
 
   routes = {
@@ -30,7 +38,7 @@ composer.verb("Replace", {
       path = { "buffer" },
       desc = "Replace within the current buffer",
       run = function(ctx)
-        require("replacer").buffer()
+        require("myplugin").buffer()
       end,
     },
 
@@ -43,7 +51,7 @@ composer.verb("Replace", {
       args = { { name = "root", type = "DIR", optional = true } },
       desc = "Replace across the working tree (optionally under root)",
       run = function(ctx)
-        require("replacer").cwd(ctx.args.root)
+        require("myplugin").cwd(ctx.args.root)
       end,
     },
 
@@ -58,7 +66,7 @@ composer.verb("Replace", {
       },
       desc = "Wrap TARGET with KIND surroundings",
       run = function(ctx)
-        require("replacer").surround(ctx.args.kind, ctx.args.target)
+        require("myplugin").surround(ctx.args.kind, ctx.args.target)
       end,
     },
   },
@@ -67,5 +75,5 @@ composer.verb("Replace", {
 -- Result:
 --   :Replace <Tab>                 -> buffer | cwd | surround
 --   :Replace surround <Tab>        -> quote | paren | brace
---   :Replace surround quote hello  -> require("replacer").surround("quote", "hello")
+--   :Replace surround quote hello  -> require("myplugin").surround("quote", "hello")
 --   :Replace bogus                 -> notify + auto-generated usage, run() never called

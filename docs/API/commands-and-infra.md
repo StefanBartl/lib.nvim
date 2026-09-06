@@ -119,6 +119,30 @@ creates/clears unconditionally (no memoization).
 M.create.clear(name: string): integer
 ```
 
+### `lib.nvim.bindings.autocmd.dispatcher` (see README)
+One autocmd, many lazy-loaded, priority-ordered, per-buffer-`once`
+handlers, factored out of the N-hand-rolled-`FileType`-autocmds
+anti-pattern. Not a performance win over plain autocmds on a miss (see
+README for measured numbers) — the win is uniform lazy loading,
+deterministic ordering, and per-buffer `once`.
+
+```
+M.new(opts: Lib.Autocmd.Dispatcher.Opts): Lib.Autocmd.Dispatcher.Handle
+  -- opts.event (required), opts.key: fun(ev): string (required), opts.name/opts.group
+M.registry(): table                    -- every dispatcher created this session, for introspection
+M.reattach_all(): nil                  -- re-run attach() on every live dispatcher (config hot-reload)
+M.filetype.new(opts): Lib.Autocmd.Dispatcher.Handle   -- FileType convenience wrapper over M.new
+```
+Handle (returned by `new`):
+```
+handle.register(key_or_keys: string|string[], spec: fun(args)|{ load: fun(args), priority?, once?, owner?, desc? }): handle
+handle.unregister(owner: string): integer removed
+handle.handlers(): table[]             -- introspection: every live registration
+handle.attach(): nil                   -- installs the autocmd (dispatch mode) or one per handler (bypass mode)
+handle.detach(): nil
+handle.stats(): table
+```
+
 ---
 
 ## `lib.nvim.bindings.keymap` (see README)

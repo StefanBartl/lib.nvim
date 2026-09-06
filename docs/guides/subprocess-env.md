@@ -106,14 +106,15 @@ an explicit `env = env.build()`/`env.apply(...)` call.
 
 ## Adoption
 
-Consumers still to migrate off their own env handling (or off implicit
-inheritance): `reposcope.nvim` (gh/curl/wget), `github_stats.nvim`,
-`pdfport.nvim` (pandoc/pdftotext/ollama), `sandbox.nvim`
-(docker/podman/nerdctl), `replacer.nvim` (ripgrep), `pickers.nvim`
-(fd/rg). Several of these call argv-based runners directly (not
-`cross.run`'s shell-string path), so migrating them still means an explicit
-`env.build()`/`env.apply()` call at each call site — the default-on wiring
-above only covers `cross.run.run`/`run_blocking` callers.
+**CDX:** as of this pass, `reposcope.nvim` (gh/curl/wget, via its own
+`utils/spawn_env.lua` wrapper), `pdfport.nvim` (pandoc/pdftotext/ollama,
+via its own `util/spawn_env.lua` wrapper), `sandbox.nvim`
+(docker/podman/nerdctl, via `util/run_argv.lua`), `replacer.nvim`
+(ripgrep, `rg.lua`/`gitfiles.lua`), and `pickers.nvim` (fd/rg,
+`engines/snacks.lua`/`smart/search.lua`/`sources/drives.lua`) all now call
+`lib.nvim.cross.run.env` directly at their argv-runner call sites. Still to
+migrate: `github_stats.nvim`, which spawns via plain `vim.system` with no
+`env` handling at all.
 
 ## Related
 

@@ -169,6 +169,21 @@ configurable word-character pattern (default `"[%w_']"`); `end_col` is
 reads the current or most-recently-active Visual range whether or not
 Visual mode is still active.
 
+## Quickfix and location lists
+
+Hands a plugin's already-collected entries to Vim's quickfix/location list
+with a title, in one call — the mechanical "show the user what I found"
+step, not the entry-building itself, which stays with the caller.
+
+- **Module:** `lib.nvim.ui.list` (`set`, `qf`, `loc`)
+- **Config:** `opts.action` (default `" "` pushes a new list; `"r"`
+  replaces; `"a"` appends), `opts.open` (default `true`; `"auto"` opens
+  only when non-empty), `opts.focus` (default `"list"`; `"source"` hands
+  the cursor back)
+
+Deliberately does not wrap `vim.diagnostic.setqflist`/`setloclist` — those
+have their own severity handling and a version-dependent signature.
+
 ## Statusline segment
 
 A short status badge pinned to one row of one window, auto-choosing between
@@ -203,8 +218,16 @@ Kitty-specific integrations (image protocol, remote control).
 
 ## Buffer-content helpers
 
-- **Module:** `lib.nvim.buffer` (`insert_lines`, `get_alternate`,
-  `is_markdown_buf`, `open_background`)
+- **Module:** `lib.nvim.buffer.*` — `insert_lines`, `get_alternate`,
+  `is_markdown_buf`, `open_background`, each its own leaf module.
+
+**CDX:** there is no `buffer/init.lua` aggregator, so `require("lib.nvim.buffer")`
+alone does not resolve — require the leaf path directly (e.g.
+`require("lib.nvim.buffer.insert_lines")`), or go through `require("lib")`,
+which flattens these functions directly (`lib.insert_lines`,
+`lib.is_markdown_buf`, `lib.buffer_context`). Same stale-aggregator shape
+already flagged on `Lib.Buffer`/`Lib.Buffer.ALL` in
+`lua/lib/nvim/buffer/@types/init.lua`.
 
 `insert_lines(lines, pos?)` inserts at the buffer start, the cursor row, or
 an explicit `{row, col}` (0-based). `open_background(path)` adds a file to
