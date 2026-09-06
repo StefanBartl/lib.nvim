@@ -3,8 +3,8 @@
 
 ---@class Lib.SafeApi
 ---@field safe_call fun(fn: function, ...: any): boolean, any|nil, string|nil
----@field is_valid_buffer fun(bufnr: integer): boolean
----@field is_valid_window fun(winnr: integer): boolean
+---@field is_valid_buffer fun(bufnr: any): boolean
+---@field is_valid_window fun(winnr: any): boolean
 ---@field buf_get_lines fun(bufnr: integer, start: integer, end_: integer, strict_indexing: boolean): boolean, string[]|nil, string|nil
 ---@field buf_line_count fun(bufnr: integer): boolean, integer|nil, string|nil
 ---@field buf_get_option fun(bufnr: integer, name: string): boolean, any|nil, string|nil

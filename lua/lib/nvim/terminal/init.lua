@@ -61,5 +61,5 @@ function M.is_kitty()
   return term:find("kitty", 1, true) ~= nil
 end
 
----@type Lib.Terminal.ALL
+---@type Lib.Terminal
 return M

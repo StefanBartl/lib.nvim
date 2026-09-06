@@ -146,4 +146,5 @@ function M.bind_buffer(bufnr, get_items, opts)
   })
 end
 
+---@type Lib.ContextMenu
 return M

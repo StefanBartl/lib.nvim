@@ -311,5 +311,4 @@ function M.ensure(lang, opts)
 end
 
 ---@type Lib.Treesitter.ParserPolicy
----@type Lib.Treesitter.ParserPolicy
 return M
