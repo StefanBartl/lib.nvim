@@ -50,8 +50,8 @@ kit.select({
   end,
 })
 
--- Rich items: a multi-line entry with per-column highlight groups (see
--- UI-KIT-CONCEPT.md §13b). Mix freely with plain strings in the same list --
+-- Rich items: a multi-line entry with per-column highlight groups. Mix
+-- freely with plain strings in the same list --
 -- on_select still hands back exactly what you put in. Navigation (j/k/<CR>)
 -- moves by logical item, landing on `anchor` (default: the item's first
 -- line), so a 3-line item is still one up/down step, not three.

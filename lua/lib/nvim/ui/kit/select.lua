@@ -1,7 +1,7 @@
 ---@module 'lib.nvim.ui.kit.select'
 --- Select component. Backed by the native themed chooser
 --- (lib.nvim.ui.kit.chooser), which absorbed and replaced the former
---- lib.nvim.ui.hover_select module (now removed; see UI-KIT-CONCEPT.md §10).
+--- lib.nvim.ui.hover_select module (now removed).
 ---
 --- `respect_override`: when true, defers to `vim.ui.select` instead of kit's
 --- own chooser IF something has replaced Neovim's builtin `vim.ui.select`
@@ -130,7 +130,7 @@ function M.open(opts)
   -- The chooser displays plain strings, pre-rendered here so the chosen row
   -- maps back to the original item by index -- callers keep passing raw
   -- items, as with vim.ui.select. A "rich" item (table with `.lines`, for
-  -- per-span custom highlights -- see UI-KIT-CONCEPT.md §13b) passes straight
+  -- per-span custom highlights -- see docs/EXAMPLES/kit-select.lua) passes straight
   -- through unrendered instead: the chooser already knows how to lay those
   -- out itself. (Rich items are incompatible with `respect_override`'s
   -- foreign-picker delegation above, which only understands plain values --

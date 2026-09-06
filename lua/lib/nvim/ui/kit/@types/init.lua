@@ -87,8 +87,9 @@
 ---@field action? fun()      # callback run when the item is picked (alias: cb)
 
 --- One `kit.select`/`kit.popup({type="select"})` item, for a multi-line entry
---- with per-column custom highlight groups (see UI-KIT-CONCEPT.md §13b). A
---- plain string item still works unchanged -- this is opt-in per item.
+--- with per-column custom highlight groups (worked example:
+--- `docs/EXAMPLES/kit-select.lua`). A plain string item still works
+--- unchanged -- this is opt-in per item.
 ---@class Lib.UI.Kit.RichItem
 ---@field lines string[]                       # >=1 line; buffer content for this item
 ---@field highlights? Lib.UI.Kit.ItemHighlight[]
