@@ -1,7 +1,8 @@
 ---@module 'lib.nvim.cross.run'
--- Shell selection and runners
-
--- FIX: Optimize, doc
+--- Shell selection plus shell-string runners: pick a platform-appropriate
+--- shell, then run a single command **string** through it — async (`run`),
+--- blocking (`run_blocking`), or detached (`run_detached`). For argv-based
+--- execution with no shell involved, see `lib.nvim.cross.run_argv`.
 
 local M = {}
 
