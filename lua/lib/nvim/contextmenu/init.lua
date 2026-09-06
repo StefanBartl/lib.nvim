@@ -118,7 +118,7 @@ end
 --- nvzone/menu isn't installed — the keymap just becomes a no-op (with one
 --- session-wide notify) until it is.
 ---@param bufnr integer
----@param get_items fun():Lib.ContextMenu.Item[]
+---@param get_items Lib.ContextMenu.ItemsProvider
 ---@param opts? { keymap?: string, modes?: string[], mouse?: boolean, desc?: string }
 function M.bind_buffer(bufnr, get_items, opts)
   opts = opts or {}
