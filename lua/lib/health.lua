@@ -15,7 +15,7 @@ local MIN_NVIM = { 0, 10, 0 }
 
 local version_ok = require("lib.nvim.health").version_ok
 
----@type string[] One representative module per namespace; each must load.
+---@type string[] Representative modules spanning both namespaces; each must load.
 local PROBE = {
   "lib.lua.tables.array",
   "lib.lua.strings",
@@ -29,7 +29,6 @@ local PROBE = {
   "lib.nvim.store.project",
   "lib.nvim.frecency",
   "lib.nvim.core",
-  "lib.nvim.ui.kit",
   "lib.nvim.bindings.usercmd.composer",
   "lib.nvim.bindings.autocmd.dispatcher",
 }

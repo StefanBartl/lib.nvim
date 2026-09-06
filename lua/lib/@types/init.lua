@@ -4,6 +4,10 @@
 -- All Lib Modules
 -- =========================================================
 
+--- CDX: `Lib.Modules` has no `---@type` referent anywhere in the repo and has
+--- CDX: drifted from the real surface (`notifier Lib.Notify+` — stray `+`, and the
+--- CDX: aggregate key is `notify`). Likely superseded by `Lib` in
+--- CDX: @types/all_functions.lua; left as-is pending an external-consumer check.
 ---@class Lib.Modules
 ---@field autocmd Lib.AutoCmd
 ---@field bufwintab Lib.BufWinTab

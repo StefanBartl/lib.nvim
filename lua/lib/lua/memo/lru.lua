@@ -98,7 +98,7 @@ local function new_lru(cap)
 
   ---@type Lib.Memo.LruState
   local state = {
-    cap = math.max(1, math.floor(cap)), -- KORREKTUR: Explizite Typsicherheit
+    cap = math.max(1, math.floor(cap)), -- coerce to a positive integer
     size = 0,
     map = {},
     head = nil,

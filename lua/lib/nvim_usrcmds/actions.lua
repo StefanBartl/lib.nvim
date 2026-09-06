@@ -9,9 +9,9 @@ local notify = require("lib.nvim.notify").create("[lib.nvim_usrcmds]")
 
 local M = {}
 
--- FIX: neotree/nvimtree/netrw do not auto-refresh after `lcd` -- trigger a
--- manual refresh in the file-tree plugin. Confirmed needed in practice, seen
--- repeatedly; still to be implemented.
+--- CDX: neo-tree/nvim-tree/netrw do not auto-refresh after `lcd`; a manual
+--- CDX: refresh of the active file-tree plugin is still to be implemented here.
+
 ---Set the local (window) cwd to the directory of the current buffer.
 ---@return nil
 function M.cwd_here()

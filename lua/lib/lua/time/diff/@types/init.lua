@@ -34,7 +34,7 @@
 --- - Metatable-based callable interface
 ---
 --- Usage:
----   local diff = require("lib.lua.time.diff")
+---   local diff = require("lib.lua.time.diff")()  -- call the factory
 ---   diff.start()           -- Optional, auto-started on creation
 ---   local t1 = diff.check("ms")  -- Record checkpoint in milliseconds
 ---   print(diff.first)      -- Access first checkpoint (always in ns)
@@ -45,7 +45,7 @@
 --- - All stored values are in nanoseconds internally
 --- - Dynamic properties (first, second, etc.) always return nanoseconds
 --- - Methods accept optional unit parameter for conversion
---- - Each require() call creates a new independent instance
+--- - Each factory call creates a new independent instance
 ---
 ---@field private _start number # Initial timestamp (nanoseconds)
 ---@field private _checks number[] # List of checkpoint timestamps (nanoseconds)
@@ -110,66 +110,18 @@
 -- =========================================================
 
 ---@class Lib.Time.Diff
---- Module factory for creating timer instances.
---- Each call to require("lib.lua.time.diff") returns this factory.
---- Calling the factory creates a new independent timer instance.
----
---- Usage:
----   local diff = require("lib.lua.time.diff")  -- diff is a TimeDiff instance
----   -- Timer is automatically started on creation
+--- Module factory. `require("lib.lua.time.diff")` returns this factory (cached);
+--- calling it (`require("lib.lua.time.diff")()`) creates a new independent timer
+--- instance, already started.
 ---
 --- Notes:
---- - Each require() call creates a NEW instance with independent state
---- - No shared global variables
---- - Instances are isolated from each other
---- - Metatable __call enables factory pattern
-
--- =========================================================
--- Technical Notes
--- =========================================================
-
---- Precision:
---- - Uses vim.uv.hrtime() for nanosecond precision
---- - Default output: nanoseconds (ns)
---- - Configurable units: ns, us, ms, s
---- - Properties always return nanoseconds
+--- - All values stored in nanoseconds; unit params only affect output.
+--- - Statistics operate on the deltas between consecutive checkpoints, e.g.
+---   checkpoints 10ms/25ms/50ms -> intervals 10ms/15ms/25ms.
+--- - stddev/CV need >= 2 checkpoints; the other stats need >= 1.
+--- - The instance is callable: `diff(unit)` and `tostring(diff)` return the
+---   summary; `__index` serves the ordinal properties (first..tenth, last).
 ---
---- Unit Conversion:
---- - 1 second (s)       = 1,000,000,000 ns
---- - 1 millisecond (ms) = 1,000,000 ns
---- - 1 microsecond (us) = 1,000 ns
---- - 1 nanosecond (ns)  = 1 ns
----
---- Statistics:
---- - Statistics operate on intervals (deltas) between consecutive checkpoints
---- - Checkpoints represent cumulative time since start
---- - Example:
----   Checkpoints: 10ms, 25ms, 50ms
----   Intervals:   10ms, 15ms, 25ms
----   Statistics:  fastest=10ms, longest=25ms, average=16.67ms
----
---- Metatable Features:
---- - __call: Makes instance callable → diff() returns results()
---- - __tostring: String conversion → tostring(diff) returns results()
---- - __index: Enables dynamic property access (first, second, etc.)
----
---- Performance:
---- - Overhead per checkpoint: ~100-200ns
---- - Statistical calculations: O(n) where n = checkpoint count
---- - Suitable for micro-benchmarking and profiling
---- - Minimal memory footprint per instance
----
---- Limitations:
---- - No support for pausing/resuming timers
---- - Checkpoints cannot be removed once recorded
---- - Iterator does not support reverse traversal
---- - Maximum 10 named properties (first-tenth)
---- - Statistics require at least 1 checkpoint (2 for stddev/CV)
----
---- Error Handling:
---- - Calling check() before start() throws error (auto-started on creation)
---- - Invalid unit parameter throws error
---- - Statistical functions return nil if insufficient checkpoints
---- - Dynamic properties return nil if checkpoint doesn't exist
+--- See lua/lib/lua/time/diff/README.md for worked examples.
 
 return {}

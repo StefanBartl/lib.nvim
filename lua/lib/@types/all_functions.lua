@@ -60,14 +60,14 @@
 ---@field is fun(platform?: Lib.Cross.Platform.PlatformName): boolean|Lib.Cross.Platform.PlatformName # Dual behavior: returns platform name or boolean check
 ---@field is_dir fun(p: string): boolean # Check if path is a directory
 ---@field is_empty_or_space fun(s: any): boolean
----@field is_linux fun(): boolean # returns true if corrent os is linux
----@field is_macos fun(): boolean # returns true if corrent os is macos
+---@field is_linux fun(): boolean # returns true if current os is linux
+---@field is_macos fun(): boolean # returns true if current os is macos
 ---@field is_markdown_buf fun(bufnr_arg: integer|nil): integer|nil # Returns buffer number if valid markdown buffer
 ---@field is_subpath fun(path: string, base: string, opts?: Lib.Fs.IsSubpathOpts): boolean # Check if path is subpath of base; pass opts to canonicalize both sides via normkey
 ---@field is_terminal_buf fun(bufnr: integer): boolean|nil # Checks if buffer is terminal
 ---@field is_web_url fun(s: string): boolean
----@field is_windows fun(): boolean # returns true if corrent os is windows
----@field is_wsl fun(): boolean # returns true if corrent os is wsl
+---@field is_windows fun(): boolean # returns true if current os is windows
+---@field is_wsl fun(): boolean # returns true if current os is wsl
 ---@field join fun(parts: string[], sep: string): string
 ---@field joinpath fun(parts: string[]): string # Joins variable strings to one path
 ---@field kebab_case fun(s: string): string
@@ -90,7 +90,7 @@
 ---@field run fun(cmd: string, cb: fun(ok:boolean, res:OsRunResult), opts?: Lib.Cross.Run.RunOpts): nil # Async run using vim.system when available; falls back to jobstart. Enriched via cross.run.env by default (opts.env = false to opt out)
 ---@field run_blocking fun(cmd: string, opts?: Lib.Cross.Run.RunOpts): OsRunResult # Blocking run (utility for quick conversions / probing). Enriched via cross.run.env by default
 ---@field safe Lib.Notify.Safe
----@field set fun(group: string, opts: Lib.Highlight.Opts, ns: string|integer|nil)-
+---@field set fun(group: string, opts: Lib.Highlight.Opts, ns: string|integer|nil)
 ---@field shell fun(): OsShell # Pick a shell suitable for the platform
 ---@field simple_echo fun(msg: string, hl: string|nil, is_error: boolean|nil): integer|string # This module returns a single function that echoes messages using vim.api.nvim_echo
 ---@field slugify fun(s: string): string
@@ -104,7 +104,7 @@
 ---@field uncapitalize fun(s: string): string
 ---@field uri_decode fun(s: string): string
 ---@field url_under_cursor fun(line: string, col: integer): string|nil
----@field write_to_file fun(path: string, content: string): boolean, string|nil # Write string content to given path. Makes sure that directory exists. Return sucess boolean and in cade of no success string notice
+---@field write_to_file fun(path: string, content: string): boolean, string|nil # Write string content to given path. Makes sure that directory exists. Returns a success boolean and, on failure, a notice string
 ---@field write_append fun(path: string, content: string): boolean, string|nil # Append content to a file (creates parent dirs, adds trailing newline). Sibling of write_to_file, which truncates.
 --- === Misc exported helpers ===
 ---@field with fun(base: table|nil, extra: table|nil): table
