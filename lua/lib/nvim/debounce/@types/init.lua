@@ -17,3 +17,12 @@
 ---@field call fun(bufnr:integer, ...:any) Reset `bufnr`'s timer; fires `fn(bufnr, ...)` after the (possibly adaptive) delay
 ---@field cancel fun(bufnr:integer) Stop and close `bufnr`'s pending timer, if any
 ---@field cancel_all fun() Stop and close every tracked timer
+
+--- `lib.nvim.debounce` module surface.
+---@class Lib.Debounce
+---@field new fun(fn: fun(...:any), ms: integer): Lib.Debounce.Handle
+---@field new_with_counter fun(fn: fun(...:any), ms: integer): Lib.Debounce.Handle, fun(): integer
+
+--- `lib.nvim.debounce.buffer` module surface.
+---@class Lib.Debounce.Buffer
+---@field new fun(fn: fun(bufnr: integer, ...:any), opts?: Lib.Debounce.BufferOpts): Lib.Debounce.BufferHandle

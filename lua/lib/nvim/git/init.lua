@@ -275,4 +275,5 @@ function M.clear_line_diff(ns)
   end
 end
 
+---@type Lib.Git
 return M

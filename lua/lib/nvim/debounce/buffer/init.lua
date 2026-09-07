@@ -133,4 +133,5 @@ local function new(fn, opts)
   return { call = call, cancel = cancel, cancel_all = cancel_all }
 end
 
+---@type Lib.Debounce.Buffer
 return { new = new }

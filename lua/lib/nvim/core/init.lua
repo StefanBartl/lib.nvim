@@ -46,5 +46,5 @@ end
 
 M.simple_echo = lazy.require("lib.nvim.core.simple_echo")
 
----@type Lib.Nvim
+---@type Lib.Nvim.Core
 return M

@@ -1,7 +1,7 @@
 ---@meta
----@module 'lib.nvim.@types'
+---@module 'lib.nvim.core.@types'
 
----@class Lib.Nvim
+---@class Lib.Nvim.Core
 ---@field has_exec fun(bin: string): boolean # Memoized `vim.fn.executable(bin) == 1` check.
 ---@field first_available fun(candidates: string[]): string|nil # First candidate binary found on PATH (via has_exec), or nil if none are.
 ---@field forget_exec fun(bin: string) # Drop bin's memoized has_exec result so the next call re-probes PATH.
