@@ -104,4 +104,5 @@ function M.sep(hex, fallback, pad)
   return pad .. M.glyph(hex, fallback) .. pad
 end
 
+---@type Lib.UI.NerdFont
 return M
