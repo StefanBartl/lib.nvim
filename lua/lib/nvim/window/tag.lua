@@ -49,4 +49,5 @@ function M.find(tag)
   return nil
 end
 
+---@type Lib.Window.Tag
 return M

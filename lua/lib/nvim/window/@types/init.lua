@@ -66,5 +66,6 @@
 ---@field open_named_scratch fun(name: string, lines?: string[], opts?: { filetype?: string, split?: "above"|"below"|"left"|"right", size?: integer, modifiable?: boolean }): integer, integer # Find-or-create a named scratch buffer shown in a split; returns bufnr, winid.
 ---@field open_scratch_split fun(lines?: string[], opts?: Lib.Window.OpenScratchSplitOpts): integer, integer # Open a fresh (non-de-duplicated) scratch buffer in a plain split; returns bufnr, winid.
 ---@field tag Lib.Window.Tag # Tag/find windows by an arbitrary string via `vim.w[win].custom_tag`.
+---@field find_by_filetype fun(filetype: string): integer|false # First open window whose buffer has `filetype`, or `false` if none exists.
 
 return {}

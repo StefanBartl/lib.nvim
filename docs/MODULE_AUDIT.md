@@ -174,3 +174,30 @@ gaps found.
   on their returns either. Correctly excluded from the public README either
   way. Left alone — renaming would touch require paths for no user-facing
   benefit; flagging here in case a future pass wants to formalize it.
+
+### progress, cache, deps, store, normalize, system — ✅ no issues
+
+`resolve_style.lua` and several `window/*.lua` files return a bare local
+function rather than a table — not a bug: the function itself carries full
+`---@param`/`---@return` annotations, so LuaLS types the returned value
+correctly without a separate `---@type` (unlike the `return M`-table cases
+elsewhere in this audit, where the table's shape isn't otherwise knowable).
+`normalize` in particular is a good example of "exactly right": 21 functions,
+21 README mentions, field counts in `@types` match exactly.
+
+### window (15 files) — ✅ fixed (another orphaned submodule)
+
+- `find_by_filetype.lua` — a real, complete, generically useful function
+  (replaces filetree-manager-specific window lookups) — was not aggregated
+  onto `window/init.lua`'s `M`, not in `@types`' `Lib.Window` class, not in
+  the README's module-structure tree, and not in its "Functions" prose. Same
+  shape as the `notify.resolve_log_level` gap from batch 1. Fixed all four.
+- `tag.lua` had the same missing-`---@type`-on-`return M` issue as
+  debounce/git (batch 1), even though `Lib.Window.Tag` already existed and
+  was already correctly referenced from the top `Lib.Window` class — so this
+  one only mattered for someone requiring `lib.nvim.window.tag` directly.
+  Fixed.
+- README's "Functions" section was also missing prose for four *already*
+  aggregated-and-typed functions: `open_named_scratch`, `is_usable_window`/
+  `target_window`, and the four focus helpers (`ensure_bottom`,
+  `make_focusable`, `force_focus`, `focus_and_bottom`). Added all of it.

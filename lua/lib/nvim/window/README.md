@@ -38,6 +38,7 @@ lib.nvim.window/
 ├── tag.lua                  -- find windows by an arbitrary string tag
 ├── focus_helpers.lua        -- keep a log view scrolled to bottom / force focus
 ├── find_usable.lua          -- find a normal, non-floating, non-sidebar window
+├── find_by_filetype.lua     -- find the first open window showing a given filetype
 └── @types/                  -- LuaLS types
 ```
 
@@ -210,6 +211,78 @@ local bufnr, winid = window.open_scratch_split(report_lines, {
 | `filetype`   | `string`                              | –          | buffer `filetype`                                     |
 | `split`      | `"above"\|"below"\|"left"\|"right"`   | –          | split direction; unset honors 'splitbelow'/'splitright' |
 | `modifiable` | `boolean`                             | `false`    | keep the buffer writable (otherwise read-only)         |
+
+---
+
+### `open_named_scratch(name, lines?, opts?) -> bufnr, winid`
+
+Find-or-create a **named** scratch buffer shown in a split. Unlike
+`open_scratch_split`, a second call with the same `name` reuses the existing
+buffer/window instead of piling up duplicates — the right choice for a log
+viewer or list view that should stay a single, stable window.
+
+```lua
+local bufnr, winid = window.open_named_scratch("MyPlugin://log", lines, {
+  filetype = "myplugin-log",
+  split = "below",
+})
+```
+
+| Option       | Type                                  | Default    | Meaning                                              |
+| ------------ | -------------------------------------- | ---------- | ----------------------------------------------------- |
+| `filetype`   | `string`                              | –          | buffer `filetype`                                     |
+| `split`      | `"above"\|"below"\|"left"\|"right"`   | `"below"`  | split direction, only used when opening for the first time |
+| `size`       | `integer`                             | –          | width (left/right) or height (above/below) of a fresh split |
+| `modifiable` | `boolean`                             | `true`     | keep the buffer writable                              |
+
+If a window already shows the named buffer (in any tab), that window is
+focused instead of opening a new split.
+
+---
+
+### `is_usable_window(winid) -> boolean` / `target_window(opts?) -> winid|nil`
+
+Find a normal content window to act on — not floating, not a sidebar
+(`filetype` in a small deny-list: `neo-tree`, `NvimTree`, etc.), not a
+special buffer type.
+
+```lua
+window.is_usable_window(vim.api.nvim_get_current_win())  -- boolean
+
+local winid = window.target_window()                              -- any tab
+local winid = window.target_window({ current_tab_only = true })   -- this tab only
+```
+
+`target_window` prefers the current window if it's usable, otherwise scans
+for the first usable one.
+
+---
+
+### Focus helpers — `ensure_bottom`, `make_focusable`, `force_focus`, `focus_and_bottom`
+
+For log/output-style windows that should stay scrolled to the latest line and
+be reachable even when opened as a non-focusable float:
+
+```lua
+window.ensure_bottom(winid)      -- scroll winid's cursor to its buffer's last line
+                                   -- (retries if winid isn't valid yet)
+window.make_focusable(winid)     -- flip a floating window's `focusable` config to true
+window.force_focus(winid)        -- make_focusable + nvim_set_current_win
+window.focus_and_bottom(winid)   -- force_focus + ensure_bottom
+```
+
+---
+
+### `find_by_filetype(filetype) -> winid|false`
+
+First open window whose buffer has the given `filetype`, or `false` if none
+exists. Generic replacement for filetree-manager-specific lookups (Neo-tree's
+`"neo-tree"`, nvim-tree's `"NvimTree"`, etc.) — pass the filetype you care
+about instead of hardcoding one.
+
+```lua
+local winid = window.find_by_filetype("neo-tree")
+```
 
 ---
 
