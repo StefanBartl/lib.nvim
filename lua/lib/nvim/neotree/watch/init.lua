@@ -262,4 +262,5 @@ function M.clear()
   registry = {}
 end
 
+---@type Lib.Neotree.Watch
 return M

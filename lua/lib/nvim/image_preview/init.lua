@@ -27,9 +27,9 @@
 ---                  file and rendered into the float's window explicitly, and
 ---                  must be cleared when that window closes.
 
-local M = {}
+require("lib.nvim.image_preview.@types")
 
----@alias Lib.ImagePreview.Provider "images.nvim"|"snacks"|"image.nvim"
+local M = {}
 
 ---Which in-Neovim preview provider is available, if any.
 ---
@@ -211,4 +211,5 @@ function M.preview(path)
   return true
 end
 
+---@type Lib.ImagePreview
 return M

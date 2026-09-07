@@ -201,3 +201,48 @@ elsewhere in this audit, where the table's shape isn't otherwise knowable).
   aggregated-and-typed functions: `open_named_scratch`, `is_usable_window`/
   `target_window`, and the four focus helpers (`ensure_bottom`,
   `make_focusable`, `force_focus`, `focus_and_bottom`). Added all of it.
+
+### dev, image_preview, lua_ls, markdown, neotree, net, treesitter — mostly ✅, 2 real fixes
+
+These are the "leaf-only" namespaces (no top-level `init.lua`, per
+`modules.md`'s documented exception pattern).
+
+- **`dev/duplicates.lua`**: types were defined but inline in the source file
+  rather than under `@types/` (violates `conventions.md`, though not
+  functionally broken — left the existing `Hit`/`Group` classes where they
+  were rather than relocating them, added the missing `Lib.Dev.Duplicates`
+  module-surface class + `---@type` next to them for consistency with the
+  rest of the audit).
+- **`image_preview`** — biggest gap in the whole audit so far: a real,
+  complete, 3-provider (images.nvim/snacks/image.nvim) module with **zero**
+  of the three required doc layers (`conventions.md`'s checklist) — no
+  README, no `@types` (its one alias was inline in `init.lua`, also a
+  convention violation), not in `modules.md`'s namespace table, despite
+  already having a one-line mention in `doc/lib.nvim.txt`'s hub (so it *was*
+  known-about, just never finished). Wrote the README, added `@types/`,
+  wired both bullets in `modules.md`.
+- **`lua_ls.insert.module_annnotation`**: the directory/require-path itself
+  has a typo (triple-n, `module_annnotation` not `module_annotation`) —
+  already self-flagged in `lua_ls/@types/init.lua` by a prior CDX pass as a
+  "phantom aggregate-module class" (no real `lua_ls/init.lua` aggregator
+  exists), left alone since it's already correctly identified as known debt.
+  What **wasn't** flagged: the submodule's own README had all four usage
+  examples calling the *correctly-spelled, nonexistent* path
+  (`module_annotation`) — copy-pasteable code that would `require`-error.
+  Also two `notify.warn(...)` prefixes inside the module itself used the
+  wrong spelling, and `modules.md`'s link text (not its href) showed the
+  wrong spelling too. Fixed all three call sites to the real (typo'd) path;
+  did not rename the directory itself (would be a breaking change for any
+  external consumer already on the typo'd path — a rename-with-deprecation
+  is a decision for the user, not an audit-sweep fix).
+- **neotree.node, neotree.watch, net.curl**: same missing-`---@type`-on-
+  `return M` pattern as debounce/git/tag (batches 1 & 3) despite fully
+  correct module-surface classes already existing. Fixed all three.
+- **neotree.watch README**: `installed()` and `clear()` — both real, typed
+  functions — were undocumented. Added.
+- **net.curl README**: `is_secret_header`/`config_quote` (public on purpose,
+  per their own doc comment, "so a caller building its own argv shares
+  this") were never named in the README's prose, only implied by the
+  security section describing what they do. Added a one-line pointer.
+- markdown.table, treesitter.guard, treesitter.parser_policy: no issues —
+  every exported function accounted for in both README and `@types`.

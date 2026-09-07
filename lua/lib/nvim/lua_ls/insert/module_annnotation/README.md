@@ -1,24 +1,24 @@
 ## Example usage (fully typed, LuaLS autocomplete):
 
 ```lua
-require("lib.nvim.lua_ls.insert.module_annotation")()
+require("lib.nvim.lua_ls.insert.module_annnotation")()
 ```
 
 ```lua
-require("lib.nvim.lua_ls.insert.module_annotation")({
+require("lib.nvim.lua_ls.insert.module_annnotation")({
   bufnr = 3,
 })
 ```
 
 ```lua
-require("lib.nvim.lua_ls.insert.module_annotation")({
+require("lib.nvim.lua_ls.insert.module_annnotation")({
   bufnr = 3,
   row = 0,
 })
 ```
 
 ```lua
-require("lib.nvim.lua_ls.insert.module_annotation")({
+require("lib.nvim.lua_ls.insert.module_annnotation")({
   bufnr = 3,
   row = 5,
   col = 2,

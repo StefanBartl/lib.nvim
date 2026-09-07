@@ -49,6 +49,7 @@ namespace one-liners), split by topic, see [`API/README.md`](API/README.md).
 | [`lib.nvim.system`](../lua/lib/nvim/system/README.md) | host env snapshot (`is_windows`/`is_wsl`/…, `home`, `pathsep`, `repo_base`) + Windows rpc pipe + `proc_trace` (blocking-call instrumentation for freeze diagnosis); opt-in `setup` |
 | [`lib.nvim.progress`](../lua/lib/nvim/progress/README.md) | style-agnostic progress indicator: `notify`/`statusline`/`fidget`/`float`/`kit` renderers, delay-guard, focus-gated cancel-with-confirm ([`:help`](../doc/lib.nvim-progress.txt)) |
 | [`lib.nvim.frecency`](../lua/lib/nvim/frecency/README.md) | frequency x recency ranking for anything a user picks repeatedly: `store(namespace)` -> `record`/`score`/`lookup`, bucketed recency, log-dampened counts, persisted under `stdpath("data")`. One handle per namespace, because a store *is* its file |
+| [`lib.nvim.image_preview`](../lua/lib/nvim/image_preview/README.md) | in-Neovim image preview via images.nvim / snacks.nvim / image.nvim (soft deps, auto-detected): `detect`/`available`/`preview(path)` into a floating window |
 | [`lib.nvim.selection`](../lua/lib/nvim/selection/README.md) | reselect a Visual line/char range after a mapping mutates it: `keep_lines`/`keep_chars` ([`:help`](../doc/lib.nvim-selection.txt)) |
 | [`lib.nvim.async`](../lua/lib/nvim/async/README.md) | coroutine async/await over libuv: `await`/`run`/`wrap`, plus `Semaphore` and `Condvar` — the shared core behind `fs.collect_recursive`'s async walk and `fs.write.async` ([`:help`](../doc/lib.nvim-async.txt)) |
 | [`lib.nvim.harvest`](../lua/lib/nvim/harvest/README.md) | "collect from a scope, then show/export it" building blocks: `scope` (buffer/range/buffers/cwd/path → sources with provenance), `render` (rows → GFM table / CSV / lines), `sink` (clipboard / file / scratch buffer / picker), `emit` ([`:help`](../doc/lib.nvim-harvest.txt)) |
@@ -81,12 +82,13 @@ and are generated on install by your plugin manager (see [Help docs](help.md)).
 - [`lib.nvim.cross.fs.mutate`](../lua/lib/nvim/cross/fs/mutate/README.md) · [`lib.nvim.cross.fs.lock`](../lua/lib/nvim/cross/fs/lock/README.md)
 - [`lib.nvim.cross.open_default`](../lua/lib/nvim/cross/open_default/README.md) · [`lib.nvim.cross.reveal_in_fm`](../lua/lib/nvim/cross/reveal_in_fm/README.md)
 - [`lib.nvim.cross.run.env`](../lua/lib/nvim/cross/run/env/README.md) — spawn environment: completed `PATH` + session/keyring variables
-- [`lib.nvim.lua_ls.insert.module_annotation`](../lua/lib/nvim/lua_ls/insert/module_annnotation/README.md)
+- [`lib.nvim.lua_ls.insert.module_annnotation`](../lua/lib/nvim/lua_ls/insert/module_annnotation/README.md)
 - [`lib.nvim.treesitter.guard`](../lua/lib/nvim/treesitter/guard/README.md) · [`lib.nvim.treesitter.parser_policy`](../lua/lib/nvim/treesitter/parser_policy/README.md)
 - [`lib.nvim.bindings.usercmd.composer`](../lua/lib/nvim/bindings/usercmd/composer/README.md)
 - [`lib.nvim.deps`](../lua/lib/nvim/deps/README.md)
 - [`lib.nvim.async`](../lua/lib/nvim/async/README.md) · [`lib.nvim.fs.watch`](../lua/lib/nvim/fs/watch/README.md) · [`lib.nvim.json`](../lua/lib/nvim/json/README.md)
 - [`lib.nvim.dotrepeat`](../lua/lib/nvim/dotrepeat/README.md) · [`lib.nvim.lastcmd`](../lua/lib/nvim/lastcmd/README.md)
+- [`lib.nvim.image_preview`](../lua/lib/nvim/image_preview/README.md)
 - [`lib.lua.class`](../lua/lib/lua/class/README.md) · [`lib.lua.context_manager`](../lua/lib/lua/context_manager/README.md)
 
 **`:help` pages**

@@ -38,13 +38,13 @@ return function(opts)
   local filepath = api.nvim_buf_get_name(bufnr)
 
   if not filepath:match("%.lua$") then
-    notify.warn("[lib.nvim.lua_ls.insert.module_annotation] Not a Lua file")
+    notify.warn("[lib.nvim.lua_ls.insert.module_annnotation] Not a Lua file")
     return false
   end
 
   local module_path = require("lib.nvim.lua_ls.get_module_path")(filepath)
   if not module_path then
-    notify.warn("[lib.nvim.lua_ls.insert.module_annotation] File not in lua/ directory")
+    notify.warn("[lib.nvim.lua_ls.insert.module_annnotation] File not in lua/ directory")
     return false
   end
 

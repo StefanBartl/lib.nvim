@@ -20,10 +20,12 @@ therefore fails, non-deterministically, with `EPERM` /
 local watch = require("lib.nvim.neotree.watch")
 
 watch.install()          -- patch neo-tree's fs_watch (idempotent; false if absent)
+watch.installed()        -- whether the patch is currently in place
 watch.release(path)      -- close the handle(s) on path + every watched subpath
 watch.with_release(path, fn)  -- release → fn() → release again
 watch.list()             -- { path, active, exists }[], sorted — for diagnostics
 watch.count()            -- how many watchers are currently tracked
+watch.clear()            -- forget all tracked watchers without closing them (tests only)
 ```
 
 - **`install()`** wraps `fs_watch.watch_folder` to record every watcher neo-tree
@@ -63,6 +65,10 @@ off), `release` simply releases nothing — so passing the hook is always safe.
 signature: a watcher still pointing at a path neo-tree never released after a
 move/delete. filetree.nvim's `handle_guard` feature surfaces this via
 `:Filetree handles` and its healthcheck line.
+
+`clear()` forgets every tracked watcher **without** closing the underlying
+handles — for tests that need to reset the registry between cases, not for
+runtime use (it would leak the OS handles `release` exists to close).
 
 Neo-tree-specific by design (it patches a neo-tree internal), hence its home
 under `lib.nvim.neotree`, alongside `node`.

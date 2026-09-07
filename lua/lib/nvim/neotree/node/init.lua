@@ -138,4 +138,5 @@ function M.get_line_number(state, node_id)
   return nil
 end
 
+---@type Lib.Neotree.Node
 return M
