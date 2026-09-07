@@ -85,4 +85,5 @@ function M.outputs()
   return { "buffer", "clipboard", "echo", "file:", "table" }
 end
 
+---@type Lib.Harvest
 return M

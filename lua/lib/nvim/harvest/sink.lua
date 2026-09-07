@@ -134,4 +134,5 @@ function M.select(items, opts, on_choose)
   end)
 end
 
+---@type Lib.Harvest.Sink
 return M

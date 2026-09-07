@@ -101,6 +101,26 @@ M.run = log.wrap(M.run, "run")
 
 `log.flush()` / `log.snapshot()` / `log.clear()` operate on the ring buffer.
 
+## Counters and extra sinks
+
+```lua
+log.count("cache_miss")     -- increment and return a named tally (integer)
+log.counters()              -- table<string, integer>: snapshot of every tally
+
+log.add_sink(function(record)
+  -- route records somewhere this module doesn't know about: a status line,
+  -- a health check, a test harness. Errors inside are pcall-contained, so
+  -- one bad sink cannot break logging for the rest.
+end)
+```
+
+`count`/`counters` are for something that happens too often to log on every
+occurrence (a cache miss, a retry) — bump a tally and read the total once,
+rather than writing a ring/notify/file record per event.
+
+`require("lib.nvim.logger").loggers()` returns every live logger instance
+(for `:checkhealth`-style inspectors).
+
 ## File sink
 
 Appends JSONL (one JSON object per line). Default:
