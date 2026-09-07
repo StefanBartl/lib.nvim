@@ -34,7 +34,8 @@ buf_win_tab/
 │  ├─ format_buffers_report() -> string
 │  ├─ only_nonfile_listed_buffers() -> boolean
 │  ├─ collect_all_state() -> table
-│  └─ show_aggregated_state(silent?: boolean) -> string|nil
+│  ├─ show_aggregated_state(silent?: boolean) -> string|nil
+│  └─ collect_win_report(winid?: integer) -> { textual: string[], raw: table }
 │
 └─ tabs
    ├─ list_tabs() -> TabInfo[]
@@ -66,18 +67,19 @@ buf_win_tab/
 
 ## lib.nvim.buf_win_tab.windows_utils
 
-| Name                              | Signature                        | Description                                                            |                                                        |
-| --------------------------------- | -------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------ |
-| `count_listed_buffers`            | `() -> integer`                  | Counts all listed buffers (platform-agnostic).                        |                                                        |
-| `list_all_buffers_info`           | `() -> table[]`                  | Returns metadata for all buffers, normalized.                         |                                                        |
-| `get_listed_buffer_ids`           | `() -> integer[]`                | Returns a list of all listed buffer IDs.                              |                                                        |
-| `get_buffers_grouped_by_filetype` | `() -> table<string, integer[]>` | Groups buffer IDs by filetype.                                        |                                                        |
-| `get_current_buffer_info`         | `() -> table`                    | Returns information about the current buffer.                         |                                                        |
-| `get_tabpage_buffers`             | `(tabnr?: integer) -> integer[]` | Returns buffer IDs for a tabpage (or the current tab when nil).       |                                                        |
-| `format_buffers_report`           | `() -> string`                   | Formats a compact report of all buffers.                             |                                                        |
-| `only_nonfile_listed_buffers`     | `() -> boolean`                  | True when every listed buffer is non-file (matches `buffer_utils.DEFAULT_EXCLUDE_FILETYPES` or has a non-empty `buftype`); vacuously true if nothing that qualifies as a real file buffer is listed. |
-| `collect_all_state`               | `() -> table`                    | Collects various state information about buffers, tabs, platform.     |                                                        |
-| `show_aggregated_state`           | `(silent?: boolean) -> string    | nil`                                                                   | Prints aggregated state, optionally only as a string.  |
+| Name                              | Signature                        | Description                                                            |
+| --------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `count_listed_buffers`            | `() -> integer`                  | Counts all listed buffers (platform-agnostic).                                                                                                                                                           |
+| `list_all_buffers_info`           | `() -> table[]`                  | Returns metadata for all buffers, normalized.                                                                                                                                                            |
+| `get_listed_buffer_ids`           | `() -> integer[]`                | Returns a list of all listed buffer IDs.                                                                                                                                                                 |
+| `get_buffers_grouped_by_filetype` | `() -> table<string, integer[]>` | Groups buffer IDs by filetype.                                                                                                                                                                           |
+| `get_current_buffer_info`         | `() -> table`                    | Returns information about the current buffer.                                                                                                                                                            |
+| `get_tabpage_buffers`             | `(tabnr?: integer) -> integer[]` | Returns buffer IDs for a tabpage (or the current tab when nil).                                                                                                                                          |
+| `format_buffers_report`           | `() -> string`                   | Formats a compact report of all buffers.                                                                                                                                                                 |
+| `only_nonfile_listed_buffers`     | `() -> boolean`                  | True when every listed buffer is non-file (matches `buffer_utils.DEFAULT_EXCLUDE_FILETYPES` or has a non-empty `buftype`); vacuously true if nothing that qualifies as a real file buffer is listed.   |
+| `collect_all_state`               | `() -> table`                    | Collects various state information about buffers, tabs, platform.                                                                                                                                       |
+| `show_aggregated_state`           | `(silent?: boolean) -> string\|nil` | `silent = true` returns the rendered text without printing it; otherwise `notify`s it (scheduled) and returns `nil`.                                                                                   |
+| `collect_win_report`              | `(winid?: integer) -> { textual: string[], raw: table }` | Detailed inspection report for a window (buffer info, cursor, options, variables, float config); safe for an invalid `winid` (returns an error message instead of raising).             |
 
 ---
 

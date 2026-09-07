@@ -25,7 +25,7 @@ Source-of-truth inventory (init/README/@types presence, `lua_files` = total
 |---|---|---|---|---|
 | async | Y | Y | 1 | |
 | bindings | Y | Y | 0 (nested have own) | huge (34 files) — ✅ audited 2026-09-07, see log |
-| buf_win_tab | - (leaf-only) | - | 4 (nested) | documented exception? verify |
+| buf_win_tab | - (leaf-only) | - | 4 (nested) | documented exception, verified — ✅ audited 2026-09-07, see log |
 | buffer | - (leaf-only) | - | 1 (nested) | documented exception, see modules.md:34 |
 | cache | Y | Y | 1 | |
 | contextmenu | Y | Y | 1 | |
@@ -490,6 +490,55 @@ overall quality of this subsystem's docs.
   priority-ordered lazy dispatcher), user commands (registry + the
   composer subcommand DSL), and a cross-cutting audit tool tying the first
   two together with four separate lints.
+
+### buf_win_tab (buffer_utils/windows_utils/tabs_utils + capture/get_option/move_buffer_to_tab/normal_buffer/resize_guarded/safe_adjacent_buffer/selection/word_under_cursor, 23 files) — ✅ reduced-depth pass, minor fixes
+
+Fifth and last of the five huge subsystems — also by far the smallest and
+cleanest one. Leaf-only namespace confirmed (no `buf_win_tab/init.lua`),
+same self-flagged fictional-aggregator pattern as `Lib.Modules`/`Lib.Fs`/
+`Lib.Cross` (`Lib.BufWinTab`/`Lib.BufWinTab.All` in `@types/init.lua`), left
+untouched per established precedent. `docs/API/ui-windows-buffers.md`
+(the parallel deep-doc file, per the lesson from `fs`/`cross`/`bindings`)
+was already fully accurate and complete for all 11 pieces of this
+subsystem — nothing to fix there, a good sign.
+
+- **`windows_utils.collect_win_report()`** (a real, substantial window-
+  inspection function, already correctly typed in `@types` and already
+  correctly listed in `docs/API/ui-windows-buffers.md`) was missing from
+  `Command-List.md` — the `README.md`-equivalent this subsystem's three
+  loose top-level files (`buffer_utils`/`windows_utils`/`tabs_utils`, no
+  `init.lua` of their own) use instead of individual READMEs. Added, plus
+  fixed an adjacent pre-existing broken Markdown table row (an unescaped
+  `|` inside `string|nil` had split one row into a phantom extra column).
+- **`modules.md`'s `buf_win_tab` row had zero links** ("buffer / window /
+  tab utilities", nothing else) despite all 8 leaf submodules plus
+  `Command-List.md` being fully documented — every other subsystem's row
+  links out. Rewrote it to link all 8.
+- **`resize_guarded/README.md`'s "File location" section pointed at a
+  stale, wrong path** (`lua/lib/buf_win_tab/resize_guarded.lua` — missing
+  the `nvim` segment, and not even the real file: the module is
+  `resize_guarded/init.lua`, not a flat file). Fixed.
+- Two lower-confidence sub-agent findings (`get_option`/`word_under_cursor`
+  each have an unused, exactly-matching `@types` alias sitting next to a
+  `return function(...)` that's already fully self-typed via its own
+  `---@param`/`---@return`) were **not** treated as bugs — same established
+  non-fix precedent as `resolve_style.lua`/`is_dir` from earlier batches:
+  LuaLS types the return identically either way, so linking the unused
+  alias would be pure tidiness with no functional benefit, not a
+  documentation or type-safety gap.
+- Everything else (`capture`, `move_buffer_to_tab` — singled out by the
+  sub-agent as "the one module that does the `---@type` linkage right",
+  `normal_buffer`, `safe_adjacent_buffer`, `selection`, plus the two
+  top-level `buffer_utils`/`tabs_utils` files I checked directly):
+  README/`@types`/code all agree exactly.
+- Feature idea: none obviously missing — small, focused, single-purpose
+  leaf modules throughout, each solving exactly one buffer/window/tab
+  primitive.
+
+**All five huge subsystems (`ui`, `fs`, `cross`, `bindings`, `buf_win_tab`)
+are now audited.** Remaining: the `lib.lua.*` namespace (9 modules, not yet
+inventoried) and the glue layer (`lib/config`, `lib/strategies/*`,
+top-level `lib/@types/*`).
 
 ### buffer (+ buffer.context) — ✅ no issues
 
