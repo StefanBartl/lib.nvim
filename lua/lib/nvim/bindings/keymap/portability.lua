@@ -41,16 +41,7 @@
 
 local M = {}
 
---- How reliably a key reaches Neovim.
----
----  - `portable` -- a plain byte or a terminfo/xterm sequence. Arrives
----    everywhere; nothing to think about.
----  - `common` -- arrives in nearly every terminal, but through a mechanism
----    with a known off switch (Alt as an ESC prefix, Ctrl+Space as NUL). Fine
----    as the everyday key, not fine as the *only* key.
----  - `fragile` -- needs an extended encoding ("CSI u"/modifyOtherKeys) or a
----    GUI. On a terminal without it, the key silently never arrives.
----@alias Lib.Keymap.Portability.Tier "portable"|"common"|"fragile"
+-- Tier alias: see @types/portability.lua (Lib.Keymap.Portability.Tier).
 
 ---@internal
 --- Notation letter -> modifier. `M` and `A` are the same modifier; `T`
@@ -266,4 +257,5 @@ function M.is_portable(lhs)
   return M.classify(lhs) == "portable"
 end
 
+---@type Lib.Keymap.Portability
 return M

@@ -18,6 +18,10 @@ Standardized wrapper around `nvim_create_user_command`/
 ```
 M.create(name: string, callback: string|fun(args:Lib.UserCommand.Args), opts: LibUserCommandOpts|nil)
   -- opts.buffer (true=current buf, or bufnr) routes to nvim_buf_create_user_command; stripped before the native call
+M.registered(filter?: { name?: string, buffer?: integer|boolean }): Lib.UserCommand.Record[]  -- newest last
+M.delete(name: string, bufnr?: integer): boolean deleted   -- native delete AND forgets the record
+M.docs   -- lazily-required proxy onto lib.nvim.bindings.usercmd.docs: write/check/create_usercmd
+         -- (see README, in usercmd/README.md — bindings/usercmd/commands.md, :LibUsercmdDocs[Check])
 M.composer   -- lazy proxy table onto lib.nvim.bindings.usercmd.composer (avoids a require cycle)
 ```
 
@@ -109,6 +113,22 @@ M.create(event: string|string[], callback: fun(args), opts?: LibAutocmdOpts): in
   -- callback pcall-wrapped, notify-on-error tagged [lib.nvim.bindings.autocmd]; opts.buffer/opts.pattern mutually exclusive
 M.norm_events(ev: any, fallback: string[]): string[]
 M.norm_pattern(pat: any): string|string[]                -- nil -> "*"
+M.registered(filter?: { event?: string, group?: string }): Lib.Autocmd.Record[]  -- newest last
+M.by_event(): table<string, Lib.Autocmd.Record[]>        -- the same, grouped by event
+M.delete(id: integer): boolean deleted                    -- native delete AND forgets the record
+M.docs   -- lazily-required proxy onto lib.nvim.bindings.autocmd.docs (see below)
+```
+
+### `lib.nvim.bindings.autocmd.docs` (see README, in `autocmd/README.md`)
+Generated `bindings/autocmd/` markdown, one file per event family, read
+back from `M.registered()` above — not a hand-kept list.
+
+```
+M.write(opts?: Lib.Autocmd.Docs.Opts): (ok: boolean, err: string|nil, written: string[])
+M.check(opts?: Lib.Autocmd.Docs.Opts): (up_to_date: boolean, stale: string[])  -- compares without writing, for CI
+M.write_all(opts?: Lib.Autocmd.Docs.AllOpts): Lib.Autocmd.Docs.AllResult[]
+  -- writes every repository that registered something this session, not just the caller's own
+M.create_usercmd(name?: string)   -- registers :LibAutocmdDocs and :LibAutocmdDocsCheck
 ```
 
 ### `lib.nvim.bindings.autocmd.augroup` (no separate README)
@@ -159,6 +179,56 @@ string `desc` positional overrides `opts.desc`. `opts.buffer = true`
 normalizes to `0`. On validation failure, `vim.keymap.set` is **not**
 called — reports every failing field plus the real caller's call site
 instead.
+
+### `lib.nvim.bindings.keymap.portability` (see README)
+Static reachability classifier over an `lhs` notation string — no terminal
+is queried or probed; classifying the notation itself is the only part of
+"can this key reach Neovim" that has a decidable answer.
+
+```
+M.classify(lhs: string|nil): (tier: "portable"|"common"|"fragile", reason: string)
+  -- reason is "" for a portable key
+M.is_portable(lhs: string|nil): boolean   -- classify(lhs) == "portable"
+```
+
+### `lib.nvim.bindings.keymap.modifier` (see README)
+Modifier keys that run *another* mapping and capture its result — `` \[a ``
+copies what `[a` produced, `` \\[a `` also inserts it. Experimental: binds
+nothing until `setup{ experimental = true }`.
+
+```
+M.setup(opts?: { experimental?: boolean, copy?: string, insert?: string }): boolean
+  -- off unless experimental; copy/insert default to \ and \\
+M.teardown(): nil                          -- unbind whatever is bound
+M.keys(): { copy: string|nil, insert: string|nil }
+M.declare(mode: string, lhs: string, fn: fun(): string|nil)   -- tier 1: pure result producer
+M.undeclare(mode: string, lhs: string)
+```
+
+### `lib.nvim.bindings.audit` (see README, in `bindings/README.md`)
+Keymap actions vs. command routes registered in the current session, plus a
+handful of lints — deliberately reads what is already loaded rather than
+spawning an isolated session to inspect a registry.
+
+```
+M.keymap_actions(root?: string): Lib.Bindings.Audit.KeyAction[]
+M.command_routes(root?: string): Lib.Bindings.Audit.CmdRoute[]
+M.gaps(root?: string): Lib.Bindings.Audit.KeyAction[]         -- actions with no obvious command counterpart
+M.key_risks(root?: string): Lib.Bindings.Audit.KeyRisk[]      -- actions with no portable key, fragile first
+M.naming_candidates(root?: string): (Lib.Bindings.Audit.CmdRoute|{vague: boolean})[]
+  -- routes whose last path segment is a bare vague word (deep/full/check/...)
+M.prefix_ambiguities(): Lib.Bindings.Audit.PrefixAmbiguity[]  -- live command names that are a prefix of another
+M.checklist_lines(root?: string): string[]
+  -- Markdown manual-verification checklist over every action/route; never invokes anything
+M.lines/.gap_lines/.key_risk_lines/.naming_candidate_lines/.prefix_ambiguity_lines(...): string[]
+  -- the above, as printable lines
+M.create_usercmd(name?: string)
+  -- registers :LibBindingsAudit[Gaps|Keys|Naming|Checklist] [path] and :LibBindingsAuditPrefixes (no path)
+```
+Every function taking `root` scopes to one repository; `nil` means the
+whole session. `prefix_ambiguities`/`prefix_ambiguity_lines` take no `root`
+— a live command name collides (or doesn't) independent of which repo
+registered it.
 
 ---
 

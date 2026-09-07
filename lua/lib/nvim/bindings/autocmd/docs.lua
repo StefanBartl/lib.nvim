@@ -330,15 +330,8 @@ local function defaults(opts)
   return opts
 end
 
---- Every field is optional; see `defaults()` for what each is inferred from.
---- Pass one only where the guess would be wrong -- a repo with several plugins
---- under `lua/`, say, or a note recording which configuration was used.
----@class Lib.Autocmd.Docs.Opts
----@field dir? string         # Target directory. Default: `<root>/lua/<plugin>/bindings/autocmd`.
----@field filter? fun(record: Lib.Autocmd.Record): boolean  # Default: every record created from a file inside `root`.
----@field root? string        # Repo root. Default: derived from the caller's own source path, else cwd.
----@field note? string        # An extra paragraph for the header, e.g. which config produced this.
----@field unregistered? integer # Direct `nvim_create_autocmd` call sites in the repo; rendered as a warning. Counted automatically when `root` is known.
+-- Lib.Autocmd.Docs.Opts: see @types/docs.lua. Every field is optional; see
+-- `defaults()` below for what each is inferred from.
 
 ---@internal
 --- The rendered files as `{ [filename] = content }`, without touching disk.
@@ -527,19 +520,7 @@ local function count_unregistered(root)
   return n
 end
 
----@class Lib.Autocmd.Docs.AllOpts
----@field under? string   # Only repositories inside this directory. Without it, every repo that registered anything -- including plugins you did not write.
----@field note? string    # Passed through to every repo's header.
----@field dry_run? boolean # Report what would be written, write nothing.
-
----@class Lib.Autocmd.Docs.AllResult
----@field root string
----@field plugin string
----@field dir string
----@field written string[]
----@field records integer
----@field unregistered integer
----@field err string|nil
+-- Lib.Autocmd.Docs.AllOpts / .AllResult: see @types/docs.lua.
 
 ---Write `bindings/autocmd` for **every** repository that registered something
 ---in this session.
@@ -652,4 +633,5 @@ function M.create_usercmd(name)
   end, { desc = "Check bindings/autocmd against what is registered" })
 end
 
+---@type Lib.Autocmd.Docs
 return M

@@ -22,6 +22,17 @@ audit.command_routes()      -- every registered command route (composer verbs
 audit.gaps()                -- keymap actions with no obvious command
                              -- counterpart -- a candidate list, not a verdict
 audit.lines() / audit.gap_lines()   -- the same, as printable lines
+audit.naming_candidates()   -- command routes whose last path segment is a bare
+                             -- vague word (deep/full/check/all/...) -- candidates
+                             -- for a naming review, not a verdict
+audit.naming_candidate_lines()      -- the same, flagged rows only, as printable lines
+audit.prefix_ambiguities()  -- live command names that are a strict prefix of
+                             -- another (<Tab>/abbreviation collisions); typing
+                             -- the short name in full still resolves correctly
+audit.prefix_ambiguity_lines()      -- the same, as printable lines
+audit.checklist_lines()     -- a Markdown checklist over every registered keymap
+                             -- action and command route, for a manual runtime
+                             -- pass -- generated, never invokes anything itself
 ```
 
 Every function takes an optional `root` (a directory path) to scope the
@@ -33,10 +44,13 @@ a verb `Handle` carries no source location to filter on, and in practice a
 session holds few of them, each named after the plugin that owns it.
 
 `audit.create_usercmd()` registers `:LibBindingsAudit [path]`,
-`:LibBindingsAuditGaps [path]` and `:LibBindingsAuditKeys [path]`. Put that
+`:LibBindingsAuditGaps [path]`, `:LibBindingsAuditKeys [path]`,
+`:LibBindingsAuditNaming [path]`, `:LibBindingsAuditChecklist [path]`, and
+`:LibBindingsAuditPrefixes` (no `[path]` — prefix ambiguity is a property
+of the whole live command namespace, not of one repo's routes). Put that
 one line in **your own config**, not in a plugin — the same reasoning
-`usercmd/docs.lua`'s own `create_usercmd()` gives. `path` is optional;
-omitted, all three commands report on the whole session.
+`usercmd/docs.lua`'s own `create_usercmd()` gives. `path` is optional where
+accepted; omitted, those commands report on the whole session.
 
 ```lua
 require("lib.nvim.bindings.audit").create_usercmd()
