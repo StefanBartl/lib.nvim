@@ -98,6 +98,7 @@ kit.popup({ type = "prompt", question = "Delete?", answer_type = "confirm", on_a
 | `confirm` | button dialog — horizontal buttons, `h`/`l`/arrows move, `<CR>` confirm, `<Esc>` cancel, left click confirms a button directly |
 | `menu`    | cursor-anchored action list — `{ label, action }` items; picking runs the action |
 | `progress`| passthrough to [`lib.nvim.progress`](../../progress/README.md) (`:update`/`:finish`/`:cancel`) |
+| `compare` | pick two items out of one picker, then view them side by side — see [Compare](#compare-pick-two-view-side-by-side) below |
 
 ## Layout engine (Phase 3, partial)
 
@@ -141,6 +142,43 @@ local p = kit.picker({
 
 `kit.picker({ prompt = "plain" })` falls back to a bare
 `kit.layout.template("picker")` whose prompt slot you wire yourself.
+
+### Compare (pick two, view side by side)
+
+`kit.compare(opts)` picks two items out of one picker, then shows both full
+height, side by side — motivated by images.nvim's "browse, pick two, view
+next to each other", but not image-specific: `render(item, surface)` is the
+only contract, so a text diff or anything else that can paint into a
+`kit.surface` works the same way.
+
+```lua
+local handle = kit.compare({
+  items = candidates,
+  render = function(item, surface)     -- called for the live preview AND
+    surface:set_lines(read_lines(item)) -- both COMPARE panes
+  end,
+  on_compare = function(a, b)          -- fires once, before either COMPARE
+    -- both picks known here, before either render() call for COMPARE --
+    -- e.g. scale two images relative to each other instead of each to its
+    -- own pane
+  end,
+  on_close = function(a, b) end,       -- b is nil on an aborted pick
+})
+```
+
+Three states, entered in order: **SEARCH** (prompt + results + a live
+preview that follows the selection) → **MARKED** (`mark_key`, default
+`<M-c>`, or `<CR>`, freezes the current item; the live preview keeps
+following the rest of the search) → **COMPARE** (`<CR>` again: both picks
+full-height, side by side; `q`/`<Esc>` on either pane closes the whole
+thing). `<CR>` does double duty on purpose — it reads as "confirm whichever
+pick this is" rather than needing a second dedicated key.
+
+`kit.chooser` is the low-level native chooser `kit.select` (and `compare`'s
+own SEARCH state) delegates to — reach for it directly only when a caller
+needs `current_item()`/`current_index()`/`move()` outside of `on_select`,
+e.g. extra keymaps that read the highlighted item without submitting or
+closing. One active instance at a time, shared with `kit.select`.
 
 ### Button-confirm
 

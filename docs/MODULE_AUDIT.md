@@ -60,7 +60,7 @@ Source-of-truth inventory (init/README/@types presence, `lua_files` = total
 | terminal | Y | Y | 1 | |
 | token | Y | Y | 1 | |
 | treesitter | - (leaf-only) | - | 0 | |
-| ui | - (leaf-only) | - | 1 (nested) | huge (29 files) |
+| ui | - (leaf-only) | - | 6 (nested) | huge (29 files) — ✅ audited 2026-09-07, see log |
 | window | Y | Y | 1 | |
 
 Plus `lib.lua.*` namespace (tables, strings, functions, time, json, memo,
@@ -246,6 +246,50 @@ These are the "leaf-only" namespaces (no top-level `init.lua`, per
   security section describing what they do. Added a one-line pointer.
 - markdown.table, treesitter.guard, treesitter.parser_policy: no issues —
   every exported function accounted for in both README and `@types`.
+
+### ui (kit, list, statusline, hl, nerd_font — 29 files) — ✅ reduced-depth pass, 2 fixes
+
+First of the five huge subsystems. Depth reduced per the handover's own
+lever: top-level README/`@types`/`modules.md` wiring checked for every leaf,
+full function-by-function README diff only where something looked off
+(not for every one of `kit`'s 20 files individually).
+
+- **`nerd_font` — same "vergessenes Submodul" shape as `image_preview`/
+  `notify.resolve_log_level`/`window.find_by_filetype`**: a real, complete,
+  actively-used (by `bindings.keymap.which_key`) 4-function module
+  (`available`/`glyph`/`chars`/`sep`) with **zero** of the three doc layers
+  — no README, no `@types` (its `return M` had no `---@type` either), and
+  not in `modules.md`'s `ui` row at all. Wrote the README, added `@types/`,
+  added the `---@type` annotation, wired into `modules.md`.
+- **`kit.compare`** — a whole, fully-implemented feature (pick two items
+  from one picker, view side by side; three-state SEARCH→MARKED→COMPARE
+  flow, its own `CompareOpts`/`CompareHandle` types, dispatchable via
+  `kit.popup({type="compare"})`) had **zero** README coverage — not in the
+  components table, no dedicated section, unlike every sibling component
+  (`note`/`viewer`/`toast`/.../`menu`). `kit.chooser` (the low-level escape
+  hatch `select`/`compare` share) was in the same spot — self-documented
+  only in its own doc comment. Added a components-table row + a full
+  "Compare" section (mirroring the existing "Interactive picker"/
+  "Button-confirm" sections) covering both.
+- **`list/init.lua`**: same missing-`---@type Lib.UI.List`-on-`return M`
+  bug as the ~6 other modules this pattern has turned up in this audit,
+  despite `Lib.UI.List` already being fully and correctly defined. Fixed.
+- **`modules.md`'s `ui` row**: `hl` was described only as generic prose
+  ("highlight helpers"), not linked, despite having a complete README —
+  now linked like every sibling.
+- **`ui/@types/init.lua`'s `Lib.UI` "phantom aggregate" class**: already
+  self-flagged by a prior CDX pass as incomplete/possibly-stale (`ui/` has
+  no `init.lua`, so nothing actually returns this shape) — same pattern as
+  `core`'s `Lib.Modules` finding and `buffer/@types`'s own note, all three
+  explicitly "pending an external-consumer check" before deciding
+  delete-vs-complete. Left untouched, same reasoning as those two: adding
+  the two fields it's missing (`statusline`, `nerd_font`) would be
+  premature work on a class that might get deleted outright.
+- `list`, `statusline`, `hl`: README/`@types` otherwise complete and
+  accurate (spot-checked function-by-function, not just presence).
+- Feature idea: none obviously missing in any of the five leaf modules —
+  `kit` in particular already covers the space thoroughly (12 component
+  types, a layout engine, sync bridge for blocking call sites).
 
 ### buffer (+ buffer.context) — ✅ no issues
 

@@ -136,4 +136,5 @@ function M.loc(items, title, opts)
   return M.set(o)
 end
 
+---@type Lib.UI.List
 return M
