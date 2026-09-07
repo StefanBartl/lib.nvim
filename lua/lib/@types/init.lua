@@ -8,6 +8,11 @@
 --- CDX: drifted from the real surface (`notifier Lib.Notify+` — stray `+`, and the
 --- CDX: aggregate key is `notify`). Likely superseded by `Lib` in
 --- CDX: @types/all_functions.lua; left as-is pending an external-consumer check.
+--- CDX: `nvim Lib.Nvim` was the one field of this drift LuaLS actually flags
+--- CDX: (undefined-doc-name) -- there is no bare `Lib.Nvim` class, only the
+--- CDX: namespaced `Lib.Nvim.Core`/`.Health`/`.Json`. Narrowed to `table` below
+--- CDX: rather than guessing which one was meant; same "pending" status as the
+--- CDX: rest of this class.
 ---@class Lib.Modules
 ---@field autocmd Lib.AutoCmd
 ---@field bufwintab Lib.BufWinTab
@@ -25,7 +30,7 @@
 ---@field memo Lib.Memo
 ---@field normalize Lib.Normalize
 ---@field notifier Lib.Notify+
----@field nvim Lib.Nvim
+---@field nvim table
 ---@field progress Lib.Progress
 ---@field require Lib.Require
 ---@field strings Lib.Strings
