@@ -81,13 +81,23 @@ end
 ---through to it, because it writes its own richer entry -- without that, every
 ---registered action would be listed twice.
 ---
----Replaces a same-site record instead of accumulating one: the same call site
----firing twice for the same buffer+lhs+mode is one keymap set twice, not two
----keymaps. A `FileType` autocmd firing again for an already-typed buffer is
----the common real case -- Neovim re-fires it even when the value does not
----change -- and left unchecked it grew the direct list on every re-fire, with
----`conflicts()` then reporting a same-site "conflict" against itself. Same
----search-then-replace shape `bindings.usercmd`'s own records already use.
+---Replaces a same-site record instead of accumulating one: the same call
+---site firing twice for the same buffer+lhs+mode is one keymap set twice,
+---not two keymaps. A `FileType` autocmd firing again for an already-typed
+---buffer is the common real case -- Neovim re-fires it even when the value
+---does not change -- and left unchecked it grew the direct list on every
+---re-fire, with `conflicts()` then reporting a same-site "conflict" against
+---itself.
+---
+---`src` is part of the match on purpose, not just buffer+lhs+mode: two
+---*different* call sites binding the same key is exactly the collision
+---`conflicts()` exists to report (`keymap_registry_spec.lua`'s "a collision
+---between two plain set() keymaps is reported" -- caught this once already,
+---as a real regression: the first cut of this fix matched on
+---buffer+lhs+mode alone and silently swallowed that case whenever both
+---calls happened to land in the same `plugin` bucket). Only a *repeat* call
+---from the identical source line is the idempotent-re-registration case
+---this function exists to collapse.
 ---@param modes string|string[]
 ---@param lhs string
 ---@param rhs string|function
@@ -104,6 +114,7 @@ function M.add(modes, lhs, rhs, opts)
       existing.lhs == lhs
       and mode_key(existing.mode) == key_mode
       and existing.buffer == key_buffer
+      and existing.src == src
     then
       table.remove(direct[plugin], i)
       break
