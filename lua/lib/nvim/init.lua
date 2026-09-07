@@ -6,8 +6,12 @@
 ---
 ---   local Nvim = require("lib.nvim")
 ---   Nvim.notify   -- == require("lib.nvim.notify")
----   Nvim.map      -- == require("lib.nvim.bindings.keymap")
 ---   Nvim.core     -- == require("lib.nvim.core")  (has_exec, simple_echo, …)
+---
+--- Note: this aggregator mirrors directory structure 1:1 (`Nvim.x` ==
+--- `require("lib.nvim.x")`), so it has no flattened shortcuts. `Nvim.map` does
+--- NOT resolve -- for the `map`/`usercmd`/`autocmd` short names, go through
+--- the flattened top-level aggregator instead: `require("lib").map`.
 ---
 --- Requiring a submodule directly still works, and is friendlier to
 --- tree-shaking:
