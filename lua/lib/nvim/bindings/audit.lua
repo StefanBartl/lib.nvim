@@ -414,6 +414,70 @@ function M.lines(root)
   return out
 end
 
+---@internal
+--- Every user-command name Neovim currently knows, builtins excluded.
+---@return string[]  sorted
+local function live_command_names()
+  local names = {}
+  for name in pairs(vim.api.nvim_get_commands({ builtin = false })) do
+    names[#names + 1] = name
+  end
+  table.sort(names)
+  return names
+end
+
+---@class Lib.Bindings.Audit.PrefixAmbiguity
+---@field short string
+---@field longer string[]
+
+---Command names that are a strict prefix of another registered name — the
+---`<Tab>`/abbreviation collision a plugin's own docs cannot see, because it
+---only knows its own names.
+---
+---Exact-name duplicates cannot happen here: `nvim_create_user_command`
+---errors on a second registration of a name that already exists (unless the
+---first is deleted first), so the only thing left to find between two
+---*distinct* live names is one swallowing the other's abbreviation — typing
+---the short one in full still resolves correctly, `<Tab>` after it does not.
+---@return Lib.Bindings.Audit.PrefixAmbiguity[]  sorted by `short`
+function M.prefix_ambiguities()
+  local names = live_command_names()
+  local out = {}
+  for i, short in ipairs(names) do
+    local longer = {}
+    for j, other in ipairs(names) do
+      if i ~= j and #other > #short and other:sub(1, #short) == short then
+        longer[#longer + 1] = other
+      end
+    end
+    if #longer > 0 then
+      out[#out + 1] = { short = short, longer = longer }
+    end
+  end
+  return out
+end
+
+---`prefix_ambiguities()` as printable lines.
+---@return string[]
+function M.prefix_ambiguity_lines()
+  local rows = M.prefix_ambiguities()
+  if #rows == 0 then
+    return { "no prefix ambiguities -- every command name resolves to itself uniquely." }
+  end
+  local out = { ("%d command name(s) that are a prefix of another:"):format(#rows) }
+  for _, r in ipairs(rows) do
+    local shown = {}
+    for _, n in ipairs(r.longer) do
+      shown[#shown + 1] = ":" .. n
+    end
+    out[#out + 1] = ("  :%-20s <Tab> also offers: %s"):format(r.short, table.concat(shown, ", "))
+  end
+  out[#out + 1] = ""
+  out[#out + 1] =
+    "typing the short name in full still resolves to it -- only abbreviation/<Tab> is affected."
+  return out
+end
+
 ---Gaps as printable lines.
 ---@param root string|nil
 ---@return string[]
@@ -472,6 +536,15 @@ function M.create_usercmd(name)
     nargs = "?",
     complete = "dir",
     desc = "Keymap actions with no obvious command counterpart (optional: scope to a repo path)",
+  })
+
+  -- No `[path]` argument, unlike the three above: prefix ambiguity is a
+  -- property of the whole live command namespace, not of one repo's routes
+  -- — scoping it to a directory would not change which names collide.
+  usercmd.create(base .. "Prefixes", function()
+    show(" " .. base .. "Prefixes ", M.prefix_ambiguity_lines())
+  end, {
+    desc = "Command names that are a strict prefix of another live command (<Tab>/abbreviation collisions)",
   })
 end
 
