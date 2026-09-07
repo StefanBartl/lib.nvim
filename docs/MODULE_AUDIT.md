@@ -91,6 +91,44 @@ pure Lua — no `vim.*`), inventoried 2026-09-07:
 fixes made, feature ideas raised. Filled in as the sweep proceeds; this
 section is the actual record, the table above is just the starting map.)
 
+### Glue layer (`lib.config`, `lib.strategies.*`, `lib.@types.*`) — 🔎 partial (session ended low on budget)
+
+- `lib.config` (setup/get/strategy_module), `lib.strategies.control`
+  (register/active/keys/reset_cache), `lib.strategies.telemetry_wrap`
+  (setup/teardown): none had a module-surface class despite complete real
+  functions — same mechanical pattern as the rest of this audit. Added and
+  wired all three, `lib.nvim@e77c981`.
+- `lib.strategies.{eager,lazy,metatable}` (the three actual aggregator
+  strategies): already had correct `---@type Lib`/`Lib.Strategy.Lazy` on
+  their `return`. No fix needed.
+- `lib/health.lua`: single `M.check()`, the native Neovim `:checkhealth`
+  contract — not a library-API surface, doesn't need a module class.
+- `lib/@types/misc.lua` (21 lines, shared cross-cutting types: `OsShell`,
+  `OsRunResult`, `Lib.Cross.Platform.PlatformName`): spot-checked, no
+  issues.
+- **NOT done, flagged for next session**: a full field-by-field cross-check
+  of `lib/@types/all_functions.lua`'s `Lib` class (129 lines, ~100+
+  fields, "KEEP IN SYNC with... lib/strategies/metatable.lua") against
+  what `eager.lua`/`lazy.lua`/`metatable.lua` actually assign — the same
+  method that found the `Lib.Strings`/`Lib.Tables` bug (`grep -oE
+  "^LIB\.[a-zA-Z_0-9]+" lua/lib/strategies/eager.lua` vs. the class's
+  `@field` list). Not attempted this session due to a hard budget cutoff
+  (~6% usage remaining) — this file is NOT self-flagged as stale like
+  `Lib.Modules` is, so there's no known reason to suspect it's wrong, but
+  it also was never verified the way strings/tables were.
+- `lib/@types/init.lua`'s `Lib.Modules` class: already self-flagged via
+  CDX comment as stale/unreferenced, "pending an external-consumer check"
+  — left untouched, consistent with every other self-flagged debt item
+  found throughout this whole audit (same reasoning as `Lib.Fs`/
+  `Lib.Cross.ALL`/`buf_win_tab`'s `Lib.BufWinTab`).
+- `lib/@types/luassert.lua` (85 lines): not reviewed this session (test-
+  framework types, lower priority, budget ran out first).
+
+**If resuming**: this is the only unfinished item in the entire
+`lib.nvim` module audit. Everything else (20 small/medium modules, all
+five huge subsystems, the complete `lib.lua.*` namespace, and the rest of
+this glue layer) is done.
+
 ### core — ✅
 
 - Found & fixed: [`lua/lib/nvim/init.lua`](../lua/lib/nvim/init.lua) docstring
