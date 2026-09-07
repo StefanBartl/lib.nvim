@@ -1,6 +1,12 @@
 ---@module 'lib.strategies.eager'
 --- Aggregator module that re-exports single-function utilities under one namespace.
 
+-- The common surface is the `Lib` class (@types/all_functions.lua); it is what
+-- `---@type Lib` below checks against and what every strategy guarantees. This
+-- strategy also keeps two eager-only extras that predate that class and are not
+-- worth a breaking removal: `augroup` / `augroup_create_clear` (also on the
+-- `lazy` strategy, declared on `Lib.Strategy.Lazy`) and a raw `json` module
+-- handle. Consume those only via a direct `require` if you need them portably.
 local LIB = {}
 
 -- === NVIM ===
@@ -44,6 +50,7 @@ LIB.find_upward_dir = require("lib.nvim.fs.find_upward_dir")
 LIB.find_root = require("lib.nvim.fs.find_root")
 LIB.mkdirp = require("lib.nvim.fs.mkdirp")
 LIB.path_shorten = require("lib.nvim.fs.path_shorten")
+LIB.globbable = require("lib.nvim.fs.globbable")
 LIB.write_to_file = require("lib.nvim.fs.write.to_file")
 LIB.write_append = require("lib.nvim.fs.write.append")
 
@@ -123,8 +130,8 @@ LIB.kit = require("lib.nvim.ui.kit")
 
 -- === AUTOCMD/KEYMAP ===
 LIB.autocmd = require("lib.nvim.bindings.autocmd")
-LIB.autogroup = require("lib.nvim.bindings.autocmd.augroup")
-LIB.autogroup_create_clear = require("lib.nvim.bindings.autocmd.augroup").create.clear
+LIB.augroup = require("lib.nvim.bindings.autocmd.augroup")
+LIB.augroup_create_clear = require("lib.nvim.bindings.autocmd.augroup").create.clear
 LIB.map = require("lib.nvim.bindings.keymap")
 LIB.usercmd = require("lib.nvim.bindings.usercmd")
 LIB.composer = require("lib.nvim.bindings.usercmd.composer")
@@ -148,6 +155,8 @@ LIB.json.is_array_like = require("lib.lua.json.decode.to_string_array").is_array
 LIB.json.ensure_string_array = require("lib.lua.json.decode.to_string_array").ensure_string_array
 LIB.json.table_to_string_array =
   require("lib.lua.json.decode.to_string_array").table_to_string_array
+-- Flat keys that make up the common `Lib` surface (see @types/all_functions.lua).
+LIB.json_decode_to_string_array = require("lib.lua.json.decode.to_string_array").ensure_string_array
 LIB.json_encode = require("lib.lua.json.encode").encode
 
 -- === MEMO ===
