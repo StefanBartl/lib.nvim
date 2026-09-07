@@ -61,11 +61,33 @@ local function plugin_of(src)
   return plugin or "(unknown)"
 end
 
+---@internal
+--- Canonical string for a `mode`, comparable even when it is a table (order
+--- should not matter for "is this the same registration").
+---@param modes string|string[]
+---@return string
+local function mode_key(modes)
+  if type(modes) == "table" then
+    local sorted = vim.deepcopy(modes)
+    table.sort(sorted)
+    return table.concat(sorted, ",")
+  end
+  return modes
+end
+
 ---Record one keymap created by a plain `set()`.
 ---
 ---Called from the `set` wrapper. `registry.register()` passes `record = false`
 ---through to it, because it writes its own richer entry -- without that, every
 ---registered action would be listed twice.
+---
+---Replaces a same-site record instead of accumulating one: the same call site
+---firing twice for the same buffer+lhs+mode is one keymap set twice, not two
+---keymaps. A `FileType` autocmd firing again for an already-typed buffer is
+---the common real case -- Neovim re-fires it even when the value does not
+---change -- and left unchecked it grew the direct list on every re-fire, with
+---`conflicts()` then reporting a same-site "conflict" against itself. Same
+---search-then-replace shape `bindings.usercmd`'s own records already use.
 ---@param modes string|string[]
 ---@param lhs string
 ---@param rhs string|function
@@ -75,6 +97,19 @@ function M.add(modes, lhs, rhs, opts)
   local src = caller_site()
   local plugin = plugin_of(src)
   direct[plugin] = direct[plugin] or {}
+
+  local key_mode, key_buffer = mode_key(modes), opts.buffer
+  for i, existing in ipairs(direct[plugin]) do
+    if
+      existing.lhs == lhs
+      and mode_key(existing.mode) == key_mode
+      and existing.buffer == key_buffer
+    then
+      table.remove(direct[plugin], i)
+      break
+    end
+  end
+
   table.insert(direct[plugin], {
     plugin = plugin,
     -- A direct `set()` has no action name -- that concept belongs to
