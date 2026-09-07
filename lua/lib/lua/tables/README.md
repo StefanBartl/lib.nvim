@@ -122,3 +122,24 @@ tables.snapshot_shallow(t)
 for i, v in tables.safe_ipairs(list) do ... end  -- snapshots #list up front,
                                                    -- safe against mutation during iteration
 ```
+
+## Merge ([`with.lua`](with.lua))
+
+```lua
+tables.with(base, extra)   -- merges extra into base; base or a copy of extra if either is nil
+```
+
+`base` is mutated (and returned) when both arguments are tables; a `nil`
+`base` returns a shallow copy of `extra` instead, so the caller never gets
+back the same table it passed as a default.
+
+## Also see
+
+`lib.lua.tables.functional` (`map`/`filter`/`reduce`/`find`/`any`/`all`/
+`flat_map`) and `lib.lua.tables.unique_table` (`unique`/`unique_by`/
+`is_unique`) are **not** part of the flat surface above — both would
+collide by name with the array-ops versions already on it (`functional`
+also differs in callback argument order: `fn(item, index)` instead of
+`fn(v, i, xs)`). Require them directly:
+`require("lib.lua.tables.functional")`,
+`require("lib.lua.tables.unique_table")`.

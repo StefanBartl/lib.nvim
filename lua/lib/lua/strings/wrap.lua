@@ -31,4 +31,5 @@ function M.center_text_lines(lines, width)
   return out
 end
 
+---@type Lib.Strings.Wrap
 return M

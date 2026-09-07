@@ -4,10 +4,7 @@
 
 local M = {}
 
----@class Lib.Strings.Location
----@field path string
----@field line integer|nil
----@field col integer|nil
+--- Lib.Strings.Location: see @types/init.lua.
 
 ---Parse a location out of `str`. Supported forms:
 ---  "path:line:col", "path:line", "path(line:col)", "path(line)", "path +line"
@@ -47,4 +44,5 @@ function M.parse_location(str)
   return nil
 end
 
+---@type Lib.Strings.Location.Mod
 return M

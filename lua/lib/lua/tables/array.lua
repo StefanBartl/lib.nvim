@@ -172,4 +172,5 @@ function M.sorted(xs, cmp)
   return out
 end
 
+---@type Lib.Tables.Array
 return M

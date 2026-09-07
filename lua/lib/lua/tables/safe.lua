@@ -101,4 +101,5 @@ function S.safe_ipairs(list)
   end
 end
 
+---@type Lib.Tables.Safe
 return S

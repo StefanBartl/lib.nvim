@@ -475,4 +475,5 @@ setmetatable(M, {
   end,
 })
 
+---@type Lib.Time.Diff
 return M

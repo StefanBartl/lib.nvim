@@ -94,4 +94,5 @@ function M.base64_decode(data)
   return table.concat(out)
 end
 
+---@type Lib.Strings.Encoding
 return M

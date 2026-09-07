@@ -345,4 +345,5 @@ function M.count_by(list, key)
   return out
 end
 
+---@type Lib.Tables.Core
 return M

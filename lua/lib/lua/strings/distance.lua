@@ -51,4 +51,5 @@ function M.similarity(a, b)
   return 1 - (M.levenshtein(a, b) / max_len)
 end
 
+---@type Lib.Strings.Distance
 return M

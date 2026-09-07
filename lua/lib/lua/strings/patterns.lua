@@ -74,4 +74,5 @@ function P.strip_ansi(s)
   )
 end
 
+---@type Lib.Strings.Patterns
 return P
