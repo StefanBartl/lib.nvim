@@ -38,6 +38,12 @@ local MIN_LINES = 4
 ---@field repos string[]                     # every distinct repo involved, sorted
 ---@field hits Lib.Dev.Duplicates.Hit[]
 
+--- `lib.nvim.dev.duplicates` module surface.
+---@class Lib.Dev.Duplicates
+---@field scan fun(root?: string): Lib.Dev.Duplicates.Group[]
+---@field lines fun(root?: string): string[]
+---@field create_usercmd fun(name?: string)
+
 ---@internal
 --- Immediate subdirectories of `root` that look like a plugin (have a
 --- `lua/` folder), excluding `lib.nvim` itself.
@@ -223,4 +229,5 @@ function M.create_usercmd(name)
   })
 end
 
+---@type Lib.Dev.Duplicates
 return M

@@ -119,6 +119,11 @@ multi-line enough to be worth sending cannot be expressed as a config value
 (a raw newline ends the option), and stdin is taken. Do not put a credential
 in a body through this module.
 
+`is_secret_header(name)` and `config_quote(value)` — the "which header goes
+via stdin" check and the config-file quoting rule — are exposed publicly so
+a caller building its own curl argv (rather than going through
+`fetch_*`/`download*`) can reuse this same logic instead of a second copy.
+
 ## `opts` fields (all tiers)
 
 | Field          | Sent as                              | Notes                                                    |

@@ -458,4 +458,5 @@ function M.download_blocking(url, dest_path, opts)
   return true, response, obj
 end
 
+---@type Lib.Net.Curl
 return M
