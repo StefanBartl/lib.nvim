@@ -76,4 +76,5 @@ function M.strategy_module()
   return STRATEGY_MODULES[M.options.strategy] or STRATEGY_MODULES.metatable
 end
 
+---@type Lib.Config
 return M
