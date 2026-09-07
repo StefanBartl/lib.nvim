@@ -91,7 +91,73 @@ pure Lua — no `vim.*`), inventoried 2026-09-07:
 fixes made, feature ideas raised. Filled in as the sweep proceeds; this
 section is the actual record, the table above is just the starting map.)
 
-### Glue layer (`lib.config`, `lib.strategies.*`, `lib.@types.*`) — 🔎 partial (session ended low on budget)
+### Glue layer (`lib.config`, `lib.strategies.*`, `lib.@types.*`) — ✅ complete (2026-09-07)
+
+**The `all_functions.lua` cross-check (the last open item) is done.** Method
+was the one that found the `Lib.Strings`/`Lib.Tables` bug: every `---@field`
+on the `Lib` class diffed against what `metatable.lua` (MODULE_MAP +
+SPECIAL_HANDLERS), `eager.lua` and `lazy.lua` actually assign, then each
+mismatch chased into the source. Six real findings, all fixed
+(`lib.nvim@<pending>`), verified by `TESTS/run.lua` (all green) + a
+three-strategy runtime smoke test:
+
+- **`Lib.set` was typed `fun(group, opts, ns)` — a highlight setter** — but
+  all three strategies export `lib.lua.tables.set` (the generic `Set<T>`
+  module). Same actively-wrong-completions bug class as `Lib.Strings`:
+  LuaLS suggested calling `lib.set("Group", {...})` and hid
+  `lib.set.from_array`. Retyped to `Lib.Tables.Set`, moved up into the
+  "Namespaces" block next to `array`/`core`/`dict`.
+- **`Lib.safe` was typed `Lib.Notify.Safe`** — strategies export
+  `lib.lua.tables.safe` (defensive nil-tolerant table mutators). Retyped to
+  `Lib.Tables.Safe`, likewise moved into the "Namespaces" block. (Both
+  `notify.safe` and `hl.set` stay reachable via `lib.notify` / `lib.hl`, so
+  nothing is lost.)
+- **`globbable` was a phantom field**: on the `Lib` class since `9265c34`
+  (the commit that added the `fs.globbable` submodule) but wired into *no*
+  strategy — under the default (metatable) strategy `lib.globbable(...)`
+  raised `"lib: unknown key 'globbable'"`. Its direct siblings `mkdirp` /
+  `path_shorten` / `relpath` were all exported everywhere. Wired into all
+  three strategies (same remediation as `hex_to_string` last session).
+- **`count_lines` missing from the `lazy` strategy** — on the `Lib` class,
+  exported by metatable + eager, but the `lazy.lua` strings block skipped
+  it, so `lib.count_lines(...)` was `nil` under that strategy. Added.
+- **`json_decode_to_string_array` missing from `eager` + `lazy`** — on the
+  base `Lib` class and exported by metatable, but the other two never
+  provided that flat key. Added to both (points at the same
+  `to_string_array.ensure_string_array` the class documents).
+- **`eager.lua` called the key `autogroup` / `autogroup_create_clear`** —
+  every other strategy and the `Lib.Strategy.Lazy` class use `augroup` /
+  `augroup_create_clear`. A strategy swap would silently rename the key.
+  Renamed in `eager.lua` to match.
+- `lazy`'s extra keys (`augroup*`, `unique`/`unique_by`/`is_unique`,
+  `json_is_array_like` & siblings) now match the `Lib.Strategy.Lazy` class
+  *exactly*. `eager`'s extras (`augroup*` plus a raw `json` module handle)
+  are documented in a header comment in `eager.lua` as deliberate,
+  non-common-surface extras kept to avoid a breaking removal.
+- **`docs/configuration.md`** claimed "All strategies expose the same
+  surface" — directly contradicted by the `Lib.Strategy.Lazy` class (which
+  exists precisely because `lazy`/`eager` add keys the default strategy
+  does not). Softened to: every strategy provides the full `Lib` surface,
+  and `lazy`/`eager` add a few flattened conveniences on top.
+- `lib/@types/luassert.lua` (85 lines): reviewed — exceptionally
+  self-documented (explains the busted-wiring failure it repairs, why not
+  `runtime.path`, the two widened signatures), internally consistent, the
+  `luassert.internal` reopen lists exactly the assertions these repos call
+  with a message. Nothing to fix.
+- `lib/@types/init.lua`'s `Lib.Modules` class: left untouched — already
+  self-flagged (CDX comment) as stale/unreferenced "pending an
+  external-consumer check", same precedent as every other self-flagged
+  debt item in this audit.
+
+**This completes the entire `lib.nvim` module audit.** See the closing note
+at the end of this file.
+
+---
+
+<details>
+<summary>Original partial-progress note from the previous session (kept for history)</summary>
+
+#### 🔎 partial (session ended low on budget)
 
 - `lib.config` (setup/get/strategy_module), `lib.strategies.control`
   (register/active/keys/reset_cache), `lib.strategies.telemetry_wrap`
@@ -128,6 +194,8 @@ section is the actual record, the table above is just the starting map.)
 `lib.nvim` module audit. Everything else (20 small/medium modules, all
 five huge subsystems, the complete `lib.lua.*` namespace, and the rest of
 this glue layer) is done.
+
+</details>
 
 ### core — ✅
 
@@ -682,3 +750,44 @@ No dedicated top-level README, but that's consistent with the deliberate
 doc-comment, and `modules.md` already explains why. `buffer.context` (the
 one submodule with its own directory) has a proper README + @types, fully
 accurate.
+
+---
+
+## Audit complete — 2026-09-07
+
+Every top-level `lib.nvim.*` module, all five huge subsystems (`ui`, `fs`,
+`cross`, `bindings`, `buf_win_tab`), the whole `lib.lua.*` namespace, and
+the glue layer (`lib.config`, `lib.strategies.*`, `lib/@types/*`) have been
+audited. Every finding was fixed, committed and pushed to `main` as the
+sweep went.
+
+The recurring finding types, in rough order of how often they turned up:
+
+1. **Forgotten features** — a real, complete, correctly-typed function that
+   simply never made it into the README. At least one per batch
+   (`ui.kit.compare`, `fs.path`, `cross.run_argv.run_async_captured`,
+   `bindings.audit`'s three lints, `buf_win_tab.collect_win_report`,
+   `strings.hex_to_string`, `autocmd.docs.write_all`).
+2. **Mechanical `---@type` gaps** — `return M` with no annotation despite a
+   correct class sitting in `@types/`. Found ~30 times.
+3. **Actively-wrong types** (rarer, higher-impact) — the annotation exists
+   but points at the wrong shape, so LuaLS gives *wrong* completions rather
+   than none: `Lib.Strings`/`Lib.Tables` (nested vs. flat), `Lib.set` /
+   `Lib.safe` (highlight/notify shape vs. the `tables.*` module actually
+   exported).
+4. **Phantom fields** — the type promises a key no aggregator provides
+   (`globbable`), or an aggregator provides a key under the wrong name
+   (`eager`'s `autogroup`).
+5. **Inline `@class` defs** in source instead of under `@types/` (a
+   `conventions.md` violation) — `bindings` ×3, `keymap.portability`,
+   `strings.location`, `dev.duplicates`.
+6. **Deliberate non-wiring left undocumented** — a module kept out of an
+   aggregator on purpose (name/signature collision) with nothing saying so
+   (`tables.functional` / `tables.unique_table`).
+
+Deliberately **not** touched, each with the same reasoning (self-flagged
+debt, or a fix that would be a breaking change for external consumers):
+`Lib.Modules` / `Lib.Fs` / `Lib.Cross.ALL` / `Lib.BufWinTab` fictional
+aggregator classes, the `module_annnotation` typo directory name, unused
+but exactly-matching `@types` aliases next to already-self-typed bare
+`return function(...)`.

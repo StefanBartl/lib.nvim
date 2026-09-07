@@ -107,6 +107,7 @@ LIB.find_upward_dir = lazy_module("lib.nvim.fs.find_upward_dir")
 LIB.find_root = lazy_module("lib.nvim.fs.find_root")
 LIB.mkdirp = lazy_module("lib.nvim.fs.mkdirp")
 LIB.path_shorten = lazy_module("lib.nvim.fs.path_shorten")
+LIB.globbable = lazy_module("lib.nvim.fs.globbable")
 LIB.write_to_file = require("lib.nvim.fs.write.to_file")
 LIB.write_append = require("lib.nvim.fs.write.append")
 
@@ -168,6 +169,10 @@ LIB.json_ensure_string_array =
   lazy_module("lib.lua.json.decode.to_string_array").ensure_string_array
 LIB.json_table_to_string_array =
   lazy_module("lib.lua.json.decode.to_string_array").table_to_string_array
+-- Common `Lib` surface key (see @types/all_functions.lua): the canonical name
+-- for `ensure_string_array`, also exported flat by the metatable/eager strategies.
+LIB.json_decode_to_string_array =
+  lazy_module("lib.lua.json.decode.to_string_array").ensure_string_array
 LIB.json_encode = lazy_module("lib.lua.json.encode").encode
 
 -- === STRINGS ===
@@ -273,6 +278,9 @@ do
   end
   LIB.surround = function(...)
     return get_strings().surround(...)
+  end
+  LIB.count_lines = function(...)
+    return get_strings().count_lines(...)
   end
 end
 

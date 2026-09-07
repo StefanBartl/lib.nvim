@@ -30,6 +30,7 @@ local MODULE_MAP = {
   find_root = "lib.nvim.fs.find_root",
   mkdirp = "lib.nvim.fs.mkdirp",
   path_shorten = "lib.nvim.fs.path_shorten",
+  globbable = "lib.nvim.fs.globbable",
   write_to_file = "lib.nvim.fs.write.to_file",
   write_append = "lib.nvim.fs.write.append",
 

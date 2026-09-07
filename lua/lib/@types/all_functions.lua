@@ -14,6 +14,8 @@
 ---@field array Lib.Tables.Array
 ---@field core Lib.Tables.Core
 ---@field dict Lib.Tables.Dict
+---@field set Lib.Tables.Set # Generic Set<T> (table<T, true>) with union/intersection/difference/subset helpers
+---@field safe Lib.Tables.Safe # Defensive table mutators / iteration guards (nil-tolerant list & dict ops)
 ---@field functional Lib.Tables.Functional
 ---@field unique_table Lib.Tables.UniqueTable
 ---@field strings Lib.Strings
@@ -89,8 +91,6 @@
 ---@field resolve_log_level fun(level?: Lib.Notify.LogLevel, default?: Lib.Notify.LogLevelNumber): integer # Resolve log level
 ---@field run fun(cmd: string, cb: fun(ok:boolean, res:OsRunResult), opts?: Lib.Cross.Run.RunOpts): nil # Async run using vim.system when available; falls back to jobstart. Enriched via cross.run.env by default (opts.env = false to opt out)
 ---@field run_blocking fun(cmd: string, opts?: Lib.Cross.Run.RunOpts): OsRunResult # Blocking run (utility for quick conversions / probing). Enriched via cross.run.env by default
----@field safe Lib.Notify.Safe
----@field set fun(group: string, opts: Lib.Highlight.Opts, ns: string|integer|nil)
 ---@field shell fun(): OsShell # Pick a shell suitable for the platform
 ---@field simple_echo fun(msg: string, hl: string|nil, is_error: boolean|nil): integer|string # This module returns a single function that echoes messages using vim.api.nvim_echo
 ---@field slugify fun(s: string): string

@@ -1,6 +1,6 @@
 # Configuration
 
-The only runtime choice is which aggregator strategy `require("lib")` uses. All strategies expose the same surface; they differ only in *when* submodules load. Configure **before** the first `require("lib")`:
+The only runtime choice is which aggregator strategy `require("lib")` uses. Every strategy exposes the full common surface — the `Lib` class in [`lua/lib/@types/all_functions.lua`](../lua/lib/@types/all_functions.lua) — and they differ only in *when* submodules load. The `lazy` and `eager` strategies additionally expose a few flattened convenience keys on top of it (`augroup`, `unique` / `unique_by` / `is_unique`, …); those are collected in the `Lib.Strategy.Lazy` class in the same file. Configure **before** the first `require("lib")`:
 
 ```lua
 require("lib.config").setup({ strategy = "lazy" })
