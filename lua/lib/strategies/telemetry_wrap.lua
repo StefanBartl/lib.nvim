@@ -31,6 +31,11 @@
 
 local M = {}
 
+---`require("lib.strategies.telemetry_wrap")` itself.
+---@class Lib.Strategies.TelemetryWrap
+---@field setup fun(opts?: { namespace?: string, profile_args?: boolean, timing?: boolean, persist?: boolean, dir?: string, wrap_opts?: RA.Telemetry.WrapOpts }): RA.Telemetry.Instance|nil
+---@field teardown fun(): nil
+
 ---@type RA.Telemetry.Instance|nil
 local instance = nil
 ---@type string[]
@@ -122,4 +127,5 @@ function M.teardown()
   instance = nil
 end
 
+---@type Lib.Strategies.TelemetryWrap
 return M

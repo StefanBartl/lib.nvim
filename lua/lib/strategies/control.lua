@@ -26,6 +26,13 @@ local M = {}
 ---@field keys? fun(): string[]        # every key the aggregate can resolve; `M.keys` falls back to pairs() without it
 ---@field reset_cache? fun(): nil      # drop memoized key -> value entries
 
+---`require("lib.strategies.control")` itself.
+---@class Lib.Strategies.Control
+---@field register fun(reg: Lib.Strategies.Registration): nil
+---@field active fun(): Lib.Strategies.Registration|nil
+---@field keys fun(aggregate?: table): string[]
+---@field reset_cache fun(): boolean cleared
+
 ---@type Lib.Strategies.Registration|nil
 local current = nil
 
@@ -80,4 +87,5 @@ function M.reset_cache()
   return false
 end
 
+---@type Lib.Strategies.Control
 return M
