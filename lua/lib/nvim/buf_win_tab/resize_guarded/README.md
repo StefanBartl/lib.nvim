@@ -109,6 +109,6 @@ vim.keymap.set({ "n", "t" }, "<S-j>", resize_guarded.create("resize -5", exclude
 
 ## File location
 
-* Module: `lua/lib/buf_win_tab/resize_guarded.lua`
+* Module: `lua/lib/nvim/buf_win_tab/resize_guarded/init.lua`
 
 -
