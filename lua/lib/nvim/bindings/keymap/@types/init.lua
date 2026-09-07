@@ -95,6 +95,8 @@
 --- what `require()` resolves to.
 ---@field registered fun(plugin: string|nil): table<string, Lib.Keymap.Registered[]>|Lib.Keymap.Registered[]
 ---@field conflicts fun(): Lib.Keymap.Conflict[]
+---@field conflict_lines fun(): string[]
+---@field create_usercmd fun(name: string|nil): nil
 ---@field forget fun(plugin: string|nil): integer
 
 return {}

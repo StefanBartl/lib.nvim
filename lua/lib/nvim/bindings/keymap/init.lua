@@ -77,6 +77,84 @@ function M.conflicts()
   return require("lib.nvim.bindings.keymap.registry").conflicts()
 end
 
+---@internal
+--- How many of lazy.nvim's tracked plugins are loaded right now, or `nil`
+--- when lazy.nvim is not present or everything is already loaded.
+--- `conflicts()` only sees registrations that already ran -- a plugin
+--- lazy.nvim has not loaded yet cannot have bound anything, so a clean
+--- report this early is not evidence of anything.
+---@return string|nil
+local function lazy_coverage_note()
+  local ok, lazy_config = pcall(require, "lazy.core.config")
+  if not ok then
+    return nil
+  end
+  local total, loaded = 0, 0
+  for _, spec in pairs(lazy_config.plugins) do
+    total = total + 1
+    if spec._ ~= nil and spec._.loaded ~= nil then
+      loaded = loaded + 1
+    end
+  end
+  if loaded >= total then
+    return nil
+  end
+  return ("note: %d/%d lazy-loaded plugins loaded right now -- the rest have bound nothing yet."):format(
+    loaded,
+    total
+  )
+end
+
+---`conflicts()` as printable lines, for `:checkhealth` and a report command.
+---@return string[]
+function M.conflict_lines()
+  local conflicts = M.conflicts()
+  local out = {}
+  local coverage = lazy_coverage_note()
+  if coverage then
+    out[#out + 1] = coverage
+    out[#out + 1] = ""
+  end
+  if #conflicts == 0 then
+    out[#out + 1] = "no keymap conflicts -- every lhs is claimed once per mode+scope."
+    return out
+  end
+  out[#out + 1] = ("%d lhs claimed by more than one registration:"):format(#conflicts)
+  for _, c in ipairs(conflicts) do
+    out[#out + 1] = ("  %-4s %s"):format(c.mode, c.lhs)
+    for _, cl in ipairs(c.claimants) do
+      local who = cl.direct and (cl.src or (cl.plugin .. " (direct)"))
+        or (cl.plugin .. "." .. cl.name)
+      out[#out + 1] = ("       %s%s"):format(who, cl.desc and (" -- " .. cl.desc) or "")
+    end
+  end
+  return out
+end
+
+---Expose `:<name>` for `conflicts()`. Put this call in **your own config**,
+---not in a library -- same reasoning `bindings.usercmd.docs.create_usercmd`
+---and `bindings.audit.create_usercmd` give.
+---@param name string|nil  # Default `LibKeymapConflicts`.
+---@return nil
+function M.create_usercmd(name)
+  local base = name or "LibKeymapConflicts"
+  local usercmd = require("lib.nvim.bindings.usercmd")
+
+  usercmd.create(base, function()
+    local lines = M.conflict_lines()
+    local ok, kit = pcall(require, "lib.nvim.ui.kit")
+    if ok then
+      kit.viewer({
+        lines = lines,
+        title = " " .. base .. " ",
+        width = math.min(120, vim.o.columns - 8),
+      })
+      return
+    end
+    print(table.concat(lines, "\n"))
+  end, { desc = "lhs values claimed by more than one plugin/registration in this session" })
+end
+
 ---@type Lib.Keymap
 return setmetatable(M, {
   __call = function(_, modes, lhs, rhs, opts, desc)
