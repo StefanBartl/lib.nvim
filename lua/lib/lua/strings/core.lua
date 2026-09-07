@@ -170,12 +170,12 @@ function S.camel_case(s)
   if #words == 0 then
     return ""
   end
-  local head = words[1]
+  local parts = { words[1] }
   for i = 2, #words do
     local w = words[i]
-    head = head .. w:sub(1, 1):upper() .. w:sub(2)
+    parts[#parts + 1] = w:sub(1, 1):upper() .. w:sub(2)
   end
-  return head
+  return table.concat(parts)
 end
 
 ---@nodiscard
