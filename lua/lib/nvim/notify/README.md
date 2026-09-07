@@ -194,6 +194,26 @@ safe_notify.error("Error from fast context")
 
 ---
 
+## Log-level resolution
+
+```lua
+local notify = require("lib.nvim.notify")
+
+notify.resolve_log_level("warn")            --> vim.log.levels.WARN
+notify.resolve_log_level(3)                 --> 3 (already a valid level)
+notify.resolve_log_level("bogus", 1)        --> 1 (falls back to `default`)
+notify.resolve_log_level(nil)               --> vim.log.levels.WARN (default's default)
+```
+
+Turns a user-provided log level — a number (0-5), a level name string
+(case-insensitive: `"trace"`/`"debug"`/`"info"`/`"warn"`/`"error"`/`"off"`),
+or `nil` — into a concrete `vim.log.levels` integer. Anything unrecognized
+(an out-of-range number, an unknown string, any other type) falls back to
+`default`, which itself defaults to `vim.log.levels.WARN`. Also reachable at
+its own leaf path (`require("lib.nvim.notify.resolve_log_level")`) for
+callers that only need this and not the rest of the module — `lib.nvim.logger`
+uses it that way.
+
 ## Design properties
 
 * one central, generic notify module

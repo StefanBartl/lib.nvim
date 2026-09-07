@@ -79,5 +79,9 @@ end
 -- Export safe notification utilities
 M.safe = require("lib.nvim.notify.safe")
 
+-- Export log-level resolution (also usable standalone at its leaf path,
+-- e.g. from lib.nvim.logger)
+M.resolve_log_level = require("lib.nvim.notify.resolve_log_level")
+
 ---@type Lib.Notify
 return M

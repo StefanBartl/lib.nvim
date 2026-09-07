@@ -72,15 +72,60 @@ lazy, class, context_manager) — not yet inventoried, add before closing out.
 fixes made, feature ideas raised. Filled in as the sweep proceeds; this
 section is the actual record, the table above is just the starting map.)
 
-### core — ✅ (partial: aggregator doc bug found & fixed)
+### core — ✅
 
-- Found: [`lua/lib/nvim/init.lua`](../lua/lib/nvim/init.lua) docstring claimed
-  `Nvim.map == require("lib.nvim.bindings.keymap")` and similar — wrong. The
-  `lib.nvim` aggregator is a straight 1:1 metatable (`require("lib.nvim." ..
-  key)`); the flattened short names (`map`, `usercmd`, `notify`, ...) only
-  exist on the *top-level* `require("lib")` aggregator
-  ([`lib/strategies/metatable.lua`](../lua/lib/strategies/metatable.lua)).
-  Fixed the docstring to stop claiming a shortcut that doesn't exist and
-  point at `require("lib").map` instead.
-- Still to check: `lib/nvim/core` module itself (has_exec, simple_echo)
-  README/@types accuracy.
+- Found & fixed: [`lua/lib/nvim/init.lua`](../lua/lib/nvim/init.lua) docstring
+  claimed `Nvim.map == require("lib.nvim.bindings.keymap")` — wrong, the
+  `lib.nvim` aggregator is a straight 1:1 metatable; flattened short names
+  only exist on `require("lib")` ([`lib/strategies/metatable.lua`](../lua/lib/strategies/metatable.lua)).
+- Found & fixed: `core/@types/init.lua` had `@module 'lib.nvim.@types'`
+  (should be `lib.nvim.core.@types`) and class `Lib.Nvim` (should be
+  `Lib.Nvim.Core`, matching sibling naming `Lib.Nvim.Health`/`Lib.Nvim.Json`).
+  Note: this surfaced a pre-existing, already-flagged issue in
+  `lua/lib/@types/init.lua`'s `Lib.Modules` class (its own comment says it's
+  stale/unreferenced, "left as-is pending an external-consumer check") — its
+  `nvim Lib.Nvim` field now points at a genuinely undefined type instead of
+  silently pointing at core's shape. Not touched; out of scope, already
+  tracked by that file's own CDX comment.
+- Feature idea: nothing obviously missing for this grab-bag module.
+
+### async, contextmenu, count — ✅ no issues
+
+Docs/@types are complete, accurate, and closely mirror the implementation.
+Feature ideas (not implemented, just noted):
+- `async`: a `sleep(ms)` convenience and `all(...)`/`race(...)` combinators
+  (await N awaitables) would round this out as a small structured-concurrency
+  kit, if a caller ever needs more than sequential awaits.
+- `contextmenu`/`count`: no gap found.
+
+### debounce — ✅ fixed
+
+- `init.lua` and `buffer/init.lua` both did bare `return M`/`return { new =
+  new }` with no `---@type` annotation (every sibling module annotates its
+  return) — LuaLS gave no type info for `require("lib.nvim.debounce")` or
+  `.debounce.buffer`. Also the module-surface classes themselves (`Lib.Debounce`,
+  `Lib.Debounce.Buffer`) didn't exist yet, only their Handle/Opts sub-types.
+  Added both classes and the `---@type` annotations.
+
+### dotrepeat, git, json, lastcmd — ✅ (git fixed)
+
+- `git/init.lua`: same missing-`---@type Lib.Git`-on-return bug as debounce,
+  even though `Lib.Git` was already fully and correctly defined in `@types`.
+  Fixed.
+- dotrepeat/json/lastcmd: no issues. lastcmd in particular is exemplary —
+  README documents even the sharp edges (the `repeat_last`-identity-comparison
+  footgun it used to ship with).
+
+### notify — ✅ fixed (undocumented submodule)
+
+- `lib.nvim.notify.resolve_log_level` existed as a real, actively-used
+  submodule (`lib.nvim.logger` depends on it) but was: not aggregated onto
+  `require("lib.nvim.notify")` (only reachable at its own leaf path), absent
+  from the README entirely, absent from `Lib.Notify`'s `@class` fields, and
+  missing its own `---@type` return annotation. `modules.md`'s one-line
+  description of `lib.nvim.notify` ("notify wrapper + log-level resolution")
+  already promised this as part of the module's surface. Fixed all four.
+
+### require, safe_api, selection — ✅ no issues
+
+Docs/@types complete and accurate. No feature gaps found.

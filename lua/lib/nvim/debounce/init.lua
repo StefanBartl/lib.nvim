@@ -111,4 +111,5 @@ function M.new_with_counter(fn, ms)
   return { call = call, cancel = handle.cancel }, get_skipped
 end
 
+---@type Lib.Debounce
 return M

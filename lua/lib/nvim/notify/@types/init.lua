@@ -46,8 +46,11 @@
 ---@field notify fun(msg: string, level?: integer, opts?: table, mode?: Lib.Notify.Safe.ScheduleMode, delay_ms?: integer): nil
 ---@field create_safe fun(prefix: string): Lib.Notify.Safe.Notifier
 
+---@alias Lib.Notify.ResolveLogLevelFn fun(level?: Lib.Notify.LogLevel, default?: Lib.Notify.LogLevelNumber): integer
+
 ---@class Lib.Notify
 ---@field create Lib.Notify.CreateFN
 ---@field safe Lib.Notify.Safe
+---@field resolve_log_level Lib.Notify.ResolveLogLevelFn
 
 return {}
