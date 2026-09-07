@@ -37,7 +37,7 @@
 ---@field get_augroup fun(name: string, opts: { clear?: boolean, prefix?: string }|nil): integer # Augroup registry with optional prefixing and deduplication.
 ---@field augroup Lib.AutoCmd.AuGroup
 ---@field dispatcher Lib.Autocmd.Dispatcher
----@field docs table # Generated `bindings/autocmd/` markdown writers (`write`/`check`/`write_all`/`create_usercmd`).
+---@field docs Lib.Autocmd.Docs # Generated `bindings/autocmd/` markdown writers (`write`/`check`/`write_all`/`create_usercmd`).
 
 return {}
 

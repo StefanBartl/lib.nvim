@@ -31,29 +31,7 @@ local M = {}
 --- Tier order, worst last. Mirrors `keymap.portability`'s own ranking.
 local RANK = { portable = 1, common = 2, fragile = 3 }
 
----@class Lib.Bindings.Audit.KeyAction
----@field surface string
----@field name string
----@field lhs string|nil
----@field bound boolean
----@field desc string|nil
-
----@class Lib.Bindings.Audit.CmdRoute
----@field name string
----@field path string
----@field desc string
-
----@class Lib.Bindings.Audit.KeyTier
----@field lhs string
----@field tier Lib.Keymap.Portability.Tier
----@field reason string
-
----@class Lib.Bindings.Audit.KeyRisk
----@field surface string
----@field name string
----@field keys Lib.Bindings.Audit.KeyTier[]  # every lhs the action binds, classified
----@field best Lib.Keymap.Portability.Tier   # the most reliable one it has
----@field desc string|nil
+-- Lib.Bindings.Audit.{KeyAction,CmdRoute,KeyTier,KeyRisk}: see @types/audit.lua.
 
 ---@internal
 --- The plugin name a root resolves to: the single subdirectory under its
@@ -492,9 +470,7 @@ local function live_command_names()
   return names
 end
 
----@class Lib.Bindings.Audit.PrefixAmbiguity
----@field short string
----@field longer string[]
+-- Lib.Bindings.Audit.PrefixAmbiguity: see @types/audit.lua.
 
 ---Command names that are a strict prefix of another registered name — the
 ---`<Tab>`/abbreviation collision a plugin's own docs cannot see, because it
@@ -796,4 +772,5 @@ function M.create_usercmd(name)
   })
 end
 
+---@type Lib.Bindings.Audit
 return M

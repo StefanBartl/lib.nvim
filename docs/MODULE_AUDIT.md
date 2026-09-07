@@ -24,7 +24,7 @@ Source-of-truth inventory (init/README/@types presence, `lua_files` = total
 | Module | init.lua | README | @types | notes |
 |---|---|---|---|---|
 | async | Y | Y | 1 | |
-| bindings | Y | Y | 0 (nested have own) | huge (34 files) |
+| bindings | Y | Y | 0 (nested have own) | huge (34 files) — ✅ audited 2026-09-07, see log |
 | buf_win_tab | - (leaf-only) | - | 4 (nested) | documented exception? verify |
 | buffer | - (leaf-only) | - | 1 (nested) | documented exception, see modules.md:34 |
 | cache | Y | Y | 1 | |
@@ -422,6 +422,74 @@ to a sub-agent (verified every finding myself before acting, same as the
   detection, three tiers of process spawning (shell-string/argv/libuv-
   direct, each with blocking+async variants), path separators, file
   mutation with Windows-sharing-error retry, and lock diagnosis.
+
+### bindings (keymap/autocmd/usercmd + composer/dispatcher/modifier/portability/audit, 34 files) — ✅ reduced-depth pass, several fixes
+
+Fourth of the five huge subsystems. `bindings/init.lua` and each of
+`keymap`/`autocmd`/`usercmd`/`composer`/`dispatcher`/`modifier` already had
+correct `---@type` on their aggregator `return`s (unlike `cross`, no
+mechanical gap here at the top level) — this subsystem was clearly kept in
+good shape already. `composer` — "the most widely-used component of the
+library, 30+ consuming plugins" — got a dedicated deep pass (delegated to a
+sub-agent tracing every behavioral claim in its 405-line README against
+`argtypes`/`check`/`complete`/`docgen`/`flags`/`kv`/`parse`/`registry`/
+`tree`): **entirely clean**, not one discrepancy found. Good sign for the
+overall quality of this subsystem's docs.
+
+- **`keymap.portability`** (a real, actively-used, 2-function module —
+  `classify`/`is_portable`, used by `bindings.audit.key_risks`) had no
+  module-surface class, and its `Tier` alias was defined inline in the
+  source rather than under `@types/` (violates `conventions.md`, same
+  pattern as `dev.duplicates` from an earlier batch). Added
+  `keymap/@types/portability.lua` with both, plus the `---@type`
+  annotation.
+- **`cross.executable`-shaped gap, twice more**: `autocmd.docs` (4
+  functions: `write`/`check`/`write_all`/`create_usercmd`) and
+  `bindings.audit` (14 functions) both had their real classes/`---@type`
+  missing or partial. `autocmd.docs`'s three classes (`Opts`/`AllOpts`/
+  `AllResult`) were inline in `docs.lua` instead of under `@types/`
+  (convention violation) — moved to a new `autocmd/@types/docs.lua`.
+  `bindings.audit`'s five classes were inline in `audit.lua` itself, same
+  fix, into a new `bindings/@types/audit.lua`. `usercmd.docs` already had
+  a correct class (`Lib.UserCommand.Docs`) sitting unused — just needed
+  the `---@type` on its `return M`.
+- **`autocmd.docs.write_all()` — a whole real, substantial feature
+  (multi-repo batch doc-writing, with a full paragraph of design rationale
+  in its own doc comment) — was completely absent from `autocmd/README.md`**.
+  Same "vergessenes Feature" shape as `run_async_captured` (cross batch)
+  and `kit.compare` (ui batch). Added a full section.
+- **`bindings.audit` had three whole undocumented lint features**:
+  `naming_candidates`/`naming_candidate_lines` (vague command-route-naming
+  lint), `prefix_ambiguities`/`prefix_ambiguity_lines` (`<Tab>`-completion
+  collision lint), `checklist_lines` (generated manual-verification
+  Markdown checklist) — none mentioned anywhere in `bindings/README.md`,
+  despite `create_usercmd()` actually registering six commands for them
+  (`:LibBindingsAudit[Gaps|Keys|Naming|Checklist]` + `...Prefixes`) while
+  the README's prose only described three. Added all three feature
+  sections + corrected the command list. Also extended `modules.md`'s
+  one-line `bindings.audit` summary to name all four lints, not just one.
+- **`docs/API/commands-and-infra.md` had four real gaps**, all now fixed:
+  `lib.nvim.bindings.keymap.modifier` and `.keymap.portability` were
+  entirely absent (both have real READMEs); the `autocmd` section's
+  function list was missing `registered`/`by_event`/`delete`/`docs`
+  entirely (only `augroup`/`group`/`get_augroup`/`create`/
+  `norm_events`/`norm_pattern` were listed) and had no `autocmd.docs`
+  subsection at all; the `usercmd` section was likewise missing
+  `registered`/`delete`/`docs`; `lib.nvim.bindings.audit` itself was
+  absent. Added all four.
+- Everything else checked (`keymap`'s own README/init.lua/registry
+  internals, `autocmd`'s three-augroup-mechanisms design — already
+  self-documented in its own README as deliberate — `autocmd.dispatcher`,
+  `usercmd`'s own surface, `docs_util.lua` — confirmed genuinely internal,
+  used only within `bindings/` itself, correctly excluded from the public
+  README like `logger`'s internals in an earlier batch): no further
+  discrepancies.
+- Feature idea: none obviously missing — this subsystem already covers
+  keymaps (one-off + named-action registry + reachability lint + result-
+  capturing modifier), autocmds (registry + augroup dedup + a full
+  priority-ordered lazy dispatcher), user commands (registry + the
+  composer subcommand DSL), and a cross-cutting audit tool tying the first
+  two together with four separate lints.
 
 ### buffer (+ buffer.context) — ✅ no issues
 

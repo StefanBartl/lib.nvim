@@ -278,4 +278,5 @@ function M.create_usercmd(name)
   end, { desc = "Check bindings/usercmd against what is registered" })
 end
 
+---@type Lib.UserCommand.Docs
 return M

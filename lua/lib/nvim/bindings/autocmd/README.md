@@ -170,6 +170,34 @@ plugin: it is a tool for whoever is editing the repo, and a plugin shipping it
 would put an identical command in every user's editor. Then, sitting in the
 repo with the plugin loaded, the whole workflow is `:LibAutocmdDocs`.
 
+### Writing every repo at once — `docs.write_all()`
+
+`docs.write()` writes one repository (the caller's own, by default).
+`docs.write_all(opts?)` does the same for **every** repository that has
+registered something in this Neovim session — useful from a top-level dev
+config that has loaded several of these plugins at once, rather than
+switching into each repo and calling `docs.write()` there.
+
+```lua
+require("lib.nvim.bindings.autocmd").docs.write_all()
+require("lib.nvim.bindings.autocmd").docs.write_all({ under = "~/repos", dry_run = true })
+```
+
+The set of repositories comes from the records themselves — each one knows
+the file it was created from — not from scanning a directory. A directory
+scan would find repositories that are installed but never loaded, and
+writing their docs would produce an empty or truncated file where a correct
+one already sits; a plugin that did not load simply does not appear, which
+is the honest outcome. For the same reason this is not a substitute for
+running it per repo: a lazy-loaded plugin whose trigger has not fired yet
+has registered nothing — load what you want documented first.
+
+`opts.under` scopes the result to repositories under one directory (without
+it, every repo that registered anything — including plugins you did not
+write). `opts.note` is passed through to every repo's header. `opts.dry_run`
+reports what would be written (`Lib.Autocmd.Docs.AllResult[]`, one entry per
+repository, sorted by name) without touching disk.
+
 Markdown, not Lua: a `.lua` file that is really a listing pretends to be code
 that runs, and the next reader goes looking for its callers.
 
