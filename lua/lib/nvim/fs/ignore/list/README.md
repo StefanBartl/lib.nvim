@@ -17,6 +17,7 @@ plugins and subsystems while keeping the rules conservative and predictable.
     - [Basenames](#basenames)
     - [Patterns](#patterns)
   - [Public API](#public-api)
+    - [`normalize(s) -> string`](#normalizes---string)
     - [`as_set() -> table<string, boolean>`](#as_set---tablestring-boolean)
     - [`as_luals_patterns() -> string[]`](#as_luals_patterns---string)
     - [`as_telescope_patterns() -> string[]`](#as_telescope_patterns---string)
@@ -114,6 +115,13 @@ These are suitable for:
 
 The module exposes several helper functions to adapt the canonical data to
 different consumers.
+
+### `normalize(s) -> string`
+
+Normalizes a basename or path for platform-agnostic comparison: strips a
+trailing separator (`/` or `\`), and lowercases on Windows (where matching
+is already case-insensitive). Used internally by every `as_*` adapter below;
+also useful directly when comparing a raw scan result against `basenames`.
 
 ### `as_set() -> table<string, boolean>`
 

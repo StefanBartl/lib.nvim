@@ -19,12 +19,13 @@ setup:
 
 ## Basic idea
 
-Your module `lib.nvim.fs.polymorphic_root_resolver` provides a **functional,
-polymorphic root resolution**:
+Your module `lib.nvim.fs.polymorphic_rootresolver` provides a **functional,
+polymorphic root resolution**. `require` returns the factory function itself
+(no wrapping table field to call through):
 
 ```lua
-local resolver_module = require("lib.nvim.fs.polymorphic_root_resolver")
-local resolve_root = resolver_module.make_root_dir_resolver()
+local make_root_dir_resolver = require("lib.nvim.fs.polymorphic_rootresolver")
+local resolve_root = make_root_dir_resolver()
 ```
 
 * `resolve_root(arg, cb?)` accepts either:
@@ -48,9 +49,9 @@ local resolve_root = resolver_module.make_root_dir_resolver()
 * **Example:**
 
 ```lua
-local resolver_module = require("lib.nvim.fs.polymorphic_root_resolver")
+local make_root_dir_resolver = require("lib.nvim.fs.polymorphic_rootresolver")
 
-local resolve_root = resolver_module.make_root_dir_resolver({
+local resolve_root = make_root_dir_resolver({
   markers = { ".marksman.toml", ".git", "mkdocs.yml" },
   include_stdpath_config = false,
 })
@@ -81,9 +82,9 @@ vim.lsp.config("marksman", {
 * **Example:**
 
 ```lua
-local resolver_module = require("lib.nvim.fs.polymorphic_root_resolver")
+local make_root_dir_resolver = require("lib.nvim.fs.polymorphic_rootresolver")
 
-local resolve_root = resolver_module.make_root_dir_resolver({
+local resolve_root = make_root_dir_resolver({
   markers = { ".git", ".hg", ".svn", ".luarc.json", ".neoconf.json", "selene.toml", "stylua.toml" },
   include_stdpath_config = true,
 })

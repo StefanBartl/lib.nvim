@@ -1,6 +1,6 @@
 # API Reference — `lib.nvim.fs.*` (filesystem / path helpers)
 
-Part of the [lib.nvim API reference](README.md). 26 submodules covering
+Part of the [lib.nvim API reference](README.md). 29 submodules covering
 path resolution, root/project detection, directory creation and scanning,
 file reading/writing/watching, ignore lists, and opening files/URLs. All
 built on `vim.fs`/`vim.uv` (or `vim.loop` fallback), not shell commands,
@@ -105,7 +105,7 @@ separators (UNC-safe).
 return function(p: string, opts?: { realpath?: boolean }): string   -- realpath default true
 ```
 
-### `lib.nvim.fs.relpath` (no README)
+### `lib.nvim.fs.relpath` (see README)
 Compute `path` relative to `base` (both made absolute + forward-slash
 normalized); `..`-climbs POSIX-style from the common ancestor; returns the
 absolute path unchanged if the two paths share no root (e.g. different

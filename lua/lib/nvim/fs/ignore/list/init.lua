@@ -137,4 +137,5 @@ function M.as_neotree_names()
   return out
 end
 
+---@type Lib.Fs.Ignore.List
 return M

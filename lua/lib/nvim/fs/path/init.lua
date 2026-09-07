@@ -93,4 +93,5 @@ function M.ensure_dir(path)
   return require("lib.nvim.fs.mkdirp")(dir)
 end
 
+---@type Lib.Fs.Path
 return M
