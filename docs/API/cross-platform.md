@@ -142,6 +142,10 @@ M.delete_file(path: string, opts?): boolean ok, string|nil err
 M.copy_file(src: string, dst: string, opts?): boolean ok, string|nil err
 M.rename_file(src: string, dst: string, opts?): boolean ok, string|nil err
 M.mkdir_p(path: string, opts?): boolean ok, string|nil err
+M.symlink(target: string, link_path: string, is_dir?: boolean, opts?): boolean ok, string|nil err
+  -- is_dir matters on Windows only (uv_fs_symlink's dir flag); target need not exist
+M.hardlink(target: string, link_path: string, opts?): boolean ok, string|nil err
+  -- files only; target must already exist
 ```
 
 ### `lib.nvim.cross.fs.lock` (see README)
@@ -234,6 +238,9 @@ M.build(opts?: Lib.Cross.Run.Env.Opts): table<string,string>
 M.path(opts?): string
   -- extra_paths -> mason bin -> inherited PATH -> login-shell PATH -> candidate_dirs();
   -- nothing inherited is dropped or reordered, dedup case-insensitive on Windows
+M.array(vars?: table<string,string>): string[]
+  -- build() as an array of "KEY=VALUE" strings, for raw uv.spawn callers
+  -- (e.g. cross.uv.spawn_capture's opts.env) instead of build()'s dict shape
 M.apply(spawn_opts?: table, opts?): table
   -- copy of spawn_opts with env filled in; an existing spawn_opts.env is folded in as overrides
 M.candidate_dirs(): string[]
@@ -258,6 +265,8 @@ Blocks the caller.
 M.run_blocking(cmd: string[], input?: string): boolean, string|nil
 M.run_blocking_captured(cmd: string[], input?: string): boolean ok, string output
   -- like run_blocking, but always also returns captured stdout, success or failure
+M.run_async_captured(cmd: string[], on_done: fun(ok, output, code), input?: string): { stop: fun() }
+  -- non-blocking counterpart; on_done is always vim.schedule-dispatched; stop() sends sigterm
 ```
 
 ---
@@ -292,7 +301,9 @@ capture and an optional timeout. On timeout the process is killed
 via `vim.schedule`.
 
 ```
-return function(argv: string[], opts?: { timeout_ms?, cwd?, env? }, on_done: fun(result: { ok, code, signal, stdout, stderr, timed_out }))
+return function(argv: string[], opts?: { timeout_ms?, cwd?, env?, stdin? }, on_done: fun(result: { ok, code, signal, stdout, stderr, timed_out }))
+  -- stdin is written to the child then the pipe is closed (so an EOF-reading command
+  -- terminates); exists so a credential need not appear in argv (readable by any process)
 ```
 
 ### `lib.nvim.cross.uv.spawn_stream` (see README)

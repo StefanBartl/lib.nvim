@@ -8,7 +8,7 @@
 ---@field is_macos fun(): boolean
 ---@field is_linux fun(): boolean
 ---@field is fun(platform?: Lib.Cross.Platform.PlatformName): boolean|Lib.Cross.Platform.PlatformName
----@field executable table # PATH / Mason binary lookup: exists / path / find / mason_bin / clear.
+---@field executable Lib.Cross.Executable # PATH / Mason binary lookup: exists / path / find / mason_bin / clear.
 ---@field run Lib.Cross.Run
 ---@field fs Lib.Cross.Fs
 ---@field separators Lib.Cross.Separators

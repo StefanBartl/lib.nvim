@@ -106,4 +106,5 @@ function M.mason_bin(package_name)
   return nil
 end
 
+---@type Lib.Cross.Executable
 return M

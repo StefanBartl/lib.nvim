@@ -486,4 +486,5 @@ function M.clear()
   cached_login_env = nil
 end
 
+---@type Lib.Cross.Run.Env
 return M

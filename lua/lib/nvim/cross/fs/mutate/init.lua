@@ -188,4 +188,5 @@ function M.hardlink(target, link_path, opts)
   end, opts)
 end
 
+---@type Lib.Cross.Fs.Mutate
 return M
