@@ -559,6 +559,170 @@ function M.gap_lines(root)
   return out
 end
 
+---@internal
+--- Words suggesting an action is destructive enough to want a second look
+--- before triggering it -- never used to invoke anything (nothing in this
+--- module ever does), only to sort candidates into their own checklist
+--- section so they are not stumbled into by accident. A guess, not a
+--- verdict: this config's own command surface includes `:Sandbox wsl
+--- shutdown-all`, `:Cases delete`, `:File delete` and `:MyPlugins remove`,
+--- and no keyword list is trustworthy enough to *decide* which of ~1300
+--- entries are safe to fire unattended -- see the module doc above
+--- `checklist_lines` for why that path was rejected outright rather than
+--- attempted.
+local RISKY_WORDS = {
+  "delete",
+  "remove",
+  "kill",
+  "shutdown",
+  "stop",
+  "wipe",
+  "prune",
+  "reset",
+  "clean",
+  "restart",
+  "uninstall",
+  "destroy",
+  "drop",
+  "force",
+  "reclone",
+  "revert",
+  "overwrite",
+}
+
+---@internal
+---@param text string|nil
+---@return boolean
+local function looks_risky(text)
+  local lower = (text or ""):lower()
+  for _, w in ipairs(RISKY_WORDS) do
+    if lower:find(w, 1, true) then
+      return true
+    end
+  end
+  return false
+end
+
+---A Markdown checklist over every registered keymap action and command
+---route — one box per item, meant to be worked through **by hand** in a real
+---session: trigger each one yourself, tick it if it does what its
+---description says, leave a note if it does not. Same
+---checkbox-and-manual-verification shape
+---`docs/ROADMAP/personal/All/FINISH/PLUGIN_ROADMAPS_TESTPLAN.md` already
+---uses in the calling config, not a new convention.
+---
+---**Deliberately never invokes anything itself.** The obvious next step —
+---auto-run everything that "looks safe" — was considered and rejected: this
+---config's own command surface includes things like `:Sandbox wsl
+---shutdown-all`, `:Cases delete` and `:File delete`, and a keyword guess
+---is not trustworthy enough to gate real execution of ~1300 entries. See
+---`docs/ROADMAP/handovers/CDX-bindings-runtime-check.md`, Phase 4, for the
+---full reasoning. `looks_risky` below sorts candidates into their own
+---section for extra caution — a hint for the human doing the walk, nothing
+---more.
+---@param root string|nil
+---@return string[]
+function M.checklist_lines(root)
+  local actions = M.keymap_actions(root)
+  local routes = M.command_routes(root)
+
+  local out = {
+    "# Bindings — runtime checklist",
+    "",
+    "Generated, not hand-written -- work through it in a real session: trigger",
+    "each one yourself, tick it if it does what its description says, leave a",
+    "note here if it does not. Nothing on this list was invoked by the",
+    "generator to build it -- see `bindings.audit.checklist_lines`'s doc",
+    "comment for why.",
+    "",
+    "Checkbox convention: `- [ ]` open, `- [x]` verified.",
+    "",
+    "## Keymaps",
+    "",
+  }
+
+  local by_surface, surfaces = {}, {}
+  for _, a in ipairs(actions) do
+    if a.bound and a.lhs then
+      if not by_surface[a.surface] then
+        by_surface[a.surface] = {}
+        surfaces[#surfaces + 1] = a.surface
+      end
+      table.insert(by_surface[a.surface], a)
+    end
+  end
+  table.sort(surfaces)
+
+  local risky = {}
+  for _, surface in ipairs(surfaces) do
+    local kept = {}
+    for _, a in ipairs(by_surface[surface]) do
+      if looks_risky(a.desc) or looks_risky(a.name) then
+        risky[#risky + 1] = ("- [ ] `%s` (%s) -- %s"):format(a.lhs, surface, a.desc or a.name)
+      else
+        kept[#kept + 1] = ("- [ ] `%s` -- %s"):format(a.lhs, a.desc or a.name)
+      end
+    end
+    -- Only a group with something left earns a heading -- one whose every
+    -- key was risky would otherwise leave a dangling "### surface" with
+    -- nothing under it.
+    if #kept > 0 then
+      out[#out + 1] = "### " .. surface
+      out[#out + 1] = ""
+      vim.list_extend(out, kept)
+      out[#out + 1] = ""
+    end
+  end
+
+  out[#out + 1] = "## Usercmds"
+  out[#out + 1] = ""
+
+  local by_name, names = {}, {}
+  for _, r in ipairs(routes) do
+    if not by_name[r.name] then
+      by_name[r.name] = {}
+      names[#names + 1] = r.name
+    end
+    table.insert(by_name[r.name], r)
+  end
+  table.sort(names)
+
+  for _, name in ipairs(names) do
+    local kept = {}
+    for _, r in ipairs(by_name[name]) do
+      local bare = r.path == "(bare)" or r.path == "(root)" or r.path == "(plain)"
+      local trigger = bare and (":" .. name) or (":" .. name .. " " .. r.path)
+      local desc = r.desc ~= "" and r.desc or "(no description)"
+      local line = ("- [ ] `%s` -- %s"):format(trigger, desc)
+      if looks_risky(r.desc) or looks_risky(r.path) then
+        risky[#risky + 1] = line
+      else
+        kept[#kept + 1] = line
+      end
+    end
+    if #kept > 0 then
+      out[#out + 1] = "### :" .. name
+      out[#out + 1] = ""
+      vim.list_extend(out, kept)
+      out[#out + 1] = ""
+    end
+  end
+
+  if #risky > 0 then
+    out[#out + 1] = "## ⚠ Handle with care"
+    out[#out + 1] = ""
+    out[#out + 1] = ("%d item(s) flagged by a keyword guess (delete/remove/kill/"):format(#risky)
+    out[#out + 1] = "shutdown/... in the description or route) -- a candidate for extra"
+    out[#out + 1] = "caution, not a verdict. Read the description before triggering any of these."
+    out[#out + 1] = ""
+    for _, l in ipairs(risky) do
+      out[#out + 1] = l
+    end
+  end
+
+  return out
+end
+
 ---Expose `:<name> [path]` (full audit) and `:<name>Gaps [path]` for the
 ---calling config or plugin. Put this call in **your own config**, not in a
 ---library — the same reasoning `bindings.usercmd.docs.create_usercmd` gives.
@@ -620,6 +784,15 @@ function M.create_usercmd(name)
     nargs = "?",
     complete = "dir",
     desc = "Routes whose last path segment is a bare vague word (deep/full/check/...) -- candidates for a naming review, not a verdict",
+  })
+
+  usercmd.create(base .. "Checklist", function(opts)
+    local root = opts.args ~= "" and vim.fn.fnamemodify(opts.args, ":p"):gsub("/$", "") or nil
+    show(" " .. base .. "Checklist ", M.checklist_lines(root))
+  end, {
+    nargs = "?",
+    complete = "dir",
+    desc = "Markdown checklist over every keymap action and command route, for a manual runtime pass (optional: scope to a repo path; never invokes anything)",
   })
 end
 
