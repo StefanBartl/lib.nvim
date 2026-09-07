@@ -202,6 +202,17 @@ blacklist (`vim.api.`, `vim.fn.`, `vim.uv.`) only applies when the caller
 passes it explicitly, unlike most other helpers in this module which apply
 their own defaults.
 
+## Hex to string ([`convert/hex_to_string.lua`](convert/hex_to_string.lua))
+
+```lua
+strings.hex_to_string("F0056")  --> the UTF-8 character at that codepoint
+strings.hex_to_string("0")      --> "" (codepoint 0 / invalid hex both yield "")
+```
+
+Converts a hex codepoint string (upper or lower, no `"0x"` prefix) to its
+UTF-8 character, via `lib.lua.strings.utf8.encode` — pure Lua, no
+`vim.fn.nr2char`.
+
 ## Also see
 
 `lib.lua.strings.transform` ([`transform/README.md`](transform/README.md))

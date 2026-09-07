@@ -7,22 +7,15 @@
 -- =========================================================
 -- Root Namespace
 -- =========================================================
+--- CDX: this used to be two separate classes — a fictional `Lib.Strings`
+--- CDX: describing a namespaced shape (`strings.core.trim`) that
+--- CDX: `strings/init.lua` never actually returns, and a `Lib.Strings.ALL`
+--- CDX: that correctly described the real flat shape (`strings.trim`) but
+--- CDX: was never referenced by anything. `strings/init.lua`'s own
+--- CDX: `---@type Lib.Strings` was pointing at the wrong (fictional) one —
+--- CDX: real bug, not a gap: LuaLS gave wrong completions for
+--- CDX: `require("lib.lua.strings")`. Merged into the one real shape below.
 ---@class Lib.Strings
----@field core Lib.Strings.Core
----@field links Lib.Strings.Links
----@field patterns Lib.Strings.Patterns
----@field convert Lib.Strings.Convert
----@field utf8 Lib.Strings.Utf8
----@field encoding Lib.Strings.Encoding
----@field distance Lib.Strings.Distance
----@field format Lib.Strings.Format
----@field location Lib.Strings.Location.Mod
----@field case Lib.Strings.Case
----@field wrap Lib.Strings.Wrap
----@field width Lib.Strings.Width.Mod
-
--- ALL String Functions
----@class Lib.Strings.ALL
 -- =========================================================
 -- lib.lua.strings.core
 -- =========================================================
@@ -62,23 +55,11 @@
 ---@field find_plain fun(s: string, needle: string): integer|nil, integer|nil
 ---@field replace_plain fun(s: string, from: string, to: string): string
 ---@field surround fun(s: string, left: string, right: string): string
+---@field strip_ansi fun(s: string): string
 -- =========================================================
--- lib.lua.strings.transform
+-- lib.lua.strings.remove_prefix
 -- =========================================================
 ---@field remove_prefix fun(s: string, list?: string[]): string
----@field trim fun(s: any): string
----@field slugify fun(s: string): string
----@field kebab_case fun(s: string): string
----@field snake_case fun(s: string): string
----@field camel_case fun(s: string): string
----@field capitalize fun(s: string): string
----@field uncapitalize fun(s: string): string
----@field normalize_ws fun(s: string): string|nil
----@field pad_start fun(s: string, width: integer): string
----@field pad_end fun(s: string, width: integer): string
----@field pad_center fun(s: string, width: integer): string
----@field indent fun(s: string, n: integer): string
----@field dedent fun(s: string): string
 -- =========================================================
 -- lib.lua.strings.convert
 -- =========================================================
@@ -129,6 +110,7 @@
 ---@field char_width fun(cp: integer): integer # Columns for one codepoint (0/1/2).
 ---@field display_width fun(str: string, opts?: Lib.Strings.Width.Opts): integer # Columns occupied by a string, tabs expanded.
 ---@field truncate fun(str: string, max_cols: integer, opts?: Lib.Strings.Width.TruncateOpts): string, integer # Cut to a column budget without splitting a character.
+---@field width Lib.Strings.Width.Mod # The full width submodule, incl. pad_start/pad_end/pad_center (not flattened onto M -- those names already mean the byte-based core versions above).
 
 ---@class Lib.Strings.Utf8
 ---@field char_len fun(lead_byte: integer): integer
@@ -150,6 +132,12 @@
 ---@class Lib.Strings.Format
 ---@field format_bytes fun(n: integer, decimals?: integer): string
 ---@field format_number fun(n: number, sep?: string): string
+
+---A parsed "path:line:col"-style location.
+---@class Lib.Strings.Location
+---@field path string
+---@field line integer|nil
+---@field col integer|nil
 
 ---@class Lib.Strings.Location.Mod
 ---@field parse_location fun(str: string): Lib.Strings.Location|nil

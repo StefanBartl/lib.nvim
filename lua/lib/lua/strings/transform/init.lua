@@ -23,4 +23,5 @@ M.pad_center = core.pad_center
 M.indent = core.indent
 M.dedent = core.dedent
 
+---@type Lib.Strings.Transform
 return M

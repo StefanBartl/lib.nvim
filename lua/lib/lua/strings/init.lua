@@ -67,6 +67,9 @@ M.similarity = require("lib.lua.strings.distance").similarity
 M.format_bytes = require("lib.lua.strings.format").format_bytes
 M.format_number = require("lib.lua.strings.format").format_number
 
+-- convert module
+M.hex_to_string = require("lib.lua.strings.convert.hex_to_string")
+
 -- location module
 M.parse_location = require("lib.lua.strings.location").parse_location
 

@@ -10,12 +10,19 @@ namespace one-liners), split by topic, see [`API/README.md`](API/README.md).
 | `lib.lua.tables`   | array / dict / set / functional / safe / unique / `with`|
 | [`lib.lua.strings`](../lua/lib/lua/strings/README.md) | trim, split/join, case conversion, padding, slugify, … plus [`width`](../lua/lib/lua/strings/width.lua): display-width (column) arithmetic — CJK/emoji/tab-aware `display_width`/`truncate`/padding ([`:help`](../doc/lib.nvim-strings_width.txt)) |
 | `lib.lua.functions`| meta helpers: noop, identity, const, raise, …           |
-| [`lib.lua.time`](../lua/lib/lua/time/diff/README.md) | time / diff calculation ([`:help`](../doc/lib.nvim-time_diff.txt)) |
-| `lib.lua.json`     | decode helpers (string array)                           |
+| [`lib.lua.time`](../lua/lib/lua/time/diff/README.md) | [`diff`](../lua/lib/lua/time/diff/README.md) (checkpoint timer, `:help`), [`format`](../lua/lib/lua/time/format/README.md) (`format_timestamp`: iso/human/short/log/filename), [`presets`](../lua/lib/lua/time/presets/README.md) (today/yesterday/last_week/this_month/this_quarter/this_year/custom ranges) ([`:help`](../doc/lib.nvim-time_diff.txt)) |
+| [`lib.lua.json`](../lua/lib/lua/json/README.md) | `decode` (coerce an already-decoded JSON-shaped value to `string[]`, not a parser — see `vim.json.decode` for that) + `encode` (pure-Lua JSON encoder, callable + `.pretty`) |
 | [`lib.lua.memo`](../lua/lib/lua/memo/README.md) | memoization                          |
 | [`lib.lua.lazy`](../lua/lib/lua/lazy/README.md) | lazy-`require` proxy                 |
 | [`lib.lua.class`](../lua/lib/lua/class/README.md) | prototype OOP: `new`/`extend`/`include` mixins |
 | [`lib.lua.context_manager`](../lua/lib/lua/context_manager/README.md) | try/finally: `with(acquire, release, body)` |
+| [`lib.lua.config`](../lua/lib/lua/config/README.md) | pure helpers for the "defaults + user overrides" config-store pattern: `deep_merge`, `get(tbl, path)` |
+| [`lib.lua.diff`](../lua/lib/lua/diff/README.md) | line-array diff, two strategies: `lines` (cheap common-prefix/suffix splice region) and `myers` (full DP LCS-based edit script) |
+| [`lib.lua.dump`](../lua/lib/lua/dump/README.md) | recursive Lua value dumper (tables/metatables/functions/threads/userdata), depth-limited against cyclic structures — `vim.inspect` alternative/complement |
+| [`lib.lua.error`](../lua/lib/lua/error/README.md) | structured-error + safe-call-with-traceback convention: `new`, `is`, `safe_call` |
+| [`lib.lua.numeral`](../lua/lib/lua/numeral/README.md) | numeral conversion: `roman` (1-3999) and `alpha` (bijective base-26, spreadsheet-column style) |
+| [`lib.lua.uuid`](../lua/lib/lua/uuid/README.md) | UUIDv4 generation + formatting (not cryptographically secure — UI/temp-id use only) |
+| [`lib.lua.yaml`](../lua/lib/lua/yaml/README.md) | deliberately minimal, dependency-free YAML-ish decoder (no anchors/aliases, no multi-document streams) |
 
 ## `lib.nvim.*` — Neovim
 

@@ -509,3 +509,38 @@ M.memoize2(fn: fun(...):any, cap?: integer, keyer?: fun(...):string): fun(...):a
   -- same contract; default keyer is vim.inspect-based instead of naive table.concat
   -- (fixes a string-concat bug with complex/table arguments)
 ```
+
+---
+
+## OOP / control flow / config
+
+### `lib.lua.class` (see README)
+Prototype OOP: root classes, single inheritance (classic two-level
+metatable chain), mixin composition.
+
+```
+M.new(name: string): table                    -- define a new root class
+M.include(target: table, mixin: table): nil    -- copy mixin's functions onto target, target's own win
+Cls.new(...): table instance                   -- per-class: construct, calls init(self, ...) if defined
+Cls:extend(sub_name: string): table            -- per-class: subclass whose lookup falls back to Cls
+```
+
+### `lib.lua.context_manager` (see README)
+Try/finally for a scarce resource, pure Lua. Built on `lib.lua.error.safe_call`.
+
+```
+M.with(acquire: fun(): (resource: any, err: string|nil), release: fun(resource), body: fun(resource): ...): (ok: boolean, ...)
+  -- acquire() runs; if resource == nil, returns (false, err) and release never runs.
+  -- Otherwise body(resource) runs pcall-safe, release(resource) ALWAYS runs next
+  -- (even if body raised), then returns (true, body's results) or (false, error).
+```
+
+### `lib.lua.config` (see README)
+Pure helpers for the "defaults + user overrides" config-store pattern —
+extracted from two byte-identical copies of the same `setup(opts)`/`get(path)`
+pair.
+
+```
+M.deep_merge(base: table, override: table): table   -- copies base, does not mutate it
+M.get(tbl: table, path: string): any                 -- dotted-path lookup, e.g. get(opts, "ui.border")
+```

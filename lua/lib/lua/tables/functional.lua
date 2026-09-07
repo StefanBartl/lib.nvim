@@ -108,4 +108,5 @@ function F.flat_map(list, fn)
   return out
 end
 
+---@type Lib.Tables.Functional
 return F

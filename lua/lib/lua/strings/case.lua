@@ -61,4 +61,5 @@ function M.change_case(str, mode)
   return str
 end
 
+---@type Lib.Strings.Case
 return M

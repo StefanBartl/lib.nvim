@@ -42,4 +42,5 @@ function M.format_number(n, sep)
   return (is_negative and "-" or "") .. grouped
 end
 
+---@type Lib.Strings.Format
 return M

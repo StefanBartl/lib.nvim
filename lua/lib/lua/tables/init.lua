@@ -110,5 +110,16 @@ M.remove_at = safe_module.remove_at
 M.snapshot_shallow = safe_module.snapshot_shallow
 M.safe_ipairs = safe_module.safe_ipairs
 
+-- =========================================================
+-- Merge helper
+-- =========================================================
+
+-- `functional` and `unique_table` are NOT wired here: both carry a
+-- `map`/`filter`/`reduce`/`unique` whose name (and, for `functional`,
+-- callback argument order) collides with the array-ops versions already
+-- above. Require them directly: `lib.lua.tables.functional`,
+-- `lib.lua.tables.unique_table`.
+M.with = require("lib.lua.tables.with")
+
 ---@type Lib.Tables
 return M

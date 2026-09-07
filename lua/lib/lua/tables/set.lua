@@ -283,4 +283,5 @@ function M.iter(s)
   end
 end
 
+---@type Lib.Tables.Set
 return M

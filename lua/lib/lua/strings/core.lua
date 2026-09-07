@@ -277,4 +277,5 @@ function S.count_lines(s)
   return count
 end
 
+---@type Lib.Strings.Core
 return S

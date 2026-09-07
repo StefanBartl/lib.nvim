@@ -91,4 +91,5 @@ function M.iter(str)
   end
 end
 
+---@type Lib.Strings.Utf8
 return M

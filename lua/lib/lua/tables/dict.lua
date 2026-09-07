@@ -113,4 +113,5 @@ function M.group_by(xs, keyfn)
   return out
 end
 
+---@type Lib.Tables.Dict
 return M

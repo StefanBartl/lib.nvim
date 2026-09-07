@@ -1,21 +1,25 @@
 ---@meta
 ---@module 'lib.lua.tables.@types'
 
----@class Lib.Tables
----@field array Lib.Tables.Array
----@field core Lib.Tables.Core
----@field dict Lib.Tables.Dict
----@field set Lib.Tables.Set
----@field functional Lib.Tables.Functional
----@field safe Lib.Tables.Safe
----@field with fun(base: table|nil, extra: table|nil): table
----@field unique_table Lib.Tables.UniqueTable
-
 -- =========================================================
 -- All Array Operations
 -- =========================================================
 
----@class Lib.Tables.All
+--- CDX: this used to be two separate classes — a fictional `Lib.Tables`
+--- CDX: describing a namespaced shape (`tables.array.map`) that
+--- CDX: `tables/init.lua` never actually returns, and a `Lib.Tables.All`
+--- CDX: that correctly described the real flat shape (`tables.map`) but was
+--- CDX: never referenced by anything. `tables/init.lua`'s own
+--- CDX: `---@type Lib.Tables` was pointing at the wrong (fictional) one —
+--- CDX: real bug, not a gap. Merged into the one real shape below. The
+--- CDX: fictional class also claimed `functional`/`unique_table` as nested
+--- CDX: fields and `unique`/`unique_by`/`is_unique` as flat ones — none of
+--- CDX: that is real either: those two modules are deliberately NOT wired
+--- CDX: into `tables/init.lua` (their `map`/`filter`/`reduce`/`unique`
+--- CDX: collide by name, and for `functional` also by callback-argument-
+--- CDX: order, with the array-ops versions already on `M`). `with` WAS
+--- CDX: real but missing from both classes; it's wired and typed now.
+---@class Lib.Tables
 ---@field len fun(xs: any[]): integer # Return length using # operator (assumes dense array).
 ---
 ---@field clone fun(xs: any[]): any[] # Create a shallow copy of a dense array with preallocation.
@@ -165,11 +169,14 @@
 ---@field safe_ipairs fun(list: any[]): fun(): integer, any # Safe iterator over array. Captures length at start, preventing issues if list is mutated during iteration.
 ---
 -- =========================================================
--- Unique Table
+-- Merge helper
 -- =========================================================
 --
----@field unique fun(list: Lib.Tables.UniqueTable.List<any>): Lib.Tables.UniqueTable.List<any> # Create a new list containing only unique elements from the input list. The first occurrence of each element is preserved.
----@field unique_by fun(list: Lib.Tables.UniqueTable.List<any>, key_fn: Lib.Tables.UniqueTable.KeyFn<any>): Lib.Tables.UniqueTable.List<any> # Create a new list containing only unique elements from the input list, using a custom key extraction function. This is useful when values are tables or when only part of a value should participate in the uniqueness decision.
----@field is_unique fun(list: Lib.Tables.UniqueTable.List<any>): boolean # Check whether a list already contains only unique elements.
+---@field with fun(base: table|nil, extra: table|nil): table # Merge extra into base (or a shallow copy of extra if base is nil). Mutates and returns base when both are given.
+--
+-- `functional` (map/filter/reduce/find/any/all/flat_map) and `unique_table`
+-- (unique/unique_by/is_unique) are deliberately NOT part of this flat
+-- surface — see the CDX note above. Require them directly:
+-- `lib.lua.tables.functional`, `lib.lua.tables.unique_table`.
 
 return {}

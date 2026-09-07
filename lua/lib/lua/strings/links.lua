@@ -71,4 +71,5 @@ function M.url_under_cursor(line, col)
   return nil
 end
 
+---@type Lib.Strings.Links
 return M

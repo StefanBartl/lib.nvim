@@ -37,7 +37,6 @@ Source-of-truth inventory (init/README/@types presence, `lua_files` = total
 | dev | - (leaf-only) | Y | 0 | |
 | dotrepeat | Y | Y | 1 | |
 | frecency | Y | Y | 1 | |
-| fs | - (leaf-only) | - | 5 (nested) | huge (52 files) |
 | git | Y | Y | 1 | |
 | harvest | Y | Y | 1 | |
 | health | Y | Y | 1 | |
@@ -64,8 +63,27 @@ Source-of-truth inventory (init/README/@types presence, `lua_files` = total
 | ui | - (leaf-only) | - | 6 (nested) | huge (29 files) — ✅ audited 2026-09-07, see log |
 | window | Y | Y | 1 | |
 
-Plus `lib.lua.*` namespace (tables, strings, functions, time, json, memo,
-lazy, class, context_manager) — not yet inventoried, add before closing out.
+`lib.lua.*` namespace (16 top-level modules, 90 files, editor-independent
+pure Lua — no `vim.*`), inventoried 2026-09-07:
+
+| Module | init.lua | README | @types | notes |
+|---|---|---|---|---|
+| class | Y | Y | 1 | ✅ |
+| config | Y | Y | 1 | ✅ was in neither `modules.md` nor `docs/API/foundations-lua.md` — fixed |
+| context_manager | Y | Y | 1 | ✅ |
+| diff | Y | Y | 1 | ✅ top-level, distinct from nested `time.diff` |
+| dump | Y | Y | 1 | ✅ |
+| error | Y | Y | 1 | ✅ |
+| functions | Y | Y | 1 | ✅ |
+| json | Y | Y | 1 | ✅ |
+| lazy | Y | Y | 1 | ✅ |
+| memo | Y | Y | 1 | ✅ |
+| numeral | Y | Y | 1 | ✅ |
+| strings | Y | Y | 6 (nested) | ✅ 21 files, see log — biggest structural fix of the audit |
+| tables | Y | Y | 8 (nested) | ✅ 17 files, see log |
+| time | - (leaf-only) | - | 1 (nested) | ✅ 12 files, 3 subdirs (diff/format/presets) |
+| uuid | Y | Y | 1 | ✅ |
+| yaml | Y | Y | 1 | ✅ |
 
 ## Per-module log
 
@@ -539,6 +557,81 @@ subsystem — nothing to fix there, a good sign.
 are now audited.** Remaining: the `lib.lua.*` namespace (9 modules, not yet
 inventoried) and the glue layer (`lib/config`, `lib/strategies/*`,
 top-level `lib/@types/*`).
+
+### lib.lua.* (16 modules, 90 files, editor-independent pure Lua) — ✅ first full pass, biggest structural bug of the audit
+
+Not one of the five huge subsystems, but the biggest single batch after
+them. `strings`/`tables` (38 files combined) delegated to a sub-agent,
+every finding verified myself before acting (same process as the huge
+subsystems); the other 14 modules (2-12 files each) checked directly.
+
+- **`Lib.Strings` and `Lib.Tables` — the two top-level aggregate classes —
+  were describing the wrong shape, and it was an active bug, not a gap.**
+  Each `@types/init.lua` had carried two classes since inception: a
+  fictional one (also named `Lib.Strings`/`Lib.Tables`) describing a
+  *namespaced* shape (`strings.core.trim`, `tables.array.map`) that
+  `init.lua` never returns, and a second one (`Lib.Strings.ALL`/
+  `Lib.Tables.All`) that correctly described the real *flat* shape
+  (`strings.trim`, `tables.map`) — but was never referenced by anything.
+  Both `init.lua`s' own `---@type Lib.Strings`/`---@type Lib.Tables` on
+  their `return M` pointed at the wrong (fictional) one the whole time:
+  LuaLS gave **actively wrong** completions for `require("lib.lua.strings")`
+  and `require("lib.lua.tables")` — promising fields that don't exist,
+  silent on the ~50-60 that do. Merged each pair into one real class.
+  While merging, a cross-check of every `M.<field>` actually set in each
+  `init.lua` against the (now real) class turned up three more gaps the
+  merge itself didn't cause: `strings.width` (the whole submodule table,
+  not just its 3 flattened functions) and `strings.strip_ansi` were real
+  and missing from the type; `tables.with` was real, undocumented in
+  `tables/README.md`, and missing from the type. All three added.
+- **`tables.functional`/`tables.unique_table` are deliberately not wired
+  into `tables/init.lua`** (their `map`/`filter`/`reduce`/`unique` collide
+  by name — and for `functional`, also by callback-argument-order — with
+  the array-ops versions already flattened onto `M`) — but nothing said so
+  anywhere; `tables/README.md` didn't mention either module exists. Added
+  an "Also see" section explaining the collision and how to require them
+  directly, matching the precedent `strings/README.md` already set for its
+  own `transform` (a curated subset with the same kind of exclusion).
+- **`strings.hex_to_string`** — real, complete, already promised by the
+  (fictional) type — was never actually wired onto `strings/init.lua`'s
+  `M`, unlike every sibling leaf's functions. No name collision blocks it
+  (unlike `functional`/`unique_table` above), so wired it up rather than
+  documenting an exclusion — same "vergessenes Submodul" remediation this
+  whole audit has used everywhere else. Added its own README section too
+  (previously undocumented anywhere).
+- **Mechanical `---@type` gaps** (the same pattern found dozens of times
+  across the five big subsystems): 10 more `strings` leaves (`core`,
+  `distance`, `encoding`, `format`, `links`, `patterns`, `case`, `wrap`,
+  `utf8`, `transform`) and 6 more `tables` leaves (`array`, `core`, `dict`,
+  `safe`, `set`, `functional`) had a matching, accurate class already
+  sitting in `@types/` but unreferenced on their own `return M`. Fixed all
+  16. `time.diff`'s callable-factory `return M` had the same gap despite a
+  complete `Lib.Time.Diff` class already existing — fixed.
+- **`strings.location.lua`** had its `Lib.Strings.Location` data-shape
+  class defined inline in the source instead of under `@types/` (the
+  now-familiar `conventions.md` violation, same shape as `dev.duplicates`/
+  `keymap.portability` from earlier batches) — moved.
+- **`modules.md`'s `lib.lua.*` table was missing 7 of 16 modules
+  entirely**: `config`, `diff`, `dump`, `error`, `numeral`, `uuid`, `yaml`
+  had complete READMEs and were never linked anywhere in it. The `time`
+  row only mentioned `diff`, not `format`/`presets`; the `json` row said
+  "decode helpers" only, omitting `encode` entirely. Rewrote the whole
+  table.
+- **`docs/API/foundations-lua.md` (the parallel deep-doc file, already
+  fully covering 13 of the 16 modules) was missing `class`,
+  `context_manager`, and — the one module absent from *both* docs —
+  `config`** entirely. Added a new "OOP / control flow / config" section
+  covering all three.
+- Everything else in the 14 small/medium modules (`class`, `config`,
+  `context_manager`, `diff`, `dump`, `error`, `functions`, `json`, `lazy`,
+  `memo`, `numeral`, `time.format`, `time.presets`, `uuid`, `yaml`, plus
+  the genuinely-internal `time.diff.internal.*` helpers): README/`@types`/
+  code all agree, no further findings.
+- Feature idea: none obviously missing — this namespace already covers
+  strings, tables, functional helpers, time/date, JSON/YAML/UUID,
+  numerals, diffing, dumping, structured errors, OOP, try/finally, config
+  merging, lazy-require, and memoization. Comprehensive for a
+  general-purpose Lua foundation layer.
 
 ### buffer (+ buffer.context) — ✅ no issues
 
