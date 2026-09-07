@@ -1,6 +1,12 @@
 ---@meta
 ---@module 'lib.nvim.fs.path.@types'
 
+---`require("lib.nvim.fs.path")` itself: the flat grab-bag surface.
+---@class Lib.Fs.Path
+---@field from_repo_relative fun(raw: string): string
+---@field joinpath fun(parts: string[]): string
+---@field ensure_dir fun(path: string): boolean, string?
+
 ---OOP `Path` instance returned by `require("lib.nvim.fs.path.object").new(path)`.
 ---@class Lib.Fs.Path.Object
 ---@field path string

@@ -72,6 +72,21 @@ local resolve_root = make_root_dir_resolver({
 
 - `markers`: list of files/folders that indicate a project root.
 - `include_stdpath_config`: if `true`, will fallback to Neovim's `stdpath("config")` if the start directory is under it.
+- `resolve`: `nil|fun(dir: string, cfg): string|nil` — replaces the default marker
+  search entirely. Called with the normalized start directory and the resolved
+  config; its return value (or the start directory, if it returns `nil`) becomes
+  the root. Use this when a server's notion of "root" is more than "nearest
+  marker" (e.g. a workspace file, a language-specific config precedence) while
+  still reusing this module's buffer/filename normalization and callback
+  plumbing:
+
+  ```lua
+  local resolve_root = make_root_dir_resolver({
+    resolve = function(dir, cfg)
+      return require("lib.nvim.fs.find_root")({ markers = { "pyproject.toml" } }).find(dir)
+    end,
+  })
+  ```
 
 ---
 
@@ -97,16 +112,19 @@ local resolve_root = make_root_dir_resolver({
             |
             v
 +-----------------------------+
-| Check VCS markers upward    |
-|  - .git, .hg, .svn          |
+| cfg.resolve set?            |
+|  yes -> cfg.resolve(dir,cfg)|
+|  no  -> vim.fs.root(dir,    |
+|         cfg.markers)        |
+|         (single call, one   |
+|         combined list --    |
+|         VCS + custom markers|
+|         are not two stages) |
 +-----------------------------+
             |
             v
 +-----------------------------+
-| Check project-specific      |
-|  config markers upward      |
-|  - .luarc.json, .neoconf.json,
-|    selene.toml, stylua.toml|
+| No root found? -> use dir   |
 +-----------------------------+
             |
             v

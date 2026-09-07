@@ -60,6 +60,7 @@ Source-of-truth inventory (init/README/@types presence, `lua_files` = total
 | terminal | Y | Y | 1 | |
 | token | Y | Y | 1 | |
 | treesitter | - (leaf-only) | - | 0 | |
+| fs | - (leaf-only) | - | 5 (nested) | huge (52 files) — ✅ audited 2026-09-07, see log |
 | ui | - (leaf-only) | - | 6 (nested) | huge (29 files) — ✅ audited 2026-09-07, see log |
 | window | Y | Y | 1 | |
 
@@ -290,6 +291,73 @@ full function-by-function README diff only where something looked off
 - Feature idea: none obviously missing in any of the five leaf modules —
   `kit` in particular already covers the space thoroughly (12 component
   types, a layout engine, sync bridge for blocking call sites).
+
+### fs (29 leaf submodules, 52 files) — ✅ reduced-depth pass, several fixes
+
+Second of the five huge subsystems. Same reduced-depth method as `ui`: for
+every one of the 29 leaf modules, checked README/`@types`/wiring presence;
+full function-by-function README diff done for all of them (delegated half
+to a sub-agent for the mechanical spot-check, verified its findings myself
+before acting), not just presence.
+
+Discovered along the way: `docs/API/*.md` (`filesystem.md` + 4 sibling
+files, one per big subsystem) is a whole parallel, more detailed doc layer
+this audit's methodology hadn't accounted for — `modules.md`'s per-module
+row is deliberately just a terse one-liner that hands off to it
+(`docs/API/README.md` says so explicitly). This means an item missing from
+`modules.md`'s row-38 fs sentence is *not* automatically a bug the way an
+item missing from a small module's one-and-only README would be — checked
+`docs/API/filesystem.md` for completeness instead, which is the real
+per-function reference for this subsystem.
+
+- **`fs.path` (`from_repo_relative`/`joinpath`/`ensure_dir`) had no module-
+  surface class at all** — same "harvest" shape as batch 5: three real,
+  typed-per-function methods, `return M` with no `---@type`. Added
+  `Lib.Fs.Path` to `path/@types/init.lua` + the `---@type` annotation. This
+  collided with an already-self-flagged **fictional** `Lib.Fs.Path` of the
+  same name in `fs/@types/path.lua` (part of the stale `Lib.Fs`/`Lib.Fs.ALL`
+  grouping every prior batch has left alone) — since mine is now the real,
+  referenced one, gutted the duplicate in `fs/@types/path.lua` down to a
+  pointer comment rather than leaving two class bodies with the same name.
+- **`fs.ignore.list`**: same missing-module-class pattern (5 functions + 2
+  data fields, zero `@types`) — added `Lib.Fs.Ignore.List`. Its README also
+  had 4 of 5 functions in the Public API section but not `normalize()`
+  (the one every `as_*` adapter calls internally) — added.
+- **`fs.relpath` — a doc-drift regression, not a gap**: has a real, complete
+  README, but `docs/API/filesystem.md` said "(no README)" for it and
+  `modules.md`'s row-38 sentence had it as unlinked plain text (same for
+  `path_shorten`, also unlinked despite a real README) — the README was
+  added after both of those were written and neither got updated. Fixed
+  both links + the API-doc annotation.
+- **`fs.polymorphic_rootresolver` — 3 doc-vs-code drifts**, all now fixed:
+  (1) `cfg.resolve` (a real, used override for the whole marker search,
+  already correctly typed in `@types`) was entirely absent from the
+  README's Configuration section; (2) the sibling
+  `example-setup-luals-marksman.md` required a wrong module path throughout
+  (`polymorphic_root_resolver`, extra underscore) and called it as
+  `resolver_module.make_root_dir_resolver(...)` as if `require` returned a
+  table — it returns the factory function directly, so every example in
+  that file would `require`-error or call-error if copy-pasted; (3) the
+  README's flow diagram depicted two sequential built-in marker-check
+  stages (VCS then project-config) — code does one `vim.fs.root` call with
+  whatever combined marker list the caller passes, so the diagram implied
+  functionality that doesn't exist. Corrected all three.
+- **`docs/API/filesystem.md` + `docs/API/README.md` both said "26
+  submodules"** for fs — actual count (headings in `filesystem.md`, which
+  matches the real README count exactly) is 29. Fixed both.
+- Remaining 25 of 29 leaf modules (`chdir`, `dir_guard`, `find_root`,
+  `find_upward_dir`, `create_entry`, `mkdirp`, `json`, `trash`, `watch`,
+  `scan_roots`, `scan_cached`, `collect_recursive`, `write.{to_file,append,
+  async,batch}`, `read`, `normkey`, `project_key`, `globbable`, `is_dir`,
+  `is_readable_file`, `is_subpath`, `is_valid_filename`): no discrepancies
+  — READMEs match code exactly, `@types` (where present) match, and the
+  ~13 modules with no `@types` dir all legitimately return a bare
+  `function(...)` fully self-typed via its own `---@param`/`---@return`
+  (the established non-bug pattern from earlier batches), not a gap.
+- Feature idea: none obviously missing — `fs` already covers path
+  resolution, root detection, stat checks, directory creation/scanning
+  (sync + async variants throughout), ignore lists, read/write/watch, and
+  trash, each with a clear single-responsibility module.
 
 ### buffer (+ buffer.context) — ✅ no issues
 

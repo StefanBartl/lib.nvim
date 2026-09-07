@@ -22,7 +22,7 @@ with worked examples.
 - **[filesystem.md](filesystem.md)** — `lib.nvim.fs.*`: working-directory
   management, root/project detection, path resolution, stat checks,
   directory creation/scanning, ignore lists, file read/write/mutation/
-  watching, opening files and URLs. The single largest namespace (26
+  watching, opening files and URLs. The single largest namespace (29
   submodules).
 - **[cross-platform.md](cross-platform.md)** — `lib.nvim.cross.*`: OS
   detection, executable/Mason lookup, clipboard, open-with-default-app,
