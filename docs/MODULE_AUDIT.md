@@ -246,3 +246,15 @@ These are the "leaf-only" namespaces (no top-level `init.lua`, per
   security section describing what they do. Added a one-line pointer.
 - markdown.table, treesitter.guard, treesitter.parser_policy: no issues —
   every exported function accounted for in both README and `@types`.
+
+### buffer (+ buffer.context) — ✅ no issues
+
+Leaf-only namespace by design (no `buffer/init.lua`, documented in
+`modules.md:34` and self-flagged again in `buffer/@types/init.lua` as the
+same stale-`Lib.Buffer`-aggregator pattern already known from `Lib.Modules`).
+No dedicated top-level README, but that's consistent with the deliberate
+"no unifying namespace" design — each leaf (`get_alternate`, `insert_lines`,
+`is_markdown_buf`, `open_background`) is fully self-documented in its own
+doc-comment, and `modules.md` already explains why. `buffer.context` (the
+one submodule with its own directory) has a proper README + @types, fully
+accurate.
