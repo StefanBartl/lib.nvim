@@ -39,4 +39,30 @@
 ---@field prompt string|nil
 ---@field format (fun(item: any): string)|nil
 
+--- `lib.nvim.harvest.scope` module surface.
+---@class Lib.Harvest.Scope
+---@field resolve fun(kind: Lib.Harvest.ScopeKind|string|nil, opts: Lib.Harvest.ScopeOpts|nil): Lib.Harvest.Source[], string|nil
+---@field resolve_token fun(token: string|nil, opts: Lib.Harvest.ScopeOpts|nil): Lib.Harvest.Source[], string|nil
+
+--- `lib.nvim.harvest.render` module surface.
+---@class Lib.Harvest.Render
+---@field markdown_table fun(headers: string[], rows: any[][], opts: Lib.Harvest.TableOpts|nil): string
+---@field csv fun(headers: string[]|nil, rows: any[][], sep: string|nil): string
+---@field lines fun(rows: any[][], sep: string|nil): string
+
+--- `lib.nvim.harvest.sink` module surface.
+---@class Lib.Harvest.Sink
+---@field clipboard fun(text: string): boolean, string|nil
+---@field file fun(text: string, path: string): boolean, string|nil
+---@field scratch fun(text: string, opts: Lib.Harvest.ScratchOpts|nil): integer
+---@field select fun(items: any[], opts: Lib.Harvest.SelectOpts|nil, on_choose: fun(item: any, idx: integer))
+
+--- `lib.nvim.harvest` module surface.
+---@class Lib.Harvest
+---@field scope Lib.Harvest.Scope
+---@field render Lib.Harvest.Render
+---@field sink Lib.Harvest.Sink
+---@field emit fun(text: string, out: string|nil, opts: (Lib.Harvest.ScratchOpts|{ path?: string })|nil): boolean, string|nil
+---@field outputs fun(): string[]
+
 return {}

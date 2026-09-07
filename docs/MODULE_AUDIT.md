@@ -129,3 +129,48 @@ Feature ideas (not implemented, just noted):
 ### require, safe_api, selection — ✅ no issues
 
 Docs/@types complete and accurate. No feature gaps found.
+
+### store (+ store.project), terminal, token, health — ✅ (token fixed)
+
+- `token/@types/init.lua` was missing the trailing `return {}` every other
+  `@types` file in the repo has (harmless at runtime — nothing uses the
+  require'd value — but inconsistent). Added.
+- store/store.project, terminal, health: no issues, docs match code exactly.
+- Feature idea: `lib.nvim.terminal` has no `is_terminal_buf`-style check for
+  "is this a *specific* terminal job" (e.g. matching by `b:term_title` or
+  job pid) — plausible future need if a caller wants to find/reuse a named
+  terminal rather than just detect/delete one, but no concrete caller need
+  identified, so just noted.
+
+### harvest — ✅ fixed (biggest gap found so far)
+
+- None of the 4 files (`init.lua`, `scope.lua`, `render.lua`, `sink.lua`) had
+  a `---@type` annotation on their return, and — unlike every other
+  multi-file module audited so far — **no module-surface classes existed at
+  all** for `scope`/`render`/`sink`/the top aggregator itself; `@types` only
+  had the data-shape classes (`Source`, `ScopeOpts`, `TableOpts`, ...). Added
+  `Lib.Harvest.Scope`/`.Render`/`.Sink`/`Lib.Harvest` and all 4 return
+  annotations. README itself was already accurate — this was purely a
+  `@types` gap, LuaLS gave zero completion/checking on any harvest call
+  before this.
+
+### cache (+ disk, memory), deps (10 files), store — ✅ no issues
+
+Both are exemplary: every submodule has a `---@type` return, every class is
+complete and matches the code exactly, README covers 100% of the surface
+including edge behavior (TTL clock choice, idempotency, etc.). No feature
+gaps found.
+
+### logger (8 files) — ✅ fixed (README gap) + 1 convention note
+
+- `count`/`counters`/`add_sink` (all three fully and correctly typed in
+  `@types`) and the top-level `loggers()` were entirely undocumented in the
+  README — added a "Counters and extra sinks" section + a `loggers()`
+  mention.
+- Convention note, not fixed: `command.lua`/`config.lua`/`record.lua`/
+  `ring.lua`/`serialize.lua`/`sinks.lua` are true internals (required only
+  from within `logger/`, confirmed via repo-wide grep) but aren't named
+  `_foo.lua`/under `internal/` per `conventions.md`, and have no `---@type`
+  on their returns either. Correctly excluded from the public README either
+  way. Left alone — renaming would touch require paths for no user-facing
+  benefit; flagging here in case a future pass wants to formalize it.

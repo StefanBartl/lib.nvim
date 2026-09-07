@@ -253,4 +253,5 @@ function M.resolve_token(token, opts)
   return M.resolve("path", vim.tbl_extend("force", opts, { path = token }))
 end
 
+---@type Lib.Harvest.Scope
 return M

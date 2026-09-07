@@ -183,4 +183,5 @@ function M.lines(rows, sep)
   return table.concat(out, "\n")
 end
 
+---@type Lib.Harvest.Render
 return M
