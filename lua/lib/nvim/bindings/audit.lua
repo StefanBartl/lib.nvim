@@ -151,6 +151,72 @@ function M.command_routes(root)
 end
 
 ---@internal
+--- Words vague enough, alone, to plausibly name almost any subcommand — the
+--- shape `:LspDoctor deep` had before it became `:LspDoctor fmt_check` (the
+--- prior name said a *level*, not what the command actually reports: which
+--- formatter is active). Listed so a route whose last path segment is one of
+--- these gets flagged for a human look. The word is not wrong by itself —
+--- `:Lsp status` is fine, "status" names the whole answer there — only a
+--- *bare* occurrence as the final segment is a candidate.
+local VAGUE_LAST_SEGMENT = {
+  deep = true,
+  full = true,
+  check = true,
+  info = true,
+  debug = true,
+  all = true,
+  basic = true,
+  extra = true,
+  advanced = true,
+  misc = true,
+}
+
+---Every command route (`command_routes`), flagged where its last path
+---segment is a single vague word.
+---
+---A candidate list, not a verdict — same caveat `gaps` already carries: the
+---fix is always a judgment call about what the command *actually* reports,
+---which this cannot know. `root` scopes the same way `command_routes` does.
+---@param root string|nil
+---@return (Lib.Bindings.Audit.CmdRoute|{vague: boolean})[]
+function M.naming_candidates(root)
+  local routes = M.command_routes(root)
+  local out = {}
+  for _, r in ipairs(routes) do
+    local last = r.path:match("(%S+)$")
+    local vague = last ~= nil and VAGUE_LAST_SEGMENT[last:lower()] == true
+    out[#out + 1] = vim.tbl_extend("force", {}, r, { vague = vague })
+  end
+  return out
+end
+
+---`naming_candidates()`, flagged rows only, as printable lines.
+---@param root string|nil
+---@return string[]
+function M.naming_candidate_lines(root)
+  local flagged = {}
+  for _, r in ipairs(M.naming_candidates(root)) do
+    if r.vague then
+      flagged[#flagged + 1] = r
+    end
+  end
+  if #flagged == 0 then
+    return { "no naming candidates -- no route's last segment is a bare vague word." }
+  end
+  local out = {
+    ("%d route(s) worth a naming look (last segment is a single vague word):"):format(#flagged),
+    "",
+  }
+  for _, r in ipairs(flagged) do
+    out[#out + 1] = ("  :%-16s %-24s %s"):format(r.name, r.path, r.desc)
+  end
+  out[#out + 1] = ""
+  out[#out + 1] =
+    "a flag here is a candidate, not a verdict -- e.g. :LspDoctor deep became :LspDoctor fmt_check for exactly this reason."
+  return out
+end
+
+---@internal
 --- Every registered action with *all* of its `lhs` values, unlike
 --- `keymap_actions`, which keeps one. The distinction is the whole point
 --- here: an action bound to a fragile key and a portable alias is fine, and
@@ -545,6 +611,15 @@ function M.create_usercmd(name)
     show(" " .. base .. "Prefixes ", M.prefix_ambiguity_lines())
   end, {
     desc = "Command names that are a strict prefix of another live command (<Tab>/abbreviation collisions)",
+  })
+
+  usercmd.create(base .. "Naming", function(opts)
+    local root = opts.args ~= "" and vim.fn.fnamemodify(opts.args, ":p"):gsub("/$", "") or nil
+    show(" " .. base .. "Naming ", M.naming_candidate_lines(root))
+  end, {
+    nargs = "?",
+    complete = "dir",
+    desc = "Routes whose last path segment is a bare vague word (deep/full/check/...) -- candidates for a naming review, not a verdict",
   })
 end
 
