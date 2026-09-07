@@ -52,10 +52,11 @@ The short version: **modules.md** to find it, **FEATURES/** for the why,
 | [WORKFLOW.md](WORKFLOW.md) | The plugin-author angle: which module to reach for when building on top. |
 | [architecture.md](architecture.md) | The `lib.lua.*` / `lib.nvim.*` split and the rule behind it. |
 
-## Contributing
+## Working on it
 
 | Page | What it answers |
 |---|---|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Ground rules, repository layout, and the steps for adding a module. |
 | [conventions.md](conventions.md) | Module layout rules, and the steps for documenting a new module. |
 | [../templates/README.md](../templates/README.md) | Resolving `lib.nvim` in a dependent plugin's own headless test suite. |
 
