@@ -38,7 +38,17 @@ composer.verb("Replace", {
       run = function(ctx)
         -- ctx.args  = { old = "...", new = "..." }
         -- ctx.flags = { dry = true|nil, type = {"lua","md"}, engine = "fzf"|nil, replace = true|nil }
-        require("replacer").run(ctx.args, ctx.flags)
+        -- replacer.run() takes one RP_Request table, not (args, flags) --
+        -- build one from what this route actually collected.
+        require("replacer").run({
+          old = ctx.args.old,
+          new = ctx.args.new,
+          scope = "%",
+          all = false,
+          dry = ctx.flags.dry == true,
+          overrides = {},
+          filters = { file_types = ctx.flags.type or {}, globs = {}, exclude = {} },
+        })
       end,
     },
   },

@@ -1,4 +1,5 @@
 -- TESTS/keymap_registry_spec.lua — lib.nvim.bindings.keymap
+---@diagnostic disable: need-check-nil
 
 return function(H)
   local eq, ok = H.eq, H.ok
