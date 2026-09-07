@@ -39,3 +39,26 @@ routed through `vim.system` (no shell) when available.
 
 `lib.nvim.cross.open_default` uses `run_blocking_captured` to resolve a WSL
 path via `wslpath -w`.
+
+### `run_async_captured(cmd, on_done, input?) -> handle`
+
+Asynchronous counterpart to `run_blocking_captured`: spawns `cmd` and hands
+the outcome to `on_done(ok, output, code)` instead of blocking the UI thread
+until the process exits. `run_blocking`/`run_blocking_captured` are, by a
+wide margin, the biggest source of UI freezes across the plugins built on
+this library — anything that can take longer than a few milliseconds
+(container CLIs, PowerShell, git over the network, image tooling) belongs
+here instead. `on_done` always runs on the main loop (`vim.schedule`), so
+it's safe to touch buffers/windows/`vim.fn.*` from it. Falls back to
+`vim.fn.system` + `vim.schedule` on Neovim without `vim.system`.
+
+```lua
+local handle = run_argv.run_async_captured({ "git", "fetch" }, function(ok, output, code)
+  if not ok then
+    vim.notify("fetch failed (" .. code .. "): " .. output, vim.log.levels.ERROR)
+  end
+end)
+
+-- handle.stop() sends SIGTERM; no-op on the legacy (Neovim < 0.10) fallback,
+-- where there is no job to kill.
+```

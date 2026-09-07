@@ -31,7 +31,7 @@ Source-of-truth inventory (init/README/@types presence, `lua_files` = total
 | contextmenu | Y | Y | 1 | |
 | core | Y | Y | 1 | |
 | count | Y | Y | 1 | |
-| cross | Y | Y | 5 (nested) | huge (42 files) |
+| cross | Y | Y | 5 (nested) | huge (42 files) — ✅ audited 2026-09-07, see log |
 | debounce | Y | Y | 1 | |
 | deps | Y | Y | 1 | |
 | dev | - (leaf-only) | Y | 0 | |
@@ -358,6 +358,70 @@ per-function reference for this subsystem.
   resolution, root detection, stat checks, directory creation/scanning
   (sync + async variants throughout), ignore lists, read/write/watch, and
   trash, each with a clear single-responsibility module.
+
+### cross (~28 leaf modules across platform/executable/fs/run/uv, 42 files) — ✅ reduced-depth pass, several fixes
+
+Third of the five huge subsystems. Same method as `ui`/`fs`, half delegated
+to a sub-agent (verified every finding myself before acting, same as the
+`fs` batch).
+
+- **`cross/init.lua` — the root aggregator itself, the single most-used
+  require in the whole subsystem — had no `---@type Lib.Cross` on its
+  `return M`**, despite `Lib.Cross` being fully and correctly defined.
+  Unlike `fs`/`ui`/`buffer` (leaf-only, no real aggregate to type), `cross`
+  has a genuine working `init.lua` aggregator, which makes this the
+  highest-impact single fix in the whole audit so far. Fixed.
+- **`modules.md`'s `lib.nvim.cross` row-header link pointed at the wrong
+  file** — `fs/separators/README.md` (a leaf three levels down) instead of
+  `cross/README.md` (the real, substantial root README). Fixed.
+- **`cross.executable` had no module-surface class at all** (same
+  "harvest"/`fs.path` shape): `exists`/`path`/`find`/`mason_bin`/`clear`,
+  zero `@types`. The top-level `Lib.Cross` class even already had a prose
+  comment on its generic `executable table` field naming `clear` — so the
+  gap was known-about, just never finished. Added `Lib.Cross.Executable` +
+  wired it into `Lib.Cross.executable`. `clear(name?)` was also entirely
+  undocumented in the module's own README (real, used for cache
+  invalidation after installing a tool mid-session) — added.
+- **`cross.run_argv.run_async_captured`** — a real, complete, substantially
+  commented async function (non-blocking counterpart to
+  `run_blocking_captured`, explicitly written to fix "the biggest source of
+  UI freezes across the plugins built on this library") — existed and was
+  correctly typed in `@types`, but was in neither the module's own README
+  nor `docs/API/cross-platform.md`. Same "vergessenes Submodul" shape as
+  `ui.nerd_font`/`fs.path`. Added to both.
+- **`cross.fs.mutate`**: missing `---@type` on `return M` (mechanical
+  pattern, ~10th time this audit has found it) despite a fully correct
+  `Lib.Cross.Fs.Mutate` class; that class's own file was also missing the
+  trailing `return {}` every sibling `@types` file has (harmless, but
+  inconsistent — same class of nit as `token`'s fix in batch 2). Both
+  fixed. Separately, `docs/API/cross-platform.md`'s mutate section was
+  missing `symlink`/`hardlink` entirely (real, in the module's own README
+  and `@types` already) — added.
+- **`cross.run.env`**: missing `---@type` on `return M` despite a fully
+  correct `Lib.Cross.Run.Env` class (same mechanical pattern). Separately,
+  `M.array()` (converts `build()`'s dict-shaped env to the array shape raw
+  `uv.spawn` — and this module's own sibling `cross.uv.spawn_capture` —
+  wants) was documented in the module's own README and `@types` but absent
+  from `docs/API/cross-platform.md`'s function list. Both fixed.
+- **`cross.uv.spawn_capture`**: `opts.stdin` (real, used to hand a
+  credential to a child via its stdin instead of argv, where any process on
+  the machine could read the command line) was correctly typed in `@types`
+  but undocumented in both the module's own README and
+  `docs/API/cross-platform.md`. Added to both.
+- **`cross.run` (the leaf module, not the assembled `cross.run` aggregate
+  sub-table)**: verified its `return M` deliberately has *no* `---@type`
+  annotation, and confirmed that's correct rather than a gap — the existing
+  `Lib.Cross.Run` class describes the aggregate shape (adds `run_argv`/
+  `env`, assembled later in `cross/init.lua`), so annotating this leaf's
+  own 4-field table with that class would be a type error, not a fix.
+- Everything else checked (platform.is_{wsl,macos,linux}, copy_to_clipboard,
+  fs._cwd/expand_path/lock/wslpath, fs.separators.*, open_default,
+  reveal_in_fm, uv.fs/spawn_command/spawn_shell_command/spawn_stream/
+  wait_until): no discrepancies.
+- Feature idea: none obviously missing — `cross` already covers OS
+  detection, three tiers of process spawning (shell-string/argv/libuv-
+  direct, each with blocking+async variants), path separators, file
+  mutation with Windows-sharing-error retry, and lock diagnosis.
 
 ### buffer (+ buffer.context) — ✅ no issues
 

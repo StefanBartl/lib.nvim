@@ -22,9 +22,16 @@ spawn_capture({ "git", "status", "--porcelain" }, { cwd = repo_root, timeout_ms 
 end)
 ```
 
-`opts` is optional: `{ timeout_ms?, cwd?, env? }`. `env`, like libuv's own
-spawn `env` option, is an array of `"KEY=VALUE"` strings — not a
+`opts` is optional: `{ timeout_ms?, cwd?, env?, stdin? }`. `env`, like
+libuv's own spawn `env` option, is an array of `"KEY=VALUE"` strings — not a
 `{ [key] = value }` dict — and is passed through unconverted.
+
+`stdin`, when given, is written to the child and the pipe is then closed, so
+a command that reads until EOF (`curl -K -`, `rg --file -`) terminates.
+Without it the child gets no stdin at all. It exists for the case where a
+value must not appear in argv: a process's command line is readable by any
+other process on the machine, which makes it the wrong place for a
+credential.
 
 If the timeout elapses before the process exits, the handle is killed with
 `sigkill` and the result settles with `timed_out = true`, `ok = false`,

@@ -17,3 +17,5 @@
 ---@field mkdir_p fun(path: string, opts?: Lib.Cross.Fs.Mutate.RetryOpts): boolean, string|nil
 ---@field symlink fun(target: string, link_path: string, is_dir?: boolean, opts?: Lib.Cross.Fs.Mutate.RetryOpts): boolean, string|nil
 ---@field hardlink fun(target: string, link_path: string, opts?: Lib.Cross.Fs.Mutate.RetryOpts): boolean, string|nil
+
+return {}
