@@ -14,19 +14,27 @@
 ---     ...
 ---   end
 ---
---- The cache is weak-keyed (`bufnr -> snapshot`), so entries for deleted
---- buffers are collected automatically; `invalidate`/`clear_all` exist for
---- callers that want to force a rebuild sooner (e.g. after mutating a buffer
---- through a path that does not bump `changedtick`).
+--- Entries for deleted buffers are dropped by a `BufDelete`/`BufWipeout`
+--- autocmd, registered once at module load; `invalidate`/`clear_all` exist
+--- for callers that want to force a rebuild sooner (e.g. after mutating a
+--- buffer through a path that does not bump `changedtick`).
+---
+--- The cache table itself is *not* weak-keyed: `bufnr` is a plain Lua
+--- number, and numbers are not a collectible type -- `{__mode = "k"}` only
+--- ever applies to table/function/userdata/thread keys, so a weak table
+--- keyed by buffer handles would never actually shrink on its own. The
+--- autocmd above is the real cleanup path.
 
 require("lib.nvim.buffer.context.@types")
 
 local api, bo = vim.api, vim.bo
+local autocmd = require("lib.nvim.bindings.autocmd")
 
 local M = {}
 
---- Weak-keyed cache (auto-cleanup on buffer deletion / GC).
-local cache = setmetatable({}, { __mode = "k" })
+--- Snapshot cache, keyed by buffer handle. Cleared per-entry by the
+--- `BufDelete`/`BufWipeout` autocmd below, not by the table itself.
+local cache = {}
 
 M.stats = {
   hits = 0,
@@ -166,9 +174,17 @@ function M.invalidate(bufnr)
   end
 end
 
+-- The actual cleanup path for deleted buffers (see the module doc for why
+-- `__mode = "k"` on a bufnr-keyed table cannot do this on its own). Fires
+-- once per buffer, for the life of the process -- no group needed since
+-- nothing here is ever torn down.
+autocmd.create({ "BufDelete", "BufWipeout" }, function(args)
+  M.invalidate(args.buf)
+end, { desc = "lib.nvim.buffer.context: drop the cached snapshot for a deleted buffer" })
+
 --- Drop every cached snapshot.
 function M.clear_all()
-  cache = setmetatable({}, { __mode = "k" })
+  cache = {}
   M.stats.invalidations = M.stats.invalidations + 1
 end
 

@@ -70,7 +70,22 @@ return function(H)
 
   buffer_ctx.print_stats() -- smoke: must not error
 
+  -- `bufnr` is a plain Lua number, not a table/function/userdata/thread --
+  -- a `{__mode = "k"}` weak-keyed cache table keyed by it would never
+  -- actually shrink on its own (numbers are not a collectible type), no
+  -- matter how many buffers get deleted. The real cleanup path is the
+  -- BufDelete/BufWipeout autocmd the module registers at load time; this
+  -- re-caches `bufnr` once more, then confirms deleting the buffer actually
+  -- drops its cache entry (observed via the invalidations counter) rather
+  -- than leaking it for the rest of the process.
+  buffer_ctx.get(bufnr)
+  local invalidations_before = buffer_ctx.get_stats().invalidations
   vim.api.nvim_buf_delete(bufnr, { force = true })
+  eq(
+    buffer_ctx.get_stats().invalidations,
+    invalidations_before + 1,
+    "buffer.context: BufDelete drops the cache entry instead of leaking it"
+  )
 
   -- --------------------------------------------------------- window.context
   local window_ctx = require("lib.nvim.window.context")
