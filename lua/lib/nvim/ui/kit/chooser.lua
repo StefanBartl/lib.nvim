@@ -15,6 +15,10 @@
 --- rich items). Navigation moves by logical item,
 --- not raw buffer line, so this is transparent to plain-string callers
 --- (every item is 1 line, anchor 0 — identical to the old behavior).
+---
+--- A rich item may set `selectable = false` (separators, headings): the
+--- cursor steps over it, <CR> on it is inert, and it can't be marked in
+--- multi-select. Plain-string items are always selectable.
 
 local surface = require("lib.nvim.ui.kit.surface")
 local map = require("lib.nvim.bindings.keymap")
@@ -58,6 +62,7 @@ local function normalize_item(item)
       lines = item.lines,
       highlights = item.highlights,
       anchor_row = item.anchor or 0,
+      selectable = item.selectable ~= false,
     }
   end
   return {
@@ -65,7 +70,36 @@ local function normalize_item(item)
     lines = { tostring(item) },
     highlights = nil,
     anchor_row = 0,
+    selectable = true,
   }
+end
+
+--- First selectable entry index at or after `from`, searching in `dir`
+--- (+1/-1) and wrapping around. Returns nil when no entry is selectable at
+--- all -- a list built entirely from decoration, which the caller must not
+--- turn into an endless scan.
+---@internal
+---@param from integer
+---@param dir integer
+---@return integer|nil
+local function next_selectable(from, dir)
+  local count = #state.entries
+  if count == 0 then
+    return nil
+  end
+  local idx = from
+  for _ = 1, count do
+    if idx < 1 then
+      idx = count
+    elseif idx > count then
+      idx = 1
+    end
+    if state.entries[idx].selectable then
+      return idx
+    end
+    idx = idx + dir
+  end
+  return nil
 end
 
 --- Build `state.entries` (with row offsets) and the flattened buffer lines
@@ -189,11 +223,11 @@ function M.move(delta)
   end
   local cur_row0 = api.nvim_win_get_cursor(win)[1] - 1
   local cur_idx = item_at_row(cur_row0) or 1
-  local idx = cur_idx + delta
-  if idx < 1 then
-    idx = count
-  elseif idx > count then
-    idx = 1
+  -- Non-selectable entries (separators, headings) are stepped over rather
+  -- than landed on, in the direction of travel.
+  local idx = next_selectable(cur_idx + delta, delta >= 0 and 1 or -1)
+  if not idx then
+    return
   end
   local e = state.entries[idx]
   api.nvim_win_set_cursor(win, { e.start_row + e.anchor_row + 1, 0 })
@@ -228,7 +262,7 @@ function M.toggle()
     return
   end
   local idx = M.current_index()
-  if not idx then
+  if not idx or not state.entries[idx].selectable then
     return
   end
   state.selections[idx] = not state.selections[idx]
@@ -242,6 +276,11 @@ function M.submit()
     return
   end
   local idx = M.current_index()
+  -- A non-selectable entry (separator, heading) is inert: picking it does
+  -- nothing and leaves the chooser open, rather than closing with no value.
+  if idx and not state.entries[idx].selectable then
+    return
+  end
   local cb, multi, entries = state.on_select, state.multi, state.entries
 
   if multi then
@@ -294,6 +333,10 @@ function M.open(opts)
     theme = opts.theme,
     title = opts.title,
     relative = opts.relative or "cursor",
+    -- Explicit placement, for an anchor the surface can't derive on its own
+    -- (`relative = "mouse"` with nvzone/menu's row/col offsets, say).
+    row = opts.row,
+    col = opts.col,
     width = opts.width,
     height = opts.height or #flat_lines,
     enter = true,
@@ -344,6 +387,9 @@ function M.open(opts)
     -- position across a close+reopen refresh) instead of always item 1.
     -- Out-of-range/absent falls back to item 1.
     local initial = entries[opts.initial_index] and opts.initial_index or 1
+    -- Never land on a separator: step forward to the first selectable entry
+    -- (and, if the list opens with one, that is item 1 as before).
+    initial = next_selectable(initial, 1) or initial
     local e = entries[initial]
     api.nvim_win_set_cursor(surf.winid, { e.start_row + e.anchor_row + 1, 0 })
   end

@@ -1,10 +1,23 @@
 # `lib.nvim.contextmenu`
 
 Building blocks for [nvzone/menu](https://github.com/nvzone/menu)-shaped
-context-menu entries: a self-gating item builder (`entry`/`group`/`submenu`)
-plus a mouse-trigger binder (`bind_buffer`). Soft dependency throughout —
-`menu` is only `require()`d when a bound trigger actually fires, and a
-missing install degrades to a single session-wide notify, never an error.
+context-menu entries: a self-gating item builder (`entry`/`group`/`submenu`),
+a renderer (`open`), and a mouse-trigger binder (`bind_buffer`).
+
+Two renderers draw the same item tables:
+
+| `renderer` | draws with | notes |
+|---|---|---|
+| `"auto"` (default) | nvzone/menu if installed, else the kit | nothing changes for an existing setup |
+| `"nvzone"` | [nvzone/menu](https://github.com/nvzone/menu) | side-by-side fly-outs; falls back to the kit (one notify) when not installed |
+| `"kit"` | `lib.nvim.ui.kit.menu` | no third-party dependency, kit theming, drill-down fly-outs |
+
+```lua
+require("lib.nvim.contextmenu").setup({ renderer = "kit" })
+```
+
+The dependency stays soft either way: `menu` is only `require()`d when a menu
+actually opens, and a missing install degrades to the kit, never to an error.
 
 ## Two integration shapes
 
@@ -58,10 +71,13 @@ relevant condition holds. Live reference: `markdown.nvim`
 ```lua
 local contextmenu = require("lib.nvim.contextmenu")
 
+contextmenu.setup({ renderer = "auto" })       -- "auto" | "kit" | "nvzone"
+contextmenu.renderer()                         -- the configured value
 contextmenu.entry(available, label, fn, rtxt)  -- {name,rtxt,cmd} or nil
 contextmenu.group(out, entry, entry, nil, entry)  -- varargs; appends non-nil items, separator between groups
 contextmenu.submenu(label, items)              -- {name=label, items=items} or nil if items is empty
-contextmenu.bind_buffer(bufnr, get_items, opts) -- buffer-local <RightMouse>, soft-requires "menu"
+contextmenu.open(items, opts)                  -- draw with the active renderer; `items` may be a "menus.<name>" string
+contextmenu.bind_buffer(bufnr, get_items, opts) -- buffer-local <RightMouse>, opens via `open`
 ```
 
 See `@types/init.lua` for full field documentation (`Lib.ContextMenu.Item`,
@@ -79,11 +95,29 @@ See `@types/init.lua` for full field documentation (`Lib.ContextMenu.Item`,
   host composing the menu) ever calls `require("menu")`, so a plugin can call
   `entry`/`group`/`submenu` unconditionally regardless of whether nvzone/menu
   is installed.
-- `bind_buffer` soft-requires `menu` at trigger time, not at bind time — safe
-  to call from a plugin's setup path even when nvzone/menu isn't present; the
-  keymap becomes an inert no-op (one notify per session) until it is.
-- Not a fit for `lib.nvim.ui.kit.menu` (`lua/lib/nvim/ui/kit/menu.lua`): that
-  component is cursor-anchored (`relative = "cursor"`), not mouse-anchored —
-  it doesn't give nvzone/menu's `{ mouse = true }` pointer positioning that
-  `<RightMouse>` needs. Use `ui.kit.menu` for keyboard-triggered action lists,
-  `contextmenu` for anything meant to open at the mouse pointer.
+- `bind_buffer` resolves the renderer at trigger time, not at bind time — safe
+  to call from a plugin's setup path regardless of what is installed.
+- Consumers never call a renderer themselves. `entry`/`group`/`submenu` build
+  plain data; `open` is the single place either renderer is reached from.
+  That is what makes the renderer swappable at all — the two live consumers
+  (`filetree.nvim`, `github_stats.nvim`) needed no change for the kit
+  renderer to exist.
+
+### The kit renderer, and a claim that was wrong
+
+An earlier version of this file argued that `lib.nvim.ui.kit.menu` was **not
+a fit**, because it is cursor-anchored and "doesn't give nvzone/menu's
+`{ mouse = true }` pointer positioning that `<RightMouse>` needs". That was
+wrong on the fact it rested on: `relative = "mouse"` is a plain
+`nvim_open_win` value, and the kit's surface has always passed `relative`
+straight through. Nothing had to be computed; the option simply had not been
+tried. What the kit renderer genuinely needed was smaller and elsewhere —
+separators the cursor steps over (a `selectable = false` rich item in
+`ui.kit.chooser`), a right-aligned `rtxt` column, and nesting.
+
+One real behavioural difference remains, and it is a design choice rather
+than a gap: nvzone/menu opens a nested fly-out in a **second window** beside
+the parent, while the kit **drills down** in place, with `<BS>` walking back
+up. A single-instance chooser is what gives the kit its themed selection and
+its one-window lifecycle; opening a second one to imitate the fly-out would
+trade that away for the visual.
