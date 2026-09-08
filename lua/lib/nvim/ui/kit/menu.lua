@@ -186,33 +186,37 @@ local function row_of(it, label_w, rtxt_w)
   return { lines = { line .. PAD }, highlights = #highlights > 0 and highlights or nil }
 end
 
---- Reopen the parent level, popping it off `stack`.
+--- The level currently on screen: `{ opts, items, raw_items, stack }`. The
+--- menu is a single instance (it rides the chooser's), and every level after
+--- the first reuses the same window and the same buffer -- so the chooser's
+--- `on_select` and the `<BS>` mapping are wired up once, at open time, and
+--- read the live level from here instead of closing over one.
+---@type table|nil
+local current = nil
+
+--- A shallow copy of `opts` with `title` replaced -- including replaced by
+--- nil, which `vim.tbl_extend("force", …)` cannot do: an absent key there
+--- leaves the old value standing, so walking back to an untitled top level
+--- would keep the child's title on the frame.
 ---@internal
----@param open_level fun(opts: table, items: any[], stack: table[])
 ---@param opts table
----@param stack table[]
-local function go_back(open_level, opts, stack)
-  local parent = stack[#stack]
-  if not parent then
-    return
+---@param title string|nil
+---@return table
+local function with_title(opts, title)
+  local out = {}
+  for k, v in pairs(opts) do
+    out[k] = v
   end
-  chooser.close()
-  local prev_stack = vim.list_extend({}, stack)
-  prev_stack[#prev_stack] = nil
-  vim.schedule(function()
-    open_level(vim.tbl_extend("force", opts, { title = parent.title }), parent.items, prev_stack)
-  end)
+  out.title = title
+  return out
 end
 
---- Open one level of the menu. `stack` carries the ancestors, so `<BS>`
---- and the back entry can reopen the parent list without the caller knowing
---- about nesting.
 ---@internal
 ---@param opts table
 ---@param raw_items any[]  # the level's own items, without the back entry
----@param stack table[]  # { { items = …, title = … }, … }, outermost first
----@return Lib.UI.Kit.Surface|nil
-local function open_level(opts, raw_items, stack)
+---@param stack table[]
+---@return any[] items, Lib.UI.Kit.RichItem[] rows, integer width
+local function build_level(opts, raw_items, stack)
   -- Below the top level, the list gets a back entry of its own. `<BS>` alone
   -- would leave the drill-down unusable with the mouse -- and <RightMouse> is
   -- how this menu is opened in the first place. `raw_items` stays the version
@@ -231,11 +235,6 @@ local function open_level(opts, raw_items, stack)
     rows[i] = row_of(it, label_w, rtxt_w)
   end
 
-  -- `mouse = true` is nvzone/menu's spelling for "anchor at the pointer";
-  -- Neovim's own `relative = "mouse"` does exactly that, so it needs no
-  -- coordinate arithmetic here.
-  local relative = opts.relative or (opts.mouse and "mouse") or "cursor"
-
   -- Explicit width, because the rows carry their own padding now: left to
   -- itself, make_scratch sizes to the widest line plus two, which would put
   -- all the slack on the right and none on the left. A drill-down level also
@@ -246,11 +245,60 @@ local function open_level(opts, raw_items, stack)
     opts.title and (vim.fn.strdisplaywidth(opts.title) + 2) or 0
   )
 
+  return items, rows, width
+end
+
+---@type fun(opts: table, raw_items: any[], stack: table[], reuse: boolean): Lib.UI.Kit.Surface|nil
+local open_level
+
+--- Walk one level back up, if there is one.
+---@internal
+local function go_back()
+  local cur = current
+  if not cur then
+    return
+  end
+  local parent = cur.stack[#cur.stack]
+  if not parent then
+    return
+  end
+  local prev_stack = vim.list_extend({}, cur.stack)
+  prev_stack[#prev_stack] = nil
+  open_level(with_title(cur.opts, parent.title), parent.items, prev_stack, true)
+end
+
+--- Show one level of the menu. `stack` carries the ancestors, so `<BS>` and
+--- the back entry can walk up without the caller knowing about nesting.
+---
+--- `reuse` swaps the list into the window that is already open, instead of
+--- closing it and opening another. Only the level changes take it: closing
+--- and reopening lets the editor underneath repaint in between, which reads
+--- as the menu flashing, and it re-anchors a `relative = "mouse"` menu to
+--- wherever the pointer has drifted to.
+---@internal
+---@param opts table
+---@param raw_items any[]  # the level's own items, without the back entry
+---@param stack table[]  # { { items = …, title = … }, … }, outermost first
+---@param reuse boolean
+---@return Lib.UI.Kit.Surface|nil
+function open_level(opts, raw_items, stack, reuse)
+  local items, rows, width = build_level(opts, raw_items, stack)
+  current = { opts = opts, items = items, raw_items = raw_items, stack = stack }
+
+  if reuse and chooser.set_items({ items = rows, width = width, title = opts.title }) then
+    return nil
+  end
+
+  -- `mouse = true` is nvzone/menu's spelling for "anchor at the pointer";
+  -- Neovim's own `relative = "mouse"` does exactly that, so it needs no
+  -- coordinate arithmetic here.
+  local relative = opts.relative or (opts.mouse and "mouse") or "cursor"
+
   local surf = chooser.open({
     items = rows,
     width = width,
     title = opts.title,
-    theme = opts.theme,
+    theme = opts.theme or "menu",
     relative = relative,
     -- A menu is picked from, not navigated in: hide the block cursor so the
     -- highlighted row is the only thing saying where you are, let one left
@@ -260,29 +308,31 @@ local function open_level(opts, raw_items, stack)
     hide_cursor = opts.hide_cursor ~= false,
     single_click = opts.single_click ~= false,
     close_on_focus_lost = opts.close_on_focus_lost ~= false,
+    -- The menu owns the window across levels; only a leaf closes it, and it
+    -- does so itself, below.
+    close_on_select = false,
     row = opts.row,
     col = opts.col,
     on_select = function(_, idx)
-      local it = items[idx]
+      local cur = current
+      local it = cur and cur.items[idx]
       if not it then
         return
       end
       if it.__back then
-        -- The chooser already closed on submit; go_back reopens the parent.
-        go_back(open_level, opts, stack)
+        go_back()
         return
       end
       local nested = children_of(it)
       if nested then
-        -- Drill down: the chooser closed on submit, so this reopens at the
-        -- child level with the parent pushed onto the back stack.
-        local next_stack = vim.list_extend({}, stack)
-        next_stack[#next_stack + 1] = { items = raw_items, title = opts.title }
-        vim.schedule(function()
-          open_level(vim.tbl_extend("force", opts, { title = label_of(it) }), nested, next_stack)
-        end)
+        local next_stack = vim.list_extend({}, cur.stack)
+        next_stack[#next_stack + 1] = { items = cur.raw_items, title = cur.opts.title }
+        open_level(with_title(cur.opts, label_of(it)), nested, next_stack, true)
         return
       end
+      -- A leaf ends the menu. Close before running, so an action that opens
+      -- a window of its own doesn't have to work around this one.
+      M.close()
       local action = action_of(it)
       if action then
         action()
@@ -290,10 +340,14 @@ local function open_level(opts, raw_items, stack)
     end,
   })
 
-  if surf and #stack > 0 then
-    map("n", "<BS>", function()
-      go_back(open_level, opts, stack)
-    end, { buffer = surf.bufnr, nowait = true, desc = "kit.menu: back to parent menu" })
+  -- One mapping for the life of the window: the buffer survives every level
+  -- change, and go_back reads the live level rather than a captured one.
+  if surf then
+    map("n", "<BS>", go_back, {
+      buffer = surf.bufnr,
+      nowait = true,
+      desc = "kit.menu: back to parent menu",
+    })
   end
 
   return surf
@@ -309,11 +363,14 @@ function M.open(opts)
     notify.error("menu: `items` is required and must be non-empty")
     return nil
   end
-  return open_level(opts, items, {})
+  -- Never `reuse`: a chooser that happens to be open here belongs to
+  -- something else (a select, a picker) and must not be taken over.
+  return open_level(opts, items, {}, false)
 end
 
 --- Close the menu if one is open (it shares the chooser's single instance).
 function M.close()
+  current = nil
   chooser.close()
 end
 

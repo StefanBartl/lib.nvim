@@ -40,6 +40,7 @@ presets differ mainly in border strength: >
     solid     single border
     double    double border
     ascii     ASCII border glyphs (terminals without good Unicode)
+    menu      rounded, coloured frame (Function) -- kit.menu's default
 <
 Highlights link to standard groups (NormalFloat / FloatBorder / FloatTitle /
 PmenuSel / …) so the default look is correct in any colorscheme.
@@ -140,6 +141,10 @@ progress. >lua
           cursor while open, picks on a single left click, and dismisses
           on a click or focus change elsewhere -- turn any of the three
           off with hide_cursor / single_click / close_on_focus_lost.
+          Defaults to the `menu` preset, so the frame is coloured
+          rather than the quiet FloatBorder. Drilling into a submenu
+          and walking back swap the list inside the SAME window, so
+          neither flashes and the menu does not move.
   progress passthrough to |lib.nvim-progress| (lib.nvim.progress.create);
           returns its handle (:update / :finish / :cancel).
   compare pick two items out of one picker, view them side by side:

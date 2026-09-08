@@ -257,6 +257,73 @@ function M.close()
   state.on_select = nil
   state.multi = false
   state.selections = {}
+  state.keep_open = false
+end
+
+---@internal
+--- Land the cursor on `initial_index`, falling forward to the first
+--- selectable entry (so a list opening on a separator still starts on a real
+--- item).
+---@param initial_index? integer
+local function place_cursor(initial_index)
+  local entries = state.entries
+  if not state.surf or not state.surf:is_valid() or not entries[1] then
+    return
+  end
+  local initial = entries[initial_index] and initial_index or 1
+  initial = next_selectable(initial, 1) or initial
+  local e = entries[initial]
+  pcall(api.nvim_win_set_cursor, state.surf.winid, { e.start_row + e.anchor_row + 1, 0 })
+end
+
+--- Replace the open chooser's list in place: new items, new size, new title,
+--- same window. Returns false when nothing is open.
+---
+--- This exists for a drill-down menu. Closing the chooser and opening a
+--- second one at the next level costs a redraw of whatever sits underneath,
+--- which the eye reads as the menu flashing; it also re-anchors the window,
+--- so a `relative = "mouse"` menu jumps to wherever the pointer happens to
+--- be. Swapping the content keeps both the frame and its position still.
+---@param opts table  # { items, title?, width?, height?, initial_index? }
+---@return boolean replaced
+function M.set_items(opts)
+  if not M.is_open() or not opts or type(opts.items) ~= "table" or #opts.items == 0 then
+    return false
+  end
+
+  local surf = state.surf
+  local entries, flat_lines = build_entries(opts.items)
+
+  clear_marks()
+  state.items = opts.items
+  state.entries = entries
+  state.selections = {}
+
+  -- The cursor may be past the end of the new, shorter list while the buffer
+  -- is being rewritten; park it at the top first so the write can't fail.
+  pcall(api.nvim_win_set_cursor, surf.winid, { 1, 0 })
+  surf:set_lines(flat_lines)
+
+  -- Re-anchor to where the window already is, rather than to whatever
+  -- `relative` it was opened with: re-applying `relative = "mouse"` would
+  -- move the menu to the pointer's current position on every level change.
+  local pos = vim.fn.win_screenpos(surf.winid)
+  local cfg = api.nvim_win_get_config(surf.winid)
+  cfg.relative = "editor"
+  cfg.win = nil
+  cfg.row = math.max(0, pos[1] - 1)
+  cfg.col = math.max(0, pos[2] - 1)
+  cfg.width = math.max(1, opts.width or cfg.width)
+  cfg.height = math.max(1, opts.height or #flat_lines)
+  -- Empty string, not nil: an omitted `title` leaves the existing one in
+  -- place, so walking from a titled submenu back to an untitled top level
+  -- would keep the child's title on the frame.
+  cfg.title = opts.title or ""
+  pcall(api.nvim_win_set_config, surf.winid, cfg)
+
+  render_content_highlights()
+  place_cursor(opts.initial_index)
+  return true
 end
 
 --- Move the current selection by `delta` items, wrapping around. Reusable by
@@ -332,6 +399,11 @@ function M.submit()
     return
   end
   local cb, multi, entries = state.on_select, state.multi, state.entries
+  -- `close_on_select = false`: the callback owns the window from here. A menu
+  -- drilling into a submenu uses this to swap the list in place instead of
+  -- closing and reopening -- the close/reopen pair costs a redraw of whatever
+  -- is underneath, which reads as a flash between the two levels.
+  local keep = state.keep_open
 
   if multi then
     local idxs = {}
@@ -348,13 +420,17 @@ function M.submit()
     for _, i in ipairs(idxs) do
       chosen[#chosen + 1] = entries[i].value
     end
-    M.close()
+    if not keep then
+      M.close()
+    end
     if cb and #chosen > 0 then
       cb(chosen, idxs)
     end
   else
     local entry = idx and entries[idx]
-    M.close()
+    if not keep then
+      M.close()
+    end
     if cb and entry ~= nil then
       cb(entry.value, idx)
     end
@@ -390,7 +466,7 @@ local function click_submit()
 end
 
 --- Open a chooser.
----@param opts table  # { items, on_select, multi_select?, title?, relative?, width?, height?, theme?, initial_index?, hide_cursor?, single_click?, close_on_focus_lost? }
+---@param opts table  # { items, on_select, multi_select?, title?, relative?, width?, height?, theme?, initial_index?, hide_cursor?, single_click?, close_on_focus_lost?, close_on_select? }
 ---@return Lib.UI.Kit.Surface|nil
 function M.open(opts)
   if not opts or type(opts.items) ~= "table" or #opts.items == 0 then
@@ -441,6 +517,7 @@ function M.open(opts)
   state.on_select = opts.on_select
   state.multi = opts.multi_select or opts.multi or false
   state.selections = {}
+  state.keep_open = opts.close_on_select == false
 
   render_content_highlights()
 
@@ -483,17 +560,10 @@ function M.open(opts)
     end, mo)
   end
 
-  if surf:is_valid() and entries[1] then
-    -- opts.initial_index: land on a specific item (e.g. restoring cursor
-    -- position across a close+reopen refresh) instead of always item 1.
-    -- Out-of-range/absent falls back to item 1.
-    local initial = entries[opts.initial_index] and opts.initial_index or 1
-    -- Never land on a separator: step forward to the first selectable entry
-    -- (and, if the list opens with one, that is item 1 as before).
-    initial = next_selectable(initial, 1) or initial
-    local e = entries[initial]
-    api.nvim_win_set_cursor(surf.winid, { e.start_row + e.anchor_row + 1, 0 })
-  end
+  -- opts.initial_index: land on a specific item (e.g. restoring cursor
+  -- position across a refresh) instead of always item 1; out-of-range or
+  -- absent falls back to item 1, and a separator is stepped over.
+  place_cursor(opts.initial_index)
 
   return surf
 end

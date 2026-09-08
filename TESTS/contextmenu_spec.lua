@@ -151,12 +151,32 @@ return function(H)
     ok(chooser.is_open(), "open: submitting a separator leaves the menu open")
     eq(ran, nil, "open: submitting a separator runs nothing")
 
-    -- Drill into the submenu, then run its leaf.
+    -- Drill into the submenu, then run its leaf. The window and buffer must
+    -- be the SAME ones: closing and reopening between levels repaints
+    -- whatever is underneath, which reads as the menu flashing, and it
+    -- re-anchors a `relative = "mouse"` menu to wherever the pointer drifted.
+    local top_win, top_buf = vim.api.nvim_get_current_win(), vim.api.nvim_get_current_buf()
+    local top_pos = vim.fn.win_screenpos(top_win)
     vim.api.nvim_win_set_cursor(0, { 4, 0 })
     chooser.submit()
     vim.wait(200, function()
       return chooser.is_open()
     end)
+    eq(vim.api.nvim_get_current_win(), top_win, "open: drilling down reuses the same window")
+    eq(vim.api.nvim_get_current_buf(), top_buf, "open: drilling down reuses the same buffer")
+    eq(
+      table.concat(vim.fn.win_screenpos(top_win), ","),
+      table.concat(top_pos, ","),
+      "open: drilling down leaves the window where it was"
+    )
+    -- The child level names itself on the frame; the top level has no title,
+    -- and walking back has to actually remove the child's rather than leave
+    -- it standing (an omitted title is "unchanged" to nvim_win_set_config).
+    local function frame_title()
+      local cfg = vim.api.nvim_win_get_config(top_win)
+      return cfg.title and cfg.title[1] and cfg.title[1][1] or nil
+    end
+    eq(frame_title(), "Git", "open: a nested level puts its label on the frame")
     local sub_lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
     -- A nested level leads with the back entry and a divider, so the menu is
     -- leavable with the mouse and not only with <BS>.
@@ -178,6 +198,7 @@ return function(H)
       "open: the back entry returns to the parent level"
     )
     eq(ran, nil, "open: going back runs no action")
+    eq(frame_title(), nil, "open: going back clears the child level's title")
     -- The parent must not have grown a back entry of its own on the way back.
     eq(#vim.api.nvim_buf_get_lines(0, 0, -1, false), 4, "open: the top level stays back-entry free")
 

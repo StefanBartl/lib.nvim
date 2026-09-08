@@ -30,6 +30,7 @@ Built-in presets differ mainly in border strength:
 | `solid`     | single    |
 | `double`    | double    |
 | `ascii`     | ASCII glyphs (terminals without good Unicode) |
+| `menu`      | rounded, but with a **coloured** frame (`Function`) — `kit.menu`'s default |
 
 Highlights link to standard groups (`NormalFloat` / `FloatBorder` /
 `FloatTitle` / `PmenuSel` / …), so the default look is correct in any
@@ -96,7 +97,7 @@ kit.popup({ type = "prompt", question = "Delete?", answer_type = "confirm", on_a
 | `select` | native themed list chooser (single/multi; `j`/`k`, `<CR>`, `<Tab>` mark) |
 | `prompt` | ask: `answer_type = "confirm"` (yes/no → boolean) or `"text"` |
 | `confirm` | button dialog — horizontal buttons, `h`/`l`/arrows move, `<CR>` confirm, `<Esc>` cancel, left click confirms a button directly |
-| `menu`    | anchored action list — `{ label, action }` items; picking runs the action. Also renders [`lib.nvim.contextmenu`](../../contextmenu/README.md) tables (`name`/`cmd`, `{ name = "separator" }`, `rtxt`, nested `items`) and takes `mouse = true` to anchor at the pointer. Rows are padded a column at each edge and dividers are indented; the block cursor is hidden while it is open, one left click picks, and a click or focus change elsewhere dismisses it (`hide_cursor` / `single_click` / `close_on_focus_lost` turn those off) |
+| `menu`    | anchored action list — `{ label, action }` items; picking runs the action. Also renders [`lib.nvim.contextmenu`](../../contextmenu/README.md) tables (`name`/`cmd`, `{ name = "separator" }`, `rtxt`, nested `items`) and takes `mouse = true` to anchor at the pointer. Rows are padded a column at each edge and dividers are indented; the block cursor is hidden while it is open, one left click picks, and a click or focus change elsewhere dismisses it (`hide_cursor` / `single_click` / `close_on_focus_lost` turn those off). Defaults to the `menu` preset, so the frame is coloured. Drilling into a submenu and walking back swap the list **inside the same window** — no flash, and the menu stays put |
 | `progress`| passthrough to [`lib.nvim.progress`](../../progress/README.md) (`:update`/`:finish`/`:cancel`) |
 | `compare` | pick two items out of one picker, then view them side by side — see [Compare](#compare-pick-two-view-side-by-side) below |
 

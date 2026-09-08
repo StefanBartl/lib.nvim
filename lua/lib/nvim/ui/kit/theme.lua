@@ -59,6 +59,16 @@ local BUILTIN = {
     ascii_border = true,
     hl = { border = "Comment", accent = "Identifier", title = "Todo" },
   },
+  -- `kit.menu`'s default, and its one point of difference is a *coloured*
+  -- frame. `FloatBorder` is deliberately quiet in most colorschemes, which is
+  -- right for a panel that was already there and wrong for a menu you just
+  -- summoned. `Function` is defined and clearly tinted in every colorscheme
+  -- worth the name, so this borrows the scheme's own accent instead of
+  -- shipping a colour of its own.
+  menu = {
+    border = "rounded",
+    hl = { border = "Function", title = "Function" },
+  },
 }
 
 -- Runtime registry (built-ins + user presets) and the active default.
