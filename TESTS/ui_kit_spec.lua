@@ -980,6 +980,43 @@ return function(H)
   end
   chooser.close()
 
+  -- A nested level whose children are named: the back entry stays OUTSIDE
+  -- every frame. It was briefly wrapped in an empty untitled box of its own,
+  -- because `loose and nil or group_open(...)` evaluates the right-hand side
+  -- whenever the left is nil -- which nil always is.
+  local ns = assert(
+    kit.menu({
+      items = {
+        { name = "Section", __heading = true },
+        { name = "Leaf", cmd = function() end },
+        {
+          name = "Deeper",
+          items = {
+            { name = "Inner", __heading = true },
+            { name = "Child", cmd = function() end },
+          },
+        },
+      },
+    }),
+    "nested menu opens"
+  )
+  local deeper
+  for i, line in ipairs(vim.api.nvim_buf_get_lines(ns.bufnr, 0, -1, false)) do
+    if line:find("Deeper", 1, true) then
+      deeper = i
+    end
+  end
+  vim.api.nvim_win_set_cursor(ns.winid, { assert(deeper, "Deeper row"), 0 })
+  chooser.submit()
+  vim.wait(200, function()
+    return chooser.is_open()
+  end)
+  local nrows = vim.api.nvim_buf_get_lines(ns.bufnr, 0, -1, false)
+  ok(nrows[1]:match("◂ Back") ~= nil, "menu back entry leads a nested level")
+  ok(nrows[1]:match("│") == nil, "menu back entry is not framed as a section of its own")
+  ok(nrows[2]:match("^ ╭─ Inner ") ~= nil, "menu frames the nested level's own group")
+  chooser.close()
+
   local ps = assert(kit.menu({ items = group_items, group_style = "plain" }), "plain menu opens")
   local prows = vim.api.nvim_buf_get_lines(ps.bufnr, 0, -1, false)
   eq(#prows, 4, "group_style=plain draws headings as rows, with no frame")
