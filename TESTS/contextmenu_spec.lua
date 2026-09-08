@@ -155,11 +155,33 @@ return function(H)
     vim.wait(200, function()
       return chooser.is_open()
     end)
-    eq(
-      vim.api.nvim_buf_get_lines(0, 0, -1, false)[1],
-      "Stage",
-      "open: picking a submenu drills into its children"
+    local sub_lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+    -- A nested level leads with the back entry and a divider, so the menu is
+    -- leavable with the mouse and not only with <BS>.
+    ok(sub_lines[1]:match("^◂ Back") ~= nil, "open: a nested level opens with a back entry")
+    ok((sub_lines[2]:gsub("─", "")) == "", "open: back entry is separated from the children")
+    ok(sub_lines[3]:match("^Stage") ~= nil, "open: picking a submenu drills into its children")
+
+    -- Back out with the entry itself, then drill in again.
+    eq(chooser.current_index(), 1, "open: the cursor starts on the back entry")
+    chooser.submit()
+    vim.wait(200, function()
+      return chooser.is_open()
+    end)
+    ok(
+      vim.api.nvim_buf_get_lines(0, 0, -1, false)[1]:match("^Do X") ~= nil,
+      "open: the back entry returns to the parent level"
     )
+    eq(ran, nil, "open: going back runs no action")
+    -- The parent must not have grown a back entry of its own on the way back.
+    eq(#vim.api.nvim_buf_get_lines(0, 0, -1, false), 4, "open: the top level stays back-entry free")
+
+    vim.api.nvim_win_set_cursor(0, { 4, 0 })
+    chooser.submit()
+    vim.wait(200, function()
+      return chooser.is_open()
+    end)
+    vim.api.nvim_win_set_cursor(0, { 3, 0 })
     chooser.submit()
     eq(ran, "stage", "open: the nested leaf's action runs")
     ok(not chooser.is_open(), "open: the menu closes after a leaf action")
