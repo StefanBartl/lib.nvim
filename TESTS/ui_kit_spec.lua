@@ -933,7 +933,7 @@ return function(H)
   local is = assert(
     kit.menu({
       items = {
-        { name = "Alpha", icon = "A", cmd = function() end },
+        { name = "Alpha", icon = "A", cmd = function() end, rtxt = "<leader>a" },
         { name = "  Beta", cmd = function() end },
         { name = "Gamma", items = { { name = "Leaf", cmd = function() end } } },
       },
@@ -941,12 +941,18 @@ return function(H)
     "menu with icons opens"
   )
   local irows = vim.api.nvim_buf_get_lines(is.bufnr, 0, -1, false)
-  eq(irows[1], " A Alpha    ", "menu draws the icon in a column of its own")
-  eq(irows[2], "   Beta     ", "menu aligns an icon-less label with the icon-bearing ones")
-  -- The fly-out marker is right-aligned in a trailing column of its own, not
-  -- appended to the label: it is the one mark that says "this goes deeper",
-  -- and trailing the text left it ragged and easy to miss.
-  ok(irows[3]:match("Gamma%s+▶ $") ~= nil, "menu right-aligns the submenu marker")
+  ok(irows[1]:match("^ A Alpha ") ~= nil, "menu draws the icon in a column of its own")
+  ok(
+    irows[2]:match("^   Beta ") ~= nil,
+    "menu aligns an icon-less label with the icon-bearing ones"
+  )
+  -- The fly-out marker has a column of its own, and that column follows the
+  -- LABEL rather than the row: the hint column keeps the right edge, so the
+  -- marker lands beside the list it belongs to instead of against the frame.
+  local mark_at = irows[3]:find("→", 1, true)
+  local hint_at = irows[1]:find("<leader>a", 1, true)
+  ok(mark_at ~= nil, "menu marks a nested entry")
+  ok(hint_at ~= nil and mark_at < hint_at, "menu puts the fly-out marker left of the hint column")
   eq(
     vim.fn.strdisplaywidth(irows[1]),
     vim.fn.strdisplaywidth(irows[3]),

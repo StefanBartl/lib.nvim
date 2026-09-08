@@ -28,10 +28,10 @@
 --- an entry sits in:
 ---
 --- >
----   ╭─ Clipboard ─────────────────╮
----   │  Copy All (Buffer)   <C-a> │
----   │  Git Actions             ▶ │
----   ╰─────────────────────────────╯
+---   ╭─ Clipboard ────────────────────╮
+---   │   Copy All (Buffer)      <C-a> │
+---   │   Git Actions        →         │
+---   ╰────────────────────────────────╯
 --- <
 ---
 --- The leading glyph is an `icon` **field**, not part of `label`. That
@@ -72,7 +72,14 @@ local RTXT_GAP = 3
 --- Columns between the icon column and the label column.
 local ICON_GAP = 1
 
---- Columns between the last text column and the submenu marker.
+--- Columns between the label column and the submenu marker.
+---
+--- The marker follows the **label** column, not the row. Pushed to the right
+--- edge it sits a long way from the text it belongs to and starts reading as
+--- part of the frame; parked just past the longest label it stays attached to
+--- the list -- which, in a menu that also carries keymap hints, puts it at
+--- roughly two thirds of the width. The hint column keeps the right edge,
+--- where a key is looked for.
 local MARKER_GAP = 2
 
 --- Columns of empty space at each edge of a row, so labels and `rtxt` hints
@@ -83,16 +90,19 @@ local MARKER_GAP = 2
 --- has to be part of the row, not slack left over in the window.
 local PAD = " "
 
---- Marker on an entry that opens a nested list. It sits right-aligned in a
---- column of its own and is drawn in the theme's accent, rather than trailing
---- the label as plain text: a fly-out is the one thing in a menu that says
---- "this does not run, it goes deeper", and it used to be the least visible
---- mark on the row.
+--- Marker on an entry that opens a nested list. It gets a column of its own
+--- and the theme's accent, rather than trailing the label as plain text: a
+--- fly-out is the one thing in a menu that says "this does not run, it goes
+--- deeper", and it used to be the least visible mark on the row.
+---
+--- An arrow with a shaft, not a bare triangle: at one cell a triangle reads
+--- as a bullet, and the shaft is what makes the direction the first thing you
+--- see.
 ---
 --- Plain Unicode, not a Nerd Font glyph: a menu that has to render on any
 --- terminal is the wrong place to require a patched font. `submenu_marker`
 --- overrides it if the default measures wide in a given terminal.
-local SUBMENU_MARKER = "▶"
+local SUBMENU_MARKER = "→"
 
 --- Label and icon of the entry that walks one level back up. It exists so the
 --- drill-down is usable with the mouse, which `<BS>` alone is not.
@@ -363,16 +373,20 @@ local function content_of(it, cols, marker)
   add(label, item_hl)
   add(string.rep(" ", math.max(0, cols.label_w - dw(label))))
 
+  -- Marker before hint: see MARKER_GAP. Left-aligned in its column, because
+  -- the column begins where the longest label ends -- that edge is the
+  -- position being aimed at, not the column's right-hand end.
+  if cols.marker_w > 0 then
+    local mark = children_of(it) and marker or ""
+    add(string.rep(" ", MARKER_GAP))
+    add(mark, mark ~= "" and "KitAccent" or nil)
+    add(string.rep(" ", math.max(0, cols.marker_w - dw(mark))))
+  end
+
   if cols.rtxt_w > 0 then
     local rtxt = rtxt_of(it)
     add(string.rep(" ", RTXT_GAP + math.max(0, cols.rtxt_w - dw(rtxt))))
     add(rtxt, rtxt ~= "" and "KitMuted" or nil)
-  end
-
-  if cols.marker_w > 0 then
-    local mark = children_of(it) and marker or ""
-    add(string.rep(" ", MARKER_GAP + math.max(0, cols.marker_w - dw(mark))))
-    add(mark, mark ~= "" and "KitAccent" or nil)
   end
 
   return table.concat(parts), hls

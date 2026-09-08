@@ -141,7 +141,9 @@ return function(H)
     -- only the last byte of the multi-byte rule character. The rule carries
     -- the same leading pad column and stops short of the right edge.
     ok((lines[3]:gsub("^ ", ""):gsub("─", "")) == "", "open: separator drawn as a divider rule")
-    ok(lines[4]:match("^ Git%s+▶ $") ~= nil, "open: a submenu entry is marked as one")
+    -- The marker sits between the label and the hint column rather than at the
+    -- far right; the trailing run here is this row's empty hint column.
+    ok(lines[4]:match("^ Git%s+→%s+$") ~= nil, "open: a submenu entry is marked as one")
 
     -- Navigation steps over the separator rather than landing on it.
     eq(chooser.current_index(), 1, "open: cursor starts on the first entry")
