@@ -9,7 +9,7 @@
 ---@field is_wsl boolean      # Windows Subsystem for Linux (v1 or v2).
 ---@field is_linux boolean    # Linux, excluding WSL.
 ---@field is_macos boolean    # macOS (Darwin).
----@field is_pwsh boolean     # `pwsh` (PowerShell Core) is on PATH.
+---@field is_pwsh boolean     # `pwsh` (PowerShell Core) is on PATH. Computed on first read (see `lib.nvim.system.env`'s DEFERRED), so it is absent from `pairs()` until then.
 ---@field repo_base string|nil # Value of `$REPOS_DIR`, or nil if unset.
 ---@field pathsep string      # Path separator for the current OS ("\\" or "/").
 ---@field home string         # Expanded home directory (`~`).

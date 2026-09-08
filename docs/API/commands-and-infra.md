@@ -727,7 +727,7 @@ M.setup(opts?: Lib.System.SetupOptions)
 ### `lib.nvim.system.env`
 Memoized host-environment snapshot.
 ```
-M.get(opts?: { refresh? }): Lib.System.Env   -- is_windows, is_wsl, is_linux, is_macos, is_pwsh, repo_base, pathsep, home
+M.get(opts?: { refresh? }): Lib.System.Env   -- is_windows, is_wsl, is_linux, is_macos, repo_base, pathsep, home (+ is_pwsh, deferred to first read)
 M.publish_globals(opts?: { fields? })         -- mirrors snapshot fields to vim.g.*
 ```
 
