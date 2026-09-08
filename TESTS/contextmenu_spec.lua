@@ -129,11 +129,13 @@ return function(H)
 
     local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
     eq(#lines, 4, "open: one row per item, separator included")
-    ok(lines[1]:match("^Do X%s+<leader>x$") ~= nil, "open: rtxt right-aligned in its own column")
+    -- One pad column at each edge, so nothing sits flush against the border.
+    ok(lines[1]:match("^ Do X%s+<leader>x $") ~= nil, "open: rtxt right-aligned in its own column")
     -- Not a `^─+$` pattern: Lua patterns are byte-based, so `+` would repeat
-    -- only the last byte of the multi-byte rule character.
-    ok((lines[3]:gsub("─", "")) == "", "open: separator drawn as a divider rule")
-    ok(lines[4]:match("^Git ▸") ~= nil, "open: a submenu entry is marked as one")
+    -- only the last byte of the multi-byte rule character. The rule carries
+    -- the same leading pad column and stops short of the right edge.
+    ok((lines[3]:gsub("^ ", ""):gsub("─", "")) == "", "open: separator drawn as a divider rule")
+    ok(lines[4]:match("^ Git ▸") ~= nil, "open: a submenu entry is marked as one")
 
     -- Navigation steps over the separator rather than landing on it.
     eq(chooser.current_index(), 1, "open: cursor starts on the first entry")
@@ -158,9 +160,12 @@ return function(H)
     local sub_lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
     -- A nested level leads with the back entry and a divider, so the menu is
     -- leavable with the mouse and not only with <BS>.
-    ok(sub_lines[1]:match("^◂ Back") ~= nil, "open: a nested level opens with a back entry")
-    ok((sub_lines[2]:gsub("─", "")) == "", "open: back entry is separated from the children")
-    ok(sub_lines[3]:match("^Stage") ~= nil, "open: picking a submenu drills into its children")
+    ok(sub_lines[1]:match("^ ◂ Back") ~= nil, "open: a nested level opens with a back entry")
+    ok(
+      (sub_lines[2]:gsub("^ ", ""):gsub("─", "")) == "",
+      "open: back entry is separated from the children"
+    )
+    ok(sub_lines[3]:match("^ Stage") ~= nil, "open: picking a submenu drills into its children")
 
     -- Back out with the entry itself, then drill in again.
     eq(chooser.current_index(), 1, "open: the cursor starts on the back entry")
@@ -169,7 +174,7 @@ return function(H)
       return chooser.is_open()
     end)
     ok(
-      vim.api.nvim_buf_get_lines(0, 0, -1, false)[1]:match("^Do X") ~= nil,
+      vim.api.nvim_buf_get_lines(0, 0, -1, false)[1]:match("^ Do X") ~= nil,
       "open: the back entry returns to the parent level"
     )
     eq(ran, nil, "open: going back runs no action")

@@ -19,6 +19,19 @@
 --- A rich item may set `selectable = false` (separators, headings): the
 --- cursor steps over it, <CR> on it is inert, and it can't be marked in
 --- multi-select. Plain-string items are always selectable.
+---
+--- Three presentation options are off by default because they change how the
+--- list behaves, not just how it looks, and the chooser is shared by
+--- `select`/`picker`/`compare` (see `kit.menu`, which turns all three on):
+---
+--- - `hide_cursor` — blank the terminal cursor while the list is open, so the
+---   highlighted row alone says where you are. `'guicursor'` is global, so it
+---   is saved and restored when the list closes for any reason.
+--- - `single_click` — one left click picks the row under the pointer, and a
+---   click outside the list dismisses it. Without it only `<2-LeftMouse>`
+---   selects and a stray click leaves the list open behind the cursor.
+--- - `close_on_focus_lost` — dismiss the list when focus moves elsewhere.
+---   Wrong for the picker, whose prompt window holds focus by design.
 
 local surface = require("lib.nvim.ui.kit.surface")
 local map = require("lib.nvim.bindings.keymap")
@@ -31,6 +44,11 @@ local M = {}
 --- Horizontal motions blocked so the cursor stays on whole rows.
 local HORIZONTAL = { "h", "l", "<Left>", "<Right>", "0", "^", "$", "w", "e", "b", "W", "E", "B" }
 
+--- Highlight the cursor is pointed at while `hide_cursor` is on. `blend = 100`
+--- makes it fully transparent; `reverse` keeps it from falling back to a solid
+--- block on a UI that ignores blending.
+local CURSOR_HL = "KitHiddenCursor"
+
 --- Single active chooser (mirrors hover_select's single-instance model).
 local state = {
   surf = nil,
@@ -41,12 +59,43 @@ local state = {
   selections = {}, -- keyed by 1-based item index
   ns = api.nvim_create_namespace("lib_kit_chooser"), -- selection marks
   content_ns = api.nvim_create_namespace("lib_kit_chooser_content"), -- per-item custom highlights
+  saved_guicursor = nil, -- non-nil while `hide_cursor` is in effect
 }
 
 --- Whether a chooser is currently open.
 ---@return boolean
 function M.is_open()
   return state.surf ~= nil and state.surf:is_valid()
+end
+
+---@internal
+--- Blank the terminal cursor for the duration of the list. `'guicursor'` is a
+--- global option, so the previous value is kept and restored -- leaking an
+--- invisible cursor into the rest of the session would be worse than never
+--- hiding it.
+local function hide_cursor()
+  if state.saved_guicursor ~= nil then
+    return
+  end
+  state.saved_guicursor = vim.o.guicursor
+  pcall(api.nvim_set_hl, 0, CURSOR_HL, { reverse = true, blend = 100 })
+  pcall(function()
+    vim.opt.guicursor:append("a:" .. CURSOR_HL .. "/lCursor")
+  end)
+end
+
+---@internal
+--- Restore the cursor saved by `hide_cursor` (idempotent, and a no-op when it
+--- was never hidden).
+local function restore_cursor()
+  if state.saved_guicursor == nil then
+    return
+  end
+  local saved = state.saved_guicursor
+  state.saved_guicursor = nil
+  pcall(function()
+    vim.o.guicursor = saved
+  end)
 end
 
 --- Normalize one raw item (string or rich table) into an entry, without row
@@ -197,6 +246,7 @@ end
 
 --- Close the chooser and reset state (idempotent).
 function M.close()
+  restore_cursor()
   if state.surf then
     clear_marks()
     state.surf:close()
@@ -311,8 +361,36 @@ function M.submit()
   end
 end
 
+---@internal
+--- Pick the row under the mouse pointer and submit it. Returns false when the
+--- click landed outside the chooser window, so the caller can decide what an
+--- off-list click means.
+---@return boolean handled
+local function click_submit()
+  if not M.is_open() then
+    return false
+  end
+  local pos = vim.fn.getmousepos()
+  if pos.winid ~= state.surf.winid then
+    return false
+  end
+  -- getmousepos() reports 1-based screen lines within the window; a click on
+  -- the border row yields line 0, which is not a row to select.
+  if type(pos.line) ~= "number" or pos.line < 1 then
+    return false
+  end
+  local idx = item_at_row(pos.line - 1)
+  if not idx or not state.entries[idx].selectable then
+    return true
+  end
+  local e = state.entries[idx]
+  api.nvim_win_set_cursor(state.surf.winid, { e.start_row + e.anchor_row + 1, 0 })
+  M.submit()
+  return true
+end
+
 --- Open a chooser.
----@param opts table  # { items, on_select, multi_select?, title?, relative?, width?, height?, theme?, initial_index? }
+---@param opts table  # { items, on_select, multi_select?, title?, relative?, width?, height?, theme?, initial_index?, hide_cursor?, single_click?, close_on_focus_lost? }
 ---@return Lib.UI.Kit.Surface|nil
 function M.open(opts)
   if not opts or type(opts.items) ~= "table" or #opts.items == 0 then
@@ -366,6 +444,19 @@ function M.open(opts)
 
   render_content_highlights()
 
+  if opts.hide_cursor then
+    hide_cursor()
+  end
+  -- The window can also go away without M.close() -- close_on_focus_lost
+  -- closes it directly, and `:q` from inside works too -- so the global
+  -- 'guicursor' is restored from the surface's own lifecycle, not from the
+  -- close path alone.
+  surf:on_close(restore_cursor)
+
+  if opts.close_on_focus_lost then
+    require("lib.nvim.window.close_on_focus_lost")(surf.winid)
+  end
+
   local mo = { buffer = surf.bufnr, nowait = true }
   for _, key in ipairs(HORIZONTAL) do
     map("n", key, "<Nop>", mo)
@@ -374,6 +465,16 @@ function M.open(opts)
   map("n", "<2-LeftMouse>", M.submit, mo)
   map("n", "<Esc>", M.close, mo)
   map("n", "q", M.close, mo)
+  if opts.single_click then
+    map("n", "<LeftMouse>", function()
+      if not click_submit() then
+        -- Clicked past the list: dismiss it. Leaving it open under the
+        -- pointer is what makes a mis-click feel stuck, and this mapping has
+        -- already swallowed the click either way.
+        M.close()
+      end
+    end, mo)
+  end
   if state.multi then
     map("n", "<Tab>", M.toggle, mo)
     map("n", "<S-Tab>", function()
