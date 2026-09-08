@@ -893,9 +893,24 @@ return function(H)
     vim.api.nvim_win_get_width(ms.winid),
     "menu row fills a title-widened window exactly"
   )
-  -- pick the second item -> runs its action
+  -- Pick the second item -> runs its action, but not instantly: the picked
+  -- row is lit for a beat first, the way a button shows its press. The delay
+  -- is the feature and not an artefact -- a leaf action closes the menu, so a
+  -- flash painted at the same moment would never be on screen to see.
   chooser.move(1)
   chooser.submit()
+  eq(ran, nil, "menu holds the action back while the picked row is lit")
+  ok(vim.fn.hlexists("KitFlash") == 1, "KitFlash group defined for the pick acknowledgement")
+  local flash_ns = vim.api.nvim_get_namespaces()["lib_kit_chooser_flash"]
+  ok(flash_ns ~= nil, "chooser owns a namespace for the pick acknowledgement")
+  eq(
+    #vim.api.nvim_buf_get_extmarks(ms.bufnr, flash_ns, 0, -1, {}),
+    1,
+    "menu lights exactly the row that was picked"
+  )
+  vim.wait(1000, function()
+    return ran ~= nil
+  end, 10)
   eq(ran, "delete", "menu runs the picked item's action")
 
   -- Row geometry: the window is exactly as wide as a padded row (no slack
@@ -1014,9 +1029,11 @@ return function(H)
   end
   vim.api.nvim_win_set_cursor(ns.winid, { assert(deeper, "Deeper row"), 0 })
   chooser.submit()
-  vim.wait(200, function()
-    return chooser.is_open()
-  end)
+  -- Held back for the length of the pick flash, as above.
+  vim.wait(1000, function()
+    local first = vim.api.nvim_buf_get_lines(ns.bufnr, 0, 1, false)[1]
+    return first ~= nil and first:match("◂ Back") ~= nil
+  end, 10)
   local nrows = vim.api.nvim_buf_get_lines(ns.bufnr, 0, -1, false)
   ok(nrows[1]:match("◂ Back") ~= nil, "menu back entry leads a nested level")
   ok(nrows[1]:match("│") == nil, "menu back entry is not framed as a section of its own")

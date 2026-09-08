@@ -30,6 +30,11 @@ local BASE = {
     accent = "Special",
     muted = "Comment",
     error = "DiagnosticError",
+    -- The momentary "you picked this one" highlight. `IncSearch` is the group
+    -- Vim already uses for "the thing you are about to act on", so every
+    -- colorscheme defines it, and defines it strongly -- which is the whole
+    -- requirement for a mark that is on screen for a tenth of a second.
+    flash = "IncSearch",
   },
 }
 
@@ -85,6 +90,7 @@ local GROUPS = {
   accent = "KitAccent",
   muted = "KitMuted",
   error = "KitError",
+  flash = "KitFlash",
 }
 
 --- Resolve a theme argument to a full token table.

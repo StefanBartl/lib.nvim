@@ -11,6 +11,7 @@
 ---@field accent    string|Lib.Highlight.Opts # focused/active  (default: link Special)
 ---@field muted     string|Lib.Highlight.Opts # hints/secondary (default: link Comment)
 ---@field error     string|Lib.Highlight.Opts # error/destructive (default: link DiagnosticError)
+---@field flash     string|Lib.Highlight.Opts # momentary pick feedback (default: link IncSearch)
 
 --- A resolved theme: design tokens read by every component.
 ---@class Lib.UI.Kit.Theme
@@ -109,6 +110,8 @@
 ---@field hide_cursor? boolean          # blank the terminal cursor while open; default true
 ---@field single_click? boolean         # one left click picks, a click outside dismisses; default true
 ---@field close_on_focus_lost? boolean  # dismiss when focus moves elsewhere; default true
+---@field flash_on_select? boolean      # light the picked row before acting; default true
+---@field flash_ms? integer             # how long that lasts; default 100, <= 0 disables
 ---@field group_style? "box"|"header"|"plain"  # how a group of items is drawn; default "box"
 ---@field submenu_marker? string        # glyph marking a nested entry; default "→"
 

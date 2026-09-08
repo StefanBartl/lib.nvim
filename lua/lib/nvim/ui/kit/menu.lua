@@ -720,6 +720,11 @@ function open_level(opts, raw_items, stack, reuse)
     hide_cursor = opts.hide_cursor ~= false,
     single_click = opts.single_click ~= false,
     close_on_focus_lost = opts.close_on_focus_lost ~= false,
+    -- And light the row that was picked before acting on it. A menu entry is
+    -- a button; a button that changes the screen with no acknowledgement
+    -- leaves you unsure which row you actually hit.
+    flash_on_select = opts.flash_on_select ~= false,
+    flash_ms = opts.flash_ms,
     -- The menu owns the window across levels; only a leaf closes it, and it
     -- does so itself, below.
     close_on_select = false,

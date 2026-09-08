@@ -249,3 +249,4 @@ parens); override them per theme via the `hl` keys:
 | `KitAccent`    | `Special`          | marked items, accents  |
 | `KitMuted`     | `Comment`          | hints / secondary text |
 | `KitError`     | `DiagnosticError`  | errors                 |
+| `KitFlash`     | `IncSearch`        | the row a pick just landed on |
