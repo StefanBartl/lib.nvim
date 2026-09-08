@@ -15,8 +15,11 @@
 ---
 --- Nesting is a **drill-down**, not a side-by-side fly-out: picking a nested
 --- entry replaces the current list with its children (the chooser is a single
---- active instance), and `<BS>` walks back up. That is the one behavioural
---- difference from nvzone/menu, which opens the child in a second window.
+--- active instance). Every level below the top opens with a `◂ Back` entry,
+--- and `<BS>` does the same thing from the keyboard — a menu reached by
+--- <RightMouse> has to be leavable with the mouse too. That drill-down is
+--- the one behavioural difference from nvzone/menu, which opens the child in
+--- a second window beside the parent.
 
 local chooser = require("lib.nvim.ui.kit.chooser")
 local map = require("lib.nvim.bindings.keymap")
@@ -31,6 +34,10 @@ local RTXT_GAP = 3
 --- a Nerd Font glyph: a menu that has to render on any terminal is the wrong
 --- place to require a patched font.
 local SUBMENU_MARKER = " ▸"
+
+--- Label of the entry that walks one level back up. It exists so the
+--- drill-down is usable with the mouse, which `<BS>` alone is not.
+local BACK_LABEL = "◂ Back"
 
 --- Resolve an item's display label across both accepted shapes.
 ---@internal
@@ -157,14 +164,44 @@ local function row_of(it, label_w, rtxt_w)
   return { lines = { line }, highlights = #highlights > 0 and highlights or nil }
 end
 
+--- Reopen the parent level, popping it off `stack`.
+---@internal
+---@param open_level fun(opts: table, items: any[], stack: table[])
+---@param opts table
+---@param stack table[]
+local function go_back(open_level, opts, stack)
+  local parent = stack[#stack]
+  if not parent then
+    return
+  end
+  chooser.close()
+  local prev_stack = vim.list_extend({}, stack)
+  prev_stack[#prev_stack] = nil
+  vim.schedule(function()
+    open_level(vim.tbl_extend("force", opts, { title = parent.title }), parent.items, prev_stack)
+  end)
+end
+
 --- Open one level of the menu. `stack` carries the ancestors, so `<BS>`
---- can reopen the parent list without the caller knowing about nesting.
+--- and the back entry can reopen the parent list without the caller knowing
+--- about nesting.
 ---@internal
 ---@param opts table
----@param items any[]
+---@param raw_items any[]  # the level's own items, without the back entry
 ---@param stack table[]  # { { items = …, title = … }, … }, outermost first
 ---@return Lib.UI.Kit.Surface|nil
-local function open_level(opts, items, stack)
+local function open_level(opts, raw_items, stack)
+  -- Below the top level, the list gets a back entry of its own. `<BS>` alone
+  -- would leave the drill-down unusable with the mouse -- and <RightMouse> is
+  -- how this menu is opened in the first place. `raw_items` stays the version
+  -- without it, so a level pushed onto the stack doesn't grow a second back
+  -- entry when it is reopened.
+  local items = raw_items
+  if #stack > 0 then
+    items = { { name = BACK_LABEL, __back = true }, { name = "separator" } }
+    vim.list_extend(items, raw_items)
+  end
+
   local label_w, rtxt_w = measure(items)
 
   local rows = {}
@@ -189,12 +226,17 @@ local function open_level(opts, items, stack)
       if not it then
         return
       end
+      if it.__back then
+        -- The chooser already closed on submit; go_back reopens the parent.
+        go_back(open_level, opts, stack)
+        return
+      end
       local nested = children_of(it)
       if nested then
         -- Drill down: the chooser closed on submit, so this reopens at the
         -- child level with the parent pushed onto the back stack.
         local next_stack = vim.list_extend({}, stack)
-        next_stack[#next_stack + 1] = { items = items, title = opts.title }
+        next_stack[#next_stack + 1] = { items = raw_items, title = opts.title }
         vim.schedule(function()
           open_level(vim.tbl_extend("force", opts, { title = label_of(it) }), nested, next_stack)
         end)
@@ -208,18 +250,8 @@ local function open_level(opts, items, stack)
   })
 
   if surf and #stack > 0 then
-    local parent = stack[#stack]
     map("n", "<BS>", function()
-      chooser.close()
-      local prev_stack = vim.list_extend({}, stack)
-      prev_stack[#prev_stack] = nil
-      vim.schedule(function()
-        open_level(
-          vim.tbl_extend("force", opts, { title = parent.title }),
-          parent.items,
-          prev_stack
-        )
-      end)
+      go_back(open_level, opts, stack)
     end, { buffer = surf.bufnr, nowait = true, desc = "kit.menu: back to parent menu" })
   end
 
