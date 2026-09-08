@@ -81,10 +81,29 @@
 ---@field filetype? string
 ---@field close_on_focus_lost? boolean                    # dismiss on WinLeave/BufLeave (default true)
 
---- One entry of a `kit.menu`.
+--- One entry of a `kit.menu`. Two shapes are accepted, because this component
+--- doubles as the native renderer for `lib.nvim.contextmenu`: the kit's own
+--- `label`/`action` pair, and nvzone/menu's `name`/`cmd` (with `items` for a
+--- nested fly-out, `rtxt` for a right-aligned hint, `hl` for a row colour).
+--- `{ name = "separator" }` draws an inert divider.
 ---@class Lib.UI.Kit.MenuItem
----@field label string       # display text
+---@field label? string      # display text
 ---@field action? fun()      # callback run when the item is picked (alias: cb)
+---@field name? string       # display text, nvzone/menu spelling (or the literal "separator")
+---@field cmd? fun()|string  # leaf action, nvzone/menu spelling: callback or Ex command string
+---@field items? Lib.UI.Kit.MenuItem[]  # nested fly-out (mutually exclusive with cmd/action)
+---@field rtxt? string       # right-aligned hint text (usually a keymap)
+---@field hl? string         # highlight group for this row's label
+
+--- Options for `kit.menu`.
+---@class Lib.UI.Kit.MenuOpts
+---@field items Lib.UI.Kit.MenuItem[]
+---@field title? string
+---@field theme? Lib.UI.Kit.ThemeArg
+---@field relative? "editor"|"cursor"|"win"|"mouse"
+---@field row? integer       # explicit placement, paired with `relative`
+---@field col? integer
+---@field mouse? boolean     # shorthand for `relative = "mouse"` (nvzone/menu's spelling)
 
 --- One `kit.select`/`kit.popup({type="select"})` item, for a multi-line entry
 --- with per-column custom highlight groups (worked example:
@@ -94,6 +113,7 @@
 ---@field lines string[]                       # >=1 line; buffer content for this item
 ---@field highlights? Lib.UI.Kit.ItemHighlight[]
 ---@field anchor? integer                      # 0-based line (within `lines`) the cursor lands on; default 0
+---@field selectable? boolean                  # false = inert decoration (separator, heading): skipped by navigation, <CR> does nothing; default true
 
 --- One highlight span within a `Lib.UI.Kit.RichItem`.
 ---@class Lib.UI.Kit.ItemHighlight

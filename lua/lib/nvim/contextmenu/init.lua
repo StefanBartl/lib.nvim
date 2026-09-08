@@ -1,9 +1,15 @@
 ---@module 'lib.nvim.contextmenu'
 --- Building blocks for nvzone/menu-shaped context-menu entries: a
---- self-gating item builder (`entry`/`group`/`submenu`) plus a mouse-trigger
---- binder (`bind_buffer`). Soft dependency throughout — `menu` (nvzone/menu)
---- is only `require()`d when a bound trigger actually fires, and a missing
---- install degrades to a single notify, never an error.
+--- self-gating item builder (`entry`/`group`/`submenu`), a renderer
+--- (`open`), and a mouse-trigger binder (`bind_buffer`).
+---
+--- Two renderers draw the same item tables, chosen by `setup{ renderer = … }`:
+--- `"nvzone"` (nvzone/menu, the original) and `"kit"`
+--- (`lib.nvim.ui.kit.menu`, no third-party dependency and themed by the kit).
+--- The default `"auto"` prefers nvzone/menu when it is installed and falls
+--- back to the kit, so nothing changes for an existing setup. Either way the
+--- dependency is soft: `menu` is only `require()`d when a menu actually
+--- opens, and a missing install degrades to the kit, never to an error.
 ---
 --- Two integration shapes this supports (see filetree.nvim and
 --- markdown.nvim for the two live reference implementations):
@@ -33,16 +39,63 @@ local notify = require("lib.nvim.notify").create("[lib.nvim.contextmenu]")
 
 local M = {}
 
+--- Active renderer choice. `"auto"` resolves per call (see `resolve_renderer`).
+---@type "auto"|"kit"|"nvzone"
+local renderer = "auto"
+
 ---@internal
---- Warn once per session that `menu` (nvzone/menu) isn't installed, when a
---- bound trigger fires with nothing to open it with.
-local _warned_missing = false
-local function warn_missing_once()
-  if _warned_missing then
+--- Say once per session that the explicitly requested nvzone/menu isn't
+--- installed and the kit is drawing instead.
+local _warned_nvzone = false
+local function warn_nvzone_missing_once()
+  if _warned_nvzone then
     return
   end
-  _warned_missing = true
-  notify.info("nvzone/menu not installed — context menu has nothing to open")
+  _warned_nvzone = true
+  notify.info("nvzone/menu not installed — rendering the context menu with lib.nvim.ui.kit.menu")
+end
+
+--- Pick the renderer. Call once, from the host's setup path.
+---@param opts? { renderer?: "auto"|"kit"|"nvzone" }
+function M.setup(opts)
+  opts = opts or {}
+  local r = opts.renderer
+  if r == nil then
+    return
+  end
+  if r ~= "auto" and r ~= "kit" and r ~= "nvzone" then
+    notify.error(("contextmenu: unknown renderer %q — keeping %q"):format(tostring(r), renderer))
+    return
+  end
+  renderer = r
+end
+
+--- The configured renderer, as set (still `"auto"` if never narrowed).
+---@return "auto"|"kit"|"nvzone"
+function M.renderer()
+  return renderer
+end
+
+---@internal
+--- Resolve `"auto"` against what is actually installed: nvzone/menu when
+--- present (it is the incumbent, and its fly-outs open side by side), the
+--- kit otherwise.
+---@return "kit"|"nvzone", table|nil nvzone_module
+local function resolve_renderer()
+  if renderer == "kit" then
+    return "kit"
+  end
+  local ok, menu = pcall(require, "menu")
+  if ok and type(menu) == "table" and type(menu.open) == "function" then
+    return "nvzone", menu
+  end
+  if renderer == "nvzone" then
+    -- An explicit choice that can't be honoured is worth saying out loud
+    -- once; falling back silently would look like the menu simply ignored
+    -- half its entries.
+    warn_nvzone_missing_once()
+  end
+  return "kit"
 end
 
 --- Build one entry, or nil when `available` is falsy — lets a caller write a
@@ -112,11 +165,51 @@ function M.submenu(label, items)
   return { name = label, items = items }
 end
 
---- Bind a mouse trigger on `bufnr` that opens `get_items()` via nvzone/menu.
---- `menu` is soft-required at trigger time, not at bind time, so this is
---- safe to call unconditionally from a plugin's setup path even when
---- nvzone/menu isn't installed — the keymap just becomes a no-op (with one
---- session-wide notify) until it is.
+--- Open a menu with the active renderer. `items` is either a built item list
+--- or, for nvzone/menu compatibility, the name of one of its `menus.*`
+--- tables (`"default"`, `"gitsigns"`, …) — the kit renderer resolves that
+--- name the same way nvzone/menu does.
+---
+--- This is the single place either renderer is reached from: callers build
+--- items with `entry`/`group`/`submenu` and never `require("menu")`
+--- themselves, which is what makes the renderer swappable at all.
+---@param items Lib.ContextMenu.Item[]|string
+---@param opts? { mouse?: boolean, title?: string, theme?: any }
+function M.open(items, opts)
+  opts = opts or {}
+  local mouse = opts.mouse ~= false
+
+  local which, menu = resolve_renderer()
+  if which == "nvzone" and menu then
+    -- nvzone/menu resolves a string name itself and takes `mouse` in opts.
+    menu.open(items, { mouse = mouse })
+    return
+  end
+
+  if type(items) == "string" then
+    local ok, mod = pcall(require, "menus." .. items)
+    if not ok or type(mod) ~= "table" then
+      notify.error(("contextmenu: no menu named %q"):format(items))
+      return
+    end
+    items = mod
+  end
+  if type(items) ~= "table" or #items == 0 then
+    return
+  end
+
+  require("lib.nvim.ui.kit.menu").open({
+    items = items,
+    title = opts.title,
+    theme = opts.theme,
+    mouse = mouse,
+  })
+end
+
+--- Bind a mouse trigger on `bufnr` that opens `get_items()` with the active
+--- renderer. Nothing is required at bind time, so this is safe to call
+--- unconditionally from a plugin's setup path; the renderer is resolved when
+--- the trigger fires.
 ---@param bufnr integer
 ---@param get_items Lib.ContextMenu.ItemsProvider
 ---@param opts? { keymap?: string, modes?: string[], mouse?: boolean, desc?: string }
@@ -127,18 +220,12 @@ function M.bind_buffer(bufnr, get_items, opts)
   local mouse = opts.mouse ~= false
 
   vim.keymap.set(modes, keymap, function()
-    local ok_menu, menu = pcall(require, "menu")
-    if not ok_menu or type(menu.open) ~= "function" then
-      warn_missing_once()
-      return
-    end
-
     local items = get_items()
     if type(items) ~= "table" or #items == 0 then
       return
     end
 
-    menu.open(items, { mouse = mouse })
+    M.open(items, { mouse = mouse })
   end, {
     buffer = bufnr,
     silent = true,

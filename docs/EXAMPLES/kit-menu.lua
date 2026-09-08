@@ -46,3 +46,34 @@ vim.keymap.set("n", "<leader>m", function()
     },
   })
 end, { desc = "Open the LSP action menu" })
+
+-- ---------------------------------------------------------------------------
+-- The same component also renders `lib.nvim.contextmenu` item tables, which
+-- is how a right-click menu gets drawn without nvzone/menu installed. That
+-- shape spells things differently (`name`/`cmd` instead of `label`/`action`)
+-- and adds three things the plain shape has no use for: `{ name =
+-- "separator" }` dividers, a right-aligned `rtxt` hint column, and nesting.
+--
+-- Nesting is a drill-down: picking "Git" replaces the list with its children
+-- and `<BS>` walks back up. `mouse = true` anchors at the pointer
+-- (`relative = "mouse"`), which is what makes it usable from <RightMouse>.
+kit.menu({
+  mouse = true,
+  items = {
+    { name = "Format buffer", cmd = "%!prettier", rtxt = "<leader>fm" },
+    { name = "Code actions", cmd = vim.lsp.buf.code_action, rtxt = "<leader>ca" },
+    { name = "separator" },
+    {
+      name = "Git",
+      hl = "ExGreen",
+      items = {
+        { name = "Stage hunk", cmd = function() end, rtxt = "<leader>gs" },
+        { name = "Reset hunk", cmd = function() end, rtxt = "<leader>gr" },
+      },
+    },
+  },
+})
+
+-- In practice you don't hand-write that table: `lib.nvim.contextmenu`'s
+-- `entry`/`group`/`submenu` build it with the gating and separators handled,
+-- and `contextmenu.open(items, { mouse = true })` picks the renderer.

@@ -3,7 +3,12 @@
 -- guards LuaLS asks for below would hide the very failure it exists to report.
 ---@diagnostic disable: need-check-nil
 -- TESTS/contextmenu_spec.lua — lib.nvim.contextmenu: entry/group/submenu
--- (pure data builders) and bind_buffer's soft-dependency degradation.
+-- (pure data builders), renderer selection, and bind_buffer's
+-- soft-dependency degradation.
+--
+-- nvzone/menu is not installed in the test environment, so every path here
+-- resolves to the kit renderer — which is the point: what these assert is
+-- exactly what has to keep holding once nvzone/menu is dropped.
 
 return function(H)
   local eq = H.eq
@@ -73,9 +78,97 @@ return function(H)
     eq(sub.items, items, "submenu: items passed through")
   end
 
+  -- ---------- renderer selection ----------
+
+  do
+    eq(contextmenu.renderer(), "auto", "renderer: defaults to auto")
+
+    contextmenu.setup({ renderer = "kit" })
+    eq(contextmenu.renderer(), "kit", "renderer: setup narrows it")
+
+    contextmenu.setup({})
+    eq(contextmenu.renderer(), "kit", "renderer: setup without the key leaves it alone")
+
+    -- The invalid value is the case under test.
+    ---@diagnostic disable-next-line: assign-type-mismatch
+    contextmenu.setup({ renderer = "nonsense" })
+    eq(contextmenu.renderer(), "kit", "renderer: an unknown value is rejected, not applied")
+  end
+
+  -- ---------- open: draws with the kit renderer ----------
+
+  do
+    local chooser = require("lib.nvim.ui.kit.chooser")
+    contextmenu.setup({ renderer = "kit" })
+
+    local ran
+    local out = {}
+    contextmenu.group(
+      out,
+      contextmenu.entry(true, "Do X", function()
+        ran = "x"
+      end, "<leader>x"),
+      contextmenu.entry(true, "Do Y", function()
+        ran = "y"
+      end)
+    )
+    contextmenu.group(
+      out,
+      contextmenu.submenu("Git", {
+        contextmenu.entry(true, "Stage", function()
+          ran = "stage"
+        end),
+      })
+    )
+    eq(#out, 4, "open fixture: two entries, a separator, a submenu")
+
+    -- `mouse = false`: `relative = "mouse"` needs a real pointer position,
+    -- which a headless run has no way to provide.
+    contextmenu.open(out, { mouse = false })
+    ok(chooser.is_open(), "open: kit renderer opens a chooser")
+
+    local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+    eq(#lines, 4, "open: one row per item, separator included")
+    ok(lines[1]:match("^Do X%s+<leader>x$") ~= nil, "open: rtxt right-aligned in its own column")
+    -- Not a `^─+$` pattern: Lua patterns are byte-based, so `+` would repeat
+    -- only the last byte of the multi-byte rule character.
+    ok((lines[3]:gsub("─", "")) == "", "open: separator drawn as a divider rule")
+    ok(lines[4]:match("^Git ▸") ~= nil, "open: a submenu entry is marked as one")
+
+    -- Navigation steps over the separator rather than landing on it.
+    eq(chooser.current_index(), 1, "open: cursor starts on the first entry")
+    chooser.move(1)
+    eq(chooser.current_index(), 2, "open: move lands on the second entry")
+    chooser.move(1)
+    eq(chooser.current_index(), 4, "open: move skips the separator")
+
+    -- <CR> on a separator is inert (it can't be reached by moving, but a
+    -- mouse click can put the cursor there).
+    vim.api.nvim_win_set_cursor(0, { 3, 0 })
+    chooser.submit()
+    ok(chooser.is_open(), "open: submitting a separator leaves the menu open")
+    eq(ran, nil, "open: submitting a separator runs nothing")
+
+    -- Drill into the submenu, then run its leaf.
+    vim.api.nvim_win_set_cursor(0, { 4, 0 })
+    chooser.submit()
+    vim.wait(200, function()
+      return chooser.is_open()
+    end)
+    eq(
+      vim.api.nvim_buf_get_lines(0, 0, -1, false)[1],
+      "Stage",
+      "open: picking a submenu drills into its children"
+    )
+    chooser.submit()
+    eq(ran, "stage", "open: the nested leaf's action runs")
+    ok(not chooser.is_open(), "open: the menu closes after a leaf action")
+  end
+
   -- ---------- bind_buffer: soft dependency, no nvzone/menu required ----------
 
   do
+    local chooser = require("lib.nvim.ui.kit.chooser")
     vim.cmd("enew")
     local buf = vim.api.nvim_get_current_buf()
 
@@ -86,8 +179,7 @@ return function(H)
     end, { desc = "test menu" })
 
     -- Triggering the keymap must not error even though "menu" (nvzone/menu)
-    -- is not installed in the test environment — bind_buffer soft-requires
-    -- it at trigger time and degrades to a single notify.
+    -- is not installed in the test environment — the kit renderer takes over.
     local mapped = vim.fn.maparg("<RightMouse>", "n", false, true)
     ok(
       type(mapped) == "table" and mapped.buffer == 1,
@@ -97,10 +189,14 @@ return function(H)
 
     local call_ok = pcall(mapped.callback)
     ok(call_ok, "bind_buffer: triggering without nvzone/menu installed doesn't error")
-    -- get_items is only invoked after the soft-require of "menu" succeeds;
-    -- it must NOT have been reached here, since "menu" isn't installed.
-    eq(get_items_called, false, "bind_buffer: get_items not called when menu is missing")
+    -- Items are now collected before any renderer is reached — the provider
+    -- decides whether there is a menu at all, and an empty list opens none.
+    eq(get_items_called, true, "bind_buffer: get_items is called regardless of nvzone/menu")
+    ok(not chooser.is_open(), "bind_buffer: an empty item list opens nothing")
 
     vim.cmd("bwipeout! " .. buf)
   end
+
+  -- Leave the module as the rest of the suite (and any host) expects it.
+  contextmenu.setup({ renderer = "auto" })
 end
