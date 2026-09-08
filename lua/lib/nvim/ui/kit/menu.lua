@@ -615,7 +615,13 @@ local function build_level(opts, raw_items, stack)
   end
 
   for i, block in ipairs(blocks) do
-    local open = block.loose and nil or group_open(block.title, style, width, glyphs)
+    -- Spelled as an `if`, not as `block.loose and nil or group_open(...)`:
+    -- `nil` is falsy, so that idiom evaluates the right-hand side anyway and
+    -- framed a loose block in an empty box.
+    local open = nil
+    if not block.loose then
+      open = group_open(block.title, style, width, glyphs)
+    end
     -- In the frameless styles a titled group announces itself; an untitled
     -- one still needs the divider to be told apart from the group above it.
     if style ~= "box" and i > 1 and not open then
@@ -628,7 +634,10 @@ local function build_level(opts, raw_items, stack)
       local content, hls = content_of(it, cols, marker)
       push(frame_row(content, hls, style, not block.loose, glyphs), it)
     end
-    local close = block.loose and nil or group_close(style, width, glyphs)
+    local close = nil
+    if not block.loose then
+      close = group_close(style, width, glyphs)
+    end
     if close then
       push(close, false)
     end
