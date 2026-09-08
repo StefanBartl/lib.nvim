@@ -110,7 +110,7 @@
 ---@field single_click? boolean         # one left click picks, a click outside dismisses; default true
 ---@field close_on_focus_lost? boolean  # dismiss when focus moves elsewhere; default true
 ---@field group_style? "box"|"header"|"plain"  # how a group of items is drawn; default "box"
----@field submenu_marker? string        # glyph marking a nested entry; default "▶"
+---@field submenu_marker? string        # glyph marking a nested entry; default "→"
 
 --- One `kit.select`/`kit.popup({type="select"})` item, for a multi-line entry
 --- with per-column custom highlight groups (worked example:
