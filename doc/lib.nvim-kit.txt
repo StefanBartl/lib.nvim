@@ -134,7 +134,12 @@ progress. >lua
           Default Yes/No -> boolean; custom `choices` -> chosen string
           (cancel -> nil).
   menu    cursor-anchored action list: items = { { label, action }, … };
-          picking an item runs its callback.
+          picking an item runs its callback. Rows are padded a column at
+          each edge and dividers are indented, so nothing sits flush
+          against the border. Unlike the bare chooser it hides the block
+          cursor while open, picks on a single left click, and dismisses
+          on a click or focus change elsewhere -- turn any of the three
+          off with hide_cursor / single_click / close_on_focus_lost.
   progress passthrough to |lib.nvim-progress| (lib.nvim.progress.create);
           returns its handle (:update / :finish / :cancel).
   compare pick two items out of one picker, view them side by side:

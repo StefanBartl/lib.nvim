@@ -30,6 +30,14 @@ local M = {}
 --- Columns between a label and its right-aligned `rtxt` hint.
 local RTXT_GAP = 3
 
+--- Columns of empty space at each edge of a row, so labels and `rtxt` hints
+--- don't sit flush against the border. nvzone/menu spends the same budget
+--- differently -- one leading space plus an `item_gap` of 5 added to the
+--- window width -- but the effect it is after is this one: air around the
+--- text. Since the menu passes its own width (see `open_level`), the padding
+--- has to be part of the row, not slack left over in the window.
+local PAD = " "
+
 --- Marker appended to an entry that opens a nested list. Plain Unicode, not
 --- a Nerd Font glyph: a menu that has to render on any terminal is the wrong
 --- place to require a patched font.
@@ -121,6 +129,17 @@ local function measure(items)
   return label_w, rtxt_w
 end
 
+--- Display width of one rendered row: a pad column, the label column, the
+--- `rtxt` column when any item has one, and a pad column. This is also the
+--- menu's window width, so every row fills it exactly.
+---@internal
+---@param label_w integer
+---@param rtxt_w integer
+---@return integer
+local function row_width(label_w, rtxt_w)
+  return #PAD + label_w + (rtxt_w > 0 and (RTXT_GAP + rtxt_w) or 0) + #PAD
+end
+
 --- Build the chooser row for one item: the padded label, its `rtxt` hint
 --- right-aligned in a fixed trailing column, and the highlight spans for
 --- both. Separators become an inert divider line.
@@ -130,18 +149,21 @@ end
 ---@param rtxt_w integer
 ---@return Lib.UI.Kit.RichItem
 local function row_of(it, label_w, rtxt_w)
-  local total = label_w + (rtxt_w > 0 and (RTXT_GAP + rtxt_w) or 0)
+  local width = row_width(label_w, rtxt_w)
 
   if is_separator(it) then
+    -- Indented, and one column short of the right edge: a divider that runs
+    -- border to border reads as a second border rather than as a grouping
+    -- inside one menu. Same shape nvzone/menu draws.
     return {
-      lines = { string.rep("─", math.max(1, total)) },
+      lines = { PAD .. string.rep("─", math.max(1, width - 2 * #PAD)) },
       highlights = { { line = 0, hl_group = "KitBorder" } },
       selectable = false,
     }
   end
 
   local label = label_of(it) .. (children_of(it) and SUBMENU_MARKER or "")
-  local line = label .. string.rep(" ", math.max(0, label_w - vim.fn.strdisplaywidth(label)))
+  local line = PAD .. label .. string.rep(" ", math.max(0, label_w - vim.fn.strdisplaywidth(label)))
 
   local highlights = {}
   local hl = type(it) == "table" and it.hl or nil
@@ -161,7 +183,7 @@ local function row_of(it, label_w, rtxt_w)
     end
   end
 
-  return { lines = { line }, highlights = #highlights > 0 and highlights or nil }
+  return { lines = { line .. PAD }, highlights = #highlights > 0 and highlights or nil }
 end
 
 --- Reopen the parent level, popping it off `stack`.
@@ -214,11 +236,30 @@ local function open_level(opts, raw_items, stack)
   -- coordinate arithmetic here.
   local relative = opts.relative or (opts.mouse and "mouse") or "cursor"
 
+  -- Explicit width, because the rows carry their own padding now: left to
+  -- itself, make_scratch sizes to the widest line plus two, which would put
+  -- all the slack on the right and none on the left. A drill-down level also
+  -- gets a title (the parent's label), which must not be clipped -- the float
+  -- spends two columns of it on the border corners.
+  local width = math.max(
+    row_width(label_w, rtxt_w),
+    opts.title and (vim.fn.strdisplaywidth(opts.title) + 2) or 0
+  )
+
   local surf = chooser.open({
     items = rows,
+    width = width,
     title = opts.title,
     theme = opts.theme,
     relative = relative,
+    -- A menu is picked from, not navigated in: hide the block cursor so the
+    -- highlighted row is the only thing saying where you are, let one left
+    -- click choose, and dismiss on a click or focus change elsewhere. Every
+    -- one of these is off by default in the chooser because it is shared
+    -- with select/picker/compare, where they would be wrong.
+    hide_cursor = opts.hide_cursor ~= false,
+    single_click = opts.single_click ~= false,
+    close_on_focus_lost = opts.close_on_focus_lost ~= false,
     row = opts.row,
     col = opts.col,
     on_select = function(_, idx)

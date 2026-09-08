@@ -115,6 +115,15 @@ tried. What the kit renderer genuinely needed was smaller and elsewhere —
 separators the cursor steps over (a `selectable = false` rich item in
 `ui.kit.chooser`), a right-aligned `rtxt` column, and nesting.
 
+The visual gap that was left after the swap closed later, and only one item
+of it was refused. Rows carry a pad column at each edge, dividers are
+indented and stop short of the right edge, the block cursor is hidden while
+the menu is open, a single left click picks, and a click or focus change
+elsewhere dismisses it. What was **not** copied is nvzone/menu's darker
+window background: that is a base46 group, so taking it would tie the menu
+to NvChad. A menu that should stand out more belongs in a kit preset, not in
+`ui.kit.menu`.
+
 One real behavioural difference remains, and it is a design choice rather
 than a gap: nvzone/menu opens a nested fly-out in a **second window** beside
 the parent, while the kit **drills down** in place, with `<BS>` walking back

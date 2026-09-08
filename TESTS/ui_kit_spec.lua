@@ -882,11 +882,59 @@ return function(H)
     "menu opens"
   )
   ok(ms:is_valid(), "menu float valid")
-  eq(vim.api.nvim_buf_get_lines(ms.bufnr, 0, 1, false)[1], "Rename", "menu shows the item labels")
+  -- Every row carries a pad column at each edge, so no label sits flush
+  -- against the border and the widest row still ends one column early.
+  eq(vim.api.nvim_buf_get_lines(ms.bufnr, 0, 1, false)[1], " Rename ", "menu pads the item labels")
   -- pick the second item -> runs its action
   chooser.move(1)
   chooser.submit()
   eq(ran, "delete", "menu runs the picked item's action")
+
+  -- Row geometry: the window is exactly as wide as a padded row (no slack
+  -- make_scratch would otherwise put entirely on the right), separators are
+  -- indented and stop short of the right edge, and an `rtxt` hint ends one
+  -- column before the border rather than against it.
+  local gs = assert(
+    kit.menu({
+      items = {
+        { name = "Copy", rtxt = "yy", cmd = function() end },
+        { name = "separator" },
+        { name = "Delete", rtxt = "dd", cmd = function() end },
+      },
+    }),
+    "menu with rtxt opens"
+  )
+  local grows = vim.api.nvim_buf_get_lines(gs.bufnr, 0, -1, false)
+  local gwidth = vim.api.nvim_win_get_width(gs.winid)
+  eq(vim.fn.strdisplaywidth(grows[1]), gwidth, "menu row fills the window width exactly")
+  eq(grows[1]:sub(1, 1), " ", "menu row starts with a pad column")
+  eq(grows[1]:sub(-1), " ", "menu row ends with a pad column")
+  eq(grows[2]:sub(1, 1), " ", "menu separator is indented")
+  eq(
+    vim.fn.strdisplaywidth(grows[2]),
+    gwidth - 1,
+    "menu separator stops one column short of the right edge"
+  )
+  chooser.close()
+
+  -- The menu turns on the chooser's three presentation options; they stay
+  -- off for select/picker/compare, which is why they are options at all.
+  local saved_guicursor = vim.o.guicursor
+  local hs = assert(kit.menu({ items = { { label = "Only", action = function() end } } }), "opens")
+  ok(vim.o.guicursor ~= saved_guicursor, "menu hides the cursor while open")
+  hs:close()
+  eq(vim.o.guicursor, saved_guicursor, "menu restores 'guicursor' when the window closes")
+
+  local ss = assert(
+    kit.select({
+      items = { "a", "b" },
+      on_select = function() end,
+    }),
+    "select opens"
+  )
+  eq(vim.o.guicursor, saved_guicursor, "select leaves the cursor alone")
+  chooser.close()
+  ok(not ss:is_valid(), "select closed")
 
   -- --------------------------------------------------------------- compare
   -- `state`/`slots`/`move`/`mark`/`confirm` mirror `kit.picker`'s handle
