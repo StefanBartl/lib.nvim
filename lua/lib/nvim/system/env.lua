@@ -22,13 +22,53 @@ local M = {}
 --- Default set of fields published to `vim.g` by `publish_globals()`.
 --- `pathsep`/`home` are intentionally excluded: they collide with nothing useful
 --- as globals and are better read from the snapshot.
+---
+--- `is_pwsh` is excluded for a different reason: it is one of the DEFERRED
+--- fields below, and publishing it would compute the very thing the deferral
+--- exists to avoid. Ask for it by name -- `publish_globals({ fields = { ...,
+--- "is_pwsh" } })` -- if a Vimscript consumer ever needs the global.
 local DEFAULT_GLOBAL_FIELDS = {
   "is_windows",
   "is_wsl",
   "is_linux",
   "is_macos",
-  "is_pwsh",
   "repo_base",
+}
+
+--- Fields computed on first read rather than inside `compute()`.
+---
+--- `vim.fn.executable("pwsh")` walks `PATH` applying `PATHEXT`, and measured
+--- 11-15 ms per call on the Windows workstation -- Vim does not cache it, so
+--- the second call costs the same as the first. That is not a rounding error:
+--- `get()` runs during startup on every host (`init.lua` publishes the globals
+--- through `lib.nvim.system.setup`), and any plugin that reads the snapshot
+--- from its own `plugin/` file pays it again before the first paint. It was
+--- the single most expensive thing in this config's spec-import phase.
+---
+--- Deferring means only a caller that actually asks the question waits for the
+--- answer. The trade-off: the snapshot is no longer a plain table -- a deferred
+--- field is invisible to `pairs()` and to `vim.deepcopy` until it has been read
+--- once. Reading it by name (`env.is_pwsh`) works unchanged, which is how every
+--- consumer reads it.
+---@type table<string, fun(): any>
+local DEFERRED = {
+  is_pwsh = function()
+    return vim.fn.executable("pwsh") == 1
+  end,
+}
+
+--- Metatable installed on the snapshot: resolve a deferred field on first read
+--- and `rawset` it, so the cost is paid at most once per snapshot.
+local deferred_mt = {
+  __index = function(snapshot, key)
+    local resolve = DEFERRED[key]
+    if not resolve then
+      return nil
+    end
+    local value = resolve()
+    rawset(snapshot, key, value)
+    return value
+  end,
 }
 
 ---@type Lib.System.Env|nil
@@ -39,16 +79,16 @@ local cache
 local function compute()
   local is_windows = require("lib.nvim.cross.platform.is_windows")()
 
-  return {
+  return setmetatable({
     is_windows = is_windows,
     is_wsl = require("lib.nvim.cross.platform.is_wsl")(),
     is_macos = require("lib.nvim.cross.platform.is_macos")(),
     is_linux = require("lib.nvim.cross.platform.is_linux")(),
-    is_pwsh = vim.fn.executable("pwsh") == 1,
+    -- is_pwsh: see DEFERRED above -- resolved on first read, not here.
     repo_base = vim.env.REPOS_DIR,
     pathsep = is_windows and "\\" or "/",
     home = vim.fn.expand("~"),
-  }
+  }, deferred_mt)
 end
 
 --- Return the cached environment snapshot, computing it once on first call.

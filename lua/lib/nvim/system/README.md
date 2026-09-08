@@ -50,7 +50,7 @@ A memoized snapshot of the host environment.
 | `is_wsl`     | `boolean`     | Windows Subsystem for Linux (v1 or v2).          |
 | `is_linux`   | `boolean`     | Linux, **excluding** WSL.                        |
 | `is_macos`   | `boolean`     | macOS (Darwin).                                  |
-| `is_pwsh`    | `boolean`     | `pwsh` (PowerShell Core) is on `PATH`.           |
+| `is_pwsh`    | `boolean`     | `pwsh` (PowerShell Core) is on `PATH`. Deferred. |
 | `repo_base`  | `string\|nil` | Value of `$REPOS_DIR`, or `nil` if unset.        |
 | `pathsep`    | `string`      | Path separator for the current OS (`\` or `/`).  |
 | `home`       | `string`      | Expanded home directory (`~`).                   |
@@ -58,6 +58,14 @@ A memoized snapshot of the host environment.
 > **WSL semantics.** Unlike a naive `not win and not mac` definition, the
 > platform booleans here are **mutually exclusive**. On WSL you get
 > `is_wsl == true` and `is_linux == false`.
+
+> **Deferred fields.** `is_pwsh` is computed on first read, not when the
+> snapshot is built. `vim.fn.executable("pwsh")` walks `PATH` applying
+> `PATHEXT` and measured 11-15 ms per call on a Windows workstation, with no
+> caching on Vim's side — and `get()` runs during startup on every host. Read
+> it by name (`env.is_pwsh`) and nothing changes; the one visible difference is
+> that the field does not show up in `pairs()` or `vim.deepcopy` until it has
+> been read once.
 
 ### `env.get(opts?) -> Lib.System.Env`
 
@@ -89,12 +97,14 @@ or Vimscript — rather than calling `get()`.
 ```lua
 require("lib.nvim.system.env").publish_globals()
 -- now vim.g.is_windows, vim.g.is_wsl, vim.g.is_linux,
---     vim.g.is_macos, vim.g.is_pwsh, vim.g.repo_base are set
+--     vim.g.is_macos, vim.g.repo_base are set
 ```
 
-By default the platform/shell/repo fields are published; `pathsep` and `home`
-are intentionally left out (read them from the snapshot). Override the set with
-`{ fields = { ... } }`.
+By default the platform/repo fields are published; `pathsep` and `home` are
+intentionally left out (read them from the snapshot), and so is the deferred
+`is_pwsh` — publishing it would compute the very thing the deferral avoids.
+Override the set with `{ fields = { ... } }`, naming `is_pwsh` explicitly if a
+Vimscript consumer needs that global.
 
 ---
 
