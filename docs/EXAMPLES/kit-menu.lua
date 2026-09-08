@@ -74,6 +74,44 @@ kit.menu({
   },
 })
 
+-- ---------------------------------------------------------------------------
+-- Icons and named sections.
+--
+-- `icon` is a FIELD, not something you prefix onto the label. The renderer
+-- gives icons a column of their own and measures it across the whole menu, so
+-- an entry with a glyph and an entry without still start their labels in the
+-- same screen column. A glyph inside `name` is just text -- it indents that
+-- one row, and "  Do X" (two spaces where a glyph was meant to go) looks
+-- exactly like a working entry until you see it next to a real one.
+--
+-- `__heading` names a group. A named group is drawn as a titled frame
+-- (`group_style = "box"`, the default); `"header"` draws a titled rule
+-- instead, and `"plain"` is the old divider look. A menu that names no group
+-- gets `"plain"` regardless -- an untitled frame says nothing a divider does
+-- not.
+local nerd = require("lib.nvim.ui.nerd_font")
+
+kit.menu({
+  mouse = true,
+  items = {
+    { name = "Clipboard", __heading = true },
+    {
+      name = "Copy all",
+      icon = nerd.glyph("F0C5", "+"),
+      cmd = "%y+",
+      rtxt = "<C-a>",
+    },
+    { name = "Danger", __heading = true },
+    {
+      name = "Delete file",
+      icon = nerd.glyph("F1F8", "x"),
+      icon_hl = "DiagnosticError",
+      cmd = function() end,
+      rtxt = "df",
+    },
+  },
+})
+
 -- In practice you don't hand-write that table: `lib.nvim.contextmenu`'s
 -- `entry`/`group`/`submenu` build it with the gating and separators handled,
 -- and `contextmenu.open(items, { mouse = true })` picks the renderer.

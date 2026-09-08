@@ -8,7 +8,10 @@
 ---@field cmd? function|string       Leaf action: a callback, or an Ex command string
 ---@field items? Lib.ContextMenu.Item[]  Nested fly-out entries (mutually exclusive with `cmd`)
 ---@field rtxt? string               Right-aligned hint text (usually a default keymap)
+---@field icon? string               Leading glyph, drawn in a column of its own -- NOT part of `name`
+---@field icon_hl? string            Highlight group for the icon (kit renderer)
 ---@field hl? string                 Optional highlight group override (nvzone/menu)
+---@field __heading? boolean         Group heading marker (see `heading`); not a row
 
 ---Options for `require("lib.nvim.contextmenu").bind_buffer(bufnr, get_items, opts)`.
 ---@class Lib.ContextMenu.BindOpts
@@ -19,6 +22,15 @@
 
 ---@alias Lib.ContextMenu.ItemsProvider fun(): Lib.ContextMenu.Item[]
 
+---Presentation extras for `entry` / `submenu`. `icon` is a field rather than
+---something a caller prefixes onto the label on purpose: the kit renderer
+---gives icons a column, so labels stay aligned whether or not an entry has
+---one.
+---@class Lib.ContextMenu.ItemOpts
+---@field icon? string     Leading glyph (one display cell)
+---@field icon_hl? string  Highlight group for the icon
+---@field hl? string       Highlight group for the label
+
 ---Which component draws the menu. `"auto"` (the default) prefers nvzone/menu
 ---when installed and falls back to `lib.nvim.ui.kit.menu`.
 ---@alias Lib.ContextMenu.Renderer "auto"|"kit"|"nvzone"
@@ -28,13 +40,16 @@
 ---@field mouse? boolean   Anchor at the mouse pointer (default `true`)
 ---@field title? string    Menu title (kit renderer only; nvzone/menu has none)
 ---@field theme? any       `Lib.UI.Kit.ThemeArg` (kit renderer only)
+---@field group_style? "box"|"header"|"plain"  How a group is drawn; default `"box"` (kit renderer only)
+---@field submenu_marker? string  Glyph marking a nested entry (kit renderer only)
 
 --- `lib.nvim.contextmenu` module surface.
 ---@class Lib.ContextMenu
 ---@field setup fun(opts?: { renderer?: Lib.ContextMenu.Renderer })
 ---@field renderer fun(): Lib.ContextMenu.Renderer
----@field entry fun(available: any, label: string, fn: function, rtxt?: string): Lib.ContextMenu.Item|nil
+---@field entry fun(available: any, label: string, fn: function, rtxt?: string, opts?: Lib.ContextMenu.ItemOpts): Lib.ContextMenu.Item|nil
+---@field heading fun(title: string): Lib.ContextMenu.Item
 ---@field group fun(out: Lib.ContextMenu.Item[], ...: Lib.ContextMenu.Item|nil): boolean
----@field submenu fun(label: string, items: Lib.ContextMenu.Item[]): Lib.ContextMenu.Item|nil
+---@field submenu fun(label: string, items: Lib.ContextMenu.Item[], opts?: Lib.ContextMenu.ItemOpts): Lib.ContextMenu.Item|nil
 ---@field open fun(items: Lib.ContextMenu.Item[]|string, opts?: Lib.ContextMenu.OpenOpts)
 ---@field bind_buffer fun(bufnr: integer, get_items: Lib.ContextMenu.ItemsProvider, opts?: Lib.ContextMenu.BindOpts)
