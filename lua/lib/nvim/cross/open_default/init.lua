@@ -49,6 +49,35 @@ end
 ---@param opts? { on_exit?: fun(code: integer) }
 ---@return boolean ok
 ---@return string|nil err
+
+--- A path `explorer.exe` will actually resolve: absolute, and spelled with
+--- backslashes.
+---
+--- Both halves are load-bearing, and the failure is the same either way:
+--- given something it cannot resolve to a file, `explorer.exe` does not
+--- report an error -- it opens a **folder window**. So a relative path (which
+--- `expand_path` leaves relative: `./clip.mp4` stays `./clip.mp4`) or a
+--- forward-slashed one silently turns "open this video in the registered
+--- player" into "here is a file browser", which reads as the default-app
+--- association being wrong when it is not. Measured 2026-09-08 against a
+--- `.mp4` with VLC registered.
+---
+--- URLs are handed over untouched: `:p` on `https://example.com/x` would
+--- prefix the working directory and destroy it.
+---@param target string
+---@return string
+local function windows_target(target)
+  if looks_like_url(target) then
+    return target
+  end
+  local path = expand_path(target)
+  -- `:p` also collapses `.` and `..`, which explorer.exe does not resolve.
+  local absolute = vim.fn.fnamemodify(path, ":p")
+  if absolute == "" then
+    absolute = path
+  end
+  return (absolute:gsub("/", "\\"))
+end
 return function(target, opts)
   if type(target) ~= "string" or target == "" then
     return false, "empty target"
@@ -69,7 +98,7 @@ return function(target, opts)
     -- with 2+ query params) because cmd.exe's own tokenizer treats a bare
     -- `&` outside quotes as a command separator, and libuv/vim.system only
     -- quote an argv entry that contains whitespace.
-    cmd = { "explorer.exe", expand_path(target) }
+    cmd = { "explorer.exe", windows_target(target) }
   elseif is_wsl then
     if looks_like_url(target) then
       cmd = { "explorer.exe", target }
