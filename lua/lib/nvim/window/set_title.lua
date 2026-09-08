@@ -39,8 +39,15 @@ local function set_title(winid, title, opts)
 
   -- nvim_win_set_config leaves omitted keys unchanged on an existing float,
   -- so a minimal patch is enough (and avoids round-tripping the full config).
+  --
+  -- Clearing is the exception, and it is why `{ title = nil }` is not what it
+  -- reads like: in Lua that IS the omitted key, so the float kept whatever
+  -- title it already had and the documented "pass nil to clear" never did
+  -- anything. An empty string is what actually removes it.
   local patch
-  if title ~= nil and opts.pos ~= nil then
+  if title == nil then
+    patch = { title = "" }
+  elseif opts.pos ~= nil then
     patch = { title = title, title_pos = opts.pos }
   else
     patch = { title = title }

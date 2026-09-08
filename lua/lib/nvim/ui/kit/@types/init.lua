@@ -99,7 +99,7 @@
 ---@class Lib.UI.Kit.MenuOpts
 ---@field items Lib.UI.Kit.MenuItem[]
 ---@field title? string
----@field theme? Lib.UI.Kit.ThemeArg
+---@field theme? Lib.UI.Kit.ThemeArg  # default: the `menu` preset (coloured frame)
 ---@field relative? "editor"|"cursor"|"win"|"mouse"
 ---@field row? integer       # explicit placement, paired with `relative`
 ---@field col? integer
@@ -239,6 +239,7 @@
 --- in lua/lib/nvim/ui/kit/init.lua for when to reach for this directly.
 ---@class Lib.UI.Kit.ChooserModule
 ---@field open fun(opts: table): Lib.UI.Kit.Surface|nil
+---@field set_items fun(opts: table): boolean  # replace the open list in place (same window); false when nothing is open
 ---@field close fun()
 ---@field is_open fun(): boolean
 ---@field move fun(delta: integer)
