@@ -32,6 +32,12 @@
 ---   selects and a stray click leaves the list open behind the cursor.
 --- - `close_on_focus_lost` — dismiss the list when focus moves elsewhere.
 ---   Wrong for the picker, whose prompt window holds focus by design.
+--- - `flash_on_select` — light the picked row for `flash_ms` before the
+---   selection is delivered, the way a button acknowledges a press. It has to
+---   delay the callback, not run alongside it: a leaf action closes the list,
+---   so a flash painted at the same moment is never on screen long enough to
+---   see. Off for `select`/`picker`, where the caller may be driving submits
+---   programmatically and a deferred callback would change the contract.
 
 local surface = require("lib.nvim.ui.kit.surface")
 local map = require("lib.nvim.bindings.keymap")
@@ -43,6 +49,11 @@ local M = {}
 
 --- Horizontal motions blocked so the cursor stays on whole rows.
 local HORIZONTAL = { "h", "l", "<Left>", "<Right>", "0", "^", "$", "w", "e", "b", "W", "E", "B" }
+
+--- Milliseconds the picked row stays lit before the selection is delivered.
+--- Long enough to register as feedback, short enough not to read as lag --
+--- the same ~100ms window UI toolkits give a button's pressed state.
+local FLASH_MS = 100
 
 --- Highlight the cursor is pointed at while `hide_cursor` is on. `blend = 100`
 --- makes it fully transparent; `reverse` keeps it from falling back to a solid
@@ -59,7 +70,17 @@ local state = {
   selections = {}, -- keyed by 1-based item index
   ns = api.nvim_create_namespace("lib_kit_chooser"), -- selection marks
   content_ns = api.nvim_create_namespace("lib_kit_chooser_content"), -- per-item custom highlights
+  flash_ns = api.nvim_create_namespace("lib_kit_chooser_flash"), -- the pick acknowledgement
   saved_guicursor = nil, -- non-nil while `hide_cursor` is in effect
+  flash_on_select = false,
+  flash_ms = 0,
+  flashing = false, -- a pick is lit and its delivery is pending
+  -- Bumped by every close. A flash defers its delivery, so between the two
+  -- the list can be dismissed (<Esc>, a click elsewhere, focus lost); the
+  -- pending callback compares this and stays silent when it has gone stale.
+  -- Cancelling a timer would not cover it: `close` is reachable from paths
+  -- that never see the pending flash at all.
+  generation = 0,
 }
 
 --- Whether a chooser is currently open.
@@ -244,11 +265,41 @@ local function render_marks()
   end
 end
 
+---@internal
+--- Light entry `idx` across every row it occupies.
+---@param idx integer|nil
+local function paint_flash(idx)
+  local buf = state.surf and state.surf.bufnr
+  local e = idx and state.entries[idx]
+  if not buf or not e or not api.nvim_buf_is_valid(buf) then
+    return
+  end
+  for row = e.start_row, e.end_row do
+    pcall(api.nvim_buf_set_extmark, buf, state.flash_ns, row, 0, {
+      line_hl_group = "KitFlash",
+      hl_eol = true,
+      -- Above the per-column content highlights and the multi-select marks,
+      -- which sit on the same rows.
+      priority = 200,
+    })
+  end
+end
+
+---@internal
+--- Clear the pick acknowledgement.
+local function clear_flash()
+  local buf = state.surf and state.surf.bufnr
+  if buf and api.nvim_buf_is_valid(buf) then
+    api.nvim_buf_clear_namespace(buf, state.flash_ns, 0, -1)
+  end
+end
+
 --- Close the chooser and reset state (idempotent).
 function M.close()
   restore_cursor()
   if state.surf then
     clear_marks()
+    clear_flash()
     state.surf:close()
   end
   state.surf = nil
@@ -258,6 +309,8 @@ function M.close()
   state.multi = false
   state.selections = {}
   state.keep_open = false
+  state.flashing = false
+  state.generation = state.generation + 1
 end
 
 ---@internal
@@ -386,18 +439,11 @@ function M.toggle()
   render_marks()
 end
 
---- Resolve the selection, fire the callback, then close. Also drivable by the
---- picker prompt (Part B) to submit the highlighted item.
-function M.submit()
-  if not M.is_open() then
-    return
-  end
-  local idx = M.current_index()
-  -- A non-selectable entry (separator, heading) is inert: picking it does
-  -- nothing and leaves the chooser open, rather than closing with no value.
-  if idx and not state.entries[idx].selectable then
-    return
-  end
+---@internal
+--- Resolve the selection for `idx`, fire the callback, and close unless the
+--- callback was promised the window.
+---@param idx integer|nil
+local function deliver(idx)
   local cb, multi, entries = state.on_select, state.multi, state.entries
   -- `close_on_select = false`: the callback owns the window from here. A menu
   -- drilling into a submenu uses this to swap the list in place instead of
@@ -437,6 +483,53 @@ function M.submit()
   end
 end
 
+--- Resolve the selection, fire the callback, then close. Also drivable by the
+--- picker prompt (Part B) to submit the highlighted item.
+---
+--- With `flash_on_select` the picked row is lit first and the delivery waits
+--- `flash_ms`. That wait is the feature, not an implementation detail: the
+--- delivery is what closes the list or swaps it to another level, so
+--- acknowledging a pick means being on screen before it happens.
+function M.submit()
+  if not M.is_open() then
+    return
+  end
+  -- A pick is already lit and waiting to be delivered. A second <CR> inside
+  -- that window would run two selections off one list.
+  if state.flashing then
+    return
+  end
+  local idx = M.current_index()
+  -- A non-selectable entry (separator, heading) is inert: picking it does
+  -- nothing and leaves the chooser open, rather than closing with no value.
+  if idx and not state.entries[idx].selectable then
+    return
+  end
+
+  if not state.flash_on_select or state.flash_ms <= 0 then
+    deliver(idx)
+    return
+  end
+
+  local gen = state.generation
+  state.flashing = true
+  paint_flash(idx)
+  vim.defer_fn(function()
+    -- Dismissed while lit: the pick was abandoned, so it is not delivered.
+    -- Both ways that happens have to be caught. `close` bumps the generation;
+    -- the window going away on its own does not, because close_on_focus_lost
+    -- closes it directly and never routes through `close` -- only `is_open`
+    -- sees that one.
+    if state.generation ~= gen or not M.is_open() then
+      state.flashing = false
+      return
+    end
+    state.flashing = false
+    clear_flash()
+    deliver(idx)
+  end, state.flash_ms)
+end
+
 ---@internal
 --- Pick the row under the mouse pointer and submit it. Returns false when the
 --- click landed outside the chooser window, so the caller can decide what an
@@ -466,7 +559,7 @@ local function click_submit()
 end
 
 --- Open a chooser.
----@param opts table  # { items, on_select, multi_select?, title?, relative?, width?, height?, theme?, initial_index?, hide_cursor?, single_click?, close_on_focus_lost?, close_on_select? }
+---@param opts table  # { items, on_select, multi_select?, title?, relative?, width?, height?, theme?, initial_index?, hide_cursor?, single_click?, close_on_focus_lost?, close_on_select?, flash_on_select?, flash_ms? }
 ---@return Lib.UI.Kit.Surface|nil
 function M.open(opts)
   if not opts or type(opts.items) ~= "table" or #opts.items == 0 then
@@ -518,6 +611,9 @@ function M.open(opts)
   state.multi = opts.multi_select or opts.multi or false
   state.selections = {}
   state.keep_open = opts.close_on_select == false
+  state.flash_on_select = opts.flash_on_select == true
+  state.flash_ms = opts.flash_ms or FLASH_MS
+  state.flashing = false
 
   render_content_highlights()
 

@@ -122,6 +122,26 @@ return function(H)
     )
     eq(#out, 4, "open fixture: two entries, a separator, a submenu")
 
+    --- Wait for the row swap a pick sets off. The menu acknowledges a pick by
+    --- lighting the row first (`flash_on_select`), so the new level is not on
+    --- screen the instant `submit()` returns -- which is the whole point of
+    --- it. Waits for the effect rather than sleeping a fixed span.
+    ---@param pattern string  # Lua pattern the new level's first row matches
+    local function wait_for_level(pattern)
+      local swapped = vim.wait(1000, function()
+        local first = vim.api.nvim_buf_get_lines(0, 0, 1, false)[1]
+        return first ~= nil and first:match(pattern) ~= nil
+      end, 10)
+      ok(swapped, "open: the level swap lands after the pick is acknowledged")
+    end
+
+    -- Every spec shares one Neovim, so callbacks other specs left on the
+    -- scheduler are still pending here. Run them out first: one of them moves
+    -- the focus, and a menu that opens before that lands is dismissed by its
+    -- own `close_on_focus_lost` the moment the loop next turns -- which it
+    -- does now that a pick is acknowledged before it is acted on.
+    vim.wait(50)
+
     -- `mouse = false`: `relative = "mouse"` needs a real pointer position,
     -- which a headless run has no way to provide.
     contextmenu.open(out, { mouse = false })
@@ -167,9 +187,14 @@ return function(H)
     local top_pos = vim.fn.win_screenpos(top_win)
     vim.api.nvim_win_set_cursor(0, { 4, 0 })
     chooser.submit()
-    vim.wait(200, function()
-      return chooser.is_open()
-    end)
+    -- Held back for the length of the flash: the parent's rows are still the
+    -- ones on screen, and the row that was picked is the one lit.
+    eq(
+      vim.api.nvim_buf_get_lines(0, 0, 1, false)[1]:match("^ Do X") ~= nil,
+      true,
+      "open: the level swap waits while the picked row is lit"
+    )
+    wait_for_level("^ ◂ Back")
     eq(vim.api.nvim_get_current_win(), top_win, "open: drilling down reuses the same window")
     eq(vim.api.nvim_get_current_buf(), top_buf, "open: drilling down reuses the same buffer")
     eq(
@@ -201,9 +226,7 @@ return function(H)
     -- Back out with the entry itself, then drill in again.
     eq(chooser.current_index(), 1, "open: the cursor starts on the back entry")
     chooser.submit()
-    vim.wait(200, function()
-      return chooser.is_open()
-    end)
+    wait_for_level("^ Do X")
     ok(
       vim.api.nvim_buf_get_lines(0, 0, -1, false)[1]:match("^ Do X") ~= nil,
       "open: the back entry returns to the parent level"
@@ -215,11 +238,12 @@ return function(H)
 
     vim.api.nvim_win_set_cursor(0, { 4, 0 })
     chooser.submit()
-    vim.wait(200, function()
-      return chooser.is_open()
-    end)
+    wait_for_level("^ ◂ Back")
     vim.api.nvim_win_set_cursor(0, { 3, 0 })
     chooser.submit()
+    vim.wait(1000, function()
+      return ran ~= nil
+    end, 10)
     eq(ran, "stage", "open: the nested leaf's action runs")
     ok(not chooser.is_open(), "open: the menu closes after a leaf action")
   end
