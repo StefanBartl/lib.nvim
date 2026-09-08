@@ -17,10 +17,15 @@
 --- "Owns its buffer" (a plugin-created UI: a tree, a dashboard, a list-view)
 --- >lua
 ---   -- integrations/menu.lua
+---   local nerd = require("lib.nvim.ui.nerd_font")
+---
 ---   function M.items()
 ---     local out = {}
 ---     contextmenu.group(out,
----       contextmenu.entry(feature("x") ~= nil, "  Do X", do_x, "<leader>x")
+---       contextmenu.heading("My Plugin"),
+---       contextmenu.entry(feature("x") ~= nil, "Do X", do_x, "<leader>x", {
+---         icon = nerd.glyph("F0AD", "*"),
+---       })
 ---     )
 ---     return out
 ---   end
@@ -101,16 +106,45 @@ end
 --- Build one entry, or nil when `available` is falsy — lets a caller write a
 --- flat list of `entry(...)` calls and rely on `group`/`vim.tbl_filter` to
 --- drop the gaps, instead of hand-writing `if` guards around every item.
+---
+--- A leading glyph belongs in `opts.icon`, never in `label`. The kit renderer
+--- draws icons as a column of their own, so an entry with one lines up with
+--- an entry without; a glyph inside the label is just text, and indents that
+--- row past every other. (Two contributors have shipped labels that begin
+--- with two spaces where a glyph was meant to go — the icon column is what
+--- makes that mistake impossible to make.)
 ---@param available any  Truthy to include the entry, falsy to omit it
 ---@param label string
 ---@param fn function     Called with no arguments when the entry is picked
 ---@param rtxt? string    Right-aligned hint text (usually a default keymap)
+---@param opts? { icon?: string, icon_hl?: string, hl?: string }
 ---@return Lib.ContextMenu.Item|nil
-function M.entry(available, label, fn, rtxt)
+function M.entry(available, label, fn, rtxt, opts)
   if not available then
     return nil
   end
-  return { name = label, rtxt = rtxt, cmd = fn }
+  opts = opts or {}
+  return {
+    name = label,
+    rtxt = rtxt,
+    cmd = fn,
+    icon = opts.icon,
+    icon_hl = opts.icon_hl,
+    hl = opts.hl,
+  }
+end
+
+--- A group heading: an inert marker that titles the group it opens. Pass it
+--- as the first argument to `group`.
+---
+--- It is a marker rather than a `title` parameter on `group` because gating
+--- has to reach it: a section whose every entry is unavailable must not leave
+--- its title standing over nothing, and `group` already knows which of its
+--- arguments survived.
+---@param title string
+---@return Lib.ContextMenu.Item
+function M.heading(title)
+  return { name = title, __heading = true }
 end
 
 --- Append every non-nil argument to `out`, preceded by a separator when
@@ -137,11 +171,25 @@ function M.group(out, ...)
       compact[#compact + 1] = item
     end
   end
+
+  -- A leading `heading(...)` titles the group. It is dropped along with the
+  -- group when every real entry gated off: a title over an empty section is
+  -- worse than no section at all.
+  local heading = nil
+  if compact[1] and compact[1].__heading then
+    heading = table.remove(compact, 1)
+  end
+
   if #compact == 0 then
     return false
   end
-  if #out > 0 then
+  -- A heading already starts a new group for the renderer; a separator on top
+  -- of it would only add an empty divider line above the title.
+  if #out > 0 and not heading then
     out[#out + 1] = { name = "separator" }
+  end
+  if heading then
+    out[#out + 1] = heading
   end
   for _, item in ipairs(compact) do
     out[#out + 1] = item
@@ -152,17 +200,25 @@ end
 --- Wrap `items` as one nested fly-out entry (the "Lsp Actions ▸" shape).
 --- Returns nil when `items` is empty, so callers can chain it straight into
 --- a host's composed list without an extra emptiness check:
---- `vim.list_extend(composed, { contextmenu.submenu("  My Plugin", items) })`
+--- `vim.list_extend(composed, { contextmenu.submenu("My Plugin", items) })`
 --- would insert a stray nil — check the return instead, as in the usage
 --- examples above.
 ---@param label string
 ---@param items Lib.ContextMenu.Item[]
+---@param opts? { icon?: string, icon_hl?: string, hl?: string }
 ---@return Lib.ContextMenu.Item|nil
-function M.submenu(label, items)
+function M.submenu(label, items, opts)
   if type(items) ~= "table" or #items == 0 then
     return nil
   end
-  return { name = label, items = items }
+  opts = opts or {}
+  return {
+    name = label,
+    items = items,
+    icon = opts.icon,
+    icon_hl = opts.icon_hl,
+    hl = opts.hl,
+  }
 end
 
 --- Open a menu with the active renderer. `items` is either a built item list
@@ -174,7 +230,7 @@ end
 --- items with `entry`/`group`/`submenu` and never `require("menu")`
 --- themselves, which is what makes the renderer swappable at all.
 ---@param items Lib.ContextMenu.Item[]|string
----@param opts? { mouse?: boolean, title?: string, theme?: any }
+---@param opts? Lib.ContextMenu.OpenOpts
 function M.open(items, opts)
   opts = opts or {}
   local mouse = opts.mouse ~= false
@@ -202,6 +258,8 @@ function M.open(items, opts)
     items = items,
     title = opts.title,
     theme = opts.theme,
+    group_style = opts.group_style,
+    submenu_marker = opts.submenu_marker,
     mouse = mouse,
   })
 end

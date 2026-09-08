@@ -87,12 +87,14 @@
 --- nested fly-out, `rtxt` for a right-aligned hint, `hl` for a row colour).
 --- `{ name = "separator" }` draws an inert divider.
 ---@class Lib.UI.Kit.MenuItem
----@field label? string      # display text
+---@field label? string      # display text (leading/trailing space is trimmed)
 ---@field action? fun()      # callback run when the item is picked (alias: cb)
 ---@field name? string       # display text, nvzone/menu spelling (or the literal "separator")
 ---@field cmd? fun()|string  # leaf action, nvzone/menu spelling: callback or Ex command string
 ---@field items? Lib.UI.Kit.MenuItem[]  # nested fly-out (mutually exclusive with cmd/action)
 ---@field rtxt? string       # right-aligned hint text (usually a keymap)
+---@field icon? string       # leading glyph, drawn in a column of its own -- NOT part of `label`
+---@field icon_hl? string    # highlight group for the icon (default: `hl`, else KitAccent)
 ---@field hl? string         # highlight group for this row's label
 
 --- Options for `kit.menu`.
@@ -107,6 +109,8 @@
 ---@field hide_cursor? boolean          # blank the terminal cursor while open; default true
 ---@field single_click? boolean         # one left click picks, a click outside dismisses; default true
 ---@field close_on_focus_lost? boolean  # dismiss when focus moves elsewhere; default true
+---@field group_style? "box"|"header"|"plain"  # how a group of items is drawn; default "box"
+---@field submenu_marker? string        # glyph marking a nested entry; default "▶"
 
 --- One `kit.select`/`kit.popup({type="select"})` item, for a multi-line entry
 --- with per-column custom highlight groups (worked example:

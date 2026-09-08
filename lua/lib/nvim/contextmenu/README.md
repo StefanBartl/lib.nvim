@@ -30,12 +30,18 @@ bound directly on the buffer it creates. Live reference: `filetree.nvim`
 ```lua
 -- integrations/menu.lua
 local contextmenu = require("lib.nvim.contextmenu")
+local nerd = require("lib.nvim.ui.nerd_font")
 
 function M.items()
   local out = {}
   contextmenu.group(out,
-    contextmenu.entry(feature("x") ~= nil, "  Do X", do_x, "<leader>x"),
-    contextmenu.entry(feature("y") ~= nil, "  Do Y", do_y)
+    contextmenu.heading("MyPlugin"),
+    contextmenu.entry(feature("x") ~= nil, "Do X", do_x, "<leader>x", {
+      icon = nerd.glyph("F0AD", "*"),
+    }),
+    contextmenu.entry(feature("y") ~= nil, "Do Y", do_y, nil, {
+      icon = nerd.glyph("F0EB", "*"),
+    })
   )
   return out
 end
@@ -43,9 +49,18 @@ end
 function M.submenu(label)
   local items = M.items()
   if #items == 0 then return nil end
-  return contextmenu.submenu(label or "  MyPlugin", items)
+  return contextmenu.submenu(label or "MyPlugin", items, {
+    icon = nerd.glyph("F1B2", "*"),
+  })
 end
 ```
+
+> **Put the glyph in `icon`, never in the label.** The kit renderer draws
+> icons as a column of their own, so an entry with one lines up with an entry
+> without. A glyph inside `label` is just text: it indents that row past every
+> other, and it makes `"  Do X"` — two spaces where a glyph was meant to be —
+> indistinguishable from a working entry. That exact bug shipped twice in this
+> ecosystem before the column existed.
 
 ```lua
 -- features/ui/context_menu/init.lua, wherever the plugin's own buffer is created
@@ -73,9 +88,10 @@ local contextmenu = require("lib.nvim.contextmenu")
 
 contextmenu.setup({ renderer = "auto" })       -- "auto" | "kit" | "nvzone"
 contextmenu.renderer()                         -- the configured value
-contextmenu.entry(available, label, fn, rtxt)  -- {name,rtxt,cmd} or nil
+contextmenu.entry(available, label, fn, rtxt, opts)  -- {name,rtxt,cmd,icon,hl} or nil; opts = { icon, icon_hl, hl }
+contextmenu.heading(title)                     -- group heading marker; pass it first to `group`
 contextmenu.group(out, entry, entry, nil, entry)  -- varargs; appends non-nil items, separator between groups
-contextmenu.submenu(label, items)              -- {name=label, items=items} or nil if items is empty
+contextmenu.submenu(label, items, opts)        -- {name=label, items=items} or nil if items is empty
 contextmenu.open(items, opts)                  -- draw with the active renderer; `items` may be a "menus.<name>" string
 contextmenu.bind_buffer(bufnr, get_items, opts) -- buffer-local <RightMouse>, opens via `open`
 ```
@@ -95,6 +111,15 @@ See `@types/init.lua` for full field documentation (`Lib.ContextMenu.Item`,
   host composing the menu) ever calls `require("menu")`, so a plugin can call
   `entry`/`group`/`submenu` unconditionally regardless of whether nvzone/menu
   is installed.
+- `heading` is a marker passed **into** `group`, not a `title` parameter on
+  it, so gating reaches it: a section whose every entry is unavailable drops
+  its title along with itself, rather than leaving a heading standing over
+  nothing. `group` also skips its usual separator when a heading is present —
+  the heading already starts the new section.
+- The kit renderer draws a named group as a titled frame (`group_style`
+  defaults to `"box"`; `"header"` and `"plain"` are the quieter variants). A
+  menu that names no section keeps the divider look it always had — which is
+  why grouping cost the existing consumers nothing.
 - `bind_buffer` resolves the renderer at trigger time, not at bind time — safe
   to call from a plugin's setup path regardless of what is installed.
 - Consumers never call a renderer themselves. `entry`/`group`/`submenu` build

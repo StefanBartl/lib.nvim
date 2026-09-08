@@ -130,12 +130,18 @@ return function(H)
     local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
     eq(#lines, 4, "open: one row per item, separator included")
     -- One pad column at each edge, so nothing sits flush against the border.
-    ok(lines[1]:match("^ Do X%s+<leader>x $") ~= nil, "open: rtxt right-aligned in its own column")
+    -- The trailing run is the fly-out marker's column, blank on a leaf: it is
+    -- measured across the whole level, so every row reserves it once one item
+    -- has children.
+    ok(
+      lines[1]:match("^ Do X%s+<leader>x%s+$") ~= nil,
+      "open: rtxt right-aligned in its own column"
+    )
     -- Not a `^─+$` pattern: Lua patterns are byte-based, so `+` would repeat
     -- only the last byte of the multi-byte rule character. The rule carries
     -- the same leading pad column and stops short of the right edge.
     ok((lines[3]:gsub("^ ", ""):gsub("─", "")) == "", "open: separator drawn as a divider rule")
-    ok(lines[4]:match("^ Git ▸") ~= nil, "open: a submenu entry is marked as one")
+    ok(lines[4]:match("^ Git%s+▶ $") ~= nil, "open: a submenu entry is marked as one")
 
     -- Navigation steps over the separator rather than landing on it.
     eq(chooser.current_index(), 1, "open: cursor starts on the first entry")
@@ -185,7 +191,10 @@ return function(H)
       (sub_lines[2]:gsub("^ ", ""):gsub("─", "")) == "",
       "open: back entry is separated from the children"
     )
-    ok(sub_lines[3]:match("^ Stage") ~= nil, "open: picking a submenu drills into its children")
+    -- Three columns of indent, not one: the back entry carries an icon, so
+    -- the whole level reserves the icon column -- including "Stage", which
+    -- has none of its own. That is the alignment guarantee.
+    ok(sub_lines[3]:match("^   Stage") ~= nil, "open: picking a submenu drills into its children")
 
     -- Back out with the entry itself, then drill in again.
     eq(chooser.current_index(), 1, "open: the cursor starts on the back entry")

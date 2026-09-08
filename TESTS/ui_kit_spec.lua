@@ -883,8 +883,16 @@ return function(H)
   )
   ok(ms:is_valid(), "menu float valid")
   -- Every row carries a pad column at each edge, so no label sits flush
-  -- against the border and the widest row still ends one column early.
-  eq(vim.api.nvim_buf_get_lines(ms.bufnr, 0, 1, false)[1], " Rename ", "menu pads the item labels")
+  -- against the border, and every row fills the window exactly -- here the
+  -- window is wider than the labels because the frame title "Actions" needs
+  -- the room, and the surplus goes to the label column rather than being left
+  -- as a ragged gap before the right border.
+  eq(vim.api.nvim_buf_get_lines(ms.bufnr, 0, 1, false)[1], " Rename  ", "menu pads the item labels")
+  eq(
+    vim.fn.strdisplaywidth(vim.api.nvim_buf_get_lines(ms.bufnr, 0, 1, false)[1]),
+    vim.api.nvim_win_get_width(ms.winid),
+    "menu row fills a title-widened window exactly"
+  )
   -- pick the second item -> runs its action
   chooser.move(1)
   chooser.submit()
@@ -914,6 +922,87 @@ return function(H)
     vim.fn.strdisplaywidth(grows[2]),
     gwidth - 1,
     "menu separator stops one column short of the right edge"
+  )
+  chooser.close()
+
+  -- Icons are a column, not a prefix: an item with one and an item without
+  -- start their labels in the same screen column. This is the whole reason
+  -- `icon` is a field -- a glyph inside `label` is just text, and indents its
+  -- row past every other. A label that arrives with stray leading space (a
+  -- real bug two contributors shipped) is trimmed rather than honoured.
+  local is = assert(
+    kit.menu({
+      items = {
+        { name = "Alpha", icon = "A", cmd = function() end },
+        { name = "  Beta", cmd = function() end },
+        { name = "Gamma", items = { { name = "Leaf", cmd = function() end } } },
+      },
+    }),
+    "menu with icons opens"
+  )
+  local irows = vim.api.nvim_buf_get_lines(is.bufnr, 0, -1, false)
+  eq(irows[1], " A Alpha    ", "menu draws the icon in a column of its own")
+  eq(irows[2], "   Beta     ", "menu aligns an icon-less label with the icon-bearing ones")
+  -- The fly-out marker is right-aligned in a trailing column of its own, not
+  -- appended to the label: it is the one mark that says "this goes deeper",
+  -- and trailing the text left it ragged and easy to miss.
+  ok(irows[3]:match("Gamma%s+▶ $") ~= nil, "menu right-aligns the submenu marker")
+  eq(
+    vim.fn.strdisplaywidth(irows[1]),
+    vim.fn.strdisplaywidth(irows[3]),
+    "menu rows are the same width with and without a marker"
+  )
+  chooser.close()
+
+  -- Groups. `contextmenu.heading` marks one; the default style frames each,
+  -- so a section reads as one thing. A menu that names no section keeps the
+  -- old divider look -- that fallback is what stops this from redrawing every
+  -- menu that only ever passed separators.
+  local group_items = {
+    { name = "Clipboard", __heading = true },
+    { name = "Copy", cmd = function() end },
+    { name = "Delete", __heading = true },
+    { name = "Wipe", cmd = function() end },
+  }
+  local bs = assert(kit.menu({ items = group_items }), "grouped menu opens")
+  local brows = vim.api.nvim_buf_get_lines(bs.bufnr, 0, -1, false)
+  local bwidth = vim.api.nvim_win_get_width(bs.winid)
+  eq(#brows, 6, "menu draws a frame line above and below each named group")
+  ok(brows[1]:match("^ ╭─ Clipboard ") ~= nil, "menu sets the group title into its top rule")
+  ok(brows[4]:match("^ ╭─ Delete ") ~= nil, "menu opens a frame per group")
+  ok(brows[3]:match("^ ╰") ~= nil, "menu closes each group's frame")
+  ok(
+    brows[2]:match("^ │ ") ~= nil and brows[2]:match(" │ $") ~= nil,
+    "menu framed rows carry both rules"
+  )
+  for i, line in ipairs(brows) do
+    eq(vim.fn.strdisplaywidth(line), bwidth, "menu group line " .. i .. " fills the window")
+  end
+  chooser.close()
+
+  local ps = assert(kit.menu({ items = group_items, group_style = "plain" }), "plain menu opens")
+  local prows = vim.api.nvim_buf_get_lines(ps.bufnr, 0, -1, false)
+  eq(#prows, 4, "group_style=plain draws headings as rows, with no frame")
+  ok(prows[1]:match("^ Clipboard") ~= nil, "group_style=plain titles a group with a heading row")
+  chooser.close()
+
+  -- No titles anywhere: the pre-group look, untouched.
+  local ds = assert(
+    kit.menu({
+      items = {
+        { name = "Copy", cmd = function() end },
+        { name = "separator" },
+        { name = "Wipe", cmd = function() end },
+      },
+    }),
+    "untitled menu opens"
+  )
+  local drows = vim.api.nvim_buf_get_lines(ds.bufnr, 0, -1, false)
+  eq(#drows, 3, "an unnamed menu keeps its divider rather than gaining a frame")
+  eq(
+    vim.fn.strdisplaywidth(drows[2]),
+    vim.api.nvim_win_get_width(ds.winid) - 1,
+    "menu separator still stops one column short of the right edge"
   )
   chooser.close()
 
