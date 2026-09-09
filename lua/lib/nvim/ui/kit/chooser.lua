@@ -20,9 +20,9 @@
 --- cursor steps over it, <CR> on it is inert, and it can't be marked in
 --- multi-select. Plain-string items are always selectable.
 ---
---- Three presentation options are off by default because they change how the
+--- Four presentation options are off by default because they change how the
 --- list behaves, not just how it looks, and the chooser is shared by
---- `select`/`picker`/`compare` (see `kit.menu`, which turns all three on):
+--- `select`/`picker`/`compare` (see `kit.menu`, which turns all four on):
 ---
 --- - `hide_cursor` — blank the terminal cursor while the list is open, so the
 ---   highlighted row alone says where you are. `'guicursor'` is global, so it
@@ -38,6 +38,12 @@
 ---   so a flash painted at the same moment is never on screen long enough to
 ---   see. Off for `select`/`picker`, where the caller may be driving submits
 ---   programmatically and a deferred callback would change the contract.
+--- - `hover` — follow the mouse without a click, moving the selection to
+---   whatever row the pointer is over (via `'mousemoveevent'` and the
+---   `<MouseMove>` pseudo-key; a silent no-op if that option cannot be set,
+---   older than this plugin's own 0.10 floor). A terminal grid cannot grow a
+---   button, so this is the honest equivalent: the row about to be picked is
+---   unambiguous before you commit to the click.
 
 local surface = require("lib.nvim.ui.kit.surface")
 local map = require("lib.nvim.bindings.keymap")
@@ -72,6 +78,7 @@ local state = {
   content_ns = api.nvim_create_namespace("lib_kit_chooser_content"), -- per-item custom highlights
   flash_ns = api.nvim_create_namespace("lib_kit_chooser_flash"), -- the pick acknowledgement
   saved_guicursor = nil, -- non-nil while `hide_cursor` is in effect
+  saved_mousemoveevent = nil, -- non-nil while `hover` is in effect
   flash_on_select = false,
   flash_ms = 0,
   flashing = false, -- a pick is lit and its delivery is pending
@@ -208,6 +215,76 @@ local function item_at_row(row0)
 end
 
 ---@internal
+--- Move the cursor to whatever selectable row the pointer is over, so the
+--- theme's `KitSelection` highlight (already applied to `CursorLine`) lights
+--- up the entry about to be picked -- the terminal equivalent of a button's
+--- hover state. A terminal cell grid has no size to animate, so this is the
+--- honest version of that effect: which row is "hot" is unambiguous before
+--- you commit to a click, the same information a growing/lit button gives
+--- in a GUI. Bound to `<MouseMove>` (see `M.open`), which only ever fires
+--- while `'mousemoveevent'` is on -- `enable_hover`/`disable_hover` below.
+local function on_hover_move()
+  local ok, pos = pcall(vim.fn.getmousepos)
+  if not ok or type(pos) ~= "table" or not state.surf or pos.winid ~= state.surf.winid then
+    return
+  end
+  if type(pos.line) ~= "number" or pos.line < 1 then
+    return
+  end
+  local idx = item_at_row(pos.line - 1)
+  if not idx or not state.entries[idx].selectable then
+    return
+  end
+  local e = state.entries[idx]
+  local target = e.start_row + e.anchor_row + 1
+  -- Skip the redundant set once the cursor is already there -- <MouseMove>
+  -- fires on every cell the pointer crosses, not once per row.
+  local cur = api.nvim_win_get_cursor(state.surf.winid)
+  if cur[1] ~= target then
+    pcall(api.nvim_win_set_cursor, state.surf.winid, { target, 0 })
+  end
+end
+
+---@internal
+--- Turn on `<MouseMove>` as a real input event. `'mousemoveevent'` is
+--- global, so the previous value is saved and restored like `'guicursor'`
+--- in `hide_cursor`/`restore_cursor`. Guarded with `pcall`: the option was
+--- added after this plugin's own 0.10 floor, so setting it on an older
+--- Neovim must degrade to "no hover tracking", not an error.
+local function enable_hover()
+  if state.saved_mousemoveevent ~= nil then
+    return
+  end
+  local ok_read, prev = pcall(function()
+    return vim.o.mousemoveevent
+  end)
+  if not ok_read then
+    return
+  end
+  local ok_write = pcall(function()
+    vim.o.mousemoveevent = true
+  end)
+  if not ok_write then
+    return
+  end
+  state.saved_mousemoveevent = prev
+end
+
+---@internal
+--- Restore `'mousemoveevent'` saved by `enable_hover` (idempotent, and a
+--- no-op when hover tracking was never turned on).
+local function disable_hover()
+  if state.saved_mousemoveevent == nil then
+    return
+  end
+  local saved = state.saved_mousemoveevent
+  state.saved_mousemoveevent = nil
+  pcall(function()
+    vim.o.mousemoveevent = saved
+  end)
+end
+
+---@internal
 --- Paint every entry's custom highlight spans (once, at open time — entries
 --- never change after that, unlike selection marks which toggle).
 local function render_content_highlights()
@@ -297,6 +374,7 @@ end
 --- Close the chooser and reset state (idempotent).
 function M.close()
   restore_cursor()
+  disable_hover()
   if state.surf then
     clear_marks()
     clear_flash()
@@ -559,7 +637,7 @@ local function click_submit()
 end
 
 --- Open a chooser.
----@param opts table  # { items, on_select, multi_select?, title?, relative?, width?, height?, theme?, initial_index?, hide_cursor?, single_click?, close_on_focus_lost?, close_on_select?, flash_on_select?, flash_ms? }
+---@param opts table  # { items, on_select, multi_select?, title?, relative?, win?, anchor?, row?, col?, width?, height?, theme?, initial_index?, hide_cursor?, single_click?, close_on_focus_lost?, close_on_select?, flash_on_select?, flash_ms?, hover? }
 ---@return Lib.UI.Kit.Surface|nil
 function M.open(opts)
   if not opts or type(opts.items) ~= "table" or #opts.items == 0 then
@@ -581,7 +659,11 @@ function M.open(opts)
     title = opts.title,
     relative = opts.relative or "cursor",
     -- Explicit placement, for an anchor the surface can't derive on its own
-    -- (`relative = "mouse"` with nvzone/menu's row/col offsets, say).
+    -- (`relative = "mouse"` with nvzone/menu's row/col offsets, say, or
+    -- `relative = "win"` to sit beside another window rather than at the
+    -- pointer -- see `win`/`anchor` below).
+    win = opts.win,
+    anchor = opts.anchor,
     row = opts.row,
     col = opts.col,
     width = opts.width,
@@ -620,11 +702,15 @@ function M.open(opts)
   if opts.hide_cursor then
     hide_cursor()
   end
+  if opts.hover then
+    enable_hover()
+  end
   -- The window can also go away without M.close() -- close_on_focus_lost
   -- closes it directly, and `:q` from inside works too -- so the global
-  -- 'guicursor' is restored from the surface's own lifecycle, not from the
-  -- close path alone.
+  -- 'guicursor'/'mousemoveevent' are restored from the surface's own
+  -- lifecycle, not from the close path alone.
   surf:on_close(restore_cursor)
+  surf:on_close(disable_hover)
 
   if opts.close_on_focus_lost then
     require("lib.nvim.window.close_on_focus_lost")(surf.winid)
@@ -638,6 +724,20 @@ function M.open(opts)
   map("n", "<2-LeftMouse>", M.submit, mo)
   map("n", "<Esc>", M.close, mo)
   map("n", "q", M.close, mo)
+  -- Absorb a right-click landing on the chooser's own buffer (a border, a
+  -- separator, the padding around a row -- anywhere <LeftMouse>'s
+  -- click_submit() has no row for) rather than leaving it unbound. Nvim
+  -- falls through an unbound key on a buffer-local mapping to whatever is
+  -- mapped globally -- for <RightMouse> that is very often another context
+  -- menu's own trigger, so a near-miss click used to close this menu only
+  -- to immediately open a second, unrelated one on top of it.
+  map("n", "<RightMouse>", M.close, mo)
+  if opts.hover then
+    -- `<MouseMove>` is a real, mappable key -- like `<LeftMouse>` -- but
+    -- only ever fires while `'mousemoveevent'` is on, which `enable_hover`
+    -- just turned on above.
+    map("n", "<MouseMove>", on_hover_move, mo)
+  end
   if opts.single_click then
     map("n", "<LeftMouse>", function()
       if not click_submit() then

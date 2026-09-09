@@ -280,6 +280,96 @@ return function(H)
     vim.cmd("bwipeout! " .. buf)
   end
 
+  -- ---------- open: win/anchor/row/col forwarded, surface returned ----------
+  --
+  -- Positioning a menu beside a plugin's own window (rather than at the
+  -- mouse) needs `win`/`row`/`col` to reach nvim_open_win, and needs a
+  -- handle back so the caller can clear a temporary highlight when the menu
+  -- closes -- `open()` used to both drop these opts on the floor for the kit
+  -- path and discard its return value entirely.
+
+  do
+    local chooser = require("lib.nvim.ui.kit.chooser")
+    contextmenu.setup({ renderer = "kit" })
+
+    vim.cmd("enew")
+    local anchor_buf = vim.api.nvim_get_current_buf()
+    local anchor_win = vim.api.nvim_get_current_win()
+
+    local out = {}
+    contextmenu.group(out, contextmenu.entry(true, "Do X", function() end))
+
+    local surf = contextmenu.open(out, { win = anchor_win, row = 0, col = -10, anchor = "NE" })
+    ok(surf ~= nil, "open: returns the kit surface when win/row/col are given")
+    ok(chooser.is_open(), "open: still actually opens the menu")
+
+    if surf then
+      local cfg = vim.api.nvim_win_get_config(surf.winid)
+      eq(cfg.relative, "win", 'open: win implies relative = "win" when unset')
+      eq(cfg.win, anchor_win, "open: the anchor window is forwarded")
+      eq(cfg.col, -10, "open: explicit col is forwarded")
+      eq(cfg.anchor, "NE", "open: explicit anchor overrides the auto-flip default")
+
+      local closed = false
+      surf:on_close(function()
+        closed = true
+      end)
+      chooser.close()
+      ok(closed, "open: the returned surface's on_close fires when the menu closes")
+    end
+
+    vim.cmd("bwipeout! " .. anchor_buf)
+  end
+
+  -- ---------- open: hover follows the mouse without a click ----------
+  --
+  -- <MouseMove> is a real, mappable key (like <LeftMouse>), gated behind
+  -- 'mousemoveevent' -- not an autocmd event. Skipped outright on a Neovim
+  -- where setting that option itself errors (older than this plugin's own
+  -- 0.10 floor): hover is a silent no-op there, nothing to assert.
+
+  if pcall(function()
+    vim.o.mousemoveevent = vim.o.mousemoveevent
+  end) then
+    local chooser = require("lib.nvim.ui.kit.chooser")
+    contextmenu.setup({ renderer = "kit" })
+
+    local saved_mme = vim.o.mousemoveevent
+    local out = {}
+    contextmenu.group(
+      out,
+      contextmenu.entry(true, "Do X", function() end),
+      contextmenu.entry(true, "Do Y", function() end)
+    )
+    local surf = contextmenu.open(out, { mouse = false })
+    ok(surf ~= nil, "hover fixture: menu opens")
+    ok(vim.o.mousemoveevent, "hover: turns 'mousemoveevent' on while open (default true)")
+
+    -- Simulate the pointer sitting over the second row: stub getmousepos()
+    -- (a headless run has no real pointer) and trigger the buffer-local
+    -- <MouseMove> mapping directly, the same way the bind_buffer test above
+    -- triggers <RightMouse>.
+    eq(chooser.current_index(), 1, "hover fixture: cursor starts on the first entry")
+    local orig_getmousepos = vim.fn.getmousepos
+    vim.fn.getmousepos = function()
+      return { winid = (surf and surf.winid) or 0, line = 2, column = 1 }
+    end
+    local mapped = vim.fn.maparg("<MouseMove>", "n", false, true)
+    ok(type(mapped) == "table" and mapped.buffer == 1, "hover: <MouseMove> is bound (default true)")
+    if type(mapped) == "table" and mapped.callback then
+      mapped.callback()
+    end
+    eq(chooser.current_index(), 2, "hover: moving over row 2 moves the selection there")
+    vim.fn.getmousepos = orig_getmousepos
+
+    chooser.close()
+    eq(
+      vim.o.mousemoveevent,
+      saved_mme,
+      "hover: 'mousemoveevent' restored to its prior value on close"
+    )
+  end
+
   -- Leave the module as the rest of the suite (and any host) expects it.
   contextmenu.setup({ renderer = "auto" })
 end

@@ -170,7 +170,7 @@ local function build_win_config(width, height, opts)
 
   local row = opts.row
   local col = opts.col
-  local anchor = "NW"
+  local anchor = opts.anchor
 
   if relative == "editor" and row == nil and col == nil then
     row = math.max(0, math.floor((vim.o.lines - height) / 2 - 1))
@@ -178,20 +178,26 @@ local function build_win_config(width, height, opts)
   elseif relative == "cursor" or relative == "mouse" then
     -- Anchored NW with a small downward offset by default (row=1 unless the
     -- caller asked otherwise) -- the float extends DOWN from the cursor/
-    -- mouse. Nothing here ever checked whether that fits: a click low in
+    -- mouse. Nothing here used to check whether that fits: a click low in
     -- the editor plus a float tall enough not to fit below it (a long
     -- context menu, say) opened anyway, extending past the bottom of the
     -- screen with no bounds check at all. Flip to anchor SW instead when it
     -- doesn't fit -- the float then extends UP from the anchor point, the
-    -- way every native context menu behaves near a screen edge.
+    -- way every native context menu behaves near a screen edge. An explicit
+    -- `opts.anchor` opts out and always gets exactly the corner it asked for.
     row = row or 1
     col = col or 0
-    local anchor_row = anchor_screenrow(relative)
-    if anchor_row and anchor_row + row + height > vim.o.lines then
-      anchor = "SW"
-      row = 0
+    if not anchor then
+      anchor = "NW"
+      local anchor_row = anchor_screenrow(relative)
+      if anchor_row and anchor_row + row + height > vim.o.lines then
+        anchor = "SW"
+        row = 0
+      end
     end
   end
+
+  anchor = anchor or "NW"
 
   ---@type table
   local cfg = {
@@ -205,6 +211,14 @@ local function build_win_config(width, height, opts)
     style = "minimal",
     focusable = opts.focusable ~= false,
   }
+  if relative == "win" then
+    -- `nvim_open_win` requires `win` whenever `relative = "win"`; row/col are
+    -- then offsets from ITS top-left corner, so a caller can position a
+    -- float immediately beside another window (negative col to sit to its
+    -- left, col = that window's width to sit to its right) without needing
+    -- to know the float's own size in advance.
+    cfg.win = opts.win
+  end
   if opts.title ~= nil then
     cfg.title = opts.title
     if opts.title_pos ~= nil then

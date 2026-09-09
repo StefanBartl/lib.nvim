@@ -36,6 +36,8 @@
 ---@field width? integer
 ---@field height? integer
 ---@field relative? "editor"|"cursor"|"win"
+---@field win? integer          # anchor window, required when relative = "win"
+---@field anchor? "NW"|"NE"|"SW"|"SE"  # default "NW", except cursor/mouse auto-flips to "SW" near the bottom of the screen
 ---@field row? integer
 ---@field col? integer
 ---@field zindex? integer        # overrides the theme's popup zindex
@@ -104,6 +106,8 @@
 ---@field title? string
 ---@field theme? Lib.UI.Kit.ThemeArg  # default: the `menu` preset (coloured frame)
 ---@field relative? "editor"|"cursor"|"win"|"mouse"
+---@field win? integer       # anchor window; implies relative = "win" when `relative` is unset
+---@field anchor? "NW"|"NE"|"SW"|"SE"  # which corner sits at (row, col); default "NW" (auto-flips to "SW" near the bottom of the screen for cursor/mouse)
 ---@field row? integer       # explicit placement, paired with `relative`
 ---@field col? integer
 ---@field mouse? boolean     # shorthand for `relative = "mouse"` (nvzone/menu's spelling)
@@ -112,6 +116,7 @@
 ---@field close_on_focus_lost? boolean  # dismiss when focus moves elsewhere; default true
 ---@field flash_on_select? boolean      # light the picked row before acting; default true
 ---@field flash_ms? integer             # how long that lasts; default 100, <= 0 disables
+---@field hover? boolean                # follow the mouse without a click, via 'mousemoveevent' + <MouseMove>; default true
 ---@field group_style? "box"|"header"|"plain"  # how a group of items is drawn; default "box"
 ---@field submenu_marker? string        # glyph marking a nested entry; default "→"
 
