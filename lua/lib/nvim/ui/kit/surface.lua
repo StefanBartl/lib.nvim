@@ -90,6 +90,8 @@ function M.open(opts)
     width = opts.width,
     height = opts.height,
     relative = opts.relative,
+    win = opts.win,
+    anchor = opts.anchor,
     row = opts.row,
     col = opts.col,
     border = resolved.border,

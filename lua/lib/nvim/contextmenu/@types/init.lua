@@ -42,6 +42,12 @@
 ---@field theme? any       `Lib.UI.Kit.ThemeArg` (kit renderer only)
 ---@field group_style? "box"|"header"|"plain"  How a group is drawn; default `"box"` (kit renderer only)
 ---@field submenu_marker? string  Glyph marking a nested entry (kit renderer only)
+---@field relative? "editor"|"cursor"|"win"|"mouse"  Explicit anchor; overrides `mouse` (kit renderer only)
+---@field win? integer     Anchor window when `relative = "win"` (kit renderer only) -- e.g. to open the menu beside a plugin's own window instead of at the pointer
+---@field anchor? "NW"|"NE"|"SW"|"SE"  Which corner of the menu sits at (row, col) (kit renderer only)
+---@field row? integer     Explicit row, paired with `relative`/`win` (kit renderer only)
+---@field col? integer     Explicit column (kit renderer only)
+---@field hover? boolean   Follow the mouse without a click (kit renderer only); default true
 
 --- `lib.nvim.contextmenu` module surface.
 ---@class Lib.ContextMenu
@@ -51,5 +57,5 @@
 ---@field heading fun(title: string): Lib.ContextMenu.Item
 ---@field group fun(out: Lib.ContextMenu.Item[], ...: Lib.ContextMenu.Item|nil): boolean
 ---@field submenu fun(label: string, items: Lib.ContextMenu.Item[], opts?: Lib.ContextMenu.ItemOpts): Lib.ContextMenu.Item|nil
----@field open fun(items: Lib.ContextMenu.Item[]|string, opts?: Lib.ContextMenu.OpenOpts)
+---@field open fun(items: Lib.ContextMenu.Item[]|string, opts?: Lib.ContextMenu.OpenOpts): Lib.UI.Kit.Surface|nil  Returns the surface (kit renderer only -- nil for nvzone/menu, which exposes no equivalent handle)
 ---@field bind_buffer fun(bufnr: integer, get_items: Lib.ContextMenu.ItemsProvider, opts?: Lib.ContextMenu.BindOpts)

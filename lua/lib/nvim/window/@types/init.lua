@@ -27,6 +27,8 @@
 ---@field width? number Float width: a value strictly between 0 and 1 is a fraction of `vim.o.columns`, anything larger is cells (so `1` is one cell, not full width). Default sizes to content, clamped to the editor.
 ---@field height? number Float height: a value strictly between 0 and 1 is a fraction of `vim.o.lines`, anything larger is cells (so `1` is one cell -- what every one-line prompt passes). Default is the line count, clamped to the editor.
 ---@field relative? "editor"|"cursor"|"win" Anchor for the float (default `"editor"`)
+---@field win? integer Anchor window, required when `relative = "win"` (row/col are then offsets from ITS top-left corner -- negative values position outside it, e.g. `col = -width` to sit immediately to its left)
+---@field anchor? "NW"|"NE"|"SW"|"SE" Which corner of the float sits at (row, col). Default `"NW"`, except `relative = "cursor"`/`"mouse"` auto-flips to `"SW"` when `"NW"` would not fit above the bottom of the screen -- pass this to opt out of that and force a corner.
 ---@field row? integer Explicit row; default centers on the editor
 ---@field col? integer Explicit column; default centers on the editor
 ---@field border? string|string[] Border style passed to `nvim_open_win` (default `"rounded"`)

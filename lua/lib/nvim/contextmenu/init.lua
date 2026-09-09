@@ -229,8 +229,14 @@ end
 --- This is the single place either renderer is reached from: callers build
 --- items with `entry`/`group`/`submenu` and never `require("menu")`
 --- themselves, which is what makes the renderer swappable at all.
+---
+--- Returns the kit renderer's surface handle (`nil` for nvzone/menu, which
+--- exposes no equivalent) -- a caller that needs to know when the menu
+--- closes (to clear a highlight it set for the duration, say) can
+--- `surf:on_close(cb)` on it; one that does not can just ignore the return.
 ---@param items Lib.ContextMenu.Item[]|string
 ---@param opts? Lib.ContextMenu.OpenOpts
+---@return Lib.UI.Kit.Surface|nil
 function M.open(items, opts)
   opts = opts or {}
   local mouse = opts.mouse ~= false
@@ -238,28 +244,35 @@ function M.open(items, opts)
   local which, menu = resolve_renderer()
   if which == "nvzone" and menu then
     -- nvzone/menu resolves a string name itself and takes `mouse` in opts.
+    -- It has no `win`/`anchor`/explicit `row`/`col` equivalent to forward.
     menu.open(items, { mouse = mouse })
-    return
+    return nil
   end
 
   if type(items) == "string" then
     local ok, mod = pcall(require, "menus." .. items)
     if not ok or type(mod) ~= "table" then
       notify.error(("contextmenu: no menu named %q"):format(items))
-      return
+      return nil
     end
     items = mod
   end
   if type(items) ~= "table" or #items == 0 then
-    return
+    return nil
   end
 
-  require("lib.nvim.ui.kit.menu").open({
+  return require("lib.nvim.ui.kit.menu").open({
     items = items,
     title = opts.title,
     theme = opts.theme,
     group_style = opts.group_style,
     submenu_marker = opts.submenu_marker,
+    relative = opts.relative,
+    win = opts.win,
+    anchor = opts.anchor,
+    row = opts.row,
+    col = opts.col,
+    hover = opts.hover,
     mouse = mouse,
   })
 end

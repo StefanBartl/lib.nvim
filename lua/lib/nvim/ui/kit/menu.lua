@@ -703,8 +703,10 @@ function open_level(opts, raw_items, stack, reuse)
 
   -- `mouse = true` is nvzone/menu's spelling for "anchor at the pointer";
   -- Neovim's own `relative = "mouse"` does exactly that, so it needs no
-  -- coordinate arithmetic here.
-  local relative = opts.relative or (opts.mouse and "mouse") or "cursor"
+  -- coordinate arithmetic here. Passing `win` only makes sense against
+  -- `relative = "win"`, so it implies that value when `relative` itself is
+  -- left unset.
+  local relative = opts.relative or (opts.win and "win") or (opts.mouse and "mouse") or "cursor"
 
   local surf = chooser.open({
     items = rows,
@@ -720,6 +722,9 @@ function open_level(opts, raw_items, stack, reuse)
     hide_cursor = opts.hide_cursor ~= false,
     single_click = opts.single_click ~= false,
     close_on_focus_lost = opts.close_on_focus_lost ~= false,
+    -- The row under the pointer selects itself as you move over it, so the
+    -- one you are about to click is never a guess.
+    hover = opts.hover ~= false,
     -- And light the row that was picked before acting on it. A menu entry is
     -- a button; a button that changes the screen with no acknowledgement
     -- leaves you unsure which row you actually hit.
@@ -728,6 +733,8 @@ function open_level(opts, raw_items, stack, reuse)
     -- The menu owns the window across levels; only a leaf closes it, and it
     -- does so itself, below.
     close_on_select = false,
+    win = opts.win,
+    anchor = opts.anchor,
     row = opts.row,
     col = opts.col,
     on_select = function(_, idx)
