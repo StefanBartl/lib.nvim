@@ -364,15 +364,30 @@ return function(H)
     -- The row is also painted explicitly (KitHover), not left to
     -- CursorLine/window-highlight alone -- query every namespace's
     -- extmarks on the buffer for one carrying that group on row 2 (0-based 1).
+    -- kit.menu supplies hover_start_col/hover_end_col (frame_row), so the
+    -- paint is a hl_group span bounded to the field, not hl_eol to the
+    -- window edge -- confirm it stops well short of the row's own length.
     if surf then
-      local found = false
+      local mark
       for _, m in ipairs(vim.api.nvim_buf_get_extmarks(surf.bufnr, -1, 0, -1, { details = true })) do
-        local row, details = m[2], m[4]
-        if row == 1 and details and details.line_hl_group == "KitHover" then
-          found = true
+        local row, col, details = m[2], m[3], m[4]
+        if
+          row == 1
+          and details
+          and (details.hl_group == "KitHover" or details.line_hl_group == "KitHover")
+        then
+          mark = { col = col, details = details }
         end
       end
-      ok(found, "hover: row 2 carries an explicit KitHover extmark")
+      ok(mark ~= nil, "hover: row 2 carries an explicit KitHover extmark")
+      if mark then
+        local line = vim.api.nvim_buf_get_lines(surf.bufnr, 1, 2, false)[1] or ""
+        ok(
+          mark.details.end_col ~= nil and mark.details.end_col < #line,
+          "hover: paint stops before the row's full width (not hl_eol), got "
+            .. vim.inspect(mark.details)
+        )
+      end
     end
 
     vim.fn.getmousepos = orig_getmousepos

@@ -427,7 +427,17 @@ local function frame_row(content, hls, style, framed, glyphs)
       { line = 0, col_start = rstart, col_end = rstart + #glyphs.v, hl_group = "KitBorder" }
   end
 
-  return { lines = { left .. content .. right }, highlights = #out > 0 and out or nil }
+  return {
+    lines = { left .. content .. right },
+    highlights = #out > 0 and out or nil,
+    -- Where the row's actual field (icon/label/marker/rtxt columns) starts
+    -- and ends, byte-offsets -- the chooser's hover paint spans exactly
+    -- this instead of the whole row out to (and including) the border,
+    -- which read as "the whole shelf lit up" rather than "this entry is
+    -- highlighted".
+    hover_start_col = shift,
+    hover_end_col = shift + #content,
+  }
 end
 
 --- A decoration row: never selectable, and spanning the full window width.

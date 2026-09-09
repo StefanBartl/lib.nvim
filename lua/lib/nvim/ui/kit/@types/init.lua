@@ -130,6 +130,8 @@
 ---@field highlights? Lib.UI.Kit.ItemHighlight[]
 ---@field anchor? integer                      # 0-based line (within `lines`) the cursor lands on; default 0
 ---@field selectable? boolean                  # false = inert decoration (separator, heading): skipped by navigation, <CR> does nothing; default true
+---@field hover_start_col? integer               # byte column (line 0) the hover paint starts at; nil = column 0
+---@field hover_end_col? integer                # byte column (line 0) the hover paint stops at; nil = the whole row width (chooser.lua's paint_hover)
 
 --- One highlight span within a `Lib.UI.Kit.RichItem`.
 ---@class Lib.UI.Kit.ItemHighlight
