@@ -360,6 +360,21 @@ return function(H)
       mapped.callback()
     end
     eq(chooser.current_index(), 2, "hover: moving over row 2 moves the selection there")
+
+    -- The row is also painted explicitly (KitHover), not left to
+    -- CursorLine/window-highlight alone -- query every namespace's
+    -- extmarks on the buffer for one carrying that group on row 2 (0-based 1).
+    if surf then
+      local found = false
+      for _, m in ipairs(vim.api.nvim_buf_get_extmarks(surf.bufnr, -1, 0, -1, { details = true })) do
+        local row, details = m[2], m[4]
+        if row == 1 and details and details.line_hl_group == "KitHover" then
+          found = true
+        end
+      end
+      ok(found, "hover: row 2 carries an explicit KitHover extmark")
+    end
+
     vim.fn.getmousepos = orig_getmousepos
 
     chooser.close()

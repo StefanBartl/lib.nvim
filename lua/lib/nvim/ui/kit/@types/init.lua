@@ -12,6 +12,7 @@
 ---@field muted     string|Lib.Highlight.Opts # hints/secondary (default: link Comment)
 ---@field error     string|Lib.Highlight.Opts # error/destructive (default: link DiagnosticError)
 ---@field flash     string|Lib.Highlight.Opts # momentary pick feedback (default: link IncSearch)
+---@field hover     string|Lib.Highlight.Opts # row under the mouse pointer (default: link Visual)
 
 --- A resolved theme: design tokens read by every component.
 ---@class Lib.UI.Kit.Theme
