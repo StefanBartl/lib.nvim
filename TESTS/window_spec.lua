@@ -149,4 +149,33 @@ return function(H)
     vim.fn.getmousepos = orig_getmousepos
     vim.o.lines = orig_lines
   end
+
+  -- ---------- make_scratch: scrolloff/sidescrolloff pinned to 0 ----------
+  --
+  -- Both are window-local but fall back to the global value when unset, so
+  -- a scratch float otherwise inherits whatever a user's own config sets
+  -- (up to the "keep the cursor centered" 999) instead of behaving like the
+  -- self-contained overlay it is meant to be. Confirms the window-local
+  -- value itself, regardless of what the global one is set to.
+
+  do
+    local make_scratch = require("lib.nvim.window.make_scratch")
+    local saved_so, saved_siso = vim.o.scrolloff, vim.o.sidescrolloff
+    vim.o.scrolloff = 10
+    vim.o.sidescrolloff = 10
+
+    local winid = make_scratch({ lines = { "one line" }, height = 3, relative = "editor" })
+    assert(winid, "make_scratch: fixture window failed to open")
+
+    H.eq(vim.wo[winid].scrolloff, 0, "make_scratch: scrolloff pinned to 0 regardless of the global")
+    H.eq(
+      vim.wo[winid].sidescrolloff,
+      0,
+      "make_scratch: sidescrolloff pinned to 0 regardless of the global"
+    )
+
+    pcall(vim.api.nvim_win_close, winid, true)
+    vim.o.scrolloff = saved_so
+    vim.o.sidescrolloff = saved_siso
+  end
 end

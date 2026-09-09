@@ -798,6 +798,20 @@ function M.open(opts)
   -- menu's own trigger, so a near-miss click used to close this menu only
   -- to immediately open a second, unrelated one on top of it.
   map("n", "<RightMouse>", M.close, mo)
+  -- Neovim's default <ScrollWheelDown>/<Up> is a plain by-line window scroll
+  -- (<C-e>/<C-y>), which -- unlike cursor-driven motions such as `G` or `j`
+  -- at the last line -- has no built-in floor stopping `topline` once the
+  -- last line has reached the window's bottom row: enough wheel ticks walk
+  -- it straight past the end, leaving nothing but blank space below the
+  -- content, permanently, for a window shorter than its list. Routed
+  -- through `M.move` instead, which already lands on and stays on a real
+  -- entry, the same way keyboard navigation does.
+  map("n", "<ScrollWheelDown>", function()
+    M.move(1)
+  end, mo)
+  map("n", "<ScrollWheelUp>", function()
+    M.move(-1)
+  end, mo)
   if opts.hover then
     -- `<MouseMove>` is a real, mappable key -- like `<LeftMouse>` -- but
     -- only ever fires while `'mousemoveevent'` is on, which `enable_hover`

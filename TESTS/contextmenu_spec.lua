@@ -400,6 +400,71 @@ return function(H)
     )
   end
 
+  -- ---------- chooser: <ScrollWheelDown>/<Up> never overscroll past content ----------
+  --
+  -- Neovim's default <ScrollWheelDown> is a plain by-line window scroll
+  -- (<C-e>), which has no floor stopping `topline` once the last line has
+  -- reached the window's bottom row -- unlike cursor-driven motions (`G`,
+  -- `j` at the last line), which do stop there. Confirmed live: 25 lines in
+  -- an 8-row window, 30x <C-e>, topline lands on 25 -- the window then shows
+  -- line 25 at the TOP with seven blank rows below it, forever. The
+  -- chooser must not have that failure mode: <ScrollWheelDown> is remapped
+  -- to M.move(1), which already clamps correctly.
+
+  do
+    local chooser = require("lib.nvim.ui.kit.chooser")
+    local items = {}
+    for i = 1, 25 do
+      items[i] = "item " .. i
+    end
+    local surf = chooser.open({
+      items = items,
+      height = 8,
+      relative = "editor",
+      on_select = function() end,
+    })
+    ok(surf ~= nil, "wheel-scroll fixture: chooser opens")
+
+    if surf then
+      local mapped = vim.fn.maparg("<ScrollWheelDown>", "n", false, true)
+      ok(
+        type(mapped) == "table" and type(mapped.callback) == "function",
+        "wheel-scroll: <ScrollWheelDown> is bound to a callback, not native scroll"
+      )
+      -- Exactly 24 steps: item 1 (where a fresh chooser starts) to item 25,
+      -- with nothing left over to wrap. M.move wraps around by design (the
+      -- picker drives it the same way arrow keys cycle results) -- a 25th
+      -- step is covered separately below, deliberately past this point.
+      if type(mapped) == "table" and mapped.callback then
+        for _ = 1, 24 do
+          mapped.callback()
+        end
+      end
+      eq(chooser.current_index(), 25, "wheel-scroll: selection follows, same as keyboard nav")
+      local last_visible = vim.fn.line("w$", surf.winid)
+      eq(
+        last_visible,
+        25,
+        "wheel-scroll: 24x <ScrollWheelDown> lands on the last item with no blank rows below it"
+      )
+
+      -- One more: wraps back to item 1. The window must follow that jump
+      -- too, not get stuck showing the tail end with the selection now
+      -- invisible above the top.
+      if type(mapped) == "table" and mapped.callback then
+        mapped.callback()
+      end
+      eq(chooser.current_index(), 1, "wheel-scroll: one more step wraps back to the first item")
+      eq(
+        vim.fn.line("w0", surf.winid),
+        1,
+        "wheel-scroll: wrapping back scrolls the window back to the top too"
+      )
+    end
+
+    chooser.close()
+  end
+
   -- Leave the module as the rest of the suite (and any host) expects it.
   contextmenu.setup({ renderer = "auto" })
 end

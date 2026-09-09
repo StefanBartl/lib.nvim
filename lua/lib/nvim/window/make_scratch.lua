@@ -14,12 +14,23 @@ local notify = require("lib.nvim.notify").create("[lib.nvim.window.make_scratch]
 local nice_quit = require("lib.nvim.window.nice_quit")
 
 ---Window-local options applied to every scratch float unless overridden via `opts.wo`.
+---
+---`scrolloff`/`sidescrolloff` at 0: both are WINDOW-local but fall back to the
+---global value when unset, and a user who keeps the cursor away from the
+---edges globally (`scrolloff = 8`, or the "keep it centered" `999`) gets that
+---same margin enforced in a scratch float too -- which, once the float is
+---shorter than its content, means scrolling can show blank space past the
+---buffer's last line purely to satisfy a margin nothing here asked for. A
+---list/menu/chooser overlay should only ever scroll to reveal more of its
+---own content, never past the end of it.
 local DEFAULT_WO = {
   number = false,
   relativenumber = false,
   signcolumn = "no",
   wrap = false,
   cursorline = false,
+  scrolloff = 0,
+  sidescrolloff = 0,
 }
 
 ---@internal
