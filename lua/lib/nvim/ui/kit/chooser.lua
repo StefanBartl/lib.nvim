@@ -144,6 +144,8 @@ local function normalize_item(item)
       highlights = item.highlights,
       anchor_row = item.anchor or 0,
       selectable = item.selectable ~= false,
+      hover_start_col = item.hover_start_col,
+      hover_end_col = item.hover_end_col,
     }
   end
   return {
@@ -240,11 +242,23 @@ local function paint_hover(idx)
     return
   end
   for row = e.start_row, e.end_row do
-    pcall(api.nvim_buf_set_extmark, buf, state.hover_ns, row, 0, {
-      line_hl_group = "KitHover",
-      hl_eol = true,
-      priority = 120,
-    })
+    if e.hover_end_col then
+      -- Span exactly the row's actual field (icon/label/marker/rtxt), not
+      -- the border character or the blank padding out past it -- `kit.menu`'s
+      -- frame_row supplies both bounds; anything that doesn't (a plain
+      -- string, another RichItem producer) falls through to hl_eol below.
+      pcall(api.nvim_buf_set_extmark, buf, state.hover_ns, row, e.hover_start_col or 0, {
+        end_col = e.hover_end_col,
+        hl_group = "KitHover",
+        priority = 120,
+      })
+    else
+      pcall(api.nvim_buf_set_extmark, buf, state.hover_ns, row, 0, {
+        line_hl_group = "KitHover",
+        hl_eol = true,
+        priority = 120,
+      })
+    end
   end
   state.hover_row = idx
 end
