@@ -90,4 +90,63 @@ return function(H)
 
     pcall(vim.api.nvim_win_close, win, true)
   end
+
+  -- ---------- make_scratch: anchor flip near a screen edge ----------
+  --
+  -- relative="cursor"/"mouse" floats used to always anchor NW (extend
+  -- downward) with no check for whether that fits -- a click low on screen
+  -- plus a tall enough float (a long context menu, say) opened anyway,
+  -- extending past the bottom edge with nothing to show there. Should flip
+  -- to anchor SW (extend upward) instead whenever it doesn't fit below.
+
+  do
+    local make_scratch = require("lib.nvim.window.make_scratch")
+    local orig_screenrow = vim.fn.screenrow
+    local orig_getmousepos = vim.fn.getmousepos
+    local orig_lines = vim.o.lines
+
+    vim.o.lines = 40
+
+    -- Cursor near the bottom (row 38 of 40), a float 10 rows tall: 38+1+10
+    -- would overshoot -- must flip.
+    vim.fn.screenrow = function()
+      return 38
+    end
+    local winid = make_scratch({ lines = { "x" }, height = 10, relative = "cursor" })
+    H.ok(winid ~= nil, "make_scratch: cursor-relative float near the bottom opens")
+    local cfg = vim.api.nvim_win_get_config(winid)
+    H.eq(cfg.anchor, "SW", "make_scratch: flips to SW when it doesn't fit below the cursor")
+    H.eq(cfg.row, 0, "make_scratch: SW row is 0 (bottom edge right at the anchor point)")
+    pcall(vim.api.nvim_win_close, winid, true)
+
+    -- Cursor near the top: the same float fits below it -- no flip.
+    vim.fn.screenrow = function()
+      return 2
+    end
+    local winid2 = make_scratch({ lines = { "x" }, height = 10, relative = "cursor" })
+    local cfg2 = vim.api.nvim_win_get_config(winid2)
+    H.eq(cfg2.anchor, "NW", "make_scratch: stays NW when it fits below the cursor")
+    H.eq(cfg2.row, 1, "make_scratch: NW keeps the default 1-row downward offset")
+    pcall(vim.api.nvim_win_close, winid2, true)
+
+    -- Same check for relative="mouse", via getmousepos() instead of screenrow().
+    vim.fn.getmousepos = function()
+      return { screenrow = 39, screencol = 10 }
+    end
+    local winid3 = make_scratch({ lines = { "x" }, height = 10, relative = "mouse" })
+    local cfg3 = vim.api.nvim_win_get_config(winid3)
+    H.eq(cfg3.anchor, "SW", "make_scratch: mouse-relative also flips near the bottom")
+    pcall(vim.api.nvim_win_close, winid3, true)
+
+    -- relative="editor" is untouched: still centers, anchor stays the
+    -- (explicit-but-equivalent) default NW.
+    local winid4 = make_scratch({ lines = { "x" }, height = 5, width = 10, relative = "editor" })
+    local cfg4 = vim.api.nvim_win_get_config(winid4)
+    H.eq(cfg4.anchor, "NW", "make_scratch: editor-relative float keeps the default NW anchor")
+    pcall(vim.api.nvim_win_close, winid4, true)
+
+    vim.fn.screenrow = orig_screenrow
+    vim.fn.getmousepos = orig_getmousepos
+    vim.o.lines = orig_lines
+  end
 end

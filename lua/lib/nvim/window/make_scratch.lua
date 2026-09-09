@@ -140,6 +140,26 @@ local function create_buffer(lines, opts)
 end
 
 ---@internal
+---The anchor point's own on-screen row (1-based), for deciding whether a
+---`relative = "cursor"`/`"mouse"` float fits below it. nil when it can't be
+---determined (an unattached UI, e.g. headless) -- callers must then assume
+---it fits, since there is nothing to flip against.
+---@param relative string
+---@return integer|nil
+local function anchor_screenrow(relative)
+  if relative == "mouse" then
+    local ok, pos = pcall(vim.fn.getmousepos)
+    return (ok and type(pos) == "table" and pos.screenrow and pos.screenrow > 0) and pos.screenrow
+      or nil
+  end
+  if relative == "cursor" then
+    local ok, row = pcall(vim.fn.screenrow)
+    return (ok and type(row) == "number" and row > 0) and row or nil
+  end
+  return nil
+end
+
+---@internal
 ---Build the floating-window config, centering on the editor when no position is given.
 ---@param width integer
 ---@param height integer
@@ -150,14 +170,33 @@ local function build_win_config(width, height, opts)
 
   local row = opts.row
   local col = opts.col
+  local anchor = "NW"
+
   if relative == "editor" and row == nil and col == nil then
     row = math.max(0, math.floor((vim.o.lines - height) / 2 - 1))
     col = math.max(0, math.floor((vim.o.columns - width) / 2))
+  elseif relative == "cursor" or relative == "mouse" then
+    -- Anchored NW with a small downward offset by default (row=1 unless the
+    -- caller asked otherwise) -- the float extends DOWN from the cursor/
+    -- mouse. Nothing here ever checked whether that fits: a click low in
+    -- the editor plus a float tall enough not to fit below it (a long
+    -- context menu, say) opened anyway, extending past the bottom of the
+    -- screen with no bounds check at all. Flip to anchor SW instead when it
+    -- doesn't fit -- the float then extends UP from the anchor point, the
+    -- way every native context menu behaves near a screen edge.
+    row = row or 1
+    col = col or 0
+    local anchor_row = anchor_screenrow(relative)
+    if anchor_row and anchor_row + row + height > vim.o.lines then
+      anchor = "SW"
+      row = 0
+    end
   end
 
   ---@type table
   local cfg = {
     relative = relative,
+    anchor = anchor,
     width = width,
     height = height,
     row = row or 1,
