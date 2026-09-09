@@ -35,6 +35,13 @@ local BASE = {
     -- colorscheme defines it, and defines it strongly -- which is the whole
     -- requirement for a mark that is on screen for a tenth of a second.
     flash = "IncSearch",
+    -- The row the mouse is hovering, painted independently of `selection`
+    -- (an extmark, not the `CursorLine` window option `selection` rides on)
+    -- so it renders the same regardless of `hide_cursor`/other window-local
+    -- quirks a given frontend might have around cursorline repaint timing.
+    -- `Visual` reads as "about to act on this" without borrowing the
+    -- keyboard-selection group's own identity.
+    hover = "Visual",
   },
 }
 
@@ -91,6 +98,7 @@ local GROUPS = {
   muted = "KitMuted",
   error = "KitError",
   flash = "KitFlash",
+  hover = "KitHover",
 }
 
 --- Resolve a theme argument to a full token table.

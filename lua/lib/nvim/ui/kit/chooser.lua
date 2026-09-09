@@ -38,12 +38,14 @@
 ---   so a flash painted at the same moment is never on screen long enough to
 ---   see. Off for `select`/`picker`, where the caller may be driving submits
 ---   programmatically and a deferred callback would change the contract.
---- - `hover` — follow the mouse without a click, moving the selection to
----   whatever row the pointer is over (via `'mousemoveevent'` and the
----   `<MouseMove>` pseudo-key; a silent no-op if that option cannot be set,
----   older than this plugin's own 0.10 floor). A terminal grid cannot grow a
----   button, so this is the honest equivalent: the row about to be picked is
----   unambiguous before you commit to the click.
+--- - `hover` — follow the mouse without a click: whatever row the pointer is
+---   over gets the theme's `KitHover` highlight (an extmark of its own, not
+---   left to `CursorLine` alone -- see `paint_hover`) and becomes the
+---   selection, via `'mousemoveevent'` and the `<MouseMove>` pseudo-key (a
+---   silent no-op if that option cannot be set, older than this plugin's own
+---   0.10 floor). A terminal grid has no per-pixel blending for text
+---   highlights, so this is an instant, unambiguous "this row is hot", not a
+---   simulated fade -- the honest equivalent of a button's hover state.
 
 local surface = require("lib.nvim.ui.kit.surface")
 local map = require("lib.nvim.bindings.keymap")
@@ -77,6 +79,8 @@ local state = {
   ns = api.nvim_create_namespace("lib_kit_chooser"), -- selection marks
   content_ns = api.nvim_create_namespace("lib_kit_chooser_content"), -- per-item custom highlights
   flash_ns = api.nvim_create_namespace("lib_kit_chooser_flash"), -- the pick acknowledgement
+  hover_ns = api.nvim_create_namespace("lib_kit_chooser_hover"), -- the row under the pointer
+  hover_row = nil, -- 1-based logical item index currently painted, or nil
   saved_guicursor = nil, -- non-nil while `hide_cursor` is in effect
   saved_mousemoveevent = nil, -- non-nil while `hover` is in effect
   flash_on_select = false,
@@ -215,14 +219,45 @@ local function item_at_row(row0)
 end
 
 ---@internal
---- Move the cursor to whatever selectable row the pointer is over, so the
---- theme's `KitSelection` highlight (already applied to `CursorLine`) lights
---- up the entry about to be picked -- the terminal equivalent of a button's
---- hover state. A terminal cell grid has no size to animate, so this is the
---- honest version of that effect: which row is "hot" is unambiguous before
---- you commit to a click, the same information a growing/lit button gives
---- in a GUI. Bound to `<MouseMove>` (see `M.open`), which only ever fires
---- while `'mousemoveevent'` is on -- `enable_hover`/`disable_hover` below.
+--- Paint `KitHover` across every row of entry `idx` (its own extmark
+--- namespace, so it composes independently of the selection mark, the flash
+--- acknowledgement, and each entry's own content highlights). Painted
+--- explicitly rather than left to `CursorLine`/`KitSelection` alone: a
+--- window-option-driven highlight depends on that window actually being
+--- the one Nvim thinks has focus and on a timely redraw, both of which a
+--- given terminal/GUI frontend's mouse-motion handling can get wrong in
+--- ways an extmark -- a direct buffer decoration -- does not.
+---@param idx integer?
+local function paint_hover(idx)
+  local buf = state.surf and state.surf.bufnr
+  if not buf or not api.nvim_buf_is_valid(buf) then
+    return
+  end
+  api.nvim_buf_clear_namespace(buf, state.hover_ns, 0, -1)
+  local e = idx and state.entries[idx]
+  if not e then
+    state.hover_row = nil
+    return
+  end
+  for row = e.start_row, e.end_row do
+    pcall(api.nvim_buf_set_extmark, buf, state.hover_ns, row, 0, {
+      line_hl_group = "KitHover",
+      hl_eol = true,
+      priority = 120,
+    })
+  end
+  state.hover_row = idx
+end
+
+---@internal
+--- Move the cursor to whatever selectable row the pointer is over (so `<CR>`
+--- and a following click agree with what is visibly lit) and paint that row
+--- with `paint_hover` -- the terminal equivalent of a button's hover state.
+--- A terminal cell grid has no size to animate and no per-pixel blending for
+--- text highlights, so an instant, unambiguous "this row is hot" is the
+--- honest version of that effect, not a simulated fade. Bound to
+--- `<MouseMove>` (see `M.open`), which only ever fires while
+--- `'mousemoveevent'` is on -- `enable_hover`/`disable_hover` below.
 local function on_hover_move()
   local ok, pos = pcall(vim.fn.getmousepos)
   if not ok or type(pos) ~= "table" or not state.surf or pos.winid ~= state.surf.winid then
@@ -235,14 +270,15 @@ local function on_hover_move()
   if not idx or not state.entries[idx].selectable then
     return
   end
+  -- <MouseMove> fires on every cell the pointer crosses, not once per row --
+  -- skip the repaint once this row is already the one lit.
+  if state.hover_row == idx then
+    return
+  end
+  paint_hover(idx)
   local e = state.entries[idx]
   local target = e.start_row + e.anchor_row + 1
-  -- Skip the redundant set once the cursor is already there -- <MouseMove>
-  -- fires on every cell the pointer crosses, not once per row.
-  local cur = api.nvim_win_get_cursor(state.surf.winid)
-  if cur[1] ~= target then
-    pcall(api.nvim_win_set_cursor, state.surf.winid, { target, 0 })
-  end
+  pcall(api.nvim_win_set_cursor, state.surf.winid, { target, 0 })
 end
 
 ---@internal
@@ -381,6 +417,7 @@ function M.close()
     state.surf:close()
   end
   state.surf = nil
+  state.hover_row = nil
   state.items = {}
   state.entries = {}
   state.on_select = nil
@@ -426,6 +463,13 @@ function M.set_items(opts)
   local entries, flat_lines = build_entries(opts.items)
 
   clear_marks()
+  -- The old row's extmark would otherwise point at whatever content ends up
+  -- on that row number after the rewrite below, not at the entry it was
+  -- actually painted for.
+  if surf.bufnr and api.nvim_buf_is_valid(surf.bufnr) then
+    api.nvim_buf_clear_namespace(surf.bufnr, state.hover_ns, 0, -1)
+  end
+  state.hover_row = nil
   state.items = opts.items
   state.entries = entries
   state.selections = {}
@@ -479,6 +523,14 @@ function M.move(delta)
   end
   local e = state.entries[idx]
   api.nvim_win_set_cursor(win, { e.start_row + e.anchor_row + 1, 0 })
+  -- Keyboard navigation takes over from a stale mouse hover: leaving the
+  -- last-hovered row lit while j/k moved the actual selection elsewhere
+  -- would show two different rows as "the one about to be picked". Only
+  -- when hover is actually on for this chooser -- select/picker/compare
+  -- never enable it, and must not gain this highlight as a side effect.
+  if state.saved_mousemoveevent ~= nil then
+    paint_hover(idx)
+  end
 end
 
 --- 1-based logical item index at the cursor, or nil when closed.
