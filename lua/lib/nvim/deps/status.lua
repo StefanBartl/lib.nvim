@@ -49,6 +49,11 @@ local ALL = "all plugins"
 ---   silently preferring the later one would hide it.
 --- * `bin_alternatives` are unioned: a spelling that counts as "found" for
 ---   one plugin counts for all of them, since it is the same program.
+--- * `paths` are unioned per platform, same reasoning as `bin_alternatives`
+---   — dropping it here (rather than just at the per-tool level) would leave
+---   the AGGREGATE report (`:Lib deps show`/`install` with no plugin name)
+---   reporting a `paths`-rescued tool as missing even though the per-plugin
+---   view of the very same spec would not.
 --- * `why` keeps the first declarer's sentence. Concatenating several would
 ---   produce a paragraph per tool and bury the list; `see` names everyone.
 ---@param acc table<string, Lib.Deps.Tool>
@@ -64,6 +69,7 @@ local function merge(acc, order, sources, tool, plugin_name)
     acc[tool.bin] = {
       bin = tool.bin,
       bin_alternatives = vim.deepcopy(tool.bin_alternatives),
+      paths = vim.deepcopy(tool.paths),
       required = tool.required,
       why = tool.why,
       see = tool.see,
@@ -92,6 +98,27 @@ local function merge(acc, order, sources, tool, plugin_name)
       end
       if not seen then
         existing.bin_alternatives[#existing.bin_alternatives + 1] = alt
+      end
+    end
+  end
+
+  if tool.paths then
+    existing.paths = existing.paths or {}
+    for _, platform in ipairs({ "win", "mac", "linux" }) do
+      local incoming = tool.paths[platform]
+      if incoming then
+        existing.paths[platform] = existing.paths[platform] or {}
+        for _, path in ipairs(incoming) do
+          local seen = false
+          for _, have in ipairs(existing.paths[platform]) do
+            if have == path then
+              seen = true
+            end
+          end
+          if not seen then
+            existing.paths[platform][#existing.paths[platform] + 1] = path
+          end
+        end
       end
     end
   end

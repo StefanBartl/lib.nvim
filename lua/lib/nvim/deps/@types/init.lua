@@ -14,10 +14,18 @@
 ---@class Lib.Deps.Tool
 ---@field bin string canonical executable name: the tool's identity, its display label, the key its install state is stored under, and what `pkg` maps from
 ---@field bin_alternatives string[]|nil other names the SAME tool is installed as on some platform (`gs` -> `gswin64c`, `gswin32c`). Detection only -- see `lib.nvim.deps.detect`. Not a list of substitutes: a different program that would also do the job is a different tool.
+---@field paths Lib.Deps.PathMap|nil literal install locations to try after every name in `bin`/`bin_alternatives` has missed on PATH -- for installers (Chrome, LibreOffice, …) that never extend PATH. See `lib.nvim.deps.detect.candidate_paths`.
 ---@field required boolean true when the plugin cannot function at all without it
 ---@field why string one-sentence reason this tool matters (validation requires non-empty)
 ---@field see string|nil optional anchor/link into the plugin's own docs for more detail
 ---@field pkg Lib.Deps.PkgMap package name per package manager (validation requires >= 1 entry)
+
+---Fallback install locations for one tool, by platform. Each entry may
+---contain `$ENVVAR` tokens (`$PROGRAMFILES`, `$LOCALAPPDATA`, `$HOME`, …),
+---expanded via `vim.fn.expand()` before the filesystem check -- so the same
+---declaration works across every account's differently-rooted install, not
+---just the one machine it was measured on.
+---@alias Lib.Deps.PathMap { win?: string[], mac?: string[], linux?: string[] }
 
 ---One validation problem found while parsing a spec file.
 ---@class Lib.Deps.Error
@@ -33,6 +41,7 @@
 ---@class Lib.Deps.HealthEntry
 ---@field bin? string executable name, probed via `has_exec` (mutually exclusive with `python_module`)
 ---@field bin_alternatives? string[] other names the same executable goes by on some platform; only meaningful alongside `bin`
+---@field paths? Lib.Deps.PathMap fallback install locations, tried after `bin`/`bin_alternatives` miss on PATH; only meaningful alongside `bin`
 ---@field python_module? string Python module name, probed via `python -c "import <module>"` (mutually exclusive with `bin`)
 ---@field required? boolean reported as an error (not a warning) when missing; defaults to false
 ---@field label? string display label; defaults to `bin`/`python_module`
@@ -85,9 +94,10 @@
 ---host, under any of the names it goes by?
 ---@class Lib.Deps.Detect
 ---@field names fun(tool: Lib.Deps.Tool|Lib.Deps.HealthEntry): string[] every name the tool may be found under, canonical first
----@field found_as fun(tool: Lib.Deps.Tool|Lib.Deps.HealthEntry): string|nil the name it was found under, nil when absent
+---@field candidate_paths fun(tool: Lib.Deps.Tool|Lib.Deps.HealthEntry): string[] this host's declared fallback `paths`, `$ENVVAR`-expanded
+---@field found_as fun(tool: Lib.Deps.Tool|Lib.Deps.HealthEntry): string|nil the name (or resolved path) it was found under, nil when absent
 ---@field found fun(tool: Lib.Deps.Tool|Lib.Deps.HealthEntry): boolean
----@field forget fun(tool: Lib.Deps.Tool|Lib.Deps.HealthEntry): nil drop the memoized PATH result for every one of its names
+---@field forget fun(tool: Lib.Deps.Tool|Lib.Deps.HealthEntry): nil drop the memoized PATH result for every one of its names and resolved paths
 
 ---`lib.nvim.deps.install` module surface: plan computation + confirmed terminal handoff.
 ---@class Lib.Deps.Install

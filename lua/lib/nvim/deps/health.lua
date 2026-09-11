@@ -82,6 +82,7 @@ function M.from_tools(tools)
     entries[#entries + 1] = {
       bin = tool.bin,
       bin_alternatives = tool.bin_alternatives,
+      paths = tool.paths,
       required = tool.required,
       label = tool.bin,
       hint = tool.why,

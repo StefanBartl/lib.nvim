@@ -209,6 +209,43 @@ that ask "is it here" — `health` (the `:checkhealth` line), `install.plan`
 key's already-installed refusal, and clearing the memoized PATH result after
 an install, for *every* name rather than just the canonical one).
 
+### Installed, but not on PATH — `paths`
+
+Several GUI installers never extend PATH at all, and this is the *normal*
+case on Windows rather than the exception: measured against a real
+machine, neither the Chrome nor the LibreOffice installer touches PATH, so
+a PATH-only check reports both as missing on a machine where they are
+plainly installed. `bin_alternatives` doesn't help here — the binary isn't
+spelled differently, it's just nowhere PATH looks.
+
+`paths` names literal install locations to try, once every name in
+`bin`/`bin_alternatives` has already missed on PATH — keyed by platform
+(`win`/`mac`/`linux`), each entry `$ENVVAR`-expandable so the same
+declaration works across accounts with a differently-rooted install:
+
+```json
+{
+  "bin": "chrome",
+  "bin_alternatives": ["google-chrome", "chromium", "chromium-browser", "brave", "msedge"],
+  "paths": {
+    "win": [
+      "$PROGRAMFILES\\Google\\Chrome\\Application\\chrome.exe",
+      "$LOCALAPPDATA\\Google\\Chrome\\Application\\chrome.exe"
+    ],
+    "mac": ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"],
+    "linux": ["/usr/bin/google-chrome"]
+  },
+  "why": "Renders a hovered link as a screenshot instead of previewing it as text.",
+  "pkg": { "winget": "Google.Chrome", "scoop": "googlechrome" }
+}
+```
+
+A `paths` hit is reported by its full resolved path rather than a bare name
+— "chrome found (as C:\\...\\chrome.exe)" says exactly where it was found,
+which a plain "found" would not. Same validation posture as
+`bin_alternatives`: a `paths` value that isn't a per-platform list of
+strings is rejected rather than silently iterating as empty.
+
 ## `lib.nvim.deps.health.report_for` — the `:checkhealth` hook
 
 The one-line addition a plugin's own `health.lua` makes instead of
@@ -263,6 +300,7 @@ rather than last-one-wins:
 | `required` | true if **any** declarer requires it | Installing it satisfies everyone; skipping it breaks at least that one plugin outright |
 | `pkg` | unioned, first declaration wins a key | Two plugins naming different packages for one binary is a bug in one of them — silently preferring the later would hide it |
 | `bin_alternatives` | unioned | A spelling that counts as "found" for one plugin counts for all: it is the same program |
+| `paths` | unioned per platform | Same reasoning as `bin_alternatives` — otherwise the aggregate `:Lib deps show`/`install` report would miss a tool the per-plugin view finds |
 | `why` | the first declarer's sentence | Concatenating several would produce a paragraph per tool and bury the list |
 | `see` | rewritten to `wanted by a.nvim, b.nvim` | Answers "who wants this?" without a renderer change |
 
