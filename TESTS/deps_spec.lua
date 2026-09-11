@@ -230,6 +230,67 @@ pkg:
     )
   end
 
+  -- paths: a per-platform map of install-location strings, for tools whose
+  -- installer never extends PATH (Chrome, LibreOffice, ...).
+  do
+    local result = spec.parse_json(vim.json.encode({
+      tools = {
+        {
+          bin = "chrome",
+          paths = {
+            win = { "$PROGRAMFILES\\Google\\Chrome\\Application\\chrome.exe" },
+            mac = { "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" },
+          },
+          why = "Chrome's installer never extends PATH.",
+          pkg = { winget = "Google.Chrome" },
+        },
+      },
+    }))
+    eq(#result.errors, 0, "parse_json: paths per-platform map -> no errors")
+    eq(#result.tools, 1, "parse_json: paths per-platform map -> tool produced")
+    eq(
+      result.tools[1].paths.win[1],
+      "$PROGRAMFILES\\Google\\Chrome\\Application\\chrome.exe",
+      "parse_json: paths.win carried through unexpanded"
+    )
+    eq(
+      result.tools[1].paths.mac[1],
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      "parse_json: paths.mac carried through"
+    )
+  end
+
+  -- Same failure shape as bin_alternatives, one level deeper: a bare string
+  -- for one platform's value would otherwise iterate as an empty list and
+  -- the tool would keep reporting missing on exactly the platform it was
+  -- added to rescue.
+  do
+    local result = spec.parse_json(vim.json.encode({
+      tools = {
+        {
+          bin = "chrome",
+          paths = { win = "not-a-list" },
+          why = "Written as a string by mistake.",
+          pkg = { winget = "Google.Chrome" },
+        },
+      },
+    }))
+    eq(#result.tools, 0, "parse_json: paths.win as a string -> no tool produced")
+    eq(#result.errors, 1, "parse_json: paths.win as a string -> one error")
+    eq(result.errors[1].field, "paths", "parse_json: the error names the offending field")
+  end
+
+  eq(#spec.parse_json(vim.json.encode({
+    tools = {
+      {
+        bin = "chrome",
+        paths = { win = { "" } },
+        why = "One path entry is empty.",
+        pkg = { winget = "Google.Chrome" },
+      },
+    },
+  })).tools, 0, "parse_json: an empty string among paths.win -> rejected")
+
   eq(
     #spec.parse_json("{not valid json").errors,
     1,
@@ -937,6 +998,67 @@ pkg:
       detect.found({ bin = "nvim", bin_alternatives = { "also-not-a-real-binary-xyz" } }),
       "detect.forget: re-probing after a forget still finds the tool"
     )
+  end
+
+  -- ------------------------------------------------------------- detect: paths
+  --
+  -- The Chrome/LibreOffice case: not on PATH under any name, but genuinely
+  -- installed at a known location. `vim.v.progpath` stands in for that
+  -- location -- this Neovim's own executable, guaranteed to exist on every
+  -- platform the suite runs on, so the fixture needs no real Chrome install.
+  do
+    local this_platform = (vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1) and "win"
+      or (vim.fn.has("mac") == 1 and "mac")
+      or "linux"
+    local other_platform = this_platform == "win" and "mac" or "win"
+    local real_exe = vim.v.progpath
+    local nonexistent = vim.fn.expand("$LIB_DEPS_SPEC_NOPE") .. "/definitely-does-not-exist"
+
+    eq(
+      table.concat(
+        detect.candidate_paths({
+          bin = "definitely-not-a-real-binary-xyz",
+          paths = { [this_platform] = { nonexistent, real_exe } },
+        }),
+        "\1"
+      ),
+      table.concat({ vim.fn.expand(nonexistent), vim.fn.expand(real_exe) }, "\1"),
+      "detect.candidate_paths: this platform's list, $ENVVAR-expanded, in order"
+    )
+    eq(#detect.candidate_paths({
+      bin = "definitely-not-a-real-binary-xyz",
+      paths = { [other_platform] = { real_exe } },
+    }), 0, "detect.candidate_paths: another platform's list is not this host's")
+    eq(
+      #detect.candidate_paths({ bin = "definitely-not-a-real-binary-xyz" }),
+      0,
+      "detect.candidate_paths: no paths declared -> empty"
+    )
+
+    local tool = {
+      bin = "definitely-not-a-real-binary-xyz",
+      paths = { [this_platform] = { nonexistent, real_exe } },
+    }
+    eq(
+      detect.found_as(tool),
+      real_exe,
+      "detect.found_as: PATH misses, falls through a non-existent path, lands on the real one"
+    )
+    ok(detect.found(tool), "detect.found: true via the paths fallback")
+    ok(not detect.found({
+      bin = "definitely-not-a-real-binary-xyz",
+      paths = { [other_platform] = { real_exe } },
+    }), "detect.found: a paths entry for a different platform is never tried")
+
+    -- `bin`/`bin_alternatives` still win over `paths` when both would answer
+    -- — PATH is tried first, `paths` is a fallback, not an alternate route.
+    eq(
+      detect.found_as({ bin = "nvim", paths = { [this_platform] = { real_exe } } }),
+      "nvim",
+      "detect.found_as: PATH still wins over a paths entry, even one that also resolves"
+    )
+
+    detect.forget(tool)
   end
 
   -- An install plan has to route through the same detection, or a tool

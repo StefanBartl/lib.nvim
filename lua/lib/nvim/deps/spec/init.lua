@@ -64,7 +64,8 @@ end
 ---Validate one decoded entry (from either the YAML block body or a JSON
 ---`tools[]` element) into a `Lib.Deps.Tool`, or a list of field errors.
 ---`bin`, non-empty `why`, and a non-empty `pkg` map are all required;
----`required` defaults to `false`; `see` and `bin_alternatives` are optional.
+---`required` defaults to `false`; `see`, `bin_alternatives` and `paths` are
+---optional.
 ---@internal
 ---@param data table
 ---@param index integer
@@ -127,6 +128,41 @@ local function validate_entry(data, index)
     end
   end
 
+  -- Same shape of mistake as `bin_alternatives` above, one level deeper: a
+  -- `paths` value that isn't a per-platform list of strings would otherwise
+  -- iterate as empty and the tool would keep reporting missing on exactly
+  -- the platform `paths` was added to rescue.
+  if data.paths ~= nil then
+    if type(data.paths) ~= "table" then
+      errors[#errors + 1] =
+        { index = index, field = "paths", message = "'paths' must be an object keyed by platform" }
+    else
+      for _, platform in ipairs({ "win", "mac", "linux" }) do
+        local list = data.paths[platform]
+        if list ~= nil then
+          if not vim.islist(list) then
+            errors[#errors + 1] = {
+              index = index,
+              field = "paths",
+              message = ("'paths.%s' must be a list of install-location strings"):format(platform),
+            }
+          else
+            for _, path in ipairs(list) do
+              if type(path) ~= "string" or path == "" then
+                errors[#errors + 1] = {
+                  index = index,
+                  field = "paths",
+                  message = ("'paths.%s' entries must be non-empty strings"):format(platform),
+                }
+                break
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
   if #errors > 0 then
     return nil, errors
   end
@@ -134,6 +170,7 @@ local function validate_entry(data, index)
   return {
     bin = data.bin,
     bin_alternatives = data.bin_alternatives,
+    paths = data.paths,
     required = data.required == true,
     why = data.why,
     see = (type(data.see) == "string" and data.see ~= "") and data.see or nil,
