@@ -19,6 +19,25 @@ require("lib.nvim.contextmenu").setup({ renderer = "kit" })
 The dependency stays soft either way: `menu` is only `require()`d when a menu
 actually opens, and a missing install degrades to the kit, never to an error.
 
+### `native_popup`
+
+Neovim ships its own built-in right-click menu (`:h popup-menu`), which pops
+up under the editor's default `'mousemodel'` (`popup_setpos`) wherever a click
+lands on no active `<RightMouse>` mapping at all — a blank line past a tree's
+last node, a spot no contributor's own menu covers, insert mode, and so on.
+From the user's chair that reads as "a different context menu sometimes
+appears", indistinguishable at a glance from this module's own menu
+degrading to something else.
+
+```lua
+require("lib.nvim.contextmenu").setup({ native_popup = false }) -- sets 'mousemodel' = "extend"
+```
+
+Left untouched (`native_popup` omitted, or `true`) by default: this module is
+a generic building block, and changing a global editor option is a call only
+a host's own setup path should make — `config.menu` (this config's general
+right-click dispatcher) is the one place that opts out.
+
 ## Two integration shapes
 
 **"Owns its buffer"** — a plugin-created UI (a tree, a dashboard, a
@@ -86,7 +105,7 @@ relevant condition holds. Live reference: `markdown.nvim`
 ```lua
 local contextmenu = require("lib.nvim.contextmenu")
 
-contextmenu.setup({ renderer = "auto" })       -- "auto" | "kit" | "nvzone"
+contextmenu.setup({ renderer = "auto", native_popup = true })  -- renderer: "auto"|"kit"|"nvzone"; native_popup: false disables Neovim's own PopUp menu
 contextmenu.renderer()                         -- the configured value
 contextmenu.entry(available, label, fn, rtxt, opts)  -- {name,rtxt,cmd,icon,hl} or nil; opts = { icon, icon_hl, hl }
 contextmenu.heading(title)                     -- group heading marker; pass it first to `group`

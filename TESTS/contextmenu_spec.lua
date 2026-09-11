@@ -95,6 +95,28 @@ return function(H)
     eq(contextmenu.renderer(), "kit", "renderer: an unknown value is rejected, not applied")
   end
 
+  -- ---------- native_popup: opt out of Neovim's own PopUp menu ----------
+
+  do
+    local saved_mousemodel = vim.o.mousemodel
+
+    vim.o.mousemodel = "popup_setpos"
+    contextmenu.setup({})
+    eq(vim.o.mousemodel, "popup_setpos", "native_popup: omitted leaves 'mousemodel' untouched")
+
+    contextmenu.setup({ native_popup = true })
+    eq(vim.o.mousemodel, "popup_setpos", "native_popup: true leaves 'mousemodel' untouched")
+
+    contextmenu.setup({ native_popup = false })
+    eq(
+      vim.o.mousemodel,
+      "extend",
+      "native_popup: false switches 'mousemodel' away from the popup menu"
+    )
+
+    vim.o.mousemodel = saved_mousemodel
+  end
+
   -- ---------- open: draws with the kit renderer ----------
 
   do

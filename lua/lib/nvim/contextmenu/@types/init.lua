@@ -51,7 +51,7 @@
 
 --- `lib.nvim.contextmenu` module surface.
 ---@class Lib.ContextMenu
----@field setup fun(opts?: { renderer?: Lib.ContextMenu.Renderer })
+---@field setup fun(opts?: { renderer?: Lib.ContextMenu.Renderer, native_popup?: boolean })  `native_popup = false` sets `'mousemodel' = "extend"`, turning off Neovim's own built-in PopUp menu; omitted or `true` leaves it alone.
 ---@field renderer fun(): Lib.ContextMenu.Renderer
 ---@field entry fun(available: any, label: string, fn: function, rtxt?: string, opts?: Lib.ContextMenu.ItemOpts): Lib.ContextMenu.Item|nil
 ---@field heading fun(title: string): Lib.ContextMenu.Item
