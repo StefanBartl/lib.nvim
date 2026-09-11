@@ -11,15 +11,14 @@
 --- dependency is soft: `menu` is only `require()`d when a menu actually
 --- opens, and a missing install degrades to the kit, never to an error.
 ---
---- `setup{ native_popup = false }` additionally turns off Neovim's OWN
---- built-in right-click menu (`:h popup-menu`), which pops up under the
---- editor's default `'mousemodel'` (`popup_setpos`) wherever a click lands
---- on no active `<RightMouse>` mapping at all -- a blank line past a tree's
---- last node, say. From the user's chair that reads as "a different context
---- menu sometimes appears", indistinguishable at a glance from this one
---- degrading. Left untouched (`native_popup` omitted or `true`) by default:
---- this is a generic building block, and changing a global editor option is
---- a call only a host's own setup path should make.
+--- `setup{...}` also turns off Neovim's OWN built-in right-click menu
+--- (`:h popup-menu`) by default, which pops up under the editor's default
+--- `'mousemodel'` (`popup_setpos`) wherever a click lands on no active
+--- `<RightMouse>` mapping at all -- a blank line past a tree's last node,
+--- say. From the user's chair that reads as "a different context menu
+--- sometimes appears", indistinguishable at a glance from this one
+--- degrading. Opt back into vanilla Neovim behaviour with
+--- `setup{ native_popup = true }`.
 ---
 --- Two integration shapes this supports (see filetree.nvim and
 --- markdown.nvim for the two live reference implementations):
@@ -70,8 +69,8 @@ local function warn_nvzone_missing_once()
   notify.info("nvzone/menu not installed — rendering the context menu with lib.nvim.ui.kit.menu")
 end
 
---- Pick the renderer, and optionally suppress Neovim's built-in right-click
---- menu. Call once, from the host's setup path.
+--- Pick the renderer, and (by default) suppress Neovim's built-in
+--- right-click menu. Call once, from the host's setup path.
 ---@param opts? { renderer?: "auto"|"kit"|"nvzone", native_popup?: boolean }
 function M.setup(opts)
   opts = opts or {}
@@ -87,11 +86,14 @@ function M.setup(opts)
     end
   end
 
-  if opts.native_popup == false then
+  if opts.native_popup ~= true then
     -- The only other legal `'mousemodel'` value: replaces Neovim's built-in
     -- PopUp menu with the classic visual-extend click, everywhere, in every
     -- mode -- not just wherever this module's own callers happen to bind a
-    -- mapping.
+    -- mapping. Opt-out, not opt-in: any call to `setup()` at all disables the
+    -- native menu unless it explicitly asks to keep it (`native_popup =
+    -- true`) -- a host that never mentions the option still gets the sane
+    -- default, with nothing for it to remember to configure.
     vim.o.mousemodel = "extend"
   end
 end

@@ -95,23 +95,29 @@ return function(H)
     eq(contextmenu.renderer(), "kit", "renderer: an unknown value is rejected, not applied")
   end
 
-  -- ---------- native_popup: opt out of Neovim's own PopUp menu ----------
+  -- ---------- native_popup: off by default, opt-out not opt-in ----------
 
   do
     local saved_mousemodel = vim.o.mousemodel
 
     vim.o.mousemodel = "popup_setpos"
-    contextmenu.setup({})
-    eq(vim.o.mousemodel, "popup_setpos", "native_popup: omitted leaves 'mousemodel' untouched")
-
     contextmenu.setup({ native_popup = true })
     eq(vim.o.mousemodel, "popup_setpos", "native_popup: true leaves 'mousemodel' untouched")
 
+    vim.o.mousemodel = "popup_setpos"
+    contextmenu.setup({})
+    eq(
+      vim.o.mousemodel,
+      "extend",
+      "native_popup: omitted disables Neovim's own PopUp menu by default"
+    )
+
+    vim.o.mousemodel = "popup_setpos"
     contextmenu.setup({ native_popup = false })
     eq(
       vim.o.mousemodel,
       "extend",
-      "native_popup: false switches 'mousemodel' away from the popup menu"
+      "native_popup: false disables it too, same as omitting the option"
     )
 
     vim.o.mousemodel = saved_mousemodel
@@ -488,5 +494,8 @@ return function(H)
   end
 
   -- Leave the module as the rest of the suite (and any host) expects it.
-  contextmenu.setup({ renderer = "auto" })
+  -- `native_popup = true`: setup() now disables the native PopUp menu by
+  -- default, which the rest of the shared test session did not ask for.
+  contextmenu.setup({ renderer = "auto", native_popup = true })
+  vim.o.mousemodel = "popup_setpos"
 end

@@ -29,14 +29,14 @@ From the user's chair that reads as "a different context menu sometimes
 appears", indistinguishable at a glance from this module's own menu
 degrading to something else.
 
-```lua
-require("lib.nvim.contextmenu").setup({ native_popup = false }) -- sets 'mousemodel' = "extend"
-```
+`setup()` turns it off by default (sets `'mousemodel' = "extend"`) — opt-out,
+not opt-in, so a host that never mentions the option still gets the sane
+default with nothing to remember to configure:
 
-Left untouched (`native_popup` omitted, or `true`) by default: this module is
-a generic building block, and changing a global editor option is a call only
-a host's own setup path should make — `config.menu` (this config's general
-right-click dispatcher) is the one place that opts out.
+```lua
+require("lib.nvim.contextmenu").setup({})                        -- native popup off (the default)
+require("lib.nvim.contextmenu").setup({ native_popup = true })   -- keep vanilla Neovim's PopUp menu
+```
 
 ## Two integration shapes
 
@@ -105,7 +105,7 @@ relevant condition holds. Live reference: `markdown.nvim`
 ```lua
 local contextmenu = require("lib.nvim.contextmenu")
 
-contextmenu.setup({ renderer = "auto", native_popup = true })  -- renderer: "auto"|"kit"|"nvzone"; native_popup: false disables Neovim's own PopUp menu
+contextmenu.setup({ renderer = "auto", native_popup = false })  -- renderer: "auto"|"kit"|"nvzone"; native_popup: true keeps Neovim's own PopUp menu (default: off)
 contextmenu.renderer()                         -- the configured value
 contextmenu.entry(available, label, fn, rtxt, opts)  -- {name,rtxt,cmd,icon,hl} or nil; opts = { icon, icon_hl, hl }
 contextmenu.heading(title)                     -- group heading marker; pass it first to `group`
