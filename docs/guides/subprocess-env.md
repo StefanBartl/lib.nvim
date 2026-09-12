@@ -118,10 +118,9 @@ migrate: `github_stats.nvim`, which spawns via plain `vim.system` with no
 
 ## Related
 
-- Background write-up: *Warum Subprozesse aus Neovim eine andere Welt sehen
-  als deine Shell* —
-  `WKDBooks/Development/wkdbook-Neovim/Referenz_Notes/00_cmdline/crossplatform/SubprocessEnv.md`,
-  which also covers the second, related Windows trap:
+- Background write-up (author's private notes): *Warum Subprozesse aus
+  Neovim eine andere Welt sehen als deine Shell* — which also covers the
+  second, related Windows trap:
   `jobstart(argv, { detach = true })` does not reliably run a **console**
   program there (libuv's `DETACHED_PROCESS` leaves it without standard
   handles), which is why `lib.nvim.cross.run.run_detached` is documented as

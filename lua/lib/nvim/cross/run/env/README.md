@@ -141,5 +141,5 @@ installing a toolchain or editing a shell profile inside a running session.
 - `lib.nvim.cross.run` — shell-string runners built on `shell()`
 - `lib.nvim.cross.run_argv` — argv runners, no shell
 - `lib.nvim.cross.executable` — "is this binary reachable at all?"
-- Background: *Warum Subprozesse aus Neovim eine andere Welt sehen als
-  deine Shell* (`WKDBooks/Development/wkdbook-Neovim/Referenz_Notes/00_cmdline/crossplatform/SubprocessEnv.md`)
+- Background (author's private notes): *Warum Subprozesse aus Neovim eine
+  andere Welt sehen als deine Shell*
