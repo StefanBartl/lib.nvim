@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 460" font-family="ui-sans-serif, Segoe UI, Roboto, sans-serif">
+  <rect width="720" height="460" rx="10" fill="#f7f6f2"/>
+  <text x="360" y="34" text-anchor="middle" font-size="15" font-weight="700" fill="#4a4640">picker template — prompt · results · preview</text>
+
+  <!-- PROMPT (full width, top) -->
+  <rect x="60" y="56" width="600" height="66" rx="4" fill="#ffffff" stroke="#1f2430" stroke-width="3"/>
+  <text x="74" y="80" font-size="11" font-weight="700" fill="#9a948a" letter-spacing="1">PROMPT</text>
+  <text x="74" y="104" font-size="15" fill="#4a4640" font-family="ui-monospace, monospace">&gt; searc</text>
+  <rect x="146" y="92" width="8" height="16" fill="#e0a520"/>
+  <rect x="74" y="112" width="120" height="2" fill="#e0a520"/>
+
+  <!-- RESULT LIST (bottom-left, ~40%, shares borders with prompt + preview) -->
+  <rect x="60" y="122" width="240" height="278" rx="4" fill="#ffffff" stroke="#1f2430" stroke-width="3"/>
+  <text x="74" y="146" font-size="11" font-weight="700" fill="#9a948a" letter-spacing="1">RESULT LIST</text>
+  <!-- selected row -->
+  <rect x="66" y="162" width="228" height="22" fill="#f6e2b0"/>
+  <rect x="74" y="169" width="150" height="8" rx="2" fill="#8a8478"/>
+  <rect x="74" y="194" width="186" height="8" rx="2" fill="#cfcabd"/>
+  <rect x="74" y="216" width="132" height="8" rx="2" fill="#cfcabd"/>
+  <rect x="74" y="238" width="170" height="8" rx="2" fill="#cfcabd"/>
+  <rect x="74" y="260" width="120" height="8" rx="2" fill="#cfcabd"/>
+  <rect x="74" y="282" width="158" height="8" rx="2" fill="#cfcabd"/>
+  <rect x="74" y="304" width="104" height="8" rx="2" fill="#cfcabd"/>
+
+  <!-- PREVIEW (bottom-right, ~60%) -->
+  <rect x="300" y="122" width="360" height="278" rx="4" fill="#ffffff" stroke="#1f2430" stroke-width="3"/>
+  <text x="314" y="146" font-size="11" font-weight="700" fill="#9a948a" letter-spacing="1">PREVIEW</text>
+  <g font-family="ui-monospace, monospace">
+    <rect x="314" y="166" width="40" height="7" rx="2" fill="#e0a520"/>
+    <rect x="362" y="166" width="150" height="7" rx="2" fill="#cfcabd"/>
+    <rect x="330" y="184" width="120" height="7" rx="2" fill="#cfcabd"/>
+    <rect x="330" y="202" width="200" height="7" rx="2" fill="#cfcabd"/>
+    <rect x="346" y="220" width="90" height="7" rx="2" fill="#cfcabd"/>
+    <rect x="346" y="238" width="160" height="7" rx="2" fill="#cfcabd"/>
+    <rect x="314" y="256" width="60" height="7" rx="2" fill="#e0a520"/>
+    <rect x="382" y="256" width="120" height="7" rx="2" fill="#cfcabd"/>
+    <rect x="330" y="274" width="180" height="7" rx="2" fill="#cfcabd"/>
+    <rect x="330" y="292" width="110" height="7" rx="2" fill="#cfcabd"/>
+  </g>
+
+  <text x="360" y="428" text-anchor="middle" font-size="12" fill="#9a948a">gap = 0 · shared borders · width 0.4 / 0.6 · recomputed on resize</text>
+</svg>
