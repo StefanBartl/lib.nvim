@@ -262,6 +262,22 @@ Locates and parses the plugin's own spec, reports each tool the same way
 no spec — a `:checkhealth` section for a plugin that declares nothing
 shouldn't print anything.
 
+**When a plugin already hand-rolls its own per-tool checks** (pdfport.nvim,
+images.nvim, mdview.nvim and migrate.nvim all do, each with messages more
+specific than a generic tool report — "pandoc producer: ready (engine:
+xelatex)" rather than "pandoc found"), call `pointer_for` instead of
+`report_for`: same lookup and no-op guards, but only the `:Lib deps show`
+line, no per-tool loop. `report_for` on top of an already-complete
+hand-rolled report does not add coverage for any tool — it repeats every one
+of them a second time in plainer wording, which reads as `:checkhealth`
+contradicting itself rather than confirming it.
+
+```lua
+-- inside your plugin's health.lua, in M.check(), when every declared tool
+-- already has its own hand-rolled check elsewhere in the same function:
+require("lib.nvim.deps.health").pointer_for("pdfport.nvim")
+```
+
 ## `lib.nvim.deps.status` — all of it at once
 
 `:Lib deps show <plugin>` answers *"what does this plugin want"*, which is

@@ -60,6 +60,7 @@
 ---@field report fun(entries: Lib.Deps.HealthEntry[]): nil
 ---@field from_tools fun(tools: Lib.Deps.Tool[]): nil report health directly from a parsed spec's `tools`
 ---@field report_for fun(plugin_name: string): nil locate + report a plugin's own spec, plus a pointer to `:Lib deps show`
+---@field pointer_for fun(plugin_name: string): nil the `:Lib deps show` pointer alone, no per-tool report -- for a plugin whose hand-rolled checks already cover every declared tool
 
 ---One OS package manager: how to detect it and how to compose an install command.
 ---@class Lib.Deps.Manager

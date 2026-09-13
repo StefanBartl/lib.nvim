@@ -122,5 +122,31 @@ function M.report_for(plugin_name)
   )
 end
 
+---Same lookup and no-op guards as `report_for`, but without the per-tool
+---loop: just the `:Lib deps show` pointer. For a plugin whose own
+---`health.lua` already reports every declared tool through its own
+---hand-rolled checks (richer messages, e.g. "pandoc producer: ready (engine:
+---xelatex)"), calling `report_for` on top repeats each tool a second time in
+---the generic, plainer wording -- confusing, not additive, since it covers
+---no tool the hand-rolled checks did not already cover. This gives the same
+---one-line discovery hint without that duplication.
+---@param plugin_name string
+function M.pointer_for(plugin_name)
+  local spec = require("lib.nvim.deps.spec")
+  local path = spec.find(plugin_name)
+  if not path then
+    return
+  end
+
+  local result = spec.load(path)
+  if not result or #result.tools == 0 then
+    return
+  end
+
+  h_info(
+    ("Run :Lib deps show %s for why each tool matters and how to install it."):format(plugin_name)
+  )
+end
+
 ---@type Lib.Deps.Health
 return M
