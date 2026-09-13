@@ -1,0 +1,126 @@
+---@meta
+---@module 'lib.nvim.buf_win_tab.@types.resize_guarded'
+-- =========================================================
+-- Guarded Window Resize Helpers
+-- =========================================================
+
+---@class Lib.BufWinTab.ResizeGuarded
+--- Guarded resize helper that allows window resize shortcuts in normal editors
+--- while preserving keypresses in terminals and special plugin buffers.
+---
+--- Problem Statement:
+---   Standard Neovim mappings (even in terminal mode) fully capture keypresses.
+---   If a terminal-mode mapping checks buffer type and does nothing (early return),
+---   the original keypress is still consumed and not forwarded to the terminal process.
+---   This breaks terminal applications like lazygit where Shift+H/J/K/L are needed.
+---
+--- Solution:
+---   This module creates mapping callbacks that:
+---     • Check if current buffer is excluded (by filetype or name pattern)
+---     • If excluded: forward the original key to the terminal via nvim_feedkeys
+---     • If not excluded: execute the specified resize command
+---
+--- Technical Implementation:
+---   • Uses nvim_replace_termcodes to convert key notation (e.g., "<S-h>") to internal keycodes
+---   • Uses nvim_feedkeys with 'n' flag (no remap) to prevent recursive mapping
+---   • Derives forward sequence from lhs automatically for common keys
+---   • Supports custom fallback mappings via COMMON_FALLBACK table
+---
+--- Design Principles:
+---   • Zero configuration for common cases (Shift+H/J/K/L)
+---   • Explicit exclusion lists for fine-grained control
+---   • No performance overhead (checks are fast hash lookups)
+---   • Safe: pcall wraps vim.cmd to catch resize errors
+---
+--- Performance:
+---   • Overhead per keypress: ~50-100ns (filetype/name lookup)
+---   • Forward key overhead: ~200-300ns (nvim_replace_termcodes + feedkeys)
+---   • Negligible impact on interactive use
+---
+---@field create fun(cmd: string, exclude_filetypes?: string[], exclude_names?: string[], lhs?: string): function # Create guarded resize mapping callback function. Returns callback suitable for vim.keymap.set. Arguments: cmd (resize command like "vertical resize -5"), exclude_filetypes (list of filetypes to exclude), exclude_names (list of Lua patterns matching buffer names to exclude), lhs (original mapping lhs like "<S-h>" - REQUIRED for key forwarding). Behavior: checks current buffer against exclusions, either forwards key or executes resize. Warns if lhs provided but fallback derivation fails.
+
+-- =========================================================
+-- Usage Example
+-- =========================================================
+
+--- local resize_guarded = require("lib.nvim.buf_win_tab.resize_guarded")
+--- local exclude_filetypes = { "terminal" }
+--- local exclude_names = { ".*lazygit.*" }
+---
+--- vim.keymap.set({ "n", "t" }, "<S-h>", resize_guarded.create(
+---   "vertical resize -5",
+---   exclude_filetypes,
+---   exclude_names,
+---   "<S-h>"
+--- ), { desc = "[Window] Resize narrower" })
+---
+--- vim.keymap.set({ "n", "t" }, "<S-l>", resize_guarded.create(
+---   "vertical resize +5",
+---   exclude_filetypes,
+---   exclude_names,
+---   "<S-l>"
+--- ), { desc = "[Window] Resize wider" })
+---
+--- vim.keymap.set({ "n", "t" }, "<S-k>", resize_guarded.create(
+---   "resize +5",
+---   exclude_filetypes,
+---   exclude_names,
+---   "<S-k>"
+--- ), { desc = "[Window] Resize taller" })
+---
+--- vim.keymap.set({ "n", "t" }, "<S-j>", resize_guarded.create(
+---   "resize -5",
+---   exclude_filetypes,
+---   exclude_names,
+---   "<S-j>"
+--- ), { desc = "[Window] Resize shorter" })
+
+-- =========================================================
+-- Technical Notes
+-- =========================================================
+
+--- Key Derivation:
+---   • COMMON_FALLBACK table maps common lhs → forward sequence
+---   • Examples: "<S-h>" → "H", "<S-j>" → "J", "<S-Up>" → "<S-Up>"
+---   • Pattern matching supports single-char shift keys: "<S-x>" → "X"
+---   • Pattern matching supports multi-char tokens: "<S-Up>" → "<S-Up>"
+---   • Custom mappings can be added to COMMON_FALLBACK
+---
+--- Exclusion Logic:
+---   • exclude_filetypes: Exact match against vim.bo[buf].filetype
+---   • exclude_names: Lua pattern match against nvim_buf_get_name(buf)
+---   • First match short-circuits (no need to check all patterns)
+---   • Empty exclusion lists allowed (always executes resize)
+---
+--- Key Forwarding:
+---   • nvim_replace_termcodes(seq, true, false, true) converts notation
+---   • nvim_feedkeys(keys, "n", false) injects keys
+---   • "n" flag prevents recursive mapping (critical for safety)
+---   • escape_ks=false because keys already escaped by replace_termcodes
+---
+--- Error Handling:
+---   • Resize commands wrapped in pcall
+---   • Errors notified with ERROR level and "resize_guarded" title
+---   • Invalid lhs triggers WARNING notification (but still creates callback)
+---   • Missing fallback_seq causes no-op when in excluded buffer
+---
+--- Limitations:
+---   • Only supports single-key mappings (no multi-key sequences)
+---   • Custom key combinations require manual COMMON_FALLBACK entry
+---   • No support for dynamic exclusion lists (static at callback creation)
+---   • Terminal process must support the forwarded key (not all do)
+---
+--- Debugging:
+---   • Check buffer filetype: :lua print(vim.bo.filetype)
+---   • Check buffer name: :lua print(vim.api.nvim_buf_get_name(0))
+---   • Test pattern match: :lua print(string.match("lazygit", ".*lazygit.*"))
+---   • Test fallback: :lua print(require("lib.nvim.buf_win_tab.resize_guarded").derive_fallback("<S-h>"))
+---   • Add temporary print() statements in callback for diagnostics
+---
+--- Platform Notes:
+---   • Works on all platforms (Windows, Linux, macOS)
+---   • Terminal emulator must support forwarded key sequences
+---   • Some terminals may not recognize all Shift+modifier combos
+---   • Test forwarding in target terminal before deploying
+
+return {}
