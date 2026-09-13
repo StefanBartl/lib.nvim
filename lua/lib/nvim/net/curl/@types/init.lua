@@ -11,6 +11,7 @@
 ---@field method? string HTTP method (default `"GET"`)
 ---@field headers? table<string, string> Extra headers, one `-H` per entry
 ---@field bearer_token? string Sent as `Authorization: Bearer <token>`
+---@field secret_headers? table<string, string> Header name/value pairs sent through the same `-K -` config-file path as `bearer_token`/`opts.auth`, never argv — for API-specific credential header names (e.g. Anthropic's `x-api-key`) that `is_secret_header` cannot recognize generically
 ---@field query? table<string, string> URL-encoded and appended as `?k=v&...`
 ---@field timeout_ms? integer Passed through to `vim.system`'s `timeout` / `wait(timeout)`
 ---@field body? string Raw request body, sent via `-d`
@@ -30,11 +31,22 @@
 ---@field headers table<string, string> Response headers, keys lowercased so a lookup does not depend on a server's own casing convention.
 ---@field body string Raw response body text, exactly as received.
 
+---Callbacks for `fetch_stream`. `on_chunk` fires once per line of raw
+---response body, in order, as it arrives; `on_done` fires once after the
+---process exits (even if the request failed — check `raw_obj.code`);
+---`on_error` fires if the process itself could not be read from (distinct
+---from an HTTP-level error, which still reaches `on_done`).
+---@class Lib.Net.Curl.StreamHandlers
+---@field on_chunk? fun(line: string)
+---@field on_done? fun(raw_obj: vim.SystemCompleted)
+---@field on_error? fun(err: string)
+--
 ---@class Lib.Net.Curl
 ---@field fetch_json fun(url: string, opts: Lib.Net.Curl.FetchOpts|nil, cb: fun(ok: boolean, data_or_err: any, raw_obj: vim.SystemCompleted))
 ---@field fetch_json_blocking fun(url: string, opts: Lib.Net.Curl.FetchOpts|nil): boolean, any, vim.SystemCompleted
 ---@field fetch_raw fun(url: string, opts: Lib.Net.Curl.FetchOpts|nil, cb: fun(ok: boolean, response_or_err: Lib.Net.Curl.RawResponse|string, raw_obj: vim.SystemCompleted))
 ---@field fetch_raw_blocking fun(url: string, opts: Lib.Net.Curl.FetchOpts|nil): boolean, Lib.Net.Curl.RawResponse|string, vim.SystemCompleted
+---@field fetch_stream fun(url: string, opts: Lib.Net.Curl.FetchOpts|nil, handlers: Lib.Net.Curl.StreamHandlers): vim.SystemObj
 ---@field download fun(url: string, dest_path: string, opts: Lib.Net.Curl.FetchOpts|nil, cb: fun(ok: boolean, response_or_err: Lib.Net.Curl.RawResponse|string, raw_obj: vim.SystemCompleted))
 ---@field download_blocking fun(url: string, dest_path: string, opts: Lib.Net.Curl.FetchOpts|nil): boolean, Lib.Net.Curl.RawResponse|string, vim.SystemCompleted
 ---@field config_quote fun(value: string): string  Escape a value for a curl config file's quoted-string form; public so a caller building its own argv shares this instead of a second copy.
