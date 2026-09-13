@@ -3,6 +3,32 @@
 For a function-signature-level index (every exported function, not just
 namespace one-liners), split by topic, see [`API/README.md`](API/README.md).
 
+This is a library, not a feature plugin: almost nothing here happens on its
+own. It is the layer a plugin author requires so that the same problem is not
+solved a fourth time in a fourth repository. Modules are requireable one by
+one, so a plugin that needs one helper does not load the rest — the `lib`
+aggregator exists for convenience, not as the entry point.
+
+## Overview
+
+| Namespace | Contains |
+| --- | --- |
+| `lib.lua.*` | Editor-independent Lua: tables, strings, numerals, time, JSON and YAML, classes, memoization, diffing, error handling, UUIDs |
+| `lib.nvim.*` | Everything that needs `vim`: buffers, windows and tabs, filesystem, git, async and debounce, notifications, logging, treesitter, selections, terminals, caches, stores |
+| `lib.nvim.ui` | The themed UI layer: the `kit` toolkit, list rendering, highlight helpers, nerd-font detection and statusline pieces — one look across sibling plugins instead of five |
+| `lib.nvim.bindings` | Named keymap actions, and `usercmd.composer`: the subcommand-verb builder every sibling plugin's `:Command <sub>` grammar is built on |
+| `lib.nvim.deps` | Declared optional external tools per plugin, and the popup, report and install command that go with them |
+| `lib.strategies` | How the `lib` aggregator resolves: eager, lazy, metatable, with optional telemetry |
+
+> **Compatibility, stated plainly.** This library tracks its author's own
+> Neovim setup, and it stays in sync with *those* plugins by construction.
+> Anyone else is welcome to use it, but the API is not held stable for external
+> consumers and modules may be renamed or removed without a deprecation period.
+> If you depend on it, pin a commit through your plugin manager's lockfile and
+> upgrade deliberately.
+
+## Detail, by namespace
+
 ## `lib.lua.*` — Lua
 
 | Module             | Contents                                                |

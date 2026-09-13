@@ -26,7 +26,8 @@ The short version: **modules.md** to find it, **FEATURES/** for the why,
 
 | Page | What it answers |
 |---|---|
-| [installation.md](installation.md) | Plugin dependency, or config-wide bootstrap? |
+| [installation.md](installation.md) | Requirements, plugin dependency vs. config-wide bootstrap. |
+| [quickstart.md](quickstart.md) | The first thing to run after installing. |
 | [usage.md](usage.md) | Require modules directly, or through the aggregator? |
 | [configuration.md](configuration.md) | Which aggregator strategies exist, and their defaults. |
 | [health.md](health.md) | Verifying a setup with `:checkhealth lib`. |
