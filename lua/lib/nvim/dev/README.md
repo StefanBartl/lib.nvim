@@ -1,7 +1,21 @@
 # `lib.nvim.dev`
 
 Tooling for whoever is developing *across* the plugin ecosystem lib.nvim sits
-under, not for a single plugin's own runtime. First occupant: `duplicates.lua`.
+under, not for a single plugin's own runtime. Occupants: `duplicates.lua`,
+`reload.lua`.
+
+## `reload.lua` — reload a config module on save
+
+```lua
+require("lib.nvim.dev.reload").watch()
+```
+
+One line in **your own config's** startup, not in a plugin: registers a
+`BufWritePost` autocmd that reloads whatever module under
+`stdpath("config")/lua` you just saved (`package.loaded[name] = nil`,
+`require(name)` again) — matched lazily per save, not by pre-globbing every
+`*.lua` file at startup. `M.module(name)` is the reload alone, if you already
+have your own autocmd wiring.
 
 ## `duplicates.lua` — cross-repo function duplication
 

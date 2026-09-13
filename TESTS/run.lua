@@ -55,6 +55,7 @@ local specs = {
   "bindings_audit_spec.lua",
   "keymap_portability_spec.lua",
   "dev_duplicates_spec.lua",
+  "dev_reload_spec.lua",
   "markdown_table_spec.lua",
   "run_argv_spec.lua",
   "run_spec.lua",
