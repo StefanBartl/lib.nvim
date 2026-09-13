@@ -1,5 +1,18 @@
 # Installation
 
+## Requirements
+
+| | |
+| --- | --- |
+| Neovim | **0.10+** |
+| Third-party plugins | none — only `vim` and itself |
+
+Individual modules reach for external tools where one exists (git, a system
+package manager for `lib.nvim.deps`), and every one of them is detected at
+runtime and degrades to nothing when absent.
+
+## When to install it
+
 How you install `lib.nvim` depends on **when** it is needed.
 
 ## As a dependency of other plugins
