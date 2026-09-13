@@ -1,0 +1,114 @@
+---@meta
+---@module 'lib.nvim.notify.@types.safe'
+---@brief Type definitions for safe notification utilities
+---@description
+--- This module defines all type annotations for lib.nvim.notify.safe, providing comprehensive
+--- type information for safe notification methods that can be called from fast event contexts.
+---
+--- Safe notification prevents issues when calling vim.notify from contexts where it might
+--- cause problems (e.g., TextChanged, CursorMoved, LSP callbacks, or other high-frequency events).
+
+-- #####################################################################
+-- Scheduling Mode Type
+
+---@alias Lib.Notify.Safe.ScheduleMode
+--- Determines which scheduling strategy to use for safe notifications.
+---| '"schedule"' # Immediate scheduling via vim.schedule (default, recommended)
+---| '"defer"'    # Delayed scheduling via vim.defer_fn with configurable delay
+---| '"wrap"'     # Pre-wrapped function for repeated efficient calls
+
+-- #####################################################################
+-- Safe Notifier Interface (returned by create_safe)
+
+---@class Lib.Notify.Safe.Notifier
+--- Safe notifier instance with automatic prefixing and scheduling.
+--- All methods use vim.schedule internally to ensure safe execution from any context.
+--- Identical API to Lib.Notify.Notifier but with built-in scheduling.
+---
+---@field notify fun(msg: string, level?: integer, opts?: table): nil
+--- Core safe notify function with automatic scheduling.
+--- Prefixes the message and schedules notification via vim.schedule.
+--- Parameters:
+---   msg: Message to display
+---   level: vim.log.levels constant (default: INFO)
+---   opts: Additional notify options (e.g., {timeout = 3000})
+---
+---@field info fun(msg: string, opts?: table): nil
+--- Safe info-level notification (vim.log.levels.INFO).
+--- Equivalent to notify(msg, vim.log.levels.INFO, opts).
+---
+---@field warn fun(msg: string, opts?: table): nil
+--- Safe warning-level notification (vim.log.levels.WARN).
+--- Equivalent to notify(msg, vim.log.levels.WARN, opts).
+---
+---@field error fun(msg: string, opts?: table): nil
+--- Safe error-level notification (vim.log.levels.ERROR).
+--- Equivalent to notify(msg, vim.log.levels.ERROR, opts).
+---
+---@field debug fun(msg: string, opts?: table): nil
+--- Safe debug-level notification (vim.log.levels.DEBUG).
+--- Equivalent to notify(msg, vim.log.levels.DEBUG, opts).
+
+-- #####################################################################
+-- Main Safe Notification Module
+
+---@class Lib.Notify.Safe
+--- Complete safe notification API providing multiple scheduling strategies.
+--- Use these methods when calling notifications from fast event contexts to prevent
+--- UI issues, errors, or undefined behavior.
+---
+-- =========================================================
+-- Primary Safe Notification Methods
+-- =========================================================
+---
+---@field schedule fun(msg: string, level?: integer, opts?: table): nil
+--- Safe notify using vim.schedule: schedules notification on the main loop immediately.
+--- This is the recommended default method for safe notifications from fast contexts.
+--- Execution happens in the next main loop tick, ensuring UI safety.
+--- Parameters:
+---   msg: Message to display
+---   level: vim.log.levels constant (default: INFO)
+---   opts: Additional notify options (e.g., {timeout = 3000, title = "..."})
+---
+---@field defer fun(msg: string, level?: integer, opts?: table, delay_ms?: integer): nil
+--- Safe notify using vim.defer_fn: defers execution by specified milliseconds.
+--- Useful when you want a small delay before showing the notification,
+--- for example during UI transitions or for debouncing purposes.
+--- Parameters:
+---   msg: Message to display
+---   level: vim.log.levels constant (default: INFO)
+---   opts: Additional notify options
+---   delay_ms: Delay in milliseconds (default: 0)
+---
+---@field wrap fun(): fun(msg: string, level?: integer, opts?: table)
+--- Create a pre-scheduled notifier function for repeated safe calls.
+--- Returns a function that is already wrapped with vim.schedule_wrap.
+--- This is the most efficient option when you need to notify repeatedly from fast contexts,
+--- as the wrapper function is created once and can be reused multiple times.
+--- Returns: A wrapped function with signature (msg, level?, opts?) -> nil
+---
+-- =========================================================
+-- Convenience and Factory Methods
+-- =========================================================
+---
+---@field notify fun(msg: string, level?: integer, opts?: table, mode?: Lib.Notify.Safe.ScheduleMode, delay_ms?: integer): nil
+--- Convenience wrapper that chooses scheduling method based on mode parameter.
+--- Prevents accidental immediate calls to vim.notify from unsafe contexts.
+--- This is useful when you want to parameterize the scheduling strategy.
+--- Parameters:
+---   msg: Message to display
+---   level: vim.log.levels constant (default: INFO)
+---   opts: Additional notify options
+---   mode: Scheduling strategy (default: "schedule")
+---   delay_ms: Delay for "defer" mode (default: 0)
+---
+---@field create_safe fun(prefix: string): Lib.Notify.Safe.Notifier
+--- Create a safe notifier with prefix support (integrates with lib.nvim.notify.create).
+--- Returns a table with safe methods that automatically prefix messages and schedule notifications.
+--- All returned methods use vim.schedule internally, making them safe for fast event contexts.
+--- This combines the prefixing feature of lib.nvim.notify.create with automatic scheduling.
+--- Parameters:
+---   prefix: Notification prefix (e.g., "[plugin-name]")
+--- Returns: Safe notifier instance with info/warn/error/debug/notify methods
+
+return {}
