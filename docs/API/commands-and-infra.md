@@ -323,6 +323,7 @@ Generic replacement for hand-rolled `check_exe`/`probe` loops.
 M.report(entries: Lib.Deps.HealthEntry[])            -- { bin?, python_module?, label?, hint?, required? }
 M.from_tools(tools: Lib.Deps.Tool[])
 M.report_for(plugin_name: string)
+M.pointer_for(plugin_name: string)                   -- `:Lib deps show` line only, no per-tool loop
 ```
 
 ### `lib.nvim.deps.spec`
