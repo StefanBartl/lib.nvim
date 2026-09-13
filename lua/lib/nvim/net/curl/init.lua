@@ -21,6 +21,25 @@
 --- `download`/`download_blocking` are a third tier: the body is written
 --- straight to a file (`-o`) instead of buffered in memory, for responses
 --- too large — or simply not needed — to hold as a Lua string.
+--- `fetch_stream` is a fourth: no `_blocking` counterpart (streaming and
+--- blocking are contradictory), it calls `on_chunk` once per line of raw
+--- response body as it arrives instead of buffering the whole thing — for a
+--- response that takes multiple seconds and whose caller wants to render it
+--- incrementally (SSE `data: ...` lines, NDJSON lines). It returns the
+--- underlying `vim.SystemObj` so a caller can `:kill()` an in-progress
+--- stream; parsing what a line *means* is left to the caller, same
+--- "bytes in, bytes out" split `lib.nvim.cross.uv.spawn_stream` keeps for
+--- process output.
+---
+--- `opts.secret_headers` sends header values through the same `-K -`
+--- config-file path already used for `bearer_token`/`opts.auth`/the
+--- hardcoded credential header names in `is_secret_header` — but for header
+--- *names* that carry a credential only for a specific API (Anthropic's
+--- `x-api-key`, say) and so cannot be recognized generically. Anything in
+--- `opts.headers` is still sent via `-H` in argv, which is visible to any
+--- other process on the machine for the lifetime of the request (Process
+--- Explorer/WMI on Windows, `ps` on POSIX) — `secret_headers` is the escape
+--- hatch for exactly the header names that must not be.
 ---
 --- Usage:
 --- ```lua
@@ -177,6 +196,13 @@ local function build_argv(url, opts, include_headers, download_dest)
   if opts.bearer_token then
     config[#config + 1] = "header = "
       .. M.config_quote("Authorization: Bearer " .. opts.bearer_token)
+  end
+
+  -- Unlike `opts.headers`, everything here goes through the config-file path
+  -- unconditionally — the caller is asserting "this name carries a
+  -- credential", `is_secret_header` does not need to already know the name.
+  for key, value in pairs(opts.secret_headers or {}) do
+    config[#config + 1] = "header = " .. M.config_quote(key .. ": " .. value)
   end
 
   -- A value starting with "@" is curl's own file-upload syntax (-F
@@ -456,6 +482,89 @@ function M.download_blocking(url, dest_path, opts)
     return false, err or UNPARSEABLE, obj
   end
   return true, response, obj
+end
+
+---Fetch `url`, calling `handlers.on_chunk` once per line of the raw response
+---body as it arrives, instead of buffering the whole response like
+---`fetch_json`/`fetch_raw` do. No blocking counterpart — streaming and
+---blocking are contradictory. Splits strictly on `\n` (a trailing `\r` is
+---stripped, so both LF and CRLF line endings work); a final line with no
+---trailing newline is still delivered to `on_chunk` before `on_done` fires.
+---Deliberately does not interpret line content — SSE's `data: ...` prefix,
+---the `data: [DONE]` sentinel, or NDJSON decoding are the caller's job, not
+---this module's (same "bytes in, bytes out" split as `fetch_raw`'s relation
+---to `fetch_json`, just one layer earlier).
+---@param url string
+---@param opts Lib.Net.Curl.FetchOpts|nil
+---@param handlers Lib.Net.Curl.StreamHandlers
+---@return vim.SystemObj process Call `process:kill(15)` to cancel a stream in progress.
+function M.fetch_stream(url, opts, handlers)
+  if not vim.system then
+    error("lib.nvim.net.curl requires Neovim 0.10+ (vim.system)")
+  end
+  opts = opts or {}
+  handlers = handlers or {}
+
+  local argv, stdin = build_argv(url, opts)
+  -- `-N`/`--no-buffer`: curl fully buffers its own stdout by default once it
+  -- is not a TTY (i.e. always, once spawned via `vim.system`) -- nothing
+  -- reaches this process until curl's internal buffer fills (~4KB) or the
+  -- request finishes. That defeats the entire point of a streaming fetch, so
+  -- it is unconditional here (unlike the other tiers, which never stream and
+  -- so never notice the default buffering).
+  table.insert(argv, 2, "-N")
+  local buffered = ""
+
+  ---@param err string|nil
+  ---@param data string|nil
+  local function on_stdout(err, data)
+    if err then
+      if handlers.on_error then
+        vim.schedule(function()
+          handlers.on_error(err)
+        end)
+      end
+      return
+    end
+    if not data then
+      return -- stdout closed; on_exit (below) still fires separately
+    end
+    buffered = buffered .. data
+    while true do
+      local nl = buffered:find("\n", 1, true)
+      if not nl then
+        break
+      end
+      local line = buffered:sub(1, nl - 1):gsub("\r$", "")
+      buffered = buffered:sub(nl + 1)
+      if handlers.on_chunk then
+        vim.schedule(function()
+          handlers.on_chunk(line)
+        end)
+      end
+    end
+  end
+
+  return vim.system(
+    argv,
+    { text = true, stdin = stdin, timeout = opts.timeout_ms, stdout = on_stdout },
+    function(obj)
+      if buffered ~= "" then
+        local line = buffered:gsub("\r$", "")
+        buffered = ""
+        if handlers.on_chunk then
+          vim.schedule(function()
+            handlers.on_chunk(line)
+          end)
+        end
+      end
+      if handlers.on_done then
+        vim.schedule(function()
+          handlers.on_done(obj)
+        end)
+      end
+    end
+  )
 end
 
 ---@type Lib.Net.Curl

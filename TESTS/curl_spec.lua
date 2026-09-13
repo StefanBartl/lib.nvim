@@ -415,4 +415,119 @@ return function(H)
 
     stop_server(server)
   end
+
+  -- opts.secret_headers: reaches the wire (an API-specific credential header
+  -- name like Anthropic's x-api-key, which is_secret_header does not know).
+  do
+    local port, server, captured = start_capturing_server(table.concat({
+      "HTTP/1.1 200 OK",
+      "",
+      "ok",
+    }, "\r\n"))
+
+    local secret = "sk_" .. tostring(os.time()) .. "_shouldnotleak"
+    local success = curl.fetch_raw_blocking(("http://127.0.0.1:%d/"):format(port), {
+      secret_headers = { ["x-api-key"] = secret },
+    })
+    vim.wait(200, function()
+      return false
+    end, 10)
+
+    ok(success, "secret_headers: request succeeds")
+    ok(
+      captured.data ~= nil and captured.data:find("x-api-key: " .. secret, 1, true) ~= nil,
+      "secret_headers: an API-specific credential header still reaches the wire"
+    )
+
+    stop_server(server)
+  end
+
+  -- fetch_stream: on_chunk fires once per line, in order, before on_done.
+  do
+    local port, server = start_server(table.concat({
+      "HTTP/1.1 200 OK",
+      "",
+      "data: one",
+      "",
+      "data: two",
+      "",
+      "data: [DONE]",
+    }, "\n"))
+
+    local lines = {}
+    local done, done_obj
+    curl.fetch_stream(("http://127.0.0.1:%d/"):format(port), nil, {
+      on_chunk = function(line)
+        lines[#lines + 1] = line
+      end,
+      on_done = function(obj)
+        done, done_obj = true, obj
+      end,
+    })
+    vim.wait(2000, function()
+      return done == true
+    end, 20)
+
+    ok(done, "fetch_stream: on_done fires")
+    eq(done_obj.code, 0, "fetch_stream: the process itself exited cleanly")
+    -- eq is `~=`-based (see harness.lua) and therefore reference equality for
+    -- tables; a fresh literal never `==` an accumulated one regardless of
+    -- content, so this needs a real deep comparison instead.
+    ok(
+      vim.deep_equal(lines, { "data: one", "", "data: two", "", "data: [DONE]" }),
+      "fetch_stream: on_chunk delivered every line, in order, blank lines included: got "
+        .. vim.inspect(lines)
+    )
+
+    stop_server(server)
+  end
+
+  -- fetch_stream: the returned vim.SystemObj can actually cancel an
+  -- in-progress stream -- the concrete answer to the concept's open question
+  -- ("streaming-cancel bei Panel-Schließen"). A drip server holds the
+  -- connection open indefinitely after the first line so the test has a
+  -- window to kill the process before it would ever finish on its own.
+  do
+    local server = assert(uv.new_tcp())
+    assert(server:bind("127.0.0.1", 0))
+    local port = server:getsockname().port
+    server:listen(128, function(listen_err)
+      assert(not listen_err, listen_err)
+      local client = assert(uv.new_tcp())
+      server:accept(client)
+      client:read_start(function(_, _)
+        client:write("HTTP/1.1 200 OK\r\n\r\ndata: first\n")
+        -- No further write and no shutdown: the connection stays open,
+        -- simulating a slow/streaming server, until the test kills curl.
+      end)
+    end)
+
+    local first_chunk_seen, done, done_obj = false, false, nil
+    local process = curl.fetch_stream(("http://127.0.0.1:%d/"):format(port), nil, {
+      on_chunk = function(_line)
+        first_chunk_seen = true
+      end,
+      on_done = function(obj)
+        done, done_obj = true, obj
+      end,
+    })
+
+    vim.wait(2000, function()
+      return first_chunk_seen
+    end, 20)
+    ok(first_chunk_seen, "fetch_stream: first line arrives while the connection is still open")
+
+    process:kill(15)
+    vim.wait(2000, function()
+      return done
+    end, 20)
+
+    ok(done, "fetch_stream: on_done fires once the killed process actually exits")
+    ok(
+      done_obj ~= nil and done_obj.code ~= 0,
+      "fetch_stream: a killed process is not reported as a clean exit"
+    )
+
+    stop_server(server)
+  end
 end
