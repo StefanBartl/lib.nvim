@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 360" font-family="ui-sans-serif, Segoe UI, Roboto, sans-serif">
+  <rect width="720" height="360" rx="10" fill="#f7f6f2"/>
+  <text x="360" y="34" text-anchor="middle" font-size="15" font-weight="700" fill="#4a4640">confirm template — horizontal buttons (h/l · &lt;CR&gt;)</text>
+
+  <!-- faint editor -->
+  <rect x="40" y="56" width="640" height="272" rx="6" fill="#efede7" stroke="#e0ddd3" stroke-width="2"/>
+
+  <!-- confirm float -->
+  <rect x="196" y="120" width="328" height="140" rx="6" fill="#ffffff" stroke="#1f2430" stroke-width="3"/>
+  <!-- question -->
+  <text x="360" y="162" text-anchor="middle" font-size="14" font-weight="600" fill="#4a4640">Delete 3 files?</text>
+
+  <!-- buttons: Yes | No (focused) | Cancel -->
+  <g font-size="12" font-weight="700">
+    <!-- Yes -->
+    <rect x="228" y="196" width="78" height="34" rx="5" fill="#ffffff" stroke="#b8b2a6" stroke-width="2"/>
+    <text x="267" y="218" text-anchor="middle" fill="#6a655c">Yes</text>
+    <!-- No (focused) -->
+    <rect x="321" y="194" width="78" height="38" rx="5" fill="#e0a520" stroke="#b3801a" stroke-width="2"/>
+    <text x="360" y="218" text-anchor="middle" fill="#3a2f10">No</text>
+    <!-- Cancel -->
+    <rect x="414" y="196" width="78" height="34" rx="5" fill="#ffffff" stroke="#b8b2a6" stroke-width="2"/>
+    <text x="453" y="218" text-anchor="middle" fill="#6a655c">Cancel</text>
+  </g>
+
+  <text x="360" y="330" text-anchor="middle" font-size="12" fill="#9a948a">answer_type = "confirm", layout = "buttons" · focused button uses theme accent</text>
+</svg>
