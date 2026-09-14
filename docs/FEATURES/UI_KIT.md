@@ -1,5 +1,10 @@
 # UI kit
 
+> **Migrated to `ui.nvim` (2026-09-14).** Canonical home is now
+> [`ui.nvim`](https://github.com/StefanBartl/ui.nvim) (`require("ui.kit")`).
+> This page describes the original copy, still present here (no shim, not
+> deleted) but no longer receiving new features.
+
 `lib.nvim.ui.kit` — a themed, composable UI toolkit built in layers on top
 of `lib.nvim.window` (`make_scratch`, `nice_quit`) and `lib.nvim.ui.hl`.
 Nothing shells out, so every component is cross-platform. Pick a preset once

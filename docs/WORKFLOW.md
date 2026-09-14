@@ -172,6 +172,13 @@ scan doesn't freeze the editor while it runs.
 
 ## Building a UI: `ui.kit` vs. hand-rolled floats
 
+> **For a new plugin, reach for [`ui.nvim`](https://github.com/StefanBartl/ui.nvim)'s
+> `ui.kit` (`require("ui.kit")`), not this repo's copy.** The kit migrated
+> there on 2026-09-14 and every consumer in this ecosystem now targets it;
+> `lib.nvim.ui.kit` (below) still works but is frozen, no new features land
+> here. Everything in this section applies verbatim, only the require path
+> differs (`lib.nvim.ui.kit` → `ui.kit`).
+
 Don't call `nvim_open_win` directly for a popup, hover panel, or prompt in a
 plugin that already depends on `lib.nvim` — `lib.nvim.ui.kit` gives you a
 themed, already-dismissable float for free, and keeps your plugin's popups
