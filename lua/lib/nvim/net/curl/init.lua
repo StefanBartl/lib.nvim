@@ -107,13 +107,22 @@ end
 ---Escape `value` for a curl config file's quoted-string form.
 ---
 ---Public because a caller that builds its own curl argv needs the same two
----helpers, and a second copy of them is a second thing to get wrong. curl unescapes
----`\\`, `\"`, `\t`, `\n`, `\r` and `\v` there; a raw newline ends the
----option, so a value carrying one cannot be expressed and is rejected below.
+---helpers, and a second copy of them is a second thing to get wrong. curl
+---unescapes `\\`, `\"`, `\t`, `\n`, `\r` and `\v` there; a raw newline (or
+---tab/CR/vertical-tab) ends the option early otherwise, so all six are
+---escaped to curl's own two-character sequences here -- a credential with a
+---trailing newline (a common shape for a key read from a file or `.env`
+---loader) must round-trip intact, not silently truncate the config line.
 ---@param value string
 ---@return string
 function M.config_quote(value)
-  local escaped = value:gsub("\\", "\\\\"):gsub('"', '\\"')
+  local escaped = value
+    :gsub("\\", "\\\\")
+    :gsub('"', '\\"')
+    :gsub("\t", "\\t")
+    :gsub("\n", "\\n")
+    :gsub("\r", "\\r")
+    :gsub("\v", "\\v")
   return '"' .. escaped .. '"'
 end
 
@@ -183,13 +192,35 @@ local function build_argv(url, opts, include_headers, download_dest)
       .. M.config_quote((opts.auth.user or "") .. ":" .. (opts.auth.pass or ""))
   end
 
+  -- Header names are case-insensitive, so a caller setting the same one in
+  -- both `opts.headers` and `opts.secret_headers` (e.g. by mistake, or a
+  -- future provider copy-pasting an existing one) must not have it sent
+  -- twice -- once safely via `-K`, once in plaintext argv via `-H`. The
+  -- explicit `secret_headers` entry always wins; skip it here instead.
+  ---@param key string
+  ---@return boolean
+  local function has_secret_header(key)
+    if not opts.secret_headers then
+      return false
+    end
+    local lower = key:lower()
+    for secret_key in pairs(opts.secret_headers) do
+      if secret_key:lower() == lower then
+        return true
+      end
+    end
+    return false
+  end
+
   for key, value in pairs(opts.headers or {}) do
-    local header = key .. ": " .. value
-    if M.is_secret_header(key) then
-      config[#config + 1] = "header = " .. M.config_quote(header)
-    else
-      argv[#argv + 1] = "-H"
-      argv[#argv + 1] = header
+    if not has_secret_header(key) then
+      local header = key .. ": " .. value
+      if M.is_secret_header(key) then
+        config[#config + 1] = "header = " .. M.config_quote(header)
+      else
+        argv[#argv + 1] = "-H"
+        argv[#argv + 1] = header
+      end
     end
   end
 
@@ -494,6 +525,12 @@ end
 ---the `data: [DONE]` sentinel, or NDJSON decoding are the caller's job, not
 ---this module's (same "bytes in, bytes out" split as `fetch_raw`'s relation
 ---to `fetch_json`, just one layer earlier).
+---
+---Unlike `fetch_json`/`fetch_raw`, `on_done` receives the raw
+---`vim.SystemObj` unconditionally, whether curl exited 0 or not -- there is
+---no built-in ok/err split here. A non-zero `obj.code` (or `obj.stderr`) is
+---the caller's own responsibility to check before treating the accumulated
+---chunks as a real answer.
 ---@param url string
 ---@param opts Lib.Net.Curl.FetchOpts|nil
 ---@param handlers Lib.Net.Curl.StreamHandlers
