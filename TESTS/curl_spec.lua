@@ -584,8 +584,15 @@ return function(H)
     end, 20)
 
     ok(done, "fetch_stream: on_done fires once the killed process actually exits")
+    -- A signal-terminated process is not required to report a non-zero
+    -- `code` -- POSIX libuv commonly reports `code = 0, signal = 15` for
+    -- exactly this case (verified: this is what a real SIGTERM'd process
+    -- reports on Linux CI, vs. `code = 1, signal = 15` observed on Windows).
+    -- Checking `code` alone flagged a clean-looking exit as "not clean" on
+    -- Windows only by accident; either field being nonzero is the real,
+    -- cross-platform signal that the process did not exit on its own.
     ok(
-      done_obj ~= nil and done_obj.code ~= 0,
+      done_obj ~= nil and (done_obj.code ~= 0 or done_obj.signal ~= 0),
       "fetch_stream: a killed process is not reported as a clean exit"
     )
 
