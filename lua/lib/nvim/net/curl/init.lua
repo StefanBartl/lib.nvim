@@ -376,17 +376,24 @@ function M.fetch_raw(url, opts, cb)
   local argv, stdin = build_argv(url, opts, true)
 
   vim.system(argv, { text = true, stdin = stdin, timeout = opts.timeout_ms }, function(obj)
-    if obj.code ~= 0 then
-      local err = (obj.stderr and obj.stderr ~= "") and obj.stderr or ("curl exited " .. obj.code)
-      cb(false, err, obj)
-      return
-    end
-    local response, err = parse_raw_response(obj.stdout)
-    if not response then
-      cb(false, err or UNPARSEABLE, obj)
-      return
-    end
-    cb(true, response, obj)
+    -- vim.system's completion callback runs in a fast event context; a
+    -- caller's `cb` routinely touches the UI (vim.notify, a popup, ...),
+    -- which Neovim's API rejects from there (E5560). fetch_stream already
+    -- schedules its handlers for the same reason -- this tier just hadn't
+    -- caught up.
+    vim.schedule(function()
+      if obj.code ~= 0 then
+        local err = (obj.stderr and obj.stderr ~= "") and obj.stderr or ("curl exited " .. obj.code)
+        cb(false, err, obj)
+        return
+      end
+      local response, err = parse_raw_response(obj.stdout)
+      if not response then
+        cb(false, err or UNPARSEABLE, obj)
+        return
+      end
+      cb(true, response, obj)
+    end)
   end)
 end
 
@@ -431,8 +438,12 @@ function M.fetch_json(url, opts, cb)
   local argv, stdin = build_argv(url, opts)
 
   vim.system(argv, { text = true, stdin = stdin, timeout = opts.timeout_ms }, function(obj)
+    -- See fetch_raw's identical comment: this callback runs in a fast
+    -- event context, and a caller's `cb` routinely touches the UI.
     local ok, data_or_err = decode_result(obj)
-    cb(ok, data_or_err, obj)
+    vim.schedule(function()
+      cb(ok, data_or_err, obj)
+    end)
   end)
 end
 
@@ -472,18 +483,22 @@ function M.download(url, dest_path, opts, cb)
   local argv, stdin = build_argv(url, opts, false, dest_path)
 
   vim.system(argv, { text = true, stdin = stdin, timeout = opts.timeout_ms }, function(obj)
-    if obj.code ~= 0 then
-      remove_partial(dest_path)
-      local err = (obj.stderr and obj.stderr ~= "") and obj.stderr or ("curl exited " .. obj.code)
-      cb(false, err, obj)
-      return
-    end
-    local response, err = parse_raw_response(obj.stdout)
-    if not response then
-      cb(false, err or UNPARSEABLE, obj)
-      return
-    end
-    cb(true, response, obj)
+    -- See fetch_raw's identical comment: this callback runs in a fast
+    -- event context, and a caller's `cb` routinely touches the UI.
+    vim.schedule(function()
+      if obj.code ~= 0 then
+        remove_partial(dest_path)
+        local err = (obj.stderr and obj.stderr ~= "") and obj.stderr or ("curl exited " .. obj.code)
+        cb(false, err, obj)
+        return
+      end
+      local response, err = parse_raw_response(obj.stdout)
+      if not response then
+        cb(false, err or UNPARSEABLE, obj)
+        return
+      end
+      cb(true, response, obj)
+    end)
   end)
 end
 
