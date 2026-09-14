@@ -442,6 +442,67 @@ return function(H)
     stop_server(server)
   end
 
+  -- config_quote: a value with an embedded raw newline must not break the
+  -- `-K` config file's own line structure. Before the fix, `header = "before
+  -- <raw \n> after"` split into a second, bare `after"` line that curl's
+  -- config parser cannot make sense of -- the request itself would fail
+  -- (non-zero exit), not just misdeliver the header.
+  do
+    local port, server = start_capturing_server(table.concat({
+      "HTTP/1.1 200 OK",
+      "",
+      "ok",
+    }, "\r\n"))
+
+    local success = curl.fetch_raw_blocking(("http://127.0.0.1:%d/"):format(port), {
+      secret_headers = { ["x-api-key"] = "before\nafter" },
+    })
+    vim.wait(200, function()
+      return false
+    end, 10)
+
+    ok(
+      success,
+      "config_quote: a secret header value with an embedded newline no longer breaks the curl config"
+    )
+
+    stop_server(server)
+  end
+
+  -- opts.headers and opts.secret_headers sharing a header name: the secret
+  -- path wins and the header reaches the wire exactly once, not twice (once
+  -- safely via -K, once in plaintext argv via -H).
+  do
+    local port, server, captured = start_capturing_server(table.concat({
+      "HTTP/1.1 200 OK",
+      "",
+      "ok",
+    }, "\r\n"))
+
+    local secret = "dup_" .. tostring(os.time())
+    local success = curl.fetch_raw_blocking(("http://127.0.0.1:%d/"):format(port), {
+      headers = { ["X-Api-Key"] = secret },
+      secret_headers = { ["x-api-key"] = secret },
+    })
+    vim.wait(200, function()
+      return false
+    end, 10)
+
+    ok(success, "secret_headers/opts.headers dedup: request succeeds")
+    local count = 0
+    if captured.data then
+      local _, n = captured.data:gsub("[Xx]%-[Aa]pi%-[Kk]ey: " .. secret, "")
+      count = n
+    end
+    eq(
+      count,
+      1,
+      "secret_headers/opts.headers dedup: the shared header name reaches the wire exactly once"
+    )
+
+    stop_server(server)
+  end
+
   -- fetch_stream: on_chunk fires once per line, in order, before on_done.
   do
     local port, server = start_server(table.concat({
