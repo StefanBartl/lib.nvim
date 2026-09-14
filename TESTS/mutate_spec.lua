@@ -154,6 +154,26 @@ return function(H)
   local mkdirp_again_ok = mutate.mkdir_p(nested)
   eq(mkdirp_again_ok, true, "mkdir_p: re-creating an already-existing directory is still ok")
 
+  -- ------------------------------------------------------------------- rmdir
+
+  local empty_dir = dir .. "/to-remove"
+  vim.fn.mkdir(empty_dir, "p")
+  local rmdir_ok = mutate.rmdir(empty_dir)
+  eq(rmdir_ok, true, "rmdir: removes an existing empty directory")
+  eq(vim.fn.isdirectory(empty_dir), 0, "rmdir: the directory is actually gone")
+
+  local rmdir_missing_ok, rmdir_missing_err = mutate.rmdir(dir .. "/does-not-exist-dir")
+  eq(rmdir_missing_ok, false, "rmdir: a missing path fails")
+  ok(rmdir_missing_err ~= nil, "rmdir: a missing path reports an error")
+
+  local non_empty_dir = dir .. "/not-empty"
+  vim.fn.mkdir(non_empty_dir, "p")
+  local nef = assert(io.open(non_empty_dir .. "/x.txt", "w"))
+  nef:write("x")
+  nef:close()
+  local rmdir_nonempty_ok = mutate.rmdir(non_empty_dir)
+  eq(rmdir_nonempty_ok, false, "rmdir: a non-empty directory fails (matches plain rmdir semantics)")
+
   -- ------------------------------------------------------------- symlink/hardlink
   --
   -- Windows symlink creation needs either Developer Mode or an elevated

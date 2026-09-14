@@ -56,6 +56,10 @@ end
 ---@return Lib.Checkpoint|nil checkpoint
 ---@return string|nil err
 function M.create(paths, opts)
+  if type(paths) ~= "table" then
+    return nil, "checkpoint: paths must be a table"
+  end
+
   local id = token.gen_token(12)
   local dir = root_dir(opts) .. "/" .. id
 
@@ -71,6 +75,10 @@ function M.create(paths, opts)
       local backup = dir .. "/" .. i .. ".bak"
       local ok_copy, err_copy = mutate.copy_file(path, backup)
       if not ok_copy then
+        -- Don't leave a half-built checkpoint (already-copied backups, the
+        -- directory itself) behind on disk when create() as a whole fails --
+        -- the caller only gets `nil, err` back, no handle to clean it up.
+        vim.fn.delete(dir, "rf")
         return nil, "checkpoint: failed to back up '" .. path .. "': " .. tostring(err_copy)
       end
       entries[i] = { path = path, backup = backup, existed = true, size = stat.size }
@@ -118,10 +126,36 @@ end
 
 ---Delete `checkpoint`'s backup files. Call this once the guarded operation
 ---either succeeded (backups no longer needed) or was already restored.
+---
+---Idempotent: discarding an already-discarded (or never-materialized)
+---checkpoint is a no-op success, not a failure -- the desired end state (no
+---backup directory) already holds. Goes through `cross.fs.mutate` for every
+---file/directory removal, same as `M.create`/`M.restore`, so a backup file
+---transiently locked by an AV scanner or indexer (plausible here: these
+---files were just written moments earlier) gets the same retry treatment as
+---everywhere else in this library, not a bare `vim.fn.delete`.
 ---@param checkpoint Lib.Checkpoint
 ---@return boolean ok
 function M.discard(checkpoint)
-  return vim.fn.delete(checkpoint.dir, "rf") == 0
+  if uv.fs_stat(checkpoint.dir) == nil then
+    return true
+  end
+
+  local all_ok = true
+  for _, entry in ipairs(checkpoint.entries) do
+    if entry.backup and uv.fs_stat(entry.backup) ~= nil then
+      if not mutate.delete_file(entry.backup) then
+        all_ok = false
+      end
+    end
+  end
+
+  if not all_ok then
+    return false
+  end
+
+  local ok = mutate.rmdir(checkpoint.dir)
+  return ok or uv.fs_stat(checkpoint.dir) == nil
 end
 
 ---@type Lib.Checkpoint.Module

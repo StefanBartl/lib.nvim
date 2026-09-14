@@ -45,9 +45,9 @@ creation along with everything else.
 
 | Function | Meaning |
 | --- | --- |
-| `checkpoint.create(paths, opts?)` | Snapshot every existing file in `paths`; returns `checkpoint\|nil, err` |
+| `checkpoint.create(paths, opts?)` | Snapshot every existing file in `paths`; returns `checkpoint\|nil, err`. On partial failure (one file fails to back up), any already-copied backups and the checkpoint directory are cleaned up before returning — a failed `create()` leaves nothing behind |
 | `checkpoint.restore(checkpoint)` | Copy every backed-up file back verbatim, delete any file that didn't exist before; returns `ok, errors[]` (best-effort — one failure doesn't stop the rest) |
-| `checkpoint.discard(checkpoint)` | Delete the checkpoint's backup directory; call once the guarded operation succeeded or was already restored |
+| `checkpoint.discard(checkpoint)` | Delete the checkpoint's backup directory; call once the guarded operation succeeded or was already restored. Idempotent — discarding an already-discarded checkpoint returns `true` |
 
 `opts` for `create`:
 
@@ -63,6 +63,8 @@ creation along with everything else.
 - **Restore is best-effort.** A locked or since-deleted file failing to
   restore does not stop the rest of the checkpoint from being applied;
   check the returned `errors` list.
-- **Built on `lib.nvim.cross.fs.mutate`**, so copy/delete operations get
-  the same Windows sharing-violation retry behavior as the rest of the
-  library.
+- **Built on `lib.nvim.cross.fs.mutate`** end to end — `create`, `restore`
+  *and* `discard` all route their copy/delete/rmdir calls through it, so a
+  backup file transiently locked by an AV scanner or indexer (plausible
+  right after `create` just wrote it) gets the same retry behavior as
+  everywhere else in the library.

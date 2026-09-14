@@ -101,4 +101,24 @@ return function(H)
     local list = range.parse("1-3", { min = 1, max = 3 })
     eq(joined(list), "1,2,3", "parse: a spec fully within [min, max] passes")
   end
+
+  -- Regression: bounds must be checked on a range's endpoints BEFORE
+  -- expanding it, not after building the full list. A huge out-of-bounds
+  -- span used to fully expand into a multi-million-entry table first --
+  -- multiple seconds of blocked main loop -- before the bounds check ever
+  -- ran, defeating the exact protection opts.max exists to provide.
+  do
+    local start = vim.uv.hrtime()
+    local list, err = range.parse("1-50000000", { max = 50 })
+    local elapsed_ms = (vim.uv.hrtime() - start) / 1e6
+
+    eq(list, nil, "parse: an out-of-bounds huge range is still rejected")
+    ok(err ~= nil, "parse: ...with an error message")
+    ok(
+      elapsed_ms < 1000,
+      ("parse: a huge out-of-bounds range fails fast (bounds checked before expansion), took %dms"):format(
+        elapsed_ms
+      )
+    )
+  end
 end
