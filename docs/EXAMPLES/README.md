@@ -37,6 +37,10 @@ that is meant to run headless at require-time).
 
 ## `lib.nvim.ui.kit`
 
+> Migrated to [`ui.nvim`](https://github.com/StefanBartl/ui.nvim) on
+> 2026-09-14 (`require("ui.kit")`) — these examples still run against this
+> repo's own (frozen) copy, and apply unchanged to `ui.nvim`'s copy too.
+
 - [kit-note.lua](kit-note.lua) — centered title + message float, optional
   auto-dismiss timeout.
 - [kit-viewer.lua](kit-viewer.lua) — read-only info panel, auto-sized,

@@ -1,5 +1,13 @@
 # `lib.nvim.ui.kit` — User Guide
 
+> **Migrated to `ui.nvim` (2026-09-14).** The kit's canonical home is now
+> [`ui.nvim`](https://github.com/StefanBartl/ui.nvim)
+> (`require("ui.kit")`) — this guide describes the original copy that still
+> lives in this repository (unremoved, no shim, still functional) but no
+> longer receives new features. Everything below still applies verbatim to
+> `ui.nvim`'s copy; only the require path changes (`lib.nvim.ui.kit` →
+> `ui.kit`).
+
 A themed, composable UI toolkit for Neovim plugins. Pick a preset once and every
 popup is visually coordinated; or override colors/borders per call. Everything
 is cross-platform (pure `nvim_open_win` + highlights).

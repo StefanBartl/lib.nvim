@@ -1,5 +1,15 @@
 # `lib.nvim.contextmenu`
 
+> **Migrated to `ui.nvim` (2026-09-14).** This module's canonical home is now
+> [`ui.nvim`](https://github.com/StefanBartl/ui.nvim) (`lua/ui/contextmenu/`,
+> `require("ui.contextmenu")`) — every one of this ecosystem's ~31 consumer
+> plugins was moved over (see `ui.nvim`'s own `PLAN-ui-kit-migration.md` for
+> the full history). No shim was built and no code here was deleted or
+> changed, so this copy still works standalone, but it no longer receives
+> new features — those land in `ui.nvim` only. Do not build new callers
+> against `lib.nvim.contextmenu`; require `ui.contextmenu` from `ui.nvim`
+> instead.
+
 Building blocks for [nvzone/menu](https://github.com/nvzone/menu)-shaped
 context-menu entries: a self-gating item builder (`entry`/`group`/`submenu`),
 a renderer (`open`), and a mouse-trigger binder (`bind_buffer`).

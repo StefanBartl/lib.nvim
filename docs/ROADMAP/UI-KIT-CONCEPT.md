@@ -1,12 +1,21 @@
 # Concept: `lib.nvim.ui.kit` — a themed, composable UI toolkit
 
-> **Status: implemented.** Shipped as `lib.nvim.ui.kit`
+> **Status: implemented, then migrated.** Shipped as `lib.nvim.ui.kit`
 > (`lua/lib/nvim/ui/kit/`) — see [§13](#13-phased-roadmap) for the
 > phase-by-phase status (all 11 originally-scoped-plus-follow-on phases are
 > done). Docs: `lua/lib/nvim/ui/kit/README.md`, `:h lib.nvim-kit`. Tests:
 > `docs/TESTS/ui_kit_spec.lua`. The line below ("no code yet") was accurate
 > when this was written and is now stale — kept here, not corrected, because
 > it's an honest record of where the module started.
+>
+> **2026-09-14: moved to `ui.nvim`.** All ~31 consumer plugins in this
+> ecosystem were migrated from `lib.nvim.ui.kit` to `ui.nvim`'s own copy
+> (`require("ui.kit")`) — see `ui.nvim`'s `PLAN-ui-kit-migration.md`. No
+> shim, no deletion here: this copy remains and still works, but is no
+> longer where new kit work happens. This document's section numbers
+> (`§7`, `§9`, `§10`, `§13a`, `§13b`, …) are still referenced by name from
+> `ui.nvim`'s copy of the source, so it stays here rather than moving with
+> the code.
 >
 > **This document is a historical design record, not open work.** It stays
 > (rather than being deleted once implemented, unlike some other concept
