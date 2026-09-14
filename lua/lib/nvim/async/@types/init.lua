@@ -12,6 +12,8 @@
 ---@field wrap fun(fn: function, argc: integer): fun(...): ... Turn a callback-style function (callback last, at position `argc`) into an awaitable one.
 ---@field Semaphore Lib.Async.SemaphoreClass
 ---@field Condvar Lib.Async.CondvarClass
+---@field LatestWins Lib.Async.LatestWinsClass
+---@field latest_wins fun(): Lib.Async.LatestWins Shorthand for `LatestWins.new()`.
 
 ---@class Lib.Async.SemaphoreClass
 ---@field new fun(permits: integer): Lib.Async.Semaphore
@@ -32,5 +34,16 @@
 ---@field wait fun(self: Lib.Async.Condvar) Suspend until notified.
 ---@field notify_one fun(self: Lib.Async.Condvar) Wake the longest-waiting coroutine, if any.
 ---@field notify_all fun(self: Lib.Async.Condvar) Wake every waiting coroutine.
+
+---@class Lib.Async.LatestWinsClass
+---@field new fun(): Lib.Async.LatestWins
+
+---"Newest request wins" token gate instance. Not tied to `M.run`; usable
+---around any callback-based async call.
+---@class Lib.Async.LatestWins
+---@field token integer The most recently minted token.
+---@field begin fun(self: Lib.Async.LatestWins): integer Mint a new token, superseding the previous one.
+---@field is_current fun(self: Lib.Async.LatestWins, token: integer): boolean Whether `token` is still the newest one minted.
+---@field if_current fun(self: Lib.Async.LatestWins, token: integer, fn: fun(...), ...) Run `fn` only if `token` is still current.
 
 return {}

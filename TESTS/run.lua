@@ -90,6 +90,10 @@ local specs = {
   "is_subpath_spec.lua",
   "normkey_spec.lua",
   "globbable_spec.lua",
+  "vregex_spec.lua",
+  "range_spec.lua",
+  "apply_edits_spec.lua",
+  "checkpoint_spec.lua",
 }
 
 --- Straight to stdout rather than through `print`.
