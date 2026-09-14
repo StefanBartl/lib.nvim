@@ -143,9 +143,7 @@ function M.notify_check_all()
   end
 
   table.sort(lines)
-  notify.error(
-    ("%d of %d route(s) failed:\n%s"):format(failed, total, table.concat(lines, "\n"))
-  )
+  notify.error(("%d of %d route(s) failed:\n%s"):format(failed, total, table.concat(lines, "\n")))
   return false
 end
 

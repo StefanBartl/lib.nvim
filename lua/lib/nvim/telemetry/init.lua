@@ -341,8 +341,8 @@ function M.new(opts)
   ---@param container table
   ---@param field string
   ---@param key string
-  ---@param opts Lib.Telemetry.WrapOpts
-  local function add_target(container, field, key, opts)
+  ---@param wrap_opts Lib.Telemetry.WrapOpts
+  local function add_target(container, field, key, wrap_opts)
     for _, tgt in ipairs(targets) do
       if tgt.container == container and tgt.field == field then
         return
@@ -353,10 +353,10 @@ function M.new(opts)
       field = field,
       key = key,
       wants = {
-        args = opts.profile_args or false,
-        time = opts.time or false,
-        errors = opts.errors or false,
-        outermost_only = opts.outermost_only or false,
+        args = wrap_opts.profile_args or false,
+        time = wrap_opts.time or false,
+        errors = wrap_opts.errors or false,
+        outermost_only = wrap_opts.outermost_only or false,
       },
     }
     if running then
@@ -748,10 +748,8 @@ function M.new(opts)
   -- stop re-clearing for a second instance with the same namespace (a
   -- hot-reloaded plugin), leaving the previous instance's callbacks alongside
   -- the new ones instead of replacing them.
-  local group = vim.api.nvim_create_augroup(
-    "lib_telemetry_" .. store.sanitize(namespace),
-    { clear = true }
-  )
+  local group =
+    vim.api.nvim_create_augroup("lib_telemetry_" .. store.sanitize(namespace), { clear = true })
 
   autocmd.create("VimLeavePre", function()
     -- Flush is settled; restoring the wrappers is not worth doing at shutdown,
