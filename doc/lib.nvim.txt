@@ -143,6 +143,8 @@ Editor-independent Lua helpers. No `vim` API; usable/testable outside Neovim.
     lib.lua.class       prototype OOP: new/extend/include, pure Lua
     lib.lua.context_manager  try/finally as one composable primitive (with);
                         built on lib.lua.error.safe_call
+    lib.lua.range       parse "1-3,5,7"-style range specs into a sorted,
+                        deduplicated integer[] (page/line/commit ranges)
 
 ------------------------------------------------------------------------------
 lib.nvim                                                    *lib.nvim-lib.nvim*
@@ -159,7 +161,9 @@ Neovim adapters.
                            wrapper
     lib.nvim.buffer        buffer helpers (insert_lines, is_markdown_buf,
                            open_background, …); buffer.context: changedtick-
-                           cached buffer metadata accessor
+                           cached buffer metadata accessor; buffer.apply_edits:
+                           bottom-up positional text edits with an optional
+                           stale-match check per edit
     lib.nvim.buf_win_tab   buffer / window / tab utilities
     lib.nvim.window        overlay/float helpers (make_scratch, nice_quit, …);
                            window.context: same-event-cached window metadata
@@ -236,7 +240,9 @@ Neovim adapters.
                            group/submenu, self-gating) + mouse-trigger binder
                            (bind_buffer, soft dependency) |lib.nvim-contextmenu|
     lib.nvim.async         coroutine async/await over libuv (await/run/wrap),
-                           Semaphore + Condvar |lib.nvim-async|
+                           Semaphore + Condvar + LatestWins (a "newest
+                           request wins" token gate for overlapping async
+                           work) |lib.nvim-async|
     lib.nvim.count         count-prefix helpers for keymaps (count1 vs count
                            vs "no count" disambiguation)
     lib.nvim.debounce      generic debounce primitive: new(fn, ms) returns a
@@ -258,6 +264,14 @@ Neovim adapters.
                            buffer / closed window)
     lib.nvim.token         ephemeral session-nonce / token generator (NOT
                            cryptographically secure)
+    lib.nvim.vregex        build \V-literal Vim-regex patterns from
+                           arbitrary text (literal/escape); prevents
+                           regex-injection when user/arbitrary text is
+                           dropped into a search or :s pattern
+    lib.nvim.checkpoint    snapshot a set of files before a destructive
+                           multi-file operation (create/restore/discard),
+                           byte-exact restore via fs_copyfile, built on
+                           cross.fs.mutate
 
 ==============================================================================
 5. CONFIGURATION                                              *lib.nvim-config*

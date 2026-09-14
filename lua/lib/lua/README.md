@@ -40,6 +40,7 @@ local tables = require("lib.lua.tables")
 | `lib.lua.lazy` | see [`lazy/README.md`](lazy/README.md) |
 | `lib.lua.memo` | see [`memo/README.md`](memo/README.md) |
 | `lib.lua.numeral` | see [`numeral/README.md`](numeral/README.md) |
+| `lib.lua.range` | see [`range/README.md`](range/README.md) |
 | `lib.lua.uuid` | see [`uuid/README.md`](uuid/README.md) |
 | `lib.lua.yaml` | see [`yaml/README.md`](yaml/README.md) |
 | `lib.lua.time` | time helpers (no README yet) |

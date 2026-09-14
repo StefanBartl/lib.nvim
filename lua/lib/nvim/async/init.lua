@@ -1,6 +1,7 @@
 ---@module 'lib.nvim.async'
 --- Minimal coroutine async/await over libuv, plus the two control
---- primitives that need it (`Semaphore`, `Condvar`).
+--- primitives that need it (`Semaphore`, `Condvar`), plus `LatestWins`, a
+--- "newest request wins" token gate for overlapping async work.
 ---
 --- The whole thing rests on one protocol: `await(starter)` yields the
 --- `starter` function, and the driver in `run()` calls `starter(resume)`.
@@ -219,6 +220,58 @@ function Condvar:notify_all()
 end
 
 M.Condvar = Condvar
+
+-- =========================================================
+-- Supersession
+-- =========================================================
+
+--- "Newest request wins" token gate. Recurs everywhere a caller kicks off
+--- overlapping async work (picker preview, LSP request, search-as-you-type)
+--- and only the most recent one's result should land — a stale callback
+--- firing after a newer request started must not overwrite it.
+---
+--- Not tied to `M.run`/coroutines: `:begin()`/`:is_current()` are plain
+--- synchronous calls, usable around any callback-based async call, not just
+--- `await`-driven ones.
+local LatestWins = class.new("LatestWins")
+
+function LatestWins:init()
+  self.token = 0
+end
+
+--- Mint a new token, superseding whichever one was handed out before it.
+---@return integer token
+function LatestWins:begin()
+  self.token = self.token + 1
+  return self.token
+end
+
+--- Whether `token` is still the newest one `begin()` handed out — i.e.
+--- nothing has superseded it since.
+---@param token integer
+---@return boolean
+function LatestWins:is_current(token)
+  return token == self.token
+end
+
+--- Run `fn` only if `token` is still current; a no-op otherwise. Convenience
+--- for the common "apply the result, but only if not superseded" shape.
+---@param token integer
+---@param fn fun(...)
+---@param ... any Forwarded to `fn`
+function LatestWins:if_current(token, fn, ...)
+  if self:is_current(token) then
+    fn(...)
+  end
+end
+
+M.LatestWins = LatestWins
+
+--- Shorthand for `LatestWins.new()`.
+---@return Lib.Async.LatestWins
+function M.latest_wins()
+  return LatestWins.new()
+end
 
 ---@type Lib.Async
 return M

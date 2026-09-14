@@ -325,4 +325,45 @@ return function(H)
     cv:notify_all()
     ok(true, "Condvar: notifying an empty waiter list does not raise")
   end
+
+  -- ------------------------------------------------------------ LatestWins
+
+  do
+    local gate = async.latest_wins()
+    local t1 = gate:begin()
+    eq(gate:is_current(t1), true, "LatestWins: the first token is current right after begin()")
+
+    local t2 = gate:begin()
+    eq(gate:is_current(t1), false, "LatestWins: a new begin() supersedes the previous token")
+    eq(gate:is_current(t2), true, "LatestWins: the newest token is current")
+    ok(t1 ~= t2, "LatestWins: successive begin() calls mint distinct tokens")
+  end
+
+  -- The classic use case: two overlapping "requests", only the newer one's
+  -- callback should actually apply its result.
+  do
+    local gate = async.LatestWins.new()
+    local applied = {}
+
+    local function fake_request(name, token)
+      -- Simulates an async callback landing later, in issue order.
+      gate:if_current(token, function()
+        applied[#applied + 1] = name
+      end)
+    end
+
+    local t1 = gate:begin()
+    local t2 = gate:begin() -- supersedes t1 before t1's "response" arrives
+
+    fake_request("first", t1)
+    fake_request("second", t2)
+
+    eq(#applied, 1, "LatestWins: only the current token's callback actually applies")
+    eq(applied[1], "second", "LatestWins: the newest request's result is the one that lands")
+  end
+
+  do
+    local gate = async.latest_wins()
+    ok(not gate:is_current(1), "LatestWins: a fresh gate has no current token yet (starts at 0)")
+  end
 end
