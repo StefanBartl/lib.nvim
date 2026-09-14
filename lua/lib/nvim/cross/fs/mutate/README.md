@@ -78,3 +78,7 @@ long for the common case or too short for the rare one.
 - `mkdir_p` goes through `retry` for a uniform signature only. `vim.fn.mkdir`
   raises a Vim error (`Vim:E739: …`) carrying no libuv code, so the transient
   check never matches and it does not in practice retry.
+- `rmdir(path, opts?)` removes an *empty* directory, with the same
+  Windows-retry behavior as every other primitive here — the counterpart to
+  `mkdir_p` for callers (e.g. `lib.nvim.checkpoint`) that need to clean up a
+  directory they created, not just the files in it.

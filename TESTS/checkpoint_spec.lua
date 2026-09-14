@@ -1,5 +1,7 @@
 -- TESTS/checkpoint_spec.lua — lib.nvim.checkpoint
 
+---@diagnostic disable: need-check-nil
+
 return function(H)
   local eq, ok = H.eq, H.ok
 
@@ -88,6 +90,80 @@ return function(H)
   ---@cast cp2 -nil
   ok(cp2.id ~= cp.id, "create: successive checkpoints get distinct ids")
   checkpoint.discard(cp2)
+
+  -- --------------------------------------------------- discard: idempotent
+
+  local existing_c = dir .. "/c.txt"
+  write_file(existing_c, "hello c")
+  local cp3 = checkpoint.create({ existing_c }, { dir = checkpoint_root })
+  ok(cp3 ~= nil, "create: a third checkpoint is created fine")
+  ---@cast cp3 -nil
+
+  eq(checkpoint.discard(cp3), true, "discard: first call succeeds")
+  eq(uv.fs_stat(cp3.dir), nil, "discard: the backup directory is gone")
+  eq(
+    checkpoint.discard(cp3),
+    true,
+    "discard: a second call on an already-discarded checkpoint is a no-op success, not a failure"
+  )
+
+  -- ------------------------------------------------- create: cleans up on failure
+  --
+  -- If a later path in the list fails to back up, create() must not leave
+  -- the partially-built checkpoint (already-copied backups, the directory
+  -- itself) behind on disk -- the caller only gets `nil, err`, with no
+  -- handle to clean it up otherwise.
+
+  do
+    local function list_entries(d)
+      local entries = {}
+      local handle = uv.fs_scandir(d)
+      if handle then
+        while true do
+          local name = uv.fs_scandir_next(handle)
+          if not name then
+            break
+          end
+          entries[#entries + 1] = name
+        end
+      end
+      return entries
+    end
+
+    local before = list_entries(checkpoint_root)
+
+    local existing_d = dir .. "/d.txt"
+    write_file(existing_d, "hello d")
+    -- A directory passes fs_stat() (so create() treats it as "existing" and
+    -- attempts to back it up) but fs_copyfile() on a directory fails --
+    -- deterministic, portable way to force a mid-loop failure.
+    local dir_as_path = dir .. "/d_is_a_dir"
+    vim.fn.mkdir(dir_as_path, "p")
+
+    local failed_cp, failed_err = checkpoint.create(
+      { existing_d, dir_as_path },
+      { dir = checkpoint_root }
+    )
+    eq(failed_cp, nil, "create: reports nil on a mid-loop backup failure")
+    ok(failed_err ~= nil, "create: ...with an error message")
+
+    local after = list_entries(checkpoint_root)
+    eq(
+      #after,
+      #before,
+      "create: no orphaned checkpoint directory survives a failed create() (entry count under checkpoint_root is unchanged)"
+    )
+  end
+
+  -- ------------------------------------------------- create: input validation
+
+  do
+    ---@diagnostic disable-next-line: param-type-mismatch
+    local pcall_ok, cp_result, err_result = pcall(checkpoint.create, nil)
+    ok(pcall_ok, "create: a non-table paths argument does not raise")
+    eq(cp_result, nil, "create: a non-table paths argument returns nil (not a checkpoint)")
+    ok(err_result ~= nil, "create: ...with an error message")
+  end
 
   ok(true, "checkpoint spec completed")
 end

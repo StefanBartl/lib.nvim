@@ -153,6 +153,17 @@ function M.mkdir_p(path, opts)
   end, opts)
 end
 
+---Remove an empty directory.
+---@param path string
+---@param opts? Lib.Cross.Fs.Mutate.RetryOpts
+---@return boolean ok
+---@return string|nil err
+function M.rmdir(path, opts)
+  return M.retry(function()
+    return uv().fs_rmdir(path)
+  end, opts)
+end
+
 ---Create a symbolic link at `link_path` pointing to `target`. `target` is
 ---stored verbatim (relative or absolute) — resolve it to an absolute path
 ---before calling this if the link must not depend on `link_path`'s location.

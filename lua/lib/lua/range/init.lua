@@ -36,24 +36,55 @@ function M.parse(spec, opts)
     return nil, "range: empty spec"
   end
 
+  -- Checked on each range's two endpoints *before* expanding it (not after,
+  -- against the finished list): since a range is contiguous, both endpoints
+  -- within [min, max] guarantees every value in between is too. Checking
+  -- post-expansion let an out-of-bounds range (e.g. "1-50000000" against
+  -- max=50) fully expand into a multi-million-entry table -- multiple
+  -- seconds of blocked main loop -- before the bounds check ever ran,
+  -- defeating the exact protection opts.min/opts.max exist to provide.
+  ---@param n integer
+  ---@return string|nil err
+  local function check_bounds(n)
+    if opts.min and n < opts.min then
+      return "range: " .. n .. " is below min " .. opts.min
+    end
+    if opts.max and n > opts.max then
+      return "range: " .. n .. " is above max " .. opts.max
+    end
+    return nil
+  end
+
   local set = {}
   for token in (trimmed .. ","):gmatch("([^,]*),") do
     if token ~= "" then
-      local a, b = token:match("^(%d+)%-(%d+)$")
-      if a then
-        a, b = tonumber(a), tonumber(b)
+      local a_str, b_str = token:match("^(%d+)%-(%d+)$")
+      if a_str then
+        local a, b = tonumber(a_str), tonumber(b_str)
+        ---@cast a integer
+        ---@cast b integer
         if a > b then
           a, b = b, a
+        end
+        local err = check_bounds(a) or check_bounds(b)
+        if err then
+          return nil, err
         end
         for n = a, b do
           set[n] = true
         end
       else
-        local n = token:match("^(%d+)$")
-        if not n then
+        local n_str = token:match("^(%d+)$")
+        if not n_str then
           return nil, "range: invalid token '" .. token .. "'"
         end
-        set[tonumber(n)] = true
+        local n = tonumber(n_str)
+        ---@cast n integer
+        local err = check_bounds(n)
+        if err then
+          return nil, err
+        end
+        set[n] = true
       end
     end
   end
@@ -63,17 +94,6 @@ function M.parse(spec, opts)
     list[#list + 1] = n
   end
   table.sort(list)
-
-  if opts.min or opts.max then
-    for _, n in ipairs(list) do
-      if opts.min and n < opts.min then
-        return nil, "range: " .. n .. " is below min " .. opts.min
-      end
-      if opts.max and n > opts.max then
-        return nil, "range: " .. n .. " is above max " .. opts.max
-      end
-    end
-  end
 
   return list, nil
 end
