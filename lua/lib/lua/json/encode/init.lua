@@ -15,6 +15,8 @@
 ---   * numbers        -> integers without trailing ".0"; NaN/Inf are an error
 ---   * booleans, nil  -> true/false/null (nil only representable as a value
 ---                       inside nothing — top-level nil encodes to "null")
+---   * lib.lua.null.NULL -> "null" (the shared sentinel for an explicit null
+---                       *inside* a table, where real Lua nil cannot live)
 ---   * tables         -> contiguous 1..n integer keys => JSON array,
 ---                       otherwise JSON object; keys are stringified
 ---                       (string/number keys only) and sorted by default for
@@ -24,6 +26,8 @@
 ---   * cycles, functions, userdata, threads -> nil + error message
 ---
 --- Errors are reported as `nil, err` — the encoder never throws.
+
+local null = require("lib.lua.null")
 
 local M = {}
 
@@ -113,9 +117,16 @@ end
 ---@return string|nil encoded
 ---@return string|nil err
 local function encode_value(value, opts, indent, level, seen)
+  if null.is_null(value) then
+    return "null", nil
+  end
+
   local t = type(value)
 
   if t == "nil" then
+    -- Unreachable through a table traversal (a table key mapped to real Lua
+    -- `nil` isn't a key at all -- see `lib.lua.null`), kept for a direct
+    -- top-level `M.encode(nil)` call.
     return "null", nil
   elseif t == "boolean" then
     return value and "true" or "false", nil

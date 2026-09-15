@@ -398,6 +398,27 @@ return function(H)
   eq(encoded, '{"a":1}', "nvim.json.encode: delegates to lib.lua.json.encode")
   eq(encode_err, nil, "nvim.json.encode: no error on encodable input")
 
+  -- nvim.json.decode normalizes vim.json.decode's own vim.NIL into the
+  -- shared lib.lua.null.NULL sentinel, so a caller never has to know
+  -- vim.NIL exists -- and lib.lua.json.encode can round-trip it back to the
+  -- JSON literal "null" without erroring on an unrecognized userdata value
+  -- (the bug this normalization exists to fix: encoding a decoded null used
+  -- to fail with "cannot encode value of type 'userdata'").
+  local null = require("lib.lua.null")
+  local null_decoded = nvim_json.decode('{"a":null,"list":[1,null,3]}')
+  ok(null.is_null(null_decoded.a), "nvim.json.decode: JSON null normalizes to lib.lua.null.NULL")
+  ok(
+    null.is_null(null_decoded.list[2]),
+    "nvim.json.decode: null normalizes recursively inside nested arrays too"
+  )
+  local null_encoded, null_encode_err = nvim_json.encode(null_decoded)
+  eq(null_encode_err, nil, "nvim.json.encode: no longer errors on a decoded null")
+  eq(
+    null_encoded,
+    '{"a":null,"list":[1,null,3]}',
+    "nvim.json.encode: a decoded null round-trips back to the JSON literal null"
+  )
+
   local Path = require("lib.nvim.fs.path.object")
   local path_dir = tmp .. "/path_obj"
   vim.fn.mkdir(path_dir, "p")

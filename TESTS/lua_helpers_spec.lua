@@ -107,6 +107,81 @@ return function(H)
   ok(nested ~= nil and nested.root ~= nil, "yaml: indentation nesting")
   eq(nested.root.child, 1, "yaml: nested value")
 
+  -- yaml.encode -- checked against simple_parse, not just eyeballed: every
+  -- case below is round-tripped back through the decoder.
+  local yaml_null = require("lib.lua.null")
+
+  local simple_map = { name = "Ana", count = 3, active = true }
+  local simple_encoded = yaml.encode(simple_map)
+  ok(simple_encoded ~= nil, "yaml.encode: no error on a flat map")
+  local simple_roundtrip = yaml.simple_parse(simple_encoded)
+  eq(simple_roundtrip.name, "Ana", "yaml.encode round-trip: bare string value")
+  eq(simple_roundtrip.count, 3, "yaml.encode round-trip: number value")
+  eq(simple_roundtrip.active, true, "yaml.encode round-trip: boolean value")
+
+  local nested_value = { user = { id = 1, tags = { "a", "b" } }, level = "error" }
+  local nested_encoded = yaml.encode(nested_value)
+  local nested_roundtrip = yaml.simple_parse(nested_encoded)
+  eq(nested_roundtrip.level, "error", "yaml.encode round-trip: sibling of a nested map")
+  eq(nested_roundtrip.user.id, 1, "yaml.encode round-trip: nested map value")
+  eq(nested_roundtrip.user.tags[1], "a", "yaml.encode round-trip: nested list value")
+  eq(nested_roundtrip.user.tags[2], "b", "yaml.encode round-trip: nested list value (2nd)")
+
+  -- A list of multi-key maps needs the bare-"-"-plus-block form (simple_parse's
+  -- own documented shorthand limit: "- a: 1" only reads ONE key per line).
+  local list_of_maps = { records = { { a = 1, b = 2 }, { a = 3, b = 4 } } }
+  local list_encoded = yaml.encode(list_of_maps)
+  local list_roundtrip = yaml.simple_parse(list_encoded)
+  eq(list_roundtrip.records[1].a, 1, "yaml.encode: multi-key list item, first record field a")
+  eq(list_roundtrip.records[1].b, 2, "yaml.encode: multi-key list item, first record field b")
+  eq(list_roundtrip.records[2].a, 3, "yaml.encode: multi-key list item, second record field a")
+
+  -- Strings that would decode differently bare must be quoted.
+  local quoting_cases = { yes = "true", num = "42", tilde = "~", colon = "a: b" }
+  local quoting_encoded = yaml.encode(quoting_cases)
+  local quoting_roundtrip = yaml.simple_parse(quoting_encoded)
+  eq(
+    quoting_roundtrip.yes,
+    "true",
+    'yaml.encode: the string "true" survives as a string, not a boolean'
+  )
+  eq(quoting_roundtrip.num, "42", 'yaml.encode: the string "42" survives as a string, not a number')
+  eq(quoting_roundtrip.tilde, "~", 'yaml.encode: the string "~" survives as a string, not null')
+  eq(
+    quoting_roundtrip.colon,
+    "a: b",
+    "yaml.encode: a string containing ': ' is quoted so it isn't split"
+  )
+
+  -- The shared null sentinel round-trips to "key omitted" -- simple_parse's
+  -- own documented null-as-absence design, not a new asymmetry.
+  local null_encoded = yaml.encode({ a = 1, b = yaml_null.NULL })
+  ok(
+    null_encoded:find("b: null", 1, true) ~= nil,
+    "yaml.encode: the shared NULL sentinel encodes as the literal null"
+  )
+  local null_roundtrip = yaml.simple_parse(null_encoded)
+  eq(null_roundtrip.a, 1, "yaml.encode: sibling of a null value survives")
+  eq(
+    null_roundtrip.b,
+    nil,
+    "yaml.encode: null value round-trips to an omitted key, per simple_parse's design"
+  )
+
+  eq(yaml.encode({}), "", "yaml.encode: an empty table encodes to the empty document")
+
+  local custom_indent = yaml.encode({ a = { b = 1 } }, { indent = 4 })
+  ok(
+    custom_indent:find("\n    b: 1", 1, true) ~= nil,
+    "yaml.encode: custom indent width is honored"
+  )
+
+  local yaml_cyclic = {}
+  yaml_cyclic.self = yaml_cyclic
+  local cyclic_encoded, cyclic_err = yaml.encode(yaml_cyclic)
+  eq(cyclic_encoded, nil, "yaml.encode: a cyclic table is refused, not looped forever")
+  ok(cyclic_err ~= nil, "yaml.encode: cyclic refusal carries an error message")
+
   -- --------------------------------------------------------------- lib.lua.time
   local presets = require("lib.lua.time.presets")
   local tfmt = require("lib.lua.time.format")
@@ -313,6 +388,15 @@ return function(H)
     depth_err ~= nil,
     "tables.path_flatten: max_depth guard reports an error instead of recursing forever"
   )
+
+  -- --------------------------------------------------------------- lib.lua.null
+  local null = require("lib.lua.null")
+
+  ok(null.is_null(null.NULL), "null.is_null: the sentinel itself is null")
+  ok(not null.is_null(nil), "null.is_null: real Lua nil is not the sentinel")
+  ok(not null.is_null(false), "null.is_null: false is not the sentinel")
+  ok(not null.is_null({}), "null.is_null: an unrelated empty table is not the sentinel")
+  eq(tostring(null.NULL), "null", "null.NULL: __tostring reads as 'null'")
 
   -- -------------------------------------------------------------- lib.lua.config
   local config = require("lib.lua.config")

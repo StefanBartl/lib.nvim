@@ -230,5 +230,9 @@ function M.simple_parse(text)
   return result, nil
 end
 
+-- Callable module: `yaml.encode(value)` and `yaml.encode.pretty(value)`.
+---@type Lib.Yaml.Encode
+M.encode = require("lib.lua.yaml.encode")
+
 ---@type LibYaml
 return M

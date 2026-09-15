@@ -18,8 +18,30 @@
 require("lib.nvim.json.@types")
 
 local lua_json = require("lib.lua.json")
+local null = require("lib.lua.null")
 
 local M = {}
+
+---@internal
+--- Recursively replace `vim.json.decode`'s own `vim.NIL` sentinel with the
+--- shared `lib.lua.null.NULL` marker, so downstream consumers (encoders,
+--- `lib.lua.tables.path_flatten` callers, cross-format conversion) work
+--- against one Lua-value IR with no nvim-specific artifact leaking into it.
+--- `vim.json.decode` never produces cycles, so no cycle guard is needed.
+---@param value any
+---@return any
+local function normalize_null(value)
+  if value == vim.NIL then
+    return null.NULL
+  end
+  if type(value) ~= "table" then
+    return value
+  end
+  for k, v in pairs(value) do
+    value[k] = normalize_null(v)
+  end
+  return value
+end
 
 ---Decode a JSON string into a Lua value.
 ---@param str string
@@ -30,7 +52,7 @@ function M.decode(str)
   if not ok then
     return nil, "invalid JSON: " .. tostring(decoded_or_err)
   end
-  return decoded_or_err, nil
+  return normalize_null(decoded_or_err), nil
 end
 
 ---JSON-encode `value`. Delegates to `lib.lua.json.encode`.
