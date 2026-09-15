@@ -14,7 +14,9 @@
 --- Semantics:
 ---   * strings           -> bare when `simple_parse` would read it back
 ---                          unchanged, single-quoted otherwise (see
----                          `needs_quoting`)
+---                          `needs_quoting`); a string containing a literal
+---                          newline is an error (nil + err) -- this subset
+---                          has no block/fold scalar to represent one
 ---   * numbers            -> integers without a trailing ".0"; NaN/Inf are
 ---                          an error, matching `lib.lua.json.encode`
 ---   * booleans           -> true/false
@@ -38,6 +40,12 @@ local null = require("lib.lua.null")
 local M = {}
 
 local DEFAULT_INDENT = 2
+
+-- Matches `lib.lua.tables.path_flatten`'s own `max_depth` default -- without
+-- this, a pathologically deep (but acyclic) nested table would overflow the
+-- Lua call stack in `emit_value`/`emit_map`/`emit_array`'s mutual recursion
+-- instead of failing cleanly with `nil, err`.
+local MAX_DEPTH = 64
 
 ---@internal
 --- Contiguous positive integer keys starting at 1 (Lua array semantics) --
@@ -124,6 +132,14 @@ local function encode_scalar(v)
     return encode_number(v)
   end
   if t == "string" then
+    if v:find("\n", 1, true) or v:find("\r", 1, true) then
+      -- This subset has no block/fold scalar form (see the module doc
+      -- comment): a literal newline inside a single-quoted or bare scalar
+      -- would break onto its own physical line with no key/indent prefix,
+      -- producing text `simple_parse` cannot read back -- reject instead of
+      -- silently emitting YAML the module's own decoder would choke on.
+      return nil, "cannot encode a string containing a newline in this YAML subset"
+    end
     if needs_quoting(v) then
       return "'" .. v:gsub("'", "''") .. "'", nil
     end
@@ -145,6 +161,10 @@ local emit_map, emit_array, emit_value
 ---@param out string[]
 ---@return string|nil err
 emit_value = function(v, head, width, level, seen, out)
+  if level > MAX_DEPTH then
+    return ("max nesting depth (%d) exceeded"):format(MAX_DEPTH)
+  end
+
   local pad = string.rep(" ", level * width)
   local label = head and (head .. ":") or "-"
 

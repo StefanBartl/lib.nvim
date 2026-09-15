@@ -182,6 +182,38 @@ return function(H)
   eq(cyclic_encoded, nil, "yaml.encode: a cyclic table is refused, not looped forever")
   ok(cyclic_err ~= nil, "yaml.encode: cyclic refusal carries an error message")
 
+  -- Regression: a string containing a literal newline used to be emitted
+  -- bare (or single-quoted, which doesn't help either) with the newline
+  -- byte embedded as-is, silently producing text `simple_parse` cannot read
+  -- back -- see lib.nvim's data.nvim review, 2026-09-15.
+  local newline_encoded, newline_err = yaml.encode({ note = "line1\nline2" })
+  eq(
+    newline_encoded,
+    nil,
+    "yaml.encode: a string containing '\\n' is refused, not silently corrupted"
+  )
+  ok(newline_err ~= nil, "yaml.encode: newline refusal carries an error message")
+  local cr_encoded, cr_err = yaml.encode({ note = "line1\rline2" })
+  eq(cr_encoded, nil, "yaml.encode: a string containing '\\r' is refused too")
+  ok(cr_err ~= nil, "yaml.encode: carriage-return refusal carries an error message")
+
+  -- Regression: emit_value/emit_map/emit_array had no recursion-depth guard
+  -- (unlike tables.path_flatten's own max_depth), so a pathologically deep
+  -- table would overflow the Lua call stack instead of failing cleanly.
+  local yaml_deep = { a = {} }
+  local yaml_cursor = yaml_deep.a
+  for _ = 1, 70 do
+    yaml_cursor.next = {}
+    yaml_cursor = yaml_cursor.next
+  end
+  local deep_encoded, deep_err = yaml.encode(yaml_deep)
+  eq(
+    deep_encoded,
+    nil,
+    "yaml.encode: max-depth guard reports an error instead of recursing forever"
+  )
+  ok(deep_err ~= nil, "yaml.encode: max-depth refusal carries an error message")
+
   -- --------------------------------------------------------------- lib.lua.time
   local presets = require("lib.lua.time.presets")
   local tfmt = require("lib.lua.time.format")
@@ -491,6 +523,38 @@ return function(H)
   local xml_cyclic_encoded, xml_cyclic_err = xml.encode(xml_cyclic)
   eq(xml_cyclic_encoded, nil, "xml.encode: a cyclic element tree is refused, not looped forever")
   ok(xml_cyclic_err ~= nil, "xml.encode: cyclic refusal carries an error message")
+
+  -- Regression: parse_element/emit_element had no recursion-depth guard
+  -- (unlike tables.path_flatten's own max_depth), so a pathologically deep
+  -- (but well-formed) element tree would overflow the Lua call stack
+  -- instead of failing cleanly.
+  local deep_open, deep_close = {}, {}
+  for i = 1, 70 do
+    deep_open[i] = "<a>"
+    deep_close[71 - i] = "</a>"
+  end
+  local deep_xml_tree, deep_xml_err =
+    xml.decode(table.concat(deep_open) .. "1" .. table.concat(deep_close))
+  ok(
+    deep_xml_tree == nil,
+    "xml.decode: max-depth guard reports an error instead of recursing forever"
+  )
+  ok(deep_xml_err ~= nil, "xml.decode: max-depth refusal carries an error message")
+
+  local deep_xml_el = { tag = "a", children = {} }
+  local deep_xml_cursor = deep_xml_el
+  for _ = 1, 70 do
+    local child = { tag = "a", children = {} }
+    deep_xml_cursor.children[1] = child
+    deep_xml_cursor = child
+  end
+  local deep_xml_encoded, deep_xml_encode_err = xml.encode(deep_xml_el)
+  eq(
+    deep_xml_encoded,
+    nil,
+    "xml.encode: max-depth guard reports an error instead of recursing forever"
+  )
+  ok(deep_xml_encode_err ~= nil, "xml.encode: max-depth refusal carries an error message")
 
   -- --------------------------------------------------------------- lib.lua.null
   local null = require("lib.lua.null")
