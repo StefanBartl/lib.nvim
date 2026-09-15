@@ -274,6 +274,46 @@ return function(H)
   tables.deep_merge(scalar_dst, { k = "now a string" })
   eq(scalar_dst.k, "now a string", "tables.deep_merge: scalar in src replaces a table in dst")
 
+  -- tables.path_flatten — the data.nvim `:JSON lines`/`filter` building block.
+  local flat, flat_err = tables.path_flatten({ user = { id = 1, name = "Ana" }, level = "error" })
+  ok(flat ~= nil and flat_err == nil, "tables.path_flatten: no error on a plain nested object")
+  ---@cast flat -nil
+  eq(#flat, 3, "tables.path_flatten: one entry per leaf")
+  eq(flat[1].path, "level", "tables.path_flatten: sorted key order (level before user.*)")
+  eq(flat[1].value, "error", "tables.path_flatten: leaf value preserved")
+  eq(flat[2].path, "user.id", "tables.path_flatten: nested path joined with default '.' sep")
+  eq(flat[3].path, "user.name", "tables.path_flatten: sibling keys sorted")
+
+  local arr_flat = tables.path_flatten({ tags = { "a", "b" } })
+  ---@cast arr_flat -nil
+  eq(arr_flat[1].path, "tags.1", "tables.path_flatten: array indices keep natural order")
+  eq(arr_flat[2].path, "tags.2", "tables.path_flatten: array indices keep natural order (2nd)")
+
+  local sep_flat = tables.path_flatten({ a = { b = 1 } }, { sep = "/" })
+  ---@cast sep_flat -nil
+  eq(sep_flat[1].path, "a/b", "tables.path_flatten: custom separator")
+
+  local empty_flat = tables.path_flatten({ a = {} })
+  ---@cast empty_flat -nil
+  eq(empty_flat[1].path, "a", "tables.path_flatten: empty nested table is its own leaf")
+  eq(
+    type(empty_flat[1].value),
+    "table",
+    "tables.path_flatten: empty-table leaf keeps the table value"
+  )
+
+  local deep = { a = {} }
+  local cursor = deep.a
+  for _ = 1, 70 do
+    cursor.next = {}
+    cursor = cursor.next
+  end
+  local _, depth_err = tables.path_flatten(deep, { max_depth = 64 })
+  ok(
+    depth_err ~= nil,
+    "tables.path_flatten: max_depth guard reports an error instead of recursing forever"
+  )
+
   -- -------------------------------------------------------------- lib.lua.config
   local config = require("lib.lua.config")
 

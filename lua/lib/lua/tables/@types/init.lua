@@ -174,6 +174,12 @@
 --
 ---@field with fun(base: table|nil, extra: table|nil): table # Merge extra into base (or a shallow copy of extra if base is nil). Mutates and returns base when both are given.
 --
+-- =========================================================
+-- Path flattening
+-- =========================================================
+--
+---@field path_flatten fun(value: any, opts?: Lib.Tables.Paths.FlattenOpts): ({path: string, value: any}[]|nil), (string|nil) # Flatten a nested value into {path, value}[] leaves (lib.lua.tables.paths). Sorted-key order for objects, natural order for arrays. Returns nil + error on max-depth overflow.
+--
 -- `functional` (map/filter/reduce/find/any/all/flat_map) and `unique_table`
 -- (unique/unique_by/is_unique) are deliberately NOT part of this flat
 -- surface — see the CDX note above. Require them directly:
