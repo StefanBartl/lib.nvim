@@ -111,6 +111,15 @@ M.snapshot_shallow = safe_module.snapshot_shallow
 M.safe_ipairs = safe_module.safe_ipairs
 
 -- =========================================================
+-- Path flattening
+-- =========================================================
+
+---@type Lib.Tables.Paths
+local paths_module = lazy.require("lib.lua.tables.paths")
+
+M.path_flatten = paths_module.flatten
+
+-- =========================================================
 -- Merge helper
 -- =========================================================
 

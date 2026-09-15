@@ -133,6 +133,34 @@ tables.with(base, extra)   -- merges extra into base; base or a copy of extra if
 `base` returns a shallow copy of `extra` instead, so the caller never gets
 back the same table it passed as a default.
 
+## Path flattening ([`paths.lua`](paths.lua))
+
+Turns a nested Lua value (decoded JSON/YAML/XML) into a flat list of leaves,
+each with its dotted key path — the building block `data.nvim` uses for its
+`:JSON lines`/`:JSON keys` render modes and its `pickers.refine`-based filter
+UI.
+
+```lua
+tables.path_flatten({ user = { id = 1, name = "Ana" }, level = "error" })
+-- {
+--   { path = "level",     value = "error" },
+--   { path = "user.id",   value = 1 },
+--   { path = "user.name", value = "Ana" },
+-- }
+tables.path_flatten(value, { sep = "/", max_depth = 32 })
+```
+
+Object keys are visited in sorted order for deterministic output; array
+indices keep their natural `1..n` order. An empty nested table (`{}`) is
+itself reported as a leaf — otherwise it would leave no trace in the
+flattened output. Returns `nil, err` if `max_depth` is exceeded (default 64),
+guarding against runaway recursion on cyclic or pathologically deep input.
+
+Named `path_flatten` rather than nested under `tables.paths.*` to match this
+module's existing flat-namespace-with-prefix convention (`dict_*`, `set_*`)
+and to avoid colliding with `tables.flatten` above (one level of *array*
+nesting — a different operation).
+
 ## Also see
 
 `lib.lua.tables.functional` (`map`/`filter`/`reduce`/`find`/`any`/`all`/
