@@ -89,6 +89,7 @@ aggregator exists for convenience, not as the entry point.
 | [`lib.nvim.harvest`](../lua/lib/nvim/harvest/README.md) | "collect from a scope, then show/export it" building blocks: `scope` (buffer/range/buffers/cwd/path → sources with provenance), `render` (rows → GFM table / CSV / lines), `sink` (clipboard / file / scratch buffer / picker), `emit` ([`:help`](../doc/lib.nvim-harvest.txt)) |
 | [`lib.nvim.dev`](../lua/lib/nvim/dev/README.md) | tooling for developing *across* the ecosystem, not one plugin's runtime: `duplicates` — function bodies shared by two or more sibling repos, candidates for extraction into lib.nvim itself; `:LibDuplicateScan [path]` |
 | [`lib.nvim.vregex`](../lua/lib/nvim/vregex/README.md) | build `\V`-literal Vim-regex patterns from arbitrary text (`literal`/`escape`) — prevents regex-injection when user/arbitrary text is dropped into a search or `:s` pattern |
+| [`lib.nvim.config.repo_file`](../lua/lib/nvim/config/repo_file/README.md) | Read a repository-local JSON config file and split its keys into an allowlist vs. everything else — the read/decode/split shape `documentation.nvim`'s and `lsp.nvim`'s project-config loaders each built independently before this existed. No path resolution, no warning text: both stay the caller's |
 | [`lib.nvim.checkpoint`](../lua/lib/nvim/checkpoint/README.md) | snapshot a set of files before a destructive multi-file operation (`create`/`restore`/`discard`), byte-exact restore via `fs_copyfile`, built on `cross.fs.mutate` |
 
 Opt-in call counting / usage statistics (`wrap`/`wrap_loaded`, persistence,
@@ -128,6 +129,7 @@ and are generated on install by your plugin manager (see [Help docs](help.md)).
 - [`lib.lua.class`](../lua/lib/lua/class/README.md) · [`lib.lua.context_manager`](../lua/lib/lua/context_manager/README.md)
 - [`lib.lua.range`](../lua/lib/lua/range/README.md)
 - [`lib.nvim.vregex`](../lua/lib/nvim/vregex/README.md) · [`lib.nvim.checkpoint`](../lua/lib/nvim/checkpoint/README.md)
+- [`lib.nvim.config.repo_file`](../lua/lib/nvim/config/repo_file/README.md)
 
 **`:help` pages**
 

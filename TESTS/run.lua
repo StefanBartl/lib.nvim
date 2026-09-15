@@ -94,6 +94,7 @@ local specs = {
   "range_spec.lua",
   "apply_edits_spec.lua",
   "checkpoint_spec.lua",
+  "config_repo_file_spec.lua",
 }
 
 --- Straight to stdout rather than through `print`.
