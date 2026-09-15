@@ -22,15 +22,30 @@ local null = require("lib.lua.null")
 
 local M = {}
 
+-- Matches `lib.lua.tables.path_flatten`'s own `max_depth` default -- without
+-- this, a pathologically deep (but acyclic) decoded value would overflow the
+-- Lua call stack here instead of failing cleanly with `nil, err`.
+local MAX_NORMALIZE_DEPTH = 64
+
 ---@internal
 --- Recursively replace `vim.json.decode`'s own `vim.NIL` sentinel with the
 --- shared `lib.lua.null.NULL` marker, so downstream consumers (encoders,
 --- `lib.lua.tables.path_flatten` callers, cross-format conversion) work
 --- against one Lua-value IR with no nvim-specific artifact leaking into it.
---- `vim.json.decode` never produces cycles, so no cycle guard is needed.
+--- `vim.json.decode` never produces cycles, so no cycle guard is needed --
+--- only a depth guard (`M.decode` below turns the resulting `error()` into
+--- the same `nil, err` shape as any other decode failure).
 ---@param value any
+---@param depth integer
 ---@return any
-local function normalize_null(value)
+local function normalize_null(value, depth)
+  if depth > MAX_NORMALIZE_DEPTH then
+    error(
+      ("max nesting depth (%d) exceeded while normalizing JSON null values"):format(
+        MAX_NORMALIZE_DEPTH
+      )
+    )
+  end
   if value == vim.NIL then
     return null.NULL
   end
@@ -38,7 +53,7 @@ local function normalize_null(value)
     return value
   end
   for k, v in pairs(value) do
-    value[k] = normalize_null(v)
+    value[k] = normalize_null(v, depth + 1)
   end
   return value
 end
@@ -52,7 +67,11 @@ function M.decode(str)
   if not ok then
     return nil, "invalid JSON: " .. tostring(decoded_or_err)
   end
-  return normalize_null(decoded_or_err), nil
+  local nok, normalized_or_err = pcall(normalize_null, decoded_or_err, 0)
+  if not nok then
+    return nil, "invalid JSON: " .. tostring(normalized_or_err)
+  end
+  return normalized_or_err, nil
 end
 
 ---JSON-encode `value`. Delegates to `lib.lua.json.encode`.

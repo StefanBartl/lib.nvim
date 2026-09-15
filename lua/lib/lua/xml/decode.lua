@@ -35,6 +35,12 @@ local M = {}
 
 local NAMED_ENTITIES = { amp = "&", lt = "<", gt = ">", quot = '"', apos = "'" }
 
+-- Matches `lib.lua.tables.path_flatten`'s own `max_depth` default -- without
+-- this, a pathologically deep (but well-formed) element tree would overflow
+-- the Lua call stack in `parse_element`'s recursion instead of failing
+-- cleanly with `nil, err`.
+local MAX_DEPTH = 64
+
 ---@internal
 --- Encode a Unicode codepoint as UTF-8 bytes (no `utf8` stdlib dependency --
 --- that library is a Lua 5.3+ addition LuaJIT does not ship).
@@ -92,6 +98,7 @@ end
 ---@field text string
 ---@field len integer
 ---@field pos integer # 1-based cursor into `text`, advanced by every helper below.
+---@field depth integer # current element-nesting call depth, see MAX_DEPTH.
 
 ---@internal
 ---@param st Lib.Xml.DecodeState
@@ -247,7 +254,12 @@ parse_element = function(st)
       end
       return { tag = name, attrs = attrs, children = children }, nil
     elseif st.text:sub(st.pos, st.pos) == "<" then
+      st.depth = st.depth + 1
+      if st.depth > MAX_DEPTH then
+        return nil, ("maximum element nesting depth (%d) exceeded"):format(MAX_DEPTH)
+      end
       local child, cherr = parse_element(st)
+      st.depth = st.depth - 1
       if cherr then
         return nil, cherr
       end
@@ -279,7 +291,7 @@ function M.decode(text)
     return nil, "invalid input: expected string"
   end
 
-  local st = { text = text, len = #text, pos = 1 }
+  local st = { text = text, len = #text, pos = 1, depth = 0 }
   skip_ws(st)
 
   if st.text:sub(st.pos, st.pos + 1) == "<?" then

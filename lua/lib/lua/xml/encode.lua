@@ -32,6 +32,12 @@ local M = {}
 local TEXT_ESCAPES = { ["&"] = "&amp;", ["<"] = "&lt;", [">"] = "&gt;" }
 local ATTR_ESCAPES = { ["&"] = "&amp;", ["<"] = "&lt;", [">"] = "&gt;", ['"'] = "&quot;" }
 
+-- Matches `lib.lua.tables.path_flatten`'s own `max_depth` default -- without
+-- this, a pathologically deep (but well-formed) element tree would overflow
+-- the Lua call stack in `emit_element`'s recursion instead of failing
+-- cleanly with `nil, err`.
+local MAX_DEPTH = 64
+
 ---@internal
 ---@param s string
 ---@return string
@@ -75,6 +81,9 @@ end
 ---@return string|nil encoded
 ---@return string|nil err
 local function emit_element(el, indent, level, seen)
+  if level > MAX_DEPTH then
+    return nil, ("maximum element nesting depth (%d) exceeded"):format(MAX_DEPTH)
+  end
   if type(el) ~= "table" or type(el.tag) ~= "string" then
     return nil, "expected an element table with a string 'tag' field"
   end

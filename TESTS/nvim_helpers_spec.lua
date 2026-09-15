@@ -419,6 +419,22 @@ return function(H)
     "nvim.json.encode: a decoded null round-trips back to the JSON literal null"
   )
 
+  -- Regression: normalize_null had no recursion-depth guard, so a
+  -- pathologically deep (but acyclic) decoded value would overflow the Lua
+  -- call stack as a raw error instead of nvim_json.decode's usual clean
+  -- `nil, err` on malformed input.
+  local deep_json_parts = {}
+  for i = 1, 70 do
+    deep_json_parts[i] = '{"a":'
+  end
+  local deep_json = table.concat(deep_json_parts) .. "1" .. string.rep("}", 70)
+  local deep_json_decoded, deep_json_err = nvim_json.decode(deep_json)
+  ok(
+    deep_json_decoded == nil,
+    "nvim.json.decode: max-depth guard reports an error instead of recursing forever"
+  )
+  ok(deep_json_err ~= nil, "nvim.json.decode: max-depth refusal carries an error message")
+
   local Path = require("lib.nvim.fs.path.object")
   local path_dir = tmp .. "/path_obj"
   vim.fn.mkdir(path_dir, "p")
