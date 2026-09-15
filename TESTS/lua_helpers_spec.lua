@@ -389,6 +389,109 @@ return function(H)
     "tables.path_flatten: max_depth guard reports an error instead of recursing forever"
   )
 
+  -- ---------------------------------------------------------------- lib.lua.xml
+  local xml = require("lib.lua.xml")
+
+  local simple_tree, simple_xml_err = xml.decode('<user id="1"><name>Ana</name></user>')
+  ok(simple_xml_err == nil, "xml.decode: no error on a well-formed simple document")
+  eq(simple_tree.tag, "user", "xml.decode: root tag")
+  eq(simple_tree.attrs.id, "1", "xml.decode: attribute value")
+  eq(simple_tree.children[1].tag, "name", "xml.decode: nested element tag")
+  eq(simple_tree.children[1].children[1], "Ana", "xml.decode: leaf text content")
+
+  local self_closing = xml.decode('<a><b/><c x="1"/></a>')
+  eq(#self_closing.children, 2, "xml.decode: two self-closing children")
+  eq(#self_closing.children[1].children, 0, "xml.decode: self-closing element has no children")
+  eq(self_closing.children[2].attrs.x, "1", "xml.decode: attribute on a self-closing element")
+
+  -- Insignificant whitespace-only text between elements is dropped; real
+  -- text content is kept, entities resolved.
+  local ws_tree = xml.decode("<a>\n  <b>1</b>\n  <c>&amp;&lt;&gt;</c>\n</a>")
+  eq(#ws_tree.children, 2, "xml.decode: whitespace-only text nodes between children are dropped")
+  eq(ws_tree.children[2].children[1], "&<>", "xml.decode: predefined entities are resolved")
+
+  local numeric_entity = xml.decode("<a>&#65;&#x42;</a>")
+  eq(numeric_entity.children[1], "AB", "xml.decode: numeric and hex character references")
+
+  local cdata_tree = xml.decode("<a><![CDATA[<not a tag> & stuff]]></a>")
+  eq(
+    cdata_tree.children[1],
+    "<not a tag> & stuff",
+    "xml.decode: CDATA content is kept literal, unescaped"
+  )
+
+  local commented = xml.decode("<a><!-- a comment --><b>1</b></a>")
+  eq(#commented.children, 1, "xml.decode: comments are discarded, not counted as content")
+
+  local decl_tree = xml.decode('<?xml version="1.0" encoding="UTF-8"?>\n<a>1</a>')
+  eq(decl_tree.tag, "a", "xml.decode: a leading <?xml ...?> declaration is skipped")
+
+  local doctype_tree = xml.decode('<!DOCTYPE a [ <!ENTITY x "y"> ]>\n<a>1</a>')
+  eq(doctype_tree.tag, "a", "xml.decode: a <!DOCTYPE ...> with an internal subset is skipped whole")
+
+  local mismatched, mismatched_err = xml.decode("<a><b></c></a>")
+  ok(mismatched == nil, "xml.decode: a mismatched closing tag is rejected")
+  ok(mismatched_err ~= nil, "xml.decode: mismatched closing tag carries an error message")
+
+  local unterminated, unterminated_err = xml.decode("<a><b>text")
+  ok(
+    unterminated == nil,
+    "xml.decode: an unterminated element (EOF before its closing tag) is rejected"
+  )
+  ok(unterminated_err ~= nil, "xml.decode: unterminated element carries an error message")
+
+  local multi_root, multi_root_err = xml.decode("<a/><b/>")
+  ok(multi_root == nil, "xml.decode: more than one root element is rejected")
+  ok(multi_root_err ~= nil, "xml.decode: multiple roots carries an error message")
+
+  -- xml.encode -- compact by default (mirrors lib.lua.json.encode), pretty
+  -- multi-line with an explicit indent, both checked by round-tripping
+  -- through xml.decode.
+  local encode_tree = {
+    tag = "user",
+    attrs = { id = "1" },
+    children = { { tag = "name", attrs = {}, children = { "Ana" } } },
+  }
+  local compact_encoded, compact_err = xml.encode(encode_tree)
+  ok(compact_err == nil, "xml.encode: no error on a simple tree")
+  eq(
+    compact_encoded,
+    '<user id="1"><name>Ana</name></user>',
+    "xml.encode: compact by default, one line"
+  )
+
+  local pretty_encoded = xml.encode.pretty(encode_tree)
+  eq(
+    pretty_encoded,
+    '<user id="1">\n  <name>Ana</name>\n</user>',
+    "xml.encode.pretty: multi-line, 2-space indent"
+  )
+
+  local roundtrip = xml.decode(compact_encoded)
+  eq(roundtrip.tag, "user", "xml round-trip: tag survives")
+  eq(roundtrip.attrs.id, "1", "xml round-trip: attribute survives")
+  eq(roundtrip.children[1].children[1], "Ana", "xml round-trip: nested text survives")
+
+  local escaped_encoded =
+    xml.encode({ tag = "a", attrs = { q = '"<&>"' }, children = { "<x> & y" } })
+  eq(
+    escaped_encoded,
+    '<a q="&quot;&lt;&amp;&gt;&quot;">&lt;x&gt; &amp; y</a>',
+    "xml.encode: text and attribute values are escaped"
+  )
+
+  eq(xml.encode({ tag = "empty" }), "<empty/>", "xml.encode: no children -> self-closing")
+
+  local self_closing_err_val, self_closing_err_msg = xml.encode({ notag = true })
+  ok(self_closing_err_val == nil, "xml.encode: a table without a string 'tag' field is refused")
+  ok(self_closing_err_msg ~= nil, "xml.encode: refusal carries an error message")
+
+  local xml_cyclic = { tag = "a", children = {} }
+  xml_cyclic.children[1] = xml_cyclic
+  local xml_cyclic_encoded, xml_cyclic_err = xml.encode(xml_cyclic)
+  eq(xml_cyclic_encoded, nil, "xml.encode: a cyclic element tree is refused, not looped forever")
+  ok(xml_cyclic_err ~= nil, "xml.encode: cyclic refusal carries an error message")
+
   -- --------------------------------------------------------------- lib.lua.null
   local null = require("lib.lua.null")
 
