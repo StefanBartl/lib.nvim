@@ -105,6 +105,16 @@ return function(H)
   eq(by_id({ id = 3 }), 30, "memo.fn: custom keyer computes")
   eq(by_id({ id = 3 }), 30, "memo.fn: a different table with the same id is a hit")
 
+  -- ------------------------------------------- a real caller that was broken
+  -- `time.diff`'s memoized stats calculator spelled its options `max_size` and
+  -- `key_fn`. Both were dropped in silence, so the default key builder was
+  -- handed a table and the calculator threw on its first call -- for as long
+  -- as it existed. Nothing called it, so nothing noticed.
+  local stats = require("lib.lua.time.diff.internal.stats")
+  local calc = stats.create_memoized_calculator()
+  ok(calc ~= nil, "time.diff: the memoized calculator is constructible")
+  ok(pcall(calc, { 1, 2, 3 }, 0), "time.diff: ...and calling it does not throw")
+
   -- --------------------------------------------------------- memoize2
   -- Keys tables by content rather than address, which is its whole reason to
   -- exist; it had the same nil-arity hole as memoize.
