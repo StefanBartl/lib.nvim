@@ -78,7 +78,21 @@ function M.open(opts)
     { win = results.winid }
   )
 
+  -- Declared here, stopped in `finish_close` below: closing the picker
+  -- before the debounce fires must not leave a stray timer that calls
+  -- `on_change` on a picker that no longer exists.
+  local timer
+
+  local function stop_timer()
+    if timer then
+      timer:stop()
+      pcall(timer.close, timer)
+      timer = nil
+    end
+  end
+
   local function finish_close()
+    stop_timer()
     pcall(function()
       vim.cmd("stopinsert")
     end)
@@ -124,13 +138,8 @@ function M.open(opts)
   end
 
   -- Debounced query notifications.
-  local timer
   local function schedule_change()
-    if timer then
-      timer:stop()
-      pcall(timer.close, timer)
-      timer = nil
-    end
+    stop_timer()
     timer = vim.uv.new_timer()
     -- libuv returns nil rather than raising when it cannot allocate a
     -- handle; without a timer the query simply is not re-run.
@@ -141,11 +150,7 @@ function M.open(opts)
       debounce_ms,
       0,
       vim.schedule_wrap(function()
-        if timer then
-          timer:stop()
-          pcall(timer.close, timer)
-          timer = nil
-        end
+        stop_timer()
         on_change(handle.query())
       end)
     )

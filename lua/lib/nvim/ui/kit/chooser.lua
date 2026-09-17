@@ -20,9 +20,9 @@
 --- cursor steps over it, <CR> on it is inert, and it can't be marked in
 --- multi-select. Plain-string items are always selectable.
 ---
---- Four presentation options are off by default because they change how the
+--- Five presentation options are off by default because they change how the
 --- list behaves, not just how it looks, and the chooser is shared by
---- `select`/`picker`/`compare` (see `kit.menu`, which turns all four on):
+--- `select`/`picker`/`compare` (see `kit.menu`, which turns all five on):
 ---
 --- - `hide_cursor` — blank the terminal cursor while the list is open, so the
 ---   highlighted row alone says where you are. `'guicursor'` is global, so it
@@ -500,6 +500,12 @@ function M.set_items(opts)
   local cfg = api.nvim_win_get_config(surf.winid)
   cfg.relative = "editor"
   cfg.win = nil
+  -- `win_screenpos` always reports the window's top-left corner, regardless
+  -- of the anchor it was opened with -- a menu that auto-flipped to "SW"
+  -- near the bottom of the screen (see @types' `anchor` field) must be
+  -- re-anchored to "NW" here, or the row/col below would shift it by its
+  -- own height on the next level change.
+  cfg.anchor = "NW"
   cfg.row = math.max(0, pos[1] - 1)
   cfg.col = math.max(0, pos[2] - 1)
   cfg.width = math.max(1, opts.width or cfg.width)

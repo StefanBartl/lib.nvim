@@ -5,10 +5,24 @@
 > `require("ui.kit")`) — every one of this ecosystem's ~31 consumer plugins
 > was moved over (see `ui.nvim`'s own
 > [`PLAN-ui-kit-migration.md`](https://github.com/StefanBartl/ui.nvim) for
-> the full history). No shim was built and no code here was deleted or
-> changed, so this copy still works standalone, but it no longer receives
-> new features — those land in `ui.nvim` only. Do not build new callers
+> the full history). No shim was built and no code here was deleted, so
+> this copy still works standalone, but it no longer receives new
+> features — those land in `ui.nvim` only. Do not build new callers
 > against `lib.nvim.ui.kit`; require `ui.kit` from `ui.nvim` instead.
+>
+> **Bug fixes are not new features, and this copy does get them
+> (2026-09-17).** "Frozen" drifted into "keeps known bugs": three fixes and
+> a security note had landed in `ui.nvim` only, while the copy here — the
+> one eleven of this library's own call sites actually run — still had a
+> `WinClosed` augroup leaked per surface, a picker debounce timer that
+> outlived its picker, and a submenu that shifted by its own height near
+> the bottom of the screen. All three are ported.
+>
+> Nothing compared the two copies, which is why it went unnoticed for
+> weeks. Something does now: `ui.nvim`'s `TESTS/kit_drift_spec.lua` diffs
+> them in CI (it already checks this repository out at `ci-verified`) and
+> fails naming the file. **A fix made in `ui.nvim` has to be mirrored
+> here**, or this copy silently keeps the bug for every consumer above.
 
 A themed, composable UI toolkit. Pick a preset once and every popup is visually
 coordinated, or override colors/borders per call. Built in layers on top of
