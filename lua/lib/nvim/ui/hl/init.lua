@@ -33,5 +33,15 @@ function M.set(group, opts, ns)
   vim.api.nvim_set_hl(ns_id, group, opts --[[@as vim.api.keyset.highlight]])
 end
 
+--- Apply highlight state now and keep it correct across theme changes.
+--- See `lib.nvim.ui.hl.persist` for the whole rationale; this is the entry
+--- point callers use, so the helper sits on the same module as `set`.
+---@param spec table<string, Lib.Highlight.Opts>|fun(): table<string, Lib.Highlight.Opts>|nil
+---@param opts Lib.UI.HL.PersistOpts
+---@return Lib.UI.HL.PersistHandle
+function M.persist(spec, opts)
+  return require("lib.nvim.ui.hl.persist").persist(spec, opts)
+end
+
 ---@type Lib.UI.HL
 return M

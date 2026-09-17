@@ -20,6 +20,18 @@
 ---@field rpc_pipe? boolean|table # Start the Windows named-pipe RPC server. `true` uses defaults; a table is forwarded to `rpc_pipe.setup`.
 ---@field info_usercmd? boolean|string # Register the system-info user command. `true` uses ":SystemInfo"; a string sets the command name.
 
+--- A line collector (see `lib.nvim.system.lines`). `feed` returns the whole
+--- lines a chunk completed; `flush` returns output that never got its newline,
+--- or nil when there is none.
+---@class Lib.System.Lines.Collector
+---@field feed fun(data: string): string[]
+---@field flush fun(): string|nil
+
+--- `lib.nvim.system.lines` module surface.
+---@class Lib.System.Lines
+---@field collector fun(): Lib.System.Lines.Collector
+---@field buffered fun(cb: (fun(err: nil, line: string))|nil): (fun(err: string|nil, data: string|nil))|nil
+
 --- Aggregator surface of `require("lib.nvim.system")`.
 ---@class Lib.System
 ---@field env Lib.System.Env.Module
@@ -27,6 +39,7 @@
 ---@field info Lib.System.Info
 ---@field proc_trace Lib.System.ProcTrace
 ---@field job Lib.System.Job
+---@field lines Lib.System.Lines
 ---@field setup fun(opts?: Lib.System.SetupOptions): Lib.System.Env
 
 --- `lib.nvim.system.env` module surface.

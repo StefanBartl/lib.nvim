@@ -23,6 +23,7 @@ M.rpc_pipe = require("lib.nvim.system.rpc_pipe")
 M.info = require("lib.nvim.system.info")
 M.proc_trace = require("lib.nvim.system.proc_trace")
 M.job = require("lib.nvim.system.job")
+M.lines = require("lib.nvim.system.lines")
 
 --- Opt-in activation of environment "features".
 --- Everything is off by default so the module stays a pure helper; a config
