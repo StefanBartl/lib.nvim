@@ -234,7 +234,7 @@ end
 --- out as the same sections it always described, now merely drawn as such.
 ---@internal
 ---@param items any[]
----@return { title: string|nil, loose: boolean, items: any[] }[]
+---@return { title?: string, loose: boolean, items: any[] }[]
 local function partition(items)
   local blocks, cur = {}, nil
 

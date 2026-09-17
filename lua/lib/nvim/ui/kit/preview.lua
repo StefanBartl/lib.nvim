@@ -25,6 +25,8 @@ local PRESETS = { "minimal", "rounded", "solid", "double", "ascii" }
 local REFERENCE = {
   "",
   "-- ── reference ─────────────────────────────────────────────",
+  "-- This buffer's contents are executed as Lua on every edit (like :lua) --",
+  "-- never paste in a config snippet from a source you have not read.",
   '-- Return a preset name   →   return "double"',
   "--   presets: minimal | rounded | solid | double | ascii",
   "-- …or the override table above (merged over the active default).",

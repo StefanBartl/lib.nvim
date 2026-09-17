@@ -34,7 +34,7 @@ end
 ---@internal
 --- Distribute `avail` cells (minus gaps) across items whose `.size` is a
 --- fraction, a fixed int, or nil (nil items share the remainder).
----@param items { size: number|nil }[]
+---@param items { size?: number }[]
 ---@param avail integer
 ---@param gap integer
 ---@return integer[]

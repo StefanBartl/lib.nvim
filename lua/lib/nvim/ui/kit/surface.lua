@@ -12,6 +12,7 @@ local api = vim.api
 ---@class Lib.UI.Kit.Surface
 ---@field package _on_close function[]
 ---@field package _closed boolean
+---@field package _augroup integer|nil
 local Surface = {}
 Surface.__index = Surface
 
@@ -63,6 +64,13 @@ function Surface:fire_close()
     return
   end
   self._closed = true
+  -- Window ids are never reused within a session, so leaving this augroup
+  -- behind (its own `once = true` autocmd already gone) would otherwise
+  -- accumulate one empty group per surface ever opened.
+  if self._augroup then
+    pcall(api.nvim_del_augroup_by_id, self._augroup)
+    self._augroup = nil
+  end
   for _, cb in ipairs(self._on_close) do
     pcall(cb)
   end
@@ -123,6 +131,7 @@ function M.open(opts)
   -- Fire on_close callbacks when the window closes for any reason.
   local autocmd = require("lib.nvim.bindings.autocmd")
   local group = autocmd.group("lib_ui_kit_surface_" .. winid, true)
+  self._augroup = group
   autocmd.create("WinClosed", function()
     self:fire_close()
   end, {
