@@ -488,6 +488,10 @@ Small, self-contained caching infrastructure — Neovim-independent.
 M.lru   -- = lib.lua.memo.lru submodule
 M.memo  -- = lib.lua.memo.memo submodule
 M.fn(func: fun(...):any, opts?: table|integer): fun(...):any   -- memoize with default settings
+  -- opts reads `size` and `keyer`; any other key raises. `weak` was listed as
+  -- a mode and accepted in silence until 2026-09-17, but was never read and
+  -- could not have worked: the cache keys on strings, and a weak table does
+  -- not collect string keys.
 ```
 
 ### `lib.lua.memo.lru`
@@ -504,11 +508,23 @@ Memoization wrapper based on `lru.lua`.
 
 ```
 M.memoize(fn: fun(...):any, cap?: integer, keyer?: fun(...):string): fun(...):any
-  -- default cap 128; default key = table.concat({...}, "\31"); nil results not cached
+  -- default cap 128; nil results not cached
+  -- default key: each argument as "<type-tag>:<tostring>", joined with "\31"
 M.memoize2(fn: fun(...):any, cap?: integer, keyer?: fun(...):string): fun(...):any
-  -- same contract; default keyer is vim.inspect-based instead of naive table.concat
-  -- (fixes a string-concat bug with complex/table arguments)
+  -- same contract; its default keyer serializes *table* arguments by content
+  -- (vim.inspect) rather than by address
 ```
+
+The default key was `table.concat({ ... }, "\31")` until 2026-09-17, which
+threw on every argument `concat` will not take — a boolean, a table, a
+function, a TSNode — and silently merged `f(1)` with `f("1")`. Both are fixed;
+`TESTS/memo_spec.lua` holds the cases.
+
+**Reference types are keyed by address**, which is only correct while the
+object outlives its cache entry. Addresses get recycled, so a short-lived
+object — a TSNode from a tree that is reparsed, for instance — can be handed
+an earlier object's cached value. Memoizing over one of those needs a `keyer`
+that derives something stable, or no memoization at all.
 
 ---
 

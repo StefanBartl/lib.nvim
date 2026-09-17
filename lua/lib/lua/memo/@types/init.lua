@@ -20,10 +20,13 @@
 ---@field _move_front fun(self: Lib.Memo.Lru, node: Lib.Memo.LruNode)
 ---@field _evict fun(self: Lib.Memo.Lru)
 
+--- `weak` used to be listed here as a supported mode. It was never read, and
+--- could not have worked: `memoize` keys on the string a keyer returns, and a
+--- weak table does not collect string keys. `memo.fn` rejects unknown options
+--- now instead of ignoring them.
 ---@class Lib.Memo.MemoOpts
 ---@field size integer|nil # Cache capacity (default: 128)
----@field weak "k"|"v"|"kv"|nil # Weak reference mode (default: nil)
----@field keyer fun(...): string|nil # Custom key generator (default: table.concat)
+---@field keyer fun(...): string|nil # Custom key generator (default: type-tagged tostring per argument)
 
 ---@class Lib.Memo.Memo
 ---@field memoize fun(fn: fun(...): any, cap: integer|nil, keyer: fun(...): string|nil): fun(...): any
