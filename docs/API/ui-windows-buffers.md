@@ -251,12 +251,22 @@ M.get_stats(): { hits, misses, total_requests, hit_rate }
 ## `lib.nvim.ui.*`
 
 ### `lib.nvim.ui.hl` (see README)
-Idempotent highlight-group definition with optional namespace support.
+Idempotent highlight-group definition with optional namespace support, plus
+highlight state that survives a theme change.
 
 ```
 M.namespace(name: string): integer   -- cached nvim_create_namespace
 M.set(group: string, opts: Lib.Highlight.Opts, ns?: string|integer|nil)   -- wraps nvim_set_hl
+M.persist(spec, opts: Lib.UI.HL.PersistOpts): Lib.UI.HL.PersistHandle
 ```
+`spec` is a group table, or a function returning one (re-evaluated on every
+change, so derived colours follow the theme), or a function returning
+nothing (a side-effect callback -- clearing a colour-derived cache is the
+same problem shaped differently). `opts`: `name` (required; augroup and
+identity -- re-registering replaces), `background` (default `true`, also
+re-applies on `OptionSet background`), `ns`, `immediate` (default `true`).
+Handle: `apply(), detach()`. Replaces 19 hand-written `ColorScheme` blocks
+across 7 plugins, which disagreed about all three of those defaults.
 
 ### `lib.nvim.ui.list` (see README)
 Quickfix and location lists: entries + title in one call, with the stack,
