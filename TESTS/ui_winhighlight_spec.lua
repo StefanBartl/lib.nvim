@@ -126,6 +126,51 @@ return function(H)
     vim.api.nvim_win_close(win, true)
   end
 
+  -- --------------------------------------------- deterministic and cheap
+  --
+  -- The callers re-apply the same mappings from `ModeChanged`,
+  -- `DiagnosticChanged`, `BufEnter` and `WinEnter`, all of which fire
+  -- repeatedly while typing. Writing `winhighlight` redraws the window, so
+  -- an unchanged value has to be recognised as such -- which in turn needs
+  -- `merge` to serialize a given set the same way every time.
+  do
+    local many = { Zed = "A", Alpha = "B", Mid = "C", Beta = "D" }
+    local first = wh.merge("", many)
+    for _ = 1, 20 do
+      eq(wh.merge("", many), first, "merge serializes a given set identically every time")
+    end
+    eq(first, "Alpha:B,Beta:D,Mid:C,Zed:A", "...in sorted order, not the table's iteration order")
+  end
+
+  do
+    local win = scratch_win()
+    local writes = 0
+    local real = vim.api.nvim_set_option_value
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.api.nvim_set_option_value = function(name, value, opts)
+      if name == "winhighlight" then
+        writes = writes + 1
+      end
+      return real(name, value, opts)
+    end
+
+    wh.update(win, { LibSpecNoop = "NormalFloat" })
+    local after_first = writes
+    wh.update(win, { LibSpecNoop = "NormalFloat" })
+    wh.update(win, { LibSpecNoop = "NormalFloat" })
+    eq(writes, after_first, "re-applying the same mapping does not write the option again")
+
+    wh.update(win, { LibSpecNoop = "Comment" })
+    ok(writes > after_first, "...but a changed target does")
+
+    local before_noop_remove = writes
+    wh.remove(win, "NothingHere")
+    eq(writes, before_noop_remove, "removing a mapping that is not there does not write either")
+
+    vim.api.nvim_set_option_value = real
+    vim.api.nvim_win_close(win, true)
+  end
+
   -- ------------------------------------------------------- invalid window
   do
     local win = scratch_win()
