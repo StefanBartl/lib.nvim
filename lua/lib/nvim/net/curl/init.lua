@@ -74,6 +74,7 @@
 require("lib.nvim.net.curl.@types")
 
 local nvim_json = require("lib.nvim.json")
+local line_stream = require("lib.nvim.system.lines")
 
 local M = {}
 
@@ -565,7 +566,10 @@ function M.fetch_stream(url, opts, handlers)
   -- it is unconditional here (unlike the other tiers, which never stream and
   -- so never notice the default buffering).
   table.insert(argv, 2, "-N")
-  local buffered = ""
+
+  -- Chunks arrive mid-line; the collector holds the partial back until the
+  -- rest of the same stream completes it (@see lib.nvim.system.lines).
+  local collector = line_stream.collector()
 
   ---@param err string|nil
   ---@param data string|nil
@@ -581,14 +585,7 @@ function M.fetch_stream(url, opts, handlers)
     if not data then
       return -- stdout closed; on_exit (below) still fires separately
     end
-    buffered = buffered .. data
-    while true do
-      local nl = buffered:find("\n", 1, true)
-      if not nl then
-        break
-      end
-      local line = buffered:sub(1, nl - 1):gsub("\r$", "")
-      buffered = buffered:sub(nl + 1)
+    for _, line in ipairs(collector.feed(data)) do
       if handlers.on_chunk then
         vim.schedule(function()
           handlers.on_chunk(line)
@@ -601,14 +598,11 @@ function M.fetch_stream(url, opts, handlers)
     argv,
     { text = true, stdin = stdin, timeout = opts.timeout_ms, stdout = on_stdout },
     function(obj)
-      if buffered ~= "" then
-        local line = buffered:gsub("\r$", "")
-        buffered = ""
-        if handlers.on_chunk then
-          vim.schedule(function()
-            handlers.on_chunk(line)
-          end)
-        end
+      local line = collector.flush()
+      if line and handlers.on_chunk then
+        vim.schedule(function()
+          handlers.on_chunk(line)
+        end)
       end
       if handlers.on_done then
         vim.schedule(function()

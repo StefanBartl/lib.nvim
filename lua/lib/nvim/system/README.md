@@ -13,6 +13,10 @@ Guiding ideas:
   publishing to `vim.g.*` and starting the RPC server are **opt-in**.
 * **no duplicated detection** — platform booleans delegate to
   [`lib.nvim.cross.platform`](../cross), so OS logic lives in exactly one place.
+* **one line splitter** — nothing that reads a process hands over lines, and
+  every consumer that re-derived that ended up with its own half-right copy.
+  `lines.lua` owns it: `job.lua` and [`lib.nvim.net.curl`](../net/curl) both
+  use it, and so do the plugins that stream a subprocess themselves.
 
 ---
 
@@ -26,6 +30,7 @@ lib.nvim.system/
 ├── info.lua        -- cross-platform system information (float + clipboard)
 ├── proc_trace.lua  -- instrumentation for system()/jobstart/vim.system calls
 ├── job.lua         -- vim.system wrapper with line-buffered, schedule-safe callbacks
+├── lines.lua       -- output chunks -> whole lines (the buffering job and net.curl share)
 └── @types/         -- LuaLS types (Lib.System.*)
 ```
 
