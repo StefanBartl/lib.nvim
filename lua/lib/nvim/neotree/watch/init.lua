@@ -222,7 +222,12 @@ function M.with_release(paths, fn)
   local ok, res = pcall(fn)
   M.release(paths)
   if not ok then
-    error(res)
+    -- Level 0: `res` is `fn`'s error, already carrying whatever position Lua
+    -- gave it at the original raise site. Re-raising at the default level 1
+    -- would stamp *this* file's path and line in front of it, so the message
+    -- would read `.../neotree/watch/init.lua:NN: caller.lua:MM: real reason`
+    -- and blame the release helper for a failure it only passed along.
+    error(res, 0)
   end
   return res
 end

@@ -140,6 +140,13 @@ return function(H)
     tostring(raised_err):find("boom", 1, true) ~= nil,
     "with_release(): the original error message survives"
   )
+  -- Regression: the re-raise used Lua's default level 1, which stamped *this*
+  -- module's own path and line in front of fn's error, so the message read
+  -- `.../neotree/watch/init.lua:225: <spec>.lua:N: boom` and blamed the
+  -- release helper for a failure it only passed along. fn's error must come
+  -- back out exactly as it went in -- one position stamp (fn's own), not two.
+  local _, stamp_count = tostring(raised_err):gsub("%.lua:%d+:", "")
+  eq(stamp_count, 1, "with_release(): re-raise adds no second source-path prefix of its own")
 
   -- ------------------------------------------------------ stop_watching wrap
 

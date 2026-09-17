@@ -60,6 +60,15 @@ fsops.rename_file(old, new, {
 When nothing is installed/tracked (non-neotree setup, or the guarding feature is
 off), `release` simply releases nothing — so passing the hook is always safe.
 
+**`with_release(paths, fn)`** brackets `fn` with a `release` on either side (the
+second catches a watcher neo-tree re-established mid-operation, so a follow-up
+step is not re-blocked) and returns `fn`'s own return value. If `fn` raises, the
+error is re-raised **after** the second release, using `error(err, 0)` so the
+original message — and only its original position — reaches the caller: a
+default-level re-raise would stamp this module's own path and line in front and
+blame the release helper for a failure it merely passed along. See
+[docs/conventions.md](../../../../docs/conventions.md#returned-error-strings-carry-no-source-position).
+
 **`list()`** returns a snapshot of every tracked watcher (`path`, `active`, and
 `exists` — whether `path` still exists on disk). `exists = false` is the leak
 signature: a watcher still pointing at a path neo-tree never released after a
