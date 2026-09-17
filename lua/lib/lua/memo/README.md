@@ -200,7 +200,13 @@ local fn = memo.memoize(
 
 ### Limitations
 
-* default keying uses `table.concat({ ... })`
+* default keying tags each argument with its type and `tostring`s it
+  (it was a bare `table.concat({ ... })` until 2026-09-17, which threw on any
+  argument `concat` will not take and merged `f(1)` with `f("1")`)
+* **reference types are keyed by address**, so memoizing over a short-lived
+  object — a TSNode from a tree that gets reparsed, say — can return an
+  earlier object's value once an address is recycled. Pass a `keyer` that
+  derives something stable, or do not memoize that function
 * a `nil` return value is not cached
 * not suitable for side effects
 * arguments should be deterministic
@@ -212,7 +218,9 @@ local fn = memo.memoize(
 * caching `vim.fn.expand`, `vim.fn.resolve`
 * memoization of path normalizations
 * reuse of computed highlight definitions
-* optimization of LSP or Tree-sitter helper functions
+* optimization of LSP or Tree-sitter helper functions — but key those on
+  something stable (a bufnr plus `changedtick`, a range), never on the node
+  itself; see the address note under Limitations
 * wrappers around expensive Lua pattern matches
 
 ---

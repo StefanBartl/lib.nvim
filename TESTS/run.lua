@@ -68,6 +68,7 @@ local specs = {
   "ui_list_spec.lua",
   "statusline_spec.lua",
   "lua_helpers_spec.lua",
+  "memo_spec.lua",
   "nvim_helpers_spec.lua",
   "window_spec.lua",
   "selection_spec.lua",
