@@ -68,6 +68,7 @@ local specs = {
   "ui_kit_spec.lua",
   "ui_hl_persist_spec.lua",
   "ui_winhighlight_spec.lua",
+  "copy_to_clipboard_spec.lua",
   "ui_list_spec.lua",
   "statusline_spec.lua",
   "lua_helpers_spec.lua",

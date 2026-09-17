@@ -29,6 +29,29 @@ local function run_with_stdin(argv, text)
   return ok and obj ~= nil and obj.code == 0
 end
 
+---@internal
+--- Set the `+` register and verify the write actually took, rather than
+--- trusting `pcall`'s success as a proxy for it.
+---
+--- `vim.fn.setreg("+", text)` does not raise when there is no clipboard
+--- provider -- it just silently does nothing, after printing "clipboard:
+--- No provider" to `:messages`. So `pcall(vim.fn.setreg, ...)` was always
+--- `true` on a machine with no provider AND no external tool, and this
+--- function reported success while nothing was actually on the clipboard.
+--- Every caller across this fleet trusted that return value to tell a user
+--- "copied" -- that was the actual bug, not a CI quirk: any Linux session
+--- with no `xclip`/`xsel`/`wl-copy` and no `g:clipboard` configured hit it.
+---@param text string
+---@return boolean
+local function try_native_register(text)
+  local ok = pcall(vim.fn.setreg, "+", text)
+  if not ok then
+    return false
+  end
+  local ok2, got = pcall(vim.fn.getreg, "+")
+  return ok2 and got == text
+end
+
 --- Copy text to system clipboard using platform-appropriate backend.
 ---@param text string
 ---@return boolean
@@ -36,8 +59,7 @@ return function(text)
   local lib = require("lib")
 
   -- 1) Try Neovim register (+)
-  local ok = pcall(vim.fn.setreg, "+", text)
-  if ok then
+  if try_native_register(text) then
     return true
   end
 
