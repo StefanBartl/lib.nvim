@@ -129,11 +129,20 @@ end
 
 ---Whether a header name carries a credential and therefore must not reach
 ---argv. Matched case-insensitively, since header names are.
+---
+---`private-token` is on this list even though it was introduced by one API
+---(GitLab's): unlike `x-api-key`, whose value is a public client identifier for
+---some services, the name states outright that its value is a secret, so
+---treating it as one cannot be wrong for any caller. Header names that only
+---carry a credential for a specific API still belong in `opts.secret_headers`.
 ---@param name string
 ---@return boolean
 function M.is_secret_header(name)
   local lower = name:lower()
-  return lower == "authorization" or lower == "proxy-authorization" or lower == "cookie"
+  return lower == "authorization"
+    or lower == "proxy-authorization"
+    or lower == "cookie"
+    or lower == "private-token"
 end
 
 ---@internal

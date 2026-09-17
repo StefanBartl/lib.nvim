@@ -104,13 +104,25 @@ function M.merge(wh, new_pairs)
   local existing = M.parse(wh)
   local seen, out = {}, {}
 
+  -- Sorted, not in `pairs()` order. A table's iteration order is stable
+  -- within one Lua state but not guaranteed across rehashes, and an
+  -- unstable order would make `update`'s no-op check below miss: the same
+  -- set of mappings would serialize differently and look like a change.
+  local incoming = {}
   for from, to in pairs(new_pairs) do
     if type(from) == "string" and type(to) == "string" then
       if from:match(GROUP) and to:match(GROUP) then
-        out[#out + 1] = { from = from, to = to }
-        seen[from] = true
+        incoming[#incoming + 1] = { from = from, to = to }
       end
     end
+  end
+  table.sort(incoming, function(x, y)
+    return x.from < y.from
+  end)
+
+  for _, pair in ipairs(incoming) do
+    out[#out + 1] = pair
+    seen[pair.from] = true
   end
 
   for i = 1, #existing do
@@ -179,7 +191,19 @@ function M.update(win, new_pairs)
   if not vim.api.nvim_win_is_valid(win) then
     return false
   end
-  return M.apply(win, M.merge(M.get(win), new_pairs))
+
+  local current = M.get(win)
+  local merged = M.merge(current, new_pairs)
+
+  -- Writing the option redraws the window, so an unchanged value is pure
+  -- cost. It is not a rare case either: the callers here re-apply the same
+  -- mappings from `ModeChanged`, `DiagnosticChanged`, `BufEnter` and
+  -- `WinEnter`, which fire repeatedly while typing.
+  if merged == current then
+    return true
+  end
+
+  return M.apply(win, merged)
 end
 
 --- Drop one or more mappings by their `from` group, leaving the rest alone.
@@ -204,14 +228,20 @@ function M.remove(win, from)
     end
   end
 
+  local current = M.get(win)
   local kept = {}
-  for _, p in ipairs(M.parse(M.get(win))) do
+  for _, p in ipairs(M.parse(current)) do
     if not drop[p.from] then
       kept[#kept + 1] = p
     end
   end
 
-  return M.apply(win, M.serialize(kept))
+  local stripped = M.serialize(kept)
+  if stripped == current then
+    return true
+  end
+
+  return M.apply(win, stripped)
 end
 
 return M

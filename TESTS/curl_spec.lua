@@ -442,6 +442,21 @@ return function(H)
     stop_server(server)
   end
 
+  -- is_secret_header: the names that must never reach argv, where any other
+  -- process on the machine can read them off the command line.
+  do
+    ok(curl.is_secret_header("Authorization"), "is_secret_header: Authorization")
+    ok(curl.is_secret_header("proxy-authorization"), "is_secret_header: Proxy-Authorization")
+    ok(curl.is_secret_header("Cookie"), "is_secret_header: Cookie")
+    -- GitLab's, but the name says outright that the value is a secret, so it
+    -- is safe to treat as one for every caller -- unlike x-api-key, which is a
+    -- public client identifier for some services and stays caller-declared.
+    ok(curl.is_secret_header("PRIVATE-TOKEN"), "is_secret_header: PRIVATE-TOKEN")
+    ok(curl.is_secret_header("private-token"), "is_secret_header: matched case-insensitively")
+    ok(not curl.is_secret_header("Accept"), "is_secret_header: an ordinary header is not secret")
+    ok(not curl.is_secret_header("x-api-key"), "is_secret_header: an API-specific name is not")
+  end
+
   -- config_quote: a value with an embedded raw newline must not break the
   -- `-K` config file's own line structure. Before the fix, `header = "before
   -- <raw \n> after"` split into a second, bare `after"` line that curl's
