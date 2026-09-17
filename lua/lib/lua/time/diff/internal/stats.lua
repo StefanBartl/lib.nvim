@@ -151,16 +151,27 @@ function M.calculate_cv(stats, stddev)
   return (stddev / stats.avg) * 100
 end
 
---- Create memoized stats calculator
---- Caches results based on checkpoint array reference
+--- Create memoized stats calculator.
+---
+--- The options were spelled `max_size` and `key_fn`; `memo.fn` reads `size`
+--- and `keyer`. Both were therefore dropped in silence, which left the default
+--- key builder holding a `checks` *table* -- so the calculator this returns
+--- threw on its first call, for as long as it existed. Nothing called it, so
+--- nothing said. `memo.fn` rejects unknown options now, which is what turned
+--- this up.
+---
+--- The key stays as its author wrote it. Note it is deliberately weak: two
+--- different checkpoint arrays of equal length taken at the same start time
+--- share an entry. Fine for the timing summaries this serves, not a general
+--- content key.
 ---@return fun(checks: number[], start_time: number): TimeDiffStats|nil
 ---@nodiscard
 ---@internal
 function M.create_memoized_calculator()
   return memo.fn(M.calculate_stats, {
-    max_size = 100,
+    size = 100,
     -- Use checks array length as cache key component
-    key_fn = function(checks, start_time)
+    keyer = function(checks, start_time)
       return string.format("%d:%d", #checks, start_time)
     end,
   })
