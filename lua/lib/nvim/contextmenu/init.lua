@@ -184,7 +184,7 @@ end
 --- pre-built list with `group(out, unpack(list))` if you already have one.
 ---@param out Lib.ContextMenu.Item[]
 ---@param ... Lib.ContextMenu.Item|nil
----@return boolean added  Whether anything from the arguments was appended
+---@return boolean added # Whether anything from the arguments was appended
 function M.group(out, ...)
   local n = select("#", ...)
   local compact = {}
