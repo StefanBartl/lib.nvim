@@ -27,3 +27,19 @@ local str, err2 = json.encode({ a = 1 })
 |-----------------------|-----------------------|------------------------------------------------------------------|
 | `M.decode(str)`        | `any, string\|nil`     | Decoded value, or `nil` + error (`"invalid JSON: ..."`)         |
 | `M.encode(value, opts)`| `string\|nil, string\|nil` | JSON string, or `nil` + error — delegates to `lib.lua.json.encode` |
+
+## Error strings are user-presentable
+
+`M.decode`'s `err` is meant to be forwarded straight into a notification, so
+it never carries a `file:line:` prefix:
+
+```
+invalid JSON: Expected object key string but found invalid token at character 2
+invalid JSON: max nesting depth (64) exceeded while normalizing JSON null values
+```
+
+The first comes from `vim.json.decode` (raised in C, so unprefixed anyway);
+the second is this module's own depth guard, which raises with `error(msg, 0)`
+precisely so both failure modes read alike. Consumers should forward `err`
+verbatim rather than pattern-matching a path prefix off the front — see
+[docs/conventions.md](../../../../docs/conventions.md#returned-error-strings-carry-no-source-position).

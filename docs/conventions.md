@@ -37,3 +37,44 @@ Not every resolver needs all three tiers; add the ones a module actually
 has callers for (rule of three still applies to the *tiers*, not just to
 extracting the module in the first place). The point of this convention is
 naming, not mandating a specific set of functions.
+
+## Returned error strings carry no source position
+
+A message that reaches a caller as a **value** — the `err` half of a
+`(value, err)` pair, or an error re-raised on someone else's behalf — must
+not carry Lua's `file:line:` stamp.
+
+`error(msg)` defaults to level 1, which prefixes `msg` with the raising
+file's path and line. That is right for a *crash* (a programmer error, where
+the position is the point) and wrong for a message a consumer will forward
+into a user-facing notification, where it reads like a plugin crash, names a
+file the user cannot act on, and leaks the developer's filesystem layout:
+
+```
+[data] JSON decode failed: E:\repos\lib.nvim/lua/lib/nvim/json/init.lua:43: max nesting depth (64) exceeded
+```
+
+So:
+
+- **Raising a message meant to be returned** — `error(msg, 0)`. Level 0
+  suppresses the position entirely. This is the fix, because it stops the
+  prefix being created at all. See `lib.nvim.json`'s depth guard, and
+  `lib.lua.functions.meta.raise`.
+- **Re-raising someone else's error** — `error(err, 0)` too. `err` already
+  carries whatever position it was raised with; level 1 would stamp a second
+  one in front and blame the forwarding helper. See
+  `lib.nvim.neotree.watch.with_release`.
+- **A genuine crash** (invalid argument, unknown key, a broken invariant) —
+  keep the position. Use level 2 to blame the caller rather than the
+  validator; `lib.lua.time.diff` and `lib.lua.memo` do this throughout.
+
+Do **not** strip the prefix afterwards with a pattern on the consuming side.
+Such a pattern has to guess which `:` starts a position stamp, and a Windows
+path (`E:\repos\...`) contains one of its own; anchoring on `:%d+:` narrows
+but does not close the gap, because a legitimate message may quote a path or
+position from user data. Errors that come from outside Lua (`vim.json.decode`
+fails in C) have no prefix to begin with, so there is nothing for a stripper
+to do but undo damage lib.nvim inflicted on itself.
+
+Pin the behaviour in the spec: assert the actionable text is present *and*
+that `%.lua:%d+:` is absent (or, for a re-raise, occurs exactly once).

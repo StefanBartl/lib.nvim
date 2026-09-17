@@ -434,6 +434,22 @@ return function(H)
     "nvim.json.decode: max-depth guard reports an error instead of recursing forever"
   )
   ok(deep_json_err ~= nil, "nvim.json.decode: max-depth refusal carries an error message")
+  -- Regression: the depth guard raised at Lua's default level 1, so the `err`
+  -- half of the pair arrived as
+  -- `invalid JSON: /abs/path/lua/lib/nvim/json/init.lua:43: max nesting ...`.
+  -- Consumers (data.nvim) forward `err` verbatim into a user notification, so
+  -- that prefix read like a plugin crash, named a file the user cannot act on,
+  -- and leaked the developer's filesystem layout. The message itself must
+  -- survive; only the position stamp must be gone. Anchored on `:<digits>:`
+  -- because a Windows path (`E:\repos\...`) contains a colon of its own.
+  ok(
+    not tostring(deep_json_err):match("%.lua:%d+:"),
+    "nvim.json.decode: max-depth refusal carries no source-path/line prefix"
+  )
+  ok(
+    tostring(deep_json_err):find("max nesting depth", 1, true) ~= nil,
+    "nvim.json.decode: max-depth refusal still states the actionable reason"
+  )
 
   local Path = require("lib.nvim.fs.path.object")
   local path_dir = tmp .. "/path_obj"

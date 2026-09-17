@@ -35,6 +35,15 @@ local MAX_NORMALIZE_DEPTH = 64
 --- `vim.json.decode` never produces cycles, so no cycle guard is needed --
 --- only a depth guard (`M.decode` below turns the resulting `error()` into
 --- the same `nil, err` shape as any other decode failure).
+---
+--- The depth guard raises at level 0 **on purpose**: this message is not a
+--- crash report, it is the `err` half of `M.decode`'s `(value, err)` pair and
+--- ends up verbatim in a consumer's user-facing notification. At the default
+--- level 1 Lua prefixes it with this file's absolute path and line number,
+--- which reads like a plugin crash, names a file no user can act on, and
+--- leaks the developer's filesystem layout. `vim.json.decode`'s own failures
+--- arrive from C without such a prefix, so level 0 is what makes both decode
+--- failure modes look alike.
 ---@param value any
 ---@param depth integer
 ---@return any
@@ -43,7 +52,8 @@ local function normalize_null(value, depth)
     error(
       ("max nesting depth (%d) exceeded while normalizing JSON null values"):format(
         MAX_NORMALIZE_DEPTH
-      )
+      ),
+      0
     )
   end
   if value == vim.NIL then
