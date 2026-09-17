@@ -60,11 +60,7 @@ return function(H)
   )
 
   -- --------------------------------------------------------------- merge
-  eq(
-    wh.merge("", { Normal = "NormalFloat" }),
-    "Normal:NormalFloat",
-    "merging into an empty value"
-  )
+  eq(wh.merge("", { Normal = "NormalFloat" }), "Normal:NormalFloat", "merging into an empty value")
 
   local merged = wh.parse(wh.merge("Normal:A,Cursor:B", { Normal = "C" }))
   eq(#merged, 2, "merge keeps the mapping it did not touch")
