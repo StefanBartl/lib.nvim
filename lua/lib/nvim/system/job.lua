@@ -22,6 +22,8 @@
 
 require("lib.nvim.system.@types")
 
+local lines = require("lib.nvim.system.lines")
+
 local M = {}
 
 ---@internal
@@ -35,54 +37,14 @@ local function build_cmd(opts)
   return cmd
 end
 
----@internal
----@param cb fun(err: nil, line: string)|nil
----@return fun(err: string|nil, data: string|nil)|nil
-local function line_buffered(cb)
-  if not cb then
-    return nil
-  end
-
-  local pending = ""
-  return function(_, data)
-    if not data then
-      -- EOF. A trailing fragment with no newline after it is still a line,
-      -- and plenty of real output ends that way — a file whose last line has
-      -- no terminator, `printf` without a trailing \n, a program killed
-      -- mid-line. Returning here without flushing drops it silently, so the
-      -- last line of a preview would just be missing.
-      if pending ~= "" then
-        local last = pending:gsub("\r$", "")
-        pending = ""
-        vim.schedule(function()
-          cb(nil, last)
-        end)
-      end
-      return
-    end
-    pending = pending .. data
-    while true do
-      local nl = pending:find("\n", 1, true)
-      if not nl then
-        break
-      end
-      local line = pending:sub(1, nl - 1):gsub("\r$", "")
-      pending = pending:sub(nl + 1)
-      vim.schedule(function()
-        cb(nil, line)
-      end)
-    end
-  end
-end
-
 --- Start a command, streaming stdout/stderr to the given callbacks one line
 --- at a time (each call already wrapped in `vim.schedule`).
 ---@param opts Lib.System.Job.Opts
 ---@return vim.SystemObj
 function M.start(opts)
   return vim.system(build_cmd(opts), {
-    stdout = line_buffered(opts.on_stdout),
-    stderr = line_buffered(opts.on_stderr),
+    stdout = lines.buffered(opts.on_stdout),
+    stderr = lines.buffered(opts.on_stderr),
   })
 end
 
