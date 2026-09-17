@@ -15,6 +15,12 @@
 --- like a guarantee that never applied. On Windows every line would otherwise
 --- carry a CR.
 ---
+--- The trailing partial is held in memory until its newline arrives, with no
+--- bound: output that never emits one accumulates in full. That is inherent to
+--- line buffering rather than a choice made here, but it is worth knowing
+--- before streaming something whose shape you do not control -- a caller that
+--- needs a ceiling has to impose it on the process, not on this.
+---
 --- Both shapes are here because callers genuinely need both: `M.collector()`
 --- when you want to pull lines out of chunks you already have, `M.buffered()`
 --- when you want a ready-made `vim.system` handler that calls you per line.
@@ -77,11 +83,16 @@ function M.collector()
     end,
 
     flush = function()
-      if buffered == "" then
-        return nil
-      end
+      -- Strip before deciding, not after: a remainder of exactly "\r" is a
+      -- line ending whose newline never arrived, not a line. Testing
+      -- emptiness first returned it as "", which is truthy in Lua, so a
+      -- caller writing `if last then ...` emitted a blank line at the end of
+      -- every such stream.
       local last = strip_cr(buffered)
       buffered = ""
+      if last == "" then
+        return nil
+      end
       return last
     end,
   }

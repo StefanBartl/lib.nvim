@@ -47,6 +47,29 @@ return function(H)
   end
 
   do
+    -- A remainder of exactly one CR is a line ending whose newline never
+    -- arrived, not a line. It used to come back as "" -- truthy in Lua -- so
+    -- a caller writing `if last then ...` put a blank line at the end of
+    -- every such stream.
+    local c = lines.collector()
+    eq(#c.feed("done\r\ntail\r"), 1, "collector: the complete line comes through")
+    eq(c.flush(), "tail", "collector: the partial keeps its content")
+
+    local only_cr = lines.collector()
+    only_cr.feed("\r")
+    eq(only_cr.flush(), nil, "collector: a remainder of just a CR is nothing, not an empty line")
+  end
+
+  do
+    -- ...while a genuinely blank final line still arrives, via feed.
+    local c = lines.collector()
+    local got = c.feed("a\n\n")
+    eq(#got, 2, "collector: a blank line before EOF is a line")
+    eq(got[2], "", "collector: ...and it is empty")
+    eq(c.flush(), nil, "collector: nothing is left over after it")
+  end
+
+  do
     -- A CR inside a line is the process's own output.
     local c = lines.collector()
     eq(table.concat(c.feed("mid\rdle\n"), "|"), "mid\rdle", "collector: interior CR is kept")
