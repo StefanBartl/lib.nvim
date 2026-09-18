@@ -227,7 +227,10 @@ function M.resolve(kind, opts)
     if not raw or raw == "" then
       return {}, "path scope needs a path"
     end
-    local p = vim.fs.normalize(vim.fn.expand(raw))
+    -- `raw` is user-command text. `vim.fn.expand` would run a backtick span
+    -- through the shell and read `%`/`#` as buffer names; `expand_path` only
+    -- resolves `~` and environment variables.
+    local p = vim.fs.normalize(require("lib.nvim.cross.fs.expand_path")(raw))
     local st = uv.fs_stat(p)
     if not st then
       return {}, ("no such file or directory: %s"):format(raw)

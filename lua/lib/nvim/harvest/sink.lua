@@ -46,7 +46,10 @@ function M.file(text, path)
   if not ok_mod then
     return false, "file writer unavailable"
   end
-  return to_file(vim.fs.normalize(vim.fn.expand(path)), text)
+  -- `path` comes from a user's `out=file:<path>` token. `vim.fn.expand`
+  -- would run a backtick span through the shell and read `%` as the current
+  -- buffer's name; `expand_path` only resolves `~` and environment variables.
+  return to_file(vim.fs.normalize(require("lib.nvim.cross.fs.expand_path")(path)), text)
 end
 
 --- Show `text` in a throwaway scratch buffer.

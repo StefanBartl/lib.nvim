@@ -121,6 +121,12 @@ harvest.outputs()  --> completion candidates
 Recognized: `buffer`/`table` (scratch buffer), `clipboard`/`clip`, `echo`,
 `file:<path>`.
 
+Paths in `file:<path>` and in `scope.resolve("path", …)`/`resolve_token` are
+expanded with [`lib.nvim.cross.fs.expand_path`](../cross/README.md) (`~`,
+`$VAR`, `%VAR%`) — never with `vim.fn.expand`. Both are user-command text: a
+backtick span in them is not a shell command, and `%`/`#` are literal
+characters, not the current or alternate buffer's name.
+
 ## Worked example
 
 ```lua

@@ -115,6 +115,19 @@ return function(H)
   local by_empty = scope.resolve_token("")
   eq(#by_empty, 1, "resolve_token: empty token falls back to the current buffer")
 
+  -- User-command text never reaches `vim.fn.expand`: `%` stays a literal
+  -- character rather than the current buffer's name, and a backtick span
+  -- stays text rather than a shell command.
+  local _, literal_err = scope.resolve("path", { path = dir .. "/%" })
+  ok(
+    literal_err ~= nil and literal_err:find("no such file", 1, true) ~= nil,
+    "scope.resolve(path): '%' is a literal, not the current buffer: " .. tostring(literal_err)
+  )
+  local marker = dir .. "/backtick-marker"
+  local _, tick_err = scope.resolve_token("`echo x > " .. marker .. "`")
+  ok(tick_err ~= nil, "resolve_token: a backtick span is not a path that resolves")
+  eq(vim.fn.filereadable(marker), 0, "resolve_token: and the shell never ran it")
+
   -- ------------------------------------------------------------ render.*
 
   -- Pipe escaping: an unescaped "|" would silently split a cell in the GFM
@@ -183,6 +196,11 @@ return function(H)
   local f = assert(io.open(out_path, "r"))
   eq(f:read("*a"), "hello\n", "emit: file sink wrote the expected content")
   f:close()
+
+  -- The `out=file:` path is user text: `%` names a file, not the buffer.
+  local literal_path = dir .. "/%.md"
+  eq(harvest.emit("pct", "file:" .. literal_path), true, "emit: file:<path> with a '%' writes")
+  eq(vim.fn.filereadable(literal_path), 1, "emit: to a file of that literal name")
 
   local ok_unknown, unknown_err = harvest.emit("x", "not-a-real-sink")
   eq(ok_unknown, false, "emit: unrecognized output token fails")
