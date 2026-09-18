@@ -46,14 +46,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-    # TEMPORARY, and the only reason it is here: `publish-ci-verified` below
-    # needs this job, and ~30 repos across the fleet pin `ref: ci-verified`.
-    # Without this, one red Windows spec would stop ci-verified from moving at
-    # all and freeze every consumer on an old lib.nvim -- a much worse outcome
-    # than the bug it would be reporting. The non-Linux legs still run and
-    # still show their failures in the log; they just do not gate the branch
-    # yet. REMOVE THIS once Windows and macOS are green, so they gate too.
-    continue-on-error: ${{ matrix.os != 'ubuntu-latest' }}
     defaults:
       run:
         # Windows runners default to PowerShell; one shell on all three keeps
