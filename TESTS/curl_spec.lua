@@ -614,6 +614,43 @@ return function(H)
     stop_server(server)
   end
 
+  -- download: the body lands in the file, and the download tier is bounded
+  -- by default -- a body larger than `max_bytes` is refused and the partial
+  -- file removed, not left behind as a truncated "success".
+  do
+    local port, server = start_server(table.concat({
+      "HTTP/1.1 200 OK",
+      "Content-Length: 24",
+      "",
+      "twenty-four-byte-body!!!",
+    }, "\r\n"))
+    local dest = vim.fn.tempname() .. ".bin"
+    local success, resp = curl.download_blocking(("http://127.0.0.1:%d/"):format(port), dest)
+    ok(success, "curl.download_blocking: a small body downloads: " .. tostring(resp))
+    eq(
+      table.concat(vim.fn.readfile(dest, "b"), "\n"),
+      "twenty-four-byte-body!!!",
+      "curl.download_blocking: the body is in the file"
+    )
+    stop_server(server)
+    vim.fn.delete(dest)
+  end
+
+  do
+    local port, server = start_server(table.concat({
+      "HTTP/1.1 200 OK",
+      "Content-Length: 24",
+      "",
+      "twenty-four-byte-body!!!",
+    }, "\r\n"))
+    local dest = vim.fn.tempname() .. ".bin"
+    local success =
+      curl.download_blocking(("http://127.0.0.1:%d/"):format(port), dest, { max_bytes = 8 })
+    eq(success, false, "curl.download_blocking: a body over max_bytes is refused")
+    eq(uv.fs_stat(dest), nil, "curl.download_blocking: and no partial file is left behind")
+    stop_server(server)
+  end
+
   -- BUG: opts.query is appended straight onto the URL, and the URL is a
   -- single positional argv element -- never routed through the `-K -`
   -- config path the way credential headers/bearer_token/auth are. Unlike

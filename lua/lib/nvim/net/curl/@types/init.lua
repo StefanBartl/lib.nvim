@@ -13,7 +13,8 @@
 ---@field bearer_token? string Sent as `Authorization: Bearer <token>`
 ---@field secret_headers? table<string, string> Header name/value pairs sent through the same `-K -` config-file path as `bearer_token`/`opts.auth`, never argv — for API-specific credential header names (e.g. Anthropic's `x-api-key`) that `is_secret_header` cannot recognize generically
 ---@field query? table<string, string> URL-encoded and appended as `?k=v&...`
----@field timeout_ms? integer Passed through to `vim.system`'s `timeout` / `wait(timeout)`
+---@field timeout_ms? integer|false Passed through to `vim.system`'s `timeout` / `wait(timeout)`. `download`/`download_blocking` default to 5 minutes; `false` lifts that default. The fetch tiers have no default.
+---@field max_bytes? integer|false Abort once the body would exceed this many bytes (curl's `--max-filesize`). `download`/`download_blocking` default to 512 MiB; `false` lifts that default. The fetch tiers have no default.
 ---@field body? string Raw request body, sent via `-d`
 ---@field auth? Lib.Net.Curl.BasicAuth Basic auth (`-u user:pass`)
 ---@field form? table<string, string> Multipart form fields, one `-F "k=v"` per entry; a value starting with `@` is curl's own file-upload syntax

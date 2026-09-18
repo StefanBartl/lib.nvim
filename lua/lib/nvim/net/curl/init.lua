@@ -190,6 +190,11 @@ local function build_argv(url, opts, include_headers, download_dest)
     argv[#argv + 1] = "-k"
   end
 
+  if opts.max_bytes then
+    argv[#argv + 1] = "--max-filesize"
+    argv[#argv + 1] = tostring(opts.max_bytes)
+  end
+
   if opts.http_version == "1.0" then
     argv[#argv + 1] = "--http1.0"
   elseif opts.http_version == "1.1" then
@@ -482,10 +487,33 @@ function M.fetch_json_blocking(url, opts)
   return ok, data_or_err, obj
 end
 
+--- A download with neither a byte limit nor a wall-clock limit lets a hostile
+--- or merely broken endpoint fill the disk before `remove_partial` ever runs
+--- (it only runs once curl has exited). Both therefore default on for the
+--- download tier; `false` lifts either explicitly. The fetch tiers keep
+--- `timeout_ms` opt-in: they buffer in memory, and a caller streaming a long
+--- response would be cut off by a default.
+local DEFAULT_DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000
+local DEFAULT_DOWNLOAD_MAX_BYTES = 512 * 1024 * 1024
+
+---@internal
+---@param opts Lib.Net.Curl.FetchOpts
+---@return Lib.Net.Curl.FetchOpts
+local function bounded(opts)
+  local out = vim.tbl_extend("force", {}, opts)
+  if out.max_bytes == nil then
+    out.max_bytes = DEFAULT_DOWNLOAD_MAX_BYTES
+  end
+  if out.timeout_ms == nil then
+    out.timeout_ms = DEFAULT_DOWNLOAD_TIMEOUT_MS
+  end
+  return out
+end
+
 ---Fetch `url` and write the response body directly to `dest_path` instead
 ---of buffering it in memory, asynchronously. Returns status/headers like
 ---`fetch_raw` — `response.body` is always `""` here, since the body went
----to `dest_path`, not stdout.
+---to `dest_path`, not stdout. Bounded by default: see `bounded`.
 ---@param url string
 ---@param dest_path string
 ---@param opts Lib.Net.Curl.FetchOpts|nil
@@ -494,11 +522,11 @@ function M.download(url, dest_path, opts, cb)
   if not vim.system then
     error("lib.nvim.net.curl requires Neovim 0.10+ (vim.system)")
   end
-  opts = opts or {}
+  opts = bounded(opts or {})
 
   local argv, stdin = build_argv(url, opts, false, dest_path)
 
-  vim.system(argv, { text = true, stdin = stdin, timeout = opts.timeout_ms }, function(obj)
+  vim.system(argv, { text = true, stdin = stdin, timeout = opts.timeout_ms or nil }, function(obj)
     -- See fetch_raw's identical comment: this callback runs in a fast
     -- event context, and a caller's `cb` routinely touches the UI.
     vim.schedule(function()
@@ -529,11 +557,12 @@ function M.download_blocking(url, dest_path, opts)
   if not vim.system then
     error("lib.nvim.net.curl requires Neovim 0.10+ (vim.system)")
   end
-  opts = opts or {}
+  opts = bounded(opts or {})
 
   local argv, stdin = build_argv(url, opts, false, dest_path)
 
-  local obj = vim.system(argv, { text = true, stdin = stdin }):wait(opts.timeout_ms)
+  local timeout = opts.timeout_ms or nil
+  local obj = vim.system(argv, { text = true, stdin = stdin, timeout = timeout }):wait(timeout)
   if obj.code ~= 0 then
     remove_partial(dest_path)
     local err = (obj.stderr and obj.stderr ~= "") and obj.stderr or ("curl exited " .. obj.code)
