@@ -27,7 +27,14 @@ return function(path, content)
   if content ~= "" and not content:match("\n$") then
     content = content .. "\n"
   end
-  f:write(content)
-  f:close()
+  -- Same as to_file: the flush error of a buffered write shows up on close.
+  local ok_write, write_err = f:write(content)
+  local ok_close, close_err = f:close()
+  if not ok_write then
+    return false, "write failed: " .. tostring(write_err or path)
+  end
+  if not ok_close then
+    return false, "close failed: " .. tostring(close_err or path)
+  end
   return true, nil
 end

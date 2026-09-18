@@ -26,7 +26,16 @@ return function(path, content)
   if content ~= "" and not content:match("\n$") then
     content = content .. "\n"
   end
-  f:write(content)
-  f:close()
+  -- Writes are buffered: a full disk or a read-only mount usually surfaces
+  -- on close, not on write, so both results are checked before claiming
+  -- the bytes are on disk.
+  local ok_write, write_err = f:write(content)
+  local ok_close, close_err = f:close()
+  if not ok_write then
+    return false, "write failed: " .. tostring(write_err or path)
+  end
+  if not ok_close then
+    return false, "close failed: " .. tostring(close_err or path)
+  end
   return true, nil
 end
