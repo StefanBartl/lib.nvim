@@ -17,7 +17,7 @@
 ---@field write fun(self: Lib.Fs.Path.Object, content: string): boolean, string|nil
 ---@field joinpath fun(self: Lib.Fs.Path.Object, ...: string): Lib.Fs.Path.Object
 ---@field parent fun(self: Lib.Fs.Path.Object): Lib.Fs.Path.Object
----@field iter fun(self: Lib.Fs.Path.Object, opts?: Lib.Fs.CollectRecursive.Opts): string[]
+---@field iter fun(self: Lib.Fs.Path.Object, opts?: Lib.Fs.CollectRecursive.Opts): string[], string[]?
 
 --- `require("lib.nvim.fs.path.object")` itself: the `Path` class table.
 ---@class Lib.Fs.Path.ObjectModule

@@ -53,7 +53,12 @@ end)
 
 ## Returns
 
-A flat `string[]` of absolute paths, merged across all roots.
+A flat `string[]` of absolute paths, merged across all roots, plus `errors`:
+`collect_recursive`'s unreadable-directory reports merged across roots, or
+`nil`. A scan that reported any error is returned as-is but **not written to
+`cache_path`** — with `ttl_seconds` unset the cache never expires, so "this
+root was unavailable once" must not become "this project has no files"
+across restarts.
 
 ## `scan_async(roots, opts?, on_done)`
 
@@ -61,6 +66,6 @@ Non-blocking counterpart to `scan`. Same options and cache semantics — the
 cache file itself is still read/written synchronously (one small JSON file,
 not the part that scales badly); only the per-root walk becomes async.
 Roots are still visited sequentially, one `collect_recursive.collect_async`
-call at a time, chained through its own `on_done`. `on_done(paths)` fires
-exactly once, always `vim.schedule`-dispatched — directly on a cache hit,
-via the last root's `collect_async` otherwise.
+call at a time, chained through its own `on_done`. `on_done(paths, errors)`
+fires exactly once, always `vim.schedule`-dispatched — directly on a cache
+hit, via the last root's `collect_async` otherwise.

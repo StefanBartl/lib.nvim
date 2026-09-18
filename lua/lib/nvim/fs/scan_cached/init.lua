@@ -28,9 +28,15 @@ local DEFAULT_TTL_SECONDS = 5
 
 ---Recursively scan `root`, honoring an in-memory TTL cache keyed by
 ---`root .. ":" .. kind`. Pass `opts.refresh = true` to force a rescan.
+---
+---`errors` is `collect_recursive`'s list of unreadable directories, or
+---`nil`. A walk that reported any is returned but not cached: a root that
+---is momentarily unavailable would otherwise answer "no files here" for
+---the whole TTL.
 ---@param root string
 ---@param opts? Lib.Fs.ScanCached.Opts
----@return string[]
+---@return string[] paths
+---@return string[]|nil errors
 ---@see lib.nvim.fs.scan_roots.scan
 function M.scan(root, opts)
   opts = opts or {}
@@ -51,9 +57,11 @@ function M.scan(root, opts)
     end
   end
 
-  local found = collect_recursive.collect(root, { kind = kind, ignore = opts.ignore })
-  ns.set(key, found)
-  return found
+  local found, errors = collect_recursive.collect(root, { kind = kind, ignore = opts.ignore })
+  if not errors then
+    ns.set(key, found)
+  end
+  return found, errors
 end
 
 ---Async counterpart to `scan`: same TTL cache, but a cache miss walks via
@@ -62,7 +70,7 @@ end
 ---the miss path, so callers can treat both uniformly.
 ---@param root string
 ---@param opts? Lib.Fs.ScanCached.Opts
----@param on_done fun(paths: string[])
+---@param on_done fun(paths: string[], errors: string[]|nil)
 ---@return nil
 ---@see lib.nvim.fs.collect_recursive.collect_async
 function M.scan_async(root, opts, on_done)
@@ -83,10 +91,16 @@ function M.scan_async(root, opts, on_done)
     end
   end
 
-  collect_recursive.collect_async(root, { kind = kind, ignore = opts.ignore }, function(found)
-    ns.set(key, found)
-    on_done(found)
-  end)
+  collect_recursive.collect_async(
+    root,
+    { kind = kind, ignore = opts.ignore },
+    function(found, errors)
+      if not errors then
+        ns.set(key, found)
+      end
+      on_done(found, errors)
+    end
+  )
 end
 
 ---@type Lib.Fs.ScanCached

@@ -8,7 +8,7 @@
 ---@field refresh boolean|nil Force a rescan, bypassing the cache, and refresh it.
 
 ---@class Lib.Fs.ScanCached
----@field scan fun(root: string, opts?: Lib.Fs.ScanCached.Opts): string[]
----@field scan_async fun(root: string, opts: Lib.Fs.ScanCached.Opts|nil, on_done: fun(paths: string[])): nil # Non-blocking counterpart to `scan`; a cache hit still calls on_done, vim.schedule-dispatched.
+---@field scan fun(root: string, opts?: Lib.Fs.ScanCached.Opts): string[], string[]? # `errors` is `collect_recursive`'s unreadable-directory list or nil; a walk that reported any is returned but not cached.
+---@field scan_async fun(root: string, opts: Lib.Fs.ScanCached.Opts|nil, on_done: fun(paths: string[], errors: string[]|nil)): nil # Non-blocking counterpart to `scan`; a cache hit still calls on_done, vim.schedule-dispatched.
 
 return {}

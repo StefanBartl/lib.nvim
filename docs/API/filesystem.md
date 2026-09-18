@@ -208,11 +208,14 @@ return function(parent_dir: string, name: string): boolean ok, "file"|"directory
 Recursive directory walker on `fs_scandir`/`fs_scandir_next`.
 
 ```
-M.collect(root: string, opts?: Lib.Fs.CollectRecursive.Opts): string[]
+M.collect(root: string, opts?: Lib.Fs.CollectRecursive.Opts): string[] paths, string[]|nil errors
   -- opts.kind: "all"|"files"|"dirs" (default "all"), opts.ignore: fun(abs_path, is_dir): boolean
-M.files(root: string, opts?): string[]   -- shorthand, kind = "files"
-M.dirs(root: string, opts?): string[]    -- shorthand, kind = "dirs"
-M.collect_async(root: string, opts?: Lib.Fs.CollectRecursive.Opts, on_done: fun(paths: string[])): fun() cancel
+  -- errors: nil when every directory could be read, else one "<dir>: <reason>" per
+  -- directory fs_scandir refused (root included) -- an empty and an unreadable tree
+  -- both yield {} and only `errors` tells them apart
+M.files(root: string, opts?): string[], string[]|nil   -- shorthand, kind = "files"
+M.dirs(root: string, opts?): string[], string[]|nil    -- shorthand, kind = "dirs"
+M.collect_async(root: string, opts?: Lib.Fs.CollectRecursive.Opts, on_done: fun(paths: string[], errors: string[]|nil)): fun() cancel
   -- non-blocking counterpart; coroutine-driven over async fs_scandir/fs_stat, one dir
   -- at a time (not parallel); on_done always vim.schedule-dispatched, never after cancel()
 M.files_async(root: string, opts?, on_done): fun() cancel   -- shorthand, kind = "files"
@@ -224,8 +227,9 @@ Recursively scan one root, memoized in-memory with a TTL (session
 lifetime); built on `collect_recursive` + `lib.nvim.cache.memory`.
 
 ```
-M.scan(root: string, opts?: Lib.Fs.ScanCached.Opts): string[]
-M.scan_async(root: string, opts?: Lib.Fs.ScanCached.Opts, on_done: fun(paths: string[])): nil
+M.scan(root: string, opts?: Lib.Fs.ScanCached.Opts): string[] paths, string[]|nil errors
+  -- errors as in collect_recursive; a walk that reported any is returned but not cached
+M.scan_async(root: string, opts?: Lib.Fs.ScanCached.Opts, on_done: fun(paths: string[], errors: string[]|nil)): nil
   -- non-blocking counterpart; a miss walks via collect_recursive.collect_async,
   -- a hit still calls on_done (vim.schedule-dispatched either way)
 ```
@@ -237,8 +241,10 @@ optional TTL-based on-disk JSON cache. Sequential by design — `scan_async`
 too, one root at a time, not in parallel.
 
 ```
-M.scan(roots: string[], opts?: Lib.Fs.ScanRoots.Opts): string[]
-M.scan_async(roots: string[], opts?: Lib.Fs.ScanRoots.Opts, on_done: fun(paths: string[])): nil
+M.scan(roots: string[], opts?: Lib.Fs.ScanRoots.Opts): string[] paths, string[]|nil errors
+  -- errors merged across roots; a scan that reported any is returned but not written
+  -- to cache_path (the cache never expires by default, a transient failure must not stick)
+M.scan_async(roots: string[], opts?: Lib.Fs.ScanRoots.Opts, on_done: fun(paths: string[], errors: string[]|nil)): nil
   -- non-blocking counterpart; the JSON cache file itself is still read/written
   -- synchronously, only the per-root walk is async
 ```

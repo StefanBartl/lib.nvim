@@ -68,12 +68,19 @@ end
 ---it -- a symlink can point at an ancestor (or itself), and following it
 ---would recurse forever (bounded in practice only by OS path-length limits
 ---or a Lua stack overflow, both bad outcomes, not a real base case).
+---
+---A directory that cannot be opened is recorded in `errors` and skipped,
+---never treated as empty: "this tree has no files" and "this tree could
+---not be read" are different answers, and only the caller knows whether
+---an unreadable subdirectory is acceptable.
 ---@param dir string
 ---@param opts Lib.Fs.CollectRecursive.Opts
 ---@param out string[]
-local function walk(dir, opts, out)
-  local handle = uv.fs_scandir(dir)
+---@param errors string[]
+local function walk(dir, opts, out, errors)
+  local handle, scandir_err = uv.fs_scandir(dir)
   if not handle then
+    errors[#errors + 1] = dir .. ": " .. tostring(scandir_err or "scandir failed")
     return
   end
 
@@ -93,7 +100,7 @@ local function walk(dir, opts, out)
           out[#out + 1] = abs_path
         end
         if not is_symlink then
-          walk(abs_path, opts, out)
+          walk(abs_path, opts, out, errors)
         end
       end
     else
@@ -106,22 +113,28 @@ local function walk(dir, opts, out)
 end
 
 ---Recursively collect absolute paths under `root`.
+---
+---`errors` is `nil` when every directory could be read, otherwise one
+---`"<dir>: <reason>"` per directory that could not be opened (the root
+---itself included) — the paths list is then whatever was reachable.
 ---@param root string
 ---@param opts? Lib.Fs.CollectRecursive.Opts
----@return string[]
+---@return string[] paths
+---@return string[]|nil errors
 function M.collect(root, opts)
   opts = opts or {}
   opts.kind = opts.kind or "all"
 
-  local out = {}
-  walk(root, opts, out)
-  return out
+  local out, errors = {}, {}
+  walk(root, opts, out, errors)
+  return out, (#errors > 0) and errors or nil
 end
 
 ---Convenience: collect only files.
 ---@param root string
 ---@param opts? Lib.Fs.CollectRecursive.Opts
----@return string[]
+---@return string[] paths
+---@return string[]|nil errors
 function M.files(root, opts)
   return M.collect(root, vim.tbl_extend("force", opts or {}, { kind = "files" }))
 end
@@ -129,7 +142,8 @@ end
 ---Convenience: collect only directories.
 ---@param root string
 ---@param opts? Lib.Fs.CollectRecursive.Opts
----@return string[]
+---@return string[] paths
+---@return string[]|nil errors
 function M.dirs(root, opts)
   return M.collect(root, vim.tbl_extend("force", opts or {}, { kind = "dirs" }))
 end
@@ -182,8 +196,9 @@ end
 ---@param dir string
 ---@param opts Lib.Fs.CollectRecursive.Opts
 ---@param out string[]
+---@param errors string[]
 ---@param is_cancelled fun(): boolean
-local function walk_async(dir, opts, out, is_cancelled)
+local function walk_async(dir, opts, out, errors, is_cancelled)
   if is_cancelled() then
     return
   end
@@ -192,6 +207,7 @@ local function walk_async(dir, opts, out, is_cancelled)
     uv.fs_scandir(dir, resume)
   end)
   if scandir_err or not handle then
+    errors[#errors + 1] = dir .. ": " .. tostring(scandir_err or "scandir failed")
     return
   end
 
@@ -215,7 +231,7 @@ local function walk_async(dir, opts, out, is_cancelled)
           out[#out + 1] = abs_path
         end
         if not is_symlink then
-          walk_async(abs_path, opts, out, is_cancelled)
+          walk_async(abs_path, opts, out, errors, is_cancelled)
         end
       end
     else
@@ -228,8 +244,9 @@ local function walk_async(dir, opts, out, is_cancelled)
 end
 
 ---Async counterpart to `collect()`: same result, without blocking the main
----loop while it walks. `on_done(paths)` fires exactly once, `vim.schedule`-
----dispatched — never for a cancelled walk.
+---loop while it walks. `on_done(paths, errors)` fires exactly once,
+---`vim.schedule`-dispatched — never for a cancelled walk. `errors` carries
+---the same "<dir>: <reason>" list `collect()` returns, or `nil`.
 ---
 ---This walks one directory at a time (async, not blocking, but not
 ---parallel either) — the fix for main-loop stalls on a large tree, not a
@@ -237,7 +254,7 @@ end
 ---coroutine driver simple.
 ---@param root string
 ---@param opts? Lib.Fs.CollectRecursive.Opts
----@param on_done fun(paths: string[])
+---@param on_done fun(paths: string[], errors: string[]|nil)
 ---@return fun() cancel Stop after the current in-flight libuv call settles; `on_done` will not fire.
 function M.collect_async(root, opts, on_done)
   opts = opts or {}
@@ -249,12 +266,12 @@ function M.collect_async(root, opts, on_done)
   end
 
   async.run(function()
-    local out = {}
-    walk_async(root, opts, out, is_cancelled)
-    return out
-  end, function(out)
+    local out, errors = {}, {}
+    walk_async(root, opts, out, errors, is_cancelled)
+    return out, (#errors > 0) and errors or nil
+  end, function(out, errors)
     if not cancelled then
-      on_done(out)
+      on_done(out, errors)
     end
   end, { tag = "lib.nvim.fs.collect_recursive" })
 
@@ -266,7 +283,7 @@ end
 ---Async convenience: collect only files.
 ---@param root string
 ---@param opts? Lib.Fs.CollectRecursive.Opts
----@param on_done fun(paths: string[])
+---@param on_done fun(paths: string[], errors: string[]|nil)
 ---@return fun() cancel
 function M.files_async(root, opts, on_done)
   return M.collect_async(root, vim.tbl_extend("force", opts or {}, { kind = "files" }), on_done)
@@ -275,7 +292,7 @@ end
 ---Async convenience: collect only directories.
 ---@param root string
 ---@param opts? Lib.Fs.CollectRecursive.Opts
----@param on_done fun(paths: string[])
+---@param on_done fun(paths: string[], errors: string[]|nil)
 ---@return fun() cancel
 function M.dirs_async(root, opts, on_done)
   return M.collect_async(root, vim.tbl_extend("force", opts or {}, { kind = "dirs" }), on_done)
