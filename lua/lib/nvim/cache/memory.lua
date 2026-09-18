@@ -39,11 +39,12 @@ end
 
 local M = {}
 
---- Backing store per namespace name, keyed weakly so an abandoned namespace
---- (caller drops its reference and never calls it again) can still be
---- garbage-collected along with its entries.
+--- Backing store per namespace name. A plain strong table: namespace names
+--- are strings, which a weak-keyed table never releases, so a namespace and
+--- its stats record live for the session once created. Callers that mint
+--- names dynamically are minting permanent entries.
 ---@type table<string, table>
-local caches = setmetatable({}, { __mode = "k" })
+local caches = {}
 
 ---@type table<string, Lib.Cache.Memory.Stats>
 local stats = {}
@@ -58,6 +59,10 @@ function M.namespace(name, opts)
   opts = opts or {}
 
   if not caches[name] then
+    -- Weak keys only release an entry whose key is a table or function that
+    -- nothing else references. A string key -- the usual case, e.g.
+    -- `root .. ":" .. kind` -- is never collected, so such an entry lives
+    -- until its TTL, `invalidate`/`clear`, or the opt-in sweep drops it.
     caches[name] = setmetatable({}, { __mode = "k" })
     stats[name] = {
       name = name,
