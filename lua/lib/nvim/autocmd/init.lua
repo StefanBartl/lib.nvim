@@ -21,6 +21,11 @@ local groups = {}
 function M.group(name, clear)
   if groups[name] == nil then
     groups[name] = vim.api.nvim_create_augroup(name, { clear = clear == true })
+  elseif clear == true then
+    -- Re-requesting with `clear` must still clear: the caller is rebuilding
+    -- its autocommands, and a cache hit that skips the re-clear leaves the
+    -- old ones registered alongside the new ones instead of replaced.
+    groups[name] = vim.api.nvim_create_augroup(name, { clear = true })
   end
   return groups[name]
 end
@@ -42,6 +47,10 @@ function M.get_augroup(name, opts)
     cache[full_name] = vim.api.nvim_create_augroup(full_name, {
       clear = opts.clear == true,
     })
+  elseif opts.clear == true then
+    -- Same reasoning as M.group above: a cache hit must not silently skip
+    -- a requested re-clear.
+    cache[full_name] = vim.api.nvim_create_augroup(full_name, { clear = true })
   end
 
   return cache[full_name]

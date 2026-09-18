@@ -119,6 +119,17 @@ multi-line enough to be worth sending cannot be expressed as a config value
 (a raw newline ends the option), and stdin is taken. Do not put a credential
 in a body through this module.
 
+**Not covered either:** `query` is appended straight onto the URL, which is
+itself a plain argv element — never routed through `-K -`. An API that takes
+its key as `?api_key=...`/`?key=...` rather than a header puts that value in
+argv, unprotected, the same way a credential in `body` would be. Do not put a
+credential in `query` through this module; use a header (`bearer_token`,
+`secret_headers`, or a hardcoded name from `is_secret_header`) instead, even
+if the API in question also happens to accept it as a query parameter.
+Pinned as a known gap in `TESTS/curl_spec.lua`, not yet closed — closing it
+needs a new opts field (a `secret_query` counterpart to `secret_headers`) or
+routing the whole URL through `-K`'s own `url =` directive.
+
 `is_secret_header(name)` and `config_quote(value)` — the "which header goes
 via stdin" check and the config-file quoting rule — are exposed publicly so
 a caller building its own curl argv (rather than going through

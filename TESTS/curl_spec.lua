@@ -613,4 +613,55 @@ return function(H)
 
     stop_server(server)
   end
+
+  -- BUG: opts.query is appended straight onto the URL, and the URL is a
+  -- single positional argv element -- never routed through the `-K -`
+  -- config path the way credential headers/bearer_token/auth are. Unlike
+  -- `body` (documented under "Not covered" in the README as staying in
+  -- argv), this was undocumented and untested: a caller putting a token in
+  -- `opts.query` -- a real shape for APIs that take the key as `?api_key=`
+  -- or `?key=` rather than a header -- gets exactly the leak this module
+  -- exists to prevent for headers, silently. Pinned rather than fixed here:
+  -- closing it needs a new opts field (a `secret_query` counterpart to
+  -- `secret_headers`, or routing the whole URL through `-K`'s `url =`
+  -- directive) and that is a real API-shape decision, not a same-day fix in
+  -- a library ~30 other repos depend on. See TESTS/README.md and the
+  -- curl README's "Credentials never go in argv" section for the pointer.
+  do
+    local seen_argv = nil
+    local real_system = vim.system
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.system = function(argv, _opts, on_exit)
+      seen_argv = argv
+      -- Answer synchronously-ish with a fake completed object so the
+      -- caller's blocking `:wait()` (or async callback) gets something
+      -- usable, without spawning a real curl process at all.
+      local obj = { code = 0, signal = 0, stdout = "{}", stderr = "" }
+      local handle = {
+        wait = function()
+          return obj
+        end,
+        kill = function() end,
+      }
+      if on_exit then
+        vim.schedule(function()
+          on_exit(obj)
+        end)
+      end
+      return handle
+    end
+
+    local secret = "leaked_via_query_shouldnotbevisible"
+    curl.fetch_json_blocking("http://127.0.0.1:1/", { query = { api_key = secret } })
+
+    vim.system = real_system
+
+    ok(seen_argv ~= nil, "query BUG regression: vim.system was invoked")
+    local url_arg = seen_argv[#seen_argv]
+    ok(
+      url_arg:find(secret, 1, true) ~= nil,
+      "query BUG regression: opts.query values still land in the URL argv element today "
+        .. "-- a credential passed this way is NOT protected the way headers/bearer_token/auth are"
+    )
+  end
 end

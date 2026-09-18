@@ -74,6 +74,30 @@ return function(H)
   local ga_other_prefix = autocmd.get_augroup("shared", { prefix = "spec.autocmd.other" })
   ok(ga_other_prefix ~= ga1, "get_augroup(): a different prefix is a different augroup")
 
+  -- BUG regression: get_augroup(name, { clear = true }) used to only clear on
+  -- the FIRST call that created the cache entry -- every later call with
+  -- clear = true silently returned the cached id without re-clearing, unlike
+  -- group()'s identical contract (tested above under "Re-requesting with
+  -- clear=true still clears"). A plugin rebuilding its autocommands through
+  -- get_augroup on a second setup() ended up with the old ones still
+  -- registered alongside the new ones instead of replaced.
+  do
+    local name = "lib_nvim_spec_get_augroup_clear_" .. tostring(vim.uv.hrtime())
+    local id = autocmd.get_augroup(name, { clear = true })
+    autocmd.create("User", function() end, { group = id, pattern = "LibNvimSpecGA" })
+    eq(#vim.api.nvim_get_autocmds({ group = id }), 1, "one autocmd registered")
+
+    local again = autocmd.get_augroup(name, { clear = true })
+    eq(id, again, "get_augroup(): same name still returns the same augroup id")
+    eq(
+      #vim.api.nvim_get_autocmds({ group = again }),
+      0,
+      "get_augroup(): BUG regression -- clear=true emptied the group on a second call too"
+    )
+
+    vim.api.nvim_del_augroup_by_name(name)
+  end
+
   -- ------------------------------------------------------------ norm_events
   --
   -- `eq` compares with `~=`, which is identity (not value) equality for

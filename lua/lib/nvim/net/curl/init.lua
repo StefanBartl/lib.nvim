@@ -41,6 +41,12 @@
 --- Explorer/WMI on Windows, `ps` on POSIX) — `secret_headers` is the escape
 --- hatch for exactly the header names that must not be.
 ---
+--- `opts.query` is NOT covered by any of this: it is appended straight onto
+--- the URL, itself a plain argv element, same as `opts.body`. Do not put a
+--- credential in `query` — use a header instead, even for an API that also
+--- accepts the credential as a query parameter. See the README's
+--- "Not covered either" section; pinned in TESTS/curl_spec.lua, not fixed.
+---
 --- Usage:
 --- ```lua
 --- local curl = require("lib.nvim.net.curl")

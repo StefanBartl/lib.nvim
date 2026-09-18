@@ -18,10 +18,18 @@
 --- directly still works and stays friendlier to tree-shaking.
 ---
 --- The former paths (`lib.nvim.map`, `lib.nvim.usercmd`, `lib.nvim.autocmd`)
---- are **gone** (2026-08-27). They resolved through deprecation shims while
---- the plugins were migrated one repo at a time; every repo is on the new
---- paths now, and lib.nvim is pre-1.0 with a breaking-changes notice in the
---- first line of its README, so carrying them further buys nothing.
+--- were meant to be **gone** (2026-08-27) once every consuming repo moved to
+--- the paths here. That migration is not actually finished: all three still
+--- exist as full, independent modules (not shims) under `lua/lib/nvim/`, and
+--- lib.nvim's own `lib.nvim.telemetry` still requires `lib.nvim.autocmd` and
+--- `lib.nvim.usercmd` directly rather than through `bindings`. Two of this
+--- module's own fixes (the augroup cached-clear regression, see
+--- `TESTS/nvim_autocmd_spec.lua`) had to be applied twice, once per copy,
+--- for exactly this reason — a fix landing in only the path everyone
+--- *assumed* was the only one left behind silently does not reach callers
+--- still on the other one. Until the old paths are actually deleted (or
+--- turned into real shims), treat them as live, dependent-on API, not dead
+--- code.
 
 local cache = {}
 
