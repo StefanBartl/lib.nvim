@@ -9,6 +9,9 @@
 
 ---@class Lib.Fs.ScanRoots.Cache
 ---@field saved_at integer
+---@field roots string[] The roots this file was written for; a read with different roots is a miss.
+---@field kind Lib.Fs.CollectRecursive.Kind Same rule.
+---@field ignore_dirs string[] Same rule.
 ---@field paths string[]
 
 ---@class Lib.Fs.ScanRoots

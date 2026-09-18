@@ -51,6 +51,12 @@ end)
 | `cache_path`  | `string?`  | `nil`       | When set, results are cached to this JSON file                |
 | `ttl_seconds` | `integer?` | `nil`       | Cache lifetime; `nil` means the cache never expires            |
 
+The cache file records the `roots`, `kind` and `ignore_dirs` it was written
+for. A read through the same `cache_path` with any of them different is a
+miss (rescan, rewrite), not a hit — otherwise one shared file would hand a
+`"dirs"` scan the previous `"files"` answer, and with `ttl_seconds` unset it
+would do so forever.
+
 ## Returns
 
 A flat `string[]` of absolute paths, merged across all roots, plus `errors`:
