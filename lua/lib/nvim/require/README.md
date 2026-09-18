@@ -42,8 +42,12 @@ caller's own source path, to prevent the classic `lua/lib/func.lua ->
 require_dir("lib")` infinite-recursion trap where `lib.func` would otherwise
 re-require itself. Every `require` and every dispatched call is wrapped in
 `pcall`; failures are reported via `require("lib.nvim.notify")` (tagged
-`[lib.nvim.require]`) rather than aborting the batch. If the directory
-contains no `.lua` files, a warning is emitted and the function returns.
+`[lib.nvim.require]`) rather than aborting the batch. If the directory does
+not exist, or contains no `.lua` files, a warning saying which of the two it
+is is emitted and the function returns. The listing goes through
+`vim.fs.dir`, which reads a path — not `vim.fn.glob`, which reads a pattern
+and would list nothing for a config directory spelled with `~` (an 8.3 short
+name), `[`, `*` or `?`.
 
 Note: this reads `dir` relative to the **user's Neovim config** directory
 (`stdpath("config")`), not relative to lib.nvim's own `lua/` tree — it is a

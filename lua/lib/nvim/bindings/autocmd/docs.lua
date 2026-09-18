@@ -499,7 +499,16 @@ local IGNORE = "lib%-docs: fallback"
 ---@return integer
 local function count_unregistered(root)
   local n = 0
-  local files = vim.fn.globpath(root .. "/lua", "**/*.lua", false, true) or {}
+  -- Not `globpath`: it reads its argument as a pattern, so an 8.3 `~1` short
+  -- name, a glob metacharacter or a comma in the repo path would silently
+  -- yield an empty list -- and a zero here is written into the generated
+  -- page as "nothing unregistered". The walker takes a path.
+  local files = require("lib.nvim.fs.collect_recursive").files(root .. "/lua", {
+    ignore = function(abs, is_dir)
+      return not is_dir and abs:sub(-4) ~= ".lua"
+    end,
+  })
+  table.sort(files)
   for _, file in ipairs(files) do
     local fd = io.open(file, "r")
     if fd then
