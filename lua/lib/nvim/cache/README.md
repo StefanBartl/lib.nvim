@@ -91,6 +91,13 @@ around. The TTL clock is monotonic (`vim.uv.hrtime`), not `os.clock()` (CPU
 time) or `os.time()` (wall clock, can jump) — entries expire at a predictable
 rate regardless of how idle Neovim has been or system clock changes.
 
+Nothing is garbage-collected on its own. An entry under a string key (the
+usual case) lives until its TTL runs out, `invalidate`/`clear` drops it, or
+the opt-in sweep below removes it — a namespace without `ttl` and without the
+sweep keeps one value per distinct key for the whole session. Namespaces
+themselves are never removed either, so mint them from a fixed set of names,
+not from per-call data.
+
 ### Auto-invalidation (opt-in, toggleable)
 
 Namespaces are pure by default: creating one and calling `get`/`set` never
