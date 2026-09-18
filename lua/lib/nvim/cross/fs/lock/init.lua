@@ -18,6 +18,7 @@
 local M = {}
 
 local uv, fn = vim.uv or vim.loop, vim.fn
+local mkdirp = require("lib.nvim.fs.mkdirp")
 
 ---@internal
 ---@return boolean
@@ -105,12 +106,25 @@ end
 
 ---@internal
 ---Materialize the helper script under `stdpath("cache")`, once per session.
+---
+---`stdpath("cache")` is where Neovim *would* keep its cache, not a directory
+---it promises already exists: nothing creates it until something writes
+---there, so on a fresh machine -- a CI runner, a first run after a clean
+---install -- it is simply absent. `writefile` does not create parents, so it
+---failed with `E482: Can't open file ... no such file or directory`, and
+---`who`/`report` then reported "cannot write helper script" on a perfectly
+---healthy Windows box. Creating the directory first is the whole fix.
 ---@return string|nil path
 ---@return string|nil err
 local function ensure_script()
-  local path = fn.stdpath("cache") .. "/lib_nvim_fs_lock.ps1"
+  local dir = fn.stdpath("cache")
+  local path = dir .. "/lib_nvim_fs_lock.ps1"
   if fn.filereadable(path) == 1 then
     return path, nil
+  end
+  local made, mkerr = mkdirp(dir)
+  if not made then
+    return nil, tostring(mkerr)
   end
   local ok, err = pcall(fn.writefile, vim.split(PS_SCRIPT, "\n"), path)
   if not ok then
