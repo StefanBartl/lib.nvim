@@ -25,3 +25,7 @@ local lib = require("lib")
 resolves the configured strategy to its module path (falls back to
 `"metatable"` on an unknown strategy name, with a warning). See
 `@types/init.lua` for `Lib.Config.Options`.
+
+Keys that are not part of `Lib.Config.Options` are reported before the merge
+(`lib.config: unknown option(s) ignored: startegy (did you mean strategy?)`)
+and never stored, so a typo cannot quietly leave the default in force.
