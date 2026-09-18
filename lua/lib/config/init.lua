@@ -33,11 +33,52 @@ local STRATEGY_MODULES = {
 ---@type Lib.Config.Options
 M.options = vim.deepcopy(defaults)
 
+---@internal
+---An unknown key, with the nearest known one as a hint when there is a
+---plausible one.
+---@param key any
+---@return string
+local function describe_unknown(key)
+  local levenshtein = require("lib.lua.strings.distance").levenshtein
+  local name = tostring(key)
+  local best, best_distance = nil, nil
+  for known in pairs(defaults) do
+    local d = levenshtein(name, known)
+    if d <= 3 and (best_distance == nil or d < best_distance) then
+      best, best_distance = known, d
+    end
+  end
+  return best and ("%s (did you mean %s?)"):format(name, best) or name
+end
+
 ---Merge user options.
+---
+---Unknown keys are reported before anything is merged and are not stored:
+---a typo such as `startegy = "eager"` would otherwise land in `M.options`
+---as a dead field while the default stays in force, and nothing would ever
+---say so.
 ---@param opts Lib.Config.Options|nil
 function M.setup(opts)
+  opts = opts or {}
   local prev = M.options.strategy
-  M.options = vim.tbl_extend("force", M.options, opts or {})
+
+  local known, unknown = {}, {}
+  for key, value in pairs(opts) do
+    if defaults[key] ~= nil then
+      known[key] = value
+    else
+      unknown[#unknown + 1] = describe_unknown(key)
+    end
+  end
+  if #unknown > 0 then
+    table.sort(unknown)
+    vim.notify(
+      ("lib.config: unknown option(s) ignored: %s"):format(table.concat(unknown, ", ")),
+      vim.log.levels.WARN
+    )
+  end
+
+  M.options = vim.tbl_extend("force", M.options, known)
 
   if not STRATEGY_MODULES[M.options.strategy] then
     vim.notify(

@@ -92,6 +92,7 @@ not carried forward.
 | `checkpoint_spec.lua` | `lib.nvim.checkpoint`: buffer/window state snapshot and restore. |
 | `config_repo_file_spec.lua` | `lib.nvim.config.repo_file`: reading a repo-local config file against real temp files on disk — one fixture per failure mode, plus the allowlist split itself. |
 | `relpath_spec.lua` | `lib.nvim.fs.relpath`: no prior coverage existed. Direct/nested child, identical-path `.`, common-ancestor climbing, trailing-separator handling, and (Windows) mixed backslash/forward-slash input. **BUG regression (fixed):** a Windows drive letter differing only in case (`c:` vs. `C:`) used to be read as "no shared root at all" and fell back to returning the absolute path unchanged instead of computing a real relative one — root cause was `root_of()`'s case-sensitive `~=` comparison; fixed by folding just the drive-letter prefix through the same `lib.nvim.cross.fs.separators.drive_upper` helper `normkey` already uses for this. |
+| `config_spec.lua` | `lib.config`: an unknown option key is reported before the merge (with a "did you mean" hint) and never stored, a known key alone reports nothing, and an unknown strategy name still falls back to `metatable`. |
 | `run.lua`         | Runner: loads every spec, reports results, sets the exit code.  |
 
 ## Adding a spec

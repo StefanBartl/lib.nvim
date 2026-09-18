@@ -101,6 +101,7 @@ local specs = {
   "checkpoint_spec.lua",
   "config_repo_file_spec.lua",
   "relpath_spec.lua",
+  "config_spec.lua",
 }
 
 --- Straight to stdout rather than through `print`.
