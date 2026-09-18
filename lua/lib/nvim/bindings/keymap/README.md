@@ -276,7 +276,10 @@ under the plugin without anyone passing a name. Pass `record = false` to opt out
 
 Direct records are kept in `keymap.records`, not in the same table, because
 `register()` replaces a plugin's array wholesale and would otherwise wipe them;
-`registered()` merges the two and returns a copy. A `setup()` that rebinds the
+`registered()` merges the two and returns a fresh list. So does `register()`
+itself. Sorting or trimming either result is safe; the entries inside are the
+registry's live records, shared with `:checkhealth`, `conflicts()` and the
+docs generator — read them, do not mutate them. A `setup()` that rebinds the
 same keys should call `forget(plugin)` first, or the list grows on every call.
 
 ### `conflicts()`

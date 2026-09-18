@@ -196,7 +196,7 @@ end
 ---@param spec Lib.Keymap.Spec
 ---@param user table|false|nil   # The user's `keymaps` table; `false` binds nothing.
 ---@param opts Lib.Keymap.RegisterOpts|nil # `buffer` binds buffer-locally; `surface` separates two sets.
----@return Lib.Keymap.Registered[] bound # What was actually bound, in declaration order.
+---@return Lib.Keymap.Registered[] bound # What was actually bound, in declaration order. A fresh list; the entries in it are the registry's own records — read them, do not mutate them.
 function M.register(plugin, spec, user, opts)
   vim.validate("plugin", plugin, "string")
   vim.validate("spec", spec, "table")
@@ -346,7 +346,12 @@ function M.register(plugin, spec, user, opts)
     require("lib.nvim.bindings.keymap.which_key").apply(plugin, spec, user, bound)
   end
 
-  return bound
+  -- A copy of the list, not the registry's own array: a caller sorting or
+  -- trimming its result for display would otherwise reorder what
+  -- `:checkhealth`, `conflicts()` and the generated docs read afterwards.
+  -- The entries themselves stay shared, exactly as `M.registered` hands
+  -- them out.
+  return vim.list_extend({}, bound)
 end
 
 ---Every action registered so far, or just one plugin's.
@@ -362,8 +367,11 @@ end
 ---author's config. Merged rather than stored together because `register()`
 ---replaces a plugin's array wholesale and would otherwise wipe them.
 ---
----Returns a **copy**, for that same reason -- mutating it does not reach either
----store.
+---Returns a fresh list (or map of lists), for that same reason -- sorting,
+---trimming or extending it does not reach either store. The
+---`Lib.Keymap.Registered` entries inside are the live records shared with
+---the registry and with `keymap.records`: read them, do not mutate them, or
+---`:checkhealth`, `conflicts()` and the generated docs see the change.
 ---The two shapes are declared as an overload rather than one union return:
 ---with a union, `pairs(registered())` sees a `Registered[]` branch it cannot
 ---rule out, and every field read off an entry becomes an `undefined-field`.
