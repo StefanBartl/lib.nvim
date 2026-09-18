@@ -18,18 +18,22 @@
 --- directly still works and stays friendlier to tree-shaking.
 ---
 --- The former paths (`lib.nvim.map`, `lib.nvim.usercmd`, `lib.nvim.autocmd`)
---- were meant to be **gone** (2026-08-27) once every consuming repo moved to
---- the paths here. That migration is not actually finished: all three still
---- exist as full, independent modules (not shims) under `lua/lib/nvim/`, and
---- lib.nvim's own `lib.nvim.telemetry` still requires `lib.nvim.autocmd` and
---- `lib.nvim.usercmd` directly rather than through `bindings`. Two of this
---- module's own fixes (the augroup cached-clear regression, see
---- `TESTS/nvim_autocmd_spec.lua`) had to be applied twice, once per copy,
---- for exactly this reason — a fix landing in only the path everyone
---- *assumed* was the only one left behind silently does not reach callers
---- still on the other one. Until the old paths are actually deleted (or
---- turned into real shims), treat them as live, dependent-on API, not dead
---- code.
+--- were meant to be gone by 2026-08-27 once every consuming repo moved to the
+--- paths here, but the migration silently stalled: all three lived on as
+--- full, independent module trees (not shims), diverged from their
+--- `bindings` counterparts (the composer here gained per-verb notify
+--- prefixes and declaration-site tracking the old one never got), and
+--- lib.nvim's own `lib.nvim.telemetry` kept requiring the old `autocmd` and
+--- `usercmd` directly. One consequence: the augroup cached-clear regression
+--- fixed in this module's `group()`/`get_augroup()` had to be re-found and
+--- re-fixed in the old copy too (see `TESTS/autocmd_spec.lua`) — a fix
+--- landing only in the path everyone *assumed* was the only one left behind
+--- did not reach callers still on the other one. That migration is now
+--- actually finished: `lib.nvim.map`, `lib.nvim.usercmd` and `lib.nvim.autocmd`
+--- are gone (2026-09-18), `lib.nvim.telemetry` requires the paths here, and
+--- the one external fleet dependent (ai.nvim, on `usercmd.composer`) was
+--- updated first. If a stray `require("lib.nvim.usercmd")` (etc.) surfaces
+--- again, it is a genuine bug, not a documentation lag — file it as one.
 
 local cache = {}
 

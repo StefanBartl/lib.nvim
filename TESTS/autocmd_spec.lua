@@ -225,4 +225,9 @@ return function(H)
 
     vim.api.nvim_del_augroup_by_name(name)
   end
+
+  -- ------------------------------------------------------------ M.augroup
+  local direct = autocmd.augroup.create.clear("spec.autocmd.direct")
+  eq(type(direct), "number", "augroup.create.clear(): returns an augroup id")
+  vim.api.nvim_del_augroup_by_id(direct)
 end
