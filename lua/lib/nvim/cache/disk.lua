@@ -125,8 +125,17 @@ function M.save(namespace, data, opts)
   if not file then
     return false, "open failed: " .. (err or path)
   end
-  file:write(encoded)
-  file:close()
+  -- Lua buffers writes, so a full disk or a read-only mount usually surfaces
+  -- on close rather than on write; both results have to be checked or a
+  -- truncated file is reported as saved.
+  local ok_write, write_err = file:write(encoded)
+  local ok_close, close_err = file:close()
+  if not ok_write then
+    return false, "write failed: " .. tostring(write_err or path)
+  end
+  if not ok_close then
+    return false, "close failed: " .. tostring(close_err or path)
+  end
 
   return true, nil
 end
