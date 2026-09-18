@@ -710,4 +710,15 @@ return function(H)
     5,
     "scan_cached: a zero-second ttl entry reads as expired on the next call"
   )
+
+  -- telemetry.fingerprint: a string is never stored as its text, whatever
+  -- its length -- a token that fits a size cap is still a token.
+  local fingerprint = require("lib.nvim.telemetry.fingerprint")
+  local secret = "ghp_0123456789abcdef0123456789abcdef0123"
+  local fp = fingerprint.value(secret)
+  eq(fp:find(secret, 1, true), nil, "fingerprint.value: a short string is not stored verbatim")
+  eq(fp:find("ghp_", 1, true), nil, "fingerprint.value: not even its prefix")
+  eq(fp, fingerprint.value(secret), "fingerprint.value: equal inputs fingerprint equally")
+  ok(fp ~= fingerprint.value(secret .. "x"), "fingerprint.value: unequal inputs differ")
+  ok(fp:match("^<string:%d+:%x+>$") ~= nil, "fingerprint.value: length plus digest: " .. fp)
 end

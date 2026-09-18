@@ -277,8 +277,8 @@ What is stored is a **fingerprint**, never the arguments:
 
 | Value | Stored as |
 | --- | --- |
-| `nil` / boolean / number / short string | the value itself |
-| long string | truncated with an ellipsis marker |
+| `nil` / boolean / number | the value itself |
+| string, any length | `<string:12:050c5d1f>` — byte length plus an 8-hex FNV-1a digest of its first 512 bytes, never the text (a token that fits a size cap is still a token) |
 | table | `<table:#3>` / `<table:map>` — shape, not contents |
 | function / userdata / thread | `<function>` / `<userdata>` / `<thread>` |
 
