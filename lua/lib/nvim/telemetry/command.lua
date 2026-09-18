@@ -17,7 +17,7 @@
 ---   :LibTelemetry coverage        which wrapped functions were never called
 ---   :LibTelemetry export [path]   write a JSON snapshot
 
-local usercmd = require("lib.nvim.usercmd")
+local usercmd = require("lib.nvim.bindings.usercmd")
 local notify = require("lib.nvim.notify").create("[lib.nvim.telemetry]")
 
 local M = {}

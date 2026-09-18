@@ -52,7 +52,7 @@ require("lib.nvim.telemetry.@types")
 
 local uv = vim.uv or vim.loop
 
-local autocmd = require("lib.nvim.autocmd")
+local autocmd = require("lib.nvim.bindings.autocmd")
 local notify = require("lib.nvim.notify").create("[lib.nvim.telemetry]")
 local registry = require("lib.nvim.telemetry.registry")
 local reminder = require("lib.nvim.telemetry.reminder")
@@ -744,10 +744,13 @@ function M.new(opts)
   -- Editor lifecycle
   -- -------------------------------------------------------------------------
 
-  -- Raw augroup rather than autocmd.group(): that caches by name and would
-  -- stop re-clearing for a second instance with the same namespace (a
-  -- hot-reloaded plugin), leaving the previous instance's callbacks alongside
-  -- the new ones instead of replacing them.
+  -- Raw augroup rather than autocmd.group(): a second instance with the same
+  -- namespace (a hot-reloaded plugin) must get a freshly cleared group, not
+  -- the previous instance's callbacks left alongside the new ones. This used
+  -- to be the only way to guarantee that -- autocmd.group(name, true) had a
+  -- cached-clear bug that skipped re-clearing on a second call with the same
+  -- name; now fixed (see TESTS/autocmd_spec.lua), but the raw call here is
+  -- unconditional and simpler, so it stays.
   local group =
     vim.api.nvim_create_augroup("lib_telemetry_" .. store.sanitize(namespace), { clear = true })
 
