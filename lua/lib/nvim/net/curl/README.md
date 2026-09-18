@@ -95,6 +95,14 @@ host, timeout, a malformed response) — a materially different failure from
 Same shape as `fetch_raw`/`fetch_raw_blocking` — `response.body` is always
 `""`, since the body was written to `dest_path` instead of stdout.
 
+The download tier is bounded by default: `timeout_ms` defaults to 5 minutes
+and `max_bytes` (curl's `--max-filesize`) to 512 MiB, and a download that
+fails or is cut off has its partial file removed. Without both limits a
+hostile or merely broken endpoint could fill the disk before that cleanup ever
+runs — it only runs once curl has exited. Pass `false` for either to lift it
+deliberately. The fetch tiers keep both opt-in, since they buffer in memory
+and a default would cut off a legitimately long streaming response.
+
 Each pair delivers these values to `cb` for the async form, or returns them
 directly for the blocking form.
 
@@ -150,4 +158,5 @@ a caller building its own curl argv (rather than going through
 | `http_version`  | `--http1.0` / `--http1.1` / `--http2`  | `"1.0"`, `"1.1"`, or `"2"`                                    |
 | `proxy`         | `-x <proxy>`                           |                                                                |
 | `insecure`      | `-k`                                   | Skip TLS certificate verification                             |
-| `timeout_ms`    | `vim.system`'s `timeout`/`wait(timeout)` |                                                              |
+| `timeout_ms`    | `vim.system`'s `timeout`/`wait(timeout)` | `download*` default 5 min, `false` lifts it; fetch tiers: none |
+| `max_bytes`     | `--max-filesize <n>`                   | `download*` default 512 MiB, `false` lifts it; fetch tiers: none |
