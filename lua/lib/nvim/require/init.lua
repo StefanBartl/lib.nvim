@@ -67,12 +67,25 @@ function M.dir(dir, calls)
     call_list = calls
   end
 
-  -- Find all .lua files within that directory (non-recursive).
+  -- Find all .lua files within that directory (non-recursive). `vim.fs.dir`
+  -- reads its argument as a path; `vim.fn.glob` would read it as a pattern
+  -- and silently list nothing for a config directory whose spelling contains
+  -- `~` (an 8.3 short name), `[`, `*` or `?`.
+  if vim.fn.isdirectory(full_dir) ~= 1 then
+    notify.warn("[lib.require_dir] No such directory: " .. full_dir)
+    return
+  end
   ---@type string[]
-  local files = vim.fn.glob(full_dir .. "/*.lua", true, true)
+  local files = {}
+  for name, kind in vim.fs.dir(full_dir) do
+    if (kind == "file" or kind == "link") and name:sub(-4) == ".lua" then
+      files[#files + 1] = full_dir .. "/" .. name
+    end
+  end
+  table.sort(files)
 
   if #files == 0 then
-    notify.warn("[lib.require_dir] No files found in " .. full_dir)
+    notify.warn("[lib.require_dir] No .lua files in " .. full_dir)
     return
   end
 
