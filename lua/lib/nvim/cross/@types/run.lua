@@ -8,6 +8,7 @@
 
 ---@class Lib.Cross.Run
 ---@field shell fun(): OsShell
+---@field argv fun(cmd: string): string[] # The argv `run`/`run_blocking` spawn: `shell().prog`, every `shell().args` entry, then `cmd`.
 ---@field run fun(cmd: string, cb: fun(ok:boolean, res:OsRunResult), opts?: Lib.Cross.Run.RunOpts): nil
 ---@field run_blocking fun(cmd: string, opts?: Lib.Cross.Run.RunOpts): OsRunResult
 ---@field run_detached fun(argv: string[]): boolean, string|nil # Launch argv detached (fire-and-forget); routes through jobstart on Windows/WSL since vim.system detach is unreliable there for GUI processes.

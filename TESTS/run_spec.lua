@@ -18,6 +18,15 @@ return function(H)
     "shell: is_powershell matches native-Windows (non-WSL) detection"
   )
 
+  -- ----------------------------------------------------------------- argv()
+  -- Every shell argument has to survive, whatever their number: the old
+  -- fixed three-slot spread dropped PowerShell's fourth (`-Command`).
+  local argv = run.argv("echo x")
+  eq(#argv, 2 + #sh.args, "argv: shell, every shell argument, then the command")
+  eq(argv[1], sh.prog, "argv: the shell comes first")
+  eq(argv[1 + #sh.args], sh.args[#sh.args], "argv: the last shell argument is kept")
+  eq(argv[#argv], "echo x", "argv: the command is last")
+
   -- --------------------------------------------------------- run_blocking()
 
   local res = run.run_blocking("echo hello-run-blocking")
