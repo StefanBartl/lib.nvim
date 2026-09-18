@@ -101,12 +101,10 @@ return function(text)
   -- 4) Windows native PowerShell
   if lib.is_windows() and not lib.is_wsl() then
     local cmd = "$input | Set-Clipboard"
-    local sh = lib.shell()
     if vim.system then
       local ok2, obj = pcall(function()
-        return vim
-          .system({ sh.prog, sh.args[1], sh.args[2], sh.args[3], cmd }, { stdin = text })
-          :wait()
+        -- `cross.run.argv` keeps every shell argument, `-Command` included.
+        return vim.system(require("lib.nvim.cross.run").argv(cmd), { stdin = text }):wait()
       end)
       if ok2 and obj and obj.code == 0 then
         return true

@@ -19,6 +19,21 @@ function M.shell()
   return { prog = "sh", args = { "-lc" }, is_powershell = false }
 end
 
+--- The argv `run`/`run_blocking` spawn for `cmd`: the shell, every one of
+--- its arguments, then the command string. Appended rather than spread over
+--- fixed positional slots, because `shell()` returns one argument on POSIX
+--- and four on Windows -- a fixed spread dropped PowerShell's `-Command`
+--- and relied on nil holes being compacted away on POSIX.
+---@param cmd string
+---@return string[]
+function M.argv(cmd)
+  local sh = M.shell()
+  local argv = { sh.prog }
+  vim.list_extend(argv, sh.args)
+  argv[#argv + 1] = cmd
+  return argv
+end
+
 ---@internal
 --- Resolve the `env` table to hand `vim.system`/`jobstart`. By default every
 --- `run`/`run_blocking` call is enriched via `cross.run.env.build()` — a
@@ -61,13 +76,9 @@ function M.run(cmd, cb, opts)
   end
 
   if vim.system then
-    vim.system(
-      { sh.prog, sh.args[1], sh.args[2], sh.args[3], cmd },
-      { text = true, env = env },
-      function(obj)
-        cb(obj.code == 0, pack(obj.code, obj.signal, obj.stdout, obj.stderr))
-      end
-    )
+    vim.system(M.argv(cmd), { text = true, env = env }, function(obj)
+      cb(obj.code == 0, pack(obj.code, obj.signal, obj.stdout, obj.stderr))
+    end)
     return
   end
 
@@ -106,9 +117,7 @@ function M.run_blocking(cmd, opts)
   local sh = M.shell()
   local env = resolve_env(opts)
   if vim.system then
-    local obj = vim
-      .system({ sh.prog, sh.args[1], sh.args[2], sh.args[3], cmd }, { text = true, env = env })
-      :wait()
+    local obj = vim.system(M.argv(cmd), { text = true, env = env }):wait()
     return {
       code = obj.code or 1,
       signal = obj.signal or 0,

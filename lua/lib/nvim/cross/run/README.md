@@ -10,6 +10,15 @@ detached). For argv-based execution (no shell involved), see
 Returns `{ prog = "powershell", args = { "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command" }, is_powershell = true }`
 on native Windows (not WSL), otherwise `{ prog = "sh", args = { "-lc" }, is_powershell = false }`.
 
+## `argv(cmd) -> string[]`
+
+The exact argv `run`/`run_blocking` spawn for `cmd`: `shell().prog`, every
+entry of `shell().args`, then `cmd` — `{ "powershell", "-NoProfile",
+"-ExecutionPolicy", "Bypass", "-Command", cmd }` on Windows, `{ "sh", "-lc",
+cmd }` elsewhere. Public so a caller that needs the same shell invocation
+with its own `vim.system` options (stdin, cwd, …) builds it here rather than
+spelling the argument list out again.
+
 ## Usage
 
 ```lua
