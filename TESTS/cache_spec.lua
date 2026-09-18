@@ -11,7 +11,23 @@ return function(H)
   local opts = { dir = dir }
 
   eq(disk.load("missing", opts), nil, "cache.disk: load on missing namespace is nil")
+  eq(
+    select(2, disk.load("missing", opts)),
+    nil,
+    "cache.disk: a missing namespace is 'empty, but ok' -- no err"
+  )
   eq(disk.stats("missing", opts).exists, false, "cache.disk: stats on missing namespace")
+
+  -- A file that exists but cannot be read is not the same as no file: a
+  -- directory squatting on the path makes io.open (Windows) or read (POSIX)
+  -- fail on every platform, which is the shape of a real transient failure.
+  vim.fn.mkdir(dir .. "/squatted.json", "p")
+  local squatted, squatted_err = disk.load("squatted", opts)
+  eq(squatted, nil, "cache.disk: an unreadable file loads as nil")
+  ok(
+    type(squatted_err) == "string" and squatted_err:match("^read failed") ~= nil,
+    "cache.disk: and says so, distinguishable from a missing file: " .. tostring(squatted_err)
+  )
 
   local saved, err = disk.save("widgets", { { id = 1 }, { id = 2 } }, opts)
   eq(saved, true, "cache.disk: save reports success: " .. tostring(err))
@@ -64,7 +80,12 @@ return function(H)
   vim.fn.delete(corrupt_backup_path)
   vim.fn.writefile({ "{not valid json" }, gadgets_path)
 
-  eq(disk.load("gadgets", opts), nil, "cache.disk: corrupt file loads as nil, not an error")
+  local corrupt_data, corrupt_err = disk.load("gadgets", opts)
+  eq(corrupt_data, nil, "cache.disk: corrupt file loads as nil, not an error")
+  ok(
+    type(corrupt_err) == "string" and corrupt_err:match("^invalid json") ~= nil,
+    "cache.disk: a corrupt file reports why, naming the backup: " .. tostring(corrupt_err)
+  )
   eq(
     vim.fn.filereadable(corrupt_backup_path),
     1,

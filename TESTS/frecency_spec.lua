@@ -162,5 +162,44 @@ return function(H)
   eq(guards:score(""), 0, "frecency: an empty key is not recorded")
   eq(guards:score(absent), 0, "frecency: nor scored")
 
+  -- ---------------------------------------------- unreadable vs. corrupt file
+  -- "No file yet" and "the file could not be read" must not collapse into the
+  -- same empty table: the second one still holds the only copy of the
+  -- history, and a flush over it would be the data loss. A directory on the
+  -- store's path makes the read fail on every platform.
+  local warnings = {}
+  local real_notify = vim.notify
+  vim.notify = function(msg, level)
+    warnings[#warnings + 1] = { msg = msg, level = level }
+  end
+
+  vim.fn.mkdir(dir .. "/unreadable.json", "p")
+  local blocked = open("unreadable")
+  blocked:record("/late.lua")
+  eq(#warnings, 1, "frecency: an unreadable store file is reported once on load")
+  local flushed, flush_err = blocked:flush()
+  eq(flushed, false, "frecency: flush refuses to overwrite a store it could not read")
+  ok(type(flush_err) == "string", "frecency: and says why")
+  eq(vim.fn.isdirectory(dir .. "/unreadable.json"), 1, "frecency: the path was left alone")
+
+  -- A corrupt file has already been backed up by cache.disk, so this one is
+  -- reported but then overwritten -- refusing forever would block every
+  -- future save behind one broken file.
+  local corrupt_path = dir .. "/corrupt.json"
+  vim.fn.writefile({ "{not json" }, corrupt_path)
+  local repaired = open("corrupt")
+  repaired:record("/after.lua")
+  eq(#warnings, 2, "frecency: a corrupt store file is reported too")
+  eq(repaired:flush(), true, "frecency: but a flush over it proceeds")
+  eq(
+    vim.fn.filereadable(corrupt_path .. ".corrupt"),
+    1,
+    "frecency: the original bytes survive next to the store"
+  )
+  repaired:reset()
+  ok(repaired:score("/after.lua") > 0, "frecency: and the rewritten store loads cleanly")
+
+  vim.notify = real_notify
+
   frecency._reset_handles()
 end

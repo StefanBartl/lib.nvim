@@ -84,7 +84,7 @@ the same string means something different in each.
 | `store:score(key)`  | `number` — `0` for a key never recorded                       |
 | `store:lookup(keys, weight?)`| `table<string, number>` — scores × `weight` (default `1.0`), zeroes omitted |
 | `store:seed(entries)`| `boolean` — adopt counts from elsewhere; refused on a non-empty store |
-| `store:flush()`     | –  write pending visits; no-op when nothing changed           |
+| `store:flush()`     | `boolean, string?` — write pending visits; `true` when nothing changed or written; `false, err` when the write failed or the store file could not be read on load (see Notes) |
 | `store:clear()`     | –  forget everything, in memory and on disk                   |
 | `store:reset()`     | –  test-only: drop the in-memory copy, leave the file alone   |
 
@@ -98,6 +98,13 @@ the same string means something different in each.
 - Persistence goes through [`lib.nvim.cache.disk`](../cache/README.md), which
   already owns namespaced, `pcall`-guarded JSON with directory creation. There
   is no second copy of that logic here.
+- **An unreadable store is never overwritten.** A store file that exists but
+  cannot be read (a sharing violation, a permission hiccup) loads as empty and
+  a warning is shown once; `flush()` then refuses with `false, err` and keeps
+  the visits pending, so this session's handful of records is not written over
+  months of history. A file that exists but is not valid JSON is reported the
+  same way, but *is* overwritten on flush: `cache.disk` has already kept the
+  original bytes next to it as `<namespace>.json.corrupt`.
 - **`seed` never writes over an existing store.** It exists so a consumer can
   adopt counts it kept in its own format before this module existed. Adopting
   them *over* real history would turn a one-time migration into silent data

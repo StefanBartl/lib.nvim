@@ -102,6 +102,15 @@ function M.store(opts)
   local cached = nil
   local dirty = false
 
+  ---Why the last load came back empty although a file exists. These counts
+  ---cannot be regenerated, so an empty in-memory table must not be written
+  ---over a file that merely could not be read this time (a sharing
+  ---violation, a permission hiccup): `flush` refuses while this is set. A
+  ---decode failure is different — `cache.disk` has already backed the
+  ---original bytes up next to the file — so that one is only reported.
+  ---@type string|nil
+  local load_err = nil
+
   ---The entry table, read from disk on the first call that needs it. A store
   ---that is opened but never used costs nothing, and returning the table
   ---rather than assigning an upvalue keeps every caller free of a nil check
@@ -110,8 +119,15 @@ function M.store(opts)
   ---@return table<string, Lib.Frecency.Entry>
   local function entries()
     if not cached then
-      local loaded = disk.load(namespace, disk_opts)
+      local loaded, err = disk.load(namespace, disk_opts)
       cached = type(loaded) == "table" and loaded or {}
+      load_err = err
+      if err then
+        vim.notify(
+          ("lib.nvim.frecency: could not load '%s': %s"):format(namespace, err),
+          vim.log.levels.WARN
+        )
+      end
     end
     return cached
   end
@@ -201,25 +217,43 @@ function M.store(opts)
       return taken > 0
     end,
 
+    ---@return boolean ok
+    ---@return string|nil err
     flush = function()
       if not dirty then
-        return
+        return true, nil
+      end
+      -- A file that exists but could not be read holds the only copy of the
+      -- history; writing this session's handful of visits over it would be
+      -- the data loss. Stay dirty so a later flush retries once the file is
+      -- readable again. A decode failure is not refused: the original bytes
+      -- are already backed up by `cache.disk`, and refusing forever would
+      -- block every future save behind one broken file.
+      if load_err and not load_err:match("^invalid json") then
+        return false, ("refusing to overwrite '%s': %s"):format(namespace, load_err)
       end
       -- An empty table is worth writing: it is the state after `clear`, and
       -- skipping it would resurrect the old file on the next load.
-      disk.save(namespace, entries(), disk_opts)
+      local ok, err = disk.save(namespace, entries(), disk_opts)
+      if not ok then
+        return false, err
+      end
       dirty = false
+      load_err = nil
+      return true, nil
     end,
 
     clear = function()
       cached = {}
       dirty = false
+      load_err = nil
       disk.clear(namespace, disk_opts)
     end,
 
     reset = function()
       cached = nil
       dirty = false
+      load_err = nil
     end,
   }
 

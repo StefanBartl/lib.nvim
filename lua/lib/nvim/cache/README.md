@@ -43,8 +43,10 @@ local disk = require("lib.nvim.cache.disk")
 
 disk.save("github_issues", { { id = 1, title = "..." } })
 
-local data = disk.load("github_issues", { ttl_seconds = 3600 })
--- nil if missing, unreadable, or older than ttl_seconds (file is left alone)
+local data, err = disk.load("github_issues", { ttl_seconds = 3600 })
+-- nil if missing, unreadable, or older than ttl_seconds (file is left alone);
+-- `err` is nil for missing/expired and set when a file exists but could not
+-- be read ("read failed: …") or decoded ("invalid json: …")
 
 local stats = disk.stats("github_issues")
 -- { exists = true, saved_at = 1731600000, age_seconds = 12, size_bytes = 512 }
@@ -55,7 +57,7 @@ disk.clear("github_issues")
 | Function                | Returns                                                                 |
 | ------------------------ | ------------------------------------------------------------------------ |
 | `save(ns, data, opts)`   | `ok:boolean, err:string?`                                              |
-| `load(ns, opts)`         | `data:any` (`nil` if missing/unreadable/expired)                       |
+| `load(ns, opts)`         | `data:any, err:string?` (`data` is `nil` if missing/unreadable/expired; `err` only for an existing file that failed to read or decode — a load-modify-save caller uses it to not overwrite real data with its empty default) |
 | `clear(ns, opts)`        | `ok:boolean` (`true` if removed or already absent)                     |
 | `stats(ns, opts)`        | `{ exists, saved_at, age_seconds, size_bytes }` (all `nil` but `exists` when absent) |
 

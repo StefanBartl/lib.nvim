@@ -12,8 +12,9 @@
 --- local disk = require("lib.nvim.cache.disk")
 ---
 --- disk.save("github_issues", { { id = 1, title = "..." } })
---- local data = disk.load("github_issues", { ttl_seconds = 3600 })
---- -- data is nil if missing, unreadable, or older than ttl_seconds
+--- local data, err = disk.load("github_issues", { ttl_seconds = 3600 })
+--- -- data is nil if missing, unreadable, or older than ttl_seconds; err is
+--- -- set only when a file exists but could not be read or decoded
 ---
 --- disk.clear("github_issues")
 --- local stats = disk.stats("github_issues")
@@ -56,29 +57,43 @@ end
 ---read), so "the file was briefly unreadable" never turns into "the data is
 ---gone". Bug pattern found and fixed the same way three times already
 ---across the plugin fleet before landing here at the shared root.
+---
+---The second return value is what lets a caller tell the two apart: `nil`
+---when there simply is no file (first run, cleared), a reason when a file
+---exists but could not be read or decoded. A load-modify-save consumer
+---that ignores it would overwrite real data with its empty default on a
+---transient read error, and the backup above only covers the decode case.
 ---@param namespace string
 ---@param opts Lib.Cache.Opts|nil
----@return { saved_at: integer, data: any }|nil
+---@return { saved_at: integer, data: any }|nil entry
+---@return string|nil err `nil` when no file exists; the failure otherwise.
 local function read_entry(namespace, opts)
   local path = cache_path(namespace, opts)
 
-  local ok_read, content = pcall(function()
-    local file = io.open(path, "r")
+  if uv.fs_stat(path) == nil then
+    return nil, nil
+  end
+
+  local ok_read, content, read_err = pcall(function()
+    local file, open_err = io.open(path, "r")
     if not file then
-      return nil
+      return nil, open_err
     end
-    local text = file:read("*a")
+    local text, err = file:read("*a")
     file:close()
-    return text
+    return text, err
   end)
-  if not ok_read or not content then
-    return nil
+  if not ok_read then
+    return nil, "read failed: " .. tostring(content)
+  end
+  if not content then
+    return nil, "read failed: " .. tostring(read_err or path)
   end
 
   local ok_decode, decoded = pcall(vim.json.decode, content)
   if not ok_decode or type(decoded) ~= "table" then
+    local backup_path = path .. ".corrupt"
     if content ~= "" then
-      local backup_path = path .. ".corrupt"
       if uv.fs_stat(backup_path) == nil then
         local fh = io.open(backup_path, "wb")
         if fh then
@@ -87,10 +102,10 @@ local function read_entry(namespace, opts)
         end
       end
     end
-    return nil
+    return nil, "invalid json: original kept at " .. backup_path
   end
 
-  return decoded
+  return decoded, nil
 end
 
 ---Persist `data` under `namespace`.
@@ -142,24 +157,30 @@ end
 
 ---Load the cached value for `namespace`, or `nil` if missing, unreadable, or
 ---expired (per `opts.ttl_seconds`).
+---
+---`err` is `nil` for the two harmless kinds of `nil` (no file yet, expired)
+---and a reason when a file exists but could not be read or decoded, so a
+---caller holding data that cannot be regenerated can refuse to write its
+---empty default over it.
 ---@param namespace string
 ---@param opts? Lib.Cache.LoadOpts|Lib.Cache.Opts
 ---@return any|nil data
+---@return string|nil err
 function M.load(namespace, opts)
   opts = opts or {}
-  local entry = read_entry(namespace, opts)
+  local entry, err = read_entry(namespace, opts)
   if not entry then
-    return nil
+    return nil, err
   end
 
   if opts.ttl_seconds then
     local saved_at = entry.saved_at or 0
     if os.time() - saved_at > opts.ttl_seconds then
-      return nil
+      return nil, nil
     end
   end
 
-  return entry.data
+  return entry.data, nil
 end
 
 ---Remove the cache file for `namespace`.

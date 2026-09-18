@@ -26,7 +26,7 @@
 --- `lib.nvim.cache.disk` module surface: persistent JSON disk cache.
 ---@class Lib.Cache.Disk
 ---@field save fun(namespace: string, data: any, opts?: Lib.Cache.SaveOpts): boolean, string?
----@field load fun(namespace: string, opts?: Lib.Cache.LoadOpts|Lib.Cache.Opts): any
+---@field load fun(namespace: string, opts?: Lib.Cache.LoadOpts|Lib.Cache.Opts): any, string? # `err` is `nil` for a missing or expired entry and `"read failed: …"` / `"invalid json: …"` when a file exists but could not be used.
 ---@field clear fun(namespace: string, opts?: Lib.Cache.Opts): boolean
 ---@field stats fun(namespace: string, opts?: Lib.Cache.Opts): Lib.Cache.Stats
 
