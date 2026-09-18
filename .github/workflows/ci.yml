@@ -38,7 +38,19 @@ jobs:
       - run: luacheck lua TESTS
 
   tests:
-    runs-on: ubuntu-latest
+    name: tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One platform failing must not cancel the others: which of the three
+      # broke is the whole information content of this job.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        # Windows runners default to PowerShell; one shell on all three keeps
+        # the run step itself from being what differs between platforms.
+        shell: bash
     steps:
       - uses: actions/checkout@v5
       # telemetry_wrap_spec.lua exercises lib.strategies.telemetry_wrap
@@ -61,6 +73,12 @@ jobs:
   # repos before anyone notices it's this repo's fault. `ci-verified` only
   # ever moves once stylua+luacheck+tests have passed, so consumers pinning
   # `ref: ci-verified` always test against a known-good commit.
+  #
+  # Since `tests` became a three-platform matrix, `needs: tests` waits on all
+  # three -- so `ci-verified` means "green on Linux, Windows and macOS", not
+  # just "green on Linux". That is deliberately stricter: this repo is the
+  # cross-platform layer the rest of the fleet calls, so a macOS-only break
+  # here is exactly the kind of thing consumers must not inherit silently.
   publish-ci-verified:
     name: publish ci-verified branch
     needs: [stylua, luacheck, tests]
