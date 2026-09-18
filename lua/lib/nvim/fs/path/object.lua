@@ -75,7 +75,8 @@ end
 --- walk, not plenary's shallow `Path:iter()` — the primitive this
 --- delegates to (`lib.nvim.fs.collect_recursive`) has no depth limit.
 ---@param opts? Lib.Fs.CollectRecursive.Opts
----@return string[]
+---@return string[] paths
+---@return string[]|nil errors # Directories that could not be read, as `collect_recursive` reports them.
 function Path:iter(opts)
   return require("lib.nvim.fs.collect_recursive").collect(self.path, opts)
 end

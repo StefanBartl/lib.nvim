@@ -106,7 +106,8 @@ end
 --- Collect readable text files under `root`.
 ---@param root string
 ---@param opts Lib.Harvest.ScopeOpts
----@return Lib.Harvest.Source[]
+---@return Lib.Harvest.Source[] sources
+---@return string|nil err # Set when a directory could not be read; `sources` is then what was reachable.
 local function dir_sources(root, opts)
   local collect_recursive = require("lib.nvim.fs.collect_recursive")
   local ignore = opts.ignore or default_ignore()
@@ -114,10 +115,11 @@ local function dir_sources(root, opts)
   local max_filesize = opts.max_filesize or DEFAULT_MAX_FILESIZE
 
   local paths
+  local err
   if opts.recursive == false then
     -- Shallow: one scandir pass, no descent.
     paths = {}
-    local handle = uv.fs_scandir(root)
+    local handle, scandir_err = uv.fs_scandir(root)
     if handle then
       while true do
         local name, kind = uv.fs_scandir_next(handle)
@@ -129,9 +131,15 @@ local function dir_sources(root, opts)
           paths[#paths + 1] = abs
         end
       end
+    else
+      err = root .. ": " .. tostring(scandir_err or "scandir failed")
     end
   else
-    paths = collect_recursive.files(root, { ignore = ignore })
+    local errors
+    paths, errors = collect_recursive.files(root, { ignore = ignore })
+    if errors then
+      err = table.concat(errors, "; ")
+    end
   end
 
   table.sort(paths)
@@ -148,7 +156,7 @@ local function dir_sources(root, opts)
       end
     end
   end
-  return out
+  return out, err
 end
 
 --- Resolve `kind` into sources.
@@ -211,7 +219,7 @@ function M.resolve(kind, opts)
 
   if kind == "cwd" then
     local root = vim.fs.normalize(vim.fn.getcwd())
-    return dir_sources(root, vim.tbl_extend("keep", opts, { recursive = true })), nil
+    return dir_sources(root, vim.tbl_extend("keep", opts, { recursive = true }))
   end
 
   if kind == "path" then
@@ -225,7 +233,7 @@ function M.resolve(kind, opts)
       return {}, ("no such file or directory: %s"):format(raw)
     end
     if st.type == "directory" then
-      return dir_sources(p, opts), nil
+      return dir_sources(p, opts)
     end
     local src = read_source(p, opts.max_filesize or DEFAULT_MAX_FILESIZE)
     if not src then

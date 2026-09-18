@@ -12,7 +12,7 @@
 ---@field paths string[]
 
 ---@class Lib.Fs.ScanRoots
----@field scan fun(roots: string[], opts?: Lib.Fs.ScanRoots.Opts): string[]
----@field scan_async fun(roots: string[], opts: Lib.Fs.ScanRoots.Opts|nil, on_done: fun(paths: string[])): nil # Non-blocking counterpart to `scan`; roots are still walked sequentially, not in parallel. Always vim.schedule-dispatched.
+---@field scan fun(roots: string[], opts?: Lib.Fs.ScanRoots.Opts): string[], string[]? # `errors` merges `collect_recursive`'s unreadable-directory reports across roots, or nil; a scan that reported any is returned but not written to `cache_path`.
+---@field scan_async fun(roots: string[], opts: Lib.Fs.ScanRoots.Opts|nil, on_done: fun(paths: string[], errors: string[]|nil)): nil # Non-blocking counterpart to `scan`; roots are still walked sequentially, not in parallel. Always vim.schedule-dispatched.
 
 return {}

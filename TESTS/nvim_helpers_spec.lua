@@ -497,6 +497,20 @@ return function(H)
   vim.fn.writefile({ "x" }, tmp .. "/walk/skipme/b.txt")
   eq(#collect.files(tmp .. "/walk"), 2, "collect_recursive.files: walks recursively")
   eq(#collect.dirs(tmp .. "/walk"), 2, "collect_recursive.dirs: finds directories")
+
+  -- "Empty tree" and "unreadable tree" both come back as {} -- the second
+  -- return value is what tells them apart, and what a caller persisting the
+  -- result has to check.
+  vim.fn.mkdir(tmp .. "/walk-empty", "p")
+  local empty_paths, empty_errors = collect.files(tmp .. "/walk-empty")
+  eq(#empty_paths, 0, "collect_recursive: an empty tree yields no paths")
+  eq(empty_errors, nil, "collect_recursive: and no errors")
+  local gone_paths, gone_errors = collect.files(tmp .. "/walk-does-not-exist")
+  eq(#gone_paths, 0, "collect_recursive: an unreadable root yields no paths either")
+  ok(
+    type(gone_errors) == "table" and #gone_errors == 1 and gone_errors[1]:match("walk%-does%-not%-exist"),
+    "collect_recursive: but names the directory it could not open: " .. vim.inspect(gone_errors)
+  )
   local filtered = collect.files(tmp .. "/walk", {
     ignore = function(path)
       return path:match("skipme") ~= nil
@@ -607,6 +621,16 @@ return function(H)
   )
 
   local cache_p = tmp .. "/scan_cache.json"
+  -- A failed walk must not be persisted: the cache never expires by
+  -- default, so a root that was unavailable once would answer "no files"
+  -- until the JSON is deleted by hand.
+  local broken_paths, broken_errors = scan_roots.scan(
+    { tmp .. "/walk-does-not-exist" },
+    { cache_path = cache_p }
+  )
+  eq(#broken_paths, 0, "scan_roots: an unreadable root yields no paths")
+  ok(type(broken_errors) == "table" and #broken_errors == 1, "scan_roots: and reports it")
+  eq(uv.fs_stat(cache_p), nil, "scan_roots: a scan that reported errors is not written to the cache")
   eq(#scan_roots.scan({ tmp .. "/walk" }, { cache_path = cache_p }), 2, "scan_roots: uncached scan")
   vim.fn.writefile({ "x" }, tmp .. "/walk/keep/c.txt")
   eq(

@@ -39,9 +39,16 @@ local function is_ignored(path, ignore_dirs)
 end
 
 ---Scan `roots` for files/dirs, honoring an optional cache.
+---
+---`errors` collects `collect_recursive`'s unreadable-directory reports
+---across all roots, or is `nil`. A scan that reported any is returned but
+---not written to `cache_path`: with `ttl_seconds` unset the cache never
+---expires, so "this root was unavailable once" must not become "this
+---project has no files" across restarts.
 ---@param roots string[]
 ---@param opts? Lib.Fs.ScanRoots.Opts
----@return string[]
+---@return string[] paths
+---@return string[]|nil errors
 ---@see lib.nvim.fs.scan_cached.scan
 function M.scan(roots, opts)
   opts = opts or {}
@@ -62,9 +69,9 @@ function M.scan(roots, opts)
   -- Sequential by design: bounded-concurrency async scanning was left out
   -- for simplicity. Callers needing that can call `M.scan` once per root
   -- from their own async scheduler instead.
-  local merged = {}
+  local merged, errors = {}, {}
   for _, root in ipairs(roots) do
-    local found = collect_recursive.collect(root, {
+    local found, root_errors = collect_recursive.collect(root, {
       kind = kind,
       ignore = function(path)
         return is_ignored(path, ignore_dirs)
@@ -73,13 +80,16 @@ function M.scan(roots, opts)
     for _, p in ipairs(found) do
       merged[#merged + 1] = p
     end
+    for _, e in ipairs(root_errors or {}) do
+      errors[#errors + 1] = e
+    end
   end
 
-  if opts.cache_path then
+  if opts.cache_path and #errors == 0 then
     json.write(opts.cache_path, { saved_at = os.time(), paths = merged })
   end
 
-  return merged
+  return merged, (#errors > 0) and errors or nil
 end
 
 ---Async counterpart to `scan`: same cache semantics (still read/written
@@ -87,12 +97,12 @@ end
 ---but the actual per-root walk uses `collect_recursive.collect_async`
 ---instead of blocking the main loop. Roots are still walked one at a time,
 ---sequentially — see `collect_async`'s own note on why this isn't
----parallelized. `on_done(paths)` fires exactly once, always
+---parallelized. `on_done(paths, errors)` fires exactly once, always
 ---`vim.schedule`-dispatched (directly on a cache hit, via `collect_async`
----otherwise).
+---otherwise); `errors` follows the same rule as in `scan`.
 ---@param roots string[]
 ---@param opts? Lib.Fs.ScanRoots.Opts
----@param on_done fun(paths: string[])
+---@param on_done fun(paths: string[], errors: string[]|nil)
 ---@return nil
 ---@see lib.nvim.fs.scan_cached.scan_async
 function M.scan_async(roots, opts, on_done)
@@ -114,14 +124,14 @@ function M.scan_async(roots, opts, on_done)
     end
   end
 
-  local merged = {}
+  local merged, errors = {}, {}
   local idx = 0
 
   local function next_root()
     idx = idx + 1
     local root = roots[idx]
     if not root then
-      if opts.cache_path then
+      if opts.cache_path and #errors == 0 then
         json.write(opts.cache_path, { saved_at = os.time(), paths = merged })
       end
       -- `collect_recursive.collect_async` already vim.schedule-dispatches
@@ -129,7 +139,7 @@ function M.scan_async(roots, opts, on_done)
       -- dispatch, so this final call is already on a scheduled callback —
       -- no extra vim.schedule needed to match the cache-hit branch's
       -- contract above.
-      on_done(merged)
+      on_done(merged, (#errors > 0) and errors or nil)
       return
     end
     collect_recursive.collect_async(root, {
@@ -137,9 +147,12 @@ function M.scan_async(roots, opts, on_done)
       ignore = function(path)
         return is_ignored(path, ignore_dirs)
       end,
-    }, function(found)
+    }, function(found, root_errors)
       for _, p in ipairs(found) do
         merged[#merged + 1] = p
+      end
+      for _, e in ipairs(root_errors or {}) do
+        errors[#errors + 1] = e
       end
       next_root()
     end)

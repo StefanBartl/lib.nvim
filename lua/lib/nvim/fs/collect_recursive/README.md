@@ -36,9 +36,15 @@ end)
 
 | Function             | Returns    | Meaning                                             |
 |-----------------------|------------|------------------------------------------------------|
-| `M.collect(root, opts)` | `string[]` | Absolute paths matching `opts.kind` (default `"all"`) |
-| `M.files(root, opts)`   | `string[]` | Shorthand for `collect` with `kind = "files"`         |
-| `M.dirs(root, opts)`    | `string[]` | Shorthand for `collect` with `kind = "dirs"`          |
+| `M.collect(root, opts)` | `string[], string[]?` | Absolute paths matching `opts.kind` (default `"all"`), plus `errors` |
+| `M.files(root, opts)`   | `string[], string[]?` | Shorthand for `collect` with `kind = "files"`         |
+| `M.dirs(root, opts)`    | `string[], string[]?` | Shorthand for `collect` with `kind = "dirs"`          |
+
+`errors` is `nil` when every directory could be read. Otherwise it holds one
+`"<dir>: <reason>"` entry per directory `fs_scandir` refused — the root
+itself included — and `paths` is whatever was reachable. An empty tree and
+an unreadable tree both yield `{}`; only `errors` tells them apart, so a
+caller that persists or caches the result should check it.
 
 When `opts.ignore(abs_path, is_dir)` returns `true` for a directory, that
 directory entry is skipped **and** its subtree is not recursed into.
@@ -67,10 +73,12 @@ visited one after another, deliberately, to keep the coroutine driver
 simple. `M.files_async`/`M.dirs_async` mirror `files`/`dirs`.
 
 ```
-M.collect_async(root: string, opts?: Lib.Fs.CollectRecursive.Opts, on_done: fun(paths: string[])): fun() cancel
-M.files_async(root: string, opts?: Lib.Fs.CollectRecursive.Opts, on_done: fun(paths: string[])): fun() cancel
-M.dirs_async(root: string, opts?: Lib.Fs.CollectRecursive.Opts, on_done: fun(paths: string[])): fun() cancel
+M.collect_async(root: string, opts?: Lib.Fs.CollectRecursive.Opts, on_done: fun(paths: string[], errors: string[]|nil)): fun() cancel
+M.files_async(root: string, opts?: Lib.Fs.CollectRecursive.Opts, on_done: fun(paths: string[], errors: string[]|nil)): fun() cancel
+M.dirs_async(root: string, opts?: Lib.Fs.CollectRecursive.Opts, on_done: fun(paths: string[], errors: string[]|nil)): fun() cancel
 ```
+
+`errors` follows the same rule as `collect`'s second return value.
 
 `on_done` is always `vim.schedule`-dispatched and fires **at most once**;
 calling the returned `cancel()` function stops the walk after its current

@@ -95,10 +95,19 @@ return function(H)
 
   -- --------------------------------------------------------- missing root
 
-  local missing = await(function(done)
+  local missing_results = await(function(done)
     collect.collect_async(tmp .. "/does-not-exist", nil, done)
-  end)[1]
-  eq(#missing, 0, "collect_async: a nonexistent root settles to an empty list, not an error")
+  end)
+  local missing, missing_errors = missing_results[1], missing_results[2]
+  eq(#missing, 0, "collect_async: a nonexistent root settles to an empty list, not a raise")
+  ok(
+    type(missing_errors) == "table" and #missing_errors == 1,
+    "collect_async: but reports the unreadable root, unlike a genuinely empty tree"
+  )
+  local clean_errors = await(function(done)
+    collect.collect_async(tmp .. "/walk/keep", nil, done)
+  end)[2]
+  eq(clean_errors, nil, "collect_async: a readable tree reports no errors")
 
   -- ----------------------------------------------------------- cancellation
 
