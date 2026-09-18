@@ -249,6 +249,7 @@ M.scan_async(roots: string[], opts?: Lib.Fs.ScanRoots.Opts, on_done: fun(paths: 
   -- synchronously, only the per-root walk is async
 ```
 `opts`: `ignore_dirs` (default `{}`), `kind` (default `"files"`), `cache_path?`, `ttl_seconds?` (nil = never expires).
+The cache file records `roots`/`kind`/`ignore_dirs`; a read with different ones through the same `cache_path` is a miss, not a hit.
 
 ---
 

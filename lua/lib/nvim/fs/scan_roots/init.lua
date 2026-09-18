@@ -38,6 +38,40 @@ local function is_ignored(path, ignore_dirs)
   return false
 end
 
+---@internal
+---A cache file answers only the exact question it was written for: the same
+---roots, `kind` and ignore list. Anything else is a different scan that
+---happens to share a file name, and its answer must not be handed back --
+---with `ttl_seconds` unset it would be, forever. A file written before these
+---fields existed fails the check once and is rewritten.
+---@param cached table
+---@param roots string[]
+---@param kind string
+---@param ignore_dirs string[]
+---@return boolean
+local function cache_matches(cached, roots, kind, ignore_dirs)
+  return type(cached.paths) == "table"
+    and cached.kind == kind
+    and vim.deep_equal(cached.roots, roots)
+    and vim.deep_equal(cached.ignore_dirs, ignore_dirs)
+end
+
+---@internal
+---@param roots string[]
+---@param kind string
+---@param ignore_dirs string[]
+---@param paths string[]
+---@return Lib.Fs.ScanRoots.Cache
+local function cache_payload(roots, kind, ignore_dirs, paths)
+  return {
+    saved_at = os.time(),
+    roots = roots,
+    kind = kind,
+    ignore_dirs = ignore_dirs,
+    paths = paths,
+  }
+end
+
 ---Scan `roots` for files/dirs, honoring an optional cache.
 ---
 ---`errors` collects `collect_recursive`'s unreadable-directory reports
@@ -57,7 +91,7 @@ function M.scan(roots, opts)
 
   if opts.cache_path then
     local cached = json.read(opts.cache_path)
-    if cached and type(cached.paths) == "table" then
+    if cached and cache_matches(cached, roots, kind, ignore_dirs) then
       local fresh = opts.ttl_seconds == nil
         or (os.time() - (cached.saved_at or 0)) <= opts.ttl_seconds
       if fresh then
@@ -86,7 +120,7 @@ function M.scan(roots, opts)
   end
 
   if opts.cache_path and #errors == 0 then
-    json.write(opts.cache_path, { saved_at = os.time(), paths = merged })
+    json.write(opts.cache_path, cache_payload(roots, kind, ignore_dirs, merged))
   end
 
   return merged, (#errors > 0) and errors or nil
@@ -112,7 +146,7 @@ function M.scan_async(roots, opts, on_done)
 
   if opts.cache_path then
     local cached = json.read(opts.cache_path)
-    if cached and type(cached.paths) == "table" then
+    if cached and cache_matches(cached, roots, kind, ignore_dirs) then
       local fresh = opts.ttl_seconds == nil
         or (os.time() - (cached.saved_at or 0)) <= opts.ttl_seconds
       if fresh then
@@ -132,7 +166,7 @@ function M.scan_async(roots, opts, on_done)
     local root = roots[idx]
     if not root then
       if opts.cache_path and #errors == 0 then
-        json.write(opts.cache_path, { saved_at = os.time(), paths = merged })
+        json.write(opts.cache_path, cache_payload(roots, kind, ignore_dirs, merged))
       end
       -- `collect_recursive.collect_async` already vim.schedule-dispatches
       -- its own on_done, and every step here runs from inside that

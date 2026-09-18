@@ -644,6 +644,27 @@ return function(H)
     "scan_roots: an expired TTL forces a rescan"
   )
 
+  -- The cache file answers only the question it was written for: a
+  -- different kind, root list or ignore list through the same path is a
+  -- different scan, not a hit -- and the cache never expires by default.
+  -- Each step's real answer differs from what a false hit on the previous
+  -- step's file would return (3 files -> 2 pruned -> 5 of any kind -> 1).
+  eq(
+    #scan_roots.scan({ tmp .. "/walk" }, { cache_path = cache_p, ignore_dirs = { "skipme" } }),
+    2,
+    "scan_roots: a different ignore list through the same cache_path does not reuse the unfiltered list"
+  )
+  eq(
+    #scan_roots.scan({ tmp .. "/walk" }, { cache_path = cache_p, kind = "all" }),
+    5,
+    "scan_roots: nor does a different kind"
+  )
+  eq(
+    #scan_roots.scan({ tmp .. "/walk/skipme" }, { cache_path = cache_p }),
+    1,
+    "scan_roots: nor does a different root list"
+  )
+
   local scan_cached = require("lib.nvim.fs.scan_cached")
   eq(#scan_cached.scan(tmp .. "/walk"), 3, "scan_cached: uncached scan across the whole tree")
   vim.fn.writefile({ "x" }, tmp .. "/walk/keep/d.txt")
@@ -656,6 +677,27 @@ return function(H)
     #scan_cached.scan(tmp .. "/walk", { refresh = true }),
     4,
     "scan_cached: refresh=true forces a rescan"
+  )
+
+  -- The ignore predicate changes the result, so it is part of the key: two
+  -- callers scanning the same root within one TTL must not share an entry.
+  local function prune_skipme(p)
+    return p:match("skipme") ~= nil
+  end
+  eq(
+    #scan_cached.scan(tmp .. "/walk", { ignore = prune_skipme }),
+    3,
+    "scan_cached: a pruning predicate gets its own, pruned entry"
+  )
+  eq(
+    #scan_cached.scan(tmp .. "/walk", { ignore = prune_skipme }),
+    3,
+    "scan_cached: and hits it again with the same predicate"
+  )
+  eq(
+    #scan_cached.scan(tmp .. "/walk"),
+    4,
+    "scan_cached: while the unfiltered caller still sees its own list"
   )
   eq(
     #scan_cached.scan(tmp .. "/walk", { ttl_seconds = 0, refresh = true }),

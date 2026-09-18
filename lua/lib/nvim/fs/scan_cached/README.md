@@ -68,8 +68,11 @@ the same from a caller's perspective.
 
 ## Notes
 
-* The cache key is `root .. ":" .. kind` — scanning the same root for
-  `"files"` and `"dirs"` separately caches independently.
+* The cache key is root + `kind` + the `ignore` predicate — scanning the
+  same root for `"files"` and `"dirs"`, or with and without a prune
+  predicate, caches independently. The predicate is keyed by identity (a
+  hit also re-checks it), so pass the *same* function on repeat calls; a
+  fresh closure per call is a fresh entry, i.e. a rescan every time.
 * This module only caches the **walk**. If your call site does further
   work per path (parsing, stat-ing, …) that is itself expensive, cache that
   result separately — `scan_cached` does not know about it.
