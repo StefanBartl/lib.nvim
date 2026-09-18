@@ -100,6 +100,8 @@ local specs = {
   "apply_edits_spec.lua",
   "checkpoint_spec.lua",
   "config_repo_file_spec.lua",
+  "relpath_spec.lua",
+  "nvim_autocmd_spec.lua",
 }
 
 --- Straight to stdout rather than through `print`.
