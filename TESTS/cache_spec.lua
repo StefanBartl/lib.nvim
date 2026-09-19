@@ -111,6 +111,34 @@ return function(H)
   disk.clear("gadgets", opts)
   vim.fn.delete(corrupt_backup_path)
 
+  -- An interrupted write (crash mid-write, or a disk that fills up before
+  -- any bytes land) can leave a save's target file completely empty.
+  -- `vim.json.decode("")` throws just like decoding garbage does, but there
+  -- is nothing to back up -- the error must not claim a `.corrupt` backup
+  -- exists when no bytes were ever written to one.
+  disk.save("empty", { { id = 1 } }, opts)
+  local empty_path = dir .. "/empty.json"
+  local empty_backup_path = empty_path .. ".corrupt"
+  vim.fn.delete(empty_backup_path)
+  vim.fn.writefile({}, empty_path) -- truncate to 0 bytes
+  local empty_data, empty_err = disk.load("empty", opts)
+  eq(empty_data, nil, "cache.disk: an empty file loads as nil")
+  ok(
+    type(empty_err) == "string" and empty_err:match("^invalid json") ~= nil,
+    "cache.disk: an empty file reports invalid json: " .. tostring(empty_err)
+  )
+  ok(
+    not empty_err:match("kept at"),
+    "cache.disk: an empty file's error does not claim a backup that was never written: "
+      .. tostring(empty_err)
+  )
+  eq(
+    vim.fn.filereadable(empty_backup_path),
+    0,
+    "cache.disk: no .corrupt backup is created for an empty file"
+  )
+  disk.clear("empty", opts)
+
   -- A namespace may contain slashes to group related entries — the form
   -- store.project's own documentation uses. Only the cache *root* used to be
   -- created, so every nested namespace failed to write with ENOENT, reporting
