@@ -168,20 +168,9 @@ return function(H)
   -- `normkey(...)`-wrapped, since the point of two of these is the exact
   -- spelling that comes back, which `normkey` would launder away.
 
-  ---@param link string
-  ---@param fn fun(): nil
-  local function with_stdpath_config(link, fn)
-    local orig = vim.fn.stdpath
-    vim.fn.stdpath = function(what)
-      if what == "config" then
-        return link
-      end
-      return orig(what)
-    end
-    local ok, err = pcall(fn)
-    vim.fn.stdpath = orig
-    assert(ok, err)
-  end
+  -- Shared with stdpath_config_root_spec.lua and dev_reload_spec.lua -- see
+  -- TESTS/harness.lua for why this used to be three separate copies.
+  local with_stdpath_config = H.with_stdpath_config
 
   do
     -- No marker anywhere, so the plain marker search would answer the file's
@@ -191,10 +180,18 @@ return function(H)
     local file = config .. "/lua/plugins/init.lua"
     vim.fn.writefile({}, file)
 
-    with_stdpath_config(config, function()
-      local resolve = resolver({ markers = { ".git" } })
-      H.eq(resolve(file), config, "a file under the (stubbed) config dir roots there")
+    -- The assertion runs inside an outer pcall so `vim.fn.delete` below still
+    -- runs on a failure, not only on success -- `with_stdpath_config` itself
+    -- re-raises past its own restore, which would otherwise skip this cleanup
+    -- entirely and leak the temp directory.
+    local test_ok, test_err = pcall(function()
+      with_stdpath_config(config, function()
+        local resolve = resolver({ markers = { ".git" } })
+        H.eq(resolve(file), config, "a file under the (stubbed) config dir roots there")
+      end)
     end)
+    vim.fn.delete(config, "rf")
+    assert(test_ok, test_err)
   end
 
   do
@@ -204,14 +201,19 @@ return function(H)
     local root = make_tree({ ".git/", "src/main.lua" })
     local config = make_tree({})
 
-    with_stdpath_config(config, function()
-      local resolve = resolver({ markers = { ".git" } })
-      H.eq(
-        normkey(resolve(root .. "/src/main.lua")),
-        root,
-        "a file outside the config dir keeps its own root"
-      )
+    local test_ok, test_err = pcall(function()
+      with_stdpath_config(config, function()
+        local resolve = resolver({ markers = { ".git" } })
+        H.eq(
+          normkey(resolve(root .. "/src/main.lua")),
+          root,
+          "a file outside the config dir keeps its own root"
+        )
+      end)
     end)
+    vim.fn.delete(root, "rf")
+    vim.fn.delete(config, "rf")
+    assert(test_ok, test_err)
   end
 
   -- The symlinked-dotfiles case reaching this call site specifically -- see
@@ -229,6 +231,12 @@ return function(H)
       { dir = true, junction = false }
     )
 
+    -- One cleanup point below, run exactly once regardless of which branch
+    -- below takes, and regardless of whether the assertion inside it raises
+    -- -- `test_ok`/`test_err` default to a no-op "pass" for the skip branch,
+    -- which does not itself assert anything.
+    local test_ok, test_err = true, nil
+
     if sym_ok ~= true then
       local message = "polymorphic_rootresolver_spec: SKIPPED — needs a real directory symlink, "
         .. "which this machine refused: "
@@ -237,22 +245,26 @@ return function(H)
       io.stdout:write(message .. "\n")
       local ci = vim.env.CI
       if ci ~= nil and ci ~= "" and ci ~= "false" and vim.fn.has("win32") ~= 1 then
-        error("outside Windows a symlink must be creatable under CI, so: " .. message, 0)
+        test_ok, test_err =
+          false, "outside Windows a symlink must be creatable under CI, so: " .. message
       end
     else
       local file = base .. "/dotfiles/nvim/lua/init.lua"
       vim.fn.writefile({}, file)
 
-      with_stdpath_config(link, function()
-        local resolve = resolver({ markers = { ".git" } })
-        H.eq(
-          resolve(file),
-          normkey(link),
-          "a symlinked config dir still roots there through this call site"
-        )
+      test_ok, test_err = pcall(function()
+        with_stdpath_config(link, function()
+          local resolve = resolver({ markers = { ".git" } })
+          H.eq(
+            resolve(file),
+            normkey(link),
+            "a symlinked config dir still roots there through this call site"
+          )
+        end)
       end)
     end
 
     pcall(vim.fn.delete, base, "rf")
+    assert(test_ok, test_err)
   end
 end

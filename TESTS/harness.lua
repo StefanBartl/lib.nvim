@@ -45,4 +45,40 @@ function H.read_lines(path)
   return out
 end
 
+--- Run `fn` with `target[key]` replaced by `value`, restoring the original
+--- afterwards whatever happens inside `fn` -- including a raised assertion. A
+--- bare "patch, call, restore" sequence skips the restore when `fn` raises,
+--- leaving the replacement in place for the rest of the shared test run
+--- (`TESTS/run.lua` loads every spec into one Neovim instance).
+---@param target table
+---@param key any
+---@param value any
+---@param fn fun(): nil
+function H.with_patched(target, key, value, fn)
+  local orig = target[key]
+  target[key] = value
+  local ok, err = pcall(fn)
+  target[key] = orig
+  assert(ok, err)
+end
+
+--- Run `fn` with `stdpath("config")` answering `link`, restoring the real one
+--- afterwards whatever happens -- a leaked stub would redirect every later
+--- spec in the run. Previously duplicated verbatim in
+--- `stdpath_config_root_spec.lua`, `dev_reload_spec.lua`, and
+--- `polymorphic_rootresolver_spec.lua` (no drift between the three, but three
+--- copies of one small helper is exactly the kind of thing that only takes
+--- one edit to the wrong copy to break).
+---@param link string
+---@param fn fun(): nil
+function H.with_stdpath_config(link, fn)
+  local orig = vim.fn.stdpath
+  H.with_patched(vim.fn, "stdpath", function(what)
+    if what == "config" then
+      return link
+    end
+    return orig(what)
+  end, fn)
+end
+
 return H

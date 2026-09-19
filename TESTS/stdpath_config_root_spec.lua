@@ -17,24 +17,6 @@ local stdpath_config_root = require("lib.nvim.fs.stdpath_config_root")
 local normkey = require("lib.nvim.fs.normkey")
 local norm = vim.fs.normalize
 
---- Run `fn` with `stdpath("config")` answering `link`, restoring the real one
---- afterwards whatever happens — a leaked stub would redirect every later spec
---- in the run, and the runner shares one Neovim instance across all of them.
----@param link string
----@param fn fun(): nil
-local function with_stdpath_config(link, fn)
-  local orig = vim.fn.stdpath
-  vim.fn.stdpath = function(what)
-    if what == "config" then
-      return link
-    end
-    return orig(what)
-  end
-  local ok, err = pcall(fn)
-  vim.fn.stdpath = orig
-  assert(ok, err)
-end
-
 --- Build `<base>/dotfiles/nvim` plus a `<base>/config_link` symlink to it, and
 --- hand `fn` both spellings of that one directory.
 ---
@@ -108,6 +90,10 @@ end
 
 ---@param H table
 return function(H)
+  -- Shared with dev_reload_spec.lua and polymorphic_rootresolver_spec.lua --
+  -- see TESTS/harness.lua for why this used to be three separate copies.
+  local with_stdpath_config = H.with_stdpath_config
+
   -- ── no symlink involved: unchanged behaviour ──────────────────────────
   --
   -- Pinned first and without a symlink, because the fix must not rewrite the
