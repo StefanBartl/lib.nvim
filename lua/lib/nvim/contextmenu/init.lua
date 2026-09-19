@@ -318,7 +318,16 @@ function M.bind_buffer(bufnr, get_items, opts)
     -- not turn a right-click into a raw traceback (ERR-01).
     local ok, items = pcall(get_items)
     if not ok then
-      notify.error(("contextmenu: items provider failed: %s"):format(items))
+      -- `items` here is whatever the provider raised, not necessarily a
+      -- string -- a table with a throwing `__tostring` would otherwise make
+      -- `format`'s own `tostring` call re-raise, uncaught, right back into
+      -- this callback (the exact class of failure ERR-01 exists to prevent).
+      local msg_ok, msg = pcall(tostring, items)
+      notify.error(
+        ("contextmenu: items provider failed: %s"):format(
+          msg_ok and msg or "<error message unavailable>"
+        )
+      )
       return
     end
     if type(items) ~= "table" or #items == 0 then
