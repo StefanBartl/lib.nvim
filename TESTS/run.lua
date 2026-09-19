@@ -89,7 +89,6 @@ local specs = {
   "watch_spec.lua",
   "composer_spec.lua",
   "telemetry_wrap_spec.lua",
-  "telemetry_spec.lua",
   "git_spec.lua",
   "curl_spec.lua",
   "deps_spec.lua",

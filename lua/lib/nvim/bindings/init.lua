@@ -34,6 +34,14 @@
 --- the one external fleet dependent (ai.nvim, on `usercmd.composer`) was
 --- updated first. If a stray `require("lib.nvim.usercmd")` (etc.) surfaces
 --- again, it is a genuine bug, not a documentation lag — file it as one.
+---
+--- (2026-09-19): `lib.nvim.telemetry` itself is gone again — the 2026-09-13
+--- re-add turned out to duplicate `runtime-analysis.telemetry` end to end
+--- (same API, same README text, zero fleet callers) rather than being a
+--- distinct module, so it was removed a second time in favor of the one
+--- copy in runtime-analysis.nvim. The paragraph above is kept as the
+--- historical record of why `bindings` won over the old `autocmd`/`usercmd`
+--- trees; it no longer names a module that exists in this repo.
 
 local cache = {}
 
