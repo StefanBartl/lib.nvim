@@ -66,6 +66,7 @@ local specs = {
   "system_job_spec.lua",
   "system_lines_spec.lua",
   "ui_kit_spec.lua",
+  "icons_spec.lua",
   "ui_hl_persist_spec.lua",
   "ui_winhighlight_spec.lua",
   "copy_to_clipboard_spec.lua",
