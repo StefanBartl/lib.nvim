@@ -71,6 +71,18 @@ function M.open(opts)
         on_answer(idx == 1) -- Yes == true
       end
     end,
+    -- Without this, `select.open`'s own on_cancel (which fires on Esc/q, an
+    -- empty list, and a failed surface open) has nothing to call, so
+    -- on_answer never fires on any of those paths -- contradicting
+    -- lib.nvim.ui.kit.confirm's documented "Answer contract (matches the list-based
+    -- confirm in prompt.lua)". Same no-answer values kit.confirm uses.
+    on_cancel = function()
+      if custom then
+        on_answer(nil)
+      else
+        on_answer(false)
+      end
+    end,
   })
 end
 
