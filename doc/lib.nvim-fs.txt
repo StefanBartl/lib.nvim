@@ -251,13 +251,14 @@ stdpath_config_root({dir})              *lib.nvim-fs-stdpath_config_root*
 Function. The Neovim config directory if {dir} lies inside it, else `nil`.
 The returned path is always a prefix of {dir}.
 
-Both the raw `stdpath("config")` and its `uv.fs_realpath` form are tried, so a
-`~/.config/nvim` that is a symlink into a dotfiles repo still matches a
-directory taken from a buffer name — which Neovim canonicalizes on Unix. A
-plain match returns `stdpath("config")` verbatim; a match on the resolved
-spelling returns that one, because a root has to be a prefix of the file it is
-a root for. The realpath is resolved once per `stdpath("config")` value, not
-per call. >lua
+Both the normalized `stdpath("config")` and its `uv.fs_realpath` form are
+tried, so a `~/.config/nvim` that is a symlink into a dotfiles repo still
+matches a directory taken from a buffer name — which Neovim canonicalizes on
+Unix. Either match returns its normalized form, never `stdpath("config")`
+verbatim: on Windows that value carries native separators on every call
+(measured), and returning it as-is would break the "genuine prefix of {dir}"
+promise above for anyone on a plain match, not only the symlinked case. The
+realpath is resolved once per `stdpath("config")` value, not per call. >lua
 
     local stdpath_config_root = require("lib.nvim.fs.stdpath_config_root")
     stdpath_config_root("/home/me/.config/nvim/lua")  -- "/home/me/.config/nvim"
