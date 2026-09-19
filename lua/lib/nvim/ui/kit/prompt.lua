@@ -22,7 +22,7 @@ function M.open(opts)
   local on_answer = opts.on_answer or function(_) end
 
   if answer_type == "text" then
-    return input.open({
+    local surf = input.open({
       title = opts.question,
       default = opts.default,
       theme = opts.theme,
@@ -34,6 +34,14 @@ function M.open(opts)
         on_answer(nil)
       end,
     })
+
+    -- `input.open` returns nil when the float itself could not be opened
+    -- (surface.open failure) -- on_answer must still fire so a kit.sync
+    -- caller blocked on it learns immediately instead of stalling.
+    if not surf then
+      on_answer(nil)
+    end
+    return surf
   end
 
   -- confirm: yes/no (or a custom `choices` list). `layout = "buttons"` uses the
