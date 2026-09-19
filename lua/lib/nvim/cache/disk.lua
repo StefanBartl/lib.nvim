@@ -93,16 +93,32 @@ local function read_entry(namespace, opts)
   local ok_decode, decoded = pcall(vim.json.decode, content)
   if not ok_decode or type(decoded) ~= "table" then
     local backup_path = path .. ".corrupt"
+    -- The message below must only claim a backup exists when one actually
+    -- does: an empty file has nothing worth backing up (there are no bytes
+    -- to keep), and a write failure (e.g. permission denied on the backup
+    -- path) must not be swallowed into a false "kept at ..." claim -- a
+    -- caller like frecency forwards this string verbatim to `vim.notify`.
+    local backed_up = false
     if content ~= "" then
-      if uv.fs_stat(backup_path) == nil then
+      if uv.fs_stat(backup_path) ~= nil then
+        backed_up = true
+      else
         local fh = io.open(backup_path, "wb")
         if fh then
           fh:write(content)
           fh:close()
+          backed_up = true
         end
       end
     end
-    return nil, "invalid json: original kept at " .. backup_path
+    if backed_up then
+      return nil, "invalid json: original kept at " .. backup_path
+    end
+    if content == "" then
+      return nil, "invalid json: file is empty, nothing to back up"
+    end
+    return nil,
+      "invalid json: backup to " .. backup_path .. " failed, original left in place at " .. path
   end
 
   return decoded, nil
