@@ -845,6 +845,48 @@ pkg:
     )
 
     vim.opt.rtp:remove(plugin_dir)
+
+    -- ------------------------------------------ corrupt store vs. no store yet
+    -- "No file yet" and "the file exists but could not be decoded" must not
+    -- collapse into the same silent empty table: the second one still holds
+    -- the only copy of which plugins were already dismissed, and the very
+    -- next mark_seen/reset would otherwise overwrite it with a near-empty
+    -- table -- resetting every plugin's "seen" flag with no trace of why.
+    local warnings = {}
+    local real_notify = vim.notify
+    vim.notify = function(msg, level)
+      warnings[#warnings + 1] = { msg = msg, level = level }
+    end
+
+    local corrupt_cache_dir = vim.fn.tempname()
+    local corrupt_cache = { dir = corrupt_cache_dir }
+    vim.fn.mkdir(corrupt_cache_dir, "p")
+    local corrupt_path = corrupt_cache_dir .. "/lib.nvim.deps.first_run.json"
+    vim.fn.writefile({ "{not valid json" }, corrupt_path)
+
+    eq(
+      first_run.seen("whatever.nvim", corrupt_cache),
+      false,
+      "first_run.seen: a corrupt store still answers false, not an error"
+    )
+    eq(#warnings, 1, "first_run: a corrupt store is reported once on load")
+    eq(
+      vim.fn.filereadable(corrupt_path .. ".corrupt"),
+      1,
+      "first_run: the original bytes survive next to the store"
+    )
+
+    -- mark_seen must proceed (not refuse forever behind one broken file);
+    -- it overwrites the source with a fresh, well-formed table, which is
+    -- safe only because the bytes above were already preserved as .corrupt.
+    first_run.mark_seen("after-corruption.nvim", corrupt_cache)
+    eq(
+      first_run.seen("after-corruption.nvim", corrupt_cache),
+      true,
+      "first_run: mark_seen recovers cleanly once the store is rewritten"
+    )
+
+    vim.notify = real_notify
   end
 
   -- vim.g opt-out: neither disable path should mark anything seen (so
