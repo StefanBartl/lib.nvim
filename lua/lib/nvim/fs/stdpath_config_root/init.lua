@@ -29,12 +29,24 @@
 --- unconditionally: a test that stubs `vim.fn.stdpath` -- which is the only
 --- way to test any of this -- then gets a fresh resolution instead of a stale
 --- one, with no cache-invalidation call to forget. All three spellings are
---- written together, from locals computed before any of them is assigned: a
---- `vim.fs.normalize`/`normkey` call that raised partway through used to be
---- able to leave `cached_raw` updated while `cached_norm`/`cached_real` still
---- held the previous value's derivation -- three spellings describing two
---- different directories. Neither call raises in practice, so this was never
---- observed, but the fix costs nothing and removes the question.
+--- written together, from locals computed before any of them is assigned --
+--- provably unreachable given this module's own inputs (`raw` is always a
+--- genuine string, and neither `vim.fs.normalize` nor `normkey` has a raise
+--- path for one), but hardens against a `vim.fs.normalize`/`normkey` call
+--- raising mid-derivation and leaving `cached_raw` updated while
+--- `cached_norm`/`cached_real` still held the previous value's derivation --
+--- three spellings describing two different directories -- for free, should
+--- either ever gain one.
+---
+--- What this caching does NOT cover: `raw` is the *string* `stdpath("config")`
+--- returns, and that string does not change when only a symlink it names is
+--- re-pointed while Neovim keeps running. `cached_norm`/`cached_real` --
+--- which is what every call actually returns, see below -- are then stale for
+--- the rest of the process; only a restart re-derives them. Accepted, not
+--- fixed: every consumer already holds its own `require()` reference resolved
+--- at its own load time, so even hot-reloading this module would not reach an
+--- already-built resolver closure either, and re-deriving on every call was
+--- the option this module exists specifically to avoid paying for.
 ---
 --- Both known spellings are tried, and that covers both platforms without
 --- resolving `dir`: Unix hands the caller the canonical spelling (it
@@ -44,22 +56,26 @@
 ---
 --- ## Which spelling is returned
 ---
---- The normalized one, on either branch -- never the raw value. An earlier
---- version returned `stdpath("config")` verbatim on a plain match, reasoning
---- that "nothing that resolved correctly before resolves differently now".
---- That missed that `is_subpath` matches on the *normalized* form while the
---- verbatim value can still differ from it: `vim.fn.stdpath("config")` comes
---- back with native separators (backslashes, measured, on every call on
---- Windows), so the returned root was not actually a prefix of the `dir` it
---- was a root *for* -- the exact defect the symlink branch exists to avoid,
---- reappearing in the branch that was supposed to be the safe one. Measured
---- consequence: `lsp.nvim`'s `build_library` concatenates the root with a
---- forward slash, so a backslash root produced a second, differently-spelled
---- workspace-library entry for the same directory lua_ls already had. Unix is
---- unaffected -- `vim.fs.normalize` is a no-op there for any path already
---- free of `~`, `//`, and `./`, which every `stdpath("config")` is -- so this
---- only ever changes the separators of the value Windows gets back, not which
---- directory is named.
+--- Never the raw value, on either branch. A plain match returns `norm` (the
+--- `vim.fs.normalize`d form); the symlink branch returns `real` (canonicalized
+--- via `normkey`/`uv.fs_realpath` -- an actual filesystem resolution, not a
+--- pure string operation, which is why it can legitimately differ from `norm`
+--- by more than separator style). An earlier version returned
+--- `stdpath("config")` verbatim on a plain match, reasoning that "nothing that
+--- resolved correctly before resolves differently now". That missed that the
+--- match itself runs against the *normalized* form while the verbatim value
+--- can still differ from it: `vim.fn.stdpath("config")` comes back with native
+--- separators (backslashes, measured, on every call on Windows), so the
+--- returned root was not actually a prefix of the `dir` it was a root *for* --
+--- the exact defect the symlink branch exists to avoid, reappearing in the
+--- branch that was supposed to be the safe one. Measured consequence:
+--- `lsp.nvim`'s `build_library` concatenates the root with a forward slash, so
+--- a backslash root produced a second, differently-spelled workspace-library
+--- entry for the same directory lua_ls already had. Unix is unaffected --
+--- `vim.fs.normalize` is a no-op there for any path already free of `~`, `//`,
+--- and `./`, which every `stdpath("config")` is -- so this only ever changes
+--- the separators of the value Windows gets back, not which directory is
+--- named.
 ---
 ---@see lib.nvim.fs.polymorphic_rootresolver
 ---@see lib.nvim.fs.is_subpath
@@ -76,17 +92,30 @@ local cached_real
 --- The config directory in both spellings, resolving at most once per value.
 ---
 --- All three are written together at the end, from locals -- not assigned as
---- each is computed -- so a call that raises midway (it does not, in
---- practice; see the module docstring) leaves the previous, self-consistent
---- triple in place rather than a mix of two directories' spellings.
+--- each is computed -- so a call that raised midway would leave the previous,
+--- self-consistent triple in place rather than a mix of two directories'
+--- spellings. Provably cannot happen with this module's own inputs (see the
+--- module docstring); kept anyway, since it costs nothing.
 ---@return string raw # exactly what `stdpath("config")` returned
 ---@return string norm # `raw` normalized
----@return string real # `raw` canonicalized
+---@return string real # `raw` canonicalized, and ALSO normalized -- see the
+---  comment on its derivation below for why that second step is not redundant
 local function spellings()
   local raw = vim.fn.stdpath("config") --[[@as string]]
   if raw ~= cached_raw then
     local norm = vim.fs.normalize(raw)
-    local real = normkey(raw)
+    -- `normkey` is not `vim.fs.normalize`-clean on its own: its own
+    -- duplicate-slash collapse is deliberately skipped once a path starts
+    -- with `//` (there to protect a leading UNC prefix), and when
+    -- `uv.fs_realpath` cannot resolve any prefix at all -- an unreachable
+    -- network share, explicitly one of the inputs this module has to
+    -- tolerate -- it falls back to the barely-processed raw value. Measured:
+    -- normkey("//host/share//tail") keeps the doubled interior slash;
+    -- vim.fs.normalize of that same string collapses it. `prefix_match`
+    -- below trusts both arguments to already be normalized, so `real` has to
+    -- actually be -- the old `is_subpath(dir, real)` this replaced
+    -- re-normalized `real` on every call and hid this gap by accident.
+    local real = vim.fs.normalize(normkey(raw))
     cached_raw, cached_norm, cached_real = raw, norm, real
   end
   -- The casts are honest, not silencing: `cached_raw` starting `nil` is what
