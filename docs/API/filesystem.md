@@ -147,11 +147,13 @@ come from different sources and may spell one directory two ways.
 get?" — answers a path that is always a **prefix of `dir`**, or `nil`. Tries the
 normalized `stdpath("config")` and its canonicalized form, so a `~/.config/nvim`
 that is a symlink into a dotfiles repo still matches a buffer path Neovim
-canonicalized on the way in. Either match returns its normalized spelling,
-never `stdpath("config")` verbatim — that value carries native separators on
-every call on Windows (measured), which would otherwise break the
-prefix-of-`dir` promise there. The `realpath` is resolved once per
-`stdpath("config")` value, not per call.
+canonicalized on the way in. Never `stdpath("config")` verbatim, on either
+branch: a plain match returns the normalized spelling, the symlink branch the
+realpath-canonicalized one — the raw value carries native separators on every
+call on Windows (measured), which would otherwise break the prefix-of-`dir`
+promise there. The `realpath` is resolved once per `stdpath("config")` value,
+not per call — keyed on that string, so a symlink re-pointed at a different
+target while Neovim keeps running is not seen until restart.
 
 ```
 return function(dir: string|nil): string|nil

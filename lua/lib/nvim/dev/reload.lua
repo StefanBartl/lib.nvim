@@ -49,7 +49,10 @@ end
 ---nothing. `opts.lua_dir`, when given, is an explicit override with no
 ---connection to `stdpath("config")` and is honoured literally, as before.
 ---@param opts { lua_dir?: string, pattern?: string, group?: string }|nil
----  `lua_dir` -- the config's Lua root; default `stdpath("config")/lua`.
+---  `lua_dir` -- the config's Lua root; default: resolved per save through
+---  `lib.nvim.fs.stdpath_config_root`, which is `stdpath("config")/lua` for a
+---  plain (non-symlinked) config and the buffer's own spelling of it
+---  otherwise -- not a single fixed value, see the paragraph above.
 ---@return nil
 function M.watch(opts)
   opts = opts or {}
@@ -62,6 +65,14 @@ function M.watch(opts)
 
     local lua_dir = explicit_lua_dir
     if not lua_dir then
+      -- `vim.fs.dirname(abs)` is already normalized (`abs` is, and dirname is
+      -- a pure string split), so `stdpath_config_root` re-normalizing it
+      -- internally is redundant on this call specifically -- deliberately
+      -- left in rather than optimized away: `BufWritePost` fires once per
+      -- explicit save, not per keystroke or per LSP request, so the cost is
+      -- unmeasurable here, and `stdpath_config_root` keeping its own
+      -- defensive normalize means it stays correct for any future caller
+      -- that does not already guarantee a normalized `dir`.
       local root = stdpath_config_root(vim.fs.dirname(abs))
       if not root then
         return
