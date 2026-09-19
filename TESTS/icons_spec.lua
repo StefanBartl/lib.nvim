@@ -67,8 +67,8 @@ return function(H)
   eq(color, data.by_extension.rs.color, "get: colour from the table")
   eq(name, data.by_extension.rs.name, "get: name from the table")
 
-  glyph, color, name = icons.get("noext", "typescript")
-  eq(name, data.by_filetype.typescript.name, "get: filetype as the last resort")
+  local _, _, ft_name = icons.get("noext", "typescript")
+  eq(ft_name, data.by_filetype.typescript.name, "get: filetype as the last resort")
 
   glyph, color = icons.get("whatever.zzz")
   eq(glyph, data.default.icon, "get: generic default when unknown")
