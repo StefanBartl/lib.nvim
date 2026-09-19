@@ -72,9 +72,54 @@ local DEFAULTS = {
   persist = true,
 }
 
+--- Every field `Lib.Telemetry.Options` accepts (see @types/init.lua) --
+--- deliberately NOT just `DEFAULTS`'s keys: `namespace`, `dir` and
+--- `remind_after` are valid options with no entry in `DEFAULTS` (their
+--- defaults are resolved elsewhere), and checking against `DEFAULTS` alone
+--- would misreport all three as unknown.
+---@type table<string, boolean>
+local KNOWN_OPTION_KEYS = {
+  namespace = true,
+  dir = true,
+  retention_days = true,
+  flush_interval_ms = true,
+  remind_after = true,
+  persist = true,
+  max_arg_values = true,
+}
+
 -- ---------------------------------------------------------------------------
 -- Helpers
 -- ---------------------------------------------------------------------------
+
+---@internal
+---Coerce a numeric config field, falling back to `default` when the value
+---isn't one at all (a typo like `retention_days = "30d"`, echoing the
+---duration-string shape `report{ since = "7d" }` accepts elsewhere in this
+---module). Zero/negative pass through unchanged -- both `retention_days`
+---(`store.prune`) and `flush_interval_ms` (`start_timer`, 0 = disabled) treat
+---those as meaningful, not invalid. Without this, the first `<`/`<=`
+---comparison downstream throws "attempt to compare number with string" --
+---inside the very next profiled call for `max_arg_values`, and inside the
+---flush timer for the other two -- instead of the field quietly falling back
+---to its default. (ERR-22)
+---@param value any
+---@param default number
+---@param field string
+---@return number
+local function numeric_field(value, default, field)
+  if value == nil then
+    return default
+  end
+  local n = tonumber(value)
+  if not n then
+    notify.warn(
+      ("invalid %s %s — falling back to %s"):format(field, vim.inspect(value), tostring(default))
+    )
+    return default
+  end
+  return n
+end
 
 ---@param prefix string|nil
 ---@param name string
@@ -190,6 +235,45 @@ local function empty_delta()
   return { version = store.VERSION, sessions = 0, functions = {}, days = {}, reminded = {} }
 end
 
+---@internal
+---An unknown `M.new()` option key, with the nearest known one as a hint when
+---there is a plausible one. Mirrors `lib.config`'s `describe_unknown`: a typo
+---like `flush_interval = 5000` (missing `_ms`) would otherwise be silently
+---dropped -- `flush_interval_ms` stays at its default and nothing says why.
+---(ERR-50)
+---@param key any
+---@return string
+local function describe_unknown_option(key)
+  local levenshtein = require("lib.lua.strings.distance").levenshtein
+  local name = tostring(key)
+  local best, best_distance = nil, nil
+  for known in pairs(KNOWN_OPTION_KEYS) do
+    local d = levenshtein(name, known)
+    if d <= 3 and (best_distance == nil or d < best_distance) then
+      best, best_distance = known, d
+    end
+  end
+  return best and ("%s (did you mean %s?)"):format(name, best) or name
+end
+
+---Report unknown `M.new()` option keys, before anything built from `opts` is
+---read. Called first thing in `M.new`, ahead of the `cfg` merge. (ERR-50)
+---@param opts table
+local function warn_unknown_options(opts)
+  local unknown = {}
+  for key in pairs(opts) do
+    if not KNOWN_OPTION_KEYS[key] then
+      unknown[#unknown + 1] = describe_unknown_option(key)
+    end
+  end
+  if #unknown > 0 then
+    table.sort(unknown)
+    notify.warn(
+      ("telemetry.new: unknown option(s) ignored: %s"):format(table.concat(unknown, ", "))
+    )
+  end
+end
+
 -- ---------------------------------------------------------------------------
 -- Instance
 -- ---------------------------------------------------------------------------
@@ -203,6 +287,7 @@ end
 ---@return Lib.Telemetry.Instance
 function M.new(opts)
   opts = opts or {}
+  warn_unknown_options(opts)
   local namespace = type(opts.namespace) == "string" and opts.namespace or "unnamed"
 
   -- Two plugins picking the same namespace silently share a cache file and
@@ -219,9 +304,13 @@ function M.new(opts)
   end
 
   local cfg = vim.tbl_extend("force", DEFAULTS, {
-    retention_days = opts.retention_days,
-    flush_interval_ms = opts.flush_interval_ms,
-    max_arg_values = opts.max_arg_values,
+    retention_days = numeric_field(opts.retention_days, DEFAULTS.retention_days, "retention_days"),
+    flush_interval_ms = numeric_field(
+      opts.flush_interval_ms,
+      DEFAULTS.flush_interval_ms,
+      "flush_interval_ms"
+    ),
+    max_arg_values = numeric_field(opts.max_arg_values, DEFAULTS.max_arg_values, "max_arg_values"),
     persist = opts.persist,
     dir = opts.dir,
   })
