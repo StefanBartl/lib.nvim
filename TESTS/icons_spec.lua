@@ -49,6 +49,16 @@ return function(H)
   )
   eq(icons.lookup("thing.unknownext"), nil, "lookup: nil when nothing matches")
   eq(icons.lookup(""), nil, "lookup: empty name")
+  -- Fix: the extension loop is capped (every real entry is at most two
+  -- dots deep) instead of walking every dot in the name -- a name with
+  -- many dots must still terminate and correctly report no match rather
+  -- than paying O(dots) sub()/find() passes, each over the still mostly
+  -- uncut remainder.
+  eq(
+    icons.lookup("x." .. string.rep("y.", 30) .. "unknownext"),
+    nil,
+    "lookup: many dots -> no match, does not hang"
+  )
   eq(
     icons.lookup("Makefile").name,
     data.by_extension.makefile.name,
@@ -85,17 +95,28 @@ return function(H)
 
   -- ------------------------------------------------------------ plugin first
   package.loaded["nvim-web-devicons"] = {
-    get_icon_color = function(fname)
-      if fname == "main.rs" then
+    get_icon_color = function(fname, ext)
+      if fname == "main.rs" or ext == "rs" then
         return "P", "#123456"
       end
       return nil
     end,
   }
   icons.reset()
-  glyph, color = icons.get("main.rs")
+  glyph, color, name = icons.get("main.rs")
   eq(glyph, "P", "get: plugin answer wins when loaded")
   eq(color, "#123456", "get: plugin colour")
+  -- Fix: `name` is the entry's stable, highlight-group-naming identifier
+  -- (see data.lua) -- the plugin path used to set it to the raw file
+  -- name, so every distinct FILE (not extension) ever queried this way
+  -- minted its own never-reclaimed highlight group via hl_group().
+  eq(name, "rs", "get: plugin path names the entry after the extension, not the file")
+  local _, _, name2 = icons.get("some_other_unique_file_12345.rs")
+  eq(
+    name2,
+    name,
+    "get: two different files sharing an extension share one name (bounded hl_group namespace)"
+  )
   glyph = icons.get("main.rs", nil, { prefer_plugin = false })
   eq(glyph, data.by_extension.rs.icon, "get: prefer_plugin = false uses the table")
   glyph = icons.get("init.lua")

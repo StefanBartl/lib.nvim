@@ -70,8 +70,12 @@ function M.lookup(filename)
     return entry
   end
   -- Longest extension first: `d.ts` before `ts`, `tar.gz` before `gz`.
+  -- Capped at a few segments: every real entry in the table is at most two
+  -- dots deep, and without a cap a name with many dots cost one sub()
+  -- allocation per dot, each over the still-mostly-uncut remainder -- O(n)
+  -- work per dot, O(n^2) total on a name with O(n) dots.
   local rest = base
-  while true do
+  for _ = 1, 4 do
     local dot = rest:find(".", 1, true)
     if not dot then
       break
@@ -125,7 +129,16 @@ function M.get(filename, filetype, opts)
       local ext = base:match("^.+%.(.+)$")
       local ok, icon, color = pcall(mod.get_icon_color, base, ext, { default = false })
       if ok and icon then
-        entry = { icon = icon, color = color, name = base }
+        -- `name` is "devicons' icon name, for highlight-group naming" (see
+        -- data.lua) -- a stable per-TYPE identifier, not the file's own
+        -- name. Using `base` here named a group after every distinct file
+        -- ever queried through the plugin path instead of every distinct
+        -- extension, and Neovim has no highlight-group-delete API to
+        -- reclaim them: unbounded growth over a session that touches many
+        -- files. `ext` (falling back to `base` only for an exact-name
+        -- match like `Makefile`, which has none) matches what this
+        -- module's own table already uses for the same field.
+        entry = { icon = icon, color = color, name = ext or base }
       end
     end
   end
