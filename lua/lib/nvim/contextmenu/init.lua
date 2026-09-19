@@ -314,7 +314,13 @@ function M.bind_buffer(bufnr, get_items, opts)
   local mouse = opts.mouse ~= false
 
   vim.keymap.set(modes, keymap, function()
-    local items = get_items()
+    -- `get_items` is supplied by another plugin; a raised error here must
+    -- not turn a right-click into a raw traceback (ERR-01).
+    local ok, items = pcall(get_items)
+    if not ok then
+      notify.error(("contextmenu: items provider failed: %s"):format(items))
+      return
+    end
     if type(items) ~= "table" or #items == 0 then
       return
     end
