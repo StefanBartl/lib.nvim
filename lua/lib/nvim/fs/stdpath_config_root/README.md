@@ -46,7 +46,12 @@ config is version-controlled, which is most people who have one.
 
 ## Which spelling comes back
 
-The **normalized** one, on either branch — never `stdpath("config")` verbatim.
+Never `stdpath("config")` verbatim, on either branch. A plain match returns
+the **normalized** spelling (`vim.fs.normalize`d); the symlink branch returns
+the **canonicalized** one (via [`normkey`](../normkey/README.md), i.e.
+`uv.fs_realpath` — an actual filesystem resolution, not a pure string
+operation, which is why it can legitimately differ from the normalized form by
+more than separator style).
 
 Returning the raw `~/.config/nvim` for a buffer at `~/dotfiles/nvim/...` would
 satisfy *"did the rule fire"* while handing the server a root that is not a
@@ -106,6 +111,19 @@ branch there too, same as Unix.
 
 A `dir` in some third spelling — behind a symlink of its own — still misses,
 and still costs nothing.
+
+### Known limitation: a symlink re-pointed mid-session
+
+The cache is keyed on the `stdpath("config")` *string*, not on what it
+resolves to. That string does not change when only the symlink it names is
+re-pointed at a different target while Neovim keeps running (switching
+dotfiles branches without restarting, for instance) — the canonicalized
+spelling stays whatever it was the first time this module ran, for the rest of
+the process. Accepted rather than fixed: every consumer already holds its own
+`require()` reference resolved at its own load time, so even hot-reloading
+this module specifically would not reach an already-built resolver closure
+either, and re-resolving on every call is the cost this module exists
+specifically to avoid paying. Restarting Neovim is the only remedy.
 
 ## Callers
 
