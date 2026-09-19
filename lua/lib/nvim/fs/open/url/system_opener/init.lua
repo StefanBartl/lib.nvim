@@ -123,8 +123,7 @@ end
 
 --- Deprecated misspelling of `is_like`, kept as an alias so existing call
 --- sites keep working. Prefer `M.is_like`.
----@param s string
----@return boolean
+---@type fun(s: string): boolean
 M.is_ike = M.is_like
 
 return M
