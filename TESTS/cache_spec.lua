@@ -185,6 +185,28 @@ return function(H)
   ns2.clear()
   eq(ns2.get("k3"), nil, "cache.memory: clear drops every key in the namespace")
 
+  -- Active sweep: lazy per-key eviction in `get` alone leaves an entry alive
+  -- forever if nothing ever queries that exact key again -- the shape
+  -- `lib.nvim.fs.scan_cached` hits when a caller passes a freshly-created
+  -- `ignore` closure on every call, since the key is derived from the
+  -- closure's own identity. `set` runs a full sweep every so often instead,
+  -- so stale entries are reclaimed even without a single matching `get`.
+  local ns4 = memory.namespace("spec.sweep", { ttl = 0.01 })
+  for i = 1, 80 do
+    ns4.set("stale-" .. i, i)
+  end
+  vim.wait(20) -- outlast the 0.01s TTL
+  for i = 1, 80 do
+    ns4.set("fresh-" .. i, i)
+  end
+  ok(
+    ns4.stats().evictions >= 80,
+    "cache.memory: a periodic sweep on set() reclaims entries nothing ever re-queries by key"
+  )
+  -- The still-live fresh-* entries prove the sweep is not indiscriminate --
+  -- only entries whose own TTL had actually elapsed were dropped.
+  eq(ns4.get("fresh-1"), 1, "cache.memory: entries set after the sweep are untouched by it")
+
   local all = memory.get_all_stats()
   ok(#all >= 2, "cache.memory: get_all_stats reports every namespace")
   memory.print_all_stats() -- smoke: must not error
