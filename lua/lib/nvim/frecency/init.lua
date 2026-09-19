@@ -111,14 +111,40 @@ function M.store(opts)
   ---@type string|nil
   local load_err = nil
 
+  -- Bounds how many times a load is retried once one has failed: entries()
+  -- backs score()/lookup() too, and without a cap a permanently unreadable
+  -- or corrupt file would turn every read-only call on this hot
+  -- picker-sorting path into a fresh disk.load() for the rest of the
+  -- session. Counted, not time-gated: a plain counter needs no clock and
+  -- gives a genuinely transient failure (an antivirus lock, a syncing
+  -- cloud-storage client) several chances across the calls a real session
+  -- makes in its first moments, while still bounding the total extra cost
+  -- to MAX_LOAD_RETRIES reads, ever, for this handle.
+  local MAX_LOAD_RETRIES = 3
+  local retry_attempts = 0
+
   ---The entry table, read from disk on the first call that needs it. A store
   ---that is opened but never used costs nothing, and returning the table
   ---rather than assigning an upvalue keeps every caller free of a nil check
   ---for a value that cannot be nil once this has run.
+  ---
+  ---A failed load is retried (bounded above) as long as nothing has been
+  ---recorded into the placeholder `cached` yet (`not dirty`): that is the
+  ---comment on flush() below promising a later flush "retries once the file
+  ---is readable again" -- without this, load_err latched permanently true
+  ---and flush() refused forever even after the file became readable,
+  ---because nothing ever called disk.load() a second time. Once dirty is
+  ---true, retrying would silently discard the in-memory data by replacing
+  ---`cached` wholesale, so retries stop there and flush()'s own guard takes
+  ---over.
   ---@internal
   ---@return table<string, Lib.Frecency.Entry>
   local function entries()
-    if not cached then
+    local should_retry = load_err ~= nil and not dirty and retry_attempts < MAX_LOAD_RETRIES
+    if not cached or should_retry then
+      if should_retry then
+        retry_attempts = retry_attempts + 1
+      end
       local loaded, err = disk.load(namespace, disk_opts)
       cached = type(loaded) == "table" and loaded or {}
       load_err = err
