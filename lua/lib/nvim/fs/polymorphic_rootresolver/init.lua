@@ -11,7 +11,7 @@
 local uv = vim.uv or vim.loop
 local fs = vim.fs
 
-local is_subpath = require("lib.nvim.fs.is_subpath")
+local stdpath_config_root = require("lib.nvim.fs.stdpath_config_root")
 
 -- Types: see @types/init.lua (RootResolverCfg).
 ---@type RootResolverCfg
@@ -60,11 +60,12 @@ return function(cfg)
       root = dir
     end
 
+    -- `stdpath_config_root` rather than a `stdpath("config")` compare of its
+    -- own: the raw value is routinely a symlink into a dotfiles repo, and a
+    -- plain compare against it silently misses for every buffer whose name
+    -- Neovim canonicalized on the way in.
     if cfg.include_stdpath_config then
-      local stdconfig = vim.fn.stdpath("config")
-      if is_subpath(root, stdconfig) then
-        root = stdconfig
-      end
+      root = stdpath_config_root(root) or root
     end
 
     if cb and type(cb) == "function" then
