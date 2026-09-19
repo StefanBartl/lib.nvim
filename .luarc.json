@@ -9,5 +9,6 @@
   ],
   "diagnostics.globals": ["vim"],
   "workspace.checkThirdParty": false,
-  "workspace.useGitIgnore": true
+  "workspace.useGitIgnore": true,
+  "workspace.ignoreDir": [".claude", ".deps"]
 }
