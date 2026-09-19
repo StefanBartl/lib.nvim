@@ -9,6 +9,13 @@
 --- KitAccent / KitTitle / KitMuted highlights bounded to each box) rather than
 --- live interactive floats, so editing the config never fights the components
 --- for focus. <Tab> in the config buffer cycles the built-in presets.
+---
+--- The config buffer's contents are `loadstring`d and `pcall`d to produce the
+--- theme (that IS the live-preview feature, not an oversight -- the buffer is
+--- only ever plugin-seeded, never fed from a file/picker/shell history).
+--- Evaluation is debounced (EVAL_DEBOUNCE_MS) rather than firing on every
+--- keystroke, so a paste or completion-insert has a brief window to be seen
+--- and undone before it runs with full Lua/vim API rights.
 
 local theme = require("lib.nvim.ui.kit.theme")
 
@@ -21,12 +28,25 @@ local NS = api.nvim_create_namespace("lib_kit_preview")
 
 local PRESETS = { "minimal", "rounded", "solid", "double", "ascii" }
 
+-- SEC-50: eval_config loadstrings + pcall(chunk)s the whole buffer, and this
+-- is genuinely the feature (a static file/picker/shell-history origin never
+-- feeds this buffer -- it is only ever plugin-seeded, so gating eval behind
+-- an opt-in flag would kill live preview, not fix anything). The real gap
+-- was firing on every single keystroke: a paste or completion-insert then
+-- executed with full Lua/vim API rights before it could be read. Debouncing
+-- (same pattern as kit.live_input / kit.picker / kit.compare) gives a brief
+-- window to see and undo a fragment before it runs.
+local EVAL_DEBOUNCE_MS = 300
+
 --- Reference block shown BELOW the return value in the config buffer.
 local REFERENCE = {
   "",
   "-- ── reference ─────────────────────────────────────────────",
-  "-- This buffer's contents are executed as Lua on every edit (like :lua) --",
-  "-- never paste in a config snippet from a source you have not read.",
+  ("-- This buffer's contents are executed as Lua %dms after you stop typing"):format(
+    EVAL_DEBOUNCE_MS
+  ),
+  "-- (not on every keystroke) -- never paste in a config snippet from a",
+  "-- source you have not read.",
   '-- Return a preset name   →   return "double"',
   "--   presets: minimal | rounded | solid | double | ascii",
   "-- …or the override table above (merged over the active default).",
@@ -36,7 +56,7 @@ local REFERENCE = {
   '--             { fg=, bg=, bold=true }; e.g. hl.title = "ErrorMsg")',
   "-- <Tab>   cycles presets",
   "-- <S-Tab> cycles nvim colorschemes (restored on close)",
-  "-- updates as you type · q closes",
+  "-- updates shortly after you stop typing · q closes",
 }
 
 ---@internal
@@ -241,14 +261,43 @@ function M.open()
   api.nvim_win_set_buf(preview_win, preview_buf)
   api.nvim_set_option_value("wrap", false, { win = preview_win })
 
-  -- Live re-render as the config changes.
+  -- Live re-render as the config changes, debounced (SEC-50): eval_config
+  -- executes the buffer as Lua, so firing on every keystroke would run a
+  -- pasted/completion-inserted fragment before it could be read. Waiting
+  -- for EVAL_DEBOUNCE_MS of quiet gives a window to see and undo it first.
+  local render_timer
+  local function stop_render_timer()
+    if render_timer then
+      render_timer:stop()
+      pcall(render_timer.close, render_timer)
+      render_timer = nil
+    end
+  end
+  local function schedule_render()
+    stop_render_timer()
+    render_timer = vim.uv.new_timer()
+    -- libuv returns nil rather than raising when it cannot allocate a
+    -- handle; without a timer the preview simply stops updating.
+    if not render_timer then
+      return
+    end
+    render_timer:start(
+      EVAL_DEBOUNCE_MS,
+      0,
+      vim.schedule_wrap(function()
+        stop_render_timer()
+        if api.nvim_buf_is_valid(config_buf) then
+          M.render(config_buf, preview_buf)
+        end
+      end)
+    )
+  end
+
   local group = autocmd.group("lib_kit_preview_" .. config_buf, true)
-  autocmd.create({ "TextChanged", "TextChangedI" }, function()
-    M.render(config_buf, preview_buf)
-  end, {
+  autocmd.create({ "TextChanged", "TextChangedI" }, schedule_render, {
     group = group,
     buffer = config_buf,
-    desc = "lib.nvim.ui.kit.preview: live re-render",
+    desc = "lib.nvim.ui.kit.preview: debounced live re-render",
   })
 
   -- <Tab> (normal mode) cycles the built-in presets.
@@ -276,6 +325,7 @@ function M.open()
 
   -- q closes the whole playground tab from either window and restores the scheme.
   local function close()
+    stop_render_timer()
     if orig_scheme and orig_scheme ~= vim.g.colors_name then
       pcall(vim.cmd.colorscheme, orig_scheme)
     end
