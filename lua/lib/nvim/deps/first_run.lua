@@ -31,11 +31,28 @@ local NAMESPACE = "lib.nvim.deps.first_run"
 local M = {}
 
 ---@internal
+--- `disk.load`'s second return is `nil` for "no file yet" and a reason for
+--- "file exists but could not be read or decoded" -- collapsing both to the
+--- same empty table here would make a corrupt first-run store look exactly
+--- like an ordinary first run, and the very next `mark_seen`/`reset` call
+--- then overwrites the file with that near-empty table, silently resetting
+--- every plugin's "seen" flag (so all their popups return) with no trace of
+--- why. `cache.disk` has already backed the original bytes up next to it
+--- before returning here, so proceeding with an empty set below does not
+--- lose anything -- but staying silent about it would, since nothing else
+--- ever surfaces the cause. A warning (not a hard refusal) keeps this from
+--- blocking every future `mark_seen` behind one broken file.
 ---@param cache_opts Lib.Cache.Opts|nil
 ---@return table<string, boolean>
 local function load_seen(cache_opts)
   local disk = require("lib.nvim.cache.disk")
-  return disk.load(NAMESPACE, cache_opts) or {}
+  local seen, err = disk.load(NAMESPACE, cache_opts)
+  if err then
+    require("lib.nvim.notify")
+      .create("[lib.nvim.deps]")
+      .warn("first-run state was unreadable, resetting: " .. tostring(err))
+  end
+  return seen or {}
 end
 
 ---True when `show_once` has already run for `plugin_name` (in this or an
