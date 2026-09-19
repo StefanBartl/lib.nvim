@@ -37,7 +37,11 @@ return function(H)
   ---@type any
   local nonsense = { strategy = "nonsense" }
   config.setup(nonsense)
-  eq(config.get().strategy, "metatable", "config.setup: an unknown strategy falls back to metatable")
+  eq(
+    config.get().strategy,
+    "metatable",
+    "config.setup: an unknown strategy falls back to metatable"
+  )
 
   vim.notify = real_notify
   config.options = before

@@ -508,7 +508,9 @@ return function(H)
   local gone_paths, gone_errors = collect.files(tmp .. "/walk-does-not-exist")
   eq(#gone_paths, 0, "collect_recursive: an unreadable root yields no paths either")
   ok(
-    type(gone_errors) == "table" and #gone_errors == 1 and gone_errors[1]:match("walk%-does%-not%-exist"),
+    type(gone_errors) == "table"
+      and #gone_errors == 1
+      and gone_errors[1]:match("walk%-does%-not%-exist"),
     "collect_recursive: but names the directory it could not open: " .. vim.inspect(gone_errors)
   )
   local filtered = collect.files(tmp .. "/walk", {
@@ -630,7 +632,11 @@ return function(H)
   )
   eq(#broken_paths, 0, "scan_roots: an unreadable root yields no paths")
   ok(type(broken_errors) == "table" and #broken_errors == 1, "scan_roots: and reports it")
-  eq(uv.fs_stat(cache_p), nil, "scan_roots: a scan that reported errors is not written to the cache")
+  eq(
+    uv.fs_stat(cache_p),
+    nil,
+    "scan_roots: a scan that reported errors is not written to the cache"
+  )
   eq(#scan_roots.scan({ tmp .. "/walk" }, { cache_path = cache_p }), 2, "scan_roots: uncached scan")
   vim.fn.writefile({ "x" }, tmp .. "/walk/keep/c.txt")
   eq(
@@ -681,8 +687,8 @@ return function(H)
 
   -- The ignore predicate changes the result, so it is part of the key: two
   -- callers scanning the same root within one TTL must not share an entry.
-  local function prune_skipme(p)
-    return p:match("skipme") ~= nil
+  local function prune_skipme(entry)
+    return entry:match("skipme") ~= nil
   end
   eq(
     #scan_cached.scan(tmp .. "/walk", { ignore = prune_skipme }),
