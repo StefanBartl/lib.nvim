@@ -201,6 +201,16 @@ function M.open(opts)
   ---@type "search"|"marked"|"compare"
   local current_state = "search"
 
+  local debounce_timer
+  ---@internal
+  local function stop_debounce_timer()
+    if debounce_timer then
+      debounce_timer:stop()
+      pcall(debounce_timer.close, debounce_timer)
+      debounce_timer = nil
+    end
+  end
+
   ---@internal
   local function fire_close(a, b)
     if finished then
@@ -218,6 +228,7 @@ function M.open(opts)
   ---synchronously) does not misread this as a user-initiated dismissal.
   local function unmount()
     transitioning = true
+    stop_debounce_timer()
     if clear then
       pcall(clear)
     end
@@ -300,15 +311,10 @@ function M.open(opts)
     render_preview()
   end
 
-  local debounce_timer
   ---@internal
   ---@param prompt_buf integer
   local function schedule_change(prompt_buf)
-    if debounce_timer then
-      debounce_timer:stop()
-      pcall(debounce_timer.close, debounce_timer)
-      debounce_timer = nil
-    end
+    stop_debounce_timer()
     debounce_timer = vim.uv.new_timer()
     -- libuv returns nil rather than raising when it cannot allocate a
     -- handle; without a timer the query simply is not re-run.
@@ -319,11 +325,7 @@ function M.open(opts)
       80,
       0,
       vim.schedule_wrap(function()
-        if debounce_timer then
-          debounce_timer:stop()
-          pcall(debounce_timer.close, debounce_timer)
-          debounce_timer = nil
-        end
+        stop_debounce_timer()
         if not api.nvim_buf_is_valid(prompt_buf) then
           return
         end
