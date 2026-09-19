@@ -305,6 +305,10 @@ function M.open()
   vim.keymap.set("n", "<Tab>", function()
     preset_idx = preset_idx % #PRESETS + 1
     api.nvim_buf_set_lines(config_buf, 0, -1, false, preset_lines(PRESETS[preset_idx]))
+    -- nvim_buf_set_lines above fires TextChanged, which schedule_render() (wired
+    -- to the config buffer) would turn into a redundant debounced re-render of
+    -- the content M.render below is about to draw synchronously. Cancel it.
+    stop_render_timer()
     M.render(config_buf, preview_buf)
   end, { buffer = config_buf, nowait = true, desc = "kit preview: next preset" })
 
@@ -320,7 +324,12 @@ function M.open()
     end
     scheme_idx = scheme_idx % #schemes + 1
     pcall(vim.cmd.colorscheme, schemes[scheme_idx])
-    M.render(config_buf, preview_buf)
+    -- SEC-50: route through the same debounce as a real edit instead of calling
+    -- M.render() synchronously here -- this handler never changes config_buf's
+    -- text, but an unpatched direct M.render() call would still re-eval the
+    -- buffer's current (possibly just-pasted, not-yet-debounced) content with
+    -- full Lua/vim API rights on every colorscheme cycle.
+    schedule_render()
   end, { buffer = config_buf, nowait = true, desc = "kit preview: next colorscheme" })
 
   -- q closes the whole playground tab from either window and restores the scheme.
