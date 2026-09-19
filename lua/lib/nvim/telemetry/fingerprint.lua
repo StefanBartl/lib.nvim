@@ -18,8 +18,14 @@ local bit = require("bit")
 local M = {}
 
 --- Only this many leading bytes go into a string's digest; a buffer's worth
---- of text would otherwise be hashed on every profiled call.
-local DIGEST_BYTES = 512
+--- of text would otherwise be hashed on every profiled call. Kept small and
+--- close to the old (pre-SEC-13) 40-byte cap on purpose: this module is on
+--- the hot path whenever telemetry is running (see
+--- lib.nvim.telemetry.registry, which fingerprints every argument of every
+--- wrapped call when a subscriber sets args=true), and "never store the
+--- text" -- the property SEC-13 actually requires -- does not depend on how
+--- many leading bytes get folded into the digest.
+local DIGEST_BYTES = 64
 
 ---@internal
 ---32-bit FNV-1a over the first `DIGEST_BYTES` of `s`, as 8 hex digits. Not a
