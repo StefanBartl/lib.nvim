@@ -130,18 +130,52 @@ return function(H)
 
   -- ── raw vs normalized: the case the block above cannot see ────────────
   --
-  -- `stdpath("config")` is genuinely un-normalized on a real machine: measured
-  -- on Windows, every call returns native backslashes
-  -- (`vim.fn.stdpath("config")` -> `C:\Users\...\nvim`), which
-  -- `vim.fs.normalize` rewrites to forward slashes. An earlier version of this
-  -- module returned that raw value verbatim on a plain match, which meant the
-  -- documented "the returned root is a genuine prefix of `dir`" was false on
-  -- every Windows call -- `dir` here is forward-slash (both production callers
-  -- build it through `vim.fs.normalize`/`vim.fs.dirname`), so a backslash root
-  -- is not a string-prefix of it at all. Every stub elsewhere in this file
-  -- happened to already be normalized and could not catch that. This one
-  -- deliberately is not.
+  -- Every stub elsewhere in this file is already `vim.fs.normalize`d (it
+  -- comes from `norm(vim.fn.tempname())`), so none of them can tell "returns
+  -- raw" apart from "returns normalized" -- an earlier version of this module
+  -- returned `stdpath("config")` verbatim on a plain match, and every one of
+  -- those cases stayed green regardless. This stub is deliberately not
+  -- normalized: a doubled *interior* separator, which `vim.fs.normalize`
+  -- collapses on every platform (unlike a native-Windows separator, which
+  -- only Windows itself converts -- that shape is the second case below).
+  --
+  -- Doubling the LAST separator specifically, not e.g. every one of them:
+  -- `vim.fs.normalize` special-cases a path that starts with `//` and
+  -- preserves it (POSIX gives that leading form implementation-defined
+  -- meaning, akin to a UNC root) -- measured, `//tmp/x` normalizes to
+  -- `//tmp/x`, not `/tmp/x`. Doubling every separator would double the
+  -- leading one on a POSIX `base`, and the stub would never resolve back to
+  -- `base` at all -- a self-inflicted failure on every non-Windows runner,
+  -- not evidence of anything about this module. Doubling only an interior one
+  -- avoids the special case while still being unnormalized.
   do
+    local base = norm(vim.fn.tempname())
+    vim.fn.mkdir(base .. "/lua", "p")
+    local unnormalized = base:gsub("/([^/]+)$", "//%1")
+
+    with_stdpath_config(unnormalized, function()
+      local dir = base .. "/lua"
+      local root = stdpath_config_root(dir)
+      H.eq(root, base, "returns the normalized spelling, not the doubled-separator one")
+      H.eq(root, dir:sub(1, #root), "and that spelling is a genuine prefix of dir")
+    end)
+
+    vim.fn.delete(base, "rf")
+  end
+
+  -- The concrete, real-machine shape of the case above: `stdpath("config")`
+  -- comes back with native separators on every call on Windows, measured
+  -- (`vim.fn.stdpath("config")` -> `C:\Users\...\nvim`), which is exactly the
+  -- un-normalized-raw-value scenario the case above covers abstractly. `dir`
+  -- here is forward-slash (both production callers build it through
+  -- `vim.fs.normalize`/`vim.fs.dirname`), so a backslash root returned
+  -- verbatim would not be a string-prefix of it at all -- handing an LSP a
+  -- root it cannot use. Windows-only: `vim.fs.normalize` only treats `\` as a
+  -- separator when `win` is true (Neovim's own `vim.fs.normalize`, gated on
+  -- the host, not on an option this module passes), so a backslash-laden stub
+  -- would not reproduce anything on Linux/macOS -- it would just be a filename
+  -- containing literal backslash characters there.
+  if vim.fn.has("win32") == 1 then
     local base = norm(vim.fn.tempname())
     vim.fn.mkdir(base .. "/lua", "p")
     local native = base:gsub("/", "\\")
