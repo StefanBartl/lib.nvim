@@ -49,6 +49,25 @@ local caches = {}
 ---@type table<string, Lib.Cache.Memory.Stats>
 local stats = {}
 
+--- `get(key)` only expires that one entry, lazily, when it happens to be
+--- looked up again. A key that is never queried a second time -- e.g. a
+--- caller that keys on a freshly-created closure's identity on every call
+--- (`lib.nvim.fs.scan_cached` with an inline `ignore` predicate is exactly
+--- this shape) -- then keeps its entry, and the closure it references,
+--- alive forever: nothing ever triggers the lazy check for that exact key
+--- again. `set` below runs a full, cheap sweep of the namespace every
+--- `SWEEP_INTERVAL` sets, so a TTL'd entry is bounded in how long it can
+--- outlive its TTL regardless of whether its key is ever re-queried --
+--- independent of, and in addition to, the per-key lazy eviction in `get`.
+---@type integer
+local SWEEP_INTERVAL = 64
+
+--- `set` calls made to each namespace since its last opportunistic sweep.
+--- Kept separate from `stats` so the public `Lib.Cache.Memory.Stats` shape
+--- (and everything that builds one field-by-field from it) stays untouched.
+---@type table<string, integer>
+local sets_since_sweep = {}
+
 --- Create or get a cache namespace. Repeated calls with the same `name`
 --- share one backing store, so unrelated callers can cheaply agree on a
 --- namespace by name instead of having to pass a table reference around.
@@ -73,10 +92,32 @@ function M.namespace(name, opts)
       total_requests = 0,
       hit_rate = 0,
     }
+    sets_since_sweep[name] = 0
   end
 
   local cache = caches[name]
   local ns_stats = stats[name]
+
+  --- Full pass over this namespace, dropping every entry whose TTL has
+  --- already elapsed. Same expiry check as `get`'s lazy path, just applied
+  --- to every key instead of one -- this is what catches an entry `get`
+  --- alone would never revisit.
+  local function sweep_expired()
+    if not opts.ttl then
+      return
+    end
+    local n = now()
+    local evicted = 0
+    for key, entry in pairs(cache) do
+      if entry.ttl and n - entry.timestamp > entry.ttl then
+        cache[key] = nil
+        evicted = evicted + 1
+      end
+    end
+    if evicted > 0 then
+      ns_stats.evictions = ns_stats.evictions + evicted
+    end
+  end
 
   return {
     get = function(key, bufnr)
@@ -114,6 +155,14 @@ function M.namespace(name, opts)
         entry.tick = nvim_buf_get_changedtick(bufnr)
       end
       cache[key] = entry
+
+      if opts.ttl then
+        sets_since_sweep[name] = sets_since_sweep[name] + 1
+        if sets_since_sweep[name] >= SWEEP_INTERVAL then
+          sets_since_sweep[name] = 0
+          sweep_expired()
+        end
+      end
     end,
 
     invalidate = function(key)
