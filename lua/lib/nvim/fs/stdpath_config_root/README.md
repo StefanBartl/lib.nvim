@@ -46,7 +46,7 @@ config is version-controlled, which is most people who have one.
 
 ## Which spelling comes back
 
-The canonical one, when it is the canonical one that matched.
+The **normalized** one, on either branch — never `stdpath("config")` verbatim.
 
 Returning the raw `~/.config/nvim` for a buffer at `~/dotfiles/nvim/...` would
 satisfy *"did the rule fire"* while handing the server a root that is not a
@@ -56,10 +56,18 @@ through the symlink and answers `textDocument/definition` with the **other**
 spelling of the file, so jumping to a definition opens a second buffer on a
 file that is already open, and edits split across two views of one file.
 
-With the canonical spelling returned, one spelling is used throughout.
-
-A plain match still returns `stdpath("config")` byte for byte, so nothing that
-resolved correctly before resolves differently now.
+An earlier version of this module returned `stdpath("config")` byte for byte
+on a plain match, on the reasoning that "nothing that resolved correctly
+before resolves differently now". That missed a case: `vim.fn.stdpath("config")`
+comes back with **native separators** — measured, on every call, on Windows
+(`C:\Users\...\nvim`) — while the `dir` it gets compared against is
+forward-slash (both production callers build it through `vim.fs.normalize`).
+The match itself is normalized, but the byte-for-byte *return value* was not,
+so the "genuine prefix of `dir`" promise above was false on every Windows call
+that took the plain-match branch. Unix is unaffected: `vim.fs.normalize` is a
+no-op there for any path already free of `~`, `//`, and `./`, which every
+`stdpath("config")` is — so this only ever changes the separators of the value
+Windows gets back, never which directory is named.
 
 ## Why the `realpath` is here, once, and not at the call site
 
@@ -84,10 +92,17 @@ cache-invalidation call to forget.
 Both known spellings are tried, which covers both platforms without resolving
 `dir` at all:
 
-| Platform | What the resolver is handed | Which compare matches |
-| -------- | --------------------------- | --------------------- |
-| Linux / macOS | the canonical spelling (Neovim canonicalizes buffer names) | the resolved one |
-| Windows | the literal spelling (measured: it does **not** canonicalize) | the raw one |
+| Platform | What a buffer name typically carries | Which compare typically matches |
+| -------- | ------------------------------------- | -------------------------------- |
+| Linux / macOS | the canonical spelling (Neovim canonicalizes buffer names) | the canonicalized compare |
+| Windows | the literal spelling (measured: it does **not** canonicalize) | the normalized compare |
+
+"Typically", not exclusively — this is about what Neovim itself does to a
+buffer name on each platform, not a hard platform split. Either branch can
+fire on either platform: nothing stops a Windows user from opening a file
+through a config symlink's *resolved* path directly (a tool that already
+resolved it, an explicit `cd`), which would take the canonicalized-compare
+branch there too, same as Unix.
 
 A `dir` in some third spelling — behind a symlink of its own — still misses,
 and still costs nothing.

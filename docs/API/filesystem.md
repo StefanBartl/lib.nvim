@@ -145,9 +145,12 @@ come from different sources and may spell one directory two ways.
 ### `lib.nvim.fs.stdpath_config_root` (see README)
 "Is `dir` inside `stdpath("config")`, and if so which spelling should an LSP
 get?" — answers a path that is always a **prefix of `dir`**, or `nil`. Tries the
-raw `stdpath("config")` and its canonicalized form, so a `~/.config/nvim` that
-is a symlink into a dotfiles repo still matches a buffer path Neovim
-canonicalized on the way in. The `realpath` is resolved once per
+normalized `stdpath("config")` and its canonicalized form, so a `~/.config/nvim`
+that is a symlink into a dotfiles repo still matches a buffer path Neovim
+canonicalized on the way in. Either match returns its normalized spelling,
+never `stdpath("config")` verbatim — that value carries native separators on
+every call on Windows (measured), which would otherwise break the
+prefix-of-`dir` promise there. The `realpath` is resolved once per
 `stdpath("config")` value, not per call.
 
 ```

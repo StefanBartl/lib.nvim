@@ -111,9 +111,11 @@ return function(H)
   -- ── no symlink involved: unchanged behaviour ──────────────────────────
   --
   -- Pinned first and without a symlink, because the fix must not rewrite the
-  -- root for the setups that never had the problem: a plain match returns
-  -- `stdpath("config")` byte for byte, not a normalized or canonicalized
-  -- rendering of it.
+  -- root for the setups that never had the problem. Every stub in this block
+  -- is already `vim.fs.normalize`d (it comes from `norm(vim.fn.tempname())`),
+  -- so `raw == norm` holds throughout and these cases cannot tell "returns
+  -- raw" apart from "returns normalized" -- the case right after this block
+  -- exists for exactly that distinction.
   do
     local raw = norm(vim.fn.tempname())
     vim.fn.mkdir(raw .. "/lua", "p")
@@ -124,6 +126,34 @@ return function(H)
     end)
 
     vim.fn.delete(raw, "rf")
+  end
+
+  -- ── raw vs normalized: the case the block above cannot see ────────────
+  --
+  -- `stdpath("config")` is genuinely un-normalized on a real machine: measured
+  -- on Windows, every call returns native backslashes
+  -- (`vim.fn.stdpath("config")` -> `C:\Users\...\nvim`), which
+  -- `vim.fs.normalize` rewrites to forward slashes. An earlier version of this
+  -- module returned that raw value verbatim on a plain match, which meant the
+  -- documented "the returned root is a genuine prefix of `dir`" was false on
+  -- every Windows call -- `dir` here is forward-slash (both production callers
+  -- build it through `vim.fs.normalize`/`vim.fs.dirname`), so a backslash root
+  -- is not a string-prefix of it at all. Every stub elsewhere in this file
+  -- happened to already be normalized and could not catch that. This one
+  -- deliberately is not.
+  do
+    local base = norm(vim.fn.tempname())
+    vim.fn.mkdir(base .. "/lua", "p")
+    local native = base:gsub("/", "\\")
+
+    with_stdpath_config(native, function()
+      local dir = base .. "/lua"
+      local root = stdpath_config_root(dir)
+      H.eq(root, base, "returns the normalized spelling, not the native one")
+      H.eq(root, dir:sub(1, #root), "and that spelling is a genuine prefix of dir")
+    end)
+
+    vim.fn.delete(base, "rf")
   end
 
   do
@@ -193,9 +223,12 @@ return function(H)
       local root = stdpath_config_root(dir)
       H.eq(root, dir:sub(1, #root), "the returned root is a prefix of the directory asked about")
 
-      -- The link spelling still answers verbatim — both spellings resolve,
-      -- each to a root that is a prefix of itself.
-      H.eq(stdpath_config_root(link .. "/lua"), link, "the link spelling still answers verbatim")
+      -- The link spelling resolves too — both spellings of the one directory
+      -- answer, each to a root that is a prefix of itself. `link` here is
+      -- already normalized (`with_symlinked_config` hands back `norm(link)`),
+      -- so this does not by itself distinguish "returns raw" from "returns
+      -- normalized" -- the earlier native-separator case does that.
+      H.eq(stdpath_config_root(link .. "/lua"), link, "the link spelling resolves to itself")
     end)
   end)
 
@@ -207,9 +240,15 @@ return function(H)
   --
   -- The canonical spelling is resolved once per `stdpath("config")` value
   -- rather than once per session, so a later stub is seen instead of a stale
-  -- answer being served. Every case above depends on that being true; this one
-  -- says so directly, and is deliberately last — it would pass trivially if it
-  -- ran before anything had warmed the cache.
+  -- answer being served.
+  --
+  -- Not order-dependent, despite running last: `first` and `second` are two
+  -- fresh temp paths built inside this one block, and the switch from one to
+  -- the other happens entirely within it, so the cache-hit-then-miss it
+  -- exercises does not depend on whatever this spec (or an earlier one in the
+  -- suite) already warmed the cache to. Placed last only because it is the
+  -- one case whose name is directly about the cache, not because an earlier
+  -- position would make it pass trivially -- it would not.
   do
     local first = norm(vim.fn.tempname())
     local second = norm(vim.fn.tempname())
