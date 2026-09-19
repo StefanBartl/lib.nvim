@@ -158,4 +158,101 @@ return function(H)
     resolve(root .. "/a.lua")
     H.ok(called, "the hook takes precedence over markers when both are given")
   end
+
+  -- ── include_stdpath_config = true (the default) ────────────────────────
+  --
+  -- Every case above sets this `false`. It defaults to `true`, and the change
+  -- that introduced `stdpath_config_root` here touched exactly one line --
+  -- `root = stdpath_config_root(root) or root` -- which none of the cases
+  -- above exercises. Assertions here are on the RAW return value, not
+  -- `normkey(...)`-wrapped, since the point of two of these is the exact
+  -- spelling that comes back, which `normkey` would launder away.
+
+  ---@param link string
+  ---@param fn fun(): nil
+  local function with_stdpath_config(link, fn)
+    local orig = vim.fn.stdpath
+    vim.fn.stdpath = function(what)
+      if what == "config" then
+        return link
+      end
+      return orig(what)
+    end
+    local ok, err = pcall(fn)
+    vim.fn.stdpath = orig
+    assert(ok, err)
+  end
+
+  do
+    -- No marker anywhere, so the plain marker search would answer the file's
+    -- own directory -- `stdpath_config_root` has to be what pulls the root up
+    -- to the stubbed config dir instead.
+    local config = make_tree({ "lua/plugins/" })
+    local file = config .. "/lua/plugins/init.lua"
+    vim.fn.writefile({}, file)
+
+    with_stdpath_config(config, function()
+      local resolve = resolver({ markers = { ".git" } })
+      H.eq(resolve(file), config, "a file under the (stubbed) config dir roots there")
+    end)
+  end
+
+  do
+    -- The `or root` fallback: a file OUTSIDE the config dir must still
+    -- resolve to whatever the marker search (or file-own-directory fallback)
+    -- already found, not fall through to the config dir.
+    local root = make_tree({ ".git/", "src/main.lua" })
+    local config = make_tree({})
+
+    with_stdpath_config(config, function()
+      local resolve = resolver({ markers = { ".git" } })
+      H.eq(
+        normkey(resolve(root .. "/src/main.lua")),
+        root,
+        "a file outside the config dir keeps its own root"
+      )
+    end)
+  end
+
+  -- The symlinked-dotfiles case reaching this call site specifically -- see
+  -- TESTS/stdpath_config_root_spec.lua for the full case on the module
+  -- itself; this pins that `polymorphic_rootresolver` actually calls through
+  -- to it, with the raw return value, rather than e.g. comparing against the
+  -- root the marker search already found before `stdpath_config_root` runs.
+  do
+    local base = normkey(vim.fn.tempname())
+    vim.fn.mkdir(base .. "/dotfiles/nvim/lua", "p")
+    local link = base .. "/config_link"
+    local sym_ok, sym_err = (vim.uv or vim.loop).fs_symlink(
+      base .. "/dotfiles/nvim",
+      link,
+      { dir = true, junction = false }
+    )
+
+    if sym_ok ~= true then
+      local message = "polymorphic_rootresolver_spec: SKIPPED — needs a real directory symlink, "
+        .. "which this machine refused: "
+        .. tostring(sym_err)
+      io.stderr:write("\n" .. message .. "\n")
+      io.stdout:write(message .. "\n")
+      local ci = vim.env.CI
+      if ci ~= nil and ci ~= "" and ci ~= "false" and vim.fn.has("win32") ~= 1 then
+        error("outside Windows a symlink must be creatable under CI, so: " .. message, 0)
+      end
+    else
+      local file = base .. "/dotfiles/nvim/lua/init.lua"
+      vim.fn.writefile({}, file)
+
+      with_stdpath_config(link, function()
+        local resolve = resolver({ markers = { ".git" } })
+        H.eq(
+          resolve(file),
+          normkey(link),
+          "a symlinked config dir still roots there through this call site"
+        )
+      end)
+    end
+
+    pcall(vim.fn.delete, base, "rf")
+  end
 end
