@@ -886,6 +886,29 @@ pkg:
       "first_run: mark_seen recovers cleanly once the store is rewritten"
     )
 
+    -- show_once() must load a corrupt store exactly once per call and reuse
+    -- that table for both the "already seen" check and the mark-seen write,
+    -- not go through the M.seen()/M.mark_seen() wrappers (each of which
+    -- independently calls load_seen) -- otherwise one logical show_once
+    -- call would warn twice for a single corrupt-store event.
+    warnings = {}
+    local show_once_corrupt_dir = vim.fn.tempname()
+    local show_once_corrupt_cache = { dir = show_once_corrupt_dir }
+    vim.fn.mkdir(show_once_corrupt_dir, "p")
+    local show_once_corrupt_path = show_once_corrupt_dir .. "/lib.nvim.deps.first_run.json"
+    vim.fn.writefile({ "{not valid json" }, show_once_corrupt_path)
+
+    eq(
+      first_run.show_once("a-plugin-with-no-spec-fx", { cache = show_once_corrupt_cache }),
+      false,
+      "show_once: a corrupt store still resolves cleanly (no spec -> not shown)"
+    )
+    eq(
+      #warnings,
+      1,
+      "show_once: a corrupt store is reported exactly once per call, not once per internal load"
+    )
+
     vim.notify = real_notify
   end
 

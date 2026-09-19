@@ -134,26 +134,39 @@ function M.show_once(plugin_name, opts)
   if user_disabled(plugin_name) then
     return false
   end
-  if M.seen(plugin_name, opts.cache) then
+
+  -- Loaded once and reused below for both the "already seen" check and
+  -- every mark-seen write in this call -- going through the public
+  -- `M.seen`/`M.mark_seen` wrappers here would each independently call
+  -- `load_seen`, so a single corrupt store would warn once per wrapper
+  -- call (up to three times for one logical `show_once` invocation)
+  -- instead of once.
+  local seen = load_seen(opts.cache)
+  if seen[plugin_name] == true then
     return false
+  end
+
+  local function mark()
+    seen[plugin_name] = true
+    require("lib.nvim.cache.disk").save(NAMESPACE, seen, opts.cache)
   end
 
   local spec = require("lib.nvim.deps.spec")
   local path = spec.find(plugin_name)
   if not path then
-    M.mark_seen(plugin_name, opts.cache)
+    mark()
     return false
   end
 
   local result = spec.load(path)
   if not result or #result.tools == 0 then
-    M.mark_seen(plugin_name, opts.cache)
+    mark()
     return false
   end
 
   local install = require("lib.nvim.deps.install")
   local plan = install.plan(result.tools, { manager = opts.manager })
-  M.mark_seen(plugin_name, opts.cache)
+  mark()
 
   if #plan.missing == 0 then
     return false
