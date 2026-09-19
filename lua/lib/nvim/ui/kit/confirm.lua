@@ -242,6 +242,18 @@ function M.open(opts)
     filetype = "lib-kit-confirm",
   })
   if not surf then
+    -- `surface.open` failed to open the float -- a genuine break, not a
+    -- user-driven cancel. Without this, on_answer never fires (despite the
+    -- module's own "Answer contract" implying it always does) and a
+    -- kit.sync caller blocked on it stalls silently. Same "no answer" value
+    -- as M.cancel() uses.
+    if opts.on_answer then
+      if custom then
+        opts.on_answer(nil)
+      else
+        opts.on_answer(false)
+      end
+    end
     return nil
   end
 
