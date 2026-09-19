@@ -41,7 +41,7 @@ function M.open(opts)
       return nil
     end
 
-    return input.open({
+    local surf = input.open({
       title = field.label or field.prompt,
       prompt = field.label or field.prompt,
       default = field.default,
@@ -64,6 +64,15 @@ function M.open(opts)
         step(i + 1)
       end,
     })
+
+    -- `input.open` returns nil when the float itself could not be opened
+    -- (surface.open failure) -- a genuine break, not a user-driven skip.
+    -- Without this, neither on_submit nor on_cancel ever fires and the
+    -- chain (and any kit.sync caller blocked on it) stalls silently.
+    if not surf and opts.on_cancel then
+      opts.on_cancel()
+    end
+    return surf
   end
 
   return step(1)
