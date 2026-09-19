@@ -71,7 +71,13 @@ local resolve_root = make_root_dir_resolver({
 ```
 
 - `markers`: list of files/folders that indicate a project root.
-- `include_stdpath_config`: if `true`, will fallback to Neovim's `stdpath("config")` if the start directory is under it.
+- `include_stdpath_config`: if `true`, falls back to Neovim's
+  `stdpath("config")` when the resolved root is under it. The check goes
+  through [`lib.nvim.fs.stdpath_config_root`](../stdpath_config_root/README.md)
+  rather than a plain compare against `stdpath("config")`: that raw value is
+  routinely a symlink into a dotfiles repo, and comparing it as a string
+  against a path Neovim canonicalized on the way into a buffer name misses
+  silently — see that README for the failure and what is returned instead.
 - `resolve`: `nil|fun(dir: string, cfg): string|nil` — replaces the default marker
   search entirely. Called with the normalized start directory and the resolved
   config; its return value (or the start directory, if it returns `nil`) becomes

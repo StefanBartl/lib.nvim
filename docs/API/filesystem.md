@@ -136,7 +136,22 @@ M.ensure_dir(path: string): boolean ok, string? err   -- ensures the *parent* di
 
 ### `lib.nvim.fs.is_subpath` (see README)
 ```
-return function(path: string, base: string): boolean   -- equality included
+return function(path: string, base: string, opts?: Lib.Fs.IsSubpathOpts): boolean   -- equality included
+```
+Without `opts` this is a pure `vim.fs.normalize` string compare (no syscalls).
+Pass `opts` to route both sides through `normkey` instead, when the two paths
+come from different sources and may spell one directory two ways.
+
+### `lib.nvim.fs.stdpath_config_root` (see README)
+"Is `dir` inside `stdpath("config")`, and if so which spelling should an LSP
+get?" — answers a path that is always a **prefix of `dir`**, or `nil`. Tries the
+raw `stdpath("config")` and its canonicalized form, so a `~/.config/nvim` that
+is a symlink into a dotfiles repo still matches a buffer path Neovim
+canonicalized on the way in. The `realpath` is resolved once per
+`stdpath("config")` value, not per call.
+
+```
+return function(dir: string|nil): string|nil
 ```
 
 ### `lib.nvim.fs.is_valid_filename` (see README)

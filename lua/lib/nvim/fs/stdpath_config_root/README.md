@@ -1,0 +1,111 @@
+# `lib.nvim.fs.stdpath_config_root`
+
+```lua
+local stdpath_config_root = require("lib.nvim.fs.stdpath_config_root")
+
+stdpath_config_root("/home/me/.config/nvim/lua/plugins")  --> "/home/me/.config/nvim"
+stdpath_config_root("/home/me/work/some-project/src")     --> nil
+```
+
+One question, asked by every LSP root resolver that honours the rule *"the
+Neovim config directory is a root of its own"*: **is this directory inside
+`stdpath("config")`, and if so, which spelling of it should the server be
+given?**
+
+Answers `nil` when `dir` is not inside it. Answers a path that is always a
+**prefix of `dir`** when it is.
+
+## The bug this replaces
+
+Both callers used to ask it themselves, with the same two lines:
+
+```lua
+local stdconfig = vim.fn.stdpath("config")
+if is_subpath(dir, stdconfig) then
+  return stdconfig
+end
+```
+
+That compares two spellings of one directory and loses.
+
+`vim.fn.stdpath("config")` reports whatever Neovim was pointed at, verbatim —
+typically `~/.config/nvim`, which on a very large share of real setups is a
+**symlink into a dotfiles repo**. The directory on the other side comes from a
+buffer name, and Unix Neovim canonicalizes a path on the way into a buffer
+name. So the comparison is:
+
+```
+dir       = /home/me/dotfiles/nvim/lua/plugins     (what the buffer carries)
+stdconfig = /home/me/.config/nvim                  (what stdpath reports)
+```
+
+No common prefix, a silent `false`, and the rule never fires. The caller falls
+through to its VCS search and roots the language server at **the whole dotfiles
+repo** — every file in it loaded into the workspace, for everyone whose Neovim
+config is version-controlled, which is most people who have one.
+
+## Which spelling comes back
+
+The canonical one, when it is the canonical one that matched.
+
+Returning the raw `~/.config/nvim` for a buffer at `~/dotfiles/nvim/...` would
+satisfy *"did the rule fire"* while handing the server a root that is not a
+prefix of the file it is being asked about — which is worse than the miss it
+replaces. Measured against a real `lua-language-server`: it indexes the tree
+through the symlink and answers `textDocument/definition` with the **other**
+spelling of the file, so jumping to a definition opens a second buffer on a
+file that is already open, and edits split across two views of one file.
+
+With the canonical spelling returned, one spelling is used throughout.
+
+A plain match still returns `stdpath("config")` byte for byte, so nothing that
+resolved correctly before resolves differently now.
+
+## Why the `realpath` is here, once, and not at the call site
+
+[`is_subpath`](../is_subpath/README.md) takes an `opts` argument that routes
+both sides through [`normkey`](../normkey/README.md) (`uv.fs_realpath`) and
+would close the gap in one character. It is deliberately not used:
+
+- `opts` resolves **both** sides on **every** call. A root resolver runs per
+  buffer, for every file in every project — two syscalls each time, on paths
+  that may sit on a network share, to re-derive an answer that cannot change.
+- `stdpath("config")` is fixed for the session. Its canonical spelling is
+  resolved **once** and kept; the comparison itself stays the pure string
+  compare it has always been.
+- `polymorphic_rootresolver` caches nothing of its own, so "once per call" here
+  really did mean once per call.
+
+The cache is keyed on the raw `stdpath("config")` value rather than held
+unconditionally, so a test that stubs `vim.fn.stdpath` — the only way to test
+any of this — gets a fresh resolution instead of a stale one, with no
+cache-invalidation call to forget.
+
+Both known spellings are tried, which covers both platforms without resolving
+`dir` at all:
+
+| Platform | What the resolver is handed | Which compare matches |
+| -------- | --------------------------- | --------------------- |
+| Linux / macOS | the canonical spelling (Neovim canonicalizes buffer names) | the resolved one |
+| Windows | the literal spelling (measured: it does **not** canonicalize) | the raw one |
+
+A `dir` in some third spelling — behind a symlink of its own — still misses,
+and still costs nothing.
+
+## Callers
+
+- [`lib.nvim.fs.polymorphic_rootresolver`](../polymorphic_rootresolver/README.md),
+  for `cfg.include_stdpath_config`
+- `lsp.servers.lua_ls.rootresolver` in `lsp.nvim`, which does the check first,
+  ahead of its own scope switch and marker search
+
+## Tests
+
+`TESTS/stdpath_config_root_spec.lua`. The symlinked cases need a **real**
+directory symlink — a junction is a different object with different resolution
+semantics and would not pin the same thing — so they skip on Windows, where
+creating one needs `SeCreateSymbolicLinkPrivilege` (Developer Mode or an
+elevated shell) and the CI runner has neither. That skip is loud, and raises
+rather than skipping under `CI` anywhere else: Linux and macOS are the
+platforms the bug actually bites on, so a silent skip there would be a gate
+reporting confidence it never earned.

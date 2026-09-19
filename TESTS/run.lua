@@ -94,6 +94,7 @@ local specs = {
   "contextmenu_spec.lua",
   "is_subpath_spec.lua",
   "normkey_spec.lua",
+  "stdpath_config_root_spec.lua",
   "globbable_spec.lua",
   "vregex_spec.lua",
   "range_spec.lua",

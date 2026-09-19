@@ -29,6 +29,7 @@ CONTENTS                                              *lib.nvim-fs-contents*
   5. Root discovery .................................. |lib.nvim-fs-roots|
        find_root ................................ |lib.nvim-fs-find_root|
        find_upward_dir ....................... |lib.nvim-fs-find_upward_dir|
+       stdpath_config_root ............. |lib.nvim-fs-stdpath_config_root|
        polymorphic_rootresolver .. |lib.nvim-fs-polymorphic_rootresolver|
   6. Scanning ........................................ |lib.nvim-fs-scanning|
        collect_recursive .................... |lib.nvim-fs-collect_recursive|
@@ -244,6 +245,26 @@ holding one of `names` (basenames, or `*`/`?` globs). >lua
     local find_upward_dir = require("lib.nvim.fs.find_upward_dir")
     local root = find_upward_dir({ ".git", "*.rockspec" }, vim.fn.expand("%:p:h"))
 <
+------------------------------------------------------------------------------
+stdpath_config_root({dir})              *lib.nvim-fs-stdpath_config_root*
+
+Function. The Neovim config directory if {dir} lies inside it, else `nil`.
+The returned path is always a prefix of {dir}.
+
+Both the raw `stdpath("config")` and its `uv.fs_realpath` form are tried, so a
+`~/.config/nvim` that is a symlink into a dotfiles repo still matches a
+directory taken from a buffer name — which Neovim canonicalizes on Unix. A
+plain match returns `stdpath("config")` verbatim; a match on the resolved
+spelling returns that one, because a root has to be a prefix of the file it is
+a root for. The realpath is resolved once per `stdpath("config")` value, not
+per call. >lua
+
+    local stdpath_config_root = require("lib.nvim.fs.stdpath_config_root")
+    stdpath_config_root("/home/me/.config/nvim/lua")  -- "/home/me/.config/nvim"
+    stdpath_config_root("/home/me/work/proj/src")     -- nil
+<
+Used by |lib.nvim-fs-polymorphic_rootresolver| for `cfg.include_stdpath_config`.
+
 ------------------------------------------------------------------------------
 polymorphic_rootresolver({cfg})    *lib.nvim-fs-polymorphic_rootresolver*
 
