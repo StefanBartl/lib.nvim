@@ -103,9 +103,16 @@ and still costs nothing.
 
 `TESTS/stdpath_config_root_spec.lua`. The symlinked cases need a **real**
 directory symlink — a junction is a different object with different resolution
-semantics and would not pin the same thing — so they skip on Windows, where
-creating one needs `SeCreateSymbolicLinkPrivilege` (Developer Mode or an
-elevated shell) and the CI runner has neither. That skip is loud, and raises
-rather than skipping under `CI` anywhere else: Linux and macOS are the
-platforms the bug actually bites on, so a silent skip there would be a gate
-reporting confidence it never earned.
+semantics and would not pin the same thing.
+
+They skip when one cannot be *created*, which is not the same as skipping on
+Windows. Creating a symlink there needs `SeCreateSymbolicLinkPrivilege`
+(Developer Mode or elevation), so a blanket platform skip looks right and is
+not: measured on this repo's own workflow, ubuntu, macos **and**
+windows-latest all create it, and all three run the cases. Windows is simply
+the one platform allowed to skip, because it is the one where the privilege
+can genuinely be absent.
+
+The skip is loud, and raises rather than skipping under `CI` anywhere else:
+Linux and macOS are the platforms the bug actually bites on, so a silent skip
+there would be a gate reporting confidence it never earned.

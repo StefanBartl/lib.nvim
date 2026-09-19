@@ -74,14 +74,23 @@ end
 --- name the cause, write it to stderr as well as stdout, and **raise instead
 --- of skipping under `CI` on any platform that is not Windows**.
 ---
---- Windows is the one legitimate skip. Creating a symlink there needs
---- `SeCreateSymbolicLinkPrivilege` — Developer Mode or an elevated shell — and
---- the GitHub Windows runner has neither by default. A developer machine with
---- Developer Mode on does run these cases, which is how they were verified
---- while being written. Linux and macOS have no such excuse, and they are the
+--- The gate is on whether a symlink can actually be *made*, not on the
+--- platform. That distinction earns its keep: creating one on Windows needs
+--- `SeCreateSymbolicLinkPrivilege` (Developer Mode or elevation), so a blanket
+--- `has("win32")` skip is the obvious move — and it would be wrong. Measured
+--- on this workflow's own runners: ubuntu, macos *and* windows-latest all
+--- create it, so all three run these cases. A plain platform skip would have
+--- thrown away the Windows coverage that works.
+---
+--- Windows stays the one platform allowed to skip, because it is the one where
+--- the privilege can genuinely be absent — a developer machine without
+--- Developer Mode. Linux and macOS have no such excuse, and they are the
 --- platforms that matter here: they are the ones whose Neovim canonicalizes a
 --- buffer name, which is what puts the two spellings on opposite sides of the
---- comparison to begin with.
+--- comparison to begin with. The Windows escape hatch is kept rather than
+--- tightened to match what the runner does today, since a future runner image
+--- could drop the privilege and that should read as a skip rather than a
+--- failure about the wrong thing.
 ---@param why string
 local function report_skip(why)
   local message = (
