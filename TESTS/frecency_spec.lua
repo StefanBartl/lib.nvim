@@ -199,6 +199,42 @@ return function(H)
   repaired:reset()
   ok(repaired:score("/after.lua") > 0, "frecency: and the rewritten store loads cleanly")
 
+  -- A load failure must not latch permanently: flush()'s own comment
+  -- promises "a later flush retries once the file is readable again", so
+  -- clearing the block must let a later access pick up the real data
+  -- instead of refusing forever.
+  vim.fn.mkdir(dir .. "/retry.json", "p")
+  local retried = open("retry")
+  eq(retried:score("/probe.lua"), 0, "frecency: unreadable on the first read scores nothing")
+  local warnings_before_retry = #warnings
+
+  vim.fn.delete(dir .. "/retry.json", "rf")
+  -- Retries are capped, not unconditional (a permanently broken file must
+  -- not turn every read-only score()/lookup() call into a fresh
+  -- disk.load() forever); the block was cleared well inside that budget,
+  -- so the very next access retries and this time succeeds.
+  local ok_after_retry = pcall(function()
+    retried:record("/after-retry.lua")
+  end)
+  ok(ok_after_retry, "frecency: retrying after the block clears does not error")
+  local flushed_retry, flush_retry_err = retried:flush()
+  eq(flushed_retry, true, "frecency: and flush now succeeds instead of refusing forever")
+  eq(flush_retry_err, nil, "frecency: with no error")
+  eq(#warnings, warnings_before_retry, "frecency: a successful retry does not warn again")
+
+  -- The retry budget is finite: a file that never becomes readable must not
+  -- cost one disk.load() per call for the rest of the session.
+  vim.fn.mkdir(dir .. "/stuck.json", "p")
+  local stuck = open("stuck")
+  local warnings_before_stuck = #warnings
+  for _ = 1, 10 do
+    stuck:score("/probe.lua")
+  end
+  ok(
+    #warnings - warnings_before_stuck <= 4, -- 1 initial load + MAX_LOAD_RETRIES(3) retries, never 10
+    "frecency: a permanently broken file stops retrying after a bounded number of attempts"
+  )
+
   vim.notify = real_notify
 
   frecency._reset_handles()
