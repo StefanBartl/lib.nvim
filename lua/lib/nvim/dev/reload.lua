@@ -38,16 +38,37 @@ end
 ---and `vim.uv.fs_realpath`-resolving every `*.lua` under the config root
 ---unconditionally at startup) cost ~600ms on a config with ~450 files,
 ---whether or not a file was ever even saved.
+---
+---With no `opts.lua_dir`, the config root is resolved through
+---`lib.nvim.fs.stdpath_config_root` -- per save, not once at registration.
+---This module used to bake `stdpath("config")/lua` in as a single spelling
+---when `watch()` was called, which is exactly the two-spelling comparison
+---`stdpath_config_root` exists to fix: on the common dotfiles setup where
+---`stdpath("config")` is a symlink into a repo, that baked-in spelling never
+---matched a buffer name in the *other* spelling, and a save silently reloaded
+---nothing. `opts.lua_dir`, when given, is an explicit override with no
+---connection to `stdpath("config")` and is honoured literally, as before.
 ---@param opts { lua_dir?: string, pattern?: string, group?: string }|nil
 ---  `lua_dir` -- the config's Lua root; default `stdpath("config")/lua`.
 ---@return nil
 function M.watch(opts)
   opts = opts or {}
   local autocmd = require("lib.nvim.bindings.autocmd")
-  local lua_dir = vim.fs.normalize(opts.lua_dir or (vim.fn.stdpath("config") .. "/lua")) .. "/"
+  local stdpath_config_root = require("lib.nvim.fs.stdpath_config_root")
+  local explicit_lua_dir = opts.lua_dir and (vim.fs.normalize(opts.lua_dir) .. "/") or nil
 
   autocmd.create("BufWritePost", function(args)
     local abs = vim.fs.normalize(vim.api.nvim_buf_get_name(args.buf))
+
+    local lua_dir = explicit_lua_dir
+    if not lua_dir then
+      local root = stdpath_config_root(vim.fs.dirname(abs))
+      if not root then
+        return
+      end
+      lua_dir = root .. "/lua/"
+    end
+
     if abs:sub(1, #lua_dir) ~= lua_dir then
       return
     end
