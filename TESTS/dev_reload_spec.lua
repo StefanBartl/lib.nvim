@@ -65,21 +65,12 @@ return function(H)
   -- at registration time, which is exactly the two-spelling comparison
   -- `lib.nvim.fs.stdpath_config_root` exists to fix -- these cases pin that
   -- the fix actually reaches this caller, the third place the pattern lived.
-
-  ---@param link string
-  ---@param fn fun(): nil
-  local function with_stdpath_config(link, fn)
-    local orig = vim.fn.stdpath
-    vim.fn.stdpath = function(what)
-      if what == "config" then
-        return link
-      end
-      return orig(what)
-    end
-    local run_ok, err = pcall(fn)
-    vim.fn.stdpath = orig
-    assert(run_ok, err)
-  end
+  --
+  -- Shared with stdpath_config_root_spec.lua and polymorphic_rootresolver_spec.lua
+  -- (with_stdpath_config) and general-purpose (with_patched) -- see
+  -- TESTS/harness.lua.
+  local with_stdpath_config = H.with_stdpath_config
+  local with_patched = H.with_patched
 
   ---@param bufname string
   ---@return integer bufnr
@@ -99,28 +90,42 @@ return function(H)
     vim.fn.mkdir(base .. "/cfg/lua", "p")
     vim.opt.rtp:append(base .. "/cfg")
 
-    with_stdpath_config(base .. "/cfg", function()
-      local reloaded = {}
-      local orig_module = reload.module
-      reload.module = function(name)
-        reloaded[#reloaded + 1] = name
-        return orig_module(name)
-      end
+    -- Everything that can raise runs inside this one pcall, so the augroup,
+    -- rtp entry, and temp directory below are all cleaned up whether the
+    -- assertion passes or not -- `reload.watch()` registers a REAL
+    -- `BufWritePost` autocmd, and one that outlives a failed case here would
+    -- keep firing (double-`require()`ing whatever this process saves next)
+    -- for the rest of the shared `TESTS/run.lua` process.
+    local test_ok, test_err = pcall(function()
+      with_stdpath_config(base .. "/cfg", function()
+        local reloaded = {}
+        local orig_module = reload.module
 
-      reload.watch({ group = "dev_reload_spec_plain" })
-      local bufnr = open_and_write(base .. "/cfg/lua/dev_reload_watch_fixture.lua")
+        -- `with_patched` restores `reload.module` even if the assertion
+        -- below raises -- a bare "patch, call, restore" would leave the spy
+        -- closure (and its now-dead `reloaded` upvalue) installed as the
+        -- module's real `reload()` for every later spec in the process.
+        with_patched(reload, "module", function(name)
+          reloaded[#reloaded + 1] = name
+          return orig_module(name)
+        end, function()
+          reload.watch({ group = "dev_reload_spec_plain" })
+          local bufnr = open_and_write(base .. "/cfg/lua/dev_reload_watch_fixture.lua")
+          vim.api.nvim_buf_delete(bufnr, { force = true })
+        end)
 
-      reload.module = orig_module
-      vim.api.nvim_buf_delete(bufnr, { force = true })
-
-      eq(
-        reloaded[1],
-        "dev_reload_watch_fixture",
-        "watch() reloads a file saved directly under stdpath('config')/lua"
-      )
+        eq(
+          reloaded[1],
+          "dev_reload_watch_fixture",
+          "watch() reloads a file saved directly under stdpath('config')/lua"
+        )
+      end)
     end)
 
+    pcall(vim.api.nvim_del_augroup_by_name, "dev_reload_spec_plain")
+    vim.opt.rtp:remove(base .. "/cfg")
     vim.fn.delete(base, "rf")
+    assert(test_ok, test_err)
   end
 
   -- The symlinked-dotfiles regression: `stdpath("config")` answering a
@@ -139,6 +144,11 @@ return function(H)
       { dir = true, junction = false }
     )
 
+    -- One cleanup point below, run exactly once regardless of which branch
+    -- runs and whether the assertion inside it raises. Defaults to a no-op
+    -- "pass" for the skip branch, which does not itself assert anything.
+    local test_ok, test_err = true, nil
+
     if sym_ok ~= true then
       -- Loud, not silent -- see TESTS/stdpath_config_root_spec.lua for why a
       -- quietly-skipped case is worse than no case at all, and why Windows is
@@ -150,39 +160,45 @@ return function(H)
       io.stdout:write(message .. "\n")
       local ci = vim.env.CI
       if ci ~= nil and ci ~= "" and ci ~= "false" and vim.fn.has("win32") ~= 1 then
-        error("outside Windows a symlink must be creatable under CI, so: " .. message, 0)
+        test_ok, test_err =
+          false, "outside Windows a symlink must be creatable under CI, so: " .. message
       end
     else
       vim.opt.rtp:append(base .. "/dotfiles/nvim")
 
-      with_stdpath_config(link, function()
-        local reloaded = {}
-        local orig_module = reload.module
-        reload.module = function(name)
-          reloaded[#reloaded + 1] = name
-          return orig_module(name)
-        end
+      test_ok, test_err = pcall(function()
+        with_stdpath_config(link, function()
+          local reloaded = {}
+          local orig_module = reload.module
 
-        reload.watch({ group = "dev_reload_spec_symlink" })
-        -- The canonical spelling: what a Unix buffer name carries for a file
-        -- opened through the symlink. Windows does not canonicalize (measured
-        -- elsewhere in this fleet), so this pins the contract identically
-        -- wherever a symlink can be made at all, matching
-        -- rootresolvers_spec.lua's own reasoning in lsp.nvim.
-        local canonical = base .. "/dotfiles/nvim/lua/dev_reload_watch_symlinked.lua"
-        local bufnr = open_and_write(canonical)
+          with_patched(reload, "module", function(name)
+            reloaded[#reloaded + 1] = name
+            return orig_module(name)
+          end, function()
+            reload.watch({ group = "dev_reload_spec_symlink" })
+            -- The canonical spelling: what a Unix buffer name carries for a
+            -- file opened through the symlink. Windows does not canonicalize
+            -- (measured elsewhere in this fleet), so this pins the contract
+            -- identically wherever a symlink can be made at all, matching
+            -- rootresolvers_spec.lua's own reasoning in lsp.nvim.
+            local canonical = base .. "/dotfiles/nvim/lua/dev_reload_watch_symlinked.lua"
+            local bufnr = open_and_write(canonical)
+            vim.api.nvim_buf_delete(bufnr, { force = true })
+          end)
 
-        reload.module = orig_module
-        vim.api.nvim_buf_delete(bufnr, { force = true })
-
-        eq(
-          reloaded[1],
-          "dev_reload_watch_symlinked",
-          "watch() reloads a file whose spelling differs from stdpath('config')'s own"
-        )
+          eq(
+            reloaded[1],
+            "dev_reload_watch_symlinked",
+            "watch() reloads a file whose spelling differs from stdpath('config')'s own"
+          )
+        end)
       end)
+
+      pcall(vim.api.nvim_del_augroup_by_name, "dev_reload_spec_symlink")
+      vim.opt.rtp:remove(base .. "/dotfiles/nvim")
     end
 
     pcall(vim.fn.delete, base, "rf")
+    assert(test_ok, test_err)
   end
 end
