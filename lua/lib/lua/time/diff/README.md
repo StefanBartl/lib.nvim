@@ -202,7 +202,7 @@ print("Third check:", third_diff, "us")
 
 Every call to `check()` returns the elapsed time since `start()`.
 
-**Available units:**
+#### Available units
 - `"ns"` – nanoseconds (default)
 - `"us"` – microseconds
 - `"ms"` – milliseconds
@@ -618,12 +618,12 @@ end
 
 ### Statistics calculations
 
-**Intervals vs. checkpoints:**
+#### Intervals vs. checkpoints
 - checkpoints are cumulative times since start
 - intervals are differences between consecutive checkpoints
 - statistics refer to intervals (deltas)
 
-**Example:**
+#### Example
 ```lua
 -- 3 checkpoints at 10ms, 25ms, 50ms
 diff.check()  -- Checkpoint 1: 10ms (interval 1: 10ms)

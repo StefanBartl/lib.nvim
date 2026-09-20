@@ -303,7 +303,7 @@ Themed, composable UI toolkit built on `lib.nvim.window` + `lib.nvim.ui.hl`.
 ~19 internal implementation files, independently `require`-able but
 intended to be consumed via `init.lua`'s dispatch functions or `kit.popup`.
 
-**Top-level dispatch API:**
+#### Top-level dispatch API
 ```
 M.theme, M.surface, M.chooser, M.layout            -- re-exported submodules
 M.setup(opts?: { default?: string, presets?: table<string,table> })

@@ -372,14 +372,14 @@ Naming and docs-path are settled; only the migration question stays open.
 
 | Phase | Deliverable | Status |
 | ----- | ----------- | ------ |
-| **1** | Spec model + route walk + `usercmd.create` registration; `STRING`/`enum` args; `default` handler | ✅ shipped |
-| **2** | Completion engine (subcommand + enum/BOOL slots) | ✅ shipped |
-| **3** | Typed args `INT`/`FLOAT`/`BOOL`/`PATH`/`DIR`/`FILE`/`BUFFER` with coercion + path completion; custom type registration | ✅ shipped |
-| **4** | Docgen (`document()` per-verb + registry-wide) + `setup()` doc defaults + section-mode writer, default path `docs/BINDINGS/Usercmds.md` | ✅ shipped |
-| **5** | Fluent sugar (§5b) ✅; vimdoc/health/aggregator wiring ✅; dogfood `nvim_usrcmds` → `:Lib` ✅ (opt-in via `lib_verb`, alongside the flat commands) | ✅ shipped |
-| **6** | Flag-style args (`--flag=value`/`--flag value`, repeatable, enum), modeled on `replacer.nvim`'s `BOOL_FLAGS`/`VALUE_FLAGS` tokenizer split. Strictly opt-in per route (`route.flags`) — zero behavior change for any route that doesn't declare flags. A `path = {}` root route (already legal before Phase 6) reproduces replacer.nvim's actual flat grammar `:Replace {old} {new} [scope] [--flags]` verbatim, no new route-shape concept needed. | ✅ shipped |
-| **7** | Three capability gaps found while planning the remaining plugin migrations, built ahead of hitting them: (a) **buffer-local commands** — `spec.buffer = true\|bufnr` routes through `nvim_buf_create_user_command` (needed for markdown.nvim's per-buffer `:TableView`); (b) **short-flag aliases** — `FlagSpec.short` (`-r` alongside `--replace`), next-token-value only, lenient on unrecognized `-x` (needed for recommender.nvim); (c) **bare `key=value` grammar** — new `Route.kv` (`KvSpec[]`), a separate module (`kv.lua`) from `flags.lua` since the leniency stance differs (undeclared `key=value` stays positional, no error — unlike `--name`), composes freely with `flags` on the same route (needed for diff.nvim's `target=`/`view=vsplit`). All three opt-in, zero behavior change for routes that don't use them. | ✅ shipped |
-| **8** | **Count prefix** — `spec.count`/`route.count` (an integer, matching `nvim_create_user_command`'s own `count` option) accepts a `:N Verb` prefix, surfaced as `ctx.range.count`. Found blocking fileops.nvim's `:File next`/`:File prev` cycling-by-N (`ctx.range.count` was already plumbed through `build_ctx` since Phase 1, but nothing ever set the registration-time `count` option, so a count prefix was silently rejected by Neovim). Same single-command-level-option reasoning as `wants_bang`/`wants_range` — an explicit `spec.count` wins, else the first route to declare `count` wins. Opt-in, zero behavior change for verbs that don't use it. | ✅ shipped |
+| **1** | Spec model + route walk + `usercmd.create` registration; `STRING`/`enum` args; `default` handler | shipped |
+| **2** | Completion engine (subcommand + enum/BOOL slots) | shipped |
+| **3** | Typed args `INT`/`FLOAT`/`BOOL`/`PATH`/`DIR`/`FILE`/`BUFFER` with coercion + path completion; custom type registration | shipped |
+| **4** | Docgen (`document()` per-verb + registry-wide) + `setup()` doc defaults + section-mode writer, default path `docs/BINDINGS/Usercmds.md` | shipped |
+| **5** | Fluent sugar (§5b); vimdoc/health/aggregator wiring; dogfood `nvim_usrcmds` → `:Lib` (opt-in via `lib_verb`, alongside the flat commands) | shipped |
+| **6** | Flag-style args (`--flag=value`/`--flag value`, repeatable, enum), modeled on `replacer.nvim`'s `BOOL_FLAGS`/`VALUE_FLAGS` tokenizer split. Strictly opt-in per route (`route.flags`) — zero behavior change for any route that doesn't declare flags. A `path = {}` root route (already legal before Phase 6) reproduces replacer.nvim's actual flat grammar `:Replace {old} {new} [scope] [--flags]` verbatim, no new route-shape concept needed. | shipped |
+| **7** | Three capability gaps found while planning the remaining plugin migrations, built ahead of hitting them: (a) **buffer-local commands** — `spec.buffer = true\|bufnr` routes through `nvim_buf_create_user_command` (needed for markdown.nvim's per-buffer `:TableView`); (b) **short-flag aliases** — `FlagSpec.short` (`-r` alongside `--replace`), next-token-value only, lenient on unrecognized `-x` (needed for recommender.nvim); (c) **bare `key=value` grammar** — new `Route.kv` (`KvSpec[]`), a separate module (`kv.lua`) from `flags.lua` since the leniency stance differs (undeclared `key=value` stays positional, no error — unlike `--name`), composes freely with `flags` on the same route (needed for diff.nvim's `target=`/`view=vsplit`). All three opt-in, zero behavior change for routes that don't use them. | shipped |
+| **8** | **Count prefix** — `spec.count`/`route.count` (an integer, matching `nvim_create_user_command`'s own `count` option) accepts a `:N Verb` prefix, surfaced as `ctx.range.count`. Found blocking fileops.nvim's `:File next`/`:File prev` cycling-by-N (`ctx.range.count` was already plumbed through `build_ctx` since Phase 1, but nothing ever set the registration-time `count` option, so a count prefix was silently rejected by Neovim). Same single-command-level-option reasoning as `wants_bang`/`wants_range` — an explicit `spec.count` wins, else the first route to declare `count` wins. Opt-in, zero behavior change for verbs that don't use it. | shipped |
 
 ## 13. Survey of existing `.nvim` plugins
 
@@ -388,7 +388,7 @@ missed `replacer.nvim` — it does exist, just wasn't matched by the first glob;
 folded in below). Grepped each for `nvim_create_user_command`, classified the
 command surface, and checked for an existing `lib.nvim` dependency.
 
-**Headline finding: `lib.nvim.usercmd.create` is already the de-facto standard.**
+### Headline finding: `lib.nvim.usercmd.create` is already the de-facto standard.
 Every surveyed repo except `cmdlog.nvim` already has a `require("lib...")` edge
 — most via a defensive shim (`local ok, lib = pcall(require, "lib.nvim.usercmd");
 has_lib = ok and lib.create ...`, else raw `nvim_create_user_command`), so it

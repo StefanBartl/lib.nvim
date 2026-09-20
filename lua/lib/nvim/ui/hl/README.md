@@ -82,7 +82,7 @@ handle.apply()   -- re-apply on demand
 handle.detach()  -- remove both autocommands
 ```
 
-**`opts`**
+#### `opts`
 
 | Field | Default | |
 | --- | --- | --- |

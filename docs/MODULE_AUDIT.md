@@ -15,8 +15,8 @@ module, verify against [conventions.md](conventions.md):
 - [ ] Feature idea check: "fehlt etwas Sinnvolles?" — noted below regardless
       of whether it gets built
 
-Status legend: ⬜ not started · 🔎 in progress · ✅ audited (fixes applied or
-nothing to fix) · 💡 has open feature idea(s) not yet acted on
+Status legend: not started · in progress · audited (fixes applied or
+nothing to fix) · has open feature idea(s) not yet acted on
 
 Source-of-truth inventory (init/README/@types presence, `lua_files` = total
 `.lua` count including submodules) taken 2026-09-07:
@@ -24,14 +24,14 @@ Source-of-truth inventory (init/README/@types presence, `lua_files` = total
 | Module | init.lua | README | @types | notes |
 |---|---|---|---|---|
 | async | Y | Y | 1 | |
-| bindings | Y | Y | 0 (nested have own) | huge (34 files) — ✅ audited 2026-09-07, see log |
-| buf_win_tab | - (leaf-only) | - | 4 (nested) | documented exception, verified — ✅ audited 2026-09-07, see log |
+| bindings | Y | Y | 0 (nested have own) | huge (34 files) — audited 2026-09-07, see log |
+| buf_win_tab | - (leaf-only) | - | 4 (nested) | documented exception, verified — audited 2026-09-07, see log |
 | buffer | - (leaf-only) | - | 1 (nested) | documented exception, see modules.md:34 |
 | cache | Y | Y | 1 | |
 | contextmenu | Y | Y | 1 | |
 | core | Y | Y | 1 | |
 | count | Y | Y | 1 | |
-| cross | Y | Y | 5 (nested) | huge (42 files) — ✅ audited 2026-09-07, see log |
+| cross | Y | Y | 5 (nested) | huge (42 files) — audited 2026-09-07, see log |
 | debounce | Y | Y | 1 | |
 | deps | Y | Y | 1 | |
 | dev | - (leaf-only) | Y | 0 | |
@@ -59,8 +59,8 @@ Source-of-truth inventory (init/README/@types presence, `lua_files` = total
 | terminal | Y | Y | 1 | |
 | token | Y | Y | 1 | |
 | treesitter | - (leaf-only) | - | 0 | |
-| fs | - (leaf-only) | - | 5 (nested) | huge (52 files) — ✅ audited 2026-09-07, see log |
-| ui | - (leaf-only) | - | 6 (nested) | huge (29 files) — ✅ audited 2026-09-07, see log |
+| fs | - (leaf-only) | - | 5 (nested) | huge (52 files) — audited 2026-09-07, see log |
+| ui | - (leaf-only) | - | 6 (nested) | huge (29 files) — audited 2026-09-07, see log |
 | window | Y | Y | 1 | |
 
 `lib.lua.*` namespace (16 top-level modules, 90 files, editor-independent
@@ -68,22 +68,22 @@ pure Lua — no `vim.*`), inventoried 2026-09-07:
 
 | Module | init.lua | README | @types | notes |
 |---|---|---|---|---|
-| class | Y | Y | 1 | ✅ |
-| config | Y | Y | 1 | ✅ was in neither `modules.md` nor `docs/API/foundations-lua.md` — fixed |
-| context_manager | Y | Y | 1 | ✅ |
-| diff | Y | Y | 1 | ✅ top-level, distinct from nested `time.diff` |
-| dump | Y | Y | 1 | ✅ |
-| error | Y | Y | 1 | ✅ |
-| functions | Y | Y | 1 | ✅ |
-| json | Y | Y | 1 | ✅ |
-| lazy | Y | Y | 1 | ✅ |
-| memo | Y | Y | 1 | ✅ |
-| numeral | Y | Y | 1 | ✅ |
-| strings | Y | Y | 6 (nested) | ✅ 21 files, see log — biggest structural fix of the audit |
-| tables | Y | Y | 8 (nested) | ✅ 17 files, see log |
-| time | - (leaf-only) | - | 1 (nested) | ✅ 12 files, 3 subdirs (diff/format/presets) |
-| uuid | Y | Y | 1 | ✅ |
-| yaml | Y | Y | 1 | ✅ |
+| class | Y | Y | 1 | audited |
+| config | Y | Y | 1 | audited; was in neither `modules.md` nor `docs/API/foundations-lua.md` — fixed |
+| context_manager | Y | Y | 1 | audited |
+| diff | Y | Y | 1 | audited; top-level, distinct from nested `time.diff` |
+| dump | Y | Y | 1 | audited |
+| error | Y | Y | 1 | audited |
+| functions | Y | Y | 1 | audited |
+| json | Y | Y | 1 | audited |
+| lazy | Y | Y | 1 | audited |
+| memo | Y | Y | 1 | audited |
+| numeral | Y | Y | 1 | audited |
+| strings | Y | Y | 6 (nested) | audited; 21 files, see log — biggest structural fix of the audit |
+| tables | Y | Y | 8 (nested) | audited; 17 files, see log |
+| time | - (leaf-only) | - | 1 (nested) | audited; 12 files, 3 subdirs (diff/format/presets) |
+| uuid | Y | Y | 1 | audited |
+| yaml | Y | Y | 1 | audited |
 
 ## Per-module log
 
@@ -91,7 +91,7 @@ pure Lua — no `vim.*`), inventoried 2026-09-07:
 fixes made, feature ideas raised. Filled in as the sweep proceeds; this
 section is the actual record, the table above is just the starting map.)
 
-### Glue layer (`lib.config`, `lib.strategies.*`, `lib.@types.*`) — ✅ complete (2026-09-07)
+### Glue layer (`lib.config`, `lib.strategies.*`, `lib.@types.*`) — complete (2026-09-07)
 
 **The `all_functions.lua` cross-check (the last open item) is done.** Method
 was the one that found the `Lib.Strings`/`Lib.Tables` bug: every `---@field`
@@ -157,7 +157,7 @@ at the end of this file.
 <details>
 <summary>Original partial-progress note from the previous session (kept for history)</summary>
 
-#### 🔎 partial (session ended low on budget)
+#### partial (session ended low on budget)
 
 - `lib.config` (setup/get/strategy_module), `lib.strategies.control`
   (register/active/keys/reset_cache), `lib.strategies.telemetry_wrap`
@@ -197,7 +197,7 @@ this glue layer) is done.
 
 </details>
 
-### core — ✅
+### core
 
 - Found & fixed: [`lua/lib/nvim/init.lua`](../lua/lib/nvim/init.lua) docstring
   claimed `Nvim.map == require("lib.nvim.bindings.keymap")` — wrong, the
@@ -214,7 +214,7 @@ this glue layer) is done.
   tracked by that file's own CDX comment.
 - Feature idea: nothing obviously missing for this grab-bag module.
 
-### async, contextmenu, count — ✅ no issues
+### async, contextmenu, count — no issues
 
 Docs/@types are complete, accurate, and closely mirror the implementation.
 Feature ideas (not implemented, just noted):
@@ -223,7 +223,7 @@ Feature ideas (not implemented, just noted):
   kit, if a caller ever needs more than sequential awaits.
 - `contextmenu`/`count`: no gap found.
 
-### debounce — ✅ fixed
+### debounce — fixed
 
 - `init.lua` and `buffer/init.lua` both did bare `return M`/`return { new =
   new }` with no `---@type` annotation (every sibling module annotates its
@@ -232,7 +232,7 @@ Feature ideas (not implemented, just noted):
   `Lib.Debounce.Buffer`) didn't exist yet, only their Handle/Opts sub-types.
   Added both classes and the `---@type` annotations.
 
-### dotrepeat, git, json, lastcmd — ✅ (git fixed)
+### dotrepeat, git, json, lastcmd — (git fixed)
 
 - `git/init.lua`: same missing-`---@type Lib.Git`-on-return bug as debounce,
   even though `Lib.Git` was already fully and correctly defined in `@types`.
@@ -241,7 +241,7 @@ Feature ideas (not implemented, just noted):
   README documents even the sharp edges (the `repeat_last`-identity-comparison
   footgun it used to ship with).
 
-### notify — ✅ fixed (undocumented submodule)
+### notify — fixed (undocumented submodule)
 
 - `lib.nvim.notify.resolve_log_level` existed as a real, actively-used
   submodule (`lib.nvim.logger` depends on it) but was: not aggregated onto
@@ -251,11 +251,11 @@ Feature ideas (not implemented, just noted):
   description of `lib.nvim.notify` ("notify wrapper + log-level resolution")
   already promised this as part of the module's surface. Fixed all four.
 
-### require, safe_api, selection — ✅ no issues
+### require, safe_api, selection — no issues
 
 Docs/@types complete and accurate. No feature gaps found.
 
-### store (+ store.project), terminal, token, health — ✅ (token fixed)
+### store (+ store.project), terminal, token, health — (token fixed)
 
 - `token/@types/init.lua` was missing the trailing `return {}` every other
   `@types` file in the repo has (harmless at runtime — nothing uses the
@@ -267,7 +267,7 @@ Docs/@types complete and accurate. No feature gaps found.
   terminal rather than just detect/delete one, but no concrete caller need
   identified, so just noted.
 
-### harvest — ✅ fixed (biggest gap found so far)
+### harvest — fixed (biggest gap found so far)
 
 - None of the 4 files (`init.lua`, `scope.lua`, `render.lua`, `sink.lua`) had
   a `---@type` annotation on their return, and — unlike every other
@@ -279,14 +279,14 @@ Docs/@types complete and accurate. No feature gaps found.
   `@types` gap, LuaLS gave zero completion/checking on any harvest call
   before this.
 
-### cache (+ disk, memory), deps (10 files), store — ✅ no issues
+### cache (+ disk, memory), deps (10 files), store — no issues
 
 Both are exemplary: every submodule has a `---@type` return, every class is
 complete and matches the code exactly, README covers 100% of the surface
 including edge behavior (TTL clock choice, idempotency, etc.). No feature
 gaps found.
 
-### logger (8 files) — ✅ fixed (README gap) + 1 convention note
+### logger (8 files) — fixed (README gap) + 1 convention note
 
 - `count`/`counters`/`add_sink` (all three fully and correctly typed in
   `@types`) and the top-level `loggers()` were entirely undocumented in the
@@ -300,7 +300,7 @@ gaps found.
   way. Left alone — renaming would touch require paths for no user-facing
   benefit; flagging here in case a future pass wants to formalize it.
 
-### progress, cache, deps, store, normalize, system — ✅ no issues
+### progress, cache, deps, store, normalize, system — no issues
 
 `resolve_style.lua` and several `window/*.lua` files return a bare local
 function rather than a table — not a bug: the function itself carries full
@@ -310,7 +310,7 @@ elsewhere in this audit, where the table's shape isn't otherwise knowable).
 `normalize` in particular is a good example of "exactly right": 21 functions,
 21 README mentions, field counts in `@types` match exactly.
 
-### window (15 files) — ✅ fixed (another orphaned submodule)
+### window (15 files) — fixed (another orphaned submodule)
 
 - `find_by_filetype.lua` — a real, complete, generically useful function
   (replaces filetree-manager-specific window lookups) — was not aggregated
@@ -327,7 +327,7 @@ elsewhere in this audit, where the table's shape isn't otherwise knowable).
   `target_window`, and the four focus helpers (`ensure_bottom`,
   `make_focusable`, `force_focus`, `focus_and_bottom`). Added all of it.
 
-### dev, image_preview, lua_ls, markdown, neotree, net, treesitter — mostly ✅, 2 real fixes
+### dev, image_preview, lua_ls, markdown, neotree, net, treesitter — mostly clean, 2 real fixes
 
 These are the "leaf-only" namespaces (no top-level `init.lua`, per
 `modules.md`'s documented exception pattern).
@@ -372,7 +372,7 @@ These are the "leaf-only" namespaces (no top-level `init.lua`, per
 - markdown.table, treesitter.guard, treesitter.parser_policy: no issues —
   every exported function accounted for in both README and `@types`.
 
-### ui (kit, list, statusline, hl, nerd_font — 29 files) — ✅ reduced-depth pass, 2 fixes
+### ui (kit, list, statusline, hl, nerd_font — 29 files) — reduced-depth pass, 2 fixes
 
 First of the five huge subsystems. Depth reduced per the handover's own
 lever: top-level README/`@types`/`modules.md` wiring checked for every leaf,
@@ -416,7 +416,7 @@ full function-by-function README diff only where something looked off
   `kit` in particular already covers the space thoroughly (12 component
   types, a layout engine, sync bridge for blocking call sites).
 
-### fs (29 leaf submodules, 52 files) — ✅ reduced-depth pass, several fixes
+### fs (29 leaf submodules, 52 files) — reduced-depth pass, several fixes
 
 Second of the five huge subsystems. Same reduced-depth method as `ui`: for
 every one of the 29 leaf modules, checked README/`@types`/wiring presence;
@@ -483,7 +483,7 @@ per-function reference for this subsystem.
   (sync + async variants throughout), ignore lists, read/write/watch, and
   trash, each with a clear single-responsibility module.
 
-### cross (~28 leaf modules across platform/executable/fs/run/uv, 42 files) — ✅ reduced-depth pass, several fixes
+### cross (~28 leaf modules across platform/executable/fs/run/uv, 42 files) — reduced-depth pass, several fixes
 
 Third of the five huge subsystems. Same method as `ui`/`fs`, half delegated
 to a sub-agent (verified every finding myself before acting, same as the
@@ -547,7 +547,7 @@ to a sub-agent (verified every finding myself before acting, same as the
   direct, each with blocking+async variants), path separators, file
   mutation with Windows-sharing-error retry, and lock diagnosis.
 
-### bindings (keymap/autocmd/usercmd + composer/dispatcher/modifier/portability/audit, 34 files) — ✅ reduced-depth pass, several fixes
+### bindings (keymap/autocmd/usercmd + composer/dispatcher/modifier/portability/audit, 34 files) — reduced-depth pass, several fixes
 
 Fourth of the five huge subsystems. `bindings/init.lua` and each of
 `keymap`/`autocmd`/`usercmd`/`composer`/`dispatcher`/`modifier` already had
@@ -615,7 +615,7 @@ overall quality of this subsystem's docs.
   composer subcommand DSL), and a cross-cutting audit tool tying the first
   two together with four separate lints.
 
-### buf_win_tab (buffer_utils/windows_utils/tabs_utils + capture/get_option/move_buffer_to_tab/normal_buffer/resize_guarded/safe_adjacent_buffer/selection/word_under_cursor, 23 files) — ✅ reduced-depth pass, minor fixes
+### buf_win_tab (buffer_utils/windows_utils/tabs_utils + capture/get_option/move_buffer_to_tab/normal_buffer/resize_guarded/safe_adjacent_buffer/selection/word_under_cursor, 23 files) — reduced-depth pass, minor fixes
 
 Fifth and last of the five huge subsystems — also by far the smallest and
 cleanest one. Leaf-only namespace confirmed (no `buf_win_tab/init.lua`),
@@ -664,7 +664,7 @@ are now audited.** Remaining: the `lib.lua.*` namespace (9 modules, not yet
 inventoried) and the glue layer (`lib/config`, `lib/strategies/*`,
 top-level `lib/@types/*`).
 
-### lib.lua.* (16 modules, 90 files, editor-independent pure Lua) — ✅ first full pass, biggest structural bug of the audit
+### lib.lua.* (16 modules, 90 files, editor-independent pure Lua) — first full pass, biggest structural bug of the audit
 
 Not one of the five huge subsystems, but the biggest single batch after
 them. `strings`/`tables` (38 files combined) delegated to a sub-agent,
@@ -739,7 +739,7 @@ subsystems); the other 14 modules (2-12 files each) checked directly.
   merging, lazy-require, and memoization. Comprehensive for a
   general-purpose Lua foundation layer.
 
-### buffer (+ buffer.context) — ✅ no issues
+### buffer (+ buffer.context) — no issues
 
 Leaf-only namespace by design (no `buffer/init.lua`, documented in
 `modules.md:34` and self-flagged again in `buffer/@types/init.lua` as the

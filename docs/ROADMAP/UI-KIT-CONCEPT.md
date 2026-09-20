@@ -359,7 +359,7 @@ Proposed component set (the task asked "are there more sensible ones?" — yes):
 themed surfaces + shared lifecycle from Layer C) that a plugin fills with its
 own matching/preview logic. It demonstrates the whole stack working together.
 
-## 9. The button-confirm component (phased, highest effort) — ✅ shipped
+## 9. The button-confirm component (phased, highest effort) — shipped
 
 > **Implemented** as `lib.nvim.ui.kit.confirm` (`kit.confirm` / `prompt` with
 > `layout = "buttons"`). The design below is what was built.
@@ -408,10 +408,10 @@ The absorption runs alongside the phased roadmap (§13):
 
 | Step | When | What happens | hover_select call sites |
 | ---- | ---- | ------------ | ----------------------- |
-| **1. Delegate** ✅ | Phase 1–2 | `kit.popup({ type = "select" })` called the existing `ui.hover_select` under the hood. | untouched |
-| **2. Native chooser** ✅ | Phase 3 | Built `lib.nvim.ui.kit.chooser` (themed, superset of `Lib.HoverSelect.Options`), matching hover_select's navigation (`j`/`k`/arrows, `<CR>`, `<Esc>`/`q`, `h`/`l` blocked) and multi-select. `kit.select` now uses it; the delegation is gone. | untouched |
-| **3. Shim** ✅ | Phase 3 | `ui.hover_select` is now a thin adapter over `kit.chooser`: `open(opts)` maps `Lib.HoverSelect.Options` → the chooser and returns `(bufnr, winid)`; `close`/`is_open` delegate. Same signature/behavior; the `buffer`/`window`/`navigation`/`highlight`/`config` submodules were deleted (logic lives in the kit). | still work, unchanged API |
-| **4. Migrate & retire** ✅ | done | All call sites moved to `kit.select` — filetree.nvim, markdown.nvim, pdfport.nvim, pickers.nvim (pushed) and the author's nvim config (switcher / pdfport action). With no consumers left, the shim was **removed**: `lib.nvim.ui.hover_select` and its help/types/aggregator entries are gone. | migrated ✅, shim removed ✅ |
+| **1. Delegate** | Phase 1–2 | `kit.popup({ type = "select" })` called the existing `ui.hover_select` under the hood. | untouched |
+| **2. Native chooser** | Phase 3 | Built `lib.nvim.ui.kit.chooser` (themed, superset of `Lib.HoverSelect.Options`), matching hover_select's navigation (`j`/`k`/arrows, `<CR>`, `<Esc>`/`q`, `h`/`l` blocked) and multi-select. `kit.select` now uses it; the delegation is gone. | untouched |
+| **3. Shim** | Phase 3 | `ui.hover_select` is now a thin adapter over `kit.chooser`: `open(opts)` maps `Lib.HoverSelect.Options` → the chooser and returns `(bufnr, winid)`; `close`/`is_open` delegate. Same signature/behavior; the `buffer`/`window`/`navigation`/`highlight`/`config` submodules were deleted (logic lives in the kit). | still work, unchanged API |
+| **4. Migrate & retire** | done | All call sites moved to `kit.select` — filetree.nvim, markdown.nvim, pdfport.nvim, pickers.nvim (pushed) and the author's nvim config (switcher / pdfport action). With no consumers left, the shim was **removed**: `lib.nvim.ui.hover_select` and its help/types/aggregator entries are gone. | migrated, shim removed |
 
 Design implication for the native chooser (Phase 3): it must be a **superset**
 of `Lib.HoverSelect.Options` so the Step-3 shim is a pure mapping with no
@@ -487,19 +487,19 @@ surfaces the library already uses:
 
 | Phase | Deliverable | Notes |
 | ----- | ----------- | ----- |
-| **1** ✅ | Theme/preset engine (Layer A) + surface primitive (Layer B) + `setup()` | Foundation; ships built-in presets; `note` as first component |
-| **2** ✅ | Short-lived popups: `toast`, `prompt(confirm/text)`, `input`; `select` delegating to hover_select | The high-frequency, quick-win components |
-| **3** ✅ | Layout engine (Layer C) + templates (§7a) + native `select` chooser + hover_select shim + interactive `kit.picker` | Composition + absorption + Telescope-style picker |
-| **4** ✅ | Button-confirm (§9) — horizontal buttons, h/l navigation, `KitSelection` focus; routed via `kit.confirm` and `prompt(answer_type="confirm", layout="buttons")` | The highest-effort component |
-| **5** ✅ | `viewer` — read-only info panel: auto-sized to content, `q`/`<Esc>` closes, closes on `WinLeave`/`BufLeave` too (`close_on_focus_lost` opt-out) | Motivated by 6+ independent hand-rolled implementations across consumer plugins (§ui_kit_migration audit) |
-| **6** ✅ | `form` — sequential multi-field prompt: chains `kit.input` per field into one keyed result table; `<Esc>` skips an optional field, aborts on a `required` one | Motivated by hand-rolled prompt chains (sandbox.nvim's `container_commands.lua`, buffer_ctx.nvim's own `process_prompts` helper — §ui_kit_migration audit §6.2) |
-| **7** ✅ | `live_input` — `kit.input` plus a debounced `on_change(query)`, fired as the user types | Motivated by filetree.nvim's `live_search`/`filter` features, each independently hand-rolling a floating prompt + `TextChangedI`-debounce (§ui_kit_migration audit §5.3) |
-| **8** ✅ | `kit.sync` — block on an async kit component via `vim.wait`, return its result as a plain value | See §13a below. Motivated by buffer_ctx.nvim's `guard_interactive()`/`process_prompts` (§ui_kit_migration audit §3), whose synchronous `vim.fn.input()`-based return value is baked into a 4-layer call chain (`boiler.get()`, consumed synchronously at 4 call sites in `commands.lua` and the telescope extension) |
-| **9** ✅ | Rich `kit.select` items — multi-line entries with per-span custom highlights, navigation by logical item instead of raw line | See §13b below. Motivated by recommender.nvim's hand-rolled suggestion float (§ui_kit_migration audit §2/§4), a 3-line-per-item picker with per-column highlight groups that plain-string `kit.select` couldn't represent |
-| **10** ✅ | `kit.input({ secret = true })` — masked entry, each character concealed behind `mask` (default `"*"`), re-derived from the buffer on every edit; real text still reaches `on_submit` | See §13c below. Motivated by sandbox.nvim's `registry_commands.lua:30` (`vim.fn.inputsecret` for a registry password) — the only masked-input call site in the migration audit |
-| **11** ✅ | `kit.input({ completion = "file" })` — `<Tab>` completes via `vim.fn.getcompletion()` into the real ins-completion popup (`vim.fn.complete()`); `<Tab>`/`<S-Tab>` cycle it, `<CR>` accepts before submitting | See §13d below. Motivated by 4 identical `completion="file"`-blocked call sites in the migration audit (diff.nvim `prompt_file`, dap.nvim's `languages/{zig,rust,c,assembly}.lua`, color_my_ascii.nvim's `export.lua`, the nvim-config's `dotnet.lua`) — all four cited the exact same missing capability |
+| **1** | Theme/preset engine (Layer A) + surface primitive (Layer B) + `setup()` | Foundation; ships built-in presets; `note` as first component |
+| **2** | Short-lived popups: `toast`, `prompt(confirm/text)`, `input`; `select` delegating to hover_select | The high-frequency, quick-win components |
+| **3** | Layout engine (Layer C) + templates (§7a) + native `select` chooser + hover_select shim + interactive `kit.picker` | Composition + absorption + Telescope-style picker |
+| **4** | Button-confirm (§9) — horizontal buttons, h/l navigation, `KitSelection` focus; routed via `kit.confirm` and `prompt(answer_type="confirm", layout="buttons")` | The highest-effort component |
+| **5** | `viewer` — read-only info panel: auto-sized to content, `q`/`<Esc>` closes, closes on `WinLeave`/`BufLeave` too (`close_on_focus_lost` opt-out) | Motivated by 6+ independent hand-rolled implementations across consumer plugins (§ui_kit_migration audit) |
+| **6** | `form` — sequential multi-field prompt: chains `kit.input` per field into one keyed result table; `<Esc>` skips an optional field, aborts on a `required` one | Motivated by hand-rolled prompt chains (sandbox.nvim's `container_commands.lua`, buffer_ctx.nvim's own `process_prompts` helper — §ui_kit_migration audit §6.2) |
+| **7** | `live_input` — `kit.input` plus a debounced `on_change(query)`, fired as the user types | Motivated by filetree.nvim's `live_search`/`filter` features, each independently hand-rolling a floating prompt + `TextChangedI`-debounce (§ui_kit_migration audit §5.3) |
+| **8** | `kit.sync` — block on an async kit component via `vim.wait`, return its result as a plain value | See §13a below. Motivated by buffer_ctx.nvim's `guard_interactive()`/`process_prompts` (§ui_kit_migration audit §3), whose synchronous `vim.fn.input()`-based return value is baked into a 4-layer call chain (`boiler.get()`, consumed synchronously at 4 call sites in `commands.lua` and the telescope extension) |
+| **9** | Rich `kit.select` items — multi-line entries with per-span custom highlights, navigation by logical item instead of raw line | See §13b below. Motivated by recommender.nvim's hand-rolled suggestion float (§ui_kit_migration audit §2/§4), a 3-line-per-item picker with per-column highlight groups that plain-string `kit.select` couldn't represent |
+| **10** | `kit.input({ secret = true })` — masked entry, each character concealed behind `mask` (default `"*"`), re-derived from the buffer on every edit; real text still reaches `on_submit` | See §13c below. Motivated by sandbox.nvim's `registry_commands.lua:30` (`vim.fn.inputsecret` for a registry password) — the only masked-input call site in the migration audit |
+| **11** | `kit.input({ completion = "file" })` — `<Tab>` completes via `vim.fn.getcompletion()` into the real ins-completion popup (`vim.fn.complete()`); `<Tab>`/`<S-Tab>` cycle it, `<CR>` accepts before submitting | See §13d below. Motivated by 4 identical `completion="file"`-blocked call sites in the migration audit (diff.nvim `prompt_file`, dap.nvim's `languages/{zig,rust,c,assembly}.lua`, color_my_ascii.nvim's `export.lua`, the nvim-config's `dotnet.lua`) — all four cited the exact same missing capability |
 
-### 13a. `kit.sync` — bridging kit's async components back to a plain return value — ✅ shipped
+### 13a. `kit.sync` — bridging kit's async components back to a plain return value — shipped
 
 **Problem.** `kit.input`/`kit.confirm`/`kit.select`/`kit.form`/`kit.live_input`
 are all async/callback-based (`on_submit`/`on_answer`/`on_select` fire later,
@@ -560,7 +560,7 @@ function M.guard_interactive()
 end
 ```
 
-**How the caveats were resolved:**
+#### How the caveats were resolved
 
 - **Fast-context restriction.** Resolved as designed: `kit.sync` calls
   `vim.in_fast_event()` up front and `error()`s immediately rather than
@@ -587,7 +587,7 @@ Implemented at `lua/lib/nvim/ui/kit/sync.lua`, exposed as `kit.sync`;
 example at `docs/EXAMPLES/kit-sync.lua`; tests in `docs/TESTS/ui_kit_spec.lua`
 (§"sync (vim.wait bridge)").
 
-### 13b. Rich list items — custom highlight per item — ✅ shipped (Phase 9)
+### 13b. Rich list items — custom highlight per item — shipped (Phase 9)
 
 **Problem.** `kit.select`'s items are plain strings: one buffer line each,
 selection shown via a window-level `CursorLine → KitSelection` remap, marks
@@ -641,7 +641,7 @@ kit.select({
 })
 ```
 
-**Design decisions:**
+#### Design decisions
 
 - **Extend `chooser.lua`, not a new component.** This is a capability of the
   existing list/select model (variable-height items + column-range
@@ -680,7 +680,7 @@ Implemented in `lua/lib/nvim/ui/kit/chooser.lua`; example at
 `docs/EXAMPLES/kit-select.lua`; tests in `docs/TESTS/ui_kit_spec.lua`
 (§"chooser (native select)").
 
-### 13c. `kit.input({ secret = true })` — masked entry — ✅ shipped (Phase 10)
+### 13c. `kit.input({ secret = true })` — masked entry — shipped (Phase 10)
 
 **Problem.** `vim.fn.inputsecret()` is the last native prompt primitive
 `kit.input` had no answer for: sandbox.nvim's `registry_commands.lua:30`
@@ -730,7 +730,7 @@ Implemented in `lua/lib/nvim/ui/kit/input.lua`; example at
 `docs/EXAMPLES/kit-input.lua`; tests in `docs/TESTS/ui_kit_spec.lua`
 (§"input(secret = true)").
 
-### 13d. `kit.input({ completion = "file" })` — real ins-completion — ✅ shipped (Phase 11)
+### 13d. `kit.input({ completion = "file" })` — real ins-completion — shipped (Phase 11)
 
 **Problem.** Four otherwise-independent migration audit call sites all cited
 the *exact same* blocker for staying on `vim.fn.input`/hand-rolled prompts:
@@ -797,7 +797,7 @@ Implemented in `lua/lib/nvim/ui/kit/input.lua`; example at
 1. **Namespace / name.** Recommendation: `lib.nvim.ui.kit` — short, honest
    ("a kit of coordinated UI pieces"), sits cleanly beside `ui.hl` /
    `ui.hover_select`. Alternatives, by flavor:
-   - *toolkit-ish:* `ui.kit` ✅, `ui.studio`, `ui.forge`
+   - *toolkit-ish:* `ui.kit`, `ui.studio`, `ui.forge`
    - *surface/overlay-ish:* `ui.surface`, `ui.overlay`, `ui.canvas`
    - *composition-ish:* `ui.deck`, `ui.compose`, `ui.stage`
    Rejected: the original sketch's `window.popup` (mixes low-level float code

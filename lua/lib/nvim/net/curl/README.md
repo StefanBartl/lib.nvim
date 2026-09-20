@@ -74,7 +74,7 @@ host, timeout, a malformed response) — a materially different failure from
 
 ## Returns
 
-**`fetch_json` / `fetch_json_blocking`**
+### `fetch_json` / `fetch_json_blocking`
 
 | # | Type                     | Meaning                                                        |
 |---|--------------------------|-----------------------------------------------------------------|
@@ -82,7 +82,7 @@ host, timeout, a malformed response) — a materially different failure from
 | 2 | `any`                    | Decoded JSON on success; an error string on failure              |
 | 3 | `vim.SystemCompleted`    | The raw `vim.system` result (`code`, `stdout`, `stderr`, ...)    |
 
-**`fetch_raw` / `fetch_raw_blocking`**
+### `fetch_raw` / `fetch_raw_blocking`
 
 | # | Type                              | Meaning                                                    |
 |---|-----------------------------------|-------------------------------------------------------------|
@@ -90,7 +90,7 @@ host, timeout, a malformed response) — a materially different failure from
 | 2 | `Lib.Net.Curl.RawResponse\|string` | `{status, status_text, headers, body}` on success; an error string on failure |
 | 3 | `vim.SystemCompleted`             | The raw `vim.system` result                                |
 
-**`download` / `download_blocking`**
+### `download` / `download_blocking`
 
 Same shape as `fetch_raw`/`fetch_raw_blocking` — `response.body` is always
 `""`, since the body was written to `dest_path` instead of stdout.
