@@ -30,6 +30,7 @@ local form = require("lib.nvim.ui.kit.form")
 local sync = require("lib.nvim.ui.kit.sync")
 local chooser = require("lib.nvim.ui.kit.chooser")
 local compare = require("lib.nvim.ui.kit.compare")
+local shortlist = require("lib.nvim.ui.kit.shortlist")
 
 local M = {}
 
@@ -124,6 +125,16 @@ function M.picker(opts)
   return picker.open(opts)
 end
 
+--- Open a promptless, stacked list+preview for a short list (a handful of
+--- items) that doesn't need fuzzy search -- preview on top, results below,
+--- both full width. See lib.nvim.ui.kit.shortlist for the `render(item, surface)`
+--- contract (shared with `kit.compare`).
+---@param opts table
+---@return table|nil
+function M.shortlist(opts)
+  return shortlist.open(opts)
+end
+
 --- Pick two items out of one picker and view them side by side (a text diff
 --- viewer, images.nvim's image comparison, …). See lib.nvim.ui.kit.compare
 --- for the three-state flow (SEARCH → MARKED → COMPARE) and the `render`
@@ -185,6 +196,7 @@ local COMPONENTS = {
   confirm = confirm.open,
   menu = menu.open,
   compare = compare.open,
+  shortlist = shortlist.open,
   progress = function(opts)
     return require("lib.nvim.progress").create(opts)
   end,
@@ -192,7 +204,7 @@ local COMPONENTS = {
 
 --- Friendly front door: dispatch on `opts.type` (default "note"). Supported
 --- types: note, viewer, toast, input, live_input, form, select, prompt, picker,
---- confirm, menu, compare, progress.
+--- confirm, menu, compare, shortlist, progress.
 ---@param opts table
 ---@return any
 function M.popup(opts)

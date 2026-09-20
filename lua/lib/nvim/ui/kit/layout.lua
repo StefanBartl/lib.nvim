@@ -201,6 +201,22 @@ M.templates = {
       },
     },
   },
+  -- No prompt row, and preview/results stacked instead of side by side: for
+  -- a short list (a handful of items) that doesn't need fuzzy search, this
+  -- trades the `picker` template's narrow results column for the full
+  -- editor width -- room enough to show a real file path instead of just
+  -- its tail. See `lib.nvim.ui.kit.shortlist`.
+  shortlist = {
+    spec = {
+      width = 0.8,
+      height = 0.8,
+      gap = 0,
+      rows = {
+        { name = "preview", height = 0.6 },
+        { name = "results" },
+      },
+    },
+  },
 }
 
 --- Mount a template by name. `opts.spec` (a partial table) is deep-merged over
