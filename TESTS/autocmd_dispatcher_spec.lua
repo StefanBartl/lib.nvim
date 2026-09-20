@@ -698,6 +698,130 @@ return function(H)
   mute_suite("dispatch_mode", true)
   mute_suite("bypass_mode", false)
 
+  -- Reporting a failure must not be able to break the loop it protects, and must
+  -- not cost what a muted repeat would throw away.
+  ---@param label string
+  ---@param dispatch boolean
+  local function report_suite(label, dispatch)
+    local group = ("spec.dispatcher.report_%s"):format(label)
+    local d = dispatcher.new({
+      event = "User",
+      name = "spec_report_" .. label,
+      group = group,
+      dispatch = dispatch,
+      key = function(ev)
+        return ev.match
+      end,
+    })
+
+    -- `owner` is typed string but never checked; the report must not choke on it.
+    local odd_owner ---@type any
+    odd_owner = true
+    local after, table_errors = 0, 0
+    d.register("Rep", {
+      load = function()
+        error("handler boom")
+      end,
+      owner = odd_owner,
+      priority = 1,
+    })
+    d.register("Rep", {
+      load = function()
+        after = after + 1
+      end,
+      owner = "survivor",
+      priority = 2,
+    })
+    d.register("Long", {
+      load = function()
+        error(("x"):rep(20000))
+      end,
+      owner = "longwinded",
+    })
+    d.register("Tbl", {
+      load = function()
+        table_errors = table_errors + 1
+        error({ code = table_errors }) -- a fresh table each time
+      end,
+      owner = "tabler",
+    })
+    d.attach()
+
+    -- A notifier that throws (a UI plugin that cannot open a window while the
+    -- text is locked) must neither skip the handlers after the failing one nor
+    -- lose the report: it is retried from vim.schedule.
+    local delivered = {}
+    local orig_notify = vim.notify
+    local ran_ok, ran_err = pcall(function()
+      vim.notify = function()
+        error("notifier exploded")
+      end
+      vim.api.nvim_exec_autocmds("User", { pattern = "Rep" })
+      vim.notify = function(msg)
+        delivered[#delivered + 1] = msg
+      end
+      vim.wait(500, function()
+        return #delivered > 0
+      end)
+    end)
+    vim.notify = orig_notify
+    if not ran_ok then
+      error(ran_err, 0)
+    end
+    eq(after, 1, label .. ": a throwing notifier does not skip the handlers after the failing one")
+    eq(#delivered, 1, label .. ": ...and the report is retried, not lost")
+    ok(delivered[1]:find("handler boom", 1, true), label .. ": the retried report is the real one")
+    ok(
+      delivered[1]:find("of true", 1, true),
+      label .. ": a non-string owner does not break the report"
+    )
+
+    -- One message of megabytes would stall the UI and be held as the mute key.
+    local long = capture_notify(function()
+      for _ = 1, 3 do
+        vim.api.nvim_exec_autocmds("User", { pattern = "Long" })
+      end
+    end)
+    eq(#long, 1, label .. ": an oversized error is still reported once, then muted")
+    ok(#long[1] < 5000, label .. ": an oversized error is clipped")
+    ok(long[1]:find("more bytes", 1, true), label .. ": ...and says how much was cut")
+
+    -- Rendering a table is the expensive part of reporting it, and a muted
+    -- repeat would throw the result away: every non-string error of one
+    -- registration is one episode, rendered once.
+    local renders = 0
+    local orig_inspect = vim.inspect
+    local tbl_ok, tbl_err, tbl
+    tbl_ok, tbl_err = pcall(function()
+      vim.inspect = function(...)
+        renders = renders + 1
+        return orig_inspect(...)
+      end
+      tbl = capture_notify(function()
+        for _ = 1, 5 do
+          vim.api.nvim_exec_autocmds("User", { pattern = "Tbl" })
+        end
+      end)
+    end)
+    vim.inspect = orig_inspect
+    if not tbl_ok then
+      error(tbl_err, 0)
+    end
+    eq(table_errors, 5, label .. ": the handler still ran on every event")
+    eq(#tbl, 1, label .. ": five different table errors are one muted episode")
+    eq(renders, 1, label .. ": a muted table error is not rendered again")
+    ok(
+      tbl[1]:find("code = 1", 1, true),
+      label .. ": the one report is the first error, rendered readably"
+    )
+
+    d.detach()
+    pcall(vim.api.nvim_del_augroup_by_name, group)
+  end
+
+  report_suite("dispatch_mode", true)
+  report_suite("bypass_mode", false)
+
   -- `opts.pattern` is documented as the way to keep a miss in C: an event that
   -- does not match must never reach the Lua `key` function, in either mode.
   ---@param label string
