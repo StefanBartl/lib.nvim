@@ -735,6 +735,183 @@ return function(H)
   pattern_suite("dispatch_mode", true)
   pattern_suite("bypass_mode", false)
 
+  -- A key's compiled form is remembered after its first use (bypass mode used to
+  -- rebuild a glob's Lua pattern on every event). The memo must not change what
+  -- matches: not for a glob, not for a plain key, not for one full of Lua
+  -- pattern magic, however often the same keys come round again.
+  ---@param label string
+  ---@param dispatch boolean
+  local function key_match_suite(label, dispatch)
+    local group = ("spec.dispatcher.keymatch_%s"):format(label)
+    local hits = { glob = 0, plain = 0, magic = 0 }
+    local d = dispatcher.new({
+      event = "User",
+      name = "spec_keymatch_" .. label,
+      group = group,
+      dispatch = dispatch,
+      key = function(ev)
+        return ev.match
+      end,
+    })
+    d.register("wk_*", function()
+      hits.glob = hits.glob + 1
+    end)
+    d.register("plain.key", function()
+      hits.plain = hits.plain + 1
+    end)
+    d.register("a-b(c)*", function()
+      hits.magic = hits.magic + 1
+    end)
+    d.attach()
+
+    local keys =
+      { "wk_one", "wk_two", "other", "plain.key", "plainXkey", "a-b(c)tail", "aab(c)tail" }
+    for _ = 1, 3 do
+      for _, key in ipairs(keys) do
+        vim.api.nvim_exec_autocmds("User", { pattern = key })
+      end
+    end
+    eq(
+      hits.glob,
+      6,
+      label .. ": a glob key keeps matching its own prefix, and only that, on repeat"
+    )
+    eq(hits.plain, 3, label .. ": a plain key stays exact -- `.` is not a wildcard")
+    eq(hits.magic, 3, label .. ": Lua pattern magic in a glob key stays literal")
+
+    d.detach()
+    pcall(vim.api.nvim_del_augroup_by_name, group)
+  end
+
+  key_match_suite("dispatch_mode", true)
+  key_match_suite("bypass_mode", false)
+
+  -- The per-key cache is bounded. Keyed on something with an open-ended range (a
+  -- file name, say) it used to grow with every distinct value ever seen.
+  do
+    local group = "spec.dispatcher.cache_bound"
+    local hits = 0
+    local d = dispatcher.new({
+      event = "User",
+      name = "spec_cache_bound",
+      group = group,
+      dispatch = true,
+      key = function(ev)
+        return ev.match
+      end,
+    })
+    d.register("Churn*", function()
+      hits = hits + 1
+    end)
+    d.attach()
+
+    eq(d.stats().cached_keys, 0, "cache: nothing is cached before the first event")
+    vim.api.nvim_exec_autocmds("User", { pattern = "ChurnA" })
+    vim.api.nvim_exec_autocmds("User", { pattern = "ChurnB" })
+    vim.api.nvim_exec_autocmds("User", { pattern = "ChurnA" })
+    eq(d.stats().cached_keys, 2, "cache: one entry per distinct key, however often it repeats")
+
+    d.register("Churn*", function() end)
+    eq(d.stats().cached_keys, 0, "cache: a new registration drops every entry")
+
+    hits = 0
+    local distinct = 600
+    for i = 1, distinct do
+      vim.api.nvim_exec_autocmds("User", { pattern = "Churn" .. i })
+    end
+    eq(hits, distinct, "cache: every distinct key still dispatches while the cache is full")
+    eq(d.stats().cached_keys, 256, "cache: capped at 256 keys, not one per key ever seen")
+
+    -- The first of them was evicted long ago; it resolves again, and correctly.
+    vim.api.nvim_exec_autocmds("User", { pattern = "Churn1" })
+    eq(hits, distinct + 1, "cache: an evicted key resolves again")
+
+    d.detach()
+    pcall(vim.api.nvim_del_augroup_by_name, group)
+  end
+
+  -- A handler that changes the registry while an event is being dispatched.
+  -- Native autocmds skip one deleted mid-event and leave one created mid-event
+  -- for the next; dispatch mode walks a snapshot of its handler list, which
+  -- used to run a just-unregistered handler once more.
+  ---@param label string
+  ---@param dispatch boolean
+  local function inflight_suite(label, dispatch)
+    local group = ("spec.dispatcher.inflight_%s"):format(label)
+    local ran = {}
+    local d = dispatcher.new({
+      event = "User",
+      name = "spec_inflight_" .. label,
+      group = group,
+      dispatch = dispatch,
+      key = function(ev)
+        return ev.match
+      end,
+    })
+    d.register("Drop", {
+      load = function()
+        ran[#ran + 1] = "killer"
+        d.unregister("victim")
+      end,
+      owner = "killer",
+      priority = 1,
+    })
+    d.register("Drop", {
+      load = function()
+        ran[#ran + 1] = "victim"
+      end,
+      owner = "victim",
+      priority = 2,
+    })
+    d.register("Drop", {
+      load = function()
+        ran[#ran + 1] = "bystander"
+      end,
+      owner = "bystander",
+      priority = 3,
+    })
+
+    local added, late = false, 0
+    d.register("Grow", {
+      load = function()
+        if added then
+          return
+        end
+        added = true
+        d.register("Grow", {
+          load = function()
+            late = late + 1
+          end,
+          owner = "grown",
+        })
+      end,
+      owner = "grower",
+      priority = 1,
+    })
+    d.attach()
+
+    vim.api.nvim_exec_autocmds("User", { pattern = "Drop" })
+    eq(
+      table.concat(ran, ","),
+      "killer,bystander",
+      label .. ": a handler unregistered mid-event does not run in that event"
+    )
+    ran = {}
+    vim.api.nvim_exec_autocmds("User", { pattern = "Drop" })
+    eq(table.concat(ran, ","), "killer,bystander", label .. ": nor in any later one")
+
+    vim.api.nvim_exec_autocmds("User", { pattern = "Grow" })
+    eq(late, 0, label .. ": a handler registered mid-event waits for the next event")
+    vim.api.nvim_exec_autocmds("User", { pattern = "Grow" })
+    eq(late, 1, label .. ": and runs from then on")
+
+    d.detach()
+    pcall(vim.api.nvim_del_augroup_by_name, group)
+  end
+
+  inflight_suite("dispatch_mode", true)
+  inflight_suite("bypass_mode", false)
+
   -- The one thing that must DIFFER: how many autocmds back the handlers.
   do
     ---@param dispatch boolean
