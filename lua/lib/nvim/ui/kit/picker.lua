@@ -195,8 +195,14 @@ function M.open(opts)
     )
   end
 
+  -- Per-instance group (matches `resize_group` above): a fixed name here
+  -- would let a second concurrent `M.open()` call -- `kit.picker` mounts no
+  -- singleton and nothing stops a caller from opening one from inside
+  -- another's `on_change`/`on_submit` -- clear the first picker's own
+  -- TextChanged autocmd out from under it on `autocmd.group(name, true)`'s
+  -- clear-on-create, silently killing its debounce while it is still open.
   autocmd.create({ "TextChangedI", "TextChanged" }, schedule_change, {
-    group = autocmd.group("lib_kit_picker", true),
+    group = autocmd.group("lib_kit_picker_" .. prompt.winid, true),
     buffer = prompt.bufnr,
     desc = "lib.nvim.ui.kit.picker: query changed",
   })

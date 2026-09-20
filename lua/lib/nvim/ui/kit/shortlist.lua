@@ -96,8 +96,19 @@ function M.open(opts)
   -- so the preview pane must be torn down from the same lifecycle, not left
   -- to linger behind it -- and this also covers the on_select path above,
   -- since `deliver()` closes the results surface before that callback runs.
+  -- Wired both ways: `results_surf` is `chooser`'s single active instance,
+  -- so a new chooser-based popup taking over already tears this one (and
+  -- hence `preview_surf`, via the callback below) down. But `preview_surf`
+  -- is a plain, focusable surface of its own -- nothing stops the user
+  -- moving focus there and closing it directly (`<C-w>c`, `:q`) -- and
+  -- without this second direction that left `results_surf` open and
+  -- preview-less, its CursorMoved/VimResized autocmds still firing against
+  -- a dead preview.
   results_surf:on_close(function()
     preview_surf:close()
+  end)
+  preview_surf:on_close(function()
+    results_surf:close()
   end)
   if opts.on_close then
     results_surf:on_close(opts.on_close)
