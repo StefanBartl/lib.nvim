@@ -28,7 +28,7 @@ propagating the raw error.
 
 ## Subcommand composer
 
-**The most widely-used module in the whole library — 30+ consuming plugins.**
+### The most widely-used module in the whole library — 30+ consuming plugins.
 Turns the `:VerbFeatureA`/`:VerbFeatureB` anti-pattern into
 `:Verb feature-a`/`:Verb feature-b`: one declarative route-tree spec produces
 one real user command with subcommand dispatch, `<Tab>` completion at every

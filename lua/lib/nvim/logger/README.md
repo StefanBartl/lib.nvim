@@ -15,12 +15,12 @@ log.error("write failed", { path = p, err = err })
 
 | | `notify` | `logger` |
 | --- | --- | --- |
-| Prefixed `info/warn/error/debug` | ✅ | ✅ (via its notify sink, fast-event safe) |
-| Structured context `{ key = val }` | ✗ | ✅ recorded per entry |
-| In-memory history (bounded ring) | ✗ | ✅ `history` records |
-| Persist to a file (JSONL) | ✗ | ✅ `file` sink |
-| Dump on crash | ✗ | ✅ `guard`/`wrap` + `VimLeavePre` flush |
-| Turn off with ~zero cost | ✗ | ✅ global/per-logger/level/tag switches |
+| Prefixed `info/warn/error/debug` | ✓ | ✓ (via its notify sink, fast-event safe) |
+| Structured context `{ key = val }` | ✗ | ✓ recorded per entry |
+| In-memory history (bounded ring) | ✗ | ✓ `history` records |
+| Persist to a file (JSONL) | ✗ | ✓ `file` sink |
+| Dump on crash | ✗ | ✓ `guard`/`wrap` + `VimLeavePre` flush |
+| Turn off with ~zero cost | ✗ | ✓ global/per-logger/level/tag switches |
 
 `notify` is unchanged and still the right tool for a simple user-facing
 message; `logger` composes it.

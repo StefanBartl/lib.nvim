@@ -98,7 +98,7 @@ Properties:
 * the result is cached in an upvalue
 * after the first access, minimal overhead (nil check)
 
-**Note on LSP support:**
+#### Note on LSP support
 
 When using `lazy.module()`, you get a wrapper object of type `Lib.LazyModule`, not the actual module. This means:
 
@@ -144,13 +144,13 @@ Properties:
 * the return value is the module itself, not a wrapper
 * full LSP support through the type annotation
 
-**Difference from `lazy.module()`:**
+#### Difference from `lazy.module()`
 
 * `lazy.module()` returns a wrapper object (type: `Lib.LazyModule`)
 * `lazy.require()` returns the actual module (castable to any type)
 * `lazy.require()` is the recommended variant for modules with a complex API
 
-**Usage with type annotations:**
+#### Usage with type annotations
 
 ```lua
 ---@type WkdNvC.UI.Stl.Modules.LSP.Cfg.Module
@@ -161,7 +161,7 @@ local options = config_mod.get_cfg()
 config_mod.set("debounce_ms", 500)
 ```
 
-**Technical background:**
+#### Technical background
 
 `lazy.require()` internally uses `lazy.module()`, but returns the result of `.get()` directly. The `---@diagnostic disable-next-line: return-type-mismatch` annotation in the module allows the language server to assume the generic type `T` that is defined by the type annotation at the call site.
 

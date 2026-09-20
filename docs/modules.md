@@ -106,7 +106,7 @@ Larger modules carry their own detailed docs. Markdown references sit next to
 the source (good for browsing on GitHub); `:help` pages live in [`doc/`](../doc/)
 and are generated on install by your plugin manager (see [Help docs](help.md)).
 
-**Markdown references**
+### Markdown references
 
 - [`lib.lua.memo`](../lua/lib/lua/memo/README.md) · [`lib.lua.lazy`](../lua/lib/lua/lazy/README.md) · [`lib.lua.time.diff`](../lua/lib/lua/time/diff/README.md)
 - [`lib.nvim.notify`](../lua/lib/nvim/notify/README.md) · [`lib.nvim.window`](../lua/lib/nvim/window/README.md) · [`lib.nvim.ui.kit`](../lua/lib/nvim/ui/kit/README.md) · [`lib.nvim.ui.statusline`](../lua/lib/nvim/ui/statusline/README.md) · [`lib.nvim.ui.list`](../lua/lib/nvim/ui/list/README.md)
@@ -131,7 +131,7 @@ and are generated on install by your plugin manager (see [Help docs](help.md)).
 - [`lib.nvim.vregex`](../lua/lib/nvim/vregex/README.md) · [`lib.nvim.checkpoint`](../lua/lib/nvim/checkpoint/README.md)
 - [`lib.nvim.config.repo_file`](../lua/lib/nvim/config/repo_file/README.md)
 
-**`:help` pages**
+### `:help` pages
 
 - `:help lib.nvim` — overview hub · `:help lib.nvim-modules` — module index
 - `:help lib.nvim-window` · `:help lib.nvim-kit` · `:help lib.nvim-time_diff` · `:help lib.nvim-progress` · `:help lib.nvim-treesitter` · `:help lib.nvim-selection` · `:help lib.nvim-composer` · `:help lib.nvim-spawn-env` · `:help lib.nvim-async` · `:help lib.nvim-strings_width`

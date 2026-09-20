@@ -28,30 +28,30 @@ implementations are added over time.
 Replace `lib/vim/<module>/init.lua` with a real implementation that offers the
 **same public signature** as `lib.nvim.<module>`, but internally uses
 `vim.fn`/Vimscript (`vim.fn.*`, `vim.cmd`, `:command`, `:map`, `execute()` …)
-instead of `vim.api`/`vim.uv`. Then set the status below to ✅.
+instead of `vim.api`/`vim.uv`. Then set the status below to `ported`.
 
 ## Status
 
-| Module                 | Status | Note                                                 |
-| ---------------------- | :----: | ---------------------------------------------------- |
-| `lib.vim.notify`       |   ⬜   | `:echohl`/`echomsg` possible                         |
-| `lib.vim.map`          |   ⬜   | `:map`/`mapset()`                                    |
-| `lib.vim.usercmd`      |   ⬜   | `:command!`                                          |
-| `lib.vim.autocmd`      |   ⬜   | `:autocmd`/`:augroup`                                |
-| `lib.vim.buffer`       |   ⬜   | `getline()`/`setline()`/`bufnr()`                    |
-| `lib.vim.buf_win_tab`  |   ⬜   | `win_*()`/`tabpage*()`                               |
-| `lib.vim.window`       |   ⬜   | `win_*()`                                            |
-| `lib.vim.ui`           |   ⬜   | `popup_*()`/`inputlist()` (involved)                 |
-| `lib.vim.fs`           |   ⬜   | `glob()`/`fnamemodify()`/`filereadable()`            |
-| `lib.vim.cross`        |   ⬜   | `has()`/`system()`/`job_start()`                     |
-| `lib.vim.normalize`    |   ⬜   | `fnamemodify()`/`substitute()`                       |
-| `lib.vim.git`          |   ⬜   | `system()`                                           |
-| `lib.vim.terminal`     |   ⬜   | `term_*()` (Vim) instead of `:terminal` buffer       |
-| `lib.vim.require`      |   ⬜   | only relevant with `+lua`                            |
-| `lib.vim.lua_ls`       |   ⬜   | pure path/string handling, ports well                |
-| `lib.vim.core`         |   ⬜   | `has_exec` → `executable()`; `simple_echo` → `echo`  |
+| Module                 | Status  | Note                                                 |
+| ---------------------- | :-----: | ---------------------------------------------------- |
+| `lib.vim.notify`       |  stub   | `:echohl`/`echomsg` possible                         |
+| `lib.vim.map`          |  stub   | `:map`/`mapset()`                                    |
+| `lib.vim.usercmd`      |  stub   | `:command!`                                          |
+| `lib.vim.autocmd`      |  stub   | `:autocmd`/`:augroup`                                |
+| `lib.vim.buffer`       |  stub   | `getline()`/`setline()`/`bufnr()`                    |
+| `lib.vim.buf_win_tab`  |  stub   | `win_*()`/`tabpage*()`                               |
+| `lib.vim.window`       |  stub   | `win_*()`                                            |
+| `lib.vim.ui`           |  stub   | `popup_*()`/`inputlist()` (involved)                 |
+| `lib.vim.fs`           |  stub   | `glob()`/`fnamemodify()`/`filereadable()`            |
+| `lib.vim.cross`        |  stub   | `has()`/`system()`/`job_start()`                     |
+| `lib.vim.normalize`    |  stub   | `fnamemodify()`/`substitute()`                       |
+| `lib.vim.git`          |  stub   | `system()`                                           |
+| `lib.vim.terminal`     |  stub   | `term_*()` (Vim) instead of `:terminal` buffer       |
+| `lib.vim.require`      |  stub   | only relevant with `+lua`                            |
+| `lib.vim.lua_ls`       |  stub   | pure path/string handling, ports well                |
+| `lib.vim.core`         |  stub   | `has_exec` → `executable()`; `simple_echo` → `echo`  |
 
-Legend: ✅ ported · 🟡 partial · ⬜ stub (placeholder)
+Legend: `ported` · `partial` · `stub` (placeholder)
 
 > Note: much of `lib.nvim.*` builds on functionality that does not exist in
 > classic Vim (e.g. extmarks, `vim.uv`, floating windows). Such parts stay

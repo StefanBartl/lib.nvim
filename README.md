@@ -51,20 +51,20 @@ Start at the [documentation index](docs/README.md) — `lib.nvim` describes the
 same module at several depths, and the index says which one answers which
 question.
 
-**The Basics**
+### The Basics
 
 - [Requirements](docs/installation.md#requirements) — Neovim version, and the (lack of) third-party dependencies.
 - [Installation](docs/installation.md) — plugin dependency vs. config-wide bootstrap.
 - [Quickstart](docs/quickstart.md) — requiring a module directly vs. through the aggregator.
 
-**Reference**
+### Reference
 
 - [Namespaces & modules](docs/modules.md) — every `lib.lua.*` / `lib.nvim.*` module, one line each, with links to per-module docs.
 - [API reference](docs/API/README.md) — function signatures across a whole theme, without opening dozens of files.
 - [Configuration](docs/configuration.md) — the aggregator strategies and their defaults.
 - [Bindings](docs/BINDINGS.md) — the deliberately small user command and autocommand surface, including `:Lib deps` and `:Lib helptags`.
 
-**The Rest**
+### The Rest
 
 - [Features](docs/FEATURES/README.md) — cross-cutting capabilities, written up per theme: why each exists and when to reach for it.
 - [Examples](docs/EXAMPLES/README.md) — runnable scenarios for the larger modules.

@@ -40,7 +40,7 @@ Core entry point. With a `spec`, registers immediately and returns a
 `Handle`. Without one, returns a fluent builder (chain
 `:desc()/:default()/:bang()/:range()/:count()/:buffer()/:route()/:build()`).
 
-**`spec` shape:**
+##### `spec` shape
 ```
 desc?: string                          -- command description
 default?: fun(ctx)                     -- handler for bare :Verb (no route path)
@@ -74,7 +74,7 @@ handle:document(path?: string): boolean ok, string|nil err
 handle:check(): Lib.UserCmd.Composer.CheckResult[]
 ```
 
-**Other module functions:**
+##### Other module functions
 ```
 M.document(path?: string): boolean ok, string|nil err   -- docs for EVERY verb registered in this process
 M.setup(opts?: Lib.UserCmd.Composer.SetupOpts)
@@ -423,7 +423,7 @@ Structured logging, diagnostics and crash-dump facility — richer sibling
 of `lib.nvim.notify`: structured context, bounded in-memory history,
 optional JSONL file sink, crash-dump wiring, near-zero-cost kill switches.
 
-**Module-level (global):**
+### Module-level (global)
 ```
 M.new(opts?: Lib.Logger.Options): Lib.Logger.Instance
   -- opts: name, level (default "debug"), notify_level (default "warn"), file (nil=default path/false=off/string),
@@ -437,7 +437,7 @@ M.tags(): { disabled, only }
 M.loggers(): Lib.Logger.Instance[]
 ```
 
-**Instance methods:**
+### Instance methods
 ```
 inst.log(level, msg, ctx?, call_opts?) / inst.trace/debug/info/warn/error(msg, ctx?, call_opts?)
 inst.set_enabled(on) / inst.is_enabled() / inst.set_level(level)
@@ -472,7 +472,7 @@ M.create(opts?: Lib.Progress.Opts): Lib.Progress.Handle
 default `"auto"` — prefers fidget if installed else notify), `delay_ms`
 (default 150), `level`, `kit_theme`.
 
-**Returned handle:**
+### Returned handle
 ```
 h:update(fields?: { text?, current?, total? })
 h:finish(text?: string)      -- silent no-op if the delay guard never elapsed
@@ -653,7 +653,7 @@ M.to_log_level(v): integer|nil                 -- -> vim.log.levels.*
 M.to_path(v, type_filter?, must_exist?): string|nil
 ```
 
-**Validators, `(ok, val, err)` contract:**
+### Validators, `(ok, val, err)` contract
 ```
 M.as_int(name, v, min, allow_nil): boolean ok, integer|nil val, string|nil err
 M.as_bool(name, v): boolean ok, boolean|nil val, string|nil err   -- only real Lua booleans, no coercion
@@ -662,7 +662,7 @@ M.buf_valid(bufnr): boolean
 M.win_valid(winid): boolean
 ```
 
-**Utilities:**
+### Utilities
 ```
 M.trim(s): string
 M.clamp(n, min, max): number
