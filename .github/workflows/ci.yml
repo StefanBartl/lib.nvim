@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: JohnnyMorganz/stylua-action@v4
+      - uses: JohnnyMorganz/stylua-action@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           # Pinned, not "latest": a stylua release changed formatting behavior
@@ -30,10 +30,11 @@ jobs:
       # this action downloads), so luacheck was never actually reached. Which
       # interpreter runs luacheck is independent of what it checks against —
       # `std = "luajit"` in .luacheckrc is what pins that, and it stays.
-      - uses: leafo/gh-actions-lua@v10
+      - uses: leafo/gh-actions-lua@v13
         with:
+          # Explicit on purpose: v13 moved the action's own default to 5.5.
           luaVersion: "5.4"
-      - uses: leafo/gh-actions-luarocks@v4
+      - uses: leafo/gh-actions-luarocks@v6
       - run: luarocks install luacheck 1.2.0
       - run: luacheck lua TESTS
 
