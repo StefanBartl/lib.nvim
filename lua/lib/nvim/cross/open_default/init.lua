@@ -38,18 +38,6 @@ local function wsl_to_win_path(unix_path)
   return require("lib.nvim.cross.fs.wslpath").to_win(unix_path)
 end
 
----Open `target` (a filesystem path or URL) with the system default handler.
----
----`opts.on_exit`, when given, runs the opener **attached** (via `jobstart`)
----and reports its exit code — the opposite of the default fire-and-forget
----`run_detached` path, whose `ok` return says only that a command was
----dispatched. Absorbed from this repo's former, less complete URL-opener
----module (removed 2026-09-06 once every caller migrated to this function).
----@param target string
----@param opts? { on_exit?: fun(code: integer) }
----@return boolean ok
----@return string|nil err
-
 --- A path `explorer.exe` will actually resolve: absolute, and spelled with
 --- backslashes.
 ---
@@ -78,6 +66,18 @@ local function windows_target(target)
   end
   return (absolute:gsub("/", "\\"))
 end
+
+---Open `target` (a filesystem path or URL) with the system default handler.
+---
+---`opts.on_exit`, when given, runs the opener **attached** (via `jobstart`)
+---and reports its exit code — the opposite of the default fire-and-forget
+---`run_detached` path, whose `ok` return says only that a command was
+---dispatched. Absorbed from this repo's former, less complete URL-opener
+---module (removed 2026-09-06 once every caller migrated to this function).
+---@param target string
+---@param opts? { on_exit?: fun(code: integer) }
+---@return boolean ok
+---@return string|nil err
 return function(target, opts)
   if type(target) ~= "string" or target == "" then
     return false, "empty target"
