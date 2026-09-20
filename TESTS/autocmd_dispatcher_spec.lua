@@ -504,6 +504,65 @@ return function(H)
   shared_suite("dispatch_mode", true)
   shared_suite("bypass_mode", false)
 
+  -- One throwing handler must not silence the ones after it. Plain autocmds
+  -- are independent, so bundling them must not quietly give that up.
+  ---@param label string
+  ---@param dispatch boolean
+  local function isolation_suite(label, dispatch)
+    local group = ("spec.dispatcher.isolation_%s"):format(label)
+    local d = dispatcher.new({
+      event = "User",
+      name = "spec_isolation_" .. label,
+      group = group,
+      dispatch = dispatch,
+      key = function(ev)
+        return ev.match
+      end,
+    })
+
+    local ran = {}
+    d.register("Boom", {
+      load = function()
+        error("deliberate handler failure")
+      end,
+      owner = "thrower",
+      desc = "always throws",
+      priority = 1,
+      once = true,
+    })
+    d.register("Boom", {
+      load = function()
+        ran[#ran + 1] = "after"
+      end,
+      owner = "survivor",
+      desc = "registered after the thrower",
+      priority = 2,
+    })
+    d.attach()
+
+    local reported = {}
+    local orig_notify = vim.notify
+    vim.notify = function(msg)
+      reported[#reported + 1] = msg
+    end
+    vim.api.nvim_exec_autocmds("User", { pattern = "Boom" })
+    vim.api.nvim_exec_autocmds("User", { pattern = "Boom" })
+    vim.notify = orig_notify
+
+    eq(#ran, 2, label .. ": a handler after a throwing one still runs, on every event")
+    eq(#reported, 1, label .. ": a once-handler that throws is reported once, not per event")
+    ok(
+      reported[1]:find("deliberate handler failure", 1, true),
+      label .. ": the error text is reported"
+    )
+
+    d.detach()
+    pcall(vim.api.nvim_del_augroup_by_name, group)
+  end
+
+  isolation_suite("dispatch_mode", true)
+  isolation_suite("bypass_mode", false)
+
   -- The one thing that must DIFFER: how many autocmds back the handlers.
   do
     ---@param dispatch boolean

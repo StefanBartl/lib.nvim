@@ -147,12 +147,11 @@ autocmds are actually behind the handlers.
 ### Where bypass is not a perfect A/B
 
 It reproduces the *shape* this module replaced — N autocmds, each doing its own
-key work — but not byte-for-byte. Four differences, all of which matter more
+key work — but not byte-for-byte. Three differences, all of which matter more
 for "am I measuring the same program" than for day-to-day use:
 
 | | dispatch | bypass |
 | --- | --- | --- |
-| a handler that throws | aborts the rest of that event's handlers | the others still run |
 | `opts.context` | built once per event | built once per *matching handler* |
 | `priority` | honoured on every dispatch | honoured at `attach()`; anything registered later lands last regardless |
 | events | one autocmd on the dispatcher's event list | every handler on the **whole** event list, even if its keys only name one event |
@@ -256,14 +255,21 @@ resolved after a `register()` call, not re-sorted on every dispatch.
 an explicit per-registration id, cleaned up on `BufWipeout` so the tracking
 table doesn't grow unbounded across a long session.
 
+## Errors
+
+A throwing handler does not stop the others. Each handler runs in its
+own `pcall`; a failure is reported once through `lib.nvim.notify` — naming
+the dispatcher, the handler's `owner`, the key and the `register()` call
+site — and the rest of that event's handlers still run, as they would have
+as separate autocmds. Bundling handlers must not quietly cost that
+isolation. `once` is consumed *before* the call, so a handler that keeps
+throwing is reported once per buffer rather than on every event. (A throwing
+`opts.context` is different: it is shared, so it fails the whole event and
+is reported by `lib.nvim.bindings.autocmd.create`'s own wrapper.)
+
 ## What this does not do
 
 - **Not a performance optimization** over plain autocmds for the common
   case — see the top of this file.
 - **Not auto-attach on require.** Nothing runs until `attach()` is called
   explicitly.
-- **No re-wrapping of errors.** Registration goes through
-  `lib.nvim.bindings.autocmd.create`, which already `pcall`-guards the callback and
-  reports failures via `lib.nvim.notify` — a handler error aborts the rest
-  of that dispatch's handler loop for that one event, same as a plain
-  autocmd callback throwing would.

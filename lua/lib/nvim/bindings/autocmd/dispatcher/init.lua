@@ -21,6 +21,8 @@
 
 require("lib.nvim.bindings.autocmd.dispatcher.@types")
 
+local notify = require("lib.nvim.notify").create("[lib.nvim.bindings.autocmd.dispatcher]")
+
 local M = {}
 
 -- `lib.nvim.bindings.autocmd` itself eagerly pulls this module in (`M.dispatcher =
@@ -265,6 +267,36 @@ function M.new(opts)
   end
 
   ---@internal
+  --- Run one handler so that a throw cannot take the rest of the event with it.
+  ---
+  --- Plain autocmds are independent: one that errors leaves its neighbours
+  --- alone. Bundling them behind one autocmd would quietly give that up -- the
+  --- loop in `attach()` would stop at the first throw, and a bug in one feature
+  --- would silence every feature registered after it. So each call is its own
+  --- pcall, reported once with enough to find the culprit (owner, desc, key,
+  --- the `register()` call site).
+  ---
+  --- `once` is consumed BEFORE the call (see `should_run`), so a handler that
+  --- keeps throwing is reported once per buffer, not on every event.
+  ---@param reg Lib.Autocmd.Dispatcher.Registration
+  ---@param ctx Lib.Autocmd.Dispatcher.Ctx
+  ---@return nil
+  local function run_isolated(reg, ctx)
+    local ok, err = pcall(reg.fn, ctx)
+    if not ok then
+      notify.error(
+        ("%s: handler%s for %q failed (registered at %s):\n%s"):format(
+          name,
+          reg.owner and (" of " .. reg.owner) or "",
+          ctx.key,
+          reg.src,
+          err
+        )
+      )
+    end
+  end
+
+  ---@internal
   --- Registrations in dispatch order: priority, then registration id.
   ---@return Lib.Autocmd.Dispatcher.Registration[]
   local function sorted_regs()
@@ -496,7 +528,7 @@ function M.new(opts)
 
       for _, reg in ipairs(matched) do
         if should_run(reg, ev.buf) then
-          reg.fn({ ev = ev, buf = ev.buf, key = concrete_key, context = ctx_value })
+          run_isolated(reg, { ev = ev, buf = ev.buf, key = concrete_key, context = ctx_value })
         end
       end
     end, {
