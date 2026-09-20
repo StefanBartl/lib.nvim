@@ -293,6 +293,15 @@ identical — this is the fix for a real bug found in the nvim-config
 prototype this module is based on (keying `once` by `tostring(load)` there
 silently merges two handlers that share a loader).
 
+Every key must be a string (the empty string is fine: it is what a buffer with
+no filetype resolves to). `register()` refuses anything else on the spot —
+`key #2 must be a string, got boolean` — instead of accepting it. A non-string
+key used to be taken silently and then threw on the first event that reached
+resolution, and on every event after: it took the **whole dispatcher** down, every
+other handler under every other key, with an error from inside the module that
+named nobody. The key list is copied at `register()`, so editing your own table
+afterwards changes nothing.
+
 ## Ordering and `once`
 
 Matched handlers for a given event run in ascending `priority` order (default

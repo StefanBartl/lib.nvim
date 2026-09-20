@@ -912,6 +912,89 @@ return function(H)
   inflight_suite("dispatch_mode", true)
   inflight_suite("bypass_mode", false)
 
+  -- A key that is not a string is refused at register(), at the call that passed
+  -- it. Accepted, it made every event throw from inside `resolve()` -- for every
+  -- key, the good handlers included -- with an error that named nobody.
+  do
+    local group = "spec.dispatcher.keycheck"
+    local d = dispatcher.new({
+      event = "User",
+      name = "spec_keycheck",
+      group = group,
+      key = function(ev)
+        return ev.match
+      end,
+    })
+    local hits = {}
+    local function hit(ctx)
+      hits[ctx.key] = (hits[ctx.key] or 0) + 1
+    end
+
+    --- The error `register(keys)` raises, or nil if it accepted them.
+    ---@param keys any
+    ---@return string|nil
+    local function refusal(keys)
+      -- A closure, not `pcall(d.register, ...)`: the error's position is that of
+      -- register()'s caller, and a C frame (pcall) has none to give.
+      local registered, err = pcall(function()
+        d.register(keys, hit)
+      end)
+      return (not registered) and tostring(err) or nil
+    end
+
+    ok(
+      (refusal(5) or ""):find("autocmd_dispatcher_spec.lua", 1, true),
+      "keycheck: the error names the caller's file, not the dispatcher's"
+    )
+
+    ok(
+      (refusal(5) or ""):find("key #1 must be a string, got number", 1, true),
+      "keycheck: a number is refused, and its position named"
+    )
+    ok(
+      (refusal({ "Fine", true }) or ""):find("key #2 must be a string, got boolean", 1, true),
+      "keycheck: every entry of a list is checked, not only the first"
+    )
+    ok(
+      (refusal({ {} }) or ""):find("key #1 must be a string, got table", 1, true),
+      "keycheck: a nested table is refused"
+    )
+    ok((refusal(nil) or ""):find("at least one key", 1, true), "keycheck: no key is still refused")
+    ok(
+      (refusal({}) or ""):find("at least one key", 1, true),
+      "keycheck: an empty list is still refused"
+    )
+    eq(d.stats().total_handlers, 0, "keycheck: a refused registration leaves nothing behind")
+    eq(refusal(""), nil, "keycheck: the empty string is a legal key -- a buffer with no filetype")
+
+    d.register("Fine", hit)
+    d.attach()
+    local reported = capture_notify(function()
+      vim.api.nvim_exec_autocmds("User", { pattern = "Fine" })
+      vim.api.nvim_exec_autocmds("User", { pattern = "Other" })
+    end)
+    eq(#reported, 0, "keycheck: no event throws after the refusals")
+    eq(hits.Fine, 1, "keycheck: the dispatcher still dispatches after them")
+
+    -- The list is copied: editing the caller's table afterwards must neither
+    -- change what the registration matches nor make it invalid.
+    local keys = { "Copied" }
+    d.register(keys, hit)
+    keys[1] = "Changed"
+    keys[2] = 42
+    reported = capture_notify(function()
+      vim.api.nvim_exec_autocmds("User", { pattern = "Copied" })
+      vim.api.nvim_exec_autocmds("User", { pattern = "Changed" })
+      vim.api.nvim_exec_autocmds("User", { pattern = "Other" })
+    end)
+    eq(#reported, 0, "keycheck: editing the caller's list afterwards breaks nothing")
+    eq(hits.Copied, 1, "keycheck: the registration keeps the keys it was given")
+    eq(hits.Changed, nil, "keycheck: ...and does not pick up the caller's later edit")
+
+    d.detach()
+    pcall(vim.api.nvim_del_augroup_by_name, group)
+  end
+
   -- The one thing that must DIFFER: how many autocmds back the handlers.
   do
     ---@param dispatch boolean
