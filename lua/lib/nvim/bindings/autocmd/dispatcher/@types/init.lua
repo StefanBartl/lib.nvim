@@ -73,7 +73,7 @@
 --- Handle returned by `dispatcher.new()`. Every field is a plain function
 --- (not a method) — call as `handle.register(...)`, not `handle:register(...)`.
 ---@class Lib.Autocmd.Dispatcher.Handle
----@field register fun(key_or_keys: string|string[], handler: Lib.Autocmd.Dispatcher.Handler): Lib.Autocmd.Dispatcher.Handle
+---@field register fun(key_or_keys: string|string[], handler: Lib.Autocmd.Dispatcher.Handler): Lib.Autocmd.Dispatcher.Handle  # throws if there is no key or one is not a string
 ---@field unregister fun(owner: string): integer
 ---@field handlers fun(): Lib.Autocmd.Dispatcher.HandlerInfo[]
 ---@field attach fun(): Lib.Autocmd.Dispatcher.Handle

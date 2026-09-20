@@ -178,6 +178,41 @@ local function key_matches(pattern, candidate)
   return lua_pattern ~= false and candidate:match(lua_pattern) ~= nil
 end
 
+---@internal
+--- Validate `register()`'s key argument, and copy it.
+---
+--- Keys are compared and searched as strings on every event. One that is not
+--- only fails once an event reaches `resolve()` -- and then on every event, for
+--- every key, since resolving walks all registrations: a single bad key takes
+--- the whole dispatcher down, with an error from inside this file that names
+--- nobody. Refusing it here points at the call that passed it.
+---
+--- `error(..., 3)` rather than `assert`: level 3 is the caller of `register()`
+--- (1 = this function, 2 = `register`), so the first line of the message carries
+--- THEIR file:line. A bare `assert` on LuaJIT prefixes the position of the assert
+--- itself, i.e. a line in this file -- the very thing being fixed.
+---
+--- The list is copied so the caller cannot edit it into an invalid one (or,
+--- unnoticed, into a different one) after the check.
+---@param key_or_keys string|string[]
+---@return string[]
+local function checked_keys(key_or_keys)
+  local given = type(key_or_keys) == "table" and key_or_keys or { key_or_keys }
+  if #given == 0 then
+    error("dispatcher.register: at least one key is required", 3)
+  end
+
+  local keys = {}
+  for i = 1, #given do
+    local key = given[i]
+    if type(key) ~= "string" then
+      error(("dispatcher.register: key #%d must be a string, got %s"):format(i, type(key)), 3)
+    end
+    keys[i] = key
+  end
+  return keys
+end
+
 ---@param opts Lib.Autocmd.Dispatcher.Opts
 ---@return Lib.Autocmd.Dispatcher.Handle
 function M.new(opts)
@@ -425,12 +460,13 @@ function M.new(opts)
   --- giving: without an owner a handler can only ever be removed by tearing
   --- the whole dispatcher down, and without a desc the table says
   --- `_(no desc)_`.
+  ---
+  --- Throws if there is no key or one of them is not a string.
   ---@param key_or_keys string|string[]
   ---@param spec Lib.Autocmd.Dispatcher.Handler
   ---@return Lib.Autocmd.Dispatcher.Handle
   function handle.register(key_or_keys, spec)
-    local keys = type(key_or_keys) == "table" and key_or_keys or { key_or_keys }
-    assert(#keys > 0, "dispatcher.register: at least one key is required")
+    local keys = checked_keys(key_or_keys)
 
     local fn, priority, once, owner, desc
     if type(spec) == "function" then
