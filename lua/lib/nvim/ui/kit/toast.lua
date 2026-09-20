@@ -7,6 +7,7 @@
 --- through `active()` — no shared global window state.
 
 local surface = require("lib.nvim.ui.kit.surface")
+local autocmd = require("lib.nvim.bindings.autocmd")
 
 local api = vim.api
 
@@ -84,6 +85,19 @@ function M.open(opts)
 
   return surf
 end
+
+-- Same bug class as PERF-92 (`ui.screenkey`, `lib.nvim.ui.kit.{compare,picker,
+-- chooser}`): `reflow()` only ran when a toast opened or closed, so a
+-- `VimResized` while one was up left it pinned to the corner computed at the
+-- editor's PREVIOUS size until the next open/close reflowed it -- and
+-- `M.open`'s `timeout = 0` disables the auto-dismiss entirely, so that
+-- window is not bounded the way a default 3s toast's is. Registered once at
+-- module load, not per-toast: `reflow()` is already idempotent over an empty
+-- `stack`, so there is nothing to enable/disable.
+autocmd.create("VimResized", reflow, {
+  group = autocmd.group("lib_kit_toast_resize", true),
+  desc = "lib.nvim.ui.kit.toast: keep the stack pinned to its corner",
+})
 
 --- Number of live toasts (also prunes dead ones).
 ---@return integer
