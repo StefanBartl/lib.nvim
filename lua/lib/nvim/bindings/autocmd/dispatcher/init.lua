@@ -16,8 +16,10 @@
 --- for a buffer with no registered handlers it does *more* work than native
 --- autocmds would, not less. In practice the cost is dominated by entering Lua
 --- at all, not by this module's own matching, and it breaks even against N
---- separate autocmds somewhere around 20 handlers. Full benchmark table,
---- method and caveats in README.md.
+--- separate autocmds somewhere around 20 handlers. If every handler shares one
+--- pattern, pass `opts.pattern`: the event is then filtered in C and a miss
+--- costs what a native one does. Full benchmark table, method and caveats in
+--- README.md.
 
 require("lib.nvim.bindings.autocmd.dispatcher.@types")
 

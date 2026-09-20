@@ -4,10 +4,11 @@ One autocmd, many handlers — a generic, event-agnostic dispatcher factory,
 plus a `FileType` convenience wrapper on top.
 
 This README covers the full reasoning, including why this is **not** a
-performance win over plain autocmds for the common case — it genuinely does
-more work per event than native dispatch, and the honest reasons to reach
-for it anyway (uniform lazy-loading, deterministic `priority` ordering,
-per-buffer `once`).
+performance win over plain autocmds for the common case — by default it
+genuinely does more work per event than native dispatch (passing a shared
+[`pattern`](#keeping-the-miss-in-c-pattern) removes that), and the honest
+reasons to reach for it anyway (uniform lazy-loading, deterministic `priority`
+ordering, per-buffer `once`).
 
 ## What it costs — measured
 
@@ -78,6 +79,45 @@ measurement: the flat cost is small enough that it should not decide anything.
 Choose this module for what it actually gives you — deterministic ordering,
 uniform lazy-loading, per-buffer `once` — and not against it for a number you
 will never perceive.
+
+### Keeping the miss in C: `pattern`
+
+Everything above describes the default, `pattern = "*"`: the dispatcher fires for
+every occurrence of the event and does the matching in Lua. If **every handler of
+one dispatcher shares a pattern**, pass it:
+
+```lua
+dispatcher.new({
+  event = "BufEnter",
+  group = "MyFeature",
+  pattern = { "*.md", "*.markdown" },   -- filtered by Neovim, in C
+  key = function(ev) return ev.match end,
+})
+```
+
+`pattern` goes straight to the underlying autocmd, so an event that does not match
+never enters Lua — the miss becomes a native miss again. Same benchmark, rerun
+with a third variant (`scripts/bench_dispatcher.lua`, `disp+pat`; another machine
+than the table at the top, so compare the columns with each other, not with that
+table):
+
+| handlers | native **miss** | dispatcher miss | dispatcher + `pattern` miss |
+| ---: | ---: | ---: | ---: |
+| 1  | 1.8 µs  | 51.0 µs | **1.7 µs** |
+| 5  | 4.0 µs  | 49.5 µs | **1.7 µs** |
+| 20 | 10.2 µs | 50.5 µs | **1.6 µs** |
+| 50 | 26.3 µs | 51.3 µs | **1.5 µs** |
+
+Hits are unchanged: the dispatcher's own hit numbers and the `pattern` ones are the
+same within noise. It even stays flat as handlers are added, because the pattern is
+checked once per dispatcher rather than once per native autocmd.
+
+Two limits. It only works when the pattern is the same for all handlers — a
+dispatcher whose handlers differ in *which* buffers they care about has to keep
+`"*"` and decide in `key`, as `filetree.nvim` does. And `pattern` is the event's
+own native pattern (a filetype for `FileType`, a file name for `BufEnter`, a user
+event name for `User`); it does not replace `key`, which still runs on every hit and
+is what handlers register against. `dispatch = false` (below) honours it too.
 
 ## Usage
 

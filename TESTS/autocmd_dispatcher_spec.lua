@@ -563,6 +563,43 @@ return function(H)
   isolation_suite("dispatch_mode", true)
   isolation_suite("bypass_mode", false)
 
+  -- `opts.pattern` is documented as the way to keep a miss in C: an event that
+  -- does not match must never reach the Lua `key` function, in either mode.
+  ---@param label string
+  ---@param dispatch boolean
+  local function pattern_suite(label, dispatch)
+    local group = ("spec.dispatcher.pattern_%s"):format(label)
+    local key_calls, hits = 0, 0
+    local d = dispatcher.new({
+      event = "User",
+      name = "spec_pattern_" .. label,
+      group = group,
+      dispatch = dispatch,
+      pattern = "PatIn",
+      key = function(ev)
+        key_calls = key_calls + 1
+        return ev.match
+      end,
+    })
+    d.register("PatIn", function()
+      hits = hits + 1
+    end)
+    d.attach()
+
+    vim.api.nvim_exec_autocmds("User", { pattern = "PatOut" })
+    eq(key_calls, 0, label .. ": an event outside `pattern` never enters Lua")
+
+    vim.api.nvim_exec_autocmds("User", { pattern = "PatIn" })
+    eq(hits, 1, label .. ": an event inside `pattern` still dispatches")
+    eq(key_calls, 1, label .. ": `key` still runs on a hit")
+
+    d.detach()
+    pcall(vim.api.nvim_del_augroup_by_name, group)
+  end
+
+  pattern_suite("dispatch_mode", true)
+  pattern_suite("bypass_mode", false)
+
   -- The one thing that must DIFFER: how many autocmds back the handlers.
   do
     ---@param dispatch boolean

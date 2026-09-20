@@ -16,6 +16,15 @@
 -- is for an ordinary file, not for the one buffer a handler cares about, so
 -- the miss path is the one that runs thousands of times a day.
 --
+-- The HIT column is also the "N handlers that all match" case: every native
+-- autocmd there carries the same pattern, so the native side runs all N per
+-- event. Each extra native callback costs well under a microsecond -- the
+-- ~30-45 us is a per-event cost paid once whichever way the handlers are wired.
+--
+-- The third variant, `disp+pat`, passes `pattern` to the dispatcher. When every
+-- handler shares one pattern the event is filtered in C like a native one, and
+-- the miss stops entering Lua at all.
+--
 -- The event is `User`, deliberately. A first attempt used FileType and
 -- measured nothing useful: `nvim_exec_autocmds("FileType", …)` also runs
 -- Neovim's own ftplugin and syntax machinery, which costs ~1.8ms per fire and
@@ -138,8 +147,35 @@ for _, n in ipairs(COUNTS) do
   end)
   d.detach()
 
+  -- ── dispatcher with `pattern`: the same, but filtered in C ──────────────
+  -- Only possible when every handler shares one pattern (the key function
+  -- still runs on a hit). This is what turns the miss back into a native one.
+  local dp = dispatcher.new({
+    event = "User",
+    group = "BenchDispatchPattern",
+    pattern = HIT_KEY,
+    key = function(ev)
+      return ev.match
+    end,
+  })
+  for _ = 1, n do
+    dp.register(HIT_KEY, function()
+      fired = fired + 1
+    end)
+  end
+  dp.attach()
+
+  local pat_hit = measure(RUNS, function()
+    fire(HIT_KEY)
+  end)
+  local pat_miss = measure(RUNS, function()
+    fire(MISS_KEY)
+  end)
+  dp.detach()
+
   row("nativ", n, nat_hit, nat_miss)
   row("dispatch", n, dis_hit, dis_miss)
+  row("disp+pat", n, pat_hit, pat_miss)
   print(
     ("%-10s %-8s %8s %8s   hit x%.2f  miss x%.2f"):format(
       "faktor",
@@ -148,6 +184,16 @@ for _, n in ipairs(COUNTS) do
       "",
       dis_hit / math.max(nat_hit, 0.0001),
       dis_miss / math.max(nat_miss, 0.0001)
+    )
+  )
+  print(
+    ("%-10s %-8s %8s %8s   hit x%.2f  miss x%.2f"):format(
+      "faktor+pat",
+      "",
+      "",
+      "",
+      pat_hit / math.max(nat_hit, 0.0001),
+      pat_miss / math.max(nat_miss, 0.0001)
     )
   )
   print("")
