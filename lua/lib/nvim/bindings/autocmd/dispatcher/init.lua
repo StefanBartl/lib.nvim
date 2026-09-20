@@ -24,6 +24,16 @@
 require("lib.nvim.bindings.autocmd.dispatcher.@types")
 
 local notify = require("lib.nvim.notify").create("[lib.nvim.bindings.autocmd.dispatcher]")
+local lru = require("lib.lua.memo.lru")
+
+--- How many concrete keys one dispatcher keeps a resolved handler list for.
+---
+--- The cache is keyed by whatever `opts.key` returns. For `ev.match` on FileType
+--- that is a few dozen values at most, but nothing stops a caller keying on
+--- `ev.file`, and an unbounded cache then grows with every file ever opened. It
+--- is an LRU, so a busy key space keeps its hot keys and a cold one only costs
+--- a re-resolve.
+local RESOLVED_CACHE_MAX = 256
 
 local M = {}
 
@@ -141,6 +151,16 @@ local function glob_to_lua_pattern(glob)
   return "^" .. escaped .. "$"
 end
 
+--- Key pattern -> its anchored Lua pattern, or `false` for one without a `*`.
+---
+--- Filled lazily, once per distinct key. Bypass mode matches on every event for
+--- every handler, so without this a glob key re-ran two `gsub`s and a concat each
+--- time -- and the "is this a glob" `find` is a lookup now as well. Bounded by
+--- the keys callers register, which are literals in their source, never by
+--- event data.
+---@type table<string, string|false>
+local compiled_keys = {}
+
 ---@internal
 --- Exact match is the fast, common path; `*` triggers glob matching.
 ---@param pattern string
@@ -150,10 +170,12 @@ local function key_matches(pattern, candidate)
   if pattern == candidate then
     return true
   end
-  if not pattern:find("*", 1, true) then
-    return false
+  local lua_pattern = compiled_keys[pattern]
+  if lua_pattern == nil then
+    lua_pattern = pattern:find("*", 1, true) and glob_to_lua_pattern(pattern) or false
+    compiled_keys[pattern] = lua_pattern
   end
-  return candidate:match(glob_to_lua_pattern(pattern)) ~= nil
+  return lua_pattern ~= false and candidate:match(lua_pattern) ~= nil
 end
 
 ---@param opts Lib.Autocmd.Dispatcher.Opts
@@ -171,6 +193,7 @@ function M.new(opts)
   ---@field owner string|nil
   ---@field desc string|nil
   ---@field src string
+  ---@field dead boolean|nil  # set by `unregister()`; an event already in flight skips it
 
   --- What this dispatcher is called in generated docs and introspection.
   local name = opts.name or opts.group or "dispatcher"
@@ -186,11 +209,16 @@ function M.new(opts)
   local next_id = 0
 
   -- Resolved-and-sorted matches per concrete key, e.g. "lua" -> {reg1, reg2}.
-  -- Cleared wholesale on every register() so a repeated key (the common case
-  -- -- the same filetype opened many times) is matched/sorted once, not per
-  -- dispatch.
-  ---@type table<string, Lib.Autocmd.Dispatcher.Registration[]>
-  local resolved_cache = {}
+  -- Dropped wholesale on every register()/unregister() so a repeated key (the
+  -- common case -- the same filetype opened many times) is matched/sorted once,
+  -- not per dispatch. At most RESOLVED_CACHE_MAX keys, least recently used out
+  -- first: the key space is whatever the caller's `opts.key` returns.
+  ---@type Lib.Memo.Lru
+  local resolved_cache = lru.new(RESOLVED_CACHE_MAX)
+
+  local function drop_resolved()
+    resolved_cache = lru.new(RESOLVED_CACHE_MAX)
+  end
 
   -- once-per-buffer tracking. Keyed by real bufnr (a number, not a
   -- GC-collectible value) rather than a weak table, which would silently do
@@ -237,7 +265,7 @@ function M.new(opts)
   ---@param concrete_key string
   ---@return Lib.Autocmd.Dispatcher.Registration[]
   local function resolve(concrete_key)
-    local cached = resolved_cache[concrete_key]
+    local cached = resolved_cache:get(concrete_key)
     if cached then
       return cached
     end
@@ -256,7 +284,7 @@ function M.new(opts)
       return a.id < b.id -- stable tiebreak: registration order
     end)
 
-    resolved_cache[concrete_key] = matched
+    resolved_cache:put(concrete_key, matched)
     return matched
   end
 
@@ -427,7 +455,7 @@ function M.new(opts)
       desc = desc,
       src = caller_site(),
     }
-    resolved_cache = {} -- one new registration can change any key's resolution
+    drop_resolved() -- one new registration can change any key's resolution
 
     -- Bypass mode builds one autocmd per registration up front, so a handler
     -- that arrives after attach() needs its own here. Note that it lands at
@@ -455,6 +483,9 @@ function M.new(opts)
   --- Also forgets the `once`-per-buffer bookkeeping for the removed handlers,
   --- so re-registering the same owner starts clean rather than inheriting
   --- "already ran" from the previous cycle.
+  ---
+  --- Safe to call from inside a handler: a handler removed while an event is
+  --- being dispatched does not run in that event, as with a deleted autocmd.
   ---@param owner string
   ---@return integer removed  # how many registrations were dropped
   function handle.unregister(owner)
@@ -463,6 +494,9 @@ function M.new(opts)
     local kept, dropped = {}, {}
     for _, reg in ipairs(registrations) do
       if reg.owner == owner then
+        -- An event that is running right now holds a snapshot of its handler
+        -- list, taken before this call; `dead` is how it finds out.
+        reg.dead = true
         dropped[#dropped + 1] = reg.id
       else
         kept[#kept + 1] = reg
@@ -474,7 +508,7 @@ function M.new(opts)
     end
 
     registrations = kept
-    resolved_cache = {}
+    drop_resolved()
     for _, seen in pairs(once_seen) do
       for _, id in ipairs(dropped) do
         seen[id] = nil
@@ -562,8 +596,12 @@ function M.new(opts)
 
       local ctx_value = opts.context and opts.context(ev) or nil
 
+      -- `matched` is a snapshot, and a handler can `register()` or
+      -- `unregister()` while it runs. Native autocmds do the same thing there:
+      -- one added mid-event waits for the next event, one removed mid-event is
+      -- skipped (`dead`) rather than run once more.
       for _, reg in ipairs(matched) do
-        if should_run(reg, ev.buf) then
+        if not reg.dead and should_run(reg, ev.buf) then
           run_isolated(reg, { ev = ev, buf = ev.buf, key = concrete_key, context = ctx_value })
         end
       end
@@ -628,6 +666,7 @@ function M.new(opts)
       attached = mode ~= nil,
       mode = mode,
       autocmds = autocmd_id and 1 or vim.tbl_count(per_handler),
+      cached_keys = resolved_cache.size,
     }
   end
 

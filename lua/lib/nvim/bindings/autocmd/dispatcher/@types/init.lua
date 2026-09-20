@@ -68,6 +68,7 @@
 ---@field attached boolean Whether `attach()` has been called (and not yet `detach()`d)
 ---@field mode "dispatch"|"bypass"|nil Which shape `attach()` built; nil while detached
 ---@field autocmds integer How many autocmds back the handlers: 1 in dispatch mode, one per handler in bypass
+---@field cached_keys integer Concrete keys whose resolved handler list is cached right now; capped at 256, least recently used out first
 
 --- Handle returned by `dispatcher.new()`. Every field is a plain function
 --- (not a method) — call as `handle.register(...)`, not `handle:register(...)`.

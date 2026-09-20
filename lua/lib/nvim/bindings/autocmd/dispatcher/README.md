@@ -146,7 +146,7 @@ ft.register("markdown", function(ctx)
 end)
 
 ft.attach()    -- creates the underlying autocmd; idempotent
-ft.stats()     -- { total_keys, total_handlers, keys, attached, mode, autocmds }
+ft.stats()     -- { total_keys, total_handlers, keys, attached, mode, autocmds, cached_keys }
 ft.handlers()  -- every registration, in dispatch order, with desc and call site
 ft.detach()    -- removes it; idempotent, registry survives for a later attach()
 ```
@@ -222,6 +222,14 @@ So anything with a setup/teardown cycle must pass `owner` and call
 `once`-per-buffer bookkeeping for the handlers it drops, so a re-registered
 owner starts clean instead of inheriting "already ran" from the cycle before.
 
+Both `unregister()` and `register()` are safe to call from inside a handler,
+and behave as native autocmds do there: a handler removed while an event is
+being dispatched does not run in that event, and one added meanwhile waits for
+the next. Dispatch mode walks a snapshot of its handler list, so it marks a
+dropped registration dead rather than trust the snapshot. (Before that it ran a
+just-unregistered handler once more; bypass mode never did, since Neovim skips
+a deleted autocmd itself.)
+
 ## `desc`, and the documentation this would otherwise cost
 
 A dispatcher collapses N handlers into **one** autocmd. That means
@@ -290,6 +298,14 @@ silently merges two handlers that share a loader).
 Matched handlers for a given event run in ascending `priority` order (default
 `0`), ties broken by registration order — sorted once when a key is first
 resolved after a `register()` call, not re-sorted on every dispatch.
+
+That resolved list is cached per concrete key, and the cache is bounded: at
+most 256 keys per dispatcher, least recently used out first (`stats().cached_keys`
+shows how many are held). For `FileType` that is far more than there are
+filetypes. It matters for a `key` with an open-ended range — a file name, say —
+where an unbounded cache would grow with every file ever opened; past 256 a
+cold key just costs a re-resolve. A glob key is compiled to its Lua pattern
+once, not on every event.
 
 `once = true` runs a handler at most once **per buffer**, not once globally
 (`nvim_create_autocmd`'s own `once` has no per-buffer equivalent). Tracked by
