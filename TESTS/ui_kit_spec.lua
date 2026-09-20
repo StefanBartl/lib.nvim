@@ -63,6 +63,47 @@ return function(H)
   eq(theme.resolve("spec_preset").border, "single", "user preset registered")
   ok(vim.tbl_contains(theme.presets(), "spec_preset"), "preset listed")
 
+  -- setup() validates rather than silently dropping a bad option: an unknown
+  -- key, a non-table `presets`, or a `default` naming no registered preset
+  -- must all be reported, matching lib.config.setup()'s own contract.
+  do
+    local before_default = theme.default()
+    local warnings = {}
+    local real_notify = vim.notify
+    vim.notify = function(msg, level)
+      warnings[#warnings + 1] = { msg = msg, level = level }
+    end
+
+    ---@type any
+    kit.setup({ default = "drak" })
+    eq(theme.default(), before_default, "setup: unknown default preset name is not applied")
+    eq(#warnings, 1, "setup: the unknown default preset is reported once")
+    ok(
+      warnings[1].msg:find("drak", 1, true) ~= nil,
+      "setup: the report names the bad preset: " .. warnings[1].msg
+    )
+    eq(warnings[1].level, vim.log.levels.WARN, "setup: reported as a warning")
+
+    ---@type any
+    kit.setup({ presets = "not-a-table" })
+    eq(#warnings, 2, "setup: a non-table presets value is reported once")
+
+    ---@type any
+    kit.setup({ preests = { foo = {} } })
+    eq(#warnings, 3, "setup: an unknown top-level key is reported once")
+    ok(
+      warnings[3].msg:find("preests", 1, true) ~= nil,
+      "setup: the report names the unknown key: " .. warnings[3].msg
+    )
+
+    kit.setup({ default = "double" })
+    eq(theme.default(), "double", "setup: a known default preset is still applied")
+    eq(#warnings, 3, "setup: a valid call reports nothing")
+
+    kit.setup({ default = before_default })
+    vim.notify = real_notify
+  end
+
   -- --------------------------------------------------------------- surface
   local s = assert(
     kit.surface.open({ lines = { "hello", "world" }, theme = "double", title = "T" }),
