@@ -93,14 +93,17 @@ function M.open(opts)
 
   ---@internal
   ---Recompute the template's geometry for the current editor size and
-  ---reapply it to both slots -- `layout.compute` is pure, so calling it again
-  ---with the same spec is the whole fix.
+  ---reapply it to every mounted slot -- `layout.compute` is pure, so calling
+  ---it again with the same spec is the whole fix. Keyed off `geo.slots`
+  ---itself, not a hardcoded slot-name list: the picker template also mounts
+  ---a "preview" slot (`layout.templates.picker.spec`) that `M.open` never
+  ---names locally, and a fixed `{"prompt", "results"}` loop silently left it
+  ---stuck at its open-time position and size on every resize.
   local function relayout()
     local geo = layout.compute(layout.templates.picker.spec)
-    for _, name in ipairs({ "prompt", "results" }) do
-      local g = geo.slots[name]
+    for name, g in pairs(geo.slots) do
       local surf = group.slots[name]
-      if g and surf and surf:is_valid() then
+      if surf and surf:is_valid() then
         pcall(api.nvim_win_set_config, surf.winid, g)
       end
     end
@@ -111,13 +114,23 @@ function M.open(opts)
     group = resize_group,
     desc = "lib.nvim.ui.kit.picker: keep the picker sized to the editor",
   })
+  -- Hung off the surface's own close lifecycle, not just `finish_close`:
+  -- `layout.mount`'s `close_all` (wired to every slot's `on_close`) tears the
+  -- picker down when a slot window is closed externally too (a plain `:q`,
+  -- `:close`, `<C-w>c` -- none of which run our own keymaps), and that path
+  -- never called `finish_close`, leaking this augroup and its autocmd for
+  -- the rest of the session. `prompt:close()` always runs as part of
+  -- `close_all`, on every path, so anchoring cleanup to `prompt`'s own
+  -- `on_close` covers all of them, `finish_close` included.
+  prompt:on_close(function()
+    pcall(api.nvim_del_augroup_by_id, resize_group)
+  end)
 
   local function finish_close()
     stop_timer()
     pcall(function()
       vim.cmd("stopinsert")
     end)
-    pcall(api.nvim_del_augroup_by_id, resize_group)
     group.close()
   end
 
