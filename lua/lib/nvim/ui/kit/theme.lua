@@ -10,6 +10,7 @@
 local hl = require("lib.nvim.ui.hl")
 local config = require("lib.nvim.ui.kit.config")
 local autocmd = require("lib.nvim.bindings.autocmd")
+local notify = require("lib.nvim.notify").create("[lib.nvim.ui.kit]")
 
 local M = {}
 
@@ -181,17 +182,47 @@ function M.apply(winid, resolved)
 end
 
 --- Register user presets / change the active default.
+---
+--- Both fields are validated before anything is applied: an unknown top-level
+--- key, a non-table `presets`, or a `default` that names no registered preset
+--- are reported rather than dropped silently -- a typo'd preset name (e.g.
+--- `default = "drak"`) would otherwise leave the active default unchanged
+--- with nothing to say the call had no effect.
 ---@param opts? Lib.UI.Kit.SetupOpts
 function M.setup(opts)
   opts = opts or {}
-  if type(opts.presets) == "table" then
-    for name, spec in pairs(opts.presets) do
-      presets[name] = spec
+
+  for key in pairs(opts) do
+    if key ~= "presets" and key ~= "default" then
+      notify.warn(("kit.setup: unknown option %q ignored"):format(tostring(key)))
     end
   end
-  if type(opts.default) == "string" and presets[opts.default] then
-    default_name = opts.default
+
+  if opts.presets ~= nil then
+    if type(opts.presets) == "table" then
+      for name, spec in pairs(opts.presets) do
+        presets[name] = spec
+      end
+    else
+      notify.warn(
+        ("kit.setup: opts.presets must be a table, got %s — ignored"):format(type(opts.presets))
+      )
+    end
   end
+
+  if opts.default ~= nil then
+    if type(opts.default) == "string" and presets[opts.default] then
+      default_name = opts.default
+    else
+      notify.warn(
+        ("kit.setup: unknown default preset %q — keeping %q"):format(
+          tostring(opts.default),
+          default_name
+        )
+      )
+    end
+  end
+
   -- Re-materialize the active default so links refresh after a colorscheme
   -- change (set up once).
   if not M._colorscheme_hook then
