@@ -109,8 +109,9 @@ table):
 | 50 | 26.3 µs | 51.3 µs | **1.5 µs** |
 
 Hits are unchanged: the dispatcher's own hit numbers and the `pattern` ones are the
-same within noise. It even stays flat as handlers are added, because the pattern is
-checked once per dispatcher rather than once per native autocmd.
+same within noise. The `pattern` miss even stays flat as handlers are added, where
+the native miss grows with them, because the pattern is checked once per dispatcher
+rather than once per native autocmd.
 
 Two limits. It only works when the pattern is the same for all handlers — a
 dispatcher whose handlers differ in *which* buffers they care about has to keep
@@ -298,14 +299,32 @@ table doesn't grow unbounded across a long session.
 ## Errors
 
 A throwing handler does not stop the others. Each handler runs in its
-own `pcall`; a failure is reported once through `lib.nvim.notify` — naming
+own `pcall`; a failure is reported through `lib.nvim.notify` — naming
 the dispatcher, the handler's `owner`, the key and the `register()` call
 site — and the rest of that event's handlers still run, as they would have
 as separate autocmds. Bundling handlers must not quietly cost that
-isolation. `once` is consumed *before* the call, so a handler that keeps
-throwing is reported once per buffer rather than on every event. (A throwing
-`opts.context` is different: it is shared, so it fails the whole event and
-is reported by `lib.nvim.bindings.autocmd.create`'s own wrapper.)
+isolation. Both modes report the same way.
+
+**Reports are muted per registration.** The same error text from the same
+handler is shown once, then hidden until that handler next runs cleanly (a
+failure after that is a new episode and is shown again). `detach()` starts a
+new episode as well. Without the mute, isolation would turn one broken handler
+on a hot event (`CursorMoved`, `TextChanged`) into a notification per event —
+measured: 3 failing handlers over 200 events were 600 notifications. A
+message that differs on every failure (one that embeds a buffer number, say)
+is not the same text and is not muted.
+
+A non-string error (`error({ code = 1 })`, `error(nil)`) is rendered with
+`vim.inspect` rather than as `table: 0x…`.
+
+`once` is consumed *before* the call, so a `once` handler that throws is not
+retried on that buffer.
+
+A throwing `opts.context` is different: it runs outside the per-handler
+`pcall`, so it is not muted and is reported by
+`lib.nvim.bindings.autocmd.create`'s own wrapper. In dispatch mode it is shared
+and fails the whole event; in bypass mode it is built per handler and fails
+only that handler.
 
 ## What this does not do
 

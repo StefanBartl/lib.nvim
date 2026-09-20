@@ -200,6 +200,15 @@ function M.new(opts)
   ---@type table<integer, table<integer, boolean>>
   local once_seen = {}
 
+  -- Last error text reported per registration id, so a handler that fails on
+  -- every event is reported once instead of on every event. Cleared when the
+  -- handler next runs cleanly (a later failure is a new episode and is reported
+  -- again), when its registration is dropped, and on `detach()` -- a re-attach
+  -- is how the dispatcher is ruled in or out as the culprit, and an error still
+  -- muted from before would look like the switch had fixed it.
+  ---@type table<integer, string>
+  local last_error = {}
+
   --- The single dispatch autocmd. `nil` in bypass mode.
   local autocmd_id = nil ---@type integer|nil
   --- Bypass mode: registration id -> its own autocmd id. Empty in dispatch mode.
@@ -275,27 +284,51 @@ function M.new(opts)
   --- alone. Bundling them behind one autocmd would quietly give that up -- the
   --- loop in `attach()` would stop at the first throw, and a bug in one feature
   --- would silence every feature registered after it. So each call is its own
-  --- pcall, reported once with enough to find the culprit (owner, desc, key,
-  --- the `register()` call site).
+  --- pcall, reported with enough to find the culprit (owner, key, the
+  --- `register()` call site).
   ---
-  --- `once` is consumed BEFORE the call (see `should_run`), so a handler that
-  --- keeps throwing is reported once per buffer, not on every event.
+  --- Reporting is muted per registration: the same error text is shown once,
+  --- then hidden until the handler next runs cleanly. Without it isolation makes
+  --- a broken handler on a hot event (`CursorMoved`, `TextChanged`) a
+  --- notification storm, and with N broken handlers N storms -- measured at 600
+  --- `vim.notify` calls for 3 failing handlers over 200 events.
+  ---
+  --- Used by both modes, so bypass behaves like dispatch here.
+  ---
+  --- `once` is consumed BEFORE the call (see `should_run`): a once-handler that
+  --- throws is not retried.
   ---@param reg Lib.Autocmd.Dispatcher.Registration
   ---@param ctx Lib.Autocmd.Dispatcher.Ctx
   ---@return nil
   local function run_isolated(reg, ctx)
     local ok, err = pcall(reg.fn, ctx)
-    if not ok then
-      notify.error(
-        ("%s: handler%s for %q failed (registered at %s):\n%s"):format(
-          name,
-          reg.owner and (" of " .. reg.owner) or "",
-          ctx.key,
-          reg.src,
-          err
-        )
-      )
+    if ok then
+      -- Read before write: assigning nil to an absent key still costs a hash
+      -- insert, and this runs for every handler on every event.
+      if last_error[reg.id] ~= nil then
+        last_error[reg.id] = nil
+      end
+      return
     end
+
+    -- `error({ ... })` and `error(nil)` are legal. Turn the value into text here
+    -- rather than trust `%s` with it: on a PUC-Lua Neovim build `format` raises
+    -- for a table, which would throw out of the very path that isolates throws.
+    local text = type(err) == "string" and err or vim.inspect(err)
+    if last_error[reg.id] == text then
+      return
+    end
+    last_error[reg.id] = text
+
+    notify.error(
+      ("%s: handler%s for %q failed (registered at %s; identical repeats are muted until it runs cleanly):\n%s"):format(
+        name,
+        reg.owner and (" of " .. reg.owner) or "",
+        tostring(ctx.key),
+        reg.src,
+        text
+      )
+    )
   end
 
   ---@internal
@@ -337,7 +370,7 @@ function M.new(opts)
       if not should_run(reg, ev.buf) then
         return
       end
-      reg.fn({
+      run_isolated(reg, {
         ev = ev,
         buf = ev.buf,
         key = concrete_key,
@@ -448,6 +481,7 @@ function M.new(opts)
       end
     end
     for _, id in ipairs(dropped) do
+      last_error[id] = nil
       if per_handler[id] then
         get_autocmd().delete(per_handler[id])
         per_handler[id] = nil
@@ -572,6 +606,7 @@ function M.new(opts)
       autocmd.delete(cleanup_id)
       cleanup_id = nil
     end
+    last_error = {}
     mode = nil
     return handle
   end

@@ -504,6 +504,24 @@ return function(H)
   shared_suite("dispatch_mode", true)
   shared_suite("bypass_mode", false)
 
+  --- Run `fn` with `vim.notify` captured, and always put it back -- an assertion
+  --- or an error inside `fn` must not leave the editor's notify replaced.
+  ---@param fn fun(): nil
+  ---@return string[]
+  local function capture_notify(fn)
+    local reported = {}
+    local orig_notify = vim.notify
+    vim.notify = function(msg)
+      reported[#reported + 1] = msg
+    end
+    local ran_ok, err = pcall(fn)
+    vim.notify = orig_notify
+    if not ran_ok then
+      error(err, 0)
+    end
+    return reported
+  end
+
   -- One throwing handler must not silence the ones after it. Plain autocmds
   -- are independent, so bundling them must not quietly give that up.
   ---@param label string
@@ -540,14 +558,10 @@ return function(H)
     })
     d.attach()
 
-    local reported = {}
-    local orig_notify = vim.notify
-    vim.notify = function(msg)
-      reported[#reported + 1] = msg
-    end
-    vim.api.nvim_exec_autocmds("User", { pattern = "Boom" })
-    vim.api.nvim_exec_autocmds("User", { pattern = "Boom" })
-    vim.notify = orig_notify
+    local reported = capture_notify(function()
+      vim.api.nvim_exec_autocmds("User", { pattern = "Boom" })
+      vim.api.nvim_exec_autocmds("User", { pattern = "Boom" })
+    end)
 
     eq(#ran, 2, label .. ": a handler after a throwing one still runs, on every event")
     eq(#reported, 1, label .. ": a once-handler that throws is reported once, not per event")
@@ -562,6 +576,127 @@ return function(H)
 
   isolation_suite("dispatch_mode", true)
   isolation_suite("bypass_mode", false)
+
+  -- Isolation must not turn one broken handler into a notification storm: the
+  -- same error is reported once, then muted until the handler runs cleanly.
+  -- (Measured before the mute: 3 failing handlers x 200 events = 600 notifies.)
+  ---@param label string
+  ---@param dispatch boolean
+  local function mute_suite(label, dispatch)
+    local group = ("spec.dispatcher.mute_%s"):format(label)
+    local d = dispatcher.new({
+      event = "User",
+      name = "spec_mute_" .. label,
+      group = group,
+      dispatch = dispatch,
+      key = function(ev)
+        return ev.match
+      end,
+    })
+
+    local failing, survivor_runs = true, 0
+    d.register("Mute", {
+      load = function()
+        if failing then
+          error("flaky failure")
+        end
+      end,
+      owner = "flaky",
+      desc = "fails while `failing` is set",
+      priority = 1,
+    })
+    d.register("Mute", {
+      load = function()
+        survivor_runs = survivor_runs + 1
+      end,
+      owner = "survivor",
+      desc = "always fine",
+      priority = 2,
+    })
+    d.attach()
+
+    local function fire()
+      vim.api.nvim_exec_autocmds("User", { pattern = "Mute" })
+    end
+
+    local first = capture_notify(function()
+      for _ = 1, 5 do
+        fire()
+      end
+    end)
+    eq(#first, 1, label .. ": the same error over five events is reported once")
+    eq(survivor_runs, 5, label .. ": muting the report does not skip the handler after it")
+
+    failing = false
+    eq(#capture_notify(fire), 0, label .. ": a clean run reports nothing")
+
+    failing = true
+    eq(
+      #capture_notify(fire),
+      1,
+      label .. ": a failure after a clean run is a new episode and is reported again"
+    )
+
+    -- A re-attach is a new episode too: flipping the dispatch mode is how the
+    -- dispatcher gets ruled in or out as the culprit, and an error still muted
+    -- from before would look like the flip had fixed it.
+    eq(#capture_notify(fire), 0, label .. ": the repeat is muted again")
+    d.detach()
+    d.attach()
+    eq(#capture_notify(fire), 1, label .. ": a re-attach reports a still-failing handler again")
+
+    -- error({ ... }) and error(nil) are legal; the report must not throw, and a
+    -- table should come out readable rather than as an address.
+    local d2 = dispatcher.new({
+      event = "User",
+      name = "spec_nonstring_" .. label,
+      group = group .. "_nonstring",
+      dispatch = dispatch,
+      key = function(ev)
+        return ev.match
+      end,
+    })
+    local after = 0
+    d2.register("NonString", {
+      load = function()
+        error({ code = 42 })
+      end,
+      owner = "table_error",
+      desc = "throws a table",
+      priority = 1,
+    })
+    d2.register("NonString", {
+      load = function()
+        error(nil)
+      end,
+      owner = "nil_error",
+      desc = "throws nil",
+      priority = 2,
+    })
+    d2.register("NonString", {
+      load = function()
+        after = after + 1
+      end,
+      owner = "survivor",
+      desc = "always fine",
+      priority = 3,
+    })
+    d2.attach()
+    local msgs = capture_notify(function()
+      vim.api.nvim_exec_autocmds("User", { pattern = "NonString" })
+    end)
+    eq(after, 1, label .. ": handlers after non-string errors still run")
+    eq(#msgs, 2, label .. ": each non-string error is reported")
+    ok(msgs[1]:find("code = 42", 1, true), label .. ": a table error is rendered readably")
+
+    d.detach()
+    d2.detach()
+    pcall(vim.api.nvim_del_augroup_by_name, group)
+    pcall(vim.api.nvim_del_augroup_by_name, group .. "_nonstring")
+  end
+
+  mute_suite("dispatch_mode", true)
+  mute_suite("bypass_mode", false)
 
   -- `opts.pattern` is documented as the way to keep a miss in C: an event that
   -- does not match must never reach the Lua `key` function, in either mode.

@@ -57,7 +57,7 @@
 ---@field dispatch? boolean `false` builds one plain autocmd per handler instead of one for all of them; overrides `vim.g.lib_nvim_autocmd_dispatch`. Read at `attach()`.
 ---@field desc? string `desc` of the dispatcher's own autocmd; a default is derived from `name`
 ---@field group? string Augroup name, created/looked up via `lib.nvim.bindings.autocmd`
----@field pattern? string|string[] Autocmd pattern; default `"*"` — matching happens in Lua via `key`
+---@field pattern? string|string[] Autocmd pattern, filtered by Neovim in C: an event outside it never reaches `key`. Only valid if every handler shares it; default `"*"` — matching then happens in Lua via `key`
 ---@field key fun(ev: Lib.Autocmd.Args): string|nil Derives the dispatch key from the event (e.g. `function(ev) return ev.match end`); a `nil` return skips dispatch entirely
 ---@field context? fun(ev: Lib.Autocmd.Args): any Optional shared context built once per event, passed to every matched handler as `ctx.context`
 
