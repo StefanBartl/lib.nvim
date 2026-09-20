@@ -200,6 +200,9 @@ function M.open(opts)
   local transitioning = false
   ---@type "search"|"marked"|"compare"
   local current_state = "search"
+  -- Set once the first mount succeeds, cleared (and the augroup dropped) in
+  -- `teardown_and_close` -- see `relayout` below.
+  local resize_group
 
   local debounce_timer
   ---@internal
@@ -244,6 +247,10 @@ function M.open(opts)
   ---@internal
   local function teardown_and_close(a, b)
     unmount()
+    if resize_group then
+      pcall(api.nvim_del_augroup_by_id, resize_group)
+      resize_group = nil
+    end
     fire_close(a, b)
   end
 
@@ -407,6 +414,31 @@ function M.open(opts)
     enter_compare(filtered[sel_idx])
   end
 
+  ---@internal
+  ---Recompute the active state's geometry and reapply it to every mounted
+  ---surface on `VimResized` -- `geo_search`/`geo_marked`/`geo_compare` are
+  ---already keyed by slot name and shaped exactly like
+  ---`nvim_win_set_config`'s opts (see `to_content`), so the only work here is
+  ---picking the one for `current_state` and skipping slots it doesn't have.
+  local function relayout()
+    local geo
+    if current_state == "search" then
+      geo = geo_search()
+    elseif current_state == "marked" then
+      geo = geo_marked()
+    elseif current_state == "compare" then
+      geo = geo_compare()
+    else
+      return
+    end
+    for name, g in pairs(geo) do
+      local s = surfaces[name]
+      if s and s:is_valid() then
+        pcall(api.nvim_win_set_config, s.winid, g)
+      end
+    end
+  end
+
   enter_search = function()
     current_state = "search"
     unmount()
@@ -554,6 +586,17 @@ function M.open(opts)
   end
 
   enter_search()
+
+  -- Wired once the first mount is up, not per-state-transition: the group
+  -- and its one autocmd outlive SEARCH/MARKED/COMPARE alike, `relayout`
+  -- reads `current_state` fresh on every fire.
+  if surfaces.prompt then
+    resize_group = autocmd.group("lib_kit_compare_resize_" .. surfaces.prompt.winid, true)
+    autocmd.create("VimResized", relayout, {
+      group = resize_group,
+      desc = "lib.nvim.ui.kit.compare: keep the active state's geometry matched to the editor",
+    })
+  end
 
   -- `state`/`slots`/`move`/`mark`/`confirm` mirror `kit.picker`'s handle
   -- (`slots`, `move`, `submit`) so the state machine is directly testable

@@ -91,11 +91,33 @@ function M.open(opts)
     end
   end
 
+  ---@internal
+  ---Recompute the template's geometry for the current editor size and
+  ---reapply it to both slots -- `layout.compute` is pure, so calling it again
+  ---with the same spec is the whole fix.
+  local function relayout()
+    local geo = layout.compute(layout.templates.picker.spec)
+    for _, name in ipairs({ "prompt", "results" }) do
+      local g = geo.slots[name]
+      local surf = group.slots[name]
+      if g and surf and surf:is_valid() then
+        pcall(api.nvim_win_set_config, surf.winid, g)
+      end
+    end
+  end
+
+  local resize_group = autocmd.group("lib_kit_picker_resize_" .. prompt.winid, true)
+  autocmd.create("VimResized", relayout, {
+    group = resize_group,
+    desc = "lib.nvim.ui.kit.picker: keep the picker sized to the editor",
+  })
+
   local function finish_close()
     stop_timer()
     pcall(function()
       vim.cmd("stopinsert")
     end)
+    pcall(api.nvim_del_augroup_by_id, resize_group)
     group.close()
   end
 

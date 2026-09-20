@@ -50,6 +50,7 @@
 local surface = require("lib.nvim.ui.kit.surface")
 local map = require("lib.nvim.bindings.keymap")
 local notify = require("lib.nvim.notify").create("[lib.nvim.ui.kit.chooser]")
+local autocmd = require("lib.nvim.bindings.autocmd")
 
 local api = vim.api
 
@@ -83,6 +84,9 @@ local state = {
   hover_row = nil, -- 1-based logical item index currently painted, or nil
   saved_guicursor = nil, -- non-nil while `hide_cursor` is in effect
   saved_mousemoveevent = nil, -- non-nil while `hover` is in effect
+  -- true while the open chooser is centered on the editor (relative =
+  -- "editor" with no explicit row/col) -- see `relayout`.
+  centered = false,
   flash_on_select = false,
   flash_ms = 0,
   flashing = false, -- a pick is lit and its delivery is pending
@@ -335,6 +339,30 @@ local function disable_hover()
 end
 
 ---@internal
+--- Re-center an editor-relative chooser after `VimResized` -- content size
+--- doesn't change, only where the editor's midpoint now is. Cursor/mouse/win
+--- -relative choosers are left alone: their anchor is a point on screen, not
+--- an editor-size fraction, so a resize doesn't make their position stale the
+--- same way (mirrors PERF-92's `ui.screenkey` fix, minus the width/height --
+--- a chooser's size is content-driven, never a fraction of the editor).
+local function relayout()
+  if not state.centered or not M.is_open() then
+    return
+  end
+  local ok, cfg = pcall(api.nvim_win_get_config, state.surf.winid)
+  if not ok then
+    return
+  end
+  pcall(api.nvim_win_set_config, state.surf.winid, {
+    relative = "editor",
+    row = math.max(0, math.floor((vim.o.lines - cfg.height) / 2 - 1)),
+    col = math.max(0, math.floor((vim.o.columns - cfg.width) / 2)),
+    width = cfg.width,
+    height = cfg.height,
+  })
+end
+
+---@internal
 --- Paint every entry's custom highlight spans (once, at open time — entries
 --- never change after that, unlike selection marks which toggle).
 local function render_content_highlights()
@@ -425,6 +453,7 @@ end
 function M.close()
   restore_cursor()
   disable_hover()
+  pcall(vim.api.nvim_del_augroup_by_name, "lib_kit_chooser_resize")
   if state.surf then
     clear_marks()
     clear_flash()
@@ -438,6 +467,7 @@ function M.close()
   state.multi = false
   state.selections = {}
   state.keep_open = false
+  state.centered = false
   state.flashing = false
   state.generation = state.generation + 1
 end
@@ -768,6 +798,13 @@ function M.open(opts)
   state.flash_on_select = opts.flash_on_select == true
   state.flash_ms = opts.flash_ms or FLASH_MS
   state.flashing = false
+  state.centered = opts.relative == "editor" and opts.row == nil and opts.col == nil
+  if state.centered then
+    autocmd.create("VimResized", relayout, {
+      group = autocmd.group("lib_kit_chooser_resize", true),
+      desc = "lib.nvim.ui.kit.chooser: keep an editor-centered chooser centered",
+    })
+  end
 
   render_content_highlights()
 
