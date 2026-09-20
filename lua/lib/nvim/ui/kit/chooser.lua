@@ -817,9 +817,14 @@ function M.open(opts)
   -- The window can also go away without M.close() -- close_on_focus_lost
   -- closes it directly, and `:q` from inside works too -- so the global
   -- 'guicursor'/'mousemoveevent' are restored from the surface's own
-  -- lifecycle, not from the close path alone.
+  -- lifecycle, not from the close path alone. The resize augroup rides the
+  -- same lifecycle, for the same reason: `M.close()`'s own cleanup only
+  -- covers the paths that call it.
   surf:on_close(restore_cursor)
   surf:on_close(disable_hover)
+  surf:on_close(function()
+    pcall(vim.api.nvim_del_augroup_by_name, "lib_kit_chooser_resize")
+  end)
 
   if opts.close_on_focus_lost then
     require("lib.nvim.window.close_on_focus_lost")(surf.winid)
