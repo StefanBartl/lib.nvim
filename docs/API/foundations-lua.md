@@ -517,8 +517,18 @@ M.memoize2(fn: fun(...):any, cap?: integer, keyer?: fun(...):string): fun(...):a
 
 The default key was `table.concat({ ... }, "\31")` until 2026-09-17, which
 threw on every argument `concat` will not take — a boolean, a table, a
-function, a TSNode — and silently merged `f(1)` with `f("1")`. Both are fixed;
-`TESTS/memo_spec.lua` holds the cases.
+function, a TSNode — and silently merged `f(1)` with `f("1")`. Both are fixed.
+
+Each part is also length-prefixed (`<tag><byte-length>:<content>`), not just
+tagged: a bare tag does not stop a string argument from embedding the
+separator plus another part's own tag text and reconstructing byte-for-byte
+into what a different-arity call would have produced — `f("a\31s:b")` and
+`f("a", "b")` collided under the tag-only scheme. The length prefix rules
+that out. The tag lookup itself falls back to `"?"` for a type not in the
+table (LuaJIT's `cdata`, from `ffi.new` or a `vim.uv` handle, is the one such
+type today) rather than indexing into `nil` and throwing from the same place
+the `table.concat` rewrite exists to stop throwing from. `TESTS/memo_spec.lua`
+holds the cases.
 
 **Reference types are keyed by address**, which is only correct while the
 object outlives its cache entry. Addresses get recycled, so a short-lived

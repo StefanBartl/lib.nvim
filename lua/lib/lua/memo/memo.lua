@@ -6,6 +6,15 @@ local LRU = require("lib.lua.memo.lru")
 local M = {}
 
 --- Type tags for `key_of`, so that f(1) and f("1") do not share a cache entry.
+---
+--- Covers Lua's 8 standard types. LuaJIT adds a 9th, `cdata` (any `ffi.new`
+--- value, and the `vim.uv`/`luv` handles that are common in Neovim plugins),
+--- which is not in this table on purpose: every unmapped type falls through
+--- to `UNKNOWN_TAG` in `key_of`/`default_keyer` below rather than indexing
+--- this table and getting nil. A missing key here used to mean
+--- `nil .. #s .. ":" .. s` -- the exact "throws from inside the wrapper"
+--- failure this whole rewrite exists to rule out, just moved to a type this
+--- table's original 8 entries didn't anticipate.
 local TAG = {
   string = "s",
   number = "n",
@@ -17,6 +26,14 @@ local TAG = {
   thread = "c",
 }
 
+--- Tag for any type not in `TAG` above (LuaJIT's `cdata`, or whatever a future
+--- Lua adds). All such types share this one tag, so two values of *different*
+--- unmapped types are distinguished only by their `tostring` -- theoretically
+--- collidable if two different exotic types ever rendered identically, but
+--- that is strictly better than the throw this replaces, and today `cdata` is
+--- the only type that reaches it.
+local UNKNOWN_TAG = "?"
+
 --- Build a cache key from an argument tuple.
 ---
 --- This used to be `table.concat({ ... }, "\31")`, which throws on anything
@@ -24,11 +41,21 @@ local TAG = {
 --- one got `invalid value (userdata) at index 1 in table for 'concat'` from
 --- inside the memo wrapper, nowhere near their own call site.
 ---
---- Two further things the old key got wrong, fixed here because a key that
+--- Further things the old key got wrong, fixed here because a key that
 --- silently collides is worse than one that throws:
 ---   - `f(1)` and `f("1")` produced the same key. Each part is tagged now.
 ---   - `select("#")`, not `#args`: `{ ... }` with a nil in it has no reliable
 ---     length, so `f(nil, 2)` and `f(2)` could land on the same key.
+---   - A tag alone does not stop a string argument from forging a tuple
+---     boundary: `key_of("a\31s:b")` and `key_of("a", "b")` both used to
+---     serialize to `"s:a\31s:b"`, because the "\31" and the next tag's own
+---     text were just more bytes the string was free to contain. Any caller
+---     whose argument content is attacker- or user-influenced (buffer text,
+---     a search query, a path) could use that to make one call read back the
+---     cached value of a different, unrelated call. Each part is length-
+---     prefixed now -- `tag .. #s .. ":" .. s` -- so the boundary is fixed by
+---     a byte count the content cannot rewrite; two encodings can only be
+---     equal if every part, and therefore the arity, was the same.
 ---
 --- Reference types (table, function, userdata, thread) are keyed by address.
 --- That is correct only while the object outlives the cache entry -- addresses
@@ -44,10 +71,11 @@ local function key_of(...)
 
   for i = 1, n do
     local arg = select(i, ...)
-    parts[i] = TAG[type(arg)] .. ":" .. tostring(arg)
+    local s = tostring(arg)
+    parts[i] = (TAG[type(arg)] or UNKNOWN_TAG) .. #s .. ":" .. s
   end
 
-  return table.concat(parts, "\31") -- unit separator
+  return table.concat(parts, "\31") -- unit separator, redundant but readable
 end
 
 --- Memoize a pure function by its argument tuple.
@@ -93,23 +121,31 @@ end
 local function default_keyer(...)
   -- `select("#", ...)`, not `#{ ... }`: a tuple with a nil in it has no
   -- reliable length, so f(nil, 2) and f(2) could produce the same key.
+  --
+  -- Each part is length-prefixed (`tag .. #s .. ":" .. s`), not just tagged --
+  -- see the note on `key_of` for why a tag alone does not stop a string (or a
+  -- table whose `vim.inspect` rendering contains one) from forging a tuple
+  -- boundary and colliding with an unrelated call.
   local n = select("#", ...)
   local parts = {}
 
   for i = 1, n do
     local arg = select(i, ...)
     local t = type(arg)
+    local s
 
     if t == "table" then
       --- CDX: `vim.inspect` here makes `lib.lua.memo` depend on the `vim` API,
       --- CDX: which architecture.md says `lib.lua.*` must not. Only reached by
       --- CDX: `memoize2` without a custom keyer.
-      parts[i] = TAG[t] .. ":" .. vim.inspect(arg)
+      s = vim.inspect(arg)
     else
       -- Everything else by value or, for reference types, by address --
       -- see the note on `key_of` for when that is safe.
-      parts[i] = TAG[t] .. ":" .. tostring(arg)
+      s = tostring(arg)
     end
+
+    parts[i] = (TAG[t] or UNKNOWN_TAG) .. #s .. ":" .. s
   end
 
   return table.concat(parts, "\31") -- unit separator

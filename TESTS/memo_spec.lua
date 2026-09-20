@@ -54,6 +54,17 @@ return function(H)
   ok(pcall(echo, handle), "memo.fn: a userdata argument does not throw")
   handle:close()
 
+  -- LuaJIT's 9th type, absent from the TAG table by name -- an unmapped type
+  -- must fall through to a fallback tag rather than index TAG into nil and
+  -- throw `attempt to concatenate a nil value` from the same place the
+  -- table.concat rewrite was meant to stop throwing from.
+  local ok_ffi, ffi = pcall(require, "ffi")
+  if ok_ffi then
+    local cdata = ffi.new("int[1]")
+    ok(type(cdata) == "cdata", "memo.fn: ffi.new produces LuaJIT's cdata type (sanity check)")
+    ok(pcall(echo, cdata), "memo.fn: a cdata argument does not throw")
+  end
+
   -- --------------------------------------------------- key collisions
   local recorded = {}
   local record = memo.fn(function(v)
@@ -72,6 +83,25 @@ return function(H)
   -- boundary. The type tags keep the two apart.
   eq(sep("a\31b", nil), "a\31b|nil", "memo.fn: a separator inside an argument")
   eq(sep("a", "b"), "a|b", "memo.fn: ...does not collide with a real two-argument call")
+
+  -- A tag alone does not stop the forgery -- it only stops the *untagged*
+  -- version of it. A string that embeds the separator *and* the next part's
+  -- own tag text reconstructs byte-for-byte into what a real two-argument
+  -- call would have produced, unless the length is pinned down too. Before
+  -- the length prefix, `variadic("a\31s:b")` and `variadic("a", "b")` shared
+  -- a key -- a one-argument call read back a two-argument call's cached
+  -- value (or vice versa), which is exactly the "wrong cached value for a
+  -- different call" failure this whole key builder exists to rule out.
+  local forge_calls = 0
+  local variadic = memo.fn(function(...)
+    forge_calls = forge_calls + 1
+    return select("#", ...)
+  end)
+
+  eq(variadic("a", "b"), 2, "memo.fn: a real two-argument call")
+  eq(forge_calls, 1, "memo.fn: ...computed once")
+  eq(variadic("a\31s:b"), 1, "memo.fn: a crafted single argument does not forge that boundary")
+  eq(forge_calls, 2, "memo.fn: ...so it was a miss, not a collision with the two-argument call")
 
   -- A nil in the middle of a tuple has no reliable `#`, so these two used to
   -- be able to land on the same key.
