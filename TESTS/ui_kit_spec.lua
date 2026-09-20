@@ -1349,4 +1349,61 @@ return function(H)
 
   -- popup dispatch: unknown types return nil without throwing
   eq(kit.popup({ type = "does-not-exist" }), nil, "unknown type returns nil (no throw)")
+
+  -- ----------------------------------------------------------- regressions
+  -- (ported from ui.nvim's TESTS/ui_kit_spec.lua)
+
+  -- bug: a second concurrent kit.picker cleared the first one's TextChanged
+  -- autocmd out from under it (both used the same, non-per-instance augroup
+  -- name), silently killing its debounce while it was still open.
+  do
+    local first_changes = {}
+    local first = assert(
+      kit.picker({
+        debounce = 10,
+        on_change = function(q)
+          first_changes[#first_changes + 1] = q
+        end,
+      }),
+      "first picker opens"
+    )
+    local second = assert(
+      kit.picker({
+        debounce = 10,
+        on_change = function() end,
+      }),
+      "second picker opens"
+    )
+
+    vim.api.nvim_buf_set_lines(first.slots.prompt.bufnr, 0, 1, false, { "hello" })
+    vim.api.nvim_exec_autocmds("TextChangedI", { buffer = first.slots.prompt.bufnr })
+    wait_for(function()
+      return #first_changes >= 1
+    end)
+    eq(
+      table.concat(first_changes, ","),
+      "hello",
+      "the first picker's own TextChanged autocmd still fires after a second picker opens"
+    )
+
+    first.close()
+    second.close()
+  end
+
+  -- bug: kit.shortlist only wired results-closes-preview, not the reverse --
+  -- closing the preview pane directly (it is a plain, focusable surface of
+  -- its own) left the results window open and preview-less.
+  do
+    local h = assert(
+      kit.shortlist({
+        items = { "x" },
+        render = function(item, surface)
+          surface:set_lines({ item })
+        end,
+      }),
+      "shortlist opens"
+    )
+    h.preview:close()
+    ok(not h.results:is_valid(), "closing the preview pane directly also closes the results window")
+  end
 end
