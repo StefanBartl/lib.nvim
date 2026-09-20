@@ -78,9 +78,10 @@ function M.open(opts)
     { win = results.winid }
   )
 
-  -- Declared here, stopped in `finish_close` below: closing the picker
-  -- before the debounce fires must not leave a stray timer that calls
-  -- `on_change` on a picker that no longer exists.
+  -- Declared here, stopped in `finish_close` and in `prompt`'s `on_close`
+  -- below: closing the picker before the debounce fires -- whether via our
+  -- own keymaps or an external `:q`/`:close`/`<C-w>c` -- must not leave a
+  -- stray timer that calls `on_change` on a picker that no longer exists.
   local timer
 
   local function stop_timer()
@@ -119,11 +120,14 @@ function M.open(opts)
   -- picker down when a slot window is closed externally too (a plain `:q`,
   -- `:close`, `<C-w>c` -- none of which run our own keymaps), and that path
   -- never called `finish_close`, leaking this augroup and its autocmd for
-  -- the rest of the session. `prompt:close()` always runs as part of
-  -- `close_all`, on every path, so anchoring cleanup to `prompt`'s own
-  -- `on_close` covers all of them, `finish_close` included.
+  -- the rest of the session -- and, for the same reason, leaving the
+  -- debounce timer running to later call `on_change` on buffers that may
+  -- already be gone. `prompt:close()` always runs as part of `close_all`, on
+  -- every path, so anchoring cleanup to `prompt`'s own `on_close` covers all
+  -- of them, `finish_close` included.
   prompt:on_close(function()
     pcall(api.nvim_del_augroup_by_id, resize_group)
+    stop_timer()
   end)
 
   local function finish_close()
