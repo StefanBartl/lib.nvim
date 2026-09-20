@@ -340,7 +340,24 @@ message that differs on every failure (one that embeds a buffer number, say)
 is not the same text and is not muted.
 
 A non-string error (`error({ code = 1 })`, `error(nil)`) is rendered with
-`vim.inspect` rather than as `table: 0x…`.
+`vim.inspect` (three levels deep) rather than as `table: 0x…`. Rendering is the
+expensive part of reporting one — 1.2 ms for a 200-row object, and the mute
+would throw the result away — so **all non-string errors of one registration
+count as one episode**: only the first is rendered and shown, until the handler
+next runs cleanly. (A handler that throws a different table each time is
+therefore reported once, not once per shape; a handler that alternates with a
+string error is reported at each change.) Measured on such a handler: 1674 µs
+per failing event before, 139 µs after — what is left is building the object.
+
+A report is at most 4096 bytes: a longer error text is cut, with the size of
+what was cut appended. A handler's error can carry data it was handed (a
+decode error that quotes a whole buffer), and one message of megabytes would
+stall the UI and be held as the mute key.
+
+Reporting cannot break the loop it protects. If the notifier itself throws — a
+UI plugin that cannot open a window while the text is locked, say — the report
+is retried from `vim.schedule` instead of being lost, and the handlers after
+the failing one still run. (Before, that case skipped them in dispatch mode.)
 
 `once` is consumed *before* the call, so a `once` handler that throws is not
 retried on that buffer.

@@ -35,6 +35,29 @@ local lru = require("lib.lua.memo.lru")
 --- a re-resolve.
 local RESOLVED_CACHE_MAX = 256
 
+--- Longest error text one report shows, in bytes. A handler's error can carry
+--- data it was handed (a decode error that quotes a whole buffer, say), and one
+--- message of megabytes stalls the UI and is then held per registration as the
+--- mute key. Cut, with the size of what was cut, so it stays recognisable.
+local MAX_ERROR_TEXT = 4096
+
+--- Mute key that stands for "a non-string error". Rendering a table is the
+--- expensive part of reporting one (measured: 1.2 ms for a 200-row object, ~100
+--- ms with a 2 MB string field in it) and a muted repeat would throw the result
+--- away -- so all non-string errors of one registration count as one episode,
+--- and only the first is rendered.
+local NON_STRING = {}
+
+---@internal
+---@param text string
+---@return string
+local function clip(text)
+  if #text <= MAX_ERROR_TEXT then
+    return text
+  end
+  return ("%s\n... (%d more bytes)"):format(text:sub(1, MAX_ERROR_TEXT), #text - MAX_ERROR_TEXT)
+end
+
 local M = {}
 
 -- `lib.nvim.bindings.autocmd` itself eagerly pulls this module in (`M.dispatcher =
@@ -263,13 +286,14 @@ function M.new(opts)
   ---@type table<integer, table<integer, boolean>>
   local once_seen = {}
 
-  -- Last error text reported per registration id, so a handler that fails on
-  -- every event is reported once instead of on every event. Cleared when the
-  -- handler next runs cleanly (a later failure is a new episode and is reported
-  -- again), when its registration is dropped, and on `detach()` -- a re-attach
-  -- is how the dispatcher is ruled in or out as the culprit, and an error still
-  -- muted from before would look like the switch had fixed it.
-  ---@type table<integer, string>
+  -- Mute key of the last error reported per registration id -- its (clipped)
+  -- text, or NON_STRING -- so a handler that fails on every event is reported
+  -- once instead of on every event. Cleared when the handler next runs cleanly
+  -- (a later failure is a new episode and is reported again), when its
+  -- registration is dropped, and on `detach()` -- a re-attach is how the
+  -- dispatcher is ruled in or out as the culprit, and an error still muted from
+  -- before would look like the switch had fixed it.
+  ---@type table<integer, string|table>
   local last_error = {}
 
   --- The single dispatch autocmd. `nil` in bypass mode.
@@ -356,6 +380,10 @@ function M.new(opts)
   --- notification storm, and with N broken handlers N storms -- measured at 600
   --- `vim.notify` calls for 3 failing handlers over 200 events.
   ---
+  --- Reporting is also bounded and cannot break the loop it protects: the text
+  --- is clipped, a table error is rendered once per episode, and a notifier that
+  --- itself throws is retried from `vim.schedule`.
+  ---
   --- Used by both modes, so bypass behaves like dispatch here.
   ---
   --- `once` is consumed BEFORE the call (see `should_run`): a once-handler that
@@ -374,24 +402,36 @@ function M.new(opts)
       return
     end
 
-    -- `error({ ... })` and `error(nil)` are legal. Turn the value into text here
-    -- rather than trust `%s` with it: on a PUC-Lua Neovim build `format` raises
-    -- for a table, which would throw out of the very path that isolates throws.
-    local text = type(err) == "string" and err or vim.inspect(err)
-    if last_error[reg.id] == text then
+    -- Everything from here on must not throw: an exception out of this function
+    -- leaves the dispatch loop, which is what the pcall above exists to prevent.
+    --
+    -- `error({ ... })` and `error(nil)` are legal, and on a PUC-Lua Neovim build
+    -- `%s` raises for a table -- so a non-string value is turned into text with
+    -- `vim.inspect` (which never runs user code, so it cannot throw either), and
+    -- only once it is known to be shown.
+    local episode = type(err) == "string" and clip(err) or NON_STRING
+    if last_error[reg.id] == episode then
       return
     end
-    last_error[reg.id] = text
+    last_error[reg.id] = episode
+    local text = episode ~= NON_STRING and episode or clip(vim.inspect(err, { depth = 3 }))
 
-    notify.error(
-      ("%s: handler%s for %q failed (registered at %s; identical repeats are muted until it runs cleanly):\n%s"):format(
-        name,
-        reg.owner and (" of " .. reg.owner) or "",
-        tostring(ctx.key),
-        reg.src,
-        text
-      )
+    local message = ("%s: handler%s for %q failed (registered at %s; identical repeats are muted until it runs cleanly):\n%s"):format(
+      name,
+      reg.owner and (" of " .. tostring(reg.owner)) or "",
+      tostring(ctx.key),
+      reg.src,
+      text
     )
+
+    -- The notifier can throw as well: a UI plugin that cannot open a window
+    -- while the text is locked, say. Try again from a context where it can work
+    -- rather than lose the report -- or the rest of this event's handlers.
+    if not pcall(notify.error, message) then
+      vim.schedule(function()
+        notify.error(message)
+      end)
+    end
   end
 
   ---@internal
