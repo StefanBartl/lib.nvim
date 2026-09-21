@@ -38,15 +38,37 @@ local function git_system(argv)
 end
 
 ---@internal
---- Build `{ bin, ["-C", dir,] ...args }`. An absent or empty `opts.dir` leaves
---- git to use the cwd.
+--- Build `{ bin, ["--no-optional-locks",] ["-C", dir,] ...args }`. An absent or
+--- empty `opts.dir` leaves git to use the cwd.
+---
+--- `opts` must be a table (or nil). A string there is the pre-`opts.dir`
+--- calling convention -- `git_cmd` used to be the first parameter -- and is
+--- rejected loudly: quietly ignoring it would run the default `git` where the
+--- caller asked for a specific binary.
+---
+--- `read_only` adds `--no-optional-locks` for a query that can refresh the
+--- index (`status`): without it git opportunistically takes `index.lock`,
+--- which makes a concurrent `git commit`/`git add` of the user fail with
+--- "index.lock exists" whenever an automatic refresh happens to overlap it.
 ---@param bin string
 ---@param opts Lib.Git.Opts|nil
 ---@param args string[]
+---@param read_only? boolean
 ---@return string[]
-local function git_argv(bin, opts, args)
+local function git_argv(bin, opts, args, read_only)
+  if opts ~= nil and type(opts) ~= "table" then
+    error(
+      ("lib.nvim.git: `opts` must be a table like { dir = ... }, got %s -- `git_cmd` is now the last parameter"):format(
+        type(opts)
+      ),
+      3
+    )
+  end
   local argv = { bin }
-  local dir = type(opts) == "table" and opts.dir or nil
+  if read_only then
+    argv[#argv + 1] = "--no-optional-locks"
+  end
+  local dir = opts and opts.dir or nil
   if dir and dir ~= "" then
     argv[#argv + 1] = "-C"
     argv[#argv + 1] = dir
@@ -89,12 +111,19 @@ function M.current_branch(opts, git_cmd)
 end
 
 --- Check whether the repository is in a detached HEAD state.
+--- `false` outside a repository -- there is no HEAD to be detached.
 ---@param opts? Lib.Git.Opts
 ---@param git_cmd? string
 ---@return boolean
 function M.is_detached_head(opts, git_cmd)
   local out = git_system(git_argv(git_cmd or "git", opts, { "symbolic-ref", "-q", "HEAD" }))
-  return out == nil
+  if out ~= nil then
+    return false
+  end
+  -- No output means either a detached HEAD or that the call failed outright
+  -- (not a repo, git missing); `git_system` cannot tell the two apart, and a
+  -- non-repo is not "detached".
+  return M.in_git_repo(opts, git_cmd)
 end
 
 --- Check whether the working tree has uncommitted changes.
@@ -102,7 +131,7 @@ end
 ---@param git_cmd? string
 ---@return boolean
 function M.is_dirty(opts, git_cmd)
-  local out = git_system(git_argv(git_cmd or "git", opts, { "status", "--porcelain" }))
+  local out = git_system(git_argv(git_cmd or "git", opts, { "status", "--porcelain" }, true))
   return out ~= nil
 end
 
@@ -316,7 +345,7 @@ end
 ---@param bin string
 ---@return string[]
 local function status_argv(opts, bin)
-  return git_argv(bin, opts, { "status", "--porcelain", "-z", "-u" })
+  return git_argv(bin, opts, { "status", "--porcelain", "-z", "-u" }, true)
 end
 
 ---@internal
@@ -326,7 +355,9 @@ end
 ---@return string|nil err
 local function status_result(ok, out)
   if not ok or type(out) ~= "string" then
-    return nil, "git status failed"
+    -- On a failed call `out` is usually empty (git writes its complaint to
+    -- stderr), but a spawn failure (git not on $PATH) puts the reason there.
+    return nil, (type(out) == "string" and vim.trim(out) ~= "") and out or "git status failed"
   end
   return M.parse_status(out), nil
 end
@@ -365,7 +396,10 @@ end
 ---@param git_cmd? string
 ---@return string|nil
 function M.remote_url(remote, opts, git_cmd)
-  return git_system(git_argv(git_cmd or "git", opts, { "remote", "get-url", remote or "origin" }))
+  -- `--`: a remote name is caller data and must not be readable as an option.
+  return git_system(
+    git_argv(git_cmd or "git", opts, { "remote", "get-url", "--", remote or "origin" })
+  )
 end
 
 --- Resolve a path's repository-relative form via `git ls-files --full-name`.

@@ -15,7 +15,7 @@ local git = require("lib.nvim.git")
 git.in_git_repo()          --> boolean
 git.repo_root()            --> absolute path string, or nil
 git.current_branch()       --> branch name, or nil in detached HEAD
-git.is_detached_head()     --> boolean
+git.is_detached_head()     --> boolean (false outside a repo: no HEAD to detach)
 git.is_dirty()             --> boolean (any porcelain status output at all)
 git.is_tracked("src/a.lua")  --> boolean
 git.upstream()             --> "origin/main"-style string, or nil (no upstream)
@@ -49,6 +49,11 @@ git.repo_root({ dir = "/repo/some/sub/dir" }) -- the root of *that* repo
 `opts` comes **before** `git_cmd` in every signature (`is_tracked` takes its
 `path` first). A nonexistent or non-repo `dir` behaves like any other
 non-repo: `nil` / `false`, no error.
+
+Passing a string where `opts` belongs — the old convention, where `git_cmd`
+was the first parameter — **raises** instead of being ignored: silently
+falling back to the default `git` would run a different binary than the one
+the caller asked for.
 
 `git.info(dir)` is the older, one-shot form of the same idea and keeps its
 positional `dir`:
@@ -118,6 +123,14 @@ first — and an `R`/`C` in either status column marks such a two-path entry.
 **Prefer `status_porcelain_async` on any automatic trigger** (a tree refresh on
 every save or focus): the synchronous call freezes the UI for as long as
 `git status` takes, which on a large tree is not nothing.
+
+**Read-only by construction.** `status_porcelain`, its async twin and
+`is_dirty` run `git --no-optional-locks status`. A plain `git status`
+opportunistically refreshes — and rewrites — the index, taking `index.lock`
+while it does; an automatic refresh that overlaps the user's own `git commit`
+or `git add` would then make *that* command fail with "index.lock exists".
+The trade-off is that stale stat data in the index is not repaired as a side
+effect of these calls.
 
 ## Diagnostics cleanup helper
 

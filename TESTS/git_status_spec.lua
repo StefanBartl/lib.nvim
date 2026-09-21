@@ -154,6 +154,28 @@ return function(H)
   H.ok(clean ~= nil, "status_porcelain: a clean tree is a map, not nil")
   H.eq(vim.tbl_count(clean), 0, "status_porcelain: ...and an empty one")
 
+  -- Read-only queries must not take index.lock or rewrite the index: an
+  -- automatic refresh that overlaps the user's own `git commit` would
+  -- otherwise make that commit fail with "index.lock exists". Same-content
+  -- rewrite = an index entry whose stat data is stale, which is exactly what
+  -- a plain `git status` opportunistically refreshes (and writes) the index
+  -- for. (The short wait only guarantees a distinct mtime, it awaits nothing.)
+  do
+    local index_path = repo .. "/.git/index"
+    vim.wait(50)
+    write(repo, "plain.txt")
+    local before = vim.uv.fs_stat(index_path)
+    git.is_dirty({ dir = repo })
+    git.status_porcelain({ dir = repo })
+    local after = vim.uv.fs_stat(index_path)
+    H.ok(
+      before.mtime.sec == after.mtime.sec
+        and before.mtime.nsec == after.mtime.nsec
+        and before.size == after.size,
+      "status_porcelain/is_dirty: read-only, the index file is left untouched"
+    )
+  end
+
   git_run(repo, { "mv", "a b.txt", "c d.txt" })
   git_run(repo, { "mv", "ü.txt", "ö.txt" })
   write(repo, "plain.txt", { "changed" })
@@ -203,6 +225,33 @@ return function(H)
     "in_git_repo({dir}): a nonexistent directory is false, not an error"
   )
   H.eq(git.repo_root({ dir = not_repo }), nil, "repo_root({dir}): nil outside a repo")
+  H.eq(
+    git.is_detached_head({ dir = not_repo }),
+    false,
+    "is_detached_head({dir}): a non-repo has no HEAD to be detached"
+  )
+
+  -- The pre-`opts` calling convention (git_cmd first) must fail loudly: a
+  -- string here used to select the git binary, and ignoring it silently would
+  -- run the default `git` instead.
+  for name, call in pairs({
+    current_branch = function()
+      return git.current_branch("some-git")
+    end,
+    status_porcelain = function()
+      return git.status_porcelain("some-git")
+    end,
+    is_tracked = function()
+      return git.is_tracked("plain.txt", "some-git")
+    end,
+  }) do
+    local ok_call, call_err = pcall(call)
+    H.eq(ok_call, false, name .. ": a string where opts belongs raises")
+    H.ok(
+      tostring(call_err):find("opts", 1, true) ~= nil,
+      name .. ": ...and the message names the parameter"
+    )
+  end
 
   H.eq(git.current_branch({ dir = repo }), "main", "current_branch({dir})")
   H.eq(git.is_detached_head({ dir = repo }), false, "is_detached_head({dir}): on a branch")
@@ -269,6 +318,15 @@ return function(H)
   H.ok(type(err) == "string" and #err > 0, "status_porcelain: ...and says why")
   local ok_call, gone = pcall(git.status_porcelain, { dir = not_repo .. "-gone" })
   H.ok(ok_call and gone == nil, "status_porcelain: a nonexistent directory does not raise")
+
+  -- A git that cannot even be spawned reports why, not a generic message.
+  local no_bin, no_bin_err =
+    git.status_porcelain({ dir = repo }, "definitely-not-a-git-binary-lib-nvim-spec")
+  H.eq(no_bin, nil, "status_porcelain: an unspawnable git is nil")
+  H.ok(
+    type(no_bin_err) == "string" and no_bin_err ~= "git status failed",
+    "status_porcelain: ...with the spawn failure as the error, not the generic fallback"
+  )
 
   -- ── async ────────────────────────────────────────────────────────────
   do
