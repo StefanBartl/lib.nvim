@@ -295,6 +295,23 @@ function M.relative_path(path, opts, git_cmd)
   return git_system(argv)
 end
 
+--- The current ref for an explicit directory: the branch name, or (detached
+--- HEAD) the short commit hash. Two git calls, not three -- prefer this over
+--- `info(dir)` when the tag/version field isn't needed (e.g. deciding what
+--- to link against for a browse URL), since `info` always pays for a third,
+--- unused `git describe --tags --always` call on top.
+---@param dir string
+---@param git_cmd? string
+---@return string|nil
+function M.current_ref(dir, git_cmd)
+  local bin = git_cmd or "git"
+  local branch = git_system({ bin, "-C", dir, "symbolic-ref", "--short", "HEAD" })
+  if branch then
+    return branch
+  end
+  return git_system({ bin, "-C", dir, "rev-parse", "--short", "HEAD" })
+end
+
 --- One blamed line, as `blame_porcelain` returns it.
 ---@class Lib.Git.BlameEntry
 ---@field line integer          1-based final line number in the current file
@@ -365,21 +382,12 @@ local function parse_blame_porcelain(text)
   return entries
 end
 
---- Blame a file (or a line range within it) via `git blame --porcelain`.
----
---- Synchronous, like every other function in this module (`ERR-01`: the
---- underlying `run_blocking_captured` call is a system-boundary shell-out,
---- and `git blame` on a large file can be slow -- callers on a hot path
---- should wrap this in their own async dispatch rather than expect one here).
----@param path string File path, relative to `opts.dir`/the cwd, or absolute.
----@param opts? { first?: integer, last?: integer, dir?: string } `first`/`last` (both required together) restrict to a 1-based inclusive line range; `dir` runs as `git -C <dir>` instead of the cwd.
----@param git_cmd? string
----@return Lib.Git.BlameEntry[]|nil entries  nil only on a git-invocation failure (ERR-10/11: an empty file is `{}`, not nil)
----@return string|nil err
-function M.blame_porcelain(path, opts, git_cmd)
-  opts = opts or {}
-  local bin = git_cmd or "git"
-
+---@internal
+---@param path string
+---@param opts { first?: integer, last?: integer, dir?: string }
+---@param bin string
+---@return string[]
+local function blame_argv(path, opts, bin)
   local argv = { bin }
   if opts.dir and opts.dir ~= "" then
     vim.list_extend(argv, { "-C", opts.dir })
@@ -390,8 +398,15 @@ function M.blame_porcelain(path, opts, git_cmd)
     argv[#argv + 1] = ("%d,%d"):format(opts.first, opts.last)
   end
   vim.list_extend(argv, { "--", path })
+  return argv
+end
 
-  local ok, out = require("lib.nvim.cross.run_argv").run_blocking_captured(argv)
+---@internal
+---@param ok boolean
+---@param out string
+---@return Lib.Git.BlameEntry[]|nil entries
+---@return string|nil err
+local function blame_result(ok, out)
   if not ok then
     return nil, (type(out) == "string" and vim.trim(out) ~= "") and out or "git blame failed"
   end
@@ -399,6 +414,43 @@ function M.blame_porcelain(path, opts, git_cmd)
     return {}, nil
   end
   return parse_blame_porcelain(out), nil
+end
+
+--- Blame a file (or a line range within it) via `git blame --porcelain`.
+---
+--- Synchronous, like every other function in this module (`ERR-01`: the
+--- underlying `run_blocking_captured` call is a system-boundary shell-out,
+--- and `git blame` on a large file can be slow -- prefer `blame_porcelain_async`
+--- on a hot/repeated path, e.g. a `CursorHold`-driven refresh).
+---@param path string File path, relative to `opts.dir`/the cwd, or absolute.
+---@param opts? { first?: integer, last?: integer, dir?: string } `first`/`last` (both required together) restrict to a 1-based inclusive line range; `dir` runs as `git -C <dir>` instead of the cwd.
+---@param git_cmd? string
+---@return Lib.Git.BlameEntry[]|nil entries  nil only on a git-invocation failure (ERR-10/11: an empty file is `{}`, not nil)
+---@return string|nil err
+function M.blame_porcelain(path, opts, git_cmd)
+  opts = opts or {}
+  local argv = blame_argv(path, opts, git_cmd or "git")
+  local ok, out = require("lib.nvim.cross.run_argv").run_blocking_captured(argv)
+  return blame_result(ok, out)
+end
+
+--- Async counterpart to `blame_porcelain` -- LUA-15: prefer this over the
+--- blocking version for any repeated/automatic trigger (a `CursorHold`-
+--- driven current-line blame refresh, in particular), since
+--- `run_blocking_captured` freezes the UI for the call's duration and a
+--- refresh firing on every cursor move is exactly the repeated-blocking-call
+--- pattern that adds up.
+---@param path string File path, relative to `opts.dir`/the cwd, or absolute.
+---@param opts? { first?: integer, last?: integer, dir?: string }
+---@param on_done fun(entries: Lib.Git.BlameEntry[]|nil, err: string|nil)  Always invoked via `vim.schedule` (`run_async_captured`'s own guarantee) -- safe to touch buffers/windows/`vim.fn.*` from it.
+---@param git_cmd? string
+---@return { stop: fun() } handle  Kills the underlying job; harmless to call after it has already finished.
+function M.blame_porcelain_async(path, opts, on_done, git_cmd)
+  opts = opts or {}
+  local argv = blame_argv(path, opts, git_cmd or "git")
+  return require("lib.nvim.cross.run_argv").run_async_captured(argv, function(ok, out)
+    on_done(blame_result(ok, out))
+  end)
 end
 
 --- Create a buffer-scoped function that clears all virtual text
