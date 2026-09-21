@@ -7,6 +7,12 @@
 ---
 --- All functions are intentionally side-effect free and rely only
 --- on invoking the Git CLI.
+---
+--- Every function that has no path of its own to act on takes an optional
+--- `opts.dir` and then runs as `git -C <dir> ...` instead of against the
+--- editor's cwd -- the right default for editor features, wrong for a caller
+--- correlating data with a specific repo (a plugin's own checkout, one row of
+--- a multi-repo overview, a file's containing repo).
 
 local M = {}
 
@@ -31,78 +37,108 @@ local function git_system(argv)
   return out
 end
 
+---@internal
+--- Build `{ bin, ["-C", dir,] ...args }`. An absent or empty `opts.dir` leaves
+--- git to use the cwd.
+---@param bin string
+---@param opts Lib.Git.Opts|nil
+---@param args string[]
+---@return string[]
+local function git_argv(bin, opts, args)
+  local argv = { bin }
+  local dir = type(opts) == "table" and opts.dir or nil
+  if dir and dir ~= "" then
+    argv[#argv + 1] = "-C"
+    argv[#argv + 1] = dir
+  end
+  return vim.list_extend(argv, args)
+end
+
 -- =========================================================
 -- Public API
 -- =========================================================
 
---- Check if the current working directory is inside a Git work-tree.
+--- Options shared by every function that can target a repo other than the cwd.
+---@class Lib.Git.Opts
+---@field dir? string Run as `git -C <dir>` instead of against the cwd.
+
+--- Check if the current working directory (or `opts.dir`) is inside a Git work-tree.
+---@param opts? Lib.Git.Opts
 ---@param git_cmd? string Optional git binary (defaults to "git")
 ---@return boolean
-function M.in_git_repo(git_cmd)
-  local bin = git_cmd or "git"
-  local out = git_system({ bin, "rev-parse", "--is-inside-work-tree" })
+function M.in_git_repo(opts, git_cmd)
+  local out = git_system(git_argv(git_cmd or "git", opts, { "rev-parse", "--is-inside-work-tree" }))
   return out == "true"
 end
 
 --- Get the absolute path to the repository root.
+---@param opts? Lib.Git.Opts
 ---@param git_cmd? string
 ---@return string|nil
-function M.repo_root(git_cmd)
-  local bin = git_cmd or "git"
-  return git_system({ bin, "rev-parse", "--show-toplevel" })
+function M.repo_root(opts, git_cmd)
+  return git_system(git_argv(git_cmd or "git", opts, { "rev-parse", "--show-toplevel" }))
 end
 
 --- Get the current branch name.
 --- Returns nil in detached HEAD state.
+---@param opts? Lib.Git.Opts
 ---@param git_cmd? string
 ---@return string|nil
-function M.current_branch(git_cmd)
-  local bin = git_cmd or "git"
-  return git_system({ bin, "symbolic-ref", "--short", "HEAD" })
+function M.current_branch(opts, git_cmd)
+  return git_system(git_argv(git_cmd or "git", opts, { "symbolic-ref", "--short", "HEAD" }))
 end
 
 --- Check whether the repository is in a detached HEAD state.
+---@param opts? Lib.Git.Opts
 ---@param git_cmd? string
 ---@return boolean
-function M.is_detached_head(git_cmd)
-  local bin = git_cmd or "git"
-  local out = git_system({ bin, "symbolic-ref", "-q", "HEAD" })
+function M.is_detached_head(opts, git_cmd)
+  local out = git_system(git_argv(git_cmd or "git", opts, { "symbolic-ref", "-q", "HEAD" }))
   return out == nil
 end
 
 --- Check whether the working tree has uncommitted changes.
+---@param opts? Lib.Git.Opts
 ---@param git_cmd? string
 ---@return boolean
-function M.is_dirty(git_cmd)
-  local bin = git_cmd or "git"
-  local out = git_system({ bin, "status", "--porcelain" })
+function M.is_dirty(opts, git_cmd)
+  local out = git_system(git_argv(git_cmd or "git", opts, { "status", "--porcelain" }))
   return out ~= nil
 end
 
 --- Check whether the given path is tracked by Git.
----@param path string Absolute or relative path
+---@param path string Absolute path, or relative to `opts.dir`/the cwd.
+---@param opts? Lib.Git.Opts
 ---@param git_cmd? string
 ---@return boolean
-function M.is_tracked(path, git_cmd)
-  local bin = git_cmd or "git"
-  local out = git_system({ bin, "ls-files", "--error-unmatch", path })
+function M.is_tracked(path, opts, git_cmd)
+  local out =
+    git_system(git_argv(git_cmd or "git", opts, { "ls-files", "--error-unmatch", "--", path }))
   return out ~= nil
 end
 
 --- Get the upstream branch of the current branch.
+---@param opts? Lib.Git.Opts
 ---@param git_cmd? string
 ---@return string|nil
-function M.upstream(git_cmd)
-  local bin = git_cmd or "git"
-  return git_system({ bin, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}" })
+function M.upstream(opts, git_cmd)
+  return git_system(
+    git_argv(
+      git_cmd or "git",
+      opts,
+      { "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}" }
+    )
+  )
 end
 
 --- Check whether the current branch is ahead or behind its upstream.
+---@param opts? Lib.Git.Opts
 ---@param git_cmd? string
 ---@return boolean ahead, boolean behind
-function M.ahead_behind(git_cmd)
-  local bin = git_cmd or "git"
-  local out = git_system({ bin, "rev-list", "--left-right", "--count", "HEAD...@{u}" })
+function M.ahead_behind(opts, git_cmd)
+  local out = git_system(
+    git_argv(git_cmd or "git", opts, { "rev-list", "--left-right", "--count", "HEAD...@{u}" })
+  )
   if not out then
     return false, false
   end
@@ -114,20 +150,19 @@ function M.ahead_behind(git_cmd)
 end
 
 --- Get the short hash of HEAD.
+---@param opts? Lib.Git.Opts
 ---@param git_cmd? string
 ---@return string|nil
-function M.head_short_hash(git_cmd)
-  local bin = git_cmd or "git"
-  return git_system({ bin, "rev-parse", "--short", "HEAD" })
+function M.head_short_hash(opts, git_cmd)
+  return git_system(git_argv(git_cmd or "git", opts, { "rev-parse", "--short", "HEAD" }))
 end
 
---- One-shot repo identity snapshot for an arbitrary directory. Unlike every
---- other function here, which reads the current working directory
---- implicitly, this takes an explicit path (`git -C <dir> ...`) — a caller
---- correlating data with *a specific plugin's* repo state (`lib.nvim.
---- telemetry`'s `info` field, for one) usually wants a different repo than
---- whatever the editor's own cwd happens to be, not this one extended with
---- a `cwd` parameter on every existing function above.
+--- One-shot repo identity snapshot for an arbitrary directory. Takes an
+--- explicit path (`git -C <dir> ...`) -- a caller correlating data with *a
+--- specific plugin's* repo state (`lib.nvim.telemetry`'s `info` field, for
+--- one) usually wants a different repo than whatever the editor's own cwd
+--- happens to be. (It predates the `opts.dir` option the functions above now
+--- share, hence its positional `dir`.)
 ---@param dir string Absolute or relative path inside the target repo.
 ---@param git_cmd? string
 ---@return { branch: string|nil, version: string|nil, commit: string|nil }
@@ -227,52 +262,110 @@ function M.refs(dir, opts, git_cmd)
   return out
 end
 
---- Parse `git status --porcelain -u` output into a path -> status-code map.
+--- One path's entry in a `status_porcelain` map.
+---@class Lib.Git.StatusEntry
+---@field code string          Two-character XY status (`" M"`, `"A "`, `"??"`, `"UU"`, ...)
+---@field orig_path string|nil Source path of a rename/copy, nil for every other entry
+
+--- Repo-root-relative path -> status entry. `git status --porcelain` never
+--- honours `status.relativePaths`: paths are always relative to the repository
+--- root, whatever directory git was started in.
+---@alias Lib.Git.StatusMap table<string, Lib.Git.StatusEntry>
+
+--- Parse `git status --porcelain -z -u` output into a path -> entry map.
+---
+--- Pure (no process), so it is headless-testable and reusable by a caller that
+--- runs git itself. Takes the **NUL-separated** (`-z`) form: without `-z` git
+--- C-quotes any path containing a space or a non-ASCII byte (`"a b.txt"`,
+--- `"\303\274.txt"`), and undoing that is guesswork; with it, paths arrive raw.
+---
 --- Handles ordinary XY codes (M/A/D/R/C/U, "??" untracked, "!!" ignored) and
---- rename/copy entries ("R  old -> new" / "C  old -> new"), keying renames
---- by their *new* path while recording the old path alongside the code.
----@param git_cmd? string
----@return table<string, { code: string, orig_path: string|nil }>|nil
-function M.status_porcelain(git_cmd)
-  local bin = git_cmd or "git"
-  local ok, out =
-    require("lib.nvim.cross.run_argv").run_blocking_captured({ bin, "status", "--porcelain", "-u" })
-  if type(out) ~= "string" then
-    return nil
-  end
-  if not ok and out == "" then
-    return nil
+--- rename/copy entries. In `-z` form those are `XY new NUL old NUL` -- the
+--- **destination first** -- and are keyed by the new path with the old one in
+--- `orig_path`. An `R`/`C` in either column marks a two-path entry.
+---@param raw string Output of `git status --porcelain -z`.
+---@return Lib.Git.StatusMap
+function M.parse_status(raw)
+  local result = {} ---@type Lib.Git.StatusMap
+  if type(raw) ~= "string" or raw == "" then
+    return result
   end
 
-  local result = {} ---@type table<string, { code: string, orig_path: string|nil }>
-  for line in out:gmatch("[^\r\n]+") do
-    local code, rest = line:sub(1, 2), line:sub(4)
-    if code ~= "" and rest ~= "" then
-      local orig_path, new_path = rest:match("^(.-)%s*%->%s*(.+)$")
-      if orig_path and new_path then
-        result[new_path] = { code = code, orig_path = orig_path }
+  local fields = vim.split(raw, "\0", { plain = true })
+  local i, n = 1, #fields
+  while i <= n do
+    local entry = fields[i]
+    i = i + 1
+    if #entry >= 4 and entry:sub(3, 3) == " " then
+      local code, path = entry:sub(1, 2), entry:sub(4)
+      local x, y = code:sub(1, 1), code:sub(2, 2)
+      if x == "R" or x == "C" or y == "R" or y == "C" then
+        local orig = fields[i]
+        i = i + 1
+        result[path] = { code = code, orig_path = (orig and orig ~= "") and orig or nil }
       else
-        result[rest] = { code = code, orig_path = nil }
+        result[path] = { code = code, orig_path = nil }
       end
     end
   end
   return result
 end
 
+---@internal
+---@param opts Lib.Git.Opts|nil
+---@param bin string
+---@return string[]
+local function status_argv(opts, bin)
+  return git_argv(bin, opts, { "status", "--porcelain", "-z", "-u" })
+end
+
+---@internal
+---@param ok boolean
+---@param out any
+---@return Lib.Git.StatusMap|nil map
+---@return string|nil err
+local function status_result(ok, out)
+  if not ok or type(out) ~= "string" then
+    return nil, "git status failed"
+  end
+  return M.parse_status(out), nil
+end
+
+--- The working tree's status as a path -> entry map (see `parse_status` for the
+--- shape and the rename handling).
+---
+--- Synchronous: the underlying `run_blocking_captured` freezes the UI for the
+--- call's duration, and `git status` on a large tree is not instant -- prefer
+--- `status_porcelain_async` on any repeated or automatic trigger.
+---@param opts? Lib.Git.Opts
+---@param git_cmd? string
+---@return Lib.Git.StatusMap|nil map  nil only on a git failure (not a repo, git missing); a clean tree is `{}`
+---@return string|nil err
+function M.status_porcelain(opts, git_cmd)
+  local argv = status_argv(opts, git_cmd or "git")
+  return status_result(require("lib.nvim.cross.run_argv").run_blocking_captured(argv))
+end
+
+--- Async counterpart to `status_porcelain` -- for a tree refresh that fires on
+--- every save/focus, where a blocking call adds up.
+---@param opts Lib.Git.Opts|nil
+---@param on_done fun(map: Lib.Git.StatusMap|nil, err: string|nil) Always invoked via `vim.schedule` -- safe to touch buffers, windows and `vim.fn.*`.
+---@param git_cmd? string
+---@return { stop: fun() } handle Kills the underlying job; harmless to call after it has finished.
+function M.status_porcelain_async(opts, on_done, git_cmd)
+  local argv = status_argv(opts, git_cmd or "git")
+  return require("lib.nvim.cross.run_argv").run_async_captured(argv, function(ok, out)
+    on_done(status_result(ok, out))
+  end)
+end
+
 --- Get a configured remote's URL.
 ---@param remote? string Remote name, defaults to "origin".
----@param opts? { dir?: string } `dir` runs as `git -C <dir>` instead of the cwd.
+---@param opts? Lib.Git.Opts `dir` runs as `git -C <dir>` instead of the cwd.
 ---@param git_cmd? string
 ---@return string|nil
 function M.remote_url(remote, opts, git_cmd)
-  opts = opts or {}
-  local bin = git_cmd or "git"
-  local argv = { bin }
-  if opts.dir and opts.dir ~= "" then
-    vim.list_extend(argv, { "-C", opts.dir })
-  end
-  vim.list_extend(argv, { "remote", "get-url", remote or "origin" })
-  return git_system(argv)
+  return git_system(git_argv(git_cmd or "git", opts, { "remote", "get-url", remote or "origin" }))
 end
 
 --- Resolve a path's repository-relative form via `git ls-files --full-name`.
@@ -281,18 +374,11 @@ end
 --- untracked file has no meaningful answer to that (it also cannot be
 --- browsed on the remote, which is this function's original motivation).
 ---@param path string A basename (resolved relative to `opts.dir`) or an absolute path.
----@param opts? { dir?: string }
+---@param opts? Lib.Git.Opts
 ---@param git_cmd? string
 ---@return string|nil
 function M.relative_path(path, opts, git_cmd)
-  opts = opts or {}
-  local bin = git_cmd or "git"
-  local argv = { bin }
-  if opts.dir and opts.dir ~= "" then
-    vim.list_extend(argv, { "-C", opts.dir })
-  end
-  vim.list_extend(argv, { "ls-files", "--full-name", "--", path })
-  return git_system(argv)
+  return git_system(git_argv(git_cmd or "git", opts, { "ls-files", "--full-name", "--", path }))
 end
 
 --- The current ref for an explicit directory: the branch name, or (detached
