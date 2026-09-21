@@ -16,19 +16,183 @@
 --- `render(item, surface)` is the same one-contract rendering `lib.nvim.ui.kit.compare`
 --- uses: fill `surface:set_lines(...)` for text, or draw directly against
 --- `surface.winid`'s geometry for anything else (an image, a diff).
+---
+--- The preview is a real, read-only window (the caller decides how read-only
+--- through `preview_bo`), so it can be worked in, not only looked at:
+---
+---   - from the list, `<C-f>`/`<C-p>` (or <PageDown>/<PageUp>) scroll it one
+---     page, `<C-d>`/`<C-u>` half a page;
+---   - `<Tab>` (and `<C-w>w`, `<C-w><C-w>`, `<C-w>W`) hop between list and
+---     preview -- the cycle is closed on purpose: left alone, `<C-w>w` walks on
+---     into the editor window underneath and leaves the popup stranded on top;
+---   - inside the preview everything that reads works (motions, `/`, visual,
+---     `y`), `<CR>` submits at the cursor line (`on_preview_submit`), `q` and
+---     `<Esc>` close the popup;
+---   - focus leaving both windows for any other one closes the popup;
+---   - the focused window's border is lit and each window carries a footer
+---     with the keys that work in it.
+---
+--- All of it is on by default and switchable: `preview_keys = false` drops the
+--- keys, a group set to `false` (or a list of your own) changes one,
+--- `close_on_leave = false` and `hints = false` the other two.
 
 local layout = require("lib.nvim.ui.kit.layout")
 local chooser = require("lib.nvim.ui.kit.chooser")
 local surface = require("lib.nvim.ui.kit.surface")
 local notify = require("lib.nvim.notify").create("[lib.nvim.ui.kit.shortlist]")
 local autocmd = require("lib.nvim.bindings.autocmd")
+local map = require("lib.nvim.bindings.keymap")
 
 local api = vim.api
 
 local M = {}
 
+---@class Lib.UI.Kit.ShortlistKeys
+---@field scroll_down? string[]|false  # preview, one page down (list and preview)
+---@field scroll_up? string[]|false    # preview, one page up (list and preview)
+---@field half_down? string[]|false    # preview, half a page down
+---@field half_up? string[]|false      # preview, half a page up
+---@field focus? string[]|false        # hop between list and preview
+---@field cycle? string[]|false        # window-cycle keys, kept inside the popup
+---@field close? string[]|false        # close the popup (preview only; the list has its own)
+---@field submit? string[]|false       # submit at the cursor line (preview only)
+
+--- The keys of the preview pane. `<C-p>` scrolls up on purpose although Vim
+--- means "one line up" by it: it pairs with `<C-f>`, and `<C-b>` stays as the
+--- alias for whoever's fingers know Vim's own pair.
+---@type Lib.UI.Kit.ShortlistKeys
+local DEFAULT_KEYS = {
+  scroll_down = { "<C-f>", "<PageDown>" },
+  scroll_up = { "<C-p>", "<C-b>", "<PageUp>" },
+  half_down = { "<C-d>" },
+  half_up = { "<C-u>" },
+  focus = { "<Tab>" },
+  cycle = { "<C-w>w", "<C-w><C-w>", "<C-w>W" },
+  close = { "q", "<Esc>" },
+  submit = { "<CR>" },
+}
+
+--- What each scroll group does to the preview window (Vim's own commands, so a
+--- page is a page as Vim counts it: the window height less two lines of
+--- overlap).
+---@type table<string, string>
+local SCROLL = {
+  scroll_down = "<C-f>",
+  scroll_up = "<C-b>",
+  half_down = "<C-d>",
+  half_up = "<C-u>",
+}
+
+--- The border group of the window that has focus, and of the one that has not.
+local BORDER_FOCUSED = "KitAccent"
+local BORDER_IDLE = "KitBorder"
+
+---@internal
+--- Merge the caller's `preview_keys` over the defaults, group by group. `false`
+--- (as a whole, or for one group) means "none"; a list replaces that group.
+---@param given any
+---@return table<string, string[]>
+local function resolve_keys(given)
+  local out = {}
+  if given == false then
+    return out
+  end
+  local over = type(given) == "table" and given or {}
+  for group, default in pairs(DEFAULT_KEYS) do
+    local v = over[group]
+    if v == nil then
+      out[group] = default
+    elseif type(v) == "table" and #v > 0 then
+      out[group] = v
+    end
+  end
+  return out
+end
+
+---@internal
+--- Point the `FloatBorder` entry of a window's 'winhighlight' at `group`, leaving
+--- every other entry alone (the chooser adds its own `CursorLine` mapping).
+---@param winid integer
+---@param group string
+local function set_border_group(winid, group)
+  if not api.nvim_win_is_valid(winid) then
+    return
+  end
+  local cur = api.nvim_get_option_value("winhighlight", { win = winid })
+  local parts, seen = {}, false
+  for entry in cur:gmatch("[^,]+") do
+    if entry:match("^FloatBorder:") then
+      parts[#parts + 1] = "FloatBorder:" .. group
+      seen = true
+    else
+      parts[#parts + 1] = entry
+    end
+  end
+  if not seen then
+    parts[#parts + 1] = "FloatBorder:" .. group
+  end
+  pcall(api.nvim_set_option_value, "winhighlight", table.concat(parts, ","), { win = winid })
+end
+
+---@internal
+--- The footer text of one window: the keys that work there, as configured. A
+--- group that is off leaves its hint out.
+---@param keys table<string, string[]>
+---@param in_preview boolean
+---@return string
+local function hint_text(keys, in_preview)
+  local parts = {}
+  if keys.scroll_down and keys.scroll_up then
+    parts[#parts + 1] = keys.scroll_down[1] .. "/" .. keys.scroll_up[1] .. " scroll"
+  end
+  if in_preview then
+    parts[#parts + 1] = "y copy"
+    if keys.submit then
+      parts[#parts + 1] = keys.submit[1] .. " open at line"
+    end
+    if keys.focus then
+      parts[#parts + 1] = keys.focus[1] .. " list"
+    end
+    if keys.close then
+      parts[#parts + 1] = keys.close[1] .. " close"
+    end
+  else
+    if keys.focus then
+      parts[#parts + 1] = keys.focus[1] .. " preview"
+    end
+    -- The list's own keys: the chooser binds these itself.
+    parts[#parts + 1] = "<CR> open"
+    parts[#parts + 1] = "q close"
+  end
+  return " " .. table.concat(parts, "  ") .. " "
+end
+
+---@internal
+--- Put `text` in the window's footer -- only where the float has a border to
+--- carry one.
+---@param winid integer
+---@param text string
+local function set_footer(winid, text)
+  if not api.nvim_win_is_valid(winid) then
+    return
+  end
+  local border = api.nvim_win_get_config(winid).border
+  if type(border) ~= "table" or #border == 0 then
+    return
+  end
+  pcall(api.nvim_win_set_config, winid, {
+    footer = { { text, "KitMuted" } },
+    footer_pos = "center",
+  })
+end
+
 --- Open a promptless, stacked list+preview.
----@param opts table  # { items, format_item?(item, width)->string, render(item, surface), on_submit?(item, idx), on_close?(), title?, preview_title?, preview_filetype?, preview_bo?, theme?, initial_index?, spec? }
+---
+--- `opts.on_preview_submit(item, idx, pos)` runs for <CR> inside the preview,
+--- after the popup has closed; `pos` is `{ row = <1-based>, col = <0-based> }`,
+--- the preview cursor, so a file preview can open the file at that line. Without
+--- it, <CR> in the preview falls back to `on_submit(item, idx)`.
+---@param opts table  # { items, format_item?(item, width)->string, render(item, surface), on_submit?(item, idx), on_preview_submit?(item, idx, pos), on_close?(), title?, preview_title?, preview_filetype?, preview_bo?, theme?, initial_index?, spec?, preview_keys?: Lib.UI.Kit.ShortlistKeys|false, close_on_leave?: boolean, hints?: boolean }
 ---@return table|nil handle  # { close(), current_item(), current_index(), results, preview }
 function M.open(opts)
   opts = opts or {}
@@ -128,6 +292,39 @@ function M.open(opts)
     buffer = results_surf.bufnr,
     desc = "lib.nvim.ui.kit.shortlist: keep the preview in sync with the selection",
   })
+
+  local keys = resolve_keys(opts.preview_keys)
+  local hints = opts.hints ~= false
+
+  --- Both windows still there? (A close callback may run mid-way.)
+  ---@return boolean
+  local function alive()
+    return results_surf:is_valid() and preview_surf:is_valid()
+  end
+
+  local function apply_hints()
+    if not (hints and alive()) then
+      return
+    end
+    set_footer(results_surf.winid, hint_text(keys, false))
+    set_footer(preview_surf.winid, hint_text(keys, true))
+  end
+
+  local function update_focus()
+    if not (hints and alive()) then
+      return
+    end
+    local cur = api.nvim_get_current_win()
+    set_border_group(
+      results_surf.winid,
+      cur == results_surf.winid and BORDER_FOCUSED or BORDER_IDLE
+    )
+    set_border_group(
+      preview_surf.winid,
+      cur == preview_surf.winid and BORDER_FOCUSED or BORDER_IDLE
+    )
+  end
+
   autocmd.create("VimResized", function()
     local g = layout.compute(spec)
     if results_surf:is_valid() then
@@ -149,13 +346,129 @@ function M.open(opts)
     if preview_surf:is_valid() then
       pcall(api.nvim_win_set_config, preview_surf.winid, g.slots.preview)
     end
+    apply_hints()
   end, {
     group = sync_group,
     desc = "lib.nvim.ui.kit.shortlist: keep the list sized to the editor",
   })
+
+  -- ---------------------------------------------------------------- focus
+
+  --- Hop between the two windows: the list's <Tab>, and the window-cycle keys
+  --- (`<C-w>w` and friends), which would otherwise walk on into the editor.
+  local function toggle_focus()
+    if not alive() then
+      return
+    end
+    if api.nvim_get_current_win() == preview_surf.winid then
+      results_surf:focus()
+    else
+      preview_surf:focus()
+    end
+  end
+
+  --- Focus left both popup windows for some other one (a click into the editor,
+  --- `<C-w>j`, a tab switch): the popup is not wanted any more. Checked after
+  --- the event, since a window switch can pass through a window on its way.
+  local function close_when_left()
+    vim.schedule(function()
+      if not alive() then
+        return
+      end
+      local cur = api.nvim_get_current_win()
+      if cur ~= results_surf.winid and cur ~= preview_surf.winid then
+        results_surf:close()
+      end
+    end)
+  end
+
+  autocmd.create("WinEnter", function()
+    update_focus()
+    if opts.close_on_leave ~= false then
+      close_when_left()
+    end
+  end, {
+    group = sync_group,
+    desc = "lib.nvim.ui.kit.shortlist: light the focused window, close when focus leaves",
+  })
+
+  -- --------------------------------------------------------------- scrolling
+
+  --- Scroll the preview by one of the SCROLL groups, whichever window the
+  --- caller is in.
+  ---@param group string
+  local function scroll(group)
+    if not preview_surf:is_valid() then
+      return
+    end
+    local key = vim.keycode(SCROLL[group])
+    api.nvim_win_call(preview_surf.winid, function()
+      pcall(vim.cmd.normal, { args = { key }, bang = true })
+    end)
+  end
+
+  --- <CR> inside the preview: hand the item and the cursor line to the caller.
+  local function submit_from_preview()
+    if not alive() then
+      return
+    end
+    local entry = chooser.current_item()
+    local idx = chooser.current_index()
+    if not entry then
+      return
+    end
+    local cursor = api.nvim_win_get_cursor(preview_surf.winid)
+    results_surf:close()
+    local handler = opts.on_preview_submit or on_submit
+    handler(entry.data, idx, { row = cursor[1], col = cursor[2] })
+  end
+
+  -- ------------------------------------------------------------------- keys
+
+  -- `record = false`: these are throwaway buffer-local keys of a float, and the
+  -- keymap records are keyed by buffer number -- a new one every time the popup
+  -- opens -- so recording them would add a few dozen entries per open, forever.
+  local list_map = { buffer = results_surf.bufnr, nowait = true, record = false }
+  local view_map = { buffer = preview_surf.bufnr, nowait = true, record = false }
+
+  for group in pairs(SCROLL) do
+    for _, lhs in ipairs(keys[group] or {}) do
+      local function go()
+        scroll(group)
+      end
+      map("n", lhs, go, list_map, "lib.nvim.ui.kit.shortlist: scroll the preview")
+      map("n", lhs, go, view_map, "lib.nvim.ui.kit.shortlist: scroll the preview")
+    end
+  end
+  for _, lhs in ipairs(keys.focus or {}) do
+    map("n", lhs, toggle_focus, list_map, "lib.nvim.ui.kit.shortlist: focus the preview")
+    map("n", lhs, toggle_focus, view_map, "lib.nvim.ui.kit.shortlist: focus the list")
+  end
+  for _, lhs in ipairs(keys.cycle or {}) do
+    map("n", lhs, toggle_focus, list_map, "lib.nvim.ui.kit.shortlist: cycle within the popup")
+    map("n", lhs, toggle_focus, view_map, "lib.nvim.ui.kit.shortlist: cycle within the popup")
+  end
+  for _, lhs in ipairs(keys.close or {}) do
+    map("n", lhs, function()
+      results_surf:close()
+    end, view_map, "lib.nvim.ui.kit.shortlist: close")
+  end
+  for _, lhs in ipairs(keys.submit or {}) do
+    map(
+      "n",
+      lhs,
+      submit_from_preview,
+      view_map,
+      "lib.nvim.ui.kit.shortlist: open at the cursor line"
+    )
+  end
+
   results_surf:on_close(function()
     pcall(api.nvim_del_augroup_by_id, sync_group)
   end)
+
+  apply_hints()
+  update_focus()
 
   return {
     close = function()

@@ -128,7 +128,10 @@ end
 --- Open a promptless, stacked list+preview for a short list (a handful of
 --- items) that doesn't need fuzzy search -- preview on top, results below,
 --- both full width. See lib.nvim.ui.kit.shortlist for the `render(item, surface)`
---- contract (shared with `kit.compare`).
+--- contract (shared with `kit.compare`) and for the preview pane's keys
+--- (`<C-f>`/`<C-p>` scroll it, `<Tab>` hops into it, `<CR>` there submits at the
+--- cursor line via `on_preview_submit`, `q`/`<Esc>` close; `preview_keys`,
+--- `close_on_leave` and `hints` switch parts of that off).
 ---@param opts table
 ---@return table|nil
 function M.shortlist(opts)
