@@ -17,6 +17,10 @@ local Surface = {}
 Surface.__index = Surface
 
 --- Replace the surface's buffer content, preserving `modifiable`.
+---
+--- `modifiable` is put back even when the API refuses the lines (a line with an
+--- embedded "\n", which is how a NUL byte from `readfile()` arrives): the error
+--- still reaches the caller, but a read-only pane does not stay writable.
 ---@param lines string[]
 function Surface:set_lines(lines)
   if not api.nvim_buf_is_valid(self.bufnr) then
@@ -24,8 +28,11 @@ function Surface:set_lines(lines)
   end
   local was_modifiable = api.nvim_get_option_value("modifiable", { buf = self.bufnr })
   api.nvim_set_option_value("modifiable", true, { buf = self.bufnr })
-  api.nvim_buf_set_lines(self.bufnr, 0, -1, false, lines)
+  local ok, err = pcall(api.nvim_buf_set_lines, self.bufnr, 0, -1, false, lines)
   api.nvim_set_option_value("modifiable", was_modifiable, { buf = self.bufnr })
+  if not ok then
+    error(err, 0)
+  end
 end
 
 --- Update (or clear, with nil) the float's title.
