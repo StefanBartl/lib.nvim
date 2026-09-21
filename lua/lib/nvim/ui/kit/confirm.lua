@@ -265,7 +265,8 @@ function M.open(opts)
   state.on_answer = opts.on_answer
   render_focus()
 
-  local mo = { buffer = surf.bufnr, nowait = true }
+  -- Throwaway buffer-local keys: not recorded (see lib.nvim.ui.kit.chooser's `mo`).
+  local mo = { buffer = surf.bufnr, nowait = true, record = false }
   for _, key in ipairs({ "l", "<Right>", "<Tab>" }) do
     map("n", key, function()
       M.move(1)

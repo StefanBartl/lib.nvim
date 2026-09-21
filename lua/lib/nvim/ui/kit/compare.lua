@@ -372,7 +372,8 @@ function M.open(opts)
       desc = "lib.nvim.ui.kit.compare: query changed",
     })
 
-    local mo = { buffer = pbuf, nowait = true }
+    -- Throwaway buffer-local keys: not recorded (see lib.nvim.ui.kit.chooser's `mo`).
+    local mo = { buffer = pbuf, nowait = true, record = false }
     map({ "i", "n" }, "<CR>", on_confirm, mo)
     map({ "i", "n" }, "<C-n>", function()
       move(1)
@@ -567,7 +568,7 @@ function M.open(opts)
     end
     wire_group_close(close_compare)
     for _, name in ipairs({ "a", "b" }) do
-      local mo = { buffer = surfaces[name].bufnr, nowait = true }
+      local mo = { buffer = surfaces[name].bufnr, nowait = true, record = false }
       map("n", "q", close_compare, mo)
       map("n", "<Esc>", close_compare, mo)
     end
