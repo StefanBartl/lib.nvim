@@ -263,9 +263,10 @@ Blocks the caller.
 
 ```
 M.run_blocking(cmd: string[], input?: string): boolean, string|nil
-M.run_blocking_captured(cmd: string[], input?: string): boolean ok, string output
-  -- like run_blocking, but always also returns captured stdout, success or failure
-M.run_async_captured(cmd: string[], on_done: fun(ok, output, code), input?: string): { stop: fun() }
+M.run_blocking_captured(cmd: string[], input?: string, opts?: { binary?: boolean }): boolean ok, string output
+  -- like run_blocking, but always also returns captured stdout, success or failure;
+  -- text mode by default (\r\n -> \n), opts.binary = byte-exact stdout
+M.run_async_captured(cmd: string[], on_done: fun(ok, output, code), input?: string, opts?: { binary?: boolean }): { stop: fun() }
   -- non-blocking counterpart; on_done is always vim.schedule-dispatched; stop() sends sigterm
 ```
 

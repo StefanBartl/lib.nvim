@@ -3,6 +3,10 @@
 
 local M = {}
 
+--- Options of the `*_captured` runners.
+---@class Lib.RunArgv.Opts
+---@field binary? boolean Deliver stdout byte for byte (`vim.system` `text = false`): no `\r\n` -> `\n` rewriting, `NUL` and non-UTF-8 bytes intact. Needs Neovim 0.10+ (`vim.system`); the legacy fallback ignores it.
+
 ---@param cmd string[]
 ---@param input? string
 ---@return boolean, string|nil
@@ -38,14 +42,21 @@ end
 --- "run this and tell me if it worked", not "run this and give me its
 --- output"). Mirrors the legacy `local out = vim.fn.system(cmd)` +
 --- `vim.v.shell_error` idiom, just via `vim.system` (no shell) when available.
+---
+--- By default stdout is handled as **text**: `vim.system` then replaces every
+--- `\r\n` with `\n`. That is what a caller wants from a command's messages, and
+--- wrong for a command whose output *is the data* (`git show` of a CRLF or
+--- binary blob): pass `{ binary = true }` to get the bytes exactly as written.
 ---@param cmd string[]
 ---@param input? string
+---@param opts? Lib.RunArgv.Opts
 ---@return boolean ok
 ---@return string output Captured stdout, both on success and failure
-function M.run_blocking_captured(cmd, input)
+function M.run_blocking_captured(cmd, input, opts)
   if vim.system then
+    local text = not (opts and opts.binary)
     local ok, res = pcall(function()
-      return vim.system(cmd, { text = true, stdin = input }):wait()
+      return vim.system(cmd, { text = text, stdin = input }):wait()
     end)
     if not ok then
       return false, tostring(res)
@@ -53,6 +64,8 @@ function M.run_blocking_captured(cmd, input)
     return res.code == 0, res.stdout or ""
   end
 
+  -- Legacy fallback (Neovim < 0.10): no byte-exact mode exists here, so
+  -- `opts.binary` cannot be honoured.
   local out = vim.fn.system(cmd, input or "")
   return vim.v.shell_error == 0, out
 end
@@ -76,11 +89,15 @@ end
 ---
 --- The returned handle has a `stop()` method that sends SIGTERM. It is a no-op
 --- on the legacy fallback path (Neovim < 0.10), where there is no job to kill.
+---
+--- Text vs. bytes: see `run_blocking_captured` -- `opts.binary` delivers stdout
+--- exactly as the process wrote it.
 ---@param cmd string[]
 ---@param on_done fun(ok: boolean, output: string, code: integer)
 ---@param input? string
+---@param opts? Lib.RunArgv.Opts
 ---@return { stop: fun() } handle
-function M.run_async_captured(cmd, on_done, input)
+function M.run_async_captured(cmd, on_done, input, opts)
   if not vim.system then
     -- Legacy fallback: no async process API. Run it the old way and report
     -- through the same callback so callers only ever need one shape.
@@ -96,7 +113,8 @@ function M.run_async_captured(cmd, on_done, input)
   -- (e.g. ENOENT) rather than delivering a failed SystemCompleted -- guard it
   -- so that case reaches on_done like every other failure, instead of an
   -- uncaught error escaping into the caller's stack.
-  local ok_spawn, job = pcall(vim.system, cmd, { text = true, stdin = input }, function(res)
+  local text = not (opts and opts.binary)
+  local ok_spawn, job = pcall(vim.system, cmd, { text = text, stdin = input }, function(res)
     vim.schedule(function()
       on_done(res.code == 0, res.stdout or "", res.code)
     end)

@@ -432,6 +432,117 @@ function M.current_ref(dir, git_cmd)
   return git_system({ bin, "-C", dir, "rev-parse", "--short", "HEAD" })
 end
 
+---@internal
+---@param path string
+---@return boolean
+local function is_absolute(path)
+  return path:sub(1, 1) == "/" or path:match("^%a:[/\\]") ~= nil or path:sub(1, 2) == "\\\\"
+end
+
+---@internal
+--- Build the argv for `git show <rev>:./<path>`.
+---
+--- `./` makes git resolve `path` against `-C <dir>`/the cwd instead of the
+--- repository root (the default of the bare `rev:path` form), so a relative
+--- path means the same here as in `blame_porcelain` or `is_tracked`. An
+--- absolute path names its own directory, which becomes `-C` -- no extra
+--- process to find the repository root.
+---
+--- `rev` is caller data glued to the front of one argument, so a leading `-`
+--- would make git read it as an option (`--output=<file>` writes a file):
+--- refused here rather than escaped.
+---@param rev string
+---@param path string
+---@param opts Lib.Git.Opts|nil
+---@param bin string
+---@return string[]|nil argv nil when the arguments are unusable.
+---@return string what `<rev>:<path>` for messages, or the reason when argv is nil.
+local function show_argv(rev, path, opts, bin)
+  if type(rev) ~= "string" or rev:sub(1, 1) == "-" or rev:find("[%z\r\n]") then
+    return nil, ("git show: invalid revision %s"):format(vim.inspect(rev))
+  end
+  if type(path) ~= "string" or path == "" then
+    return nil, ("git show: invalid path %s"):format(vim.inspect(path))
+  end
+
+  local where, rel = opts, path
+  if is_absolute(path) then
+    where, rel = { dir = vim.fs.dirname(path) }, vim.fs.basename(path)
+  elseif vim.fn.has("win32") == 1 then
+    rel = (rel:gsub("\\", "/"))
+  end
+  return git_argv(bin, where, { "show", ("%s:./%s"):format(rev, rel) }), ("%s:%s"):format(rev, path)
+end
+
+---@internal
+---@param ok boolean
+---@param out any
+---@param what string
+---@return string|nil content
+---@return string|nil err
+local function show_result(ok, out, what)
+  if not ok or type(out) ~= "string" then
+    -- A failed `git show` writes nothing to stdout, so a non-empty `out` is a
+    -- spawn failure's reason (git not on $PATH).
+    if type(out) == "string" and out ~= "" then
+      return nil, out
+    end
+    return nil,
+      ("git show %s failed (unknown revision, path not in that revision, or not a repository)"):format(
+        what
+      )
+  end
+  return out, nil
+end
+
+--- The content of a file at a revision -- `git show <rev>:<path>` -- **byte for
+--- byte**: a CRLF file keeps its `\r\n`, a binary blob keeps every byte
+--- (including `NUL`). An empty file is `""`, which is why the result is not
+--- collapsed to `nil` the way the other helpers here collapse empty output.
+---
+--- `path` is relative to `opts.dir`/the cwd (like `blame_porcelain`), or
+--- absolute. `rev` is anything `git show` resolves -- `HEAD~1`, a branch, a tag,
+--- a hash -- plus the index: `""` is the staged version and `":1"`/`":2"`/`":3"`
+--- are the base/ours/theirs versions of a file in a merge conflict.
+---
+--- Synchronous (like most of this module); `show_async` for a repeated or
+--- interactive trigger.
+---@param rev string A revision, `""` for the index, or `":<stage>"`. Must not start with `-`.
+---@param path string Relative to `opts.dir`/the cwd, or absolute.
+---@param opts? Lib.Git.Opts
+---@param git_cmd? string
+---@return string|nil content nil on failure (unknown revision, path not in that revision, not a repo)
+---@return string|nil err
+function M.show(rev, path, opts, git_cmd)
+  local argv, what = show_argv(rev, path, opts, git_cmd or "git")
+  if not argv then
+    return nil, what
+  end
+  local ok, out =
+    require("lib.nvim.cross.run_argv").run_blocking_captured(argv, nil, { binary = true })
+  return show_result(ok, out, what)
+end
+
+--- Async counterpart to `show`.
+---@param rev string
+---@param path string
+---@param opts Lib.Git.Opts|nil
+---@param on_done fun(content: string|nil, err: string|nil) Always invoked via `vim.schedule` -- safe to touch buffers, windows and `vim.fn.*`.
+---@param git_cmd? string
+---@return { stop: fun() } handle Kills the underlying job; harmless to call after it has finished.
+function M.show_async(rev, path, opts, on_done, git_cmd)
+  local argv, what = show_argv(rev, path, opts, git_cmd or "git")
+  if not argv then
+    vim.schedule(function()
+      on_done(nil, what)
+    end)
+    return { stop = function() end }
+  end
+  return require("lib.nvim.cross.run_argv").run_async_captured(argv, function(ok, out)
+    on_done(show_result(ok, out, what))
+  end, nil, { binary = true })
+end
+
 --- One blamed line, as `blame_porcelain` returns it.
 ---@class Lib.Git.BlameEntry
 ---@field line integer          1-based final line number in the current file
