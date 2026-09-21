@@ -128,6 +128,13 @@ return function(H)
     "git.relative_path: an untracked/nonexistent path is nil"
   )
 
+  -- ── M.current_ref ────────────────────────────────────────────────────
+  H.eq(git.current_ref(root), "main", "git.current_ref: branch when not detached")
+  local outside_ref = vim.fn.tempname() .. "-not-a-repo-current-ref"
+  vim.fn.mkdir(outside_ref, "p")
+  H.eq(git.current_ref(outside_ref), nil, "git.current_ref: outside any repo, nil")
+  vim.fn.delete(outside_ref, "rf")
+
   -- ── M.blame_porcelain ────────────────────────────────────────────────
   --
   -- README.md is tracked and has real history in this repo -- no fixture
@@ -182,4 +189,60 @@ return function(H)
   H.eq(ok_call, true, "git.blame_porcelain: outside a repo does not raise")
   H.eq(outside_blame, nil, "git.blame_porcelain: ...and reports failure, not an empty table")
   vim.fn.delete(outside_dir, "rf")
+
+  -- ── M.blame_porcelain_async ──────────────────────────────────────────
+  --
+  -- Same contract as the sync version, delivered via on_done instead of a
+  -- return value -- exercised against the same real file so the two are
+  -- directly comparable.
+  do
+    local done, async_entries, async_err = false, nil, nil
+    git.blame_porcelain_async(
+      "README.md",
+      { dir = root, first = 1, last = 3 },
+      function(entries, cb_err)
+        done, async_entries, async_err = true, entries, cb_err
+      end
+    )
+    vim.wait(2000, function()
+      return done
+    end)
+    H.ok(done, "git.blame_porcelain_async: on_done fires")
+    H.eq(async_err, nil, "git.blame_porcelain_async: no error for a tracked file")
+    H.eq(
+      #async_entries,
+      3,
+      "git.blame_porcelain_async: first/last restricts to the requested range"
+    )
+    H.eq(async_entries[1].line, 1, "git.blame_porcelain_async: keeps real file line numbers")
+    H.eq(
+      async_entries[1].sha,
+      ranged[1].sha,
+      "git.blame_porcelain_async: same sha as the sync call for the same line"
+    )
+  end
+
+  do
+    local done, async_entries, async_err = false, nil, nil
+    git.blame_porcelain_async(
+      "whatever.md",
+      { dir = outside_ref .. "-gone" },
+      function(entries, cb_err)
+        done, async_entries, async_err = true, entries, cb_err
+      end
+    )
+    vim.wait(2000, function()
+      return done
+    end)
+    H.ok(done, "git.blame_porcelain_async: on_done fires even on failure")
+    H.eq(
+      async_entries,
+      nil,
+      "git.blame_porcelain_async: outside a repo is a real failure, not an empty list"
+    )
+    H.ok(
+      type(async_err) == "string" and #async_err > 0,
+      "git.blame_porcelain_async: ...and says why"
+    )
+  end
 end
