@@ -90,6 +90,7 @@ local specs = {
   "composer_spec.lua",
   "telemetry_wrap_spec.lua",
   "git_spec.lua",
+  "git_status_spec.lua",
   "curl_spec.lua",
   "deps_spec.lua",
   "contextmenu_spec.lua",

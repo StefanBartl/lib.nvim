@@ -127,7 +127,7 @@ first.
 
 - **Module:** `lib.nvim.git` (`in_git_repo`, `repo_root`, `current_branch`,
   `is_dirty`, `is_tracked`, `upstream`, `ahead_behind`, `head_short_hash`,
-  `status_porcelain`, `info`)
+  `status_porcelain`, `status_porcelain_async`, `parse_status`, `info`)
 
 ## Async/blocking HTTP via curl
 

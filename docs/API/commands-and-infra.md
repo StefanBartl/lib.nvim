@@ -531,20 +531,23 @@ M.select(items: T[], opts?, on_choose: fun(item, idx))   -- kit.select if availa
 
 Composable Git query helpers; every function shells out via
 `lib.nvim.cross.run_argv` (argv, no shell), side-effect free. Returns
-`nil`/`false` (not throw) on failure/no-repo.
+`nil`/`false` (not throw) on failure/no-repo. `opts.dir` runs a call as
+`git -C <dir>` instead of against the cwd.
 
 ```
-M.in_git_repo(git_cmd?: string): boolean
-M.repo_root(git_cmd?: string): string|nil
-M.current_branch(git_cmd?: string): string|nil
-M.is_detached_head(git_cmd?: string): boolean
-M.is_dirty(git_cmd?: string): boolean
-M.is_tracked(path: string, git_cmd?: string): boolean
-M.upstream(git_cmd?: string): string|nil        -- "origin/main"-style
-M.ahead_behind(git_cmd?: string): boolean ahead, boolean behind   -- vs @{u}
-M.head_short_hash(git_cmd?: string): string|nil
+M.in_git_repo(opts?: {dir?}, git_cmd?: string): boolean
+M.repo_root(opts?: {dir?}, git_cmd?: string): string|nil
+M.current_branch(opts?: {dir?}, git_cmd?: string): string|nil
+M.is_detached_head(opts?: {dir?}, git_cmd?: string): boolean
+M.is_dirty(opts?: {dir?}, git_cmd?: string): boolean
+M.is_tracked(path: string, opts?: {dir?}, git_cmd?: string): boolean
+M.upstream(opts?: {dir?}, git_cmd?: string): string|nil        -- "origin/main"-style
+M.ahead_behind(opts?: {dir?}, git_cmd?: string): boolean ahead, boolean behind   -- vs @{u}
+M.head_short_hash(opts?: {dir?}, git_cmd?: string): string|nil
 M.info(dir: string, git_cmd?: string): { branch, version, commit }
-M.status_porcelain(git_cmd?: string): table<string, {code, orig_path}>|nil
+M.status_porcelain(opts?: {dir?}, git_cmd?: string): table<string, {code, orig_path}>|nil, err?   -- `-z`, exact paths
+M.status_porcelain_async(opts: {dir?}|nil, on_done: fun(map|nil, err|nil), git_cmd?: string): { stop }
+M.parse_status(raw: string): table<string, {code, orig_path}>   -- pure, `-z` output
 M.clear_line_diff(ns: integer): fun(buf: integer): nil
 ```
 
