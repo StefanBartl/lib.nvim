@@ -47,6 +47,9 @@ local function close_on_focus_lost(winid, opts)
     group = augroup,
     buffer = bufnr,
     once = true,
+    -- A throwaway hook of one overlay: its group is named after the window id,
+    -- new for every overlay, so a record would outlive it for good.
+    record = false,
     desc = "lib.nvim: close window on focus lost",
   })
 

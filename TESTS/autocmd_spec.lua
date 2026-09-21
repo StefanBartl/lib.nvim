@@ -226,6 +226,40 @@ return function(H)
     vim.api.nvim_del_augroup_by_name(name)
   end
 
+  -- `record = false`: the autocmd exists and fires, it just is not recorded.
+  -- A popup's per-window hooks are created under a group named after the window
+  -- id -- new every time, never asked for again -- so their records would
+  -- outlive them for good; the kit passes this for those. The default stays
+  -- "recorded", and a `once` autocmd keeps its record after it fired.
+  do
+    local name = "lib_nvim_spec_record_" .. tostring(vim.uv.hrtime())
+    local id = autocmd.group(name, true)
+    local fired = 0
+
+    autocmd.create("User", function()
+      fired = fired + 1
+    end, { group = id, pattern = "SpecRecOff", record = false })
+    autocmd.create("User", function() end, { group = id, pattern = "SpecRecDefault" })
+    autocmd.create("User", function() end, { group = id, pattern = "SpecRecOnce", once = true })
+
+    local recs = autocmd.registered({ group = name })
+    local patterns = {}
+    for _, r in ipairs(recs) do
+      patterns[#patterns + 1] = r.pattern
+    end
+    table.sort(patterns)
+    H.eq(table.concat(patterns, ","), "SpecRecDefault,SpecRecOnce", "record = false is left out")
+    H.eq(#vim.api.nvim_get_autocmds({ group = id }), 3, "...but all three are real autocmds")
+
+    vim.api.nvim_exec_autocmds("User", { pattern = "SpecRecOff" })
+    H.eq(fired, 1, "an unrecorded autocmd still fires")
+
+    vim.api.nvim_exec_autocmds("User", { pattern = "SpecRecOnce" })
+    H.eq(#autocmd.registered({ group = name }), 2, "a fired `once` autocmd keeps its record")
+
+    vim.api.nvim_del_augroup_by_name(name)
+  end
+
   -- ------------------------------------------------------------ M.augroup
   local direct = autocmd.augroup.create.clear("spec.autocmd.direct")
   eq(type(direct), "number", "augroup.create.clear(): returns an augroup id")

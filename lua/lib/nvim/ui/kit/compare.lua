@@ -595,6 +595,7 @@ function M.open(opts)
     resize_group = autocmd.group("lib_kit_compare_resize_" .. surfaces.prompt.winid, true)
     autocmd.create("VimResized", relayout, {
       group = resize_group,
+      record = false, -- throwaway per-window hook: not recorded (see lib.nvim.ui.kit.surface)
       desc = "lib.nvim.ui.kit.compare: keep the active state's geometry matched to the editor",
     })
   end

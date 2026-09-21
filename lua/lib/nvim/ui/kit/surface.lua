@@ -145,6 +145,12 @@ function M.open(opts)
     group = group,
     pattern = tostring(winid),
     once = true,
+    -- `record = false`: a throwaway hook of one float. Its group is named after
+    -- the window id -- new for every popup -- and lib.nvim's autocmd records are
+    -- only dropped through `delete(id)` or by asking for the same group again,
+    -- so recording it added one entry per popup for good (shortlist: five, with
+    -- the ones below). Every kit popup that hooks a window does the same.
+    record = false,
     desc = "lib.nvim.ui.kit.surface: lifecycle",
   })
 
