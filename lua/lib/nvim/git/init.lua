@@ -259,6 +259,112 @@ function M.status_porcelain(git_cmd)
   return result
 end
 
+--- One blamed line, as `blame_porcelain` returns it.
+---@class Lib.Git.BlameEntry
+---@field line integer          1-based final line number in the current file
+---@field sha string            Full commit hash ("0000000000000000000000000000000000000000" for an uncommitted/working-tree line)
+---@field author string|nil
+---@field author_time integer|nil  Unix timestamp
+---@field summary string|nil
+
+---@internal
+--- Parse `git blame --porcelain` output into one entry per line.
+---
+--- The porcelain format gives a full metadata block (author, author-time,
+--- summary, ...) only the FIRST time a commit is mentioned; every later line
+--- attributed to the same commit repeats just the header
+--- (`<sha> <orig-line> <final-line>`) followed directly by the tab-prefixed
+--- content line -- so metadata is cached per sha and reused for repeats,
+--- rather than re-parsed or left nil.
+---@param text string
+---@return Lib.Git.BlameEntry[]
+local function parse_blame_porcelain(text)
+  local entries = {}
+  local commits = {} ---@type table<string, { author: string|nil, author_time: integer|nil, summary: string|nil }>
+  local lines = vim.split(text, "\n", { plain = true })
+  local i, n = 1, #lines
+
+  while i <= n do
+    local line = lines[i]
+    -- orig_line (the line number in the commit that introduced it) is
+    -- unused here, so it is matched but not captured.
+    local sha, final_line = line:match("^(%x+)%s+%d+%s+(%d+)")
+    if not sha then
+      i = i + 1
+    else
+      commits[sha] = commits[sha] or {}
+      local c = commits[sha]
+      i = i + 1
+      while i <= n do
+        local sub = lines[i]
+        if sub:sub(1, 1) == "\t" then
+          -- Content line: this entry is complete.
+          entries[#entries + 1] = {
+            line = tonumber(final_line),
+            sha = sha,
+            author = c.author,
+            author_time = c.author_time,
+            summary = c.summary,
+          }
+          i = i + 1
+          break
+        end
+        local key, val = sub:match("^(%S+)%s(.*)$")
+        if key == "author" then
+          c.author = val
+        elseif key == "author-time" then
+          c.author_time = tonumber(val)
+        elseif key == "summary" then
+          c.summary = val
+        end
+        -- Every other porcelain key (author-mail, committer*, previous,
+        -- filename, boundary, ...) is intentionally ignored: callers that
+        -- need more than author/author-time/summary should parse the raw
+        -- output themselves rather than growing this struct unboundedly.
+        i = i + 1
+      end
+    end
+  end
+
+  return entries
+end
+
+--- Blame a file (or a line range within it) via `git blame --porcelain`.
+---
+--- Synchronous, like every other function in this module (`ERR-01`: the
+--- underlying `run_blocking_captured` call is a system-boundary shell-out,
+--- and `git blame` on a large file can be slow -- callers on a hot path
+--- should wrap this in their own async dispatch rather than expect one here).
+---@param path string File path, relative to `opts.dir`/the cwd, or absolute.
+---@param opts? { first?: integer, last?: integer, dir?: string } `first`/`last` (both required together) restrict to a 1-based inclusive line range; `dir` runs as `git -C <dir>` instead of the cwd.
+---@param git_cmd? string
+---@return Lib.Git.BlameEntry[]|nil entries  nil only on a git-invocation failure (ERR-10/11: an empty file is `{}`, not nil)
+---@return string|nil err
+function M.blame_porcelain(path, opts, git_cmd)
+  opts = opts or {}
+  local bin = git_cmd or "git"
+
+  local argv = { bin }
+  if opts.dir and opts.dir ~= "" then
+    vim.list_extend(argv, { "-C", opts.dir })
+  end
+  vim.list_extend(argv, { "blame", "--porcelain" })
+  if opts.first and opts.last then
+    argv[#argv + 1] = "-L"
+    argv[#argv + 1] = ("%d,%d"):format(opts.first, opts.last)
+  end
+  vim.list_extend(argv, { "--", path })
+
+  local ok, out = require("lib.nvim.cross.run_argv").run_blocking_captured(argv)
+  if not ok then
+    return nil, (type(out) == "string" and vim.trim(out) ~= "") and out or "git blame failed"
+  end
+  if type(out) ~= "string" or vim.trim(out) == "" then
+    return {}, nil
+  end
+  return parse_blame_porcelain(out), nil
+end
+
 --- Create a buffer-scoped function that clears all virtual text
 --- in the given namespace.
 ---
