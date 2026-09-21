@@ -73,12 +73,13 @@ jobs:
       - run: |
           exec > >(tee -a "$RUNNER_TEMP/test-output.log") 2>&1
           nvim -n -i NONE --headless -u NONE -l TESTS/run.lua
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: test-output-tests-${{ matrix.os }}
           path: ${{ runner.temp }}/test-output.log
           if-no-files-found: ignore
+          retention-days: 14
 
   # Consumers across the fleet checkout this repo as a CI dependency. Pointing
   # them at `main` directly means a broken commit here goes red in ~30 other
