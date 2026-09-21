@@ -132,6 +132,33 @@ or `git add` would then make *that* command fail with "index.lock exists".
 The trade-off is that stale stat data in the index is not repaired as a side
 effect of these calls.
 
+## Reading a file at a revision
+
+```lua
+local content, err = git.show("HEAD~1", "src/a.lua", { dir = repo })
+git.show_async("v1.2.0", "assets/logo.png", { dir = repo }, function(blob, err) end)
+```
+
+`git show <rev>:<path>` with the content delivered **byte for byte**: a CRLF
+file keeps its `\r\n`, a binary blob keeps every byte (including `NUL`), and an
+empty file is `""` — deliberately not `nil`, which means *failure* here (unknown
+revision, path not in that revision, not a repository), with the reason in the
+second value. Text-mode handling of the output (what the other helpers here
+use) would rewrite `\r\n` to `\n` and corrupt exactly the files a caller wants
+to diff or hash, which is why this goes through `run_argv`'s `binary` option.
+
+- `path` is relative to `opts.dir` (or the cwd), **not** to the repository
+  root — the same meaning as in `blame_porcelain`/`is_tracked` — or absolute.
+  An absolute path names its own directory, so `opts.dir` is ignored for it
+  (and no extra process is needed to find the repository root).
+- `rev` is anything `git show` resolves (`HEAD~1`, a branch, a tag, a hash),
+  plus the index: `""` is the *staged* version (not the worktree), and during a
+  merge conflict `":1"`, `":2"`, `":3"` are the base, ours and theirs versions.
+- A `rev` that starts with `-` or contains a line break is **refused**
+  (`nil, "…invalid revision…"`): it is glued to the front of one argument, and
+  an option such as `--pretty=format:X` would make git succeed with output
+  that is not the file.
+
 ## Diagnostics cleanup helper
 
 ```lua

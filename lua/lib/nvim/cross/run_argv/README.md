@@ -29,7 +29,7 @@ letting the error escape to the caller. On success (`code == 0`) returns
 `vim.fn.system(cmd, input or "")` plus `vim.v.shell_error` on Neovim
 without `vim.system`.
 
-### `run_blocking_captured(cmd, input?) -> ok, output`
+### `run_blocking_captured(cmd, input?, opts?) -> ok, output`
 
 Like `run_blocking`, but always returns captured stdout as the second value
 — on both success and failure — which is the gap `run_blocking` deliberately
@@ -37,12 +37,26 @@ leaves open (it answers "did this work", not "what did it print"). Mirrors
 the legacy `local out = vim.fn.system(cmd); vim.v.shell_error` idiom, just
 routed through `vim.system` (no shell) when available.
 
+**Text vs. bytes.** By default stdout is handled as *text*: `vim.system`
+replaces every `\r\n` with `\n`. Right for a command's messages, wrong for a
+command whose output *is the data* — `git show` of a CRLF or binary blob. Pass
+`{ binary = true }` to get the bytes exactly as the process wrote them (CRLF
+kept, `NUL` and non-UTF-8 bytes intact). Needs `vim.system` (Neovim 0.10+); the
+legacy fallback ignores it. `lib.nvim.git.show` is the first user.
+
+```lua
+local ok, blob = run_argv.run_blocking_captured(
+  { "git", "show", "HEAD:./logo.png" }, nil, { binary = true }
+)
+```
+
 `lib.nvim.cross.open_default` uses `run_blocking_captured` to resolve a WSL
 path via `wslpath -w`.
 
-### `run_async_captured(cmd, on_done, input?) -> handle`
+### `run_async_captured(cmd, on_done, input?, opts?) -> handle`
 
-Asynchronous counterpart to `run_blocking_captured`: spawns `cmd` and hands
+Asynchronous counterpart to `run_blocking_captured` (same `opts.binary`):
+spawns `cmd` and hands
 the outcome to `on_done(ok, output, code)` instead of blocking the UI thread
 until the process exits. `run_blocking`/`run_blocking_captured` are, by a
 wide margin, the biggest source of UI freezes across the plugins built on
