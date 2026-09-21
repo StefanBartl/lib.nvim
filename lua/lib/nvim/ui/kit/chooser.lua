@@ -830,7 +830,12 @@ function M.open(opts)
     require("lib.nvim.window.close_on_focus_lost")(surf.winid)
   end
 
-  local mo = { buffer = surf.bufnr, nowait = true }
+  -- `record = false`: these are throwaway buffer-local keys of a float, not part
+  -- of anyone's keymap surface. The keymap records are keyed by buffer number --
+  -- a new one for every popup -- and never removed, so recording them added ~20
+  -- entries per open for good (each holding its `rhs` closure, hence the popup's
+  -- state, alive as well). Every kit popup that binds keys this way does the same.
+  local mo = { buffer = surf.bufnr, nowait = true, record = false }
   for _, key in ipairs(HORIZONTAL) do
     map("n", key, "<Nop>", mo)
   end

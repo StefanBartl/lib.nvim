@@ -783,6 +783,7 @@ function open_level(opts, raw_items, stack, reuse)
     map("n", "<BS>", go_back, {
       buffer = surf.bufnr,
       nowait = true,
+      record = false, -- throwaway buffer-local key: not recorded (see lib.nvim.ui.kit.chooser's `mo`)
       desc = "kit.menu: back to parent menu",
     })
   end
