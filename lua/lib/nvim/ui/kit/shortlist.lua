@@ -48,14 +48,14 @@ local api = vim.api
 local M = {}
 
 ---@class Lib.UI.Kit.ShortlistKeys
----@field scroll_down? string[]|false  # preview, one page down (list and preview)
----@field scroll_up? string[]|false    # preview, one page up (list and preview)
----@field half_down? string[]|false    # preview, half a page down
----@field half_up? string[]|false      # preview, half a page up
----@field focus? string[]|false        # hop between list and preview
----@field cycle? string[]|false        # window-cycle keys, kept inside the popup
----@field close? string[]|false        # close the popup (preview only; the list has its own)
----@field submit? string[]|false       # submit at the cursor line (preview only)
+---@field scroll_down? string[]|string|false  # preview, one page down (list and preview)
+---@field scroll_up? string[]|string|false    # preview, one page up (list and preview)
+---@field half_down? string[]|string|false    # preview, half a page down
+---@field half_up? string[]|string|false      # preview, half a page up
+---@field focus? string[]|string|false        # hop between list and preview
+---@field cycle? string[]|string|false        # window-cycle keys, kept inside the popup
+---@field close? string[]|string|false        # close the popup (preview only; the list has its own)
+---@field submit? string[]|string|false       # submit at the cursor line (preview only)
 
 --- The keys of the preview pane. `<C-p>` scrolls up on purpose although Vim
 --- means "one line up" by it: it pairs with `<C-f>`, and `<C-b>` stays as the
@@ -88,6 +88,31 @@ local BORDER_FOCUSED = "KitAccent"
 local BORDER_IDLE = "KitBorder"
 
 ---@internal
+--- One key group as the caller wrote it, cleaned up: the non-empty strings of a
+--- list (a bare string counts as a list of one), or nil when none is left. The
+--- keys come from a user's config, and a bad entry must not get as far as the
+--- `map` call (which raises on an empty lhs) or the hint text (which cannot join
+--- a table): both run after the windows are up, and would leave them open with
+--- no handle to close them.
+---@param v any
+---@return string[]|nil
+local function key_list(v)
+  if type(v) == "string" then
+    v = { v }
+  end
+  if type(v) ~= "table" then
+    return nil
+  end
+  local out = {}
+  for _, key in ipairs(v) do
+    if type(key) == "string" and key ~= "" then
+      out[#out + 1] = key
+    end
+  end
+  return #out > 0 and out or nil
+end
+
+---@internal
 --- Merge the caller's `preview_keys` over the defaults, group by group. `false`
 --- (as a whole, or for one group) means "none"; a list replaces that group.
 ---@param given any
@@ -102,8 +127,8 @@ local function resolve_keys(given)
     local v = over[group]
     if v == nil then
       out[group] = default
-    elseif type(v) == "table" and #v > 0 then
-      out[group] = v
+    else
+      out[group] = key_list(v)
     end
   end
   return out
@@ -209,6 +234,8 @@ function M.open(opts)
   local format_item = opts.format_item or function(item, _width)
     return tostring(item)
   end
+  --- Also the fallback for `<CR>` in the preview, which adds the cursor position.
+  ---@type fun(item: any, idx: integer, pos?: { row: integer, col: integer })
   local on_submit = opts.on_submit or function(_item, _idx) end
 
   local spec = vim.deepcopy(layout.templates.shortlist.spec)
@@ -280,8 +307,17 @@ function M.open(opts)
 
   local function render_current()
     local entry = chooser.current_item()
-    if entry and preview_surf:is_valid() then
-      pcall(render, entry.data, preview_surf)
+    if not (entry and preview_surf:is_valid()) then
+      return
+    end
+    local ok, err = pcall(render, entry.data, preview_surf)
+    if not ok then
+      -- Say so instead of leaving the previous item's text under this item's
+      -- row: with the keys of the preview pane, <CR> there acts on what it
+      -- shows (opens this item at that text's line).
+      local first = tostring(err):match("[^\n]*")
+      pcall(preview_surf.set_lines, preview_surf, { "preview failed: " .. first })
+      pcall(api.nvim_win_set_cursor, preview_surf.winid, { 1, 0 })
     end
   end
   render_current()
@@ -414,7 +450,7 @@ function M.open(opts)
     end
     local entry = chooser.current_item()
     local idx = chooser.current_index()
-    if not entry then
+    if not (entry and idx) then
       return
     end
     local cursor = api.nvim_win_get_cursor(preview_surf.winid)
