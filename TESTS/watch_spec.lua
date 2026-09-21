@@ -37,6 +37,17 @@ return function(H)
     return uv.hrtime() / 1e6
   end
 
+  ---Last path component of a reported filename. Not every backend reports a
+  ---bare name: on Windows a watched directory reached through a short (8.3)
+  ---path such as `C:\Users\RUNNER~1\...` -- what `tempname()` returns on
+  ---GitHub's runners -- comes back as `\0\arm-probe.txt`, directory prefix
+  ---included. The last component is the file on every platform.
+  ---@param filename string|nil
+  ---@return string|nil
+  local function basename(filename)
+    return filename and filename:match("[^/\\]+$")
+  end
+
   ---How many recorded callbacks carried `name`.
   ---@param seen string[]
   ---@param name string
@@ -61,10 +72,11 @@ return function(H)
   local function armed_watch(dir, debounce_ms, seen)
     local armed = false
     local handle, err = watch.start(dir, function(_, filename, _)
-      if filename == PROBE then
+      local name = basename(filename)
+      if name == PROBE then
         armed = true
       else
-        seen[#seen + 1] = filename
+        seen[#seen + 1] = name
       end
     end, { debounce_ms = debounce_ms })
     ok(handle ~= nil, "watch.start: returns a handle")
