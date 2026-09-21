@@ -8,6 +8,7 @@ on:
 jobs:
   stylua:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: JohnnyMorganz/stylua-action@v5
@@ -23,6 +24,7 @@ jobs:
 
   luacheck:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       # PUC Lua, not "luajit-2.1": that value made the setup step fail with a
@@ -41,6 +43,7 @@ jobs:
   tests:
     name: tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       # One platform failing must not cancel the others: which of the three
       # broke is the whole information content of this job.
@@ -67,7 +70,15 @@ jobs:
         with:
           neovim: true
           version: stable
-      - run: nvim --headless -u NONE -l TESTS/run.lua
+      - run: |
+          exec > >(tee -a "$RUNNER_TEMP/test-output.log") 2>&1
+          nvim -n -i NONE --headless -u NONE -l TESTS/run.lua
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-output-tests-${{ matrix.os }}
+          path: ${{ runner.temp }}/test-output.log
+          if-no-files-found: ignore
 
   # Consumers across the fleet checkout this repo as a CI dependency. Pointing
   # them at `main` directly means a broken commit here goes red in ~30 other
@@ -85,6 +96,7 @@ jobs:
     needs: [stylua, luacheck, tests]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
