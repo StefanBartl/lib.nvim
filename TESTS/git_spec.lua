@@ -96,6 +96,38 @@ return function(H)
   vim.fn.delete(no_repo, "rf")
   H.eq(#git.refs(no_repo .. "/gone"), 0, "git.refs: nonexistent directory, an empty list")
 
+  -- ── M.remote_url / M.relative_path ──────────────────────────────────
+  --
+  -- This checkout has a real "origin" remote pointing at GitHub -- no
+  -- fixture needed.
+  local remote = git.remote_url("origin", { dir = root })
+  H.ok(type(remote) == "string" and #remote > 0, "git.remote_url: this repo has an origin remote")
+  H.ok(
+    remote:match("lib%.nvim") ~= nil,
+    "git.remote_url: it points at this repo (" .. tostring(remote) .. ")"
+  )
+  H.eq(
+    git.remote_url("definitely-not-a-real-remote", { dir = root }),
+    nil,
+    "git.remote_url: an unknown remote name is nil, not an error"
+  )
+
+  H.eq(
+    git.relative_path("README.md", { dir = root }),
+    "README.md",
+    "git.relative_path: a root-level tracked file resolves to itself"
+  )
+  H.eq(
+    git.relative_path("init.lua", { dir = root .. "/lua/lib/nvim/git" }),
+    "lua/lib/nvim/git/init.lua",
+    "git.relative_path: resolves relative to the repo root, not the given dir"
+  )
+  H.eq(
+    git.relative_path("not-a-real-file.md", { dir = root }),
+    nil,
+    "git.relative_path: an untracked/nonexistent path is nil"
+  )
+
   -- ── M.blame_porcelain ────────────────────────────────────────────────
   --
   -- README.md is tracked and has real history in this repo -- no fixture

@@ -259,6 +259,42 @@ function M.status_porcelain(git_cmd)
   return result
 end
 
+--- Get a configured remote's URL.
+---@param remote? string Remote name, defaults to "origin".
+---@param opts? { dir?: string } `dir` runs as `git -C <dir>` instead of the cwd.
+---@param git_cmd? string
+---@return string|nil
+function M.remote_url(remote, opts, git_cmd)
+  opts = opts or {}
+  local bin = git_cmd or "git"
+  local argv = { bin }
+  if opts.dir and opts.dir ~= "" then
+    vim.list_extend(argv, { "-C", opts.dir })
+  end
+  vim.list_extend(argv, { "remote", "get-url", remote or "origin" })
+  return git_system(argv)
+end
+
+--- Resolve a path's repository-relative form via `git ls-files --full-name`.
+--- Only tracked files resolve (an untracked or ignored path returns nil) --
+--- the intended use is "where does this file live inside the repo", and an
+--- untracked file has no meaningful answer to that (it also cannot be
+--- browsed on the remote, which is this function's original motivation).
+---@param path string A basename (resolved relative to `opts.dir`) or an absolute path.
+---@param opts? { dir?: string }
+---@param git_cmd? string
+---@return string|nil
+function M.relative_path(path, opts, git_cmd)
+  opts = opts or {}
+  local bin = git_cmd or "git"
+  local argv = { bin }
+  if opts.dir and opts.dir ~= "" then
+    vim.list_extend(argv, { "-C", opts.dir })
+  end
+  vim.list_extend(argv, { "ls-files", "--full-name", "--", path })
+  return git_system(argv)
+end
+
 --- One blamed line, as `blame_porcelain` returns it.
 ---@class Lib.Git.BlameEntry
 ---@field line integer          1-based final line number in the current file
