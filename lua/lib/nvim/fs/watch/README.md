@@ -42,6 +42,16 @@ handle.stop() -- safe to call more than once
 platform's backend reports one; it can be `nil`), and the raw libuv
 `events` table (`{change=bool, rename=bool}`).
 
+## Start-up latency (macOS)
+
+`start()` returns as soon as libuv accepted the handle, not once the OS
+backend is delivering events. On macOS libuv registers the FSEvents stream
+from its own run-loop thread, so a change made in the first milliseconds
+after `start()` — most visibly under load, on the first watcher of a process —
+may never be reported. Callers that must not miss such a change confirm the
+watcher is live first: write a probe file until `on_change` reports it, then
+make the real change (`TESTS/watch_spec.lua` does exactly that).
+
 ## Why not `lib.nvim.neotree.watch`
 
 That module manages `fs_event` handles *neo-tree itself* creates and

@@ -6,6 +6,13 @@
 --- so the raw event feeds a debounce handle instead of calling `on_change`
 --- directly.
 ---
+--- `start()` returns once libuv accepted the handle, not once the OS backend is
+--- delivering events: on macOS libuv registers the FSEvents stream from its own
+--- run-loop thread, so a change made in the first milliseconds after `start()`
+--- (most visibly under load, on the first watcher of a process) may never be
+--- reported. Code that must not miss a change made right after `start()` has to
+--- confirm the watcher is live first (see TESTS/watch_spec.lua).
+---
 --- Closing an `fs_event` handle is asynchronous: it may still report itself
 --- open for one loop tick after `:close()`, so `stop()` guards with an
 --- `is_closing()` check and a `pcall` before closing.

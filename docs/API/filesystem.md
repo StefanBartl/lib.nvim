@@ -363,6 +363,8 @@ can fire the raw event several times in quick succession.
 ```
 M.start(path: string, on_change: fun(path, filename, events), opts?: { debounce_ms?: integer, recursive?: boolean }): Lib.Fs.Watch.Handle|nil handle, string|nil err
   -- handle.stop(): nil   -- safe to call more than once
+  -- start() returns before the backend is guaranteed live (macOS: a change in the first
+  -- milliseconds may go unreported) -- see the module README, "Start-up latency"
 ```
 `opts.debounce_ms` default `200`; `opts.recursive` default `false` (ignored
 by Linux's `inotify` backend — a recursive watch there needs one `M.start`
