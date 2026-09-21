@@ -64,7 +64,7 @@
 ---@field ensure_bottom fun(winid: integer): nil # Scroll winid's cursor to the last line of its buffer (retries if the window isn't valid yet).
 ---@field make_focusable fun(winid: integer): boolean # Flip a floating window's focusable config to true.
 ---@field force_focus fun(winid: integer): boolean # Make winid focusable (if floating) and switch to it.
----@field focus_and_bottom fun(winid: integer): boolean # force_focus + ensure_bottom.
+---@field reveal_at_bottom fun(winid: integer): boolean # force_focus + ensure_bottom.
 ---@field open_named_scratch fun(name: string, lines?: string[], opts?: { filetype?: string, split?: "above"|"below"|"left"|"right", size?: integer, modifiable?: boolean }): integer, integer # Find-or-create a named scratch buffer shown in a split; returns bufnr, winid.
 ---@field open_scratch_split fun(lines?: string[], opts?: Lib.Window.OpenScratchSplitOpts): integer, integer # Open a fresh (non-de-duplicated) scratch buffer in a plain split; returns bufnr, winid.
 ---@field tag Lib.Window.Tag # Tag/find windows by an arbitrary string via `vim.w[win].custom_tag`.

@@ -258,7 +258,7 @@ for the first usable one.
 
 ---
 
-### Focus helpers — `ensure_bottom`, `make_focusable`, `force_focus`, `focus_and_bottom`
+### Focus helpers — `ensure_bottom`, `make_focusable`, `force_focus`, `reveal_at_bottom`
 
 For log/output-style windows that should stay scrolled to the latest line and
 be reachable even when opened as a non-focusable float:
@@ -268,7 +268,7 @@ window.ensure_bottom(winid)      -- scroll winid's cursor to its buffer's last l
                                    -- (retries if winid isn't valid yet)
 window.make_focusable(winid)     -- flip a floating window's `focusable` config to true
 window.force_focus(winid)        -- make_focusable + nvim_set_current_win
-window.focus_and_bottom(winid)   -- force_focus + ensure_bottom
+window.reveal_at_bottom(winid)   -- force_focus + ensure_bottom
 ```
 
 ---

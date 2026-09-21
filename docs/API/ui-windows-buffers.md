@@ -141,7 +141,7 @@ consumption styles: free functions, or `attach(winid)` bound handle.
 ```
 M.nice_quit, M.set_title, M.make_scratch, M.close_on_focus_lost, M.center
 M.is_usable_window, M.target_window                          -- from find_usable
-M.ensure_bottom, M.make_focusable, M.force_focus, M.focus_and_bottom   -- from focus_helpers
+M.ensure_bottom, M.make_focusable, M.force_focus, M.reveal_at_bottom   -- from focus_helpers
 M.open_named_scratch, M.open_scratch_split, M.tag
 M.attach(winid: integer): Lib.Window.Handle
   -- dot-call bound wrapper; every winid-first method above becomes handle.method(...)
@@ -206,7 +206,7 @@ M.target_window(opts?: { current_tab_only?: boolean }): integer|nil winid
 M.ensure_bottom(winid: integer, retries?: integer)   -- default 3 retries via vim.schedule
 M.make_focusable(winid: integer): boolean ok
 M.force_focus(winid: integer): boolean ok
-M.focus_and_bottom(winid: integer): boolean ok
+M.reveal_at_bottom(winid: integer): boolean ok
 ```
 
 ### `lib.nvim.window.open_named_scratch` (documented in directory README)

@@ -23,7 +23,7 @@ CONTENTS                                          *lib.nvim-window-contents*
        tag ...................................... |lib.nvim-window-tag|
        is_usable_window/target_window .......... |lib.nvim-window-find_usable|
        ensure_bottom/make_focusable/force_focus/
-         focus_and_bottom ....................... |lib.nvim-window-focus_helpers|
+         reveal_at_bottom ....................... |lib.nvim-window-focus_helpers|
        attach .................................. |lib.nvim-window-attach|
 
 ==============================================================================
@@ -243,7 +243,7 @@ Options (`target_window`) ~
 
 ------------------------------------------------------------------------------
 ensure_bottom({winid}), make_focusable({winid}),
-force_focus({winid}), focus_and_bottom({winid})
+force_focus({winid}), reveal_at_bottom({winid})
                                            *lib.nvim-window-focus_helpers*
 
 Small helpers for log/output-style windows. `ensure_bottom` moves the
@@ -251,11 +251,11 @@ cursor to the last line, retrying on the next tick if the window isn't
 valid yet (e.g. right after creation). `make_focusable` flips a floating
 window created with `focusable = false` to focusable; a no-op returning
 `false` on a non-floating window. `force_focus` makes the window focusable
-first, then focuses it. `focus_and_bottom` does both: focus, then scroll
+first, then focuses it. `reveal_at_bottom` does both: focus, then scroll
 to bottom. All but `ensure_bottom` return `ok` (boolean). >lua
 
     local h = window.make_scratch({ lines = {}, focusable = false })
-    window.focus_and_bottom(h)  -- streamed output: focus + follow the tail
+    window.reveal_at_bottom(h)  -- streamed output: focus + follow the tail
 <
 ------------------------------------------------------------------------------
 attach({winid})                                       *lib.nvim-window-attach*
