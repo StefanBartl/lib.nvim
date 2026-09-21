@@ -39,7 +39,9 @@ handle.stop() -- safe to call more than once
 
 `on_change(path, filename, events)` receives the `path` passed to `start`
 (not necessarily the exact changed file — `filename` is that, when the
-platform's backend reports one; it can be `nil`), and the raw libuv
+platform's backend reports one; it can be `nil`, and on Windows it can carry
+a directory prefix such as `\0\file.txt` when the watched path is a short
+8.3 path — match on the last path component), and the raw libuv
 `events` table (`{change=bool, rename=bool}`).
 
 ## Start-up latency (macOS)
