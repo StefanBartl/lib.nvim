@@ -68,6 +68,15 @@ table goes on listing something that no longer fires — the precise failure thi
 registry exists to prevent. Clearing an augroup through `group(name, true)`
 already forgets its records; this is the same guarantee for one autocmd by id.
 
+`record = false` skips the record. It is for the throwaway autocmds of something
+short-lived that is created over and over, such as a popup's per-window
+lifecycle hooks (the keymap wrapper has the same option): the group name carries
+the window id, so it is new each time and never asked for again, and the record
+would outlive the autocmd for good, because `delete(id)` and `group(name, true)`
+are the only things that drop one. Leave it on for anything that belongs in the
+generated table. It is deliberately not automatic for `once` autocmds: one that
+already fired still belongs in the table describing what a plugin registers.
+
 `opts.src` overrides the recorded `file:line`. It exists for wrappers that
 create an autocmd on someone else's behalf: the recorded site is derived from
 the call stack, so without it a wrapper's autocmds are all attributed to the

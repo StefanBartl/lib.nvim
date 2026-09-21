@@ -326,6 +326,7 @@ function M.open(opts)
   autocmd.create("CursorMoved", render_current, {
     group = sync_group,
     buffer = results_surf.bufnr,
+    record = false, -- throwaway per-popup hook: not recorded (see lib.nvim.ui.kit.surface)
     desc = "lib.nvim.ui.kit.shortlist: keep the preview in sync with the selection",
   })
 
@@ -385,6 +386,7 @@ function M.open(opts)
     apply_hints()
   end, {
     group = sync_group,
+    record = false, -- throwaway per-popup hook: not recorded (see lib.nvim.ui.kit.surface)
     desc = "lib.nvim.ui.kit.shortlist: keep the list sized to the editor",
   })
 
@@ -425,6 +427,7 @@ function M.open(opts)
     end
   end, {
     group = sync_group,
+    record = false, -- throwaway per-popup hook: not recorded (see lib.nvim.ui.kit.surface)
     desc = "lib.nvim.ui.kit.shortlist: light the focused window, close when focus leaves",
   })
 

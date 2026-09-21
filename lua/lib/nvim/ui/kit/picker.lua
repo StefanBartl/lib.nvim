@@ -113,6 +113,7 @@ function M.open(opts)
   local resize_group = autocmd.group("lib_kit_picker_resize_" .. prompt.winid, true)
   autocmd.create("VimResized", relayout, {
     group = resize_group,
+    record = false, -- throwaway per-window hook: not recorded (see lib.nvim.ui.kit.surface)
     desc = "lib.nvim.ui.kit.picker: keep the picker sized to the editor",
   })
   -- Hung off the surface's own close lifecycle, not just `finish_close`:
@@ -204,6 +205,7 @@ function M.open(opts)
   autocmd.create({ "TextChangedI", "TextChanged" }, schedule_change, {
     group = autocmd.group("lib_kit_picker_" .. prompt.winid, true),
     buffer = prompt.bufnr,
+    record = false, -- throwaway per-window hook: not recorded (see lib.nvim.ui.kit.surface)
     desc = "lib.nvim.ui.kit.picker: query changed",
   })
 

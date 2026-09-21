@@ -212,10 +212,18 @@ function M.get_augroup(name, opts)
   return cache[full_name]
 end
 
----Create an autocmd and record it.
+---Create an autocmd and record it, unless `opts.record` is `false`.
 ---
 ---The callback is wrapped in `pcall` unless `opts.raw` is true; see the note
 ---at that wrapper for the two cases that need it off.
+---
+---`record = false` is for throwaway autocmds of something that lives for a
+---moment and is created over and over -- a popup's per-window lifecycle hooks.
+---Their group name carries the window id, so it is new every time and nothing
+---ever asks for the same group again; the record would outlive the autocmd for
+---good. The keymap wrapper has the same option for the same reason. It is the
+---caller's call, not automatic (`once` autocmds keep their record after they
+---fire): the generated tables are built from these records.
 ---@param event string|string[]
 ---@param callback fun(args:Lib.Autocmd.Args): boolean|nil  # a `true` return deletes the autocmd (native behaviour; needs `opts.raw`)
 ---@param opts LibAutocmdOpts|nil
@@ -279,6 +287,10 @@ function M.create(event, callback, opts)
   -- undocumented autocmd forever: it IS the registering call.
   -- lib-docs: fallback
   local id = vim.api.nvim_create_autocmd(event, native_opts)
+
+  if opts.record == false then
+    return id
+  end
 
   records[#records + 1] = {
     id = id,

@@ -25,6 +25,7 @@
 ---@field nested? boolean
 ---@field src? string  # Override the recorded `file:line`; for a wrapper creating an autocmd on a caller's behalf.
 ---@field raw? boolean  # Install the callback unwrapped, so `error()` and a `true` return keep their native meaning. See `create()`.
+---@field record? boolean  # `false`: do not record it (throwaway per-window autocmds of a popup). Default: recorded.
 
 ---@class Lib.AutoCmd
 ---@field norm_events fun(ev: any, fallback: string[]): string[] # Normalize event configuration to a non-empty list.
