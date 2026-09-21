@@ -209,7 +209,7 @@ return function(H)
     "ensure_bottom",
     "make_focusable",
     "force_focus",
-    "focus_and_bottom",
+    "reveal_at_bottom",
     "open_named_scratch",
   }) do
     eq(type(window[fn]), "function", "window aggregator exports " .. fn)

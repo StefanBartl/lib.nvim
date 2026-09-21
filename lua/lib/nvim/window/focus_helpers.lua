@@ -55,7 +55,7 @@ end
 ---Force focus onto `winid` and scroll it to the bottom.
 ---@param winid integer
 ---@return boolean ok
-function M.focus_and_bottom(winid)
+function M.reveal_at_bottom(winid)
   local ok = M.force_focus(winid)
   if ok then
     M.ensure_bottom(winid)

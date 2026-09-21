@@ -48,7 +48,7 @@ local lib_keys = {}
 ---@param lib table
 ---@param control table
 ---@param wrap_opts? RA.Telemetry.WrapOpts
-local function materialize_and_wrap(inst, lib, control, wrap_opts)
+local function instrument_keys(inst, lib, control, wrap_opts)
   for _, key in ipairs(control.keys(lib)) do
     local ok_value, value = pcall(function()
       return lib[key]
@@ -95,7 +95,7 @@ function M.setup(opts)
     persist = opts.persist,
     dir = opts.dir,
   })
-  materialize_and_wrap(instance, lib, control, opts.wrap_opts)
+  instrument_keys(instance, lib, control, opts.wrap_opts)
   instance.start({
     profile_args = opts.profile_args or nil,
     time = opts.timing or nil,
