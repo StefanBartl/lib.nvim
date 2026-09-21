@@ -201,7 +201,7 @@ function M.open(opts)
   ---@type "search"|"marked"|"compare"
   local current_state = "search"
   -- Set once the first mount succeeds, cleared (and the augroup dropped) in
-  -- `teardown_and_close` -- see `relayout` below.
+  -- `finalize_close` -- see `relayout` below.
   local resize_group
 
   local debounce_timer
@@ -245,7 +245,7 @@ function M.open(opts)
   end
 
   ---@internal
-  local function teardown_and_close(a, b)
+  local function finalize_close(a, b)
     unmount()
     if resize_group then
       pcall(api.nvim_del_augroup_by_id, resize_group)
@@ -471,16 +471,16 @@ function M.open(opts)
         s:close()
       end
       notify.error("failed to open the compare picker")
-      teardown_and_close(nil, nil)
+      finalize_close(nil, nil)
       return
     end
     surfaces.prompt, surfaces.results, surfaces.preview = prompt, results, preview
 
     wire_group_close(function()
-      teardown_and_close(nil, nil)
+      finalize_close(nil, nil)
     end)
     wire_prompt(mark_current, function()
-      teardown_and_close(nil, nil)
+      finalize_close(nil, nil)
     end, { [mark_key] = mark_current })
   end
 
@@ -516,19 +516,19 @@ function M.open(opts)
         s:close()
       end
       notify.error("failed to open the compare picker")
-      teardown_and_close(frozen, nil)
+      finalize_close(frozen, nil)
       return
     end
     surfaces.prompt, surfaces.results = prompt, results
     surfaces.marked, surfaces.preview = marked, preview
 
     wire_group_close(function()
-      teardown_and_close(frozen, nil)
+      finalize_close(frozen, nil)
     end)
     pcall(render, frozen, surfaces.marked)
 
     wire_prompt(confirm_second, function()
-      teardown_and_close(frozen, nil)
+      finalize_close(frozen, nil)
     end)
   end
 
@@ -557,13 +557,13 @@ function M.open(opts)
         s:close()
       end
       notify.error("failed to open the compare view")
-      teardown_and_close(a, b)
+      finalize_close(a, b)
       return
     end
     surfaces.a, surfaces.b = sa, sb
 
     local function close_compare()
-      teardown_and_close(a, b)
+      finalize_close(a, b)
     end
     wire_group_close(close_compare)
     for _, name in ipairs({ "a", "b" }) do
@@ -603,7 +603,7 @@ function M.open(opts)
   -- headlessly, the same way — no keypress simulation needed.
   return {
     close = function()
-      teardown_and_close(marked_item, confirmed_b)
+      finalize_close(marked_item, confirmed_b)
     end,
     ---@return "search"|"marked"|"compare"
     state = function()
