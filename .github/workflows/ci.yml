@@ -102,4 +102,38 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v5
-      - run: git push origin HEAD:refs/heads/ci-verified --force
+      # Never move ci-verified backwards: two pushes can finish out of order,
+      # and the older run must not overwrite the newer verified commit. The
+      # lookup fails closed (an API or network error stops the job instead of
+      # falling through to a push) and the update carries a lease on the tip it
+      # compared against.
+      - name: Publish ci-verified
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          # Look the branch up on the remote instead of inferring "missing" from an API
+          # error: a failed lookup must stop the job, not fall through to a push.
+          tip=$(git ls-remote --heads origin refs/heads/ci-verified | cut -f1)
+          if [ -z "$tip" ]; then
+            # First publish. A plain push creates the branch and is rejected if a
+            # concurrent run created it first.
+            git push origin HEAD:refs/heads/ci-verified
+            exit 0
+          fi
+          status=$(gh api "repos/$REPO/compare/$tip...$SHA" --jq .status)
+          case "$status" in
+            behind | identical)
+              echo "ci-verified ($tip) is '$status' relative to $SHA (published or superseded); leaving it alone"
+              ;;
+            ahead | diverged)
+              # The lease makes the server refuse the update if ci-verified moved since
+              # the comparison, so an older run can never overwrite a newer one.
+              git push origin HEAD:refs/heads/ci-verified --force-with-lease="refs/heads/ci-verified:$tip"
+              ;;
+            *)
+              echo "::error::unexpected compare status '$status' for $tip...$SHA"
+              exit 1
+              ;;
+          esac

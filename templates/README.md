@@ -95,10 +95,10 @@ A consumer's GitHub Actions checkout of `lib.nvim` should not point at
 flight) — pointed there, a consumer's CI turns red for a bug that isn't
 in the consumer at all, and whoever's debugging it looks in the wrong repo.
 
-`ci-verified` is a branch this repo's own CI force-pushes to, but only
-*after* `stylua` + `luacheck` + `tests` have all passed on `main` — so it
-always names a commit that was actually green here. Point consumer
-checkouts at it instead:
+`ci-verified` is a branch this repo's own CI moves, but only *after*
+`stylua` + `luacheck` + `tests` have all passed on `main` (and only
+forward, never back to an older commit) — so it always names a commit that
+was actually green here. Point consumer checkouts at it instead:
 
 ```yaml
 - uses: actions/checkout@v5
