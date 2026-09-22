@@ -22,12 +22,12 @@
 ---
 ---   - from the list, `<C-f>`/`<C-p>` (or <PageDown>/<PageUp>) scroll it one
 ---     page, `<C-d>`/`<C-u>` half a page;
----   - `<Tab>` (and `<C-w>w`, `<C-w><C-w>`, `<C-w>W`, `<C-w>j`, `<C-w>k`) hop
----     between list and preview -- the cycle is closed on purpose: left alone,
----     `<C-w>w`/`<C-w>j`/`<C-w>k` would walk on into the editor window
----     underneath (or fail silently, since the list and preview are two
----     unrelated floats, not siblings in a split) and leave the popup
----     stranded on top;
+---   - `<Tab>` (and `<C-w>w`, `<C-w><C-w>`, `<C-w>W`) hop between list and
+---     preview -- the cycle is closed on purpose: left alone, `<C-w>w` walks on
+---     into the editor window underneath and leaves the popup stranded on top;
+---     `<C-w>j`/`<C-w>k` do the same, but direction-aware (preview sits above
+---     the list, so `<C-w>j` only does something from the preview, `<C-w>k`
+---     only from the list -- otherwise a no-op, not a jump the wrong way);
 ---   - inside the preview everything that reads works (motions, `/`, visual,
 ---     `y`), `<CR>` submits at the cursor line (`on_preview_submit`), `q` and
 ---     `<Esc>` close the popup;
@@ -408,6 +408,30 @@ function M.open(opts)
     end
   end
 
+  --- `<C-w>j`/`<C-w>k`, direction-aware unlike `toggle_focus`: preview sits
+  --- above the list in this template, so "down" only does something FROM the
+  --- preview and "up" only FROM the list -- the edge (list pressing `<C-w>j`,
+  --- preview pressing `<C-w>k`) is a no-op, the way a real `<C-w>j`/`<C-w>k`
+  --- does nothing at the edge of a window layout, rather than jumping the
+  --- wrong way the way a blind toggle would.
+  ---@param dir "up"|"down"
+  local function move_focus(dir)
+    if not alive() then
+      return
+    end
+    local cur = api.nvim_get_current_win()
+    if dir == "down" and cur == preview_surf.winid then
+      results_surf:focus()
+    elseif dir == "up" and cur == results_surf.winid then
+      preview_surf:focus()
+    end
+  end
+
+  --- Which of `keys.cycle`'s entries are direction-aware (`move_focus`) rather
+  --- than a blind toggle (`toggle_focus`, same as `<C-w>w` and friends).
+  ---@type table<string, "up"|"down">
+  local CYCLE_DIRECTION = { ["<C-w>j"] = "down", ["<C-w>k"] = "up" }
+
   --- Focus left both popup windows for some other one (a click into the editor,
   --- `<C-w>h`, a tab switch): the popup is not wanted any more. Checked after
   --- the event, since a window switch can pass through a window on its way.
@@ -487,8 +511,12 @@ function M.open(opts)
     map("n", lhs, toggle_focus, view_map, "lib.nvim.ui.kit.shortlist: focus the list")
   end
   for _, lhs in ipairs(keys.cycle or {}) do
-    map("n", lhs, toggle_focus, list_map, "lib.nvim.ui.kit.shortlist: cycle within the popup")
-    map("n", lhs, toggle_focus, view_map, "lib.nvim.ui.kit.shortlist: cycle within the popup")
+    local dir = CYCLE_DIRECTION[lhs]
+    local fn = dir and function()
+      move_focus(dir)
+    end or toggle_focus
+    map("n", lhs, fn, list_map, "lib.nvim.ui.kit.shortlist: cycle within the popup")
+    map("n", lhs, fn, view_map, "lib.nvim.ui.kit.shortlist: cycle within the popup")
   end
   for _, lhs in ipairs(keys.close or {}) do
     map("n", lhs, function()
