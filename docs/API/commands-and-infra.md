@@ -545,8 +545,8 @@ M.upstream(opts?: {dir?}, git_cmd?: string): string|nil        -- "origin/main"-
 M.ahead_behind(opts?: {dir?}, git_cmd?: string): boolean ahead, boolean behind   -- vs @{u}
 M.head_short_hash(opts?: {dir?}, git_cmd?: string): string|nil
 M.info(dir: string, git_cmd?: string): { branch, version, commit }
-M.status_porcelain(opts?: {dir?}, git_cmd?: string): table<string, {code, orig_path}>|nil, err?   -- `-z`, exact paths
-M.status_porcelain_async(opts: {dir?}|nil, on_done: fun(map|nil, err|nil), git_cmd?: string): { stop }
+M.status_porcelain(opts?: {dir?, ignored?}, git_cmd?: string): table<string, {code, orig_path}>|nil, err?   -- `-z`, exact paths
+M.status_porcelain_async(opts: {dir?, ignored?}|nil, on_done: fun(map|nil, err|nil), git_cmd?: string): { stop }
 M.parse_status(raw: string): table<string, {code, orig_path}>   -- pure, `-z` output
 M.show(rev: string, path: string, opts?: {dir?}, git_cmd?: string): string|nil, err?   -- file content at a revision, byte for byte ("" = index, ":1/:2/:3" = merge stages)
 M.show_async(rev: string, path: string, opts: {dir?}|nil, on_done: fun(content|nil, err|nil), git_cmd?: string): { stop }

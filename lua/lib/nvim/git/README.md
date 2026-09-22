@@ -111,6 +111,10 @@ rename/copy entries, which are keyed by the **new** path with `orig_path` set
 to the old one; ordinary entries have `orig_path = nil`. Paths are always
 relative to the **repository root**, whichever directory git was started in.
 
+Ignored paths (`!!`) are **not** included unless `opts.ignored = true` adds
+`--ignored` to the call — plain `-u` only controls untracked files, not
+ignored ones.
+
 A clean tree is `{}`; `nil` (plus an error string) means git itself failed —
 not a repo, or `git` missing.
 
