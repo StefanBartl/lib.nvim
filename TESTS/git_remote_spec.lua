@@ -103,4 +103,22 @@ return function(H)
     "https://codeberg.org/owner/repo/src/branch/main/src/x.lua",
     "build: a codeberg file URL (different grammar: /src/branch/)"
   )
+
+  -- A tracked file or branch name can legitimately contain a space, '#' or
+  -- '?' (all valid on a POSIX filesystem) -- unescaped, any of the three
+  -- would truncate or misdirect the URL (a browser reads '#'/'?' as the
+  -- fragment/query separator). Each path segment is percent-encoded, '/'
+  -- itself left alone so a subdirectory (or a branch containing one) still
+  -- reads as a real path rather than a literal "%2F".
+  H.eq(
+    remote.build("github", gh_remote, "main", "docs/notes #1.md"),
+    "https://github.com/StefanBartl/gitsuite.nvim/blob/main/docs/notes%20%231.md",
+    "build: percent-encodes '#' and a space in a file name, keeps '/' as the separator"
+  )
+
+  H.eq(
+    remote.build("github", gh_remote, "feature/x?y", "a.lua"),
+    "https://github.com/StefanBartl/gitsuite.nvim/blob/feature/x%3Fy/a.lua",
+    "build: percent-encodes '?' in a branch name, but keeps its own real '/' namespace separator intact"
+  )
 end
