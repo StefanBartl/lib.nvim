@@ -5,6 +5,7 @@
 ---@field in_git_repo fun(opts?: Lib.Git.Opts, git_cmd?: string): boolean # Check if the cwd (or `opts.dir`) is inside a Git work-tree.
 ---@field repo_root fun(opts?: Lib.Git.Opts, git_cmd?: string): string|nil # Get the absolute path to the repository root.
 ---@field current_branch fun(opts?: Lib.Git.Opts, git_cmd?: string): string|nil # Get the current branch name. Returns nil in detached HEAD state.
+---@field checkout fun(name: string, opts?: Lib.Git.Opts, git_cmd?: string): boolean, string|nil # Check out an existing local branch or other revision (`git checkout <name>`). Returns ok + git's own stderr on failure.
 ---@field is_detached_head fun(opts?: Lib.Git.Opts, git_cmd?: string): boolean # Check whether the repository is in a detached HEAD state.
 ---@field is_dirty fun(opts?: Lib.Git.Opts, git_cmd?: string): boolean # Check whether the working tree has uncommitted changes.
 ---@field is_tracked fun(path: string, opts?: Lib.Git.Opts, git_cmd?: string): boolean # Check whether the given path is tracked by Git.

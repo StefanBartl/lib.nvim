@@ -2,10 +2,14 @@
 
 Small, composable Git query helpers for editor features (autocommands,
 status integrations, conditional behavior). Every function shells out to the
-`git` CLI via `lib.nvim.cross.run_argv` (argv form, no shell) and is
-side-effect free; every function accepts an optional `git_cmd` to override
-the `git` binary. `opts.dir` (see [below](#querying-a-different-repo-than-the-editors-cwd))
-runs any of the cwd-implicit ones as `git -C <dir>`.
+`git` CLI via `lib.nvim.cross.run_argv` (argv form, no shell); every function
+accepts an optional `git_cmd` to override the `git` binary. `opts.dir` (see
+[below](#querying-a-different-repo-than-the-editors-cwd)) runs any of the
+cwd-implicit ones as `git -C <dir>`.
+
+Every function here is side-effect free except `checkout` (see
+[below](#checking-out-a-branch)), which is a real filesystem/index mutation
+by design.
 
 ## Usage
 
@@ -15,6 +19,7 @@ local git = require("lib.nvim.git")
 git.in_git_repo()          --> boolean
 git.repo_root()            --> absolute path string, or nil
 git.current_branch()       --> branch name, or nil in detached HEAD
+git.checkout("main")       --> boolean ok, string|nil err (git's own stderr on failure)
 git.is_detached_head()     --> boolean (false outside a repo: no HEAD to detach)
 git.is_dirty()             --> boolean (any porcelain status output at all)
 git.is_tracked("src/a.lua")  --> boolean
@@ -25,13 +30,38 @@ git.describe()             --> nearest tag, or the short hash (--always), or nil
 git.ahead_behind()         --> boolean ahead, boolean behind (vs. @{u})
 ```
 
-All of these return `nil` (or `false`, for the boolean ones) rather than
-throwing when the command fails or produces empty output — e.g. outside a
-Git repo, `repo_root()`/`current_branch()`/etc. all just return `nil`.
+All of these (except `checkout`, see [below](#checking-out-a-branch)) return
+`nil` (or `false`, for the boolean ones) rather than throwing when the
+command fails or produces empty output — e.g. outside a Git repo,
+`repo_root()`/`current_branch()`/etc. all just return `nil`.
 
 `ahead_behind()` parses `git rev-list --left-right --count HEAD...@{u}`; if
 the command fails, produces no output, or the output doesn't match
 `"<n> <n>"`, both results are `false` rather than raising.
+
+## Checking out a branch
+
+```lua
+local ok, err = git.checkout("some-branch")
+if not ok then
+  vim.notify("checkout failed: " .. err, vim.log.levels.ERROR)
+end
+```
+
+Runs `git checkout <name>` — the one function in this module that mutates
+the working tree/HEAD, so it goes through `run_blocking`, not
+`run_blocking_captured` (what the read-only helpers above use): a failed
+checkout writes its reason to **stderr**, and `run_blocking` is the runner
+here that actually captures it, so `err` is git's own text ("pathspec
+'<name>' did not match any file(s) known to git", "Your local changes to the
+following files would be overwritten by checkout", ...) rather than a
+generic message.
+
+`name` is refused outright (`ok = false`) if it starts with `-` — read as an
+option otherwise — rather than escaped. No `--` is inserted before it
+either: that would tell `git checkout` to treat `name` as a pathspec
+(restore a file from the index) instead of a branch, the opposite of what
+this function does.
 
 ## Querying a different repo than the editor's cwd
 
