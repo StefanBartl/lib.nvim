@@ -22,9 +22,12 @@
 ---
 ---   - from the list, `<C-f>`/`<C-p>` (or <PageDown>/<PageUp>) scroll it one
 ---     page, `<C-d>`/`<C-u>` half a page;
----   - `<Tab>` (and `<C-w>w`, `<C-w><C-w>`, `<C-w>W`) hop between list and
----     preview -- the cycle is closed on purpose: left alone, `<C-w>w` walks on
----     into the editor window underneath and leaves the popup stranded on top;
+---   - `<Tab>` (and `<C-w>w`, `<C-w><C-w>`, `<C-w>W`, `<C-w>j`, `<C-w>k`) hop
+---     between list and preview -- the cycle is closed on purpose: left alone,
+---     `<C-w>w`/`<C-w>j`/`<C-w>k` would walk on into the editor window
+---     underneath (or fail silently, since the list and preview are two
+---     unrelated floats, not siblings in a split) and leave the popup
+---     stranded on top;
 ---   - inside the preview everything that reads works (motions, `/`, visual,
 ---     `y`), `<CR>` submits at the cursor line (`on_preview_submit`), `q` and
 ---     `<Esc>` close the popup;
@@ -67,7 +70,7 @@ local DEFAULT_KEYS = {
   half_down = { "<C-d>" },
   half_up = { "<C-u>" },
   focus = { "<Tab>" },
-  cycle = { "<C-w>w", "<C-w><C-w>", "<C-w>W" },
+  cycle = { "<C-w>w", "<C-w><C-w>", "<C-w>W", "<C-w>j", "<C-w>k" },
   close = { "q", "<Esc>" },
   submit = { "<CR>" },
 }
@@ -406,7 +409,7 @@ function M.open(opts)
   end
 
   --- Focus left both popup windows for some other one (a click into the editor,
-  --- `<C-w>j`, a tab switch): the popup is not wanted any more. Checked after
+  --- `<C-w>h`, a tab switch): the popup is not wanted any more. Checked after
   --- the event, since a window switch can pass through a window on its way.
   local function close_when_left()
     vim.schedule(function()
@@ -505,6 +508,13 @@ function M.open(opts)
   results_surf:on_close(function()
     pcall(api.nvim_del_augroup_by_id, sync_group)
   end)
+
+  -- The popup always starts in the list -- the preview is something you go into
+  -- (`<Tab>`/`<C-w>w`), not something it opens into. `chooser.open()`'s own
+  -- `enter = true`, called after `preview_surf` above, already leaves focus here in
+  -- practice; making it explicit stops that ordering from being the only thing this
+  -- invariant rests on.
+  results_surf:focus()
 
   apply_hints()
   update_focus()
