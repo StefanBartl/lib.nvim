@@ -312,6 +312,59 @@ return function(H)
   H.ok(conflicted["my file.txt"] ~= nil, "status_porcelain: a conflicted path with a space")
   H.eq(conflicted["my file.txt"].code, "UU", "status_porcelain: both-modified conflict is UU")
 
+  -- ── opts.ignored ──────────────────────────────────────────────────────
+  do
+    local ig = tmpdir("-git-status-ignored")
+    git_run(ig, { "init", "-q", "-b", "main" })
+    write(ig, ".gitignore", { "ignored dir/", "*.log" })
+    write(ig, "kept.txt")
+    write(ig, "debug.log")
+    vim.fn.mkdir(ig .. "/ignored dir", "p")
+    write(ig, "ignored dir/inside.txt")
+
+    local plain = git.status_porcelain({ dir = ig })
+    H.ok(plain ~= nil, "status_porcelain: ignored fixture yields a map")
+    H.eq(
+      plain["debug.log"],
+      nil,
+      "status_porcelain: without opts.ignored, an ignored file is absent"
+    )
+    H.eq(
+      plain["ignored dir/inside.txt"],
+      nil,
+      "status_porcelain: without opts.ignored, an ignored directory's content is absent"
+    )
+    H.ok(plain["kept.txt"] ~= nil, "status_porcelain: a tracked-candidate file is still listed")
+
+    local with_ignored = git.status_porcelain({ dir = ig, ignored = true })
+    H.ok(with_ignored ~= nil, "status_porcelain({ignored=true}): still yields a map")
+    H.eq(
+      with_ignored["debug.log"] and with_ignored["debug.log"].code,
+      "!!",
+      "status_porcelain({ignored=true}): an ignored file is listed with code !!"
+    )
+    H.eq(
+      with_ignored["ignored dir/inside.txt"] and with_ignored["ignored dir/inside.txt"].code,
+      "!!",
+      "status_porcelain({ignored=true}): an ignored directory reports its content, with a space in the dir name"
+    )
+
+    local done, async_map = false, nil
+    git.status_porcelain_async({ dir = ig, ignored = true }, function(map)
+      done, async_map = true, map
+    end)
+    H.ok(
+      wait_for(function()
+        return done
+      end),
+      "status_porcelain_async({ignored=true}): on_done fires"
+    )
+    H.ok(
+      vim.deep_equal(async_map, with_ignored),
+      "status_porcelain_async({ignored=true}): same map as the synchronous call"
+    )
+  end
+
   -- ── failure shape ────────────────────────────────────────────────────
   local none, err = git.status_porcelain({ dir = not_repo })
   H.eq(none, nil, "status_porcelain: outside a repo is nil, not an empty map")

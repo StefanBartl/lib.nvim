@@ -83,6 +83,7 @@ end
 --- Options shared by every function that can target a repo other than the cwd.
 ---@class Lib.Git.Opts
 ---@field dir? string Run as `git -C <dir>` instead of against the cwd.
+---@field ignored? boolean Also list ignored paths (`git status --ignored`). Only honoured by `status_porcelain`/`status_porcelain_async`; every other function ignores it.
 
 --- Check if the current working directory (or `opts.dir`) is inside a Git work-tree.
 ---@param opts? Lib.Git.Opts
@@ -345,7 +346,11 @@ end
 ---@param bin string
 ---@return string[]
 local function status_argv(opts, bin)
-  return git_argv(bin, opts, { "status", "--porcelain", "-z", "-u" }, true)
+  local args = { "status", "--porcelain", "-z", "-u" }
+  if opts and opts.ignored then
+    args[#args + 1] = "--ignored"
+  end
+  return git_argv(bin, opts, args, true)
 end
 
 ---@internal
