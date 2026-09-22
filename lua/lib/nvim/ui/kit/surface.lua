@@ -35,6 +35,46 @@ function Surface:set_lines(lines)
   end
 end
 
+--- Replace only the buffer's last line, preserving `modifiable`. For a
+--- streaming consumer that keeps its own line buffer and only extends the
+--- line currently being written to, this avoids the full-buffer
+--- `nvim_buf_set_lines` a repeated `set_lines` call would otherwise cost per
+--- chunk. Pair with `append_lines` for newline-crossing chunks.
+---@param text string
+function Surface:set_last_line(text)
+  if not api.nvim_buf_is_valid(self.bufnr) then
+    return
+  end
+  local was_modifiable = api.nvim_get_option_value("modifiable", { buf = self.bufnr })
+  api.nvim_set_option_value("modifiable", true, { buf = self.bufnr })
+  -- -2/-1: the buffer's last line only (Neovim buffers always have >= 1
+  -- line, so this range is always valid, even right after surface.open()).
+  local ok, err = pcall(api.nvim_buf_set_lines, self.bufnr, -2, -1, false, { text })
+  api.nvim_set_option_value("modifiable", was_modifiable, { buf = self.bufnr })
+  if not ok then
+    error(err, 0)
+  end
+end
+
+--- Append `lines` after the buffer's current last line, preserving
+--- `modifiable`. A no-op for an empty list. See `set_last_line`.
+---@param lines string[]
+function Surface:append_lines(lines)
+  if #lines == 0 then
+    return
+  end
+  if not api.nvim_buf_is_valid(self.bufnr) then
+    return
+  end
+  local was_modifiable = api.nvim_get_option_value("modifiable", { buf = self.bufnr })
+  api.nvim_set_option_value("modifiable", true, { buf = self.bufnr })
+  local ok, err = pcall(api.nvim_buf_set_lines, self.bufnr, -1, -1, false, lines)
+  api.nvim_set_option_value("modifiable", was_modifiable, { buf = self.bufnr })
+  if not ok then
+    error(err, 0)
+  end
+end
+
 --- Update (or clear, with nil) the float's title.
 ---@param title string|nil
 function Surface:set_title(title)
