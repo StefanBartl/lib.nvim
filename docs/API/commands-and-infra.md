@@ -530,14 +530,17 @@ M.select(items: T[], opts?, on_choose: fun(item, idx))   -- kit.select if availa
 ## `lib.nvim.git` (see README)
 
 Composable Git query helpers; every function shells out via
-`lib.nvim.cross.run_argv` (argv, no shell), side-effect free. Returns
-`nil`/`false` (not throw) on failure/no-repo. `opts.dir` runs a call as
+`lib.nvim.cross.run_argv` (argv, no shell). Every function except
+`checkout` is side-effect free and returns `nil`/`false` (not throw) on
+failure/no-repo; `checkout` mutates HEAD/the working tree and returns
+`ok, err` instead (git's own stderr on failure). `opts.dir` runs a call as
 `git -C <dir>` instead of against the cwd.
 
 ```
 M.in_git_repo(opts?: {dir?}, git_cmd?: string): boolean
 M.repo_root(opts?: {dir?}, git_cmd?: string): string|nil
 M.current_branch(opts?: {dir?}, git_cmd?: string): string|nil
+M.checkout(name: string, opts?: {dir?}, git_cmd?: string): boolean ok, string|nil err   -- mutates HEAD; git's own stderr on failure
 M.is_detached_head(opts?: {dir?}, git_cmd?: string): boolean
 M.is_dirty(opts?: {dir?}, git_cmd?: string): boolean
 M.is_tracked(path: string, opts?: {dir?}, git_cmd?: string): boolean

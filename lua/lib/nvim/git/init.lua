@@ -111,6 +111,35 @@ function M.current_branch(opts, git_cmd)
   return git_system(git_argv(git_cmd or "git", opts, { "symbolic-ref", "--short", "HEAD" }))
 end
 
+--- Check out an existing local branch or other revision (`git checkout
+--- <name>`, a real filesystem/index mutation -- unlike every read-only
+--- helper above).
+---
+--- Uses `run_blocking` (not `run_blocking_captured`, which the rest of this
+--- module builds on): a failed checkout writes its reason to stderr, and
+--- `run_blocking` is the one runner here that actually captures it (see its
+--- own doc comment) -- a caller reporting a failed checkout to the user
+--- needs git's real reason ("pathspec '<name>' did not match any file(s)
+--- known to git", "Your local changes ... would be overwritten"), not the
+--- read helpers' bare nil.
+---
+--- No `--` before `name`: that would tell `git checkout` to treat it as a
+--- pathspec (restore a file from the index) instead of a branch -- exactly
+--- the opposite of what this function does. A leading `-` is refused
+--- outright instead, the same guard `show`'s `rev` argument uses.
+---@param name string Branch name or other revision `git checkout` accepts. Must not start with `-`.
+---@param opts? Lib.Git.Opts
+---@param git_cmd? string
+---@return boolean ok
+---@return string|nil err Git's own stderr on failure, or the rejection reason for an invalid `name`.
+function M.checkout(name, opts, git_cmd)
+  if type(name) ~= "string" or name == "" or name:sub(1, 1) == "-" then
+    return false, ("git checkout: invalid revision %s"):format(vim.inspect(name))
+  end
+  local argv = git_argv(git_cmd or "git", opts, { "checkout", name })
+  return require("lib.nvim.cross.run_argv").run_blocking(argv)
+end
+
 --- Check whether the repository is in a detached HEAD state.
 --- `false` outside a repository -- there is no HEAD to be detached.
 ---@param opts? Lib.Git.Opts
