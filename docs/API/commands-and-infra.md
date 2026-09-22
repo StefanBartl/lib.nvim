@@ -543,7 +543,9 @@ M.is_dirty(opts?: {dir?}, git_cmd?: string): boolean
 M.is_tracked(path: string, opts?: {dir?}, git_cmd?: string): boolean
 M.upstream(opts?: {dir?}, git_cmd?: string): string|nil        -- "origin/main"-style
 M.ahead_behind(opts?: {dir?}, git_cmd?: string): boolean ahead, boolean behind   -- vs @{u}
+M.head_hash(opts?: {dir?}, git_cmd?: string): string|nil        -- full SHA
 M.head_short_hash(opts?: {dir?}, git_cmd?: string): string|nil
+M.describe(opts?: {dir?}, git_cmd?: string): string|nil         -- nearest tag, or the short hash (--always)
 M.info(dir: string, git_cmd?: string): { branch, version, commit }
 M.status_porcelain(opts?: {dir?, ignored?}, git_cmd?: string): table<string, {code, orig_path}>|nil, err?   -- `-z`, exact paths
 M.status_porcelain_async(opts: {dir?, ignored?}|nil, on_done: fun(map|nil, err|nil), git_cmd?: string): { stop }
