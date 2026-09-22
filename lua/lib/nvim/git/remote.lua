@@ -6,7 +6,29 @@
 --- third consumer (github_stats.nvim, documentation.nvim) needed the same
 --- grammar instead of each parsing remotes with their own regex.
 
+local encoding = require("lib.lua.strings.encoding")
+
 local M = {}
+
+---@internal
+--- Percent-encode a path for use inside a URL path, segment by segment --
+--- `/` itself is preserved as the separator (encoding it too would turn a
+--- real subdirectory, or a branch name that legitimately contains one, into
+--- a literal `%2F` and break the link instead of fixing it). Reviewed after
+--- `M.build` shipped interpolating `branch`/`rel_path` raw: a tracked file
+--- or branch name containing `#`/`?`/a space is common enough (POSIX
+--- filesystems allow all three) and would otherwise truncate the URL at a
+--- `#` (read as the fragment separator) or `?` (read as the query
+--- separator) instead of naming the file.
+---@param path string
+---@return string
+local function encode_path(path)
+  local parts = {}
+  for part in path:gmatch("[^/]+") do
+    parts[#parts + 1] = encoding.url_encode(part)
+  end
+  return table.concat(parts, "/")
+end
 
 ---Parse a git remote URL into {host, owner, repo}. Supports
 ---`https://[user@]host/owner/repo(.git)?`, `git@host:owner/repo(.git)?`,
@@ -56,9 +78,12 @@ function M.host_kind(host, hosts_cfg)
 end
 
 ---Build a web URL for a file (optionally with a line anchor) or, with
----`rel_path == nil`, the repository root. `rel_path`/`branch` are expected
----to be git-controlled values, never raw user text, but this still only
----ever produces an http(s) URL string -- nothing is shelled out from here.
+---`rel_path == nil`, the repository root. `branch`/`rel_path` are expected
+---to be git-controlled values, never raw user text, but a tracked file or
+---branch name can still legitimately contain a space, `#` or `?` (any of
+---which would otherwise truncate or misdirect the URL) -- both are
+---percent-encoded segment by segment before going into the path, `/`
+---itself preserved as the separator. Nothing is shelled out from here.
 ---@param kind "github"|"gitlab"|"codeberg"
 ---@param remote { host: string, owner: string, repo: string }
 ---@param branch string
@@ -77,13 +102,14 @@ function M.build(kind, remote, branch, rel_path, first, last)
     anchor = (last and last ~= first) and ("#L%d-L%d"):format(first, last) or ("#L%d"):format(first)
   end
 
+  local enc_branch, enc_path = encode_path(branch), encode_path(rel_path)
   if kind == "gitlab" then
-    return ("%s/-/blob/%s/%s%s"):format(base, branch, rel_path, anchor)
+    return ("%s/-/blob/%s/%s%s"):format(base, enc_branch, enc_path, anchor)
   elseif kind == "codeberg" then
     -- Also the shape most self-hosted Gitea/Forgejo forks accept.
-    return ("%s/src/branch/%s/%s%s"):format(base, branch, rel_path, anchor)
+    return ("%s/src/branch/%s/%s%s"):format(base, enc_branch, enc_path, anchor)
   end
-  return ("%s/blob/%s/%s%s"):format(base, branch, rel_path, anchor)
+  return ("%s/blob/%s/%s%s"):format(base, enc_branch, enc_path, anchor)
 end
 
 return M
