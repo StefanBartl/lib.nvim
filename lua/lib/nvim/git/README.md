@@ -19,7 +19,9 @@ git.is_detached_head()     --> boolean (false outside a repo: no HEAD to detach)
 git.is_dirty()             --> boolean (any porcelain status output at all)
 git.is_tracked("src/a.lua")  --> boolean
 git.upstream()             --> "origin/main"-style string, or nil (no upstream)
+git.head_hash()            --> full hash string, or nil
 git.head_short_hash()      --> short hash string, or nil
+git.describe()             --> nearest tag, or the short hash (--always), or nil
 git.ahead_behind()         --> boolean ahead, boolean behind (vs. @{u})
 ```
 

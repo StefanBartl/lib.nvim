@@ -179,12 +179,32 @@ function M.ahead_behind(opts, git_cmd)
   return tonumber(left) > 0, tonumber(right) > 0
 end
 
+--- Get the full hash of HEAD.
+---@param opts? Lib.Git.Opts
+---@param git_cmd? string
+---@return string|nil
+function M.head_hash(opts, git_cmd)
+  return git_system(git_argv(git_cmd or "git", opts, { "rev-parse", "HEAD" }))
+end
+
 --- Get the short hash of HEAD.
 ---@param opts? Lib.Git.Opts
 ---@param git_cmd? string
 ---@return string|nil
 function M.head_short_hash(opts, git_cmd)
   return git_system(git_argv(git_cmd or "git", opts, { "rev-parse", "--short", "HEAD" }))
+end
+
+--- The nearest reachable tag (`git describe --tags`), or the short hash if
+--- there is none yet (`--always`) -- "there is a version tag" and "there is
+--- no tag" are both answered honestly, neither masquerading as the other.
+--- Same command `M.info`'s `version` field runs, split out on its own for a
+--- caller that wants only this and not `info`'s other two processes.
+---@param opts? Lib.Git.Opts
+---@param git_cmd? string
+---@return string|nil
+function M.describe(opts, git_cmd)
+  return git_system(git_argv(git_cmd or "git", opts, { "describe", "--tags", "--always" }))
 end
 
 --- One-shot repo identity snapshot for an arbitrary directory. Takes an

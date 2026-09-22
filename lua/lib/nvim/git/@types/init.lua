@@ -10,7 +10,9 @@
 ---@field is_tracked fun(path: string, opts?: Lib.Git.Opts, git_cmd?: string): boolean # Check whether the given path is tracked by Git.
 ---@field upstream fun(opts?: Lib.Git.Opts, git_cmd?: string): string|nil # Get the upstream branch of the current branch.
 ---@field ahead_behind fun(opts?: Lib.Git.Opts, git_cmd?: string): (boolean, boolean) # Check whether the current branch is ahead or behind its upstream.
+---@field head_hash fun(opts?: Lib.Git.Opts, git_cmd?: string): string|nil # Get the full hash of HEAD.
 ---@field head_short_hash fun(opts?: Lib.Git.Opts, git_cmd?: string): string|nil # Get the short hash of HEAD.
+---@field describe fun(opts?: Lib.Git.Opts, git_cmd?: string): string|nil # Nearest reachable tag (`git describe --tags`), or the short hash if there is none (`--always`).
 ---@field info fun(dir: string, git_cmd?: string): { branch: string|nil, version: string|nil, commit: string|nil } # One-shot repo identity snapshot for an arbitrary directory (`git -C <dir> ...`).
 ---@field refs fun(dir?: string, opts?: { branches?: boolean, remotes?: boolean, tags?: boolean, limit?: integer }, git_cmd?: string): string[] # Named revisions (local branches, remote branches, tags), each group most-recent-commit first, deduplicated. Built for <Tab>-completing a revision argument.
 ---@field parse_status fun(raw: string): Lib.Git.StatusMap # Pure parser for `git status --porcelain -z` output (path -> {code, orig_path}); renames/copies are keyed by their new path.
