@@ -139,8 +139,15 @@ function M.capture(cmd, opts, cb)
 
   local wins_before, bufs_before = snapshot_state()
 
-  -- Execute command
-  vim.cmd(cmd)
+  -- Execute command. Guarded because the command is caller-supplied and may
+  -- reach into a broken plugin (e.g. `:Noice all` throwing inside noice's own
+  -- formatter) -- an uncaught error here would otherwise bubble up as a raw
+  -- traceback instead of a clean notify.
+  local ok, err = pcall(vim.cmd, cmd)
+  if not ok then
+    notify.error(("cmd %q failed: %s"):format(cmd, err))
+    return nil
+  end
 
   local start = uv.now()
   local timer = uv.new_timer()
