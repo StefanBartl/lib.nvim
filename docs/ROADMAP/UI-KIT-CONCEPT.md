@@ -24,7 +24,7 @@
 > non-obvious decisions — deleting it would leave those pointers dead.
 >
 > Status: **concept / design proposal** (no code yet). Working name `ui.kit` is
-> a placeholder — see [Open decisions](#open-decisions).
+> a placeholder — see [Open decisions](#14-open-decisions).
 > Everything specified here is **cross-platform** (pure `vim.api` / `vim.fn`
 > float + highlight APIs, no shell-outs, no OS-specific paths).
 
