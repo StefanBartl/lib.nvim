@@ -18,6 +18,9 @@
 ![Status](https://img.shields.io/badge/status-beta-orange)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)
 [![CI](https://github.com/StefanBartl/lib.nvim/actions/workflows/ci.yml/badge.svg)](https://github.com/StefanBartl/lib.nvim/actions/workflows/ci.yml)
+[![wkd](https://img.shields.io/badge/wkd-family-c6ff3d)](https://stefanbartl.github.io/wkd/p/lib/)
+
+> Part of the [wkd](https://stefanbartl.github.io/wkd/) family — see this plugin's [page](https://stefanbartl.github.io/wkd/p/lib/) on the site.
 
 Reusable Lua and Neovim helpers — one tested base under a whole set of plugins.
 Extracted from a private Neovim configuration so that personal plugins can
