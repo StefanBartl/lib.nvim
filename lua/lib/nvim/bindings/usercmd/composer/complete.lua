@@ -3,6 +3,12 @@
 --- it offers subcommand literals, or — once literals are exhausted — the current
 --- positional arg's completer. Adding a route or arg type extends `<Tab>` for
 --- free.
+---
+--- A literal whose own route declares `check` and currently fails it is
+--- dropped from the offered subcommands -- the same `route.check` a route
+--- already uses to report "the optional plugin/binary it needs isn't
+--- installed" to `checkhealth`, now also read here so `<Tab>` never offers a
+--- subcommand that would just fail with that message.
 
 local tree = require("lib.nvim.bindings.usercmd.composer.tree")
 local argtypes = require("lib.nvim.bindings.usercmd.composer.argtypes")
@@ -10,6 +16,34 @@ local flags = require("lib.nvim.bindings.usercmd.composer.flags")
 local kv = require("lib.nvim.bindings.usercmd.composer.kv")
 
 local M = {}
+
+---@internal
+--- Whether a child node's own literal token should be offered as a
+--- completion candidate: true unless that child is itself a terminal route
+--- declaring a `check` that currently fails.
+---
+--- Only a child's OWN route is consulted -- an intermediate node (no route
+--- of its own, e.g. `ui` under `ui diffview open`) has nothing to check and
+--- always stays visible; its children are filtered independently the next
+--- time `<Tab>` walks into them.
+---
+--- `pcall`-guarded like `check.lua`'s own use of `route.check`: a throwing
+--- check must not take down completion for every other candidate, and a
+--- broken check fails OPEN (stays visible) rather than silently hiding a
+--- command a typo in its own check happened to break.
+---@param node Lib.UserCmd.Composer.Node
+---@return boolean
+local function child_visible(node)
+  local route = node.route
+  if not route or not route.check then
+    return true
+  end
+  local pok, cok = pcall(route.check)
+  if not pok then
+    return true
+  end
+  return cok ~= false
+end
 
 --- Split a command line into the committed tokens the user has already entered
 --- (excluding the command word itself and the in-progress `arg_lead`).
@@ -92,7 +126,13 @@ function M.candidates(root, arg_lead, cmd_line)
   -- positional; `tree.walk` still resolves an actually-typed literal to the
   -- child route, so the two never conflict at execution time.
   if next(node.children) ~= nil and filled == 0 then
-    out = argtypes.prefix(tree.child_keys(node), arg_lead)
+    local visible_keys = {}
+    for _, k in ipairs(tree.child_keys(node)) do
+      if child_visible(node.children[k]) then
+        visible_keys[#visible_keys + 1] = k
+      end
+    end
+    out = argtypes.prefix(visible_keys, arg_lead)
     if route and route.args and route.args[1] then
       local seen = {}
       for _, c in ipairs(out) do
