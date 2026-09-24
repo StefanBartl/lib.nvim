@@ -153,6 +153,41 @@ return function(H)
     eq(comp("", "Demo buffer "), "", "complete: no args past a leaf with no schema")
   end
 
+  -- A route.check gates its own literal out of the offered subcommands, the
+  -- same check checkhealth already surfaces -- so `<Tab>` never advertises a
+  -- subcommand that would immediately fail with "not installed".
+  do
+    local checked_root = tree.build({
+      {
+        path = { "ui", "lazygit" },
+        check = function()
+          return true
+        end,
+        run = function() end,
+      },
+      {
+        path = { "ui", "neogit" },
+        check = function()
+          return false, "neogit is not installed"
+        end,
+        run = function() end,
+      },
+      {
+        path = { "ui", "diffview" },
+        check = function()
+          error("boom")
+        end,
+        run = function() end,
+      },
+      { path = { "ui", "status" }, run = function() end },
+    })
+    eq(
+      join(complete.candidates(checked_root, "", "Demo ui ")),
+      "diffview,lazygit,status",
+      "complete: a route.check returning false drops its literal; a throwing check fails open; a route with no check always stays"
+    )
+  end
+
   -- Root route (`path = {}`) coexisting with literal children: the first slot
   -- must offer BOTH, or every value the root route accepts is invisible.
   -- This is open.nvim's `:Open [target] [scope]` next to `:Open viewer …`,
