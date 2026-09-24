@@ -4,11 +4,16 @@
 --- positional arg's completer. Adding a route or arg type extends `<Tab>` for
 --- free.
 ---
---- A literal whose own route declares `check` and currently fails it is
---- dropped from the offered subcommands -- the same `route.check` a route
---- already uses to report "the optional plugin/binary it needs isn't
---- installed" to `checkhealth`, now also read here so `<Tab>` never offers a
---- subcommand that would just fail with that message.
+--- A literal whose own route declares `check` or `available` and currently
+--- fails it is dropped from the offered subcommands. The two are deliberately
+--- NOT the same field: `check` is also surfaced by checkhealth/check_all as an
+--- error (a route that is genuinely broken without its dependency), while
+--- `available` affects completion only and is never read by checkhealth (a
+--- route that is merely one of several interchangeable optional backends,
+--- where one being absent was already designed to be informational, not an
+--- error -- see each field's own doc in `@types`). Gating completion on BOTH
+--- lets a hard `check` failure stay out of `<Tab>` too, without forcing a
+--- soft `available` failure to start looking like a health-check error.
 
 local tree = require("lib.nvim.bindings.usercmd.composer.tree")
 local argtypes = require("lib.nvim.bindings.usercmd.composer.argtypes")
@@ -18,31 +23,44 @@ local kv = require("lib.nvim.bindings.usercmd.composer.kv")
 local M = {}
 
 ---@internal
+--- `pcall`-guarded like `check.lua`'s own use of `route.check`: a throwing
+--- predicate must not take down completion for every other candidate, and a
+--- broken one fails OPEN (stays visible) rather than silently hiding a
+--- command a typo in its own predicate happened to break.
+---@param predicate fun(): boolean, string|nil
+---@return boolean visible
+local function passes(predicate)
+  local pok, cok = pcall(predicate)
+  if not pok then
+    return true
+  end
+  return cok ~= false
+end
+
+---@internal
 --- Whether a child node's own literal token should be offered as a
 --- completion candidate: true unless that child is itself a terminal route
---- declaring a `check` that currently fails.
+--- whose `check` or `available` currently fails (see `@types` for why both
+--- are consulted here but only `check` is surfaced by checkhealth).
 ---
 --- Only a child's OWN route is consulted -- an intermediate node (no route
 --- of its own, e.g. `ui` under `ui diffview open`) has nothing to check and
 --- always stays visible; its children are filtered independently the next
 --- time `<Tab>` walks into them.
----
---- `pcall`-guarded like `check.lua`'s own use of `route.check`: a throwing
---- check must not take down completion for every other candidate, and a
---- broken check fails OPEN (stays visible) rather than silently hiding a
---- command a typo in its own check happened to break.
 ---@param node Lib.UserCmd.Composer.Node
 ---@return boolean
 local function child_visible(node)
   local route = node.route
-  if not route or not route.check then
+  if not route then
     return true
   end
-  local pok, cok = pcall(route.check)
-  if not pok then
-    return true
+  if route.check and not passes(route.check) then
+    return false
   end
-  return cok ~= false
+  if route.available and not passes(route.available) then
+    return false
+  end
+  return true
 end
 
 --- Split a command line into the committed tokens the user has already entered
