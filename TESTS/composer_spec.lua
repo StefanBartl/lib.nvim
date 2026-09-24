@@ -188,6 +188,41 @@ return function(H)
     )
   end
 
+  -- route.available gates completion exactly like route.check does, but --
+  -- unlike route.check -- must NEVER be read by check.results/checkhealth:
+  -- it exists precisely for a route whose backend is one of several
+  -- interchangeable optional ones, where one being absent was already
+  -- designed to be informational rather than an error (gitsuite.nvim's
+  -- `:Git ui neogit`/`:Git ui lazygit` is the motivating case -- see its own
+  -- usrcmds.lua). A route.check that fails here would wrongly surface as a
+  -- checkhealth error for something the caller never meant to be a hard
+  -- requirement; route.available must not repeat that mistake.
+  do
+    local available_root = tree.build({
+      {
+        path = { "ui", "neogit" },
+        available = function()
+          return false
+        end,
+        run = function() end,
+      },
+      { path = { "ui", "diffview" }, run = function() end },
+    })
+    eq(
+      join(complete.candidates(available_root, "", "Demo ui ")),
+      "diffview",
+      "complete: route.available returning false drops its literal, same as route.check"
+    )
+
+    -- Required locally: the `check` local further below in this file is
+    -- declared later in this same function body, not in scope yet here.
+    local results = require("lib.nvim.bindings.usercmd.composer.check").results(available_root)
+    ok(
+      #results == 2 and results[1].ok and results[2].ok,
+      "check.results: route.available is never consulted -- both routes report ok regardless of it"
+    )
+  end
+
   -- Root route (`path = {}`) coexisting with literal children: the first slot
   -- must offer BOTH, or every value the root route accepts is invisible.
   -- This is open.nvim's `:Open [target] [scope]` next to `:Open viewer …`,
