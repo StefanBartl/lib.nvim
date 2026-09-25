@@ -18,8 +18,12 @@ local M = {}
 
 --- Create a prefixed notify helper (standard mode, not scheduled)
 ---@param prefix string Notification prefix, e.g. "[neotree-fs-refactor]"
+---@param create_opts? Lib.Notify.CreateOpts `popup = true` shows messages as a corner toast with history (see lib.nvim.notify.popup) instead of `vim.notify`
 ---@return Lib.Notify.Notifier
-function M.create(prefix)
+function M.create(prefix, create_opts)
+  local popup = create_opts and create_opts.popup
+  local source = create_opts and create_opts.source
+
   -- Normalize prefix once
   if type(prefix) ~= "string" then
     prefix = ""
@@ -45,6 +49,11 @@ function M.create(prefix)
 
     level = level or vim.log.levels.INFO
     opts = opts or {}
+
+    if popup then
+      require("lib.nvim.notify.popup").deliver(prefix .. msg, level, { source = source })
+      return
+    end
 
     vim.notify(prefix .. msg, level, opts)
   end
@@ -78,6 +87,9 @@ end
 
 -- Export safe notification utilities
 M.safe = require("lib.nvim.notify.safe")
+
+-- Export popup delivery (toast + history)
+M.popup = require("lib.nvim.notify.popup")
 
 -- Export log-level resolution (also usable standalone at its leaf path,
 -- e.g. from lib.nvim.logger)

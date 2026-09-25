@@ -5,6 +5,7 @@
 - [`lib.nvim.notify`](#libnvimnotify)
   - [Example: usage in a module](#example-usage-in-a-module)
   - [Example: another module, another prefix](#example-another-module-another-prefix)
+  - [`popup = true`](#popup--true-toast-instead-of-messages)
   - [`lib.nvim.notify.safe`](#libnvimnotifysafe)
     - [When is `lib.nvim.notify.safe` needed](#when-is-libnvimnotifysafe-needed)
     - [`safe.schedule`](#safeschedule)
@@ -40,6 +41,30 @@ local notify = require("lib.nvim.notify").create("[lsp]")
 
 notify.debug("Attaching server")
 ```
+
+---
+
+## `popup = true`: toast instead of `:messages`
+
+On a plain Neovim UI `vim.notify` is `nvim_echo`, so long or multi-line text
+(a rejected `git push`, say) pops up as a more-prompt. With `popup = true` the
+message becomes a non-focus-stealing corner toast (`ui.kit.toast` from
+ui.nvim, soft dependency) colored by level, and is kept in a yankable history:
+
+```lua
+local notify = require("lib.nvim.notify").create("[myplugin]", { popup = true, source = "myplugin" })
+notify.error("push failed
+...")
+
+local popup = require("lib.nvim.notify").popup
+popup.show_history("myplugin") -- scratch buffer, `q` closes
+popup.clear("myplugin")
+```
+
+The message is handed to plain `vim.notify` instead when `ui.notify` is
+enabled (it already renders toasts) or when no toast can be shown, so a
+message is never lost. `popup.deliver(msg, level, { source, timeout })` is the
+direct entry point.
 
 ---
 
