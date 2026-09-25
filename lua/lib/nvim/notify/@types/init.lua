@@ -21,7 +21,11 @@
 ---@field error fun(msg: string, opts?: table)
 ---@field debug fun(msg: string, opts?: table)
 
----@alias Lib.Notify.CreateFN fun(prefix: string): Lib.Notify.Notifier
+---@class Lib.Notify.CreateOpts
+---@field popup? boolean Deliver via lib.nvim.notify.popup (toast + history) instead of vim.notify
+---@field source? string Source tag for the popup title and history filter
+
+---@alias Lib.Notify.CreateFN fun(prefix: string, opts?: Lib.Notify.CreateOpts): Lib.Notify.Notifier
 
 ---Which scheduling strategy `Lib.Notify.Safe.notify` uses to reach the main loop.
 ---@alias Lib.Notify.Safe.ScheduleMode
@@ -51,6 +55,7 @@
 ---@class Lib.Notify
 ---@field create Lib.Notify.CreateFN
 ---@field safe Lib.Notify.Safe
+---@field popup Lib.Notify.Popup
 ---@field resolve_log_level Lib.Notify.ResolveLogLevelFn
 
 return {}

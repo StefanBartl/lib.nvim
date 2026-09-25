@@ -34,6 +34,7 @@ not carried forward.
 | ----------------- | --------------------------------------------------------------- |
 | `harness.lua`     | Shared `eq`/`ok` assertions, `tmpfile()`, `read_lines()`.       |
 | `polymorphic_rootresolver_spec.lua` | `lib.nvim.fs.polymorphic_rootresolver`: buffer-number/filename/nil argument normalization and the optional-callback contract an LSP `root_dir` resolver needs. |
+| `notify_popup_spec.lua` | `lib.nvim.notify.popup`: history, toast wrap/cap/title, `vim.notify` fallback, `ui.notify`-active bypass, source filter, `notify.create({ popup = true })`. |
 | `logger_spec.lua` | `lib.nvim.logger`: records, level/tag/master switches, ring bound, redaction, guard/wrap, file sink (JSONL), flush/clear. |
 | `autocmd_spec.lua` | `lib.nvim.bindings.autocmd`: `create` (buffer-vs-pattern exclusivity, defensive `pcall` wrapping, `raw` bypass), `group`/`get_augroup` caching including the re-clear-on-a-cached-name regression (a second `clear = true` call must still empty the group, not just the first), dead-group cache invalidation, `delete`/`registered` record-keeping, and `augroup.create.clear`. |
 | `keymap_registry_spec.lua` | `lib.nvim.bindings.keymap`: action registration/lookup, buffer-local vs. global scoping, and the warn-once-per-typo'd-action path. |

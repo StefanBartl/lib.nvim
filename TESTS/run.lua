@@ -44,6 +44,7 @@ local H = dofile(dir .. "harness.lua")
 local specs = {
   "polymorphic_rootresolver_spec.lua",
   "logger_spec.lua",
+  "notify_popup_spec.lua",
   "autocmd_spec.lua",
   "keymap_registry_spec.lua",
   "count_spec.lua",
