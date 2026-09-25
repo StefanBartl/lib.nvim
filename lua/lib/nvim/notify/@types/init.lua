@@ -24,6 +24,7 @@
 ---@class Lib.Notify.CreateOpts
 ---@field popup? boolean Deliver via lib.nvim.notify.popup (toast + history) instead of vim.notify
 ---@field source? string Source tag for the popup title and history filter
+---@field messages? boolean Also write to `:messages` (default: true, see lib.nvim.notify.popup)
 
 ---@alias Lib.Notify.CreateFN fun(prefix: string, opts?: Lib.Notify.CreateOpts): Lib.Notify.Notifier
 

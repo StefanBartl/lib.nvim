@@ -28,11 +28,14 @@ return function(H)
     native[#native + 1] = { msg = msg, level = level }
   end
   with_stubs(
-    { ["ui.notify"] = false, ["ui.kit.toast"] = {
-      open = function()
-        error("no ui")
-      end,
-    } },
+    {
+      ["ui.notify"] = false,
+      ["ui.kit.toast"] = {
+        open = function()
+          error("no ui")
+        end,
+      },
+    },
     function()
       popup.deliver("first\nsecond", vim.log.levels.ERROR, { source = "spec" })
     end
@@ -115,6 +118,36 @@ return function(H)
     n.error("boom")
     eq(popup.history("spec")[1].message, "[spec] boom", "prefixed message recorded")
     eq(opened.title, "spec error", "level reflected")
+  end)
+  popup.clear()
+
+  -- :messages: written by default, off by option, and never displayed via a
+  -- native echo (no more-prompt).
+  local function hist_has(text)
+    return vim.api.nvim_exec2("messages", { output = true }).output:find(text, 1, true) ~= nil
+  end
+  vim.cmd("messages clear")
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function()
+        return {}
+      end,
+    },
+  }, function()
+    popup.deliver("history line one\nline two", vim.log.levels.ERROR, { source = "spec" })
+    ok(hist_has("history line one"), "written to :messages by default")
+
+    vim.cmd("messages clear")
+    popup.deliver("quiet message", vim.log.levels.INFO, { source = "spec", messages = false })
+    ok(not hist_has("quiet message"), "per-call messages = false skips :messages")
+
+    popup.setup({ messages = false })
+    popup.deliver("global off", vim.log.levels.INFO)
+    ok(not hist_has("global off"), "setup({ messages = false }) changes the default")
+    popup.deliver("call wins", vim.log.levels.INFO, { messages = true })
+    ok(hist_has("call wins"), "a per-call value beats the module default")
+    popup.setup({ messages = true })
   end)
   popup.clear()
 end
