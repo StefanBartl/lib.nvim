@@ -55,7 +55,7 @@ function M.create(prefix, create_opts)
       require("lib.nvim.notify.popup").deliver(
         prefix .. msg,
         level,
-        { source = source, messages = messages }
+        { source = source, messages = messages, timeout = opts.timeout }
       )
       return
     end

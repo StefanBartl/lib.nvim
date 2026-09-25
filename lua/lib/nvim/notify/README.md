@@ -78,7 +78,10 @@ there.
 The message is handed to plain `vim.notify` instead when `ui.notify` is
 enabled (it already renders toasts) or when no toast can be shown, so a
 message is never lost. `popup.deliver(msg, level, { source, timeout })` is the
-direct entry point.
+direct entry point. Very large messages stay cheap: the toast wraps only the
+first 4000 bytes (12 lines max, marked as cut), and a history entry keeps at most
+64 KB. Delivery from a fast event (libuv callback) is rescheduled onto the main
+loop automatically.
 
 ---
 

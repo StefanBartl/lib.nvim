@@ -32,6 +32,10 @@ local config = { messages = true }
 local WIDTH = 38 -- ui.kit toasts are 40 columns wide, minus the border
 local MAX_LINES = 12
 local HISTORY_MAX = 200
+-- A message can be arbitrarily large (a whole command's output). Only its head
+-- is ever shown in a toast, and the history keeps a bounded copy per entry.
+local TOAST_INPUT_MAX = 4000 -- bytes considered when wrapping for the toast
+local ENTRY_MAX = 64 * 1024 -- bytes kept per history entry
 
 -- Per level: title, toast highlight group, milliseconds on screen.
 local LEVELS = {
@@ -62,6 +66,12 @@ local history = {}
 ---@param max_lines integer
 ---@return string[]
 local function wrap(text, width, max_lines)
+  local truncated = false
+  if #text > TOAST_INPUT_MAX then
+    text = text:sub(1, TOAST_INPUT_MAX)
+    truncated = true
+  end
+
   local out = {}
   for _, raw in ipairs(vim.split(text, "\n", { plain = true })) do
     local line = raw:gsub("\t", "  "):gsub("%s+$", "")
@@ -69,22 +79,34 @@ local function wrap(text, width, max_lines)
       out[#out + 1] = ""
     else
       while vim.fn.strdisplaywidth(line) > width do
-        -- Prefer a break at the last space inside the window.
+        -- Prefer a break at the last space inside the window. `cut` counts
+        -- characters (strcharpart), while the match position is a byte index,
+        -- so convert before comparing.
         local cut = width
         local head = vim.fn.strcharpart(line, 0, width)
         local space = head:match("^.*() ")
-        if space and space > width / 3 then
-          cut = space - 1
+        if space then
+          local chars = vim.fn.strchars(head:sub(1, space - 1))
+          if chars > width / 3 then
+            cut = chars
+          end
         end
         out[#out + 1] = vim.fn.strcharpart(line, 0, cut)
         line = vim.fn.strcharpart(line, cut):gsub("^%s+", "")
+        if #out > max_lines then
+          break
+        end
       end
       out[#out + 1] = line
     end
+    if #out > max_lines then
+      break
+    end
   end
-  if #out > max_lines then
+
+  if #out > max_lines or truncated then
     out = vim.list_slice(out, 1, max_lines)
-    out[max_lines] = "... (full text: the popup history)"
+    out[#out] = "... (full text: the popup history)"
   end
   return out
 end
@@ -130,8 +152,14 @@ end
 ---True when ui.nvim's `ui.notify` already routes `vim.notify` into toasts.
 ---@return boolean
 local function ui_notify_active()
-  local ok, ui_notify = pcall(require, "ui.notify")
-  return ok and type(ui_notify.is_enabled) == "function" and ui_notify.is_enabled() or false
+  -- `ui.notify` is loaded by whoever enabled it; looking at package.loaded
+  -- neither pays for a failed rtp search per message nor loads it as a side
+  -- effect.
+  local ui_notify = package.loaded["ui.notify"]
+  return type(ui_notify) == "table"
+      and type(ui_notify.is_enabled) == "function"
+      and ui_notify.is_enabled()
+    or false
 end
 
 ---@param message string
@@ -161,9 +189,21 @@ end
 ---@param opts? Lib.Notify.Popup.Opts
 ---@return nil
 function M.deliver(message, level, opts)
+  -- vim.fn / nvim_* calls below are not allowed in a fast event (libuv
+  -- callback); re-enter on the main loop instead of failing.
+  if vim.in_fast_event() then
+    vim.schedule(function()
+      M.deliver(message, level, opts)
+    end)
+    return
+  end
+
   level = level or vim.log.levels.INFO
   opts = opts or {}
   message = tostring(message)
+  if #message > ENTRY_MAX then
+    message = message:sub(1, ENTRY_MAX) .. "\n... (truncated)"
+  end
 
   history[#history + 1] =
     { time = os.date("%H:%M:%S"), level = level, message = message, source = opts.source }
@@ -171,10 +211,14 @@ function M.deliver(message, level, opts)
     table.remove(history, 1)
   end
 
-  if opts.messages == nil then
-    opts.messages = config.messages
+  -- Resolved into a local: `opts` belongs to the caller, who may reuse it, and
+  -- writing the default into it would freeze a later `setup({ messages = ... })`
+  -- out of that table.
+  local to_messages = opts.messages
+  if to_messages == nil then
+    to_messages = config.messages
   end
-  if opts.messages then
+  if to_messages then
     write_messages(message, level)
   end
 
@@ -206,7 +250,7 @@ end
 ---@return Lib.Notify.Popup.Entry[]
 function M.history(source)
   if source == nil then
-    return history
+    return vim.list_slice(history)
   end
   return vim.tbl_filter(function(entry)
     return matches(entry, source)
@@ -243,6 +287,15 @@ function M.show_history(source)
     lines = { "(no messages yet)" }
   end
 
+  -- A buffer name is unique: reopening while the previous history buffer is
+  -- still around would fail with E95, so retire the old one first.
+  local name = "notify://" .. (source or "messages")
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_get_name(b) == name then
+      pcall(vim.api.nvim_buf_delete, b, { force = true })
+    end
+  end
+
   vim.cmd("botright new")
   local buf = vim.api.nvim_get_current_buf()
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
@@ -250,7 +303,7 @@ function M.show_history(source)
   vim.bo[buf].bufhidden = "wipe"
   vim.bo[buf].swapfile = false
   vim.bo[buf].modifiable = false
-  vim.api.nvim_buf_set_name(buf, "notify://" .. (source or "messages"))
+  vim.api.nvim_buf_set_name(buf, name)
   vim.cmd("normal! G")
   vim.keymap.set(
     "n",
