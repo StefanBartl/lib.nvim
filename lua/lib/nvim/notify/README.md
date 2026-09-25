@@ -53,8 +53,7 @@ ui.nvim, soft dependency) colored by level, and is kept in a yankable history:
 
 ```lua
 local notify = require("lib.nvim.notify").create("[myplugin]", { popup = true, source = "myplugin" })
-notify.error("push failed
-...")
+notify.error("push failed\n...")
 
 local popup = require("lib.nvim.notify").popup
 popup.show_history("myplugin") -- scratch buffer, `q` closes
