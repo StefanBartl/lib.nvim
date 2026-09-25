@@ -2,7 +2,7 @@
 
 Tooling for whoever is developing *across* the plugin ecosystem lib.nvim sits
 under, not for a single plugin's own runtime. Occupants: `duplicates.lua`,
-`reload.lua`.
+`reload.lua`, `notify_scan.lua`.
 
 ## `reload.lua` — reload a config module on save
 
@@ -51,3 +51,25 @@ defaults to cwd — run it from the directory that holds your sibling repos.
 ```lua
 require("lib.nvim.dev.duplicates").create_usercmd()
 ```
+
+## `notify_scan.lua` — where do sibling repos emit user messages?
+
+Scans every immediate subdirectory of a root for `vim.notify`, `nvim_echo`,
+`nvim_err_write(ln)`, `:echoerr`/`:echomsg`, `print(` and `lib.nvim.notify`
+usage — the worklist for moving repos onto
+[`lib.nvim.notify.popup`](../notify/README.md). Per finding: kind, level (when
+spelled out), literal head, and two migration flags: `dynamic` (a wrapper —
+converting it converts every caller) and `bound` (`local notify = vim.notify`
+at load, which bypasses hooks installed later).
+
+```lua
+local scan = require("lib.nvim.dev.notify_scan")
+scan.scan("B:/repos")      -- Finding[]
+scan.summarize(findings)   -- per-repo totals
+scan.lines("B:/repos")     -- Markdown: summary table + findings per repo
+```
+
+`notify_scan.create_usercmd()` registers `:LibNotifyScan [path]` (call it from
+your own config). A line scanner, not a parser: it skips `TESTS/`, `.deps/`,
+`lib.nvim` and `ui.nvim`, and counts `lib.nvim.notify` *creation* sites, not
+each `notifier.info(...)` call.
