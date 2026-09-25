@@ -23,6 +23,7 @@ local M = {}
 function M.create(prefix, create_opts)
   local popup = create_opts and create_opts.popup
   local source = create_opts and create_opts.source
+  local messages = create_opts and create_opts.messages
 
   -- Normalize prefix once
   if type(prefix) ~= "string" then
@@ -51,7 +52,11 @@ function M.create(prefix, create_opts)
     opts = opts or {}
 
     if popup then
-      require("lib.nvim.notify.popup").deliver(prefix .. msg, level, { source = source })
+      require("lib.nvim.notify.popup").deliver(
+        prefix .. msg,
+        level,
+        { source = source, messages = messages }
+      )
       return
     end
 

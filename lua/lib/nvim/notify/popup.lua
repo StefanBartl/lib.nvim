@@ -9,7 +9,9 @@
 --- that opens in a scratch buffer, so the full text can be yanked later.
 ---
 --- Delivery order for a message:
----   1. recorded in the history (always)
+---   1. recorded in the popup history (always)
+---   1b. written to `:messages` too (default; `messages = false` turns it off),
+---      without displaying it -- see `write_messages`
 ---   2. if `ui.notify` (ui.nvim) is enabled it already turns `vim.notify` into
 ---      toasts, so the message is handed to `vim.notify` to avoid a second popup
 ---   3. else shown via `ui.kit.toast` (soft dependency on ui.nvim)
@@ -20,6 +22,12 @@
 
 ---@class Lib.Notify.Popup
 local M = {}
+
+---@class Lib.Notify.Popup.Config
+---@field messages boolean Also record every message in `:messages` (default: true)
+
+---@type Lib.Notify.Popup.Config
+local config = { messages = true }
 
 local WIDTH = 38 -- ui.kit toasts are 40 columns wide, minus the border
 local MAX_LINES = 12
@@ -43,6 +51,7 @@ local LEVELS = {
 ---@class Lib.Notify.Popup.Opts
 ---@field source? string Tag for the history and the toast title (e.g. "reposcope")
 ---@field timeout? integer Toast lifetime in ms (default per level)
+---@field messages? boolean Override the module default for writing to `:messages`
 
 ---@type Lib.Notify.Popup.Entry[]
 local history = {}
@@ -78,6 +87,44 @@ local function wrap(text, width, max_lines)
     out[max_lines] = "... (full text: the popup history)"
   end
   return out
+end
+
+local MSG_HL = {
+  [vim.log.levels.WARN] = "WarningMsg",
+  [vim.log.levels.ERROR] = "ErrorMsg",
+}
+
+---Adds `message` to `:messages` (the message history) without showing it.
+---
+---`nvim_echo(..., true, {})` records the message but also displays it, which
+---for multi-line text is exactly the more-prompt this module avoids. The
+---display is suppressed by attaching a throwaway `ext_messages` handler for
+---the duration of the call: the native UI then receives nothing, while the
+---history entry is still written. Messages are unaffected outside the call.
+---
+---An additional `ext_messages` consumer (noice.nvim and the like) still gets
+---the message -- that is their contract with Neovim and cannot be prevented
+---from here; such setups can turn this off with `messages = false`.
+---@param message string
+---@param level integer
+---@return nil
+local function write_messages(message, level)
+  if vim.in_fast_event() then
+    vim.schedule(function()
+      write_messages(message, level)
+    end)
+    return
+  end
+
+  local ns = vim.api.nvim_create_namespace("lib_nvim_notify_popup")
+  local attached = pcall(vim.ui_attach, ns, { ext_messages = true }, function()
+    return true
+  end)
+  if not attached then
+    return -- nothing safe to do: writing history would display it
+  end
+  pcall(vim.api.nvim_echo, { { message, MSG_HL[level] } }, true, {})
+  pcall(vim.ui_detach, ns)
 end
 
 ---True when ui.nvim's `ui.notify` already routes `vim.notify` into toasts.
@@ -124,8 +171,25 @@ function M.deliver(message, level, opts)
     table.remove(history, 1)
   end
 
+  if opts.messages == nil then
+    opts.messages = config.messages
+  end
+  if opts.messages then
+    write_messages(message, level)
+  end
+
   if ui_notify_active() or not show_toast(message, level, opts) then
     vim.notify(message, level)
+  end
+end
+
+---Changes module-wide defaults.
+---@param opts? { messages?: boolean } `messages = false` stops writing to `:messages`
+---@return nil
+function M.setup(opts)
+  opts = opts or {}
+  if opts.messages ~= nil then
+    config.messages = opts.messages and true or false
   end
 end
 
