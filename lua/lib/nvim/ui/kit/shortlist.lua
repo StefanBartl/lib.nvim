@@ -57,7 +57,7 @@ local M = {}
 ---@field half_up? string[]|string|false      # preview, half a page up
 ---@field focus? string[]|string|false        # hop between list and preview
 ---@field cycle? string[]|string|false        # window-cycle keys, kept inside the popup
----@field close? string[]|string|false        # close the popup (preview only; the list has its own)
+---@field close? string[]|string|false        # close the popup, from the preview and from the list (`q`/`<Esc>` on the list are the chooser's own and always there); add a key that also opens the popup to make it a toggle
 ---@field submit? string[]|string|false       # submit at the cursor line (preview only)
 
 --- The keys of the preview pane. `<C-p>` scrolls up on purpose although Vim
@@ -519,9 +519,16 @@ function M.open(opts)
     map("n", lhs, fn, view_map, "lib.nvim.ui.kit.shortlist: cycle within the popup")
   end
   for _, lhs in ipairs(keys.close or {}) do
-    map("n", lhs, function()
+    local function close_all()
       results_surf:close()
-    end, view_map, "lib.nvim.ui.kit.shortlist: close")
+    end
+    map("n", lhs, close_all, view_map, "lib.nvim.ui.kit.shortlist: close")
+    -- The list closes on `q`/`<Esc>` by itself (chooser); any other close key
+    -- -- `<C-e>` as the toggle for the key that opened the popup -- is bound
+    -- there too, or it would only work once focus had hopped to the preview.
+    if lhs ~= "q" and lhs ~= "<Esc>" then
+      map("n", lhs, close_all, list_map, "lib.nvim.ui.kit.shortlist: close")
+    end
   end
   for _, lhs in ipairs(keys.submit or {}) do
     map(
