@@ -349,6 +349,14 @@ end
 ---Mount (or re-configure) a chip under `opts.id`. Draws nothing by itself
 ---until the resolved text is non-empty -- an idle chip (no active session,
 ---no running container, ...) stays invisible, not a placeholder.
+---
+---A field `opts` omits (nil) keeps the entry's current value rather than
+---clearing it -- re-mounting an existing id to change just one thing (e.g.
+---`shape`, to switch rounded/rect/text live) must not wipe out `text`/
+---`color`/... nobody re-passed. `visible` needs its own nil check rather
+---than the `opts.x or entry.x` idiom the other fields use: `false` is a
+---legitimate value there, and `and/or` treats a falsy `false` the same as a
+---missing one.
 ---@param opts Lib.UI.Kit.ChipOpts
 ---@return string id
 function M.mount(opts)
@@ -365,12 +373,18 @@ function M.mount(opts)
     chips[id] = entry
   end
 
-  entry.text_src = opts.text
-  entry.visible_src = opts.visible
+  if opts.text ~= nil then
+    entry.text_src = opts.text
+  end
+  if opts.visible ~= nil then
+    entry.visible_src = opts.visible
+  end
   entry.anchor = ANCHORS[opts.anchor] and opts.anchor or entry.anchor or "bottom-left"
   entry.shape = opts.shape or entry.shape or "rounded"
-  entry.color = opts.color
-  entry.zindex = opts.zindex or 60
+  if opts.color ~= nil then
+    entry.color = opts.color
+  end
+  entry.zindex = opts.zindex or entry.zindex or 60
 
   ensure_hooks()
   M.refresh(id)
