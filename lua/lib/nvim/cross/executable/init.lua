@@ -18,8 +18,54 @@
 --- noticed until the cache is dropped. Call `clear()` after installing
 --- something, or `clear(name)` for a single entry. Anything checking for a tool
 --- it just installed itself should clear that name.
+---
+--- Memoizing does not help the FIRST lookup of each name, and a name that is
+--- not installed is the expensive one (every $PATH entry x every $PATHEXT
+--- extension, ~40 ms measured). On native Windows the third native lookup
+--- therefore starts a background index of $PATH (`executable.index`): from then
+--- on every not-yet-seen name is answered from a table instead. The index
+--- expires (see `index.MAX_AGE_MS`) and is dropped when $PATH changes; whatever
+--- it cannot answer goes to `vim.fn` as before.
+
+local index = require("lib.nvim.cross.executable.index")
 
 local M = {}
+
+--- Native lookups before the index is worth building (each costs 8-40 ms).
+local NATIVE_BEFORE_INDEX = 3
+
+---@type integer
+local native_lookups = 0
+
+---@type table<string, boolean>  names that must skip the index (cleared by name)
+local bypass = {}
+
+---Count one native lookup; on Windows, start the index after a few of them.
+---@return nil
+local function note_native()
+  native_lookups = native_lookups + 1
+  if
+    native_lookups >= NATIVE_BEFORE_INDEX
+    and index.supported()
+    and not index.ready()
+    and not index.building()
+  then
+    index.build_async()
+  end
+end
+
+---Ask the index for `name`, unless the caller cleared that name (a tool
+---installed a moment ago is not in an index built before it). The entry stays
+---until a full `clear()`: `exists` and `path` both look the name up once.
+---@param name string
+---@return string|nil path
+---@return boolean known
+local function from_index(name)
+  if bypass[name] then
+    return nil, false
+  end
+  return index.lookup(name)
+end
 
 ---@type table<string, boolean>
 local exists_cache = {}
@@ -35,10 +81,22 @@ function M.clear(name)
   if name == nil then
     exists_cache = {}
     path_cache = {}
+    bypass = {}
+    native_lookups = 0
+    index.reset()
     return
   end
   exists_cache[name] = nil
   path_cache[name] = nil
+  bypass[name] = true
+end
+
+---Build the $PATH index in the background now (native Windows only; a no-op
+---elsewhere). For a caller that knows it is about to ask for many names, e.g.
+---a health check listing every configured tool.
+---@return nil
+function M.warm()
+  index.build_async()
 end
 
 ---True when `name` is found on PATH. Memoized; see `clear()`.
@@ -49,7 +107,14 @@ function M.exists(name)
   if hit ~= nil then
     return hit
   end
-  local found = vim.fn.executable(name) == 1
+  local resolved, known = from_index(name)
+  local found
+  if known then
+    found = resolved ~= nil
+  else
+    found = vim.fn.executable(name) == 1
+    note_native()
+  end
   exists_cache[name] = found
   return found
 end
@@ -63,8 +128,12 @@ function M.path(name)
     -- `false` is the cached "not on PATH" sentinel.
     return hit or nil
   end
-  local exe = vim.fn.exepath(name)
-  local resolved = (exe ~= "" and exe) or nil
+  local resolved, known = from_index(name)
+  if not known then
+    local exe = vim.fn.exepath(name)
+    resolved = (exe ~= "" and exe) or nil
+    note_native()
+  end
   path_cache[name] = resolved or false
   return resolved
 end

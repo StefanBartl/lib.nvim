@@ -51,6 +51,8 @@ independently re-implemented in several plugins (open.nvim's
 M.exists(name: string): boolean
 M.path(name: string): string|nil
 M.find(name_or_candidates: string|string[]): string|nil
+M.clear(name?: string): nil       -- drop memoized lookups (and, without a name, the $PATH index)
+M.warm(): nil                      -- build the Windows $PATH index in the background now
 M.mason_bin(package_name: string): string|nil
   -- resolves stdpath("data")/mason/bin/<name>, .cmd suffix on native Windows, confirmed via uv.fs_stat
 ```
