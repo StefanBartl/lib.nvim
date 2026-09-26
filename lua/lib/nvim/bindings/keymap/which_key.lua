@@ -49,22 +49,103 @@
 
 local M = {}
 
+---@type table[][]  entry lists waiting for which-key to be loaded
+local pending = {}
+
+---@type boolean
+local watching = false
+
+---@internal
+---which-key, only when it is ALREADY loaded. Never `require`s it: under a lazy
+---plugin manager a `require` is the load trigger, and registering a group label
+---during startup used to pull the whole plugin in (9-17 ms) for a popup nobody
+---has opened yet -- which-key is meant to load on the first `<leader>`.
+---@return table|nil
+local function loaded_wk()
+  local mod = package.loaded["which-key"]
+  if type(mod) == "table" and type(mod.add) == "function" then
+    return mod
+  end
+  return nil
+end
+
+---@internal
+---Hand every queued entry list to which-key, once it is there.
+---@return boolean flushed  false while which-key is still not loaded
+local function flush()
+  local mod = loaded_wk()
+  if not mod then
+    return false
+  end
+  local queued = pending
+  pending = {}
+  for _, entries in ipairs(queued) do
+    -- pcall: which-key's spec format has changed between majors, and a label
+    -- being wrong is never worth taking a plugin's setup down with it.
+    pcall(mod.add, entries)
+  end
+  return true
+end
+
+---@internal
+---Flush when which-key shows up. Under lazy.nvim every plugin load (also one
+---triggered by someone else's `require`) fires `User LazyLoad`; `VimEnter` /
+---`UIEnter` cover a manager that loads it eagerly without an event. One
+---watcher, removed once it has delivered.
+---@return nil
+local function watch()
+  if watching then
+    return
+  end
+  watching = true
+  local group = vim.api.nvim_create_augroup("lib.nvim.which_key.pending", { clear = true })
+  vim.api.nvim_create_autocmd({ "User", "VimEnter", "UIEnter" }, {
+    group = group,
+    callback = function(ev)
+      if ev.event == "User" and ev.match ~= "LazyLoad" and ev.match ~= "VeryLazy" then
+        return
+      end
+      if flush() then
+        watching = false
+        pcall(vim.api.nvim_del_augroup_by_id, group)
+      end
+    end,
+    desc = "lib.nvim: deliver queued which-key labels once which-key is loaded",
+  })
+end
+
+---@internal
+---Send `entries` now if which-key is loaded, else queue them.
+---@param entries table[]
+---@return boolean applied  true when which-key took them, false when queued or rejected
+local function send(entries)
+  local mod = loaded_wk()
+  if mod then
+    return (pcall(mod.add, entries))
+  end
+  pending[#pending + 1] = entries
+  watch()
+  return false
+end
+
+---Queued label lists that have not reached which-key yet (tests, `:checkhealth`).
+---@return integer
+function M.pending_count()
+  return #pending
+end
+
+---Deliver anything queued, if which-key is loaded by now.
+---@return boolean flushed
+function M.flush()
+  return flush()
+end
+
 ---@internal
 --- Is it safe to send icons? Declared by the user, not detected -- see
 --- `lib.nvim.ui.nerd_font` for why detection is impossible.
 ---@return boolean
 local function icons_ok()
   return require("lib.nvim.ui.nerd_font").available()
-end
-
----@internal
----@return table|nil
-local function wk()
-  local ok, mod = pcall(require, "which-key")
-  if not ok or type(mod) ~= "table" or type(mod.add) ~= "function" then
-    return nil
-  end
-  return mod
 end
 
 ---Build one which-key group entry.
@@ -87,14 +168,15 @@ function M.entry(prefix, g, plugin)
   return entry
 end
 
----Label one prefix as a group, outside of a `register` call.
+---Label one prefix as a group, outside of a `register` call. Delivered when
+---which-key is loaded: at once if it already is, otherwise queued until it loads.
 ---
 ---`register` puts a plugin's own groups up by itself; this is for the cases
 ---where the prefix is not known until the user's config has been read --
 ---sessions.nvim's keys are entirely opt-in, so the prefix they share is
 ---whatever the user picked.
 ---@param spec { prefix: string, group?: string, icon?: string, mode?: string|string[] }|table[]
----@return boolean applied
+---@return boolean applied  false when queued (which-key not loaded yet) or rejected
 function M.add_group(spec)
   vim.validate("spec", spec, "table")
 
@@ -110,20 +192,15 @@ function M.add_group(spec)
     return false
   end
 
-  local mod = wk()
-  if not mod then
-    return false
-  end
-  -- pcall: which-key's spec format has changed between majors, and a label
-  -- being wrong is never worth taking a plugin's setup down with it.
-  return (pcall(mod.add, entries))
+  return send(entries)
 end
 
 ---Register what which-key cannot infer: the prefix group label, and any
 ---per-action icons.
 ---
 ---Called by `registry.register` after the mappings are set. Silent and
----harmless when which-key is not installed.
+---harmless when which-key is not installed; queued until it loads when it is
+---installed but lazy.
 ---@param plugin string
 ---@param spec Lib.Keymap.Spec
 ---@param user table
@@ -194,15 +271,7 @@ function M.apply(plugin, spec, user, bound)
     return false
   end
 
-  local mod = wk()
-  if not mod then
-    return false
-  end
-
-  -- pcall: which-key's spec format has changed between majors, and a label
-  -- being wrong is never worth taking a plugin's setup down with it.
-  local ok = pcall(mod.add, entries)
-  return ok
+  return send(entries)
 end
 
 return M
