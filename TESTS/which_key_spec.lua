@@ -172,6 +172,11 @@ return function(H)
       "registry.register: its group label is queued, not sent to a missing which-key"
     )
     eq(loads, 0, "registry.register: still never required which-key")
+    -- `forget()` only drops direct `set()` records (see its own doc comment);
+    -- `register()`'s own array is replaced by calling it again, empty, which
+    -- is the documented way to clear it -- otherwise "wk_queue_probe" stays in
+    -- `registry.registered()` for the rest of this shared run.
+    registry.register("wk_queue_probe", { actions = {} })
     registry.forget("wk_queue_probe")
   end)
 
