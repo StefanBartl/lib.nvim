@@ -311,7 +311,12 @@ local function reflow()
       local box_h = entry.border == "none" and 1 or 3
       local row = edge.v == "top" and offset
         or math.max(0, vim.o.lines - vim.o.cmdheight - offset - box_h + 1)
-      local col = edge.h == "left" and MARGIN
+      -- Flush against the left edge (col 0), not inset by MARGIN -- a
+      -- bordered float's `col` is where its own border starts, so 0 already
+      -- sits exactly at the screen edge without clipping anything. The right
+      -- edge keeps its MARGIN inset so a right-anchored chip isn't flush
+      -- against the terminal's own right border.
+      local col = edge.h == "left" and 0
         or math.max(0, vim.o.columns - entry.width - MARGIN - (entry.border == "none" and 0 or 2))
       pcall(api.nvim_win_set_config, entry.win, {
         relative = "editor",

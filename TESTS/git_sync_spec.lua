@@ -278,6 +278,54 @@ return function(H)
     H.eq(changed, nil, "update_async(fetch fails): no changed flag when the fetch never got there")
   end
 
+  -- ── update_async: the returned handle re-points from fetch to pull ──────
+  -- Regression for a bug where update_async always returned fetch_async's
+  -- own handle, so calling .stop() once the pull had started silently
+  -- killed an already-finished fetch job and left the real, in-flight
+  -- `git pull` completely untracked. `pull_async` is monkey-patched
+  -- (through the same module table `update_async` itself calls via `M.`)
+  -- so this is deterministic rather than racing real process timing.
+  do
+    local repo = tmpdir("-git-sync-update-handle")
+    git_run(repo, { "init", "-q", "-b", "main" })
+
+    local original_pull_async = git.pull_async
+    local pull_stop_called = false
+    git.pull_async = function()
+      return {
+        stop = function()
+          pull_stop_called = true
+        end,
+      }
+    end
+
+    local ok_call, handle = pcall(git.update_async, { dir = repo }, function() end)
+    H.ok(ok_call, "update_async: does not raise with pull_async faked")
+
+    H.ok(
+      wait_for(function()
+        return handle.stop ~= nil
+      end),
+      "update_async: returns a handle immediately"
+    )
+
+    -- The repo has no remotes, so `git fetch --all --prune` resolves
+    -- almost immediately with nothing to do, and update_async's own fetch
+    -- callback calls the (faked) pull_async right after -- a short fixed
+    -- wait (no network involved on either side) is enough for that
+    -- fetch->pull handoff to have already happened by the time this checks
+    -- which stop() the handle now reaches.
+    vim.wait(300)
+
+    handle.stop()
+    H.ok(
+      pull_stop_called,
+      "update_async: handle.stop() reaches the pull job, not the (finished) fetch job"
+    )
+
+    git.pull_async = original_pull_async
+  end
+
   for _, dir in ipairs(created) do
     pcall(vim.fn.delete, dir, "rf")
   end

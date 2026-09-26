@@ -761,15 +761,28 @@ function M.fetch_async(opts, on_done, git_cmd)
   return require("lib.nvim.cross.run_argv").run_async_captured(
     argv,
     function(ok, _stdout, code, stderr)
-      stderr = stderr or ""
       if not ok then
+        stderr = stderr or ""
         on_done(
           false,
           (stderr ~= "" and stderr) or ("git fetch failed (exit code %d)"):format(code)
         )
         return
       end
-      on_done(true, nil, stderr:match("%S") ~= nil)
+      -- `stderr` is `nil` only on the legacy (pre-`vim.system`) fallback,
+      -- which cannot separate it from stdout at all (see run_argv's own
+      -- doc comment) -- reporting `changed = false` there would be a
+      -- confident-looking lie, so "unknown" stays `nil` instead of
+      -- guessing either way. Deliberately an `if`, not `... and ... or
+      -- nil`: the middle term is a real `false` on a successful, nothing-
+      -- changed fetch, and `false or nil` in Lua evaluates to `nil` --
+      -- that idiom would have silently turned every "nothing changed"
+      -- result into "unknown" too.
+      local changed
+      if stderr ~= nil then
+        changed = stderr:match("%S") ~= nil
+      end
+      on_done(true, nil, changed)
     end
   )
 end
@@ -779,24 +792,29 @@ end
 --- the same "never clobber local work" guarantee `checkout` gives for
 --- switching branches.
 ---
---- `changed` reports whether anything actually fast-forwarded: git prints
---- "Already up to date." to stdout when there was nothing to merge, and an
---- "Updating <old>..<new>"/"Fast-forward" summary otherwise.
+--- `changed` reports whether anything actually fast-forwarded, by comparing
+--- `HEAD` before and after the pull rather than pattern-matching git's own
+--- ("Already up to date." vs "Updating <old>..<new>") message: that text is
+--- translatable (a git build with NLS/gettext support under a non-English
+--- `LANGUAGE`/`LC_ALL` would emit a localized string this never matches),
+--- so a structural check is the only one that works regardless of the
+--- caller's locale.
 ---@param opts? Lib.Git.Opts
 ---@param on_done fun(ok: boolean, err: string|nil, changed: boolean|nil)
 ---@param git_cmd? string
 ---@return { stop: fun() } handle
 function M.pull_async(opts, on_done, git_cmd)
+  local before = M.head_hash(opts, git_cmd)
   local argv = git_argv(git_cmd or "git", opts, { "pull", "--ff-only" })
   return require("lib.nvim.cross.run_argv").run_async_captured(
     argv,
-    function(ok, stdout, code, stderr)
+    function(ok, _stdout, code, stderr)
       if not ok then
         stderr = stderr or ""
         on_done(false, (stderr ~= "" and stderr) or ("git pull failed (exit code %d)"):format(code))
         return
       end
-      on_done(true, nil, not (stdout or ""):lower():match("already up.to.date"))
+      on_done(true, nil, before ~= M.head_hash(opts, git_cmd))
     end
   )
 end
@@ -829,18 +847,31 @@ end
 --- `changed` mirrors the pull's own -- that is what "did this checkout move
 --- forward" means for the combined operation. A failed fetch short-circuits
 --- before the pull ever runs.
+---
+--- The returned handle's `stop` is re-pointed from the fetch job to the
+--- pull job once the fetch resolves and the pull actually starts: a caller
+--- that stores the handle and calls `stop()` later (e.g. a multi-repo
+--- dashboard cancelling every in-flight update when its window closes)
+--- would otherwise kill an already-finished fetch and leave the real,
+--- still-running `git pull` completely untracked and uncancellable.
 ---@param opts? Lib.Git.Opts
 ---@param on_done fun(ok: boolean, err: string|nil, changed: boolean|nil)
 ---@param git_cmd? string
 ---@return { stop: fun() } handle
 function M.update_async(opts, on_done, git_cmd)
-  return M.fetch_async(opts, function(ok, err)
+  local active = { stop = function() end }
+  active.stop = M.fetch_async(opts, function(ok, err)
     if not ok then
       on_done(false, err)
       return
     end
-    M.pull_async(opts, on_done, git_cmd)
-  end, git_cmd)
+    active.stop = M.pull_async(opts, on_done, git_cmd).stop
+  end, git_cmd).stop
+  return {
+    stop = function()
+      active.stop()
+    end,
+  }
 end
 
 --- Create a buffer-scoped function that clears all virtual text
