@@ -100,20 +100,28 @@ end
 --- updates to stderr, `pull`'s "Already up to date." to stdout) needs both
 --- streams from the same successful run, not just the failure-only one.
 --- Existing callers that destructure only `(ok, output)` are unaffected --
---- Lua ignores the extra return values.
+--- Lua ignores the extra return values. On the legacy fallback (Neovim <
+--- 0.10) `stderr` is always `nil`, never `""`: `vim.fn.system` cannot
+--- separate the two streams at all, and a caller that treats stderr
+--- content as a signal needs to tell "this platform genuinely doesn't know"
+--- apart from "known and empty" rather than get a confident wrong answer.
 ---@param cmd string[]
----@param on_done fun(ok: boolean, output: string, code: integer, stderr: string)
+---@param on_done fun(ok: boolean, output: string, code: integer, stderr: string|nil)
 ---@param input? string
 ---@param opts? Lib.RunArgv.Opts
 ---@return { stop: fun() } handle
 function M.run_async_captured(cmd, on_done, input, opts)
   if not vim.system then
     -- Legacy fallback: no async process API, and no separate stderr stream
-    -- either (`vim.fn.system` only ever returns stdout) -- reported as "".
+    -- either (`vim.fn.system` only ever returns stdout) -- reported as
+    -- `nil`, not `""`, so a caller that treats stderr content as a signal
+    -- (e.g. "did this fetch move a ref") can tell "unknown, this platform
+    -- can't say" apart from "known and genuinely empty" instead of a
+    -- confident-looking wrong answer either way.
     local out = vim.fn.system(cmd, input or "")
     local code = vim.v.shell_error
     vim.schedule(function()
-      on_done(code == 0, out, code, "")
+      on_done(code == 0, out, code, nil)
     end)
     return { stop = function() end }
   end
