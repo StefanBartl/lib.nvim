@@ -219,4 +219,40 @@ return function(H)
   end)
   eq(#popup.history(), before + 1, "a delivery from a fast event lands on the main loop")
   popup.clear()
+
+  -- Regression: an earlier `write_messages` attached a throwaway
+  -- `vim.ui_attach` to swallow the on-screen echo, which hung indefinitely
+  -- once any floating window was already open (vim.ui_attach is documented
+  -- experimental/unstable; a `pcall` around it catches errors, not a call
+  -- that never returns). A floating window here must not stop delivery from
+  -- completing, and the message must still land in `:messages`.
+  do
+    local buf = vim.api.nvim_create_buf(false, true)
+    local win = vim.api.nvim_open_win(buf, false, {
+      relative = "editor",
+      row = 0,
+      col = 0,
+      width = 10,
+      height = 1,
+      style = "minimal",
+    })
+    vim.cmd("messages clear")
+    with_stubs({
+      ["ui.notify"] = false,
+      ["ui.kit.toast"] = {
+        open = function()
+          return {}
+        end,
+      },
+    }, function()
+      popup.deliver("float open, still delivered", vim.log.levels.ERROR, { source = "spec" })
+    end)
+    ok(
+      hist_has("float open, still delivered"),
+      "delivery completes and reaches :messages with a float open"
+    )
+    pcall(vim.api.nvim_win_close, win, true)
+    pcall(vim.api.nvim_buf_delete, buf, { force = true })
+  end
+  popup.clear()
 end
