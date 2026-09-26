@@ -118,8 +118,10 @@ return function(H)
   end)
   popup.clear()
 
-  -- :messages: written by default, off by option, and never displayed via a
-  -- native echo (no more-prompt).
+  -- :messages: written by default, off by option, and never blocks on a
+  -- --More-- prompt even for a long/multi-line message ('more' is toggled
+  -- off for the call) -- see write_messages()'s own doc comment for why it
+  -- no longer tries to hide the echo entirely (Neovim has no API for that).
   local function hist_has(text)
     return vim.api.nvim_exec2("messages", { output = true }).output:find(text, 1, true) ~= nil
   end
@@ -253,6 +255,32 @@ return function(H)
     )
     pcall(vim.api.nvim_win_close, win, true)
     pcall(vim.api.nvim_buf_delete, buf, { force = true })
+  end
+  popup.clear()
+
+  -- Regression: write_messages() used to run a hand-built
+  -- `:silent! echohl X | echomsg "..." | echohl None` Ex command. `:silent`
+  -- only scopes to the FIRST bar-separated command, so `echomsg` ran fully
+  -- unsilenced -- every delivery was, in practice, a plain visible echo,
+  -- length notwithstanding. A long/multi-line message through that path
+  -- (or through a naive nvim_echo call with 'more' left on) would block on
+  -- a --More-- prompt. Delivery must never do that, and 'more' must come
+  -- back exactly as it was found.
+  do
+    local more_before = vim.o.more
+    vim.o.more = true
+    with_stubs({
+      ["ui.notify"] = false,
+      ["ui.kit.toast"] = {
+        open = function()
+          return {}
+        end,
+      },
+    }, function()
+      popup.deliver(("line\n"):rep(500), vim.log.levels.INFO, { source = "spec" })
+    end)
+    eq(vim.o.more, true, "'more' is restored to what it was, not left toggled off")
+    vim.o.more = more_before
   end
   popup.clear()
 end
