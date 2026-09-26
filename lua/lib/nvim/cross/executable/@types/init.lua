@@ -9,5 +9,6 @@
 ---@field find fun(name_or_candidates: string|string[]): string|nil
 ---@field mason_bin fun(package_name: string): string|nil
 ---@field clear fun(name?: string): nil
+---@field warm fun(): nil
 
 return {}
