@@ -151,17 +151,17 @@ return function(H)
   -- deliver must not write its resolved default into the caller's opts table.
   local shared = { source = "spec" }
   popup.setup({ messages = false })
-  with_stubs(
-    { ["ui.notify"] = false, ["ui.kit.toast"] = {
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
       open = function()
         return {}
       end,
-    } },
-    function()
-      popup.deliver("first use", vim.log.levels.INFO, shared)
-      eq(shared.messages, nil, "the caller's opts table is left untouched")
-    end
-  )
+    },
+  }, function()
+    popup.deliver("first use", vim.log.levels.INFO, shared)
+    eq(shared.messages, nil, "the caller's opts table is left untouched")
+  end)
   popup.setup({ messages = true })
 
   -- A message far larger than a toast: the toast input stays bounded and the
