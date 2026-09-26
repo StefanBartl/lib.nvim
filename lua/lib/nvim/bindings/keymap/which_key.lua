@@ -49,7 +49,7 @@
 
 local M = {}
 
----@type table[][]  entry lists waiting for which-key to be loaded
+---@type (fun(mod: table))[]  deliveries waiting for which-key to be loaded
 local pending = {}
 
 ---@type boolean
@@ -63,7 +63,7 @@ local watching = false
 ---@return table|nil
 local function loaded_wk()
   local mod = package.loaded["which-key"]
-  if type(mod) == "table" and type(mod.add) == "function" then
+  if type(mod) == "table" then
     return mod
   end
   return nil
@@ -79,10 +79,10 @@ local function flush()
   end
   local queued = pending
   pending = {}
-  for _, entries in ipairs(queued) do
+  for _, delivery in ipairs(queued) do
     -- pcall: which-key's spec format has changed between majors, and a label
     -- being wrong is never worth taking a plugin's setup down with it.
-    pcall(mod.add, entries)
+    pcall(delivery, mod)
   end
   return true
 end
@@ -114,16 +114,39 @@ local function watch()
   })
 end
 
+---Run `fn(which_key)` once which-key is loaded: at once if it already is,
+---otherwise when it loads (see `watch`). For a caller that speaks to which-key
+---in its own way -- v2's `register`, a spec it builds itself -- but must not
+---`require` it while a lazy manager would take that as the load trigger.
+---@param fn fun(mod: table)
+---@return boolean ran  true when it ran now, false when it was queued
+function M.when_loaded(fn)
+  local mod = loaded_wk()
+  if mod then
+    pcall(fn, mod)
+    return true
+  end
+  pending[#pending + 1] = fn
+  watch()
+  return false
+end
+
 ---@internal
 ---Send `entries` now if which-key is loaded, else queue them.
 ---@param entries table[]
 ---@return boolean applied  true when which-key took them, false when queued or rejected
 local function send(entries)
-  local mod = loaded_wk()
-  if mod then
+  local function deliver(mod)
+    if type(mod.add) ~= "function" then
+      return false
+    end
     return (pcall(mod.add, entries))
   end
-  pending[#pending + 1] = entries
+  local mod = loaded_wk()
+  if mod then
+    return deliver(mod)
+  end
+  pending[#pending + 1] = deliver
   watch()
   return false
 end
