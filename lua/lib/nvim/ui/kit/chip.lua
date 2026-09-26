@@ -467,7 +467,21 @@ function M.refresh(id)
 
     local colors = resolve_colors(entry.color, is_transparent_shape(entry.shape))
     local applied = entry.applied_colors
-    if not applied or applied.fg ~= colors.fg or applied.bg ~= colors.bg then
+    -- `themed` is compared too, not just the rendered fg/bg: switching
+    -- `entry.color` between a table and a highlight-group name can resolve
+    -- to identical pixels (e.g. a custom fg that happens to match a group's
+    -- fg on a transparent chip, where bg is always `window_bg()` either
+    -- way). Comparing fg/bg alone would then skip `apply_colors` and leave
+    -- `applied_colors.themed` stale -- and the `ColorScheme` handler above
+    -- gates its re-tint on exactly that field, so a chip that just became
+    -- (or stopped being) theme-linked would silently keep the wrong
+    -- behaviour on every future colorscheme change.
+    if
+      not applied
+      or applied.fg ~= colors.fg
+      or applied.bg ~= colors.bg
+      or applied.themed ~= colors.themed
+    then
       apply_colors(entry, colors)
     end
   end
