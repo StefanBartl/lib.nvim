@@ -181,13 +181,19 @@ return function(H)
 
   -- Without an index, native lookups are added up; at the break-even (60 ms) the
   -- index is built synchronously -- inside a loop that never yields, which is
-  -- exactly where a background build could not finish.
+  -- exactly where a background build could not finish. A controlled clock, not
+  -- sleeping: timer granularity on Windows would make the count wobble.
   index.reset()
   executable.clear()
   native_calls = 0
+  local now_ns = 0
+  local real_hrtime = vim.uv.hrtime
+  rawset(vim.uv, "hrtime", function()
+    return now_ns
+  end)
   vim.fn.executable = function(...)
     native_calls = native_calls + 1
-    vim.wait(25) -- a slow native lookup: three of them pass 60 ms
+    now_ns = now_ns + 25 * 1e6 -- every native lookup "takes" 25 ms
     return real_executable(...)
   end
   executable.exists("nowhere-1")
@@ -203,6 +209,7 @@ return function(H)
   executable.exists("nowhere-4")
   executable.exists("nowhere-5")
   eq(native_calls, before, "executable: once built, new names no longer go native")
+  rawset(vim.uv, "hrtime", real_hrtime)
 
   -- warm() builds in the background.
   index.reset()
