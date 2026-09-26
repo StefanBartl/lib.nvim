@@ -141,10 +141,19 @@ local function resolve_colors(color, transparent)
 end
 
 ---@internal
+---Every non-alphanumeric byte -- including a literal `_`, so the escape
+---marker itself can never appear unescaped -- becomes `_xx` (its hex byte).
+---Unlike a lossy "replace with `_`" pass, this is unambiguous: two distinct
+---ids (e.g. `"a.b"` and `"a_b"`, both of which used to sanitize to the same
+---`"a_b"`) can never collide onto the same derived group name, so refreshing
+---one mounted chip can never bleed its colour into an unrelated one.
 ---@param id string
 ---@return string
 local function hl_group_name(id)
-  return "UiKitChip_" .. id:gsub("[^%w_]", "_")
+  local encoded = id:gsub("[^%w]", function(c)
+    return ("_%02x"):format(c:byte())
+  end)
+  return "UiKitChip_" .. encoded
 end
 
 ---@internal
@@ -242,6 +251,8 @@ local function open_window(entry)
   entry.win = surf.winid
   entry.buf = surf.bufnr
   entry.applied_border = entry.border
+  entry.applied_text = entry.text
+  entry.applied_width = entry.width
   surf:on_close(function()
     if chips[entry.id] == entry then
       entry.surf = nil
@@ -249,10 +260,13 @@ local function open_window(entry)
       entry.buf = nil
     end
   end)
-  apply_colors(
-    entry,
-    entry.applied_colors or resolve_colors(entry.color, is_transparent_shape(entry.shape))
-  )
+  -- Always resolved fresh from `entry.color` -- never `entry.applied_colors`,
+  -- which (re-)opening this window is a bad time to trust: a still-pending
+  -- `pulse()` leaves it holding the *pulse* colour, and reusing that here
+  -- (e.g. on the `ensure_current_tab` reopen below) left a chip stuck showing
+  -- its pulse colour forever once the pending revert's captured window
+  -- handle stopped matching the newly (re)opened one.
+  apply_colors(entry, resolve_colors(entry.color, is_transparent_shape(entry.shape)))
 end
 
 ---@internal
@@ -336,7 +350,7 @@ local function ensure_hooks()
         and entry.applied_colors
         and entry.applied_colors.themed
       then
-        apply_colors(entry, resolve_colors(entry.color))
+        apply_colors(entry, resolve_colors(entry.color, is_transparent_shape(entry.shape)))
       end
     end
   end, {
@@ -420,17 +434,37 @@ function M.refresh(id)
   if not entry.win or not api.nvim_win_is_valid(entry.win) then
     open_window(entry)
   else
-    entry.surf:set_lines({ text })
-    -- `border` only changes shape at runtime (rounded/rect/text switched on
-    -- an already-open chip); reconfiguring it every refresh would be a
-    -- needless (if harmless) window update on every dirty-tracking event.
-    local wconfig = { width = entry.width }
+    -- `refresh()` runs off editing-rate autocmds (sessions.nvim wires it into
+    -- BufAdd/BufDelete/WinNew/WinClosed/TabNewEntered/TabClosed), so most
+    -- calls find nothing about the chip itself actually changed. Text,
+    -- width, border and colour are each only re-applied to the live window
+    -- when they differ from what is already showing -- otherwise every one
+    -- of those events would repaint a chip whose rendered output never moved.
+    if entry.applied_text ~= text then
+      entry.surf:set_lines({ text })
+      entry.applied_text = text
+    end
+
+    local wconfig = nil
+    if entry.applied_width ~= entry.width then
+      wconfig = wconfig or {}
+      wconfig.width = entry.width
+      entry.applied_width = entry.width
+    end
     if entry.applied_border ~= entry.border then
+      wconfig = wconfig or {}
       wconfig.border = entry.border
       entry.applied_border = entry.border
     end
-    pcall(api.nvim_win_set_config, entry.win, wconfig)
-    apply_colors(entry, resolve_colors(entry.color, is_transparent_shape(entry.shape)))
+    if wconfig then
+      pcall(api.nvim_win_set_config, entry.win, wconfig)
+    end
+
+    local colors = resolve_colors(entry.color, is_transparent_shape(entry.shape))
+    local applied = entry.applied_colors
+    if not applied or applied.fg ~= colors.fg or applied.bg ~= colors.bg then
+      apply_colors(entry, colors)
+    end
   end
 
   reflow()
