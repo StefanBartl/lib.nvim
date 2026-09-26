@@ -787,6 +787,26 @@ function M.fetch_async(opts, on_done, git_cmd)
   )
 end
 
+---@internal
+--- Async equivalent of `M.head_hash`, used by `M.pull_async` so its
+--- before/after HEAD comparison never blocks the calling thread the way
+--- `M.head_hash` (built on `run_blocking_captured`) does.
+---@param opts? Lib.Git.Opts
+---@param on_done fun(hash: string|nil)
+---@param git_cmd? string
+---@return { stop: fun() } handle
+local function head_hash_async(opts, on_done, git_cmd)
+  local argv = git_argv(git_cmd or "git", opts, { "rev-parse", "HEAD" })
+  return require("lib.nvim.cross.run_argv").run_async_captured(argv, function(ok, stdout)
+    if not ok or type(stdout) ~= "string" then
+      on_done(nil)
+      return
+    end
+    stdout = vim.trim(stdout)
+    on_done(stdout ~= "" and stdout or nil)
+  end)
+end
+
 --- Fast-forward-only pull of the current branch (`git pull --ff-only`).
 --- Fails loudly (reported via `err`) rather than creating a merge commit --
 --- the same "never clobber local work" guarantee `checkout` gives for
@@ -798,25 +818,43 @@ end
 --- translatable (a git build with NLS/gettext support under a non-English
 --- `LANGUAGE`/`LC_ALL` would emit a localized string this never matches),
 --- so a structural check is the only one that works regardless of the
---- caller's locale.
+--- caller's locale. Both HEAD reads go through `head_hash_async`, not
+--- `M.head_hash` -- that one is a blocking `run_blocking_captured` call, and
+--- spending two of those on every pull (one before dispatching the async
+--- job, one inside its own completion callback) would reintroduce exactly
+--- the main-thread stall this whole async API exists to avoid, doubly so
+--- for a caller fanning this out over many repositories (`M.update_async`'s
+--- own multi-repo-dashboard case).
 ---@param opts? Lib.Git.Opts
 ---@param on_done fun(ok: boolean, err: string|nil, changed: boolean|nil)
 ---@param git_cmd? string
 ---@return { stop: fun() } handle
 function M.pull_async(opts, on_done, git_cmd)
-  local before = M.head_hash(opts, git_cmd)
-  local argv = git_argv(git_cmd or "git", opts, { "pull", "--ff-only" })
-  return require("lib.nvim.cross.run_argv").run_async_captured(
-    argv,
-    function(ok, _stdout, code, stderr)
-      if not ok then
-        stderr = stderr or ""
-        on_done(false, (stderr ~= "" and stderr) or ("git pull failed (exit code %d)"):format(code))
-        return
+  local active = { stop = function() end }
+  active.stop = head_hash_async(opts, function(before)
+    local argv = git_argv(git_cmd or "git", opts, { "pull", "--ff-only" })
+    active.stop = require("lib.nvim.cross.run_argv").run_async_captured(
+      argv,
+      function(ok, _stdout, code, stderr)
+        if not ok then
+          stderr = stderr or ""
+          on_done(
+            false,
+            (stderr ~= "" and stderr) or ("git pull failed (exit code %d)"):format(code)
+          )
+          return
+        end
+        active.stop = head_hash_async(opts, function(after)
+          on_done(true, nil, before ~= after)
+        end, git_cmd).stop
       end
-      on_done(true, nil, before ~= M.head_hash(opts, git_cmd))
-    end
-  )
+    ).stop
+  end, git_cmd).stop
+  return {
+    stop = function()
+      active.stop()
+    end,
+  }
 end
 
 --- Push the current branch to its upstream (`git push`).
