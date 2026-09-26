@@ -185,6 +185,26 @@ return function(H)
   ok(#popup.history()[1].message <= 64 * 1024 + 32, "history entries are size-capped")
   popup.clear()
 
+  -- Regression: a raw NUL in the message crosses the vim.fn bridge as a
+  -- Blob, and wrap()'s vim.fn.strdisplaywidth call then raises E976 --
+  -- deliver() must not lose the message (or itself error) over that.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        seen = o
+        return {}
+      end,
+    },
+  }, function()
+    local delivered_ok =
+      pcall(popup.deliver, "foo\0bar", vim.log.levels.ERROR, { messages = false })
+    ok(delivered_ok, "a NUL byte in the message does not raise out of deliver()")
+    eq(popup.history()[1].message, "foo\\0bar", "the NUL is replaced with a visible placeholder")
+    eq(seen.message[1], "foo\\0bar", "and the toast text is unaffected")
+  end)
+  popup.clear()
+
   -- Multibyte text is wrapped on characters, not bytes.
   with_stubs({
     ["ui.notify"] = false,

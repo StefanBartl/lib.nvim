@@ -219,7 +219,11 @@ function M.deliver(message, level, opts)
 
   level = level or vim.log.levels.INFO
   opts = opts or {}
-  message = tostring(message)
+  -- A message containing a raw NUL crosses the vim.fn bridge as a Blob, not a
+  -- String -- wrap()'s vim.fn.strdisplaywidth/strcharpart/strchars calls then
+  -- raise E976 and this whole delivery is lost. A message can be arbitrary
+  -- command output (see TOAST_INPUT_MAX above), so a stray NUL is realistic.
+  message = tostring(message):gsub("%z", "\\0")
   if #message > ENTRY_MAX then
     message = message:sub(1, ENTRY_MAX) .. "\n... (truncated)"
   end
