@@ -116,39 +116,40 @@ local MSG_HL = {
   [vim.log.levels.ERROR] = "ErrorMsg",
 }
 
----Escapes `s` as a double-quoted Vimscript string literal.
----@param s string
----@return string
-local function vim_string_literal(s)
-  return '"'
-    .. s:gsub('[\\"\n\r\t]', {
-      ["\\"] = "\\\\",
-      ['"'] = '\\"',
-      ["\n"] = "\\n",
-      ["\r"] = "\\r",
-      ["\t"] = "\\t",
-    })
-    .. '"'
-end
-
----Adds `message` to `:messages` (the message history) without showing it.
+---Adds `message` to `:messages` (the message history).
 ---
----`:silent` suppresses the on-screen echo while `:echomsg` still
----unconditionally records into |message-history| -- the standard Vim idiom
----for a message that must stay retrievable via `:messages` without ever
----popping up a more-prompt.
+---A previous version of this function ran `:silent! echohl X | echomsg "..."
+---| echohl None` through `vim.cmd`, on the theory that `:silent!` would
+---suppress the on-screen echo while `:echomsg` still recorded into
+---|message-history|. It did not: a command modifier such as `:silent` only
+---applies to the FIRST bar (`|`)-separated command on the line (see
+---`:h :verbose-cmd`'s own worked example), so the `echomsg` clause ran
+---completely unsilenced -- every delivery with the default `messages = true`
+---was, in practice, an ordinary visible echo, for any message length. And
+---repeating `silent!` on every clause is not a fix either (verified
+---directly): `:silent` does not just suppress display, it also stops the
+---message from being added to history at all (see `:h :silent`), so that
+---"fix" would have silently defeated this function's entire purpose instead.
 ---
----This intentionally does not go through `vim.ui_attach` (as an earlier
----version of this function did, attaching a throwaway `ext_messages`
----handler for the duration of the call to swallow the display side).
----`vim.ui_attach` is documented as experimental/unstable, and it has been
----observed to hang indefinitely -- never returning -- when a floating
----window is already open; a `pcall` around it only catches errors, not a
----call that simply never comes back, so it gave no real protection.
+---Neovim has no API to add a message to |message-history| without ever
+---touching the screen -- `nvim_echo(..., true, {})` is the only way to
+---record one, and it echoes as it records. This calls that directly instead
+---of going through a hand-built Ex command: it removes both the `:silent`
+---scoping bug above and any question of escaping `message` into a Vimscript
+---string literal safely (there is no command string left to build). `more`
+---is toggled off for the call so a long or multi-line message can never
+---block on a `--More--` prompt.
 ---
----An additional `ext_messages` consumer (noice.nvim and the like) may not
----observe a `:silent`-echoed message the way it would a normal one; such
----setups can turn this off with `messages = false`.
+---An earlier version instead attached a throwaway `ext_messages` UI
+---consumer (`vim.ui_attach`) for the call, specifically to swallow the
+---on-screen echo while still recording history. That approach is dropped:
+---`vim.ui_attach` is documented as experimental/unstable, and it was found
+---to hang indefinitely -- never returning -- once any floating window was
+---already open; a `pcall` around it only catches errors, not a call that
+---never comes back, so it gave no real protection against that.
+---
+---A message that must never be echoed at all -- not even briefly -- should
+---pass `messages = false` instead of relying on this function to hide it.
 ---@param message string
 ---@param level integer
 ---@return nil
@@ -161,10 +162,10 @@ local function write_messages(message, level)
   end
 
   local hl = MSG_HL[level] or "None"
-  pcall(
-    vim.cmd,
-    ("silent! echohl %s | echomsg %s | echohl None"):format(hl, vim_string_literal(message))
-  )
+  local more = vim.o.more
+  vim.o.more = false
+  pcall(vim.api.nvim_echo, { { message, hl } }, true, {})
+  vim.o.more = more
 end
 
 ---True when ui.nvim's `ui.notify` already routes `vim.notify` into toasts.
