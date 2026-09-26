@@ -116,17 +116,39 @@ local MSG_HL = {
   [vim.log.levels.ERROR] = "ErrorMsg",
 }
 
+---Escapes `s` as a double-quoted Vimscript string literal.
+---@param s string
+---@return string
+local function vim_string_literal(s)
+  return '"'
+    .. s:gsub('[\\"\n\r\t]', {
+      ["\\"] = "\\\\",
+      ['"'] = '\\"',
+      ["\n"] = "\\n",
+      ["\r"] = "\\r",
+      ["\t"] = "\\t",
+    })
+    .. '"'
+end
+
 ---Adds `message` to `:messages` (the message history) without showing it.
 ---
----`nvim_echo(..., true, {})` records the message but also displays it, which
----for multi-line text is exactly the more-prompt this module avoids. The
----display is suppressed by attaching a throwaway `ext_messages` handler for
----the duration of the call: the native UI then receives nothing, while the
----history entry is still written. Messages are unaffected outside the call.
+---`:silent` suppresses the on-screen echo while `:echomsg` still
+---unconditionally records into |message-history| -- the standard Vim idiom
+---for a message that must stay retrievable via `:messages` without ever
+---popping up a more-prompt.
 ---
----An additional `ext_messages` consumer (noice.nvim and the like) still gets
----the message -- that is their contract with Neovim and cannot be prevented
----from here; such setups can turn this off with `messages = false`.
+---This intentionally does not go through `vim.ui_attach` (as an earlier
+---version of this function did, attaching a throwaway `ext_messages`
+---handler for the duration of the call to swallow the display side).
+---`vim.ui_attach` is documented as experimental/unstable, and it has been
+---observed to hang indefinitely -- never returning -- when a floating
+---window is already open; a `pcall` around it only catches errors, not a
+---call that simply never comes back, so it gave no real protection.
+---
+---An additional `ext_messages` consumer (noice.nvim and the like) may not
+---observe a `:silent`-echoed message the way it would a normal one; such
+---setups can turn this off with `messages = false`.
 ---@param message string
 ---@param level integer
 ---@return nil
@@ -138,15 +160,11 @@ local function write_messages(message, level)
     return
   end
 
-  local ns = vim.api.nvim_create_namespace("lib_nvim_notify_popup")
-  local attached = pcall(vim.ui_attach, ns, { ext_messages = true }, function()
-    return true
-  end)
-  if not attached then
-    return -- nothing safe to do: writing history would display it
-  end
-  pcall(vim.api.nvim_echo, { { message, MSG_HL[level] } }, true, {})
-  pcall(vim.ui_detach, ns)
+  local hl = MSG_HL[level] or "None"
+  pcall(
+    vim.cmd,
+    ("silent! echohl %s | echomsg %s | echohl None"):format(hl, vim_string_literal(message))
+  )
 end
 
 ---True when ui.nvim's `ui.notify` already routes `vim.notify` into toasts.
