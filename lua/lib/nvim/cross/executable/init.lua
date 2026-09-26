@@ -21,37 +21,46 @@
 ---
 --- Memoizing does not help the FIRST lookup of each name, and a name that is
 --- not installed is the expensive one (every $PATH entry x every $PATHEXT
---- extension, ~40 ms measured). On native Windows the third native lookup
---- therefore starts a background index of $PATH (`executable.index`): from then
---- on every not-yet-seen name is answered from a table instead. The index
---- expires (see `index.MAX_AGE_MS`) and is dropped when $PATH changes; whatever
---- it cannot answer goes to `vim.fn` as before.
+--- extension, ~40 ms measured). On native Windows the time spent in native
+--- lookups is therefore added up, and once it reaches what an index of $PATH
+--- costs to build (`executable.index`, ~30-65 ms) the index is built right
+--- there, synchronously: from then on every not-yet-seen name is answered from
+--- a table. Synchronously, because the typical caller is a loop over a dozen
+--- names (dap adapters, language servers) that never yields to the event loop --
+--- a background build could not finish inside it. Never spending more on native
+--- lookups than the index costs is the point; `warm()` builds it ahead of time.
+--- The index expires (see `index.MAX_AGE_MS`) and is dropped when $PATH changes;
+--- whatever it cannot answer goes to `vim.fn` as before.
 
 local index = require("lib.nvim.cross.executable.index")
 
 local M = {}
 
---- Native lookups before the index is worth building (each costs 8-40 ms).
-local NATIVE_BEFORE_INDEX = 3
+--- Milliseconds of native lookups after which the index is cheaper: about what
+--- building it costs (30-65 ms measured), so the total is never more than twice
+--- what the cheapest strategy in hindsight would have paid.
+local INDEX_BREAKEVEN_MS = 60
 
----@type integer
-local native_lookups = 0
+---@type number  ms spent in native lookups so far
+local native_ms = 0
 
 ---@type table<string, boolean>  names that must skip the index (cleared by name)
 local bypass = {}
 
----Count one native lookup; on Windows, start the index after a few of them.
+---Account for one native lookup that took `ms`; on Windows, build the index
+---once the native lookups have cost as much as it would.
+---@param ms number
 ---@return nil
-local function note_native()
-  native_lookups = native_lookups + 1
-  if
-    native_lookups >= NATIVE_BEFORE_INDEX
-    and index.supported()
-    and not index.ready()
-    and not index.building()
-  then
-    index.build_async()
+local function note_native(ms)
+  native_ms = native_ms + ms
+  if native_ms >= INDEX_BREAKEVEN_MS and index.supported() and not index.ready() then
+    index.build()
   end
+end
+
+---@return number ms
+local function now_ms()
+  return (vim.uv or vim.loop).hrtime() / 1e6
 end
 
 ---Ask the index for `name`, unless the caller cleared that name (a tool
@@ -82,7 +91,7 @@ function M.clear(name)
     exists_cache = {}
     path_cache = {}
     bypass = {}
-    native_lookups = 0
+    native_ms = 0
     index.reset()
     return
   end
@@ -112,8 +121,9 @@ function M.exists(name)
   if known then
     found = resolved ~= nil
   else
+    local t0 = now_ms()
     found = vim.fn.executable(name) == 1
-    note_native()
+    note_native(now_ms() - t0)
   end
   exists_cache[name] = found
   return found
@@ -130,9 +140,10 @@ function M.path(name)
   end
   local resolved, known = from_index(name)
   if not known then
+    local t0 = now_ms()
     local exe = vim.fn.exepath(name)
     resolved = (exe ~= "" and exe) or nil
-    note_native()
+    note_native(now_ms() - t0)
   end
   path_cache[name] = resolved or false
   return resolved

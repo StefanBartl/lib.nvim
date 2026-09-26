@@ -179,22 +179,39 @@ return function(H)
   ok(native_calls > 0, "executable.clear(name): ... by asking vim.fn")
   eq(under(first, executable.path(late)), true, "executable.clear(name): and path() agrees")
 
-  -- Without an index the third native lookup starts a background build.
+  -- Without an index, native lookups are added up; at the break-even (60 ms) the
+  -- index is built synchronously -- inside a loop that never yields, which is
+  -- exactly where a background build could not finish.
   index.reset()
   executable.clear()
   native_calls = 0
+  vim.fn.executable = function(...)
+    native_calls = native_calls + 1
+    vim.wait(25) -- a slow native lookup: three of them pass 60 ms
+    return real_executable(...)
+  end
   executable.exists("nowhere-1")
   executable.exists("nowhere-2")
-  eq(index.building(), false, "executable: two native lookups do not build an index")
+  eq(index.ready(), false, "executable: 50 ms of native lookups do not build an index yet")
   executable.exists("nowhere-3")
-  ok(index.building() or index.ready(), "executable: the third native lookup starts one")
+  eq(
+    index.ready(),
+    true,
+    "executable: the lookup that reaches the break-even builds it, synchronously"
+  )
+  local before = native_calls
+  executable.exists("nowhere-4")
+  executable.exists("nowhere-5")
+  eq(native_calls, before, "executable: once built, new names no longer go native")
+
+  -- warm() builds in the background.
+  index.reset()
+  executable.clear()
+  executable.warm()
   vim.wait(3000, function()
     return index.ready()
   end, 10)
-  ok(index.ready(), "index.build_async: finishes in the background")
-  local before = native_calls
-  executable.exists("nowhere-4")
-  eq(native_calls, before, "executable: once built, new names no longer go native")
+  ok(index.ready(), "executable.warm: builds the index in the background")
 
   -- A build for a $PATH that changed meanwhile is dropped, not published.
   index.reset()
