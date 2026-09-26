@@ -96,6 +96,38 @@ return function(H)
   vim.api.nvim_exec_autocmds("VimEnter", {})
   eq(seen, 1, "VimEnter: delivers when which-key was loaded without an event")
 
+  -- ------------------------------------------- when_loaded: for callers with
+  -- their own way of talking to which-key
+  package.loaded["which-key"] = nil
+  wk = fresh()
+  local got_mod
+  eq(
+    wk.when_loaded(function(mod)
+      got_mod = mod
+    end),
+    false,
+    "when_loaded: queued while which-key is not loaded"
+  )
+  eq(loads, 0, "when_loaded: never requires which-key")
+  local fake_wk = { register = function() end } -- v2: no `add`
+  package.loaded["which-key"] = fake_wk
+  vim.api.nvim_exec_autocmds("User", { pattern = "LazyLoad", data = "which-key.nvim" })
+  eq(
+    got_mod,
+    fake_wk,
+    "when_loaded: runs with the module once it is loaded (any which-key version)"
+  )
+  wk = fresh()
+  local ran_now
+  eq(
+    wk.when_loaded(function()
+      ran_now = true
+    end),
+    true,
+    "when_loaded: runs at once when which-key is already loaded"
+  )
+  ok(ran_now, "when_loaded: ... and did run")
+
   -- ----------------------------------------- a failing add() never propagates
   package.loaded["which-key"] = {
     add = function()
