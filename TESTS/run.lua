@@ -96,6 +96,7 @@ local specs = {
   "git_show_spec.lua",
   "git_hash_describe_spec.lua",
   "git_checkout_spec.lua",
+  "git_sync_spec.lua",
   "git_remote_spec.lua",
   "curl_spec.lua",
   "deps_spec.lua",
