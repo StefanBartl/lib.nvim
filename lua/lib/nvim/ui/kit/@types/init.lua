@@ -229,7 +229,7 @@
 ---@field text? string|fun():string              # re-read on every `refresh`; "" hides the chip
 ---@field visible? boolean|fun():boolean         # default: derived from `text` being non-empty
 ---@field anchor? "bottom-left"|"bottom-right"|"top-left"|"top-right"  # default "bottom-left"
----@field shape? "rounded"|"rect"                # default "rounded"
+---@field shape? "rounded"|"rect"|"text"         # default "rounded"; "text" has no box at all (no border, no background)
 ---@field color? Lib.UI.Kit.ChipColor
 ---@field zindex? integer                        # default 60
 

@@ -33,6 +33,12 @@
 --- chips, or a chip and a modal kit popup, can be on screen at once with
 --- independently coloured chips instead of fighting over one shared group.
 ---
+--- `opts.shape` picks the box: `"rounded"` (the default, a bordered
+--- capsule), `"rect"` (borderless, a flat coloured block), or `"text"`
+--- (borderless AND background-less -- just the coloured text floating over
+--- whatever is behind it, no box at all; any `color.bg` is ignored for this
+--- one since the whole point is having no visible background).
+---
 --- A floating window belongs to the tabpage it was opened in and simply does
 --- not appear on any other tab -- so a chip that should follow the user
 --- across tabs is re-opened (same text/colour) on `TabEnter` rather than
@@ -116,17 +122,22 @@ local function window_bg()
 end
 
 ---@internal
+---`transparent` (shape = "text"): the resolved background is always the
+---window's own, whatever `color.bg` says -- "text" means no visible box, a
+---custom bg would put one back.
 ---@param color Lib.UI.Kit.ChipColor|nil
+---@param transparent boolean|nil
 ---@return { fg: integer, bg: integer, themed: boolean }
-local function resolve_colors(color)
+local function resolve_colors(color, transparent)
   if type(color) == "table" then
     local fg = as_color_number(color.fg) or resolve_hl(DEFAULT_HL_GROUP).fg or 0xc0caf5
-    local bg = as_color_number(color.bg) or window_bg()
+    local bg = transparent and window_bg() or (as_color_number(color.bg) or window_bg())
     return { fg = fg, bg = bg, themed = false }
   end
   local group = type(color) == "string" and color or DEFAULT_HL_GROUP
   local fg = resolve_hl(group).fg or resolve_hl("Normal").fg or 0xc0caf5
-  return { fg = fg, bg = mix(fg, window_bg(), CHIP_TINT), themed = true }
+  local bg = transparent and window_bg() or mix(fg, window_bg(), CHIP_TINT)
+  return { fg = fg, bg = bg, themed = true }
 end
 
 ---@internal
@@ -181,10 +192,17 @@ local function resolve_visible(v)
 end
 
 ---@internal
----@param shape "rounded"|"rect"|nil
+---@param shape "rounded"|"rect"|"text"|nil
 ---@return "rounded"|"minimal"  # a lib.nvim.ui.kit.theme preset name: "rounded" border, or borderless
 local function preset_for_shape(shape)
-  return shape == "rect" and "minimal" or "rounded"
+  return shape == "rounded" and "rounded" or "minimal"
+end
+
+---@internal
+---@param shape "rounded"|"rect"|"text"|nil
+---@return boolean  # "text": no visible box, just coloured text over the window behind it
+local function is_transparent_shape(shape)
+  return shape == "text"
 end
 
 -- ---------------------------------------------------------------- window lifecycle
@@ -230,7 +248,10 @@ local function open_window(entry)
       entry.buf = nil
     end
   end)
-  apply_colors(entry, entry.applied_colors or resolve_colors(entry.color))
+  apply_colors(
+    entry,
+    entry.applied_colors or resolve_colors(entry.color, is_transparent_shape(entry.shape))
+  )
 end
 
 ---@internal
@@ -386,7 +407,7 @@ function M.refresh(id)
   else
     entry.surf:set_lines({ text })
     pcall(api.nvim_win_set_config, entry.win, { width = entry.width })
-    apply_colors(entry, resolve_colors(entry.color))
+    apply_colors(entry, resolve_colors(entry.color, is_transparent_shape(entry.shape)))
   end
 
   reflow()
@@ -404,13 +425,14 @@ function M.pulse(id, opts)
   end
   opts = opts or {}
   local duration = tonumber(opts.duration_ms) or 300
-  apply_colors(entry, resolve_colors(opts.color or "DiagnosticWarn"))
+  local transparent = is_transparent_shape(entry.shape)
+  apply_colors(entry, resolve_colors(opts.color or "DiagnosticWarn", transparent))
 
   local win = entry.win
   vim.defer_fn(function()
     local e = chips[id]
     if e and e.win == win and api.nvim_win_is_valid(win) then
-      apply_colors(e, resolve_colors(e.color))
+      apply_colors(e, resolve_colors(e.color, is_transparent_shape(e.shape)))
     end
   end, duration)
 end
