@@ -92,19 +92,28 @@ end
 ---
 --- Text vs. bytes: see `run_blocking_captured` -- `opts.binary` delivers stdout
 --- exactly as the process wrote it.
+---
+--- `stderr` (the 4th `on_done` argument) is captured unconditionally, on
+--- success as well as failure -- unlike `run_blocking`'s error string, which
+--- only ever exists on failure. A caller distinguishing "nothing to do" from
+--- "did something" on a *successful* exit (git writes `push`/`fetch`'s ref
+--- updates to stderr, `pull`'s "Already up to date." to stdout) needs both
+--- streams from the same successful run, not just the failure-only one.
+--- Existing callers that destructure only `(ok, output)` are unaffected --
+--- Lua ignores the extra return values.
 ---@param cmd string[]
----@param on_done fun(ok: boolean, output: string, code: integer)
+---@param on_done fun(ok: boolean, output: string, code: integer, stderr: string)
 ---@param input? string
 ---@param opts? Lib.RunArgv.Opts
 ---@return { stop: fun() } handle
 function M.run_async_captured(cmd, on_done, input, opts)
   if not vim.system then
-    -- Legacy fallback: no async process API. Run it the old way and report
-    -- through the same callback so callers only ever need one shape.
+    -- Legacy fallback: no async process API, and no separate stderr stream
+    -- either (`vim.fn.system` only ever returns stdout) -- reported as "".
     local out = vim.fn.system(cmd, input or "")
     local code = vim.v.shell_error
     vim.schedule(function()
-      on_done(code == 0, out, code)
+      on_done(code == 0, out, code, "")
     end)
     return { stop = function() end }
   end
@@ -116,13 +125,13 @@ function M.run_async_captured(cmd, on_done, input, opts)
   local text = not (opts and opts.binary)
   local ok_spawn, job = pcall(vim.system, cmd, { text = text, stdin = input }, function(res)
     vim.schedule(function()
-      on_done(res.code == 0, res.stdout or "", res.code)
+      on_done(res.code == 0, res.stdout or "", res.code, res.stderr or "")
     end)
   end)
 
   if not ok_spawn then
     vim.schedule(function()
-      on_done(false, tostring(job), -1)
+      on_done(false, tostring(job), -1, "")
     end)
     return { stop = function() end }
   end

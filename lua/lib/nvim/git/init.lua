@@ -738,6 +738,111 @@ function M.blame_porcelain_async(path, opts, on_done, git_cmd)
   end)
 end
 
+--- Fetch every remote's tracking refs and prune deleted ones
+--- (`git fetch --all --prune`). Does not touch the working tree or `HEAD`.
+---
+--- Always async (`run_async_captured`, never a blocking counterpart): this is
+--- a network call, and `lib.nvim.cross.run_argv`'s own reasoning for
+--- `run_async_captured` -- "git over the network ... belongs here rather
+--- than [blocking]" -- applies to every function in this section, not just
+--- this one.
+---
+--- `changed` reports whether the fetch actually moved a remote-tracking ref:
+--- git writes ref updates (`<old>..<new> main -> origin/main`) to stderr and
+--- stays silent there when nothing was new. A failed fetch never reaches this
+--- branch (`on_done` returns early on `ok == false`), so a present `changed`
+--- always means the call actually succeeded.
+---@param opts? Lib.Git.Opts
+---@param on_done fun(ok: boolean, err: string|nil, changed: boolean|nil)
+---@param git_cmd? string
+---@return { stop: fun() } handle
+function M.fetch_async(opts, on_done, git_cmd)
+  local argv = git_argv(git_cmd or "git", opts, { "fetch", "--all", "--prune" })
+  return require("lib.nvim.cross.run_argv").run_async_captured(
+    argv,
+    function(ok, _stdout, code, stderr)
+      stderr = stderr or ""
+      if not ok then
+        on_done(
+          false,
+          (stderr ~= "" and stderr) or ("git fetch failed (exit code %d)"):format(code)
+        )
+        return
+      end
+      on_done(true, nil, stderr:match("%S") ~= nil)
+    end
+  )
+end
+
+--- Fast-forward-only pull of the current branch (`git pull --ff-only`).
+--- Fails loudly (reported via `err`) rather than creating a merge commit --
+--- the same "never clobber local work" guarantee `checkout` gives for
+--- switching branches.
+---
+--- `changed` reports whether anything actually fast-forwarded: git prints
+--- "Already up to date." to stdout when there was nothing to merge, and an
+--- "Updating <old>..<new>"/"Fast-forward" summary otherwise.
+---@param opts? Lib.Git.Opts
+---@param on_done fun(ok: boolean, err: string|nil, changed: boolean|nil)
+---@param git_cmd? string
+---@return { stop: fun() } handle
+function M.pull_async(opts, on_done, git_cmd)
+  local argv = git_argv(git_cmd or "git", opts, { "pull", "--ff-only" })
+  return require("lib.nvim.cross.run_argv").run_async_captured(
+    argv,
+    function(ok, stdout, code, stderr)
+      if not ok then
+        stderr = stderr or ""
+        on_done(false, (stderr ~= "" and stderr) or ("git pull failed (exit code %d)"):format(code))
+        return
+      end
+      on_done(true, nil, not (stdout or ""):lower():match("already up.to.date"))
+    end
+  )
+end
+
+--- Push the current branch to its upstream (`git push`).
+---@param opts? Lib.Git.Opts
+---@param on_done fun(ok: boolean, err: string|nil)
+---@param git_cmd? string
+---@return { stop: fun() } handle
+function M.push_async(opts, on_done, git_cmd)
+  local argv = git_argv(git_cmd or "git", opts, { "push" })
+  return require("lib.nvim.cross.run_argv").run_async_captured(
+    argv,
+    function(ok, _stdout, code, stderr)
+      if not ok then
+        stderr = stderr or ""
+        on_done(false, (stderr ~= "" and stderr) or ("git push failed (exit code %d)"):format(code))
+        return
+      end
+      on_done(true, nil)
+    end
+  )
+end
+
+--- Fetch, then fast-forward pull -- the pair every "bring this repo level
+--- with its upstream" caller wants (multi-repo dashboards, batch sync
+--- tools), expressed once so they all agree on exactly what "update" means
+--- instead of each spelling out the same two calls.
+---
+--- `changed` mirrors the pull's own -- that is what "did this checkout move
+--- forward" means for the combined operation. A failed fetch short-circuits
+--- before the pull ever runs.
+---@param opts? Lib.Git.Opts
+---@param on_done fun(ok: boolean, err: string|nil, changed: boolean|nil)
+---@param git_cmd? string
+---@return { stop: fun() } handle
+function M.update_async(opts, on_done, git_cmd)
+  return M.fetch_async(opts, function(ok, err)
+    if not ok then
+      on_done(false, err)
+      return
+    end
+    M.pull_async(opts, on_done, git_cmd)
+  end, git_cmd)
+end
+
 --- Create a buffer-scoped function that clears all virtual text
 --- in the given namespace.
 ---
