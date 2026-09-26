@@ -112,6 +112,7 @@ local specs = {
   "relpath_spec.lua",
   "config_spec.lua",
   "cross_executable_spec.lua",
+  "which_key_spec.lua",
 }
 
 --- Straight to stdout rather than through `print`.
