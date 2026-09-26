@@ -33,10 +33,14 @@ for a tool it just installed itself should clear that name first.
 Memoizing does not help the first lookup of each name, and a name that is not
 installed is the expensive one: `vim.fn.exepath` stats every $PATH entry times
 every $PATHEXT extension (72 x 11 on the author's machine, ~40 ms per miss). The
-third native lookup therefore starts a background index of $PATH
-(`lib.nvim.cross.executable.index`, ~30–65 ms for ~7800 names, one directory per
-event-loop tick); from then on names not seen before are answered from a table
-in microseconds.
+time spent in native lookups is therefore added up; once it reaches what an index
+of $PATH costs to build (`lib.nvim.cross.executable.index`, ~30–65 ms for ~7800
+names, 60 ms is the break-even) the index is built right there, synchronously --
+the typical caller is a loop over a dozen names that never yields, so a
+background build could not finish inside it. From then on names not seen before
+are answered from a table in microseconds. Native lookups never cost much more
+than the index would have. `warm()` builds the index in the background ahead of
+time for a caller that knows what is coming.
 
 The index reproduces Vim's own lookup, quirks included (checked against
 `vim.fn.exepath`/`executable` on a real $PATH: 379 of 380 names identical): $PATH

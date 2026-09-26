@@ -32,8 +32,9 @@ Mason-managed binary lookup in one place.
 
 - **Module:** `lib.nvim.cross.executable` (`exists`, `path`, `find`,
   `mason_bin`, `clear`, `warm`). Lookups are memoized per name; on native
-  Windows the third native lookup starts a background index of $PATH, so a
-  config asking for a dozen missing tools no longer pays ~40 ms per miss.
+  Windows, once native lookups have cost as much as an index of $PATH (60 ms), the
+  index is built and later lookups are answered from it: a loop over a dozen
+  missing tools no longer pays ~40 ms per miss.
 
 ```lua
 cross.executable.find({ "rg", "grep" })     -- first one that exists
