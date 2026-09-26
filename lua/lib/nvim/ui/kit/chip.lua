@@ -241,6 +241,7 @@ local function open_window(entry)
   entry.surf = surf
   entry.win = surf.winid
   entry.buf = surf.bufnr
+  entry.applied_border = entry.border
   surf:on_close(function()
     if chips[entry.id] == entry then
       entry.surf = nil
@@ -420,7 +421,15 @@ function M.refresh(id)
     open_window(entry)
   else
     entry.surf:set_lines({ text })
-    pcall(api.nvim_win_set_config, entry.win, { width = entry.width })
+    -- `border` only changes shape at runtime (rounded/rect/text switched on
+    -- an already-open chip); reconfiguring it every refresh would be a
+    -- needless (if harmless) window update on every dirty-tracking event.
+    local wconfig = { width = entry.width }
+    if entry.applied_border ~= entry.border then
+      wconfig.border = entry.border
+      entry.applied_border = entry.border
+    end
+    pcall(api.nvim_win_set_config, entry.win, wconfig)
     apply_colors(entry, resolve_colors(entry.color, is_transparent_shape(entry.shape)))
   end
 
