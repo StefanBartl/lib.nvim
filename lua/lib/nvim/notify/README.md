@@ -60,19 +60,18 @@ popup.show_history("myplugin") -- scratch buffer, `q` closes
 popup.clear("myplugin")
 ```
 
-Every message is also written to `:messages` by default, **without** showing
-it (a throwaway `ext_messages` handler swallows the display while the history
-entry is kept). Turn that off per notifier, per call, or globally:
+Every message is also written to `:messages` by default via a plain
+`nvim_echo`, so it briefly echoes on screen too -- there is no Neovim API to
+add a message to `:messages` without ever touching the screen. `'more'` is
+toggled off for that call, so a long or multi-line message can never block on
+a `--More--` prompt. Turn the `:messages` write off entirely per notifier, per
+call, or globally if even that brief echo is unwanted:
 
 ```lua
 require("lib.nvim.notify").create("[p]", { popup = true, messages = false })
 popup.deliver("x", vim.log.levels.INFO, { messages = false })
 popup.setup({ messages = false }) -- module default
 ```
-
-Caveat: another `ext_messages` UI (noice.nvim and similar) still receives the
-`:messages` write as an `echomsg` and may show it -- set `messages = false`
-there.
 
 The message is handed to plain `vim.notify` instead when `ui.notify` is
 enabled (it already renders toasts) or when no toast can be shown, so a
