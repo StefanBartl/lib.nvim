@@ -22,6 +22,7 @@ local preview = require("lib.nvim.ui.kit.preview")
 local note = require("lib.nvim.ui.kit.note")
 local viewer = require("lib.nvim.ui.kit.viewer")
 local toast = require("lib.nvim.ui.kit.toast")
+local chip = require("lib.nvim.ui.kit.chip")
 local input = require("lib.nvim.ui.kit.input")
 local live_input = require("lib.nvim.ui.kit.live_input")
 local select = require("lib.nvim.ui.kit.select")
@@ -45,6 +46,7 @@ M.surface = surface
 --- instance, same as `kit.select` itself (they share one chooser).
 M.chooser = chooser
 M.layout = layout
+M.chip = chip
 
 --- Register user presets / set the active default preset.
 ---@param opts? Lib.UI.Kit.SetupOpts
