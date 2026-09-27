@@ -20,6 +20,8 @@
 --- Use it through `require("lib.nvim.notify").create(prefix, { popup = true })`
 --- or call `deliver` directly.
 
+local fast_event = require("lib.nvim.notify.internal.fast_event")
+
 ---@class Lib.Notify.Popup
 local M = {}
 
@@ -189,20 +191,13 @@ local MSG_HL = {
 ---@param message string
 ---@param level integer
 ---@return nil
-local function write_messages(message, level)
-  if vim.in_fast_event() then
-    vim.schedule(function()
-      write_messages(message, level)
-    end)
-    return
-  end
-
+local write_messages = fast_event.guard(function(message, level)
   local hl = MSG_HL[level] or "None"
   local more = vim.o.more
   vim.o.more = false
   pcall(vim.api.nvim_echo, { { message, hl } }, true, {})
   vim.o.more = more
-end
+end)
 
 ---True when ui.nvim's `ui.notify` already routes `vim.notify` into toasts.
 ---@return boolean
@@ -247,16 +242,7 @@ end
 ---@param level? integer vim.log.levels value (default: INFO)
 ---@param opts? Lib.Notify.Popup.Opts
 ---@return nil
-function M.deliver(message, level, opts)
-  -- vim.fn / nvim_* calls below are not allowed in a fast event (libuv
-  -- callback); re-enter on the main loop instead of failing.
-  if vim.in_fast_event() then
-    vim.schedule(function()
-      M.deliver(message, level, opts)
-    end)
-    return
-  end
-
+M.deliver = fast_event.guard(function(message, level, opts)
   level = level or vim.log.levels.INFO
   opts = opts or {}
   -- A message containing a raw NUL crosses the vim.fn bridge as a Blob, not a
@@ -309,7 +295,7 @@ function M.deliver(message, level, opts)
     -- it the same way a plain vim.notify() call would have taken it.
     vim.notify(message, level, opts.title and { title = opts.title } or nil)
   end
-end
+end)
 
 ---Changes module-wide defaults.
 ---@param opts? Lib.Notify.Popup.SetupOpts `timeouts` merges per level rather
