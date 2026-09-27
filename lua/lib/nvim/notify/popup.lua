@@ -75,7 +75,8 @@ local LEVELS = {
 ---@field source string|nil
 
 ---@class Lib.Notify.Popup.Opts
----@field source? string Tag for the history and the toast title (e.g. "reposcope")
+---@field source? string Tag for the history and, absent an explicit `title`, the toast title (e.g. "reposcope")
+---@field title? string Overrides the toast's default `source level-name` title (e.g. "sessions.marks"); also passed to the plain `vim.notify` fallback so a rich backend still sees it
 ---@field timeout? integer Toast lifetime in ms (default per level, or config.timeouts[level])
 ---@field messages? boolean Override the module default for writing to `:messages`
 ---@field max_lines? integer Override config.max_lines for this call
@@ -96,6 +97,11 @@ local last_entry = nil
 ---@param max_bytes integer Bytes of `text` considered before wrapping
 ---@return string[]
 local function wrap(text, width, max_lines, max_bytes)
+  -- A caller-supplied max_lines of 0 (or negative) would make
+  -- vim.list_slice(out, 1, max_lines) return an empty table below, and the
+  -- truncation marker would then land on out[0] -- invisible to ipairs/#,
+  -- silently losing the whole message instead of showing at least one line.
+  max_lines = math.max(1, max_lines)
   local truncated = false
   if #text > max_bytes then
     text = text:sub(1, max_bytes)
@@ -222,7 +228,7 @@ local function show_toast(message, level, opts)
   end
 
   local spec = LEVELS[level] or LEVELS[vim.log.levels.INFO]
-  local title = (opts.source and (opts.source .. " ") or "") .. spec.name
+  local title = opts.title or ((opts.source and (opts.source .. " ") or "") .. spec.name)
   local width = opts.width or config.width
   local max_lines = opts.max_lines or config.max_lines
   local max_bytes = opts.toast_max_bytes or config.toast_max_bytes
@@ -297,7 +303,11 @@ function M.deliver(message, level, opts)
   end
 
   if ui_notify_active() or not show_toast(message, level, opts) then
-    vim.notify(message, level)
+    -- Handing off to vim.notify -- either because a rich backend (ui.notify)
+    -- already turns it into a toast, or because no toast could be shown --
+    -- is also the caller's only remaining chance to see its title: forward
+    -- it the same way a plain vim.notify() call would have taken it.
+    vim.notify(message, level, opts.title and { title = opts.title } or nil)
   end
 end
 
@@ -389,6 +399,9 @@ function M.clear(source)
   history = vim.tbl_filter(function(entry)
     return not matches(entry, source)
   end, history)
+  if last_entry and matches(last_entry, source) then
+    last_entry = nil
+  end
 end
 
 ---Renders the recorded messages (optionally filtered by `source`) into

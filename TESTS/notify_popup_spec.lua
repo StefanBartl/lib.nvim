@@ -436,4 +436,94 @@ return function(H)
     notify_mod.setup({ popup = false })
   end
   popup.clear()
+
+  -- Regression: clear(source) used to leave last_entry pointing at an
+  -- already-cleared message when the last delivery's source matched the
+  -- filter -- expand_last()/`:Lib notify last` would still show something
+  -- the caller just asked to forget.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function()
+        return {}
+      end,
+    },
+  }, function()
+    popup.deliver("hello", vim.log.levels.INFO, { source = "foo", messages = false })
+  end)
+  popup.clear("foo")
+  ok(pcall(popup.expand_last), "expand_last() after clearing its own source does not error")
+  local viewer_opened_after_clear
+  with_stubs({
+    ["lib.nvim.ui.kit.viewer"] = {
+      open = function(o)
+        viewer_opened_after_clear = o
+      end,
+    },
+  }, function()
+    popup.expand_last()
+  end)
+  eq(
+    viewer_opened_after_clear,
+    nil,
+    "clear(source) forgets last_entry too when it belongs to that source"
+  )
+  popup.clear()
+
+  -- Regression: wrap() (via deliver()/show_toast()) used to silently lose
+  -- the whole message when max_lines was configured down to 0 -- a
+  -- 0-length vim.list_slice() left the truncation marker written to
+  -- out[0], invisible to ipairs/#. max_lines is now clamped to at least 1.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    popup.deliver("hello world", vim.log.levels.INFO, { max_lines = 0, messages = false })
+    eq(#opened.message, 1, "max_lines = 0 is clamped to 1, not silently emptied")
+    ok(opened.message[1] ~= nil and opened.message[1] ~= "", "and that one line is not blank")
+  end)
+  popup.clear()
+
+  -- opts.title overrides the default "source level-name" toast title, and
+  -- also reaches the plain vim.notify fallback (a rich backend -- ui.notify,
+  -- nvim-notify, noice -- can still render it there).
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    popup.deliver("hi", vim.log.levels.INFO, { title = "custom title", messages = false })
+    eq(opened.title, "custom title", "opts.title overrides the default toast title")
+  end)
+  local fallback_notify_opts
+  local original_notify = vim.notify
+  vim.notify = function(_, _, notify_opts)
+    fallback_notify_opts = notify_opts
+  end
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function()
+        error("no ui")
+      end,
+    },
+  }, function()
+    popup.deliver("hi", vim.log.levels.INFO, { title = "custom title", messages = false })
+  end)
+  vim.notify = original_notify
+  eq(
+    fallback_notify_opts and fallback_notify_opts.title,
+    "custom title",
+    "opts.title also reaches the plain vim.notify fallback"
+  )
+  popup.clear()
 end
