@@ -792,31 +792,31 @@ end
 --- before/after HEAD comparison never blocks the calling thread the way
 --- `M.head_hash` (built on `run_blocking_captured`) does.
 ---
---- Reports a bare `hash: string|nil`, same as the blocking `M.head_hash` --
---- deliberately NOT an `(ok, hash)` pair. `git rev-parse HEAD` exits
---- non-zero for a *genuinely* empty repository (no commits yet -- an
---- entirely normal state for `M.pull_async` to run against, e.g. pulling
---- into a freshly `git init`'d checkout) exactly the same way it does for
---- a process `run_async_captured`'s own `stop()` killed -- verified
---- directly: both report `ok = false` from the underlying job with no way
---- to tell them apart. Trying to gate on that `ok` (an earlier version of
---- this function did) makes every legitimate empty-repo pull look
---- identical to a cancelled one and wrongly aborts it. `M.pull_async`
---- tracks cancellation itself instead, with its own flag independent of
---- what the git process reports.
+--- Reports `hash` as a bare `string|nil` first, matching the blocking
+--- `M.head_hash`, plus a second `ok` value a caller MAY ignore. `git
+--- rev-parse HEAD` exits non-zero for a *genuinely* empty repository (no
+--- commits yet -- an entirely normal state to run this against, e.g. before
+--- pulling into a freshly `git init`'d checkout) exactly the same way it
+--- does for a process `run_async_captured`'s own `stop()` killed, or any
+--- other unrelated failure -- verified directly: all three report `ok =
+--- false` from the underlying job with no way to tell them apart from
+--- `ok` alone. `M.pull_async`'s *before* read ignores `ok` for exactly
+--- that reason (its own doc comment explains why); its *after* read does
+--- not, because by the time it runs a *different* invariant applies (see
+--- there).
 ---@param opts? Lib.Git.Opts
----@param on_done fun(hash: string|nil)
+---@param on_done fun(hash: string|nil, ok: boolean)
 ---@param git_cmd? string
 ---@return { stop: fun() } handle
 local function head_hash_async(opts, on_done, git_cmd)
   local argv = git_argv(git_cmd or "git", opts, { "rev-parse", "HEAD" })
   return require("lib.nvim.cross.run_argv").run_async_captured(argv, function(ok, stdout)
     if not ok or type(stdout) ~= "string" then
-      on_done(nil)
+      on_done(nil, false)
       return
     end
     stdout = vim.trim(stdout)
-    on_done(stdout ~= "" and stdout or nil)
+    on_done(stdout ~= "" and stdout or nil, true)
   end)
 end
 
@@ -852,6 +852,16 @@ end
 --- untracked and uncancellable, and calling it during the after-hash read
 --- would still report a guessed `changed` for a pull the caller no longer
 --- wanted a result for.
+---
+--- The *after* read's `ok` IS checked, unlike the *before* read's: a
+--- `git pull --ff-only` that exits 0 (the `ok` branch just above it)
+--- proves the target upstream ref already resolved to a real commit --
+--- an upstream with no commits at all makes the pull itself fail instead
+--- of trivially no-opping (verified directly) -- so a failed read at this
+--- specific point can only be a genuine error, never the legitimate
+--- emptiness the *before* read can hit. Reports `changed = nil` (honestly
+--- unknown) rather than comparing a real `before` hash against a `nil`
+--- that would otherwise silently guess `true`.
 ---@param opts? Lib.Git.Opts
 ---@param on_done fun(ok: boolean, err: string|nil, changed: boolean|nil)
 ---@param git_cmd? string
@@ -878,8 +888,12 @@ function M.pull_async(opts, on_done, git_cmd)
           )
           return
         end
-        active.stop = head_hash_async(opts, function(after)
+        active.stop = head_hash_async(opts, function(after, after_ok)
           if cancelled then
+            return
+          end
+          if not after_ok then
+            on_done(true, nil, nil)
             return
           end
           on_done(true, nil, before ~= after)
