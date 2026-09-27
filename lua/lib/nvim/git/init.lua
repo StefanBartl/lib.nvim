@@ -791,19 +791,26 @@ end
 --- Async equivalent of `M.head_hash`, used by `M.pull_async` so its
 --- before/after HEAD comparison never blocks the calling thread the way
 --- `M.head_hash` (built on `run_blocking_captured`) does.
+---
+--- `ok` and `hash` are reported separately, not collapsed into one
+--- `hash: string|nil` -- a killed/failed read (`stop()` called mid-flight,
+--- or a genuine process error) and a legitimately empty repository (no
+--- commits yet, so `git rev-parse HEAD` fails too, but *expectedly*) both
+--- produce `hash == nil`, and a caller that cannot tell them apart cannot
+--- correctly decide whether to trust that `nil`.
 ---@param opts? Lib.Git.Opts
----@param on_done fun(hash: string|nil)
+---@param on_done fun(ok: boolean, hash: string|nil)
 ---@param git_cmd? string
 ---@return { stop: fun() } handle
 local function head_hash_async(opts, on_done, git_cmd)
   local argv = git_argv(git_cmd or "git", opts, { "rev-parse", "HEAD" })
   return require("lib.nvim.cross.run_argv").run_async_captured(argv, function(ok, stdout)
     if not ok or type(stdout) ~= "string" then
-      on_done(nil)
+      on_done(false, nil)
       return
     end
     stdout = vim.trim(stdout)
-    on_done(stdout ~= "" and stdout or nil)
+    on_done(true, stdout ~= "" and stdout or nil)
   end)
 end
 
@@ -825,13 +832,28 @@ end
 --- the main-thread stall this whole async API exists to avoid, doubly so
 --- for a caller fanning this out over many repositories (`M.update_async`'s
 --- own multi-repo-dashboard case).
+---
+--- A failed/cancelled *before* read short-circuits (mirroring
+--- `M.update_async`'s own `if not ok then on_done(false, err) end` on a
+--- failed fetch) rather than dispatching the real `git pull` regardless --
+--- otherwise calling the returned handle's `stop()` while that first read
+--- is still in flight would only kill the cheap lookup and let the real
+--- pull start anyway, untracked and uncancellable. A failed/cancelled
+--- *after* read reports `changed = nil` (honestly unknown), never a guessed
+--- `true`/`false` -- the pull itself already succeeded by that point, so
+--- failing the whole call would be wrong, but so would pretending the HEAD
+--- comparison happened when it didn't.
 ---@param opts? Lib.Git.Opts
 ---@param on_done fun(ok: boolean, err: string|nil, changed: boolean|nil)
 ---@param git_cmd? string
 ---@return { stop: fun() } handle
 function M.pull_async(opts, on_done, git_cmd)
   local active = { stop = function() end }
-  active.stop = head_hash_async(opts, function(before)
+  active.stop = head_hash_async(opts, function(before_ok, before)
+    if not before_ok then
+      on_done(false, "could not read HEAD before pull")
+      return
+    end
     local argv = git_argv(git_cmd or "git", opts, { "pull", "--ff-only" })
     active.stop = require("lib.nvim.cross.run_argv").run_async_captured(
       argv,
@@ -844,7 +866,11 @@ function M.pull_async(opts, on_done, git_cmd)
           )
           return
         end
-        active.stop = head_hash_async(opts, function(after)
+        active.stop = head_hash_async(opts, function(after_ok, after)
+          if not after_ok then
+            on_done(true, nil, nil)
+            return
+          end
           on_done(true, nil, before ~= after)
         end, git_cmd).stop
       end

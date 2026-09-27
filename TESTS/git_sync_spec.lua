@@ -326,6 +326,119 @@ return function(H)
     git.pull_async = original_pull_async
   end
 
+  -- ── pull_async: a failed/cancelled before-hash read short-circuits, ─────
+  -- never dispatching the real pull ────────────────────────────────────────
+  -- Regression: head_hash_async used to collapse run_async_captured's `ok`
+  -- flag into the hash value itself, so a killed/failed "rev-parse HEAD"
+  -- (the before-read) looked identical to "HEAD legitimately doesn't exist
+  -- yet" -- pull_async proceeded to spawn the real `git pull` regardless,
+  -- breaking the exact cancellation contract `update_async`'s own fetch
+  -- stage already honors. `run_async_captured` is monkey-patched (through
+  -- the shared `run_argv` module both `head_hash_async` and the real pull
+  -- call go through) so the "rev-parse HEAD" call fails deterministically
+  -- while the "pull" call, if it were ever dispatched, would be caught.
+  do
+    local run_argv = require("lib.nvim.cross.run_argv")
+    local original_run_async_captured = run_argv.run_async_captured
+    local repo = tmpdir("-git-sync-before-hash-fails")
+    git_run(repo, { "init", "-q", "-b", "main" })
+
+    local pull_was_dispatched = false
+    run_argv.run_async_captured = function(argv, on_done, ...)
+      if vim.tbl_contains(argv, "pull") then
+        pull_was_dispatched = true
+      end
+      if vim.tbl_contains(argv, "rev-parse") then
+        vim.schedule(function()
+          on_done(false, "", 128, "fatal: simulated failure")
+        end)
+        return { stop = function() end }
+      end
+      return original_run_async_captured(argv, on_done, ...)
+    end
+
+    local done, ok, err, changed
+    git.pull_async({ dir = repo }, function(ok_, err_, changed_)
+      done, ok, err, changed = true, ok_, err_, changed_
+    end)
+    H.ok(
+      wait_for(function()
+        return done
+      end),
+      "pull_async(before-hash fails): on_done fires"
+    )
+    H.eq(ok, false, "pull_async(before-hash fails): reports failure, not a guessed success")
+    H.ok(type(err) == "string" and #err > 0, "pull_async(before-hash fails): reports why")
+    H.eq(changed, nil, "pull_async(before-hash fails): no changed flag when the pull never ran")
+    H.ok(
+      not pull_was_dispatched,
+      "pull_async(before-hash fails): the real `git pull` must never be dispatched"
+    )
+
+    run_argv.run_async_captured = original_run_async_captured
+  end
+
+  -- ── pull_async: a failed/cancelled after-hash read reports changed = ────
+  -- nil, never a guessed true/false ────────────────────────────────────────
+  -- Regression: the same collapsed-`ok` bug made a failed *after* read
+  -- compare a real "before" hash against `nil`, which is never equal --
+  -- silently reporting `changed = true` (or `false`, if `before` also
+  -- failed) instead of the honest "unknown" the module's own `fetch_async`
+  -- already prefers over a confident guess.
+  do
+    local run_argv = require("lib.nvim.cross.run_argv")
+    local original_run_async_captured = run_argv.run_async_captured
+    local bare2 = tmpdir("-git-sync-after-hash-bare")
+    git_run(bare2, { "init", "-q", "--bare", "-b", "main" })
+    local src = tmpdir("-git-sync-after-hash-src")
+    git_run(src, { "clone", "-q", bare2, "." })
+    vim.fn.writefile({ "x" }, src .. "/f.txt")
+    git_run(src, { "add", "-A" })
+    git_run(src, { "commit", "-q", "-m", "first" })
+    git_run(src, { "push", "-q", "origin", "main" })
+    local repo = tmpdir("-git-sync-after-hash-repo")
+    git_run(repo, { "clone", "-q", bare2, "." })
+    vim.fn.writefile({ "y" }, src .. "/f2.txt")
+    git_run(src, { "add", "-A" })
+    git_run(src, { "commit", "-q", "-m", "second" })
+    git_run(src, { "push", "-q", "origin", "main" })
+    git_run(repo, { "fetch", "-q" })
+
+    local rev_parse_count = 0
+    run_argv.run_async_captured = function(argv, on_done, ...)
+      if vim.tbl_contains(argv, "rev-parse") then
+        rev_parse_count = rev_parse_count + 1
+        if rev_parse_count > 1 then
+          vim.schedule(function()
+            on_done(false, "", 137, "")
+          end)
+          return { stop = function() end }
+        end
+      end
+      return original_run_async_captured(argv, on_done, ...)
+    end
+
+    local done, ok, err, changed
+    git.pull_async({ dir = repo }, function(ok_, err_, changed_)
+      done, ok, err, changed = true, ok_, err_, changed_
+    end)
+    H.ok(
+      wait_for(function()
+        return done
+      end),
+      "pull_async(after-hash fails): on_done fires"
+    )
+    H.eq(ok, true, "pull_async(after-hash fails): the pull itself still succeeded")
+    H.eq(err, nil, "pull_async(after-hash fails): no error on a successful pull")
+    H.eq(
+      changed,
+      nil,
+      "pull_async(after-hash fails): changed stays honestly unknown, not a guessed true/false"
+    )
+
+    run_argv.run_async_captured = original_run_async_captured
+  end
+
   for _, dir in ipairs(created) do
     pcall(vim.fn.delete, dir, "rf")
   end
