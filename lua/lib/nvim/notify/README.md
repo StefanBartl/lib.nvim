@@ -79,8 +79,12 @@ popup.setup({ messages = false }) -- module default
 
 The message is handed to plain `vim.notify` instead when `ui.notify` is
 enabled (it already renders toasts) or when no toast can be shown, so a
-message is never lost. `popup.deliver(msg, level, { source, timeout })` is the
-direct entry point. Very large messages stay cheap: the toast wraps only the
+message is never lost -- and in both cases `opts.title` (see below) still
+reaches it, for a rich `vim.notify` backend to render.
+`popup.deliver(msg, level, { source, title, timeout })` is the
+direct entry point. `title` overrides the toast's default `source
+level-name` title (e.g. `"sessions.marks"` instead of `"sessions info"`);
+omit it to keep the default. Very large messages stay cheap: the toast wraps only the
 first 4000 bytes by default (12 lines max, marked as cut), and a history entry
 keeps at most 64 KB by default. Delivery from a fast event (libuv callback) is
 rescheduled onto the main loop automatically.
