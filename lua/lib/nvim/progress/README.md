@@ -33,9 +33,11 @@ lib.nvim.progress/
 ├── styles/
 │   ├── notify.lua           -- default: vim.notify, in-place when backend supports replace
 │   ├── statusline.lua       -- headless: keeps text in memory, read via .active()
+│   ├── echo.lua             -- transient nvim_echo line via lib.nvim.echo
 │   ├── fidget.lua           -- optional fidget.nvim adapter
 │   ├── float.lua            -- interactive floating window, cancel-with-confirm on <Esc>
 │   └── kit.lua              -- like "float", themed via lib.nvim.ui.kit's surface/preset system
+├── internal/render_text.lua -- shared "title text (current/total)" formatter (notify/statusline/echo)
 └── @types/                  -- LuaLS types
 ```
 
@@ -82,7 +84,7 @@ h:on_cancel(function() job:kill() end)   -- still your job to actually stop the 
 | Option     | Type      | Default   | Meaning                                              |
 | ---------- | --------- | --------- | ----------------------------------------------------- |
 | `title`    | `string`  | `""`      | prefix shown in front of every message                |
-| `style`    | `string`  | `"auto"`  | `"auto"` \| `"notify"` \| `"statusline"` \| `"fidget"` \| `"float"` \| `"kit"` |
+| `style`    | `string\|string[]` | `"auto"`  | `"auto"` \| `"notify"` \| `"statusline"` \| `"echo"` \| `"fidget"` \| `"float"` \| `"kit"`, or a list to run several in parallel for one handle, e.g. `{"statusline", "echo"}` |
 | `delay_ms` | `integer` | `150`     | suppress the indicator until it has run this long      |
 | `level`    | `integer` | `INFO`    | `vim.log.levels.*` used by the `"notify"` style        |
 | `kit_theme`| `string\|table` | active default preset | preset name or partial override for the `"kit"` style, see [`lib.nvim.ui.kit`](../ui/kit/README.md) |
@@ -109,6 +111,7 @@ h:on_cancel(function() job:kill() end)   -- still your job to actually stop the 
 | `"auto"`      | prefers `"fidget"` when fidget.nvim is installed, else `"notify"`. Never picks `"float"` automatically. |
 | `"notify"`    | `vim.notify`; updates replace the previous notification in place when the active backend returns a record with `.id` (e.g. nvim-notify), otherwise sequential notifies |
 | `"statusline"`| headless — nothing is drawn; read `require("lib.nvim.progress.styles.statusline").active()` (`string[]`, oldest first) from your own statusline component. Calls `:redrawstatus` on every change so your component actually refreshes while you're idle, not just on the next unrelated redraw |
+| `"echo"`      | transient `nvim_echo` cmdline line via [`lib.nvim.echo`](../echo/README.md) — `start`/`update` write with `history = false`, `finish`/`cancel` write once with `history = true` so the final line stays in `:messages` |
 | `"fidget"`    | delegates to `fidget.nvim`'s LSP-style progress handles                    |
 | `"float"`     | small floating window, bottom-right, `enter = false` (never steals focus); focus it and press `<Esc>` to ask for cancellation — opt-in only, see [Usage](#usage) |
 | `"kit"`       | same interaction model as `"float"`, but rendered via [`lib.nvim.ui.kit`](../ui/kit/README.md)'s themed `surface` — matches whatever preset/border/highlights the caller has configured for its other ui.kit popups instead of a fixed look. Pass `kit_theme` to pick a specific preset for this handle. Opt-in only, same reasoning as `"float"` |
@@ -118,6 +121,17 @@ Adding a new style means adding one file under `styles/` that implements
 `finish(state, spec, opts)`, `cancel(state, spec, opts)` — see
 `@types/init.lua`'s `Lib.Progress.StyleImpl` for the exact shape. `request_cancel`
 only matters to interactive styles like `"float"`; everything else ignores it.
+
+### Multiple styles at once
+
+```lua
+local h = progress.create({ title = "[my-plugin]", style = { "statusline", "echo" } })
+```
+
+Every named style renders the same handle in parallel — a statusline badge
+*and* a cmdline line for the same operation here — with no extra code at the
+call site. A bare string is just the one-element case: `style = "notify"`
+behaves exactly as before.
 
 ---
 

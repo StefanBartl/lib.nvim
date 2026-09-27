@@ -68,6 +68,10 @@ the background until confirmed: >lua
     "statusline"    headless — read `lib.nvim.progress.styles.statusline`.active()
                     from your own statusline component. Calls :redrawstatus on
                     every change so it refreshes while you're idle.
+    "echo"          transient nvim_echo cmdline line via lib.nvim.echo;
+                    start/update write with history=false, finish/cancel
+                    write once with history=true so the final line stays in
+                    :messages
     "fidget"        delegates to fidget.nvim's LSP-style progress API
     "float"         small floating window (bottom-right, never steals focus);
                     focus it + <Esc> asks to cancel via request_cancel()
@@ -84,13 +88,22 @@ Create a new, independent progress handle. >lua
 
     local h = progress.create({
       title    = "[replacer]",
-      style    = "auto",     -- "auto" | "notify" | "statusline" | "fidget" | "float" | "kit"
+      style    = "auto",     -- "auto"|"notify"|"statusline"|"echo"|"fidget"|"float"|"kit"
       delay_ms = 150,
     })
 <
+`style` also accepts a list to run several renderers in parallel for one
+handle, with no extra code at the call site: >lua
+
+    local h = progress.create({ title = "[my-plugin]", style = { "statusline", "echo" } })
+<
+A bare string is just the one-element case, so an existing `style = "notify"`
+caller sees no behavior change.
+
 Options ~
     title       string      prefix shown in front of every message
-    style       string      renderer selection (default "auto")
+    style       string|string[]  renderer selection, or a list to run
+                            several in parallel (default "auto")
     delay_ms    integer     suppress the indicator until it has run this
                             long (default 150)
     level       integer     vim.log.levels.* used by the "notify" style

@@ -14,6 +14,10 @@ local function resolve_style(want)
     return (require("lib.nvim.progress.styles.statusline"))
   end
 
+  if want == "echo" then
+    return (require("lib.nvim.progress.styles.echo"))
+  end
+
   if want == "fidget" then
     if pcall(require, "fidget") then
       return (require("lib.nvim.progress.styles.fidget"))
