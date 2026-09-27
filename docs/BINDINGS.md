@@ -57,7 +57,8 @@ action the flat set would also omit.
 | `:Lib cwd-here` | `lcd` to the current buffer's directory |
 | `:Lib ps-profile` | Open the active PowerShell profile |
 | `:Lib deps show [{plugin}]` | List a plugin's declared external tools, why each matters, and what is missing |
-| `:Lib deps install {plugin}` | Offer to install a plugin's missing external tools (asks first) |
+| `:Lib deps status` | Every declared tool across every plugin, and what's missing here |
+| `:Lib deps install [{plugin}]` | Offer to install missing external tools — one plugin's, or every plugin's (asks first) |
 | `:Lib deps reset-first-run [{plugin}]` | Forget that a plugin's (or every plugin's) first-run popup was already shown |
 | `:Lib notify last` | Show the last delivered message in full, in a read-only viewer |
 | `:Lib notify history [{source}]` | Open the notify history (optionally filtered by source) |
