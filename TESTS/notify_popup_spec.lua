@@ -180,7 +180,7 @@ return function(H)
   }, function()
     popup.deliver(("y"):rep(200000), vim.log.levels.INFO, { messages = false })
     ok(#seen.message <= 12, "a huge message still fits the line cap")
-    eq(seen.message[#seen.message], "... (full text: the popup history)", "and is marked as cut")
+    eq(seen.message[#seen.message], "... (:Lib notify last)", "and is marked as cut")
   end)
   ok(#popup.history()[1].message <= 64 * 1024 + 32, "history entries are size-capped")
   popup.clear()
@@ -301,6 +301,139 @@ return function(H)
     end)
     eq(vim.o.more, true, "'more' is restored to what it was, not left toggled off")
     vim.o.more = more_before
+  end
+  popup.clear()
+
+  -- toast_min_level: below it, the message is recorded but no toast (or
+  -- vim.notify fallback) is shown -- only history/:messages.
+  do
+    local shown_native = {}
+    vim.notify = function(msg, level)
+      shown_native[#shown_native + 1] = { msg = msg, level = level }
+    end
+    popup.setup({ toast_min_level = vim.log.levels.INFO })
+    with_stubs({
+      ["ui.notify"] = false,
+      ["ui.kit.toast"] = {
+        open = function(o)
+          opened = o
+          return {}
+        end,
+      },
+    }, function()
+      opened = nil
+      popup.deliver("too quiet", vim.log.levels.DEBUG, { source = "spec" })
+      eq(opened, nil, "below toast_min_level: no toast")
+      eq(#shown_native, 0, "below toast_min_level: no vim.notify fallback either")
+      eq(popup.history("spec")[1].message, "too quiet", "still recorded in history")
+
+      popup.deliver("loud enough", vim.log.levels.INFO, { source = "spec" })
+      ok(opened ~= nil, "at/above toast_min_level: toast shown")
+    end)
+    vim.notify = original
+    popup.clear()
+  end
+
+  -- Configurable cap: per-call override and global setup() both work.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    popup.deliver(("line\n"):rep(20), vim.log.levels.INFO, { max_lines = 3, messages = false })
+    eq(#opened.message, 3, "opts.max_lines overrides the toast line cap for this call")
+
+    popup.setup({ max_lines = 2 })
+    popup.deliver(("line\n"):rep(20), vim.log.levels.INFO, { messages = false })
+    eq(#opened.message, 2, "setup({ max_lines = ... }) changes the default")
+    popup.setup({ max_lines = 12 })
+  end)
+  popup.clear()
+
+  -- expand_last(): opens the last delivered message in full, via the viewer.
+  do
+    local viewer_opened
+    with_stubs({
+      ["ui.notify"] = false,
+      ["ui.kit.toast"] = {
+        open = function()
+          return {}
+        end,
+      },
+      ["lib.nvim.ui.kit.viewer"] = {
+        open = function(o)
+          viewer_opened = o
+        end,
+      },
+    }, function()
+      popup.deliver("a\nb\nc", vim.log.levels.INFO, { source = "spec", messages = false })
+      popup.expand_last()
+    end)
+    eq(
+      table.concat(viewer_opened.lines, ","),
+      "a,b,c",
+      "expand_last shows the full, unwrapped message"
+    )
+    eq(viewer_opened.title, "spec", "titled with the entry's source")
+  end
+  popup.clear()
+
+  -- expand_last() with nothing delivered yet is a no-op, not an error.
+  ok(pcall(popup.expand_last), "expand_last() with no last entry does not error")
+
+  -- history_full / <C-s>: show_history() collapses long entries by default;
+  -- toggle_full() (same effect as the buffer-local <C-s> keymap) expands them.
+  do
+    popup.deliver(("l\n"):rep(20), vim.log.levels.INFO, { source = "spec", messages = false })
+    local buf = popup.show_history("spec")
+    local collapsed = table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n")
+    ok(collapsed:match("%+%d+ lines, <C%-s>") ~= nil, "collapsed history marks hidden lines")
+
+    local has_cs = false
+    for _, m in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do
+      if m.lhs and m.lhs:lower():find("<c%-s>", 1, false) then
+        has_cs = true
+      end
+    end
+    ok(has_cs, "history buffer has a buffer-local <C-s> keymap")
+
+    popup.toggle_full()
+    local buf2 = popup.show_history("spec")
+    local full = table.concat(vim.api.nvim_buf_get_lines(buf2, 0, -1, false), "\n")
+    ok(not full:find("<C%-s>", 1, false), "history_full = true shows entries uncollapsed")
+    popup.toggle_full() -- reset to the default (false) for later tests
+    pcall(vim.api.nvim_buf_delete, buf2, { force = true })
+  end
+  popup.clear()
+
+  -- require("lib.nvim.notify").setup({ popup = true }): a notifier created
+  -- BEFORE the global default is set still resolves it at call time, not at
+  -- create() time (the same load-time-binding trap this module's own docs
+  -- warn about, one layer up).
+  do
+    local notify_mod = require("lib.nvim.notify")
+    local n = notify_mod.create("[spec-global]", { source = "spec" }) -- popup left unset
+    notify_mod.setup({ popup = true })
+    with_stubs({
+      ["ui.notify"] = false,
+      ["ui.kit.toast"] = {
+        open = function()
+          return {}
+        end,
+      },
+    }, function()
+      n.info("via global default")
+    end)
+    eq(
+      popup.history("spec")[1].message,
+      "[spec-global] via global default",
+      "create() resolves the popup default at call time, not at create time"
+    )
+    notify_mod.setup({ popup = false })
   end
   popup.clear()
 end

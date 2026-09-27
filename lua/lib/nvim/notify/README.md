@@ -6,6 +6,10 @@
   - [Example: usage in a module](#example-usage-in-a-module)
   - [Example: another module, another prefix](#example-another-module-another-prefix)
   - [`popup = true`](#popup--true-toast-instead-of-messages)
+    - [Configuring the toast (cap, min level, timeouts)](#configuring-the-toast-cap-min-level-timeouts)
+    - [Global default: `notify.setup({ popup = true })`](#global-default-notifysetup-popup--true)
+    - [Full text: `expand_last()` and the history's `<C-s>` toggle](#full-text-expand_last-and-the-historys-c-s-toggle)
+    - [`:Lib notify last | history | clear`](#lib-notify-last--history--clear)
   - [`lib.nvim.notify.safe`](#libnvimnotifysafe)
     - [When is `lib.nvim.notify.safe` needed](#when-is-libnvimnotifysafe-needed)
     - [`safe.schedule`](#safeschedule)
@@ -77,9 +81,78 @@ The message is handed to plain `vim.notify` instead when `ui.notify` is
 enabled (it already renders toasts) or when no toast can be shown, so a
 message is never lost. `popup.deliver(msg, level, { source, timeout })` is the
 direct entry point. Very large messages stay cheap: the toast wraps only the
-first 4000 bytes (12 lines max, marked as cut), and a history entry keeps at most
-64 KB. Delivery from a fast event (libuv callback) is rescheduled onto the main
-loop automatically.
+first 4000 bytes by default (12 lines max, marked as cut), and a history entry
+keeps at most 64 KB by default. Delivery from a fast event (libuv callback) is
+rescheduled onto the main loop automatically.
+
+### Configuring the toast (cap, min level, timeouts)
+
+Every cap above is a default in `popup`'s own config, not a fixed constant --
+override it globally or per call:
+
+```lua
+local popup = require("lib.nvim.notify").popup
+
+popup.setup({
+  max_lines = 12, -- toast line cap
+  width = 38, -- toast wrap width in columns
+  toast_max_bytes = 4000, -- bytes of a message considered when wrapping
+  entry_max_bytes = 64 * 1024, -- bytes kept per history entry
+  toast_min_level = vim.log.levels.INFO, -- below this: history/:messages only, no toast
+  timeouts = { [vim.log.levels.ERROR] = 10000 }, -- per-level override, merged in
+  history_full = false, -- show_history(): collapsed (default) or full entries
+})
+
+-- Per call: overrides `popup.setup`'s defaults for this one delivery only.
+popup.deliver(msg, vim.log.levels.WARN, { max_lines = 4, toast_max_bytes = 500 })
+```
+
+`toast_min_level` is what keeps a chatty plugin (dozens of `lib_notify` call
+sites at INFO) from spamming the corner: below it, the message is still
+recorded in history/`:messages`, it just never becomes a toast (and, since
+either would still be a visible popup on a plain UI, never falls back to
+plain `vim.notify` either).
+
+### Global default: `notify.setup({ popup = true })`
+
+Rather than passing `popup = true` to every `create()` call across a config,
+set it once as the module-wide default -- existing and future notifiers that
+don't set `popup` explicitly then follow it:
+
+```lua
+require("lib.nvim.notify").setup({ popup = true })
+```
+
+This is read at **call time**, not at `create()` time: a notifier built at
+module load (`local notify = require("lib.nvim.notify").create("[p]")`, the
+common style across these plugins) still picks up a default set later --
+exactly the load-time-binding trap this module's own popup code warns about
+elsewhere, closed one layer up. A `create(prefix, { popup = false })` still
+wins over the global default for a notifier that wants to opt out.
+
+### Full text: `expand_last()` and the history's `<C-s>` toggle
+
+A toast is deliberately non-focusable and wraps to `max_lines`/`toast_max_bytes`
+-- when it says `... (:Lib notify last)`, the full message is one call away:
+
+```lua
+popup.expand_last() -- read-only viewer panel, the last delivered message in full
+```
+
+`show_history(source)`'s scratch buffer collapses each entry to `max_lines`
+the same way (`[+N lines, <C-s>]`); pressing `<C-s>` there (buffer-local, same
+effect as `popup.toggle_full()`) expands every entry in place.
+
+### `:Lib notify last | history | clear`
+
+`lib.nvim_usrcmds`'s `:Lib` verb carries these three subcommands (see
+`lib.nvim.notify.popup.routes()`):
+
+```vim
+:Lib notify last              " expand_last()
+:Lib notify history [source]  " show_history(source)
+:Lib notify clear [source]    " clear(source)
+```
 
 ---
 

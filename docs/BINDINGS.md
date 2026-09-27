@@ -59,6 +59,9 @@ action the flat set would also omit.
 | `:Lib deps show [{plugin}]` | List a plugin's declared external tools, why each matters, and what is missing |
 | `:Lib deps install {plugin}` | Offer to install a plugin's missing external tools (asks first) |
 | `:Lib deps reset-first-run [{plugin}]` | Forget that a plugin's (or every plugin's) first-run popup was already shown |
+| `:Lib notify last` | Show the last delivered message in full, in a read-only viewer |
+| `:Lib notify history [{source}]` | Open the notify history (optionally filtered by source) |
+| `:Lib notify clear [{source}]` | Clear the notify history (optionally by source) |
 
 `{plugin}` completes from the `DEPS_PLUGIN` argument type — the set of plugins
 that declare a dependency spec, computed at completion time.
@@ -66,7 +69,9 @@ that declare a dependency spec, computed at completion time.
 The `deps` routes live under `:Lib deps …` rather than a separate `:LibDeps`
 command on purpose: a second top-level name for a subordinate feature is
 exactly the `:VerbFeatureA`/`:VerbFeatureB` shape the composer exists to
-replace.
+replace. The `notify` routes (`lib.nvim.notify.popup.routes()`) follow the
+same pattern and, unlike `deps`, are always merged in — no `o.notify` flag —
+since notify history management is core lib.nvim, not an opt-in feature.
 
 Every route here is a command and none is a keymap, which is why this
 namespace has no keymaps module at all: a library its dependents load has no
