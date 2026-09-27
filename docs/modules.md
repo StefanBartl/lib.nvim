@@ -56,6 +56,9 @@ aggregator exists for convenience, not as the entry point.
 | Module                 | Contents                                            |
 | ---------------------- | --------------------------------------------------- |
 | [`lib.nvim.notify`](../lua/lib/nvim/notify/README.md) | notify wrapper + log-level resolution |
+| [`lib.nvim.echo`](../lua/lib/nvim/echo/README.md) | transient `nvim_echo` output (cmdline-area line, not a popup) — for progress/status lines, as opposed to `lib.nvim.notify`'s discrete events |
+| [`lib.nvim.output`](../lua/lib/nvim/output/README.md) | channel-agnostic output facade (`popup`/`echo`/`vim_notify`, plus caller-registered channels) behind one notifier shape, and `viewer` (a dump-friendly wrapper around `lib.nvim.ui.kit.viewer` — the `print()` replacement) |
+| [`lib.nvim.cache`](../lua/lib/nvim/cache/README.md) | two independent backends: `disk` (persistent JSON, TTL) and `memory` (generic TTL/changedtick namespace cache, opt-in autocmd-driven auto-invalidation) |
 | `lib.nvim.bindings.keymap`         | keymap helpers                                      |
 | [`lib.nvim.count`](../lua/lib/nvim/count/README.md) | count-prefix helpers for keymaps: `get`/`raw`/`given`/`clamp`, plus `times` (sync repeat) and `chain` (async repeat gated on a completion signal) |
 | [`lib.nvim.dotrepeat`](../lua/lib/nvim/dotrepeat/README.md) | wire a Lua function into native `.`-repeat via `operatorfunc`, no `vim-repeat` dependency |
@@ -109,7 +112,7 @@ and are generated on install by your plugin manager (see [Help docs](help.md)).
 ### Markdown references
 
 - [`lib.lua.memo`](../lua/lib/lua/memo/README.md) · [`lib.lua.lazy`](../lua/lib/lua/lazy/README.md) · [`lib.lua.time.diff`](../lua/lib/lua/time/diff/README.md)
-- [`lib.nvim.notify`](../lua/lib/nvim/notify/README.md) · [`lib.nvim.window`](../lua/lib/nvim/window/README.md) · [`lib.nvim.ui.kit`](../lua/lib/nvim/ui/kit/README.md) · [`lib.nvim.ui.statusline`](../lua/lib/nvim/ui/statusline/README.md) · [`lib.nvim.ui.list`](../lua/lib/nvim/ui/list/README.md)
+- [`lib.nvim.notify`](../lua/lib/nvim/notify/README.md) · [`lib.nvim.echo`](../lua/lib/nvim/echo/README.md) · [`lib.nvim.output`](../lua/lib/nvim/output/README.md) · [`lib.nvim.window`](../lua/lib/nvim/window/README.md) · [`lib.nvim.ui.kit`](../lua/lib/nvim/ui/kit/README.md) · [`lib.nvim.ui.statusline`](../lua/lib/nvim/ui/statusline/README.md) · [`lib.nvim.ui.list`](../lua/lib/nvim/ui/list/README.md)
 - [`lib.nvim.system`](../lua/lib/nvim/system/README.md) · [`lib.nvim.progress`](../lua/lib/nvim/progress/README.md) · [`lib.nvim.selection`](../lua/lib/nvim/selection/README.md)
 - [`lib.nvim.buf_win_tab.capture`](../lua/lib/nvim/buf_win_tab/capture/README.md) · [`lib.nvim.buf_win_tab.resize_guarded`](../lua/lib/nvim/buf_win_tab/resize_guarded/README.md)
 - [`lib.nvim.fs.ignore.list`](../lua/lib/nvim/fs/ignore/list/README.md) · [`lib.nvim.fs.is_subpath`](../lua/lib/nvim/fs/is_subpath/README.md) · [`lib.nvim.fs.stdpath_config_root`](../lua/lib/nvim/fs/stdpath_config_root/README.md) · [`lib.nvim.fs.polymorphic_rootresolver`](../lua/lib/nvim/fs/polymorphic_rootresolver/README.md) · [`lib.nvim.fs.find_root`](../lua/lib/nvim/fs/find_root/README.md)
@@ -130,6 +133,7 @@ and are generated on install by your plugin manager (see [Help docs](help.md)).
 - [`lib.lua.range`](../lua/lib/lua/range/README.md)
 - [`lib.nvim.vregex`](../lua/lib/nvim/vregex/README.md) · [`lib.nvim.checkpoint`](../lua/lib/nvim/checkpoint/README.md)
 - [`lib.nvim.config.repo_file`](../lua/lib/nvim/config/repo_file/README.md)
+- [`lib.nvim.cache`](../lua/lib/nvim/cache/README.md)
 
 ### `:help` pages
 
