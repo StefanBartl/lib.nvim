@@ -19,14 +19,20 @@ deliberately small and every part of it is opt-in.
 
 ## Keymaps
 
-**None.** A library that other plugins depend on has no business claiming a key
-on their behalf, so `lua/lib/nvim_usrcmds/` has no `keymaps.lua` at all — the
-one deliberate gap in the three-module `bindings/` split every plugin here uses.
+**None global.** A library that other plugins depend on has no business
+claiming a key on their behalf, so `lua/lib/nvim_usrcmds/` has no
+`keymaps.lua` at all — the one deliberate gap in the three-module `bindings/`
+split every plugin here uses.
 
 `lib.nvim.bindings.keymap` is a wrapper *for callers* around `vim.keymap.set`; it binds
-nothing itself. The only `vim.keymap.set` in the tree that fires is `q` inside
-the UI-kit preview surface (`ui/kit/preview.lua`) — buffer-local to a float
-this library opened, closed again with the float.
+nothing itself. Every actual `vim.keymap.set` call in the tree is buffer-local
+to a window this library opened itself, closed again with the window:
+
+| key | buffer | desc |
+| --- | --- | --- |
+| `q` | UI-kit preview surface (`ui/kit/preview.lua`) | Close the preview |
+| `q` | notify history (`notify/popup.lua`'s `show_history()`) | Close the history buffer |
+| `<C-s>` | notify history (`notify/popup.lua`'s `show_history()`) | Toggle collapsed/full entries — same effect as `popup.toggle_full()` |
 
 ## User commands
 
