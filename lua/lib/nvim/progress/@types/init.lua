@@ -1,11 +1,11 @@
 ---@meta
 ---@module 'lib.nvim.progress.@types'
 
----@alias Lib.Progress.Style "auto"|"notify"|"statusline"|"fidget"|"float"|"kit"
+---@alias Lib.Progress.Style "auto"|"notify"|"statusline"|"echo"|"fidget"|"float"|"kit"
 
 ---@class Lib.Progress.Opts
 ---@field title? string Prefix shown in front of every message (default `""`)
----@field style? Lib.Progress.Style Renderer selection (default `"auto"`)
+---@field style? Lib.Progress.Style|Lib.Progress.Style[] Renderer selection (default `"auto"`); a list runs every named style in parallel for the same handle
 ---@field delay_ms? integer Suppress the indicator until it has run this long (default `150`)
 ---@field level? integer `vim.log.levels.*` used by the `"notify"` style (default `INFO`)
 ---@field kit_theme? string|table Preset name or partial override for the `"kit"` style; see `lib.nvim.ui.kit.theme` (default: the active default preset)

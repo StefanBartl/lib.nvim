@@ -7,9 +7,11 @@
 ---  h:update({ text = "searching", current = 12, total = 128 })
 ---  h:finish("128 matches in 19 files")
 ---
----`style` ("auto" | "notify" | "statusline" | "fidget" | "float") only changes
----*how* the same calls render; callers never touch a style implementation
----directly. See `lib.nvim.progress.styles.*` to add a new renderer.
+---`style` ("auto" | "notify" | "statusline" | "echo" | "fidget" | "float" | "kit")
+---only changes *how* the same calls render; callers never touch a style
+---implementation directly. See `lib.nvim.progress.styles.*` to add a new
+---renderer. `style` also accepts a list (e.g. `{"statusline", "echo"}`) to
+---run several renderers in parallel for one handle.
 ---
 ---The "float" style owns an interactive window: focus it deliberately and
 ---press <Esc> (normal mode) to ask for cancellation via `request_cancel()`.
@@ -60,17 +62,37 @@ local function safe_close_timer(t)
   end
 end
 
+---Normalizes `opts.style` (a single style or a list) to a resolved style-
+---implementation list. A bare string becomes a single-element list, so an
+---existing caller passing `style = "notify"` sees no behavior change -- the
+---loops below just run once.
+---@internal
+---@param want Lib.Progress.Style|Lib.Progress.Style[]|nil
+---@return Lib.Progress.StyleImpl[]
+local function resolve_styles(want)
+  local wanted = want or "auto"
+  if type(wanted) ~= "table" then
+    wanted = { wanted }
+  end
+  local styles = {}
+  for _, one in ipairs(wanted) do
+    styles[#styles + 1] = resolve_style(one)
+  end
+  return styles
+end
+
 ---@param opts? Lib.Progress.Opts
 ---@return Lib.Progress.Handle
 function M.create(opts)
   opts = opts or {}
   local title = normalize_title(opts.title)
   local delay_ms = type(opts.delay_ms) == "number" and opts.delay_ms or DEFAULT_DELAY_MS
-  local style = resolve_style(opts.style or "auto")
+  local styles = resolve_styles(opts.style)
 
   ---@type Lib.Progress.Fields
   local fields = {}
-  local style_state = nil
+  ---@type any[] index-aligned with `styles`
+  local style_states = {}
   local started = false
   local done = false
   ---@type fun()[]
@@ -88,9 +110,11 @@ function M.create(opts)
       return
     end
     started = true
-    style_state = style.start(spec(), opts, function()
-      handle:request_cancel()
-    end)
+    for i, style in ipairs(styles) do
+      style_states[i] = style.start(spec(), opts, function()
+        handle:request_cancel()
+      end)
+    end
   end
 
   if delay_ms > 0 then
@@ -130,7 +154,9 @@ function M.create(opts)
         fields.total = new_fields.total
       end
       if started then
-        style_state = style.update(style_state, spec(), opts)
+        for i, style in ipairs(styles) do
+          style_states[i] = style.update(style_states[i], spec(), opts)
+        end
       end
     end,
 
@@ -146,7 +172,9 @@ function M.create(opts)
       if not started then
         return -- never became visible; a fast operation stays silent
       end
-      style.finish(style_state, spec(), opts)
+      for i, style in ipairs(styles) do
+        style.finish(style_states[i], spec(), opts)
+      end
     end,
 
     cancel = function(_, text)
@@ -161,7 +189,9 @@ function M.create(opts)
       if not started then
         return
       end
-      style.cancel(style_state, spec(), opts)
+      for i, style in ipairs(styles) do
+        style.cancel(style_states[i], spec(), opts)
+      end
     end,
 
     on_cancel = function(_, fn)

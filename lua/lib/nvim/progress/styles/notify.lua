@@ -8,23 +8,7 @@
 
 require("lib.nvim.progress.@types")
 
----@internal
----@param spec Lib.Progress.Spec
----@return string
-local function render_text(spec)
-  local parts = {}
-  if spec.text and spec.text ~= "" then
-    parts[#parts + 1] = spec.text
-  end
-  if type(spec.current) == "number" then
-    if type(spec.total) == "number" and spec.total > 0 then
-      parts[#parts + 1] = string.format("(%d/%d)", spec.current, spec.total)
-    else
-      parts[#parts + 1] = string.format("(%d)", spec.current)
-    end
-  end
-  return spec.title .. table.concat(parts, " ")
-end
+local render_text = require("lib.nvim.progress.internal.render_text")
 
 ---Notify, tolerating backends that don't support `replace` or return nothing.
 ---@internal

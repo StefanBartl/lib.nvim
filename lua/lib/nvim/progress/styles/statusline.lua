@@ -10,6 +10,8 @@
 
 require("lib.nvim.progress.@types")
 
+local render_text = require("lib.nvim.progress.internal.render_text")
+
 local M = {}
 
 ---@type table<table, string>
@@ -28,24 +30,6 @@ local function request_redraw()
       vim.cmd("redrawstatus")
     end)
   end)
-end
-
----@internal
----@param spec Lib.Progress.Spec
----@return string
-local function render_text(spec)
-  local parts = {}
-  if spec.text and spec.text ~= "" then
-    parts[#parts + 1] = spec.text
-  end
-  if type(spec.current) == "number" then
-    if type(spec.total) == "number" and spec.total > 0 then
-      parts[#parts + 1] = string.format("(%d/%d)", spec.current, spec.total)
-    else
-      parts[#parts + 1] = string.format("(%d)", spec.current)
-    end
-  end
-  return spec.title .. table.concat(parts, " ")
 end
 
 ---@internal
