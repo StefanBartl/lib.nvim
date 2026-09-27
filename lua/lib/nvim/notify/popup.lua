@@ -25,17 +25,39 @@ local M = {}
 
 ---@class Lib.Notify.Popup.Config
 ---@field messages boolean Also record every message in `:messages` (default: true)
+---@field max_lines integer Toast line cap (default 12)
+---@field width integer Toast wrap width in columns (default 38; ui.kit toasts are 40 columns wide, minus the border)
+---@field toast_max_bytes integer Bytes of a message considered when wrapping for the toast (default 4000); a message can be arbitrarily large (a whole command's output) but only its head is ever shown in a toast
+---@field entry_max_bytes integer Bytes kept per history entry (default 64 KiB)
+---@field toast_min_level integer Below this vim.log.levels value: recorded in history/`:messages` only, no toast (default INFO)
+---@field timeouts table<integer, integer> Per-level toast lifetime override in ms, merged over `LEVELS[*].timeout`
+---@field history_full boolean `show_history()` shows entries in full instead of collapsed to `max_lines` (default false)
+
+---Partial form of `Lib.Notify.Popup.Config` accepted by `M.setup`: every
+---field optional, a field left unset keeps its current value.
+---@class Lib.Notify.Popup.SetupOpts
+---@field messages? boolean
+---@field max_lines? integer
+---@field width? integer
+---@field toast_max_bytes? integer
+---@field entry_max_bytes? integer
+---@field toast_min_level? integer
+---@field timeouts? table<integer, integer>
+---@field history_full? boolean
 
 ---@type Lib.Notify.Popup.Config
-local config = { messages = true }
+local config = {
+  messages = true,
+  max_lines = 12,
+  width = 38,
+  toast_max_bytes = 4000,
+  entry_max_bytes = 64 * 1024,
+  toast_min_level = vim.log.levels.INFO,
+  timeouts = {},
+  history_full = false,
+}
 
-local WIDTH = 38 -- ui.kit toasts are 40 columns wide, minus the border
-local MAX_LINES = 12
-local HISTORY_MAX = 200
--- A message can be arbitrarily large (a whole command's output). Only its head
--- is ever shown in a toast, and the history keeps a bounded copy per entry.
-local TOAST_INPUT_MAX = 4000 -- bytes considered when wrapping for the toast
-local ENTRY_MAX = 64 * 1024 -- bytes kept per history entry
+local HISTORY_MAX = 200 -- capped number of entries kept, independent of config
 
 -- Per level: title, toast highlight group, milliseconds on screen.
 local LEVELS = {
@@ -54,21 +76,29 @@ local LEVELS = {
 
 ---@class Lib.Notify.Popup.Opts
 ---@field source? string Tag for the history and the toast title (e.g. "reposcope")
----@field timeout? integer Toast lifetime in ms (default per level)
+---@field timeout? integer Toast lifetime in ms (default per level, or config.timeouts[level])
 ---@field messages? boolean Override the module default for writing to `:messages`
+---@field max_lines? integer Override config.max_lines for this call
+---@field width? integer Override config.width for this call
+---@field toast_max_bytes? integer Override config.toast_max_bytes for this call
+---@field entry_max_bytes? integer Override config.entry_max_bytes for this call
+---@field toast_min_level? integer Override config.toast_min_level for this call
 
 ---@type Lib.Notify.Popup.Entry[]
 local history = {}
+---@type Lib.Notify.Popup.Entry|nil
+local last_entry = nil
 
 ---Hard-wraps `text` to `width` display columns and caps the line count.
 ---@param text string
 ---@param width integer
 ---@param max_lines integer
+---@param max_bytes integer Bytes of `text` considered before wrapping
 ---@return string[]
-local function wrap(text, width, max_lines)
+local function wrap(text, width, max_lines, max_bytes)
   local truncated = false
-  if #text > TOAST_INPUT_MAX then
-    text = text:sub(1, TOAST_INPUT_MAX)
+  if #text > max_bytes then
+    text = text:sub(1, max_bytes)
     truncated = true
   end
 
@@ -106,7 +136,7 @@ local function wrap(text, width, max_lines)
 
   if #out > max_lines or truncated then
     out = vim.list_slice(out, 1, max_lines)
-    out[#out] = "... (full text: the popup history)"
+    out[#out] = "... (:Lib notify last)"
   end
   return out
 end
@@ -193,10 +223,14 @@ local function show_toast(message, level, opts)
 
   local spec = LEVELS[level] or LEVELS[vim.log.levels.INFO]
   local title = (opts.source and (opts.source .. " ") or "") .. spec.name
+  local width = opts.width or config.width
+  local max_lines = opts.max_lines or config.max_lines
+  local max_bytes = opts.toast_max_bytes or config.toast_max_bytes
+  local timeout = opts.timeout or config.timeouts[level] or spec.timeout
   local ok = pcall(toast.open, {
     title = title,
-    message = wrap(message, WIDTH, MAX_LINES),
-    timeout = opts.timeout or spec.timeout,
+    message = wrap(message, width, max_lines, max_bytes),
+    timeout = timeout,
     theme = { hl = { border = spec.hl, title = spec.hl } },
   })
   return ok
@@ -222,14 +256,22 @@ function M.deliver(message, level, opts)
   -- A message containing a raw NUL crosses the vim.fn bridge as a Blob, not a
   -- String -- wrap()'s vim.fn.strdisplaywidth/strcharpart/strchars calls then
   -- raise E976 and this whole delivery is lost. A message can be arbitrary
-  -- command output (see TOAST_INPUT_MAX above), so a stray NUL is realistic.
+  -- command output (see toast_max_bytes above), so a stray NUL is realistic.
   message = tostring(message):gsub("%z", "\\0")
-  if #message > ENTRY_MAX then
-    message = message:sub(1, ENTRY_MAX) .. "\n... (truncated)"
+  local entry_max = opts.entry_max_bytes or config.entry_max_bytes
+  if #message > entry_max then
+    message = message:sub(1, entry_max) .. "\n... (truncated)"
   end
 
-  history[#history + 1] =
-    { time = os.date("%H:%M:%S"), level = level, message = message, source = opts.source }
+  ---@type Lib.Notify.Popup.Entry
+  local entry = {
+    time = os.date("%H:%M:%S") --[[@as string]],
+    level = level,
+    message = message,
+    source = opts.source,
+  }
+  history[#history + 1] = entry
+  last_entry = entry
   if #history > HISTORY_MAX then
     table.remove(history, 1)
   end
@@ -245,19 +287,74 @@ function M.deliver(message, level, opts)
     write_messages(message, level)
   end
 
+  -- Below toast_min_level: stays in history/:messages only. This is what
+  -- keeps a chatty plugin (dozens of INFO-level lib_notify call sites) from
+  -- spamming the corner -- deliberately skips vim.notify too, not just the
+  -- toast, since either would still be a visible popup on a plain UI.
+  local toast_min_level = opts.toast_min_level or config.toast_min_level
+  if level < toast_min_level then
+    return
+  end
+
   if ui_notify_active() or not show_toast(message, level, opts) then
     vim.notify(message, level)
   end
 end
 
 ---Changes module-wide defaults.
----@param opts? { messages?: boolean } `messages = false` stops writing to `:messages`
+---@param opts? Lib.Notify.Popup.SetupOpts `timeouts` merges per level rather
+---than replacing the whole table.
 ---@return nil
 function M.setup(opts)
   opts = opts or {}
   if opts.messages ~= nil then
     config.messages = opts.messages and true or false
   end
+  if opts.max_lines ~= nil then
+    config.max_lines = opts.max_lines
+  end
+  if opts.width ~= nil then
+    config.width = opts.width
+  end
+  if opts.toast_max_bytes ~= nil then
+    config.toast_max_bytes = opts.toast_max_bytes
+  end
+  if opts.entry_max_bytes ~= nil then
+    config.entry_max_bytes = opts.entry_max_bytes
+  end
+  if opts.toast_min_level ~= nil then
+    config.toast_min_level = opts.toast_min_level
+  end
+  if opts.timeouts ~= nil then
+    for lvl, ms in pairs(opts.timeouts) do
+      config.timeouts[lvl] = ms
+    end
+  end
+  if opts.history_full ~= nil then
+    config.history_full = opts.history_full and true or false
+  end
+end
+
+---Opens the last delivered message in full, in a read-only viewer panel
+---(yankable, `q`/`<Esc>` closes). No-op when nothing has been delivered yet.
+---@return nil
+function M.expand_last()
+  if not last_entry then
+    return
+  end
+  require("lib.nvim.ui.kit.viewer").open({
+    lines = vim.split(last_entry.message, "\n", { plain = true }),
+    title = last_entry.source or "notify",
+  })
+end
+
+---Toggles `config.history_full` (collapsed vs. full entries in
+---`show_history()`). Exposed separately from `setup` so a keymap -- the
+---buffer-local `<C-s>` in a history buffer, or a global one from the user's
+---own config -- can flip it without reading the current value back out.
+---@return nil
+function M.toggle_full()
+  config.history_full = not config.history_full
 end
 
 ---Matches an entry against an optional source filter.
@@ -286,6 +383,7 @@ end
 function M.clear(source)
   if source == nil then
     history = {}
+    last_entry = nil
     return
   end
   history = vim.tbl_filter(function(entry)
@@ -293,23 +391,39 @@ function M.clear(source)
   end, history)
 end
 
----Opens the history in a scratch buffer (newest last) so it can be yanked.
----@param source? string Only show messages of this source
----@return integer bufnr
-function M.show_history(source)
+---Renders the recorded messages (optionally filtered by `source`) into
+---display lines, prefixed with time and level. Collapsed to `config.max_lines`
+---per entry (plus a `[+N lines, <C-s>]` marker) unless `config.history_full`.
+---@param source? string
+---@return string[]
+local function render_history_lines(source)
   local lines = {}
   for _, entry in ipairs(M.history(source)) do
     local spec = LEVELS[entry.level] or LEVELS[vim.log.levels.INFO]
     local prefix = ("%s %-5s "):format(entry.time, spec.name:upper())
     local pad = (" "):rep(#prefix)
-    for i, text in ipairs(vim.split(entry.message, "\n", { plain = true })) do
+    local entry_lines = vim.split(entry.message, "\n", { plain = true })
+    if not config.history_full and #entry_lines > config.max_lines then
+      local hidden = #entry_lines - config.max_lines
+      entry_lines = vim.list_slice(entry_lines, 1, config.max_lines)
+      entry_lines[#entry_lines + 1] = ("[+%d lines, <C-s>]"):format(hidden)
+    end
+    for i, text in ipairs(entry_lines) do
       lines[#lines + 1] = (i == 1 and prefix or pad) .. text
     end
   end
   if #lines == 0 then
     lines = { "(no messages yet)" }
   end
+  return lines
+end
 
+---Opens the history in a scratch buffer (newest last) so it can be yanked.
+---`<C-s>` (buffer-local) toggles collapsed/full entries, same effect as
+---`M.toggle_full()`.
+---@param source? string Only show messages of this source
+---@return integer bufnr
+function M.show_history(source)
   -- A buffer name is unique: reopening while the previous history buffer is
   -- still around would fail with E95, so retire the old one first.
   local name = "notify://" .. (source or "messages")
@@ -321,11 +435,16 @@ function M.show_history(source)
 
   vim.cmd("botright new")
   local buf = vim.api.nvim_get_current_buf()
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+
+  local function render()
+    vim.bo[buf].modifiable = true
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, render_history_lines(source))
+    vim.bo[buf].modifiable = false
+  end
+  render()
   vim.bo[buf].buftype = "nofile"
   vim.bo[buf].bufhidden = "wipe"
   vim.bo[buf].swapfile = false
-  vim.bo[buf].modifiable = false
   vim.api.nvim_buf_set_name(buf, name)
   vim.cmd("normal! G")
   vim.keymap.set(
@@ -334,7 +453,44 @@ function M.show_history(source)
     "<Cmd>close<CR>",
     { buffer = buf, silent = true, desc = "Close message history" }
   )
+  vim.keymap.set("n", "<C-s>", function()
+    M.toggle_full()
+    render()
+  end, { buffer = buf, nowait = true, silent = true, desc = "Toggle collapsed/full messages" })
   return buf
+end
+
+---The `:Lib notify …` routes, for `lib.nvim_usrcmds` to merge into the `:Lib`
+---verb it already builds. Exposed as data rather than registered here so
+---there is exactly one place that owns the `:Lib` verb (same pattern as
+---`lib.nvim.deps.routes()`).
+---@return table[] routes
+function M.routes()
+  return {
+    {
+      path = { "notify", "last" },
+      desc = "Show the last delivered message in full (viewer)",
+      run = function()
+        M.expand_last()
+      end,
+    },
+    {
+      path = { "notify", "history" },
+      args = { { name = "source", type = "STRING", optional = true } },
+      desc = "Open the notify history (optionally filtered by source)",
+      run = function(ctx)
+        M.show_history(ctx.args.source)
+      end,
+    },
+    {
+      path = { "notify", "clear" },
+      args = { { name = "source", type = "STRING", optional = true } },
+      desc = "Clear the notify history (optionally by source)",
+      run = function(ctx)
+        M.clear(ctx.args.source)
+      end,
+    },
+  }
 end
 
 return M

@@ -55,6 +55,7 @@
 
 ---@class Lib.Notify
 ---@field create Lib.Notify.CreateFN
+---@field setup fun(opts?: { popup?: boolean }): nil
 ---@field safe Lib.Notify.Safe
 ---@field popup Lib.Notify.Popup
 ---@field resolve_log_level Lib.Notify.ResolveLogLevelFn

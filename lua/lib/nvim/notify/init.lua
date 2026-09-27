@@ -16,12 +16,32 @@ require("lib.nvim.notify.@types")
 
 local M = {}
 
+-- Global default for the `popup` option of `create()`, set via `M.setup`.
+-- Read at *call* time inside `notifier.notify` (not at `create()` time): a
+-- notifier is typically built once at module load
+-- (`local notify = require("lib.nvim.notify").create(...)`), and resolving
+-- the default there would freeze it to whatever was configured before that
+-- module happened to load -- the same load-time-binding trap `popup.lua`'s
+-- own docs warn about, one layer up.
+local default_popup = false
+
+--- Changes module-wide defaults.
+---@param opts? { popup?: boolean } `popup = true` makes `create()` default to
+---popup delivery for notifiers that don't set `popup` explicitly themselves
+---@return nil
+function M.setup(opts)
+  opts = opts or {}
+  if opts.popup ~= nil then
+    default_popup = opts.popup and true or false
+  end
+end
+
 --- Create a prefixed notify helper (standard mode, not scheduled)
 ---@param prefix string Notification prefix, e.g. "[neotree-fs-refactor]"
----@param create_opts? Lib.Notify.CreateOpts `popup = true` shows messages as a corner toast with history (see lib.nvim.notify.popup) instead of `vim.notify`
+---@param create_opts? Lib.Notify.CreateOpts `popup = true`/`false` shows messages as a corner toast with history (see lib.nvim.notify.popup) instead of `vim.notify`; omitted, it follows the global default set via `M.setup({ popup = ... })` (default: false)
 ---@return Lib.Notify.Notifier
 function M.create(prefix, create_opts)
-  local popup = create_opts and create_opts.popup
+  local popup_opt = create_opts and create_opts.popup
   local source = create_opts and create_opts.source
   local messages = create_opts and create_opts.messages
 
@@ -51,6 +71,10 @@ function M.create(prefix, create_opts)
     level = level or vim.log.levels.INFO
     opts = opts or {}
 
+    local popup = popup_opt
+    if popup == nil then
+      popup = default_popup
+    end
     if popup then
       require("lib.nvim.notify.popup").deliver(
         prefix .. msg,

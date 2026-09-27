@@ -50,6 +50,14 @@ function M.lib_verb(o)
       run = actions.cwd_here,
     },
   }
+
+  -- `:Lib notify last|history|clear` is always available (no `o.notify` flag,
+  -- unlike `o.powershell_profile`/`o.deps` below): notify history management
+  -- is core lib.nvim, not an opt-in feature.
+  for _, route in ipairs(require("lib.nvim.notify.popup").routes()) do
+    routes[#routes + 1] = route
+  end
+
   if o.powershell_profile then
     routes[#routes + 1] = {
       path = { "ps-profile" },
