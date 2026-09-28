@@ -476,7 +476,28 @@ local function reflow()
         -- statusline plugin active) -- `dock` is never a hard requirement
         -- on one being there.
         row = vim.o.lines - vim.o.cmdheight - 1
-        col = 0
+        -- `dock_left`'s own border array leaves the left corners/edge as ""
+        -- (see `lib.nvim.ui.kit.theme`'s `dock_left` preset) so nothing is drawn
+        -- there -- but Neovim still reserves 1 screen column for that
+        -- position regardless of whether its char is a glyph or "": an
+        -- empty border char hides the glyph, it does not shrink the
+        -- window's footprint (`:h nvim_open_win()`'s `border`, confirmed
+        -- live: a floating window opened with this exact array and `col =
+        -- 0` painted its first *visible* (non-border) column one cell in
+        -- from the real screen edge, not flush against it). Unlike an
+        -- ordinary bordered chip (`col = 0` in the `else` branch below,
+        -- correct there because that border's left glyph itself IS the
+        -- visible edge), `dock_left`'s left "border" is invisible, so the
+        -- reserved-but-blank cell must be pushed one column off-screen
+        -- instead: `col = -1` (Neovim accepts and clips a partially
+        -- off-screen `relative = "editor"` float without erroring) lands
+        -- that blank cell at screen column -1 and the first real, visible
+        -- column of content at screen column 0 -- flush for real. Scoped to
+        -- `dock_left` specifically, not every docked entry: `opts.dock` and
+        -- `opts.shape` are independent, and a docked chip using a shape
+        -- with a real left border glyph (e.g. `rounded_chip`) must keep
+        -- `col = 0`, or this would clip a visible column of its own border.
+        col = entry.shape == "dock_left" and -1 or 0
       else
         row = edge.v == "top" and offset
           or math.max(0, vim.o.lines - vim.o.cmdheight - status_rows - offset - box_h + 1)
