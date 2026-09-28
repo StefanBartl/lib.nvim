@@ -194,25 +194,50 @@ end
 --- live the instant a differently-themed one opened next to it (e.g. a green
 --- `notify.success` toast), since both windows' `winhighlight` referenced
 --- the SAME group name and only the latest materialize() call's colors
---- exist for that name at any given moment. Scoping just these three
---- winhighlight-facing names to `winid` gives every surface its own,
---- independent set; `KitSelection`/`KitAccent`/`KitMuted`/`KitError`/
---- `KitFlash`/`KitHover` stay global/fixed (unaffected by this) since other
---- kit components (`lib.nvim.ui.kit.confirm`, `.chooser`, …) reference those
---- exact names directly in their own extmarks, not through a window's
---- `winhighlight`, and aren't implicated in the toast-stacking bug this
---- fixes.
+--- exist for that name at any given moment.
+---
+--- The replacement group is keyed by a fingerprint of the role's resolved
+--- spec, not by `winid`: two surfaces that happen to resolve to the same
+--- colors share one group (no reason for two identical ones to exist), and
+--- -- since Neovim has no API to delete a highlight group once defined --
+--- keying by `winid` instead would mint three brand new, permanent groups
+--- for every surface that ever opens, growing this without bound for the
+--- life of the session; keying by content instead bounds the total to
+--- however many DISTINCT colors are ever actually used (a handful of
+--- presets/`opts.hl` overrides), independent of how many surfaces open over
+--- time.
+---
+--- `KitSelection`/`KitAccent`/`KitMuted`/`KitError`/`KitFlash`/`KitHover`
+--- stay global/fixed, unaffected by this. So, still, do the OTHER two
+--- consumers of `KitBorder`/`KitTitle` themselves: `lib.nvim.ui.kit.menu`
+--- and `lib.nvim.ui.kit.shortlist` paint their own border/title decoration
+--- via extmarks that reference those exact fixed names directly, not
+--- through a window's `winhighlight` -- this fix only reaches the native
+--- float border/title Neovim itself draws via `winhighlight`. A menu or
+--- shortlist open at the same time as a differently-themed surface can
+--- still show the same live-recoloring this fix addresses for toasts;
+--- narrower in practice (those components are closer to modal, toasts are
+--- explicitly meant to stack), but not actually fixed.
+---@type table<string, string>
+local window_group_cache = {}
+local window_group_counter = 0
+
 ---@param resolved Lib.UI.Kit.Theme
----@param winid integer
 ---@return { normal: string, border: string, title: string }
-local function materialize_window_groups(resolved, winid)
-  local names = { normal = "KitNormal", border = "KitBorder", title = "KitTitle" }
-  for key, base_name in pairs(names) do
-    local name = ("%s_%d"):format(base_name, winid)
-    local spec = resolved.hl[key]
-    local opts = type(spec) == "string" and { link = spec } or spec
-    hl.set(name, opts)
-    names[key] = name
+local function materialize_window_groups(resolved)
+  local names = {}
+  for _, role in ipairs({ "normal", "border", "title" }) do
+    local spec = resolved.hl[role]
+    local cache_key = role .. ":" .. vim.inspect(spec)
+    local name = window_group_cache[cache_key]
+    if not name then
+      window_group_counter = window_group_counter + 1
+      name = ("Kit%s_%d"):format(role:sub(1, 1):upper() .. role:sub(2), window_group_counter)
+      local opts = type(spec) == "string" and { link = spec } or spec
+      hl.set(name, opts)
+      window_group_cache[cache_key] = name
+    end
+    names[role] = name
   end
   return names
 end
@@ -226,7 +251,7 @@ function M.apply(winid, resolved)
     return
   end
   materialize(resolved)
-  local names = materialize_window_groups(resolved, winid)
+  local names = materialize_window_groups(resolved)
   local winhl = table.concat({
     "NormalFloat:" .. names.normal,
     "FloatBorder:" .. names.border,
