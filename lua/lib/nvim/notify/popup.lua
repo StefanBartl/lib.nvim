@@ -86,6 +86,7 @@ local LEVELS = {
 ---@field toast_max_bytes? integer Override config.toast_max_bytes for this call
 ---@field entry_max_bytes? integer Override config.entry_max_bytes for this call
 ---@field toast_min_level? integer Override config.toast_min_level for this call
+---@field hl? string Toast border/title highlight group override, independent of `level` -- lets a caller show e.g. a green "success" toast (`level = INFO`, for correct `toast_min_level` filtering and `:messages`/history semantics) without vim.log.levels having a distinct SUCCESS value of its own. See `notifier.success` in `lib.nvim.notify`'s `init.lua`.
 
 ---@type Lib.Notify.Popup.Entry[]
 local history = {}
@@ -223,6 +224,7 @@ local function show_toast(message, level, opts)
   end
 
   local spec = LEVELS[level] or LEVELS[vim.log.levels.INFO]
+  local hl = opts.hl or spec.hl
   local title = opts.title or ((opts.source and (opts.source .. " ") or "") .. spec.name)
   local width = opts.width or config.width
   local max_lines = opts.max_lines or config.max_lines
@@ -232,7 +234,7 @@ local function show_toast(message, level, opts)
     title = title,
     message = wrap(message, width, max_lines, max_bytes),
     timeout = timeout,
-    theme = { hl = { border = spec.hl, title = spec.hl } },
+    theme = { hl = { border = hl, title = hl } },
   })
   return ok
 end
