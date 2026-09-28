@@ -257,10 +257,10 @@ local function close_window(entry)
     -- `entry.busy = false` below and leave it stuck true forever, silently
     -- turning every future M.refresh(id) for this chip into a no-op with no
     -- recovery short of an explicit unmount()+mount(). Re-raised once busy
-    -- is safely cleared, so error visibility is unchanged.
-    local ok, err = pcall(function()
-      entry.surf:close()
-    end)
+    -- is safely cleared, so error visibility is unchanged. Method + self
+    -- passed directly (not wrapped in a closure) -- same style as
+    -- open_window()'s pcall below, no per-call closure allocation.
+    local ok, err = pcall(entry.surf.close, entry.surf)
     entry.busy = false
     if not ok then
       error(err, 0)
