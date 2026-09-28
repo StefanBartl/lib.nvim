@@ -8,7 +8,6 @@
 
 local surface = require("lib.nvim.ui.kit.surface")
 local autocmd = require("lib.nvim.bindings.autocmd")
-local theme = require("lib.nvim.ui.kit.theme")
 
 local api = vim.api
 
@@ -80,8 +79,7 @@ function M.open(opts)
     return nil
   end
 
-  local entry =
-    { surf = surf, height = #lines, bordered = theme.resolve(opts.theme).border ~= "none" }
+  local entry = { surf = surf, height = #lines, bordered = surf.border ~= "none" }
   stack[#stack + 1] = entry
   reflow()
 
