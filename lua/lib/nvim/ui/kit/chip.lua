@@ -476,6 +476,41 @@ local function ensure_hooks()
     group = group,
     desc = "lib.nvim.ui.kit.chip: re-tint theme-linked chips",
   })
+
+  -- A consumer that mounts a chip during plugin-spec loading (`lazy = false`,
+  -- e.g. sessions.nvim's `bindings.autocmds.enable()`) does so *before*
+  -- `VimEnter` -- before some other startup-time config (a statusline plugin
+  -- setting `laststatus`, a colorscheme finishing) has necessarily run yet.
+  -- `M.refresh()`'s own `reflow()`/colour resolution always reads live
+  -- `vim.o.*`/highlight state, so it is correct in principle, but it only
+  -- re-runs on this module's own trigger events -- none of which mean
+  -- "Neovim's own startup has actually finished" -- so an early mount can sit
+  -- at a stale row/col and colour until whatever unrelated later event
+  -- happens to fire next.
+  --
+  -- `VimEnter` + `vim.schedule()`, not `UIEnter`: measured live (headless
+  -- repro) that `UIEnter` never fires at all in a `--headless` run, which
+  -- would make this settle pass silently skip on any headless start; `VimEnter`
+  -- always fires. This mirrors the same choice this user's own nvim config
+  -- already made for the identical problem (`startup.UI_READY`'s own doc
+  -- comment: "does NOT use lazy.nvim's `User VeryLazy`... measured not firing
+  -- at all in headless runs"). `once = true`: this is a startup settle, not a
+  -- recurring resync -- `ColorScheme`/`VimResized`/`TabEnter` above stay
+  -- responsible for anything that changes after startup.
+  autocmd.create("VimEnter", function()
+    vim.schedule(function()
+      for _, entry in pairs(chips) do
+        if entry.win and api.nvim_win_is_valid(entry.win) then
+          apply_colors(entry, resolve_colors(entry.color, is_transparent_shape(entry.shape)))
+        end
+      end
+      reflow()
+    end)
+  end, {
+    group = group,
+    once = true,
+    desc = "lib.nvim.ui.kit.chip: re-settle colour/position once Neovim's own startup has finished",
+  })
 end
 
 -- ---------------------------------------------------------------- public API
@@ -634,10 +669,19 @@ function M.pulse(id, opts)
   local transparent = is_transparent_shape(entry.shape)
   apply_colors(entry, resolve_colors(opts.color or "DiagnosticWarn", transparent))
 
-  local win = entry.win
+  -- Not `e.win == win` against the window handle captured just above: if the
+  -- chip's window gets closed and reopened while the pulse is pending (e.g.
+  -- a text/width change re-opens it, which `M.refresh()` can trigger right
+  -- after `M.pulse()` was called -- `:LastSession` does exactly that,
+  -- `refresh()` then `pulse()`), the captured handle no longer matches
+  -- `chips[id].win` and this guard silently never reverted -- the chip was
+  -- then stuck showing the pulse colour until some unrelated later refresh
+  -- happened to recolour it. Reverting onto whatever window is *currently*
+  -- live for this id (not the one the pulse started on) is what the pulse
+  -- is actually supposed to do.
   vim.defer_fn(function()
     local e = chips[id]
-    if e and e.win == win and api.nvim_win_is_valid(win) then
+    if e and e.win and api.nvim_win_is_valid(e.win) then
       apply_colors(e, resolve_colors(e.color, is_transparent_shape(e.shape)))
     end
   end, duration)
