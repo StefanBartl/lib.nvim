@@ -467,7 +467,8 @@ local function reflow()
       local content_h = entry.height or 1
       local box_h = entry.border == "none" and content_h or (content_h + 2)
       local row, col
-      if entry.dock and edge.v == "bottom" and status_rows > 0 then
+      local docked = entry.dock and edge.v == "bottom" and status_rows > 0
+      if docked then
         -- Sit flush ON the statusline row itself, fused with it, instead of
         -- floating in this corner's normal separate-box-with-a-gap stack.
         -- Degrades to the `else` branch below (unchanged) when there is no
@@ -493,7 +494,13 @@ local function reflow()
         col = col,
         width = entry.width,
       })
-      offset = offset + box_h + MARGIN
+      -- A docked entry doesn't occupy a slot in this corner's stack at all
+      -- (it sits on the statusline row, wherever that is) -- advancing
+      -- `offset` for it would only push any OTHER, non-docked chip at the
+      -- same anchor further away than it needs to be.
+      if not docked then
+        offset = offset + box_h + MARGIN
+      end
     end
   end
 end
@@ -583,7 +590,18 @@ local function ensure_mode_tracking(entry, track_mode)
     entry.track_mode = track_mode
   end
   if entry.track_mode and not entry.track_mode_autocmd_id then
-    local group = autocmd.group("UiKitChip", true)
+    -- No `clear` argument here: `ensure_hooks()` already created (and
+    -- cleared) this group once. Passing `true` again -- found by adversarial
+    -- review, live-reproduced -- re-clears an ALREADY-EXISTING group
+    -- (`lib.nvim.bindings.autocmd`'s own documented behaviour: re-requesting
+    -- a cached group with `clear = true` re-issues `nvim_create_augroup`
+    -- with `clear = true`), wiping every autocmd already in it -- not just
+    -- this chip's own, but `ensure_hooks()`'s VimResized/TabEnter/
+    -- ColorScheme/VimEnter and any OTHER chip's own ModeChanged tracker.
+    -- Exactly the hazard `lib.nvim.ui.kit.picker` already documents for itself
+    -- (its own comment on why it suffixes its group name per-window rather
+    -- than reusing one shared name with `clear = true`).
+    local group = autocmd.group("UiKitChip")
     local id = entry.id
     entry.track_mode_autocmd_id = autocmd.create("ModeChanged", function()
       M.refresh(id)
@@ -687,15 +705,14 @@ function M.refresh(id)
   -- Read straight from `lib.nvim.ui.kit.theme` rather than a hardcoded "minimal" ->
   -- "none" / anything-else -> "rounded" guess: correct for any preset
   -- `preset_for_shape` maps to, including `dock_left`'s glyph array, not
-  -- just the two originally hand-coded here. Cached on `entry.shape`, not
-  -- recomputed on every call: `theme.resolve()` deep-copies a whole theme
-  -- table, and `refresh()` runs on every editing-rate dirty-tracking event
-  -- (see the comment on the diffing below) where the shape essentially
-  -- never actually changed since the last call.
-  if entry._border_shape ~= entry.shape then
-    entry.border = theme.resolve(preset_for_shape(entry.shape)).border
-    entry._border_shape = entry.shape
-  end
+  -- just the two originally hand-coded here. Deliberately NOT cached on
+  -- `entry.shape` (an earlier version of this did): `lib.nvim.ui.kit.theme.setup()`
+  -- lets any plugin redefine a preset's border at runtime, and a cache keyed
+  -- only on the unchanged shape name would then keep showing the stale
+  -- definition indefinitely for an already-mounted chip. `theme.resolve()`
+  -- deep-copies a small table -- negligible next to `resolve_colors()`
+  -- already running fresh on every refresh() a few lines down.
+  entry.border = theme.resolve(preset_for_shape(entry.shape)).border
 
   if not entry.win or not api.nvim_win_is_valid(entry.win) then
     open_window(entry)
