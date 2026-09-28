@@ -74,7 +74,7 @@ colors/borders/highlights yourself through a documented option surface.
   standard group (`NormalFloat`, `FloatBorder`, `FloatTitle`, `Pmenu`,
   `PmenuSel`, `Visual`, …) unless the user overrides it, so the default look is
   correct in any colorscheme — the same fallback strategy hover_select already
-  uses in [`highlight.lua`](../../lua/lib/nvim/ui/hover_select/highlight.lua).
+  uses in [`theme.lua`](../../lua/lib/nvim/ui/kit/theme.lua).
 - **Handles, not globals.** Components return a small handle object with
   methods (`:close()`, `:set_lines()`, `:focus()`, …), following the
   `window.attach` fluent-wrapper pattern in

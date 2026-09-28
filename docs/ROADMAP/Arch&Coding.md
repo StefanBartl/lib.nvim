@@ -1,7 +1,7 @@
 # Architektur- & Codierungsrichtlinien — applied to lib.nvim
 
 Audit against
-[`Arch&Coding-Regeln.md`](E:/repos/Notes/MyNotes/Checklists/Lua/Arch&Coding-Regeln.md).
+[`Arch&Coding-Regeln.md`]($REPOS_DIR/WKDBooks/Development/wkdbook-Lua/Checklists/archiv/Arch&Coding-Regeln.md).
 good · partial · gap · N/A for this repo.
 
 > lib.nvim **is** the `lib.*` helper library the other checklists tell every
