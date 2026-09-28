@@ -24,6 +24,7 @@ local M = {}
 M.nice_quit = require("lib.nvim.window.nice_quit")
 M.set_title = require("lib.nvim.window.set_title")
 M.make_scratch = require("lib.nvim.window.make_scratch")
+M.max_float_width = require("lib.nvim.window.max_float_width")
 M.close_on_focus_lost = require("lib.nvim.window.close_on_focus_lost")
 M.center = require("lib.nvim.window.center")
 M.is_usable_window = require("lib.nvim.window.find_usable").is_usable_window

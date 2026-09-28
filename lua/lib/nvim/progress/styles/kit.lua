@@ -11,6 +11,8 @@
 
 require("lib.nvim.progress.@types")
 
+local max_float_width = require("lib.nvim.window").max_float_width
+
 ---@internal
 ---@param spec Lib.Progress.Spec
 ---@return string
@@ -50,6 +52,46 @@ local function close(surf)
 end
 
 ---@internal
+---The width `line` needs -- a floor for a short/bare render, otherwise its
+---own display width, clamped to the same ceiling `make_scratch` clamps the
+---actually-opened window to.
+---@param line string
+---@return integer
+local function fit_width(line)
+  return math.min(math.max(20, vim.fn.strdisplaywidth(line) + 2), max_float_width())
+end
+
+---@internal
+---Grow (never shrink) `surf` to fit `line` when it no longer does, up to the
+---same ceiling `start()` clamps to. A one-way ratchet, not a full resync on
+---every render: row/height stay exactly what `start()` opened with (pinned
+---near the bottom, one line tall) -- only width/col ever need to move, and
+---shrinking back down would make the float visibly jitter as
+---`current`/`total` tick between fewer and more digits. `nvim_win_set_config`
+---direct rather than a `Surface` method: `lib.nvim.ui.kit` is a frozen
+---mirror of `ui.kit` (see ui.nvim's TESTS/kit_drift_spec.lua) that takes bug
+---fixes but not new features, same as every other resize/reposition call
+---site in this tree (toast.lua, chip.lua, chooser.lua, ...).
+---@param surf any lib.nvim.ui.kit surface handle
+---@param line string
+local function maybe_resize(surf, line)
+  if not surf or not surf:is_valid() then
+    return
+  end
+  local needed = fit_width(line)
+  if needed <= vim.api.nvim_win_get_width(surf.winid) then
+    return
+  end
+  pcall(vim.api.nvim_win_set_config, surf.winid, {
+    relative = "editor",
+    row = vim.o.lines - 4,
+    col = math.max(0, vim.o.columns - needed - 2),
+    width = needed,
+    height = 1,
+  })
+end
+
+---@internal
 ---@param bufnr integer
 ---@param spec Lib.Progress.Spec
 ---@param request_cancel fun()
@@ -79,20 +121,11 @@ local function start(spec, opts, request_cancel)
   -- start() never sees the bare "working…" fallback -- can already render a
   -- line past 40 cells. This style has no wrapping, so the (n/total) counter
   -- it exists to show would be the first thing silently clipped by a fixed
-  -- width. Fixes the render at start() time only: update()/finish()/cancel()
-  -- never resize the float afterwards, so a later render that grows past
-  -- this width is still clipped -- the same class of bug, just deferred to
-  -- after start() instead of eliminated outright.
-  --
-  -- Clamped to the same ceiling `make_scratch`'s own `resolve_dimensions`
-  -- applies (`math.max(1, vim.o.columns - 4)`) -- `col` below is computed
-  -- from this value to keep the float right-anchored, so it has to match
-  -- what `nvim_open_win` actually ends up using; an unclamped width here
-  -- would compute `col` for a wider float than the one that actually opens,
-  -- pinning it to the wrong edge once a render exceeds the editor's width.
+  -- width. update()/finish()/cancel() each grow the float in place
+  -- (maybe_resize) when a later render outgrows this one, so the fix isn't
+  -- limited to whatever start() happened to see first.
   local line = render_line(spec)
-  local max_w = math.max(1, vim.o.columns - 4)
-  local width = math.min(math.max(20, vim.fn.strdisplaywidth(line) + 2), max_w)
+  local width = fit_width(line)
   local surf = kit.surface.open({
     lines = { line },
     theme = opts.kit_theme,
@@ -119,7 +152,9 @@ end
 ---@param spec Lib.Progress.Spec
 ---@return any|nil
 local function update(state, spec)
-  set_line(state, render_line(spec))
+  local line = render_line(spec)
+  maybe_resize(state, line)
+  set_line(state, line)
   return state
 end
 
@@ -129,7 +164,9 @@ local function finish(state, spec)
   if not state then
     return
   end
-  set_line(state, render_line(spec))
+  local line = render_line(spec)
+  maybe_resize(state, line)
+  set_line(state, line)
   vim.defer_fn(function()
     close(state)
   end, 800)
@@ -142,7 +179,9 @@ local function cancel(state, spec)
     return
   end
   local text = spec.text and spec.text ~= "" and spec.text or "cancelled"
-  set_line(state, spec.title .. text)
+  local line = spec.title .. text
+  maybe_resize(state, line)
+  set_line(state, line)
   vim.defer_fn(function()
     close(state)
   end, 800)

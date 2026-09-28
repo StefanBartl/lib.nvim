@@ -12,6 +12,7 @@ require("lib.nvim.window.@types")
 local api = vim.api
 local notify = require("lib.nvim.notify").create("[lib.nvim.window.make_scratch]")
 local nice_quit = require("lib.nvim.window.nice_quit")
+local max_float_width = require("lib.nvim.window.max_float_width")
 
 ---Window-local options applied to every scratch float unless overridden via `opts.wo`.
 ---
@@ -96,7 +97,7 @@ end
 ---@return integer width
 ---@return integer height
 local function resolve_dimensions(lines, opts)
-  local max_w = math.max(1, vim.o.columns - 4)
+  local max_w = max_float_width()
   local max_h = math.max(1, vim.o.lines - 4)
 
   -- +2 leaves room for a border; fall back to a comfortable default whenever

@@ -56,6 +56,7 @@
 ---@field nice_quit fun(winid: integer, opts?: Lib.Window.NiceQuitOpts): boolean
 ---@field set_title fun(winid: integer, title: string|nil, opts?: Lib.Window.SetTitleOpts): boolean
 ---@field make_scratch fun(opts?: Lib.Window.MakeScratchOpts): integer|nil, integer|nil
+---@field max_float_width fun(): integer # The screen-width ceiling `make_scratch` clamps every float's width to -- the value a caller must clamp to before deriving a right-anchored `col` from that same width.
 ---@field close_on_focus_lost fun(winid: integer, opts?: Lib.Window.CloseOnFocusLostOpts): integer|nil
 ---@field center fun(winid: integer): boolean
 ---@field attach fun(winid: integer): Lib.Window.Handle

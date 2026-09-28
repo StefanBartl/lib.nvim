@@ -72,7 +72,13 @@ end
 ---@param request_cancel fun()
 ---@return { winid: integer|nil, bufnr: integer|nil }
 local function start(spec, _opts, request_cancel)
-  local width = 40
+  -- Clamped to make_scratch's own ceiling: `col` below is computed from
+  -- `width` to keep the float right-anchored, so it has to match what
+  -- `nvim_open_win` actually ends up using. On a narrow editor
+  -- (`vim.o.columns - 4 < 40`) an unclamped 40 here would compute `col` for
+  -- a wider float than the one that actually opens, pinning it to the wrong
+  -- edge instead of near the right.
+  local width = math.min(40, window.max_float_width())
   local winid, bufnr = window.make_scratch({
     lines = { render_line(spec) },
     width = width,
