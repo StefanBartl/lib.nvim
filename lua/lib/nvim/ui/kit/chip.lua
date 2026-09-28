@@ -291,22 +291,6 @@ local function is_transparent_shape(shape)
   return shape == "classic"
 end
 
----@internal
----Whether a resolved border's left corners/edge are all blank (`""`) --
----the shape carries a real border (Neovim still reserves the screen
----column) but draws nothing there, e.g. `lib.nvim.ui.kit.theme`'s `dock_left`
----preset. Checked against the actual resolved array (indices 1, 7, 8 --
----topleft, bottomleft, left, per `:h nvim_open_win()`), not a shape NAME:
----`theme.setup()` lets any consumer fully replace a preset (including
----"dock_left") at runtime, so a name check alone can go stale the moment
----one does. A non-table border (a named style string like `"rounded"`,
----or `"none"`) is never blank-left by definition.
----@param border string|string[]|nil
----@return boolean
-local function border_left_is_blank(border)
-  return type(border) == "table" and border[1] == "" and border[7] == "" and border[8] == ""
-end
-
 -- ---------------------------------------------------------------- window lifecycle
 
 ---@internal
@@ -484,41 +468,6 @@ local function reflow()
       local box_h = entry.border == "none" and content_h or (content_h + 2)
       local row, col
       local docked = entry.dock and edge.v == "bottom" and status_rows > 0
-      -- A left-anchored chip whose border's left corners/edge (indices 1, 7,
-      -- 8 of the 8-slot array -- topleft, bottomleft, left, per
-      -- `:h nvim_open_win()`) are all "" (e.g. `lib.nvim.ui.kit.theme`'s `dock_left`
-      -- preset) still has Neovim reserve 1 screen column for that position:
-      -- an empty border char hides the glyph, it does not shrink the
-      -- window's footprint (confirmed live: a floating window opened with
-      -- such an array and `col = 0` painted its first *visible* (non-border)
-      -- column one cell in from the real screen edge, not flush against
-      -- it). Unlike an ordinary bordered chip (a real left glyph IS the
-      -- visible edge, `col = 0` is correct as-is), that reserved-but-blank
-      -- cell must be pushed one column off-screen instead: `col = -1`
-      -- (Neovim accepts and clips a partially off-screen
-      -- `relative = "editor"` float without erroring) lands the blank cell
-      -- at screen column -1 and the first real, visible column of content
-      -- at screen column 0 -- flush for real.
-      --
-      -- Keyed on `entry.border`'s actual resolved glyphs, not on
-      -- `entry.shape == "dock_left"` by name: `lib.nvim.ui.kit.theme.setup()` lets
-      -- any consumer fully replace the "dock_left" preset (or any other) at
-      -- runtime, including giving it a real left border -- checking the
-      -- name alone would then keep clipping a column of that consumer's own
-      -- visible border. `entry.border` is already re-resolved fresh from
-      -- the live preset on every refresh (see the `applied_border` diffing
-      -- below), so reading it here never goes stale the way a
-      -- shape-name check would.
-      --
-      -- Applies independent of `docked`: the reserved-blank-column issue is
-      -- a property of the border array itself, not of whether this
-      -- particular chip happens to be docked on the statusline row this
-      -- refresh -- a `dock_left`-shaped chip anchored `top-left`, or one
-      -- anchored `bottom-left` with `dock = true` but no statusline row
-      -- currently visible (`laststatus = 0`, a lone real window under
-      -- `laststatus = 1`, ...), still uses this same border and needs the
-      -- same offset even though it takes the `else` branch below.
-      local left_flush_col = border_left_is_blank(entry.border) and -1 or 0
       if docked then
         -- Sit flush ON the statusline row itself, fused with it, instead of
         -- floating in this corner's normal separate-box-with-a-gap stack.
@@ -527,18 +476,36 @@ local function reflow()
         -- statusline plugin active) -- `dock` is never a hard requirement
         -- on one being there.
         row = vim.o.lines - vim.o.cmdheight - 1
-        col = left_flush_col
+        -- Flush at col 0, same as the `else` branch below -- see that
+        -- branch's own comment for why `col = 0` is correct even for
+        -- `dock_left`'s blank-left-edge border array. (History: `96e695d`/
+        -- `305e49b` briefly used `col = -1` here on the theory that Neovim
+        -- reserves a screen column for that border position even though
+        -- nothing is drawn there. That theory is correct in isolation
+        -- (confirmed via a headless `nvim_open_win` probe) but did not
+        -- explain the actual symptom: live screenshots before and after
+        -- that change showed the chip's first visible pixel at the exact
+        -- same screen column, proving `col` was never the cause. The real
+        -- source was this user's own WezTerm `window_padding = "1cell"`
+        -- setting -- set deliberately, for `images.nvim`'s OSC-1337 image
+        -- placement, see `terminals/wezterm/config/experimental.lua` in
+        -- their `Configs` repo -- which insets WezTerm's entire terminal
+        -- grid by one cell on every side, outside of and unreachable by
+        -- anything Neovim draws. No `col` value can compensate for padding
+        -- applied by the terminal emulator around its own grid. Reverted
+        -- rather than left in as a no-op: it also made `entry.border`
+        -- overrides via `theme.setup()` a live footgun for no actual
+        -- benefit.)
+        col = 0
       else
         row = edge.v == "top" and offset
           or math.max(0, vim.o.lines - vim.o.cmdheight - status_rows - offset - box_h + 1)
-        -- Flush against the left edge (col 0, or -1 -- see
-        -- `left_flush_col` above), not inset by MARGIN -- a bordered
-        -- float's `col` is where its own border starts, so 0 (or the
-        -- blank-border compensation) already sits exactly at the screen
-        -- edge without clipping anything real. The right edge keeps its
-        -- MARGIN inset so a right-anchored chip isn't flush against the
-        -- terminal's own right border.
-        col = edge.h == "left" and left_flush_col
+        -- Flush against the left edge (col 0), not inset by MARGIN -- a
+        -- bordered float's `col` is where its own border starts, so 0 already
+        -- sits exactly at the screen edge without clipping anything. The right
+        -- edge keeps its MARGIN inset so a right-anchored chip isn't flush
+        -- against the terminal's own right border.
+        col = edge.h == "left" and 0
           or math.max(0, vim.o.columns - entry.width - MARGIN - (entry.border == "none" and 0 or 2))
       end
       pcall(api.nvim_win_set_config, entry.win, {
