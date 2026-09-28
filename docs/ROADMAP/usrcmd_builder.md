@@ -54,7 +54,7 @@ three things for free:
 ## 2. Design principles
 
 - **Build on what exists, don't fork it.** Registration goes through
-  [`lib.nvim.usercmd.create`](../../lua/lib/nvim/usercmd/init.lua) — it already
+  [`lib.nvim.usercmd.create`](../../lua/lib/nvim/bindings/usercmd/init.lua) — it already
   gives the defensive `pcall` wrapper, `force = true` idempotency, and
   `[lib.nvim.usercmd]` notify. This module only adds the *tree + completion +
   parsing* layer on top; it never calls `nvim_create_user_command` directly.

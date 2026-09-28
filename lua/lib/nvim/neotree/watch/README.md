@@ -67,7 +67,7 @@ error is re-raised **after** the second release, using `error(err, 0)` so the
 original message — and only its original position — reaches the caller: a
 default-level re-raise would stamp this module's own path and line in front and
 blame the release helper for a failure it merely passed along. See
-[docs/conventions.md](../../../../docs/conventions.md#returned-error-strings-carry-no-source-position).
+[docs/conventions.md](../../../../../docs/conventions.md#returned-error-strings-carry-no-source-position).
 
 **`list()`** returns a snapshot of every tracked watcher (`path`, `active`, and
 `exists` — whether `path` still exists on disk). `exists = false` is the leak
