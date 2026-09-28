@@ -669,19 +669,25 @@ function M.pulse(id, opts)
   local transparent = is_transparent_shape(entry.shape)
   apply_colors(entry, resolve_colors(opts.color or "DiagnosticWarn", transparent))
 
-  -- Not `e.win == win` against the window handle captured just above: if the
-  -- chip's window gets closed and reopened while the pulse is pending (e.g.
-  -- a text/width change re-opens it, which `M.refresh()` can trigger right
-  -- after `M.pulse()` was called -- `:LastSession` does exactly that,
-  -- `refresh()` then `pulse()`), the captured handle no longer matches
-  -- `chips[id].win` and this guard silently never reverted -- the chip was
-  -- then stuck showing the pulse colour until some unrelated later refresh
-  -- happened to recolour it. Reverting onto whatever window is *currently*
-  -- live for this id (not the one the pulse started on) is what the pulse
-  -- is actually supposed to do.
+  -- A generation counter, not a captured window handle: an earlier version
+  -- of this guarded on `e.win == win`, the window handle captured just
+  -- above -- which broke if the chip's window closed and reopened while
+  -- the pulse was pending (e.g. a hide/show cycle), silently skipping the
+  -- revert forever since the captured handle could never match again. But
+  -- dropping the check entirely (comparing only "is *some* window live")
+  -- trades that bug for a different one: two overlapping pulse() calls on
+  -- the same id, with the window replaced in between, would then let the
+  -- FIRST pulse's now-window-matching-again revert fire on top of the
+  -- SECOND pulse's still-active colour, cutting it short. A monotonic
+  -- per-entry generation (same shape as sessions.nvim's own
+  -- `hide_generation`, sessions/chip.lua) sidesteps both: each pulse()
+  -- call is only ever reverted by its *own* deferred callback, regardless
+  -- of whether the window in between got replaced.
+  entry.pulse_generation = (entry.pulse_generation or 0) + 1
+  local generation = entry.pulse_generation
   vim.defer_fn(function()
     local e = chips[id]
-    if e and e.win and api.nvim_win_is_valid(e.win) then
+    if e and e.pulse_generation == generation and e.win and api.nvim_win_is_valid(e.win) then
       apply_colors(e, resolve_colors(e.color, is_transparent_shape(e.shape)))
     end
   end, duration)
