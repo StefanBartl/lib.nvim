@@ -223,8 +223,22 @@ end
 ---@return boolean|nil  nil = "not set", let the caller derive it from the text instead
 local function resolve_visible(v)
   if type(v) == "function" then
+    -- Not `ok and out and true or (ok and false or nil)`: that "a and b or
+    -- c" idiom breaks the moment `out` is itself `false` -- `ok and out`
+    -- then evaluates to `false` regardless of `ok`, so the expression
+    -- always falls through to the `or` branch and returns `nil` ("not
+    -- set") instead of the caller's actual `false`. In practice this made
+    -- a `visible = function() return X end` provider that returns `false`
+    -- indistinguishable from one returning `nil`/erroring: M.refresh()'s
+    -- `if visible == nil then visible = text ~= "" end` fallback then took
+    -- over and re-showed a chip with non-empty text regardless -- e.g.
+    -- sessions.nvim's own auto-hide timer flips its `visible` closure to
+    -- `false` and calls refresh(), and the chip never actually hid.
     local ok, out = pcall(v)
-    return ok and out and true or (ok and false or nil)
+    if not ok or type(out) ~= "boolean" then
+      return nil
+    end
+    return out
   end
   if type(v) == "boolean" then
     return v
