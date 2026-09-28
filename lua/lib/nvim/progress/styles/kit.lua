@@ -78,13 +78,21 @@ local function start(spec, opts, request_cancel)
   -- scan calls update() synchronously, ahead of the 150ms start delay, so
   -- start() never sees the bare "working…" fallback -- can already render a
   -- line past 40 cells. This style has no wrapping, so the (n/total) counter
-  -- it exists to show would be the first thing silently clipped. No upper
-  -- cap of its own beyond a floor for a very short render: make_scratch
-  -- already clamps to the editor's own width, which is the only ceiling that
-  -- can't itself reintroduce the exact clipping this fixes for a realistic
-  -- (if long) title/text.
+  -- it exists to show would be the first thing silently clipped by a fixed
+  -- width. Fixes the render at start() time only: update()/finish()/cancel()
+  -- never resize the float afterwards, so a later render that grows past
+  -- this width is still clipped -- the same class of bug, just deferred to
+  -- after start() instead of eliminated outright.
+  --
+  -- Clamped to the same ceiling `make_scratch`'s own `resolve_dimensions`
+  -- applies (`math.max(1, vim.o.columns - 4)`) -- `col` below is computed
+  -- from this value to keep the float right-anchored, so it has to match
+  -- what `nvim_open_win` actually ends up using; an unclamped width here
+  -- would compute `col` for a wider float than the one that actually opens,
+  -- pinning it to the wrong edge once a render exceeds the editor's width.
   local line = render_line(spec)
-  local width = math.max(20, vim.fn.strdisplaywidth(line) + 2)
+  local max_w = math.max(1, vim.o.columns - 4)
+  local width = math.min(math.max(20, vim.fn.strdisplaywidth(line) + 2), max_w)
   local surf = kit.surface.open({
     lines = { line },
     theme = opts.kit_theme,
