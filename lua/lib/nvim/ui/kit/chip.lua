@@ -329,11 +329,20 @@ end
 ---chip must leave alone rather than draw over.
 ---
 ---`laststatus`, not a fixed assumption: `0` never shows one, `1` only once
----there is more than one window (so a lone-window session has no reserved
----row at all), `2`/`3` always do. Getting this wrong is exactly the bug this
----function exists to fix -- a bottom-right chip used to land ON the
+---there is more than one REAL window (so a lone-window session has no
+---reserved row at all), `2`/`3` always do. Getting this wrong is exactly the
+---bug this function exists to fix -- a bottom-right chip used to land ON the
 ---statusline row (only `cmdheight` was reserved), invisible over it or
 ---clipping its rightmost cells rather than sitting above it.
+---
+---`nvim_tabpage_list_wins` counts EVERY window on the tabpage, floats
+---included -- a mounted chip's own floating window (or any other float:
+---a hover doc, a picker) would otherwise make `laststatus == 1` see "more
+---than one window" and reserve a row Neovim itself never draws for a
+---genuinely single-real-window session, since real Neovim only counts
+---splits for that decision, not floats (verified: opening a float never
+---changes a real window's own height). Filtered to `relative == ""` so
+---only actual splits count.
 ---@return integer 0 or 1
 local function bottom_statusline_rows()
   local laststatus = vim.o.laststatus
@@ -341,7 +350,13 @@ local function bottom_statusline_rows()
     return 0
   end
   if laststatus == 1 then
-    return #api.nvim_tabpage_list_wins(0) > 1 and 1 or 0
+    local real_wins = 0
+    for _, win in ipairs(api.nvim_tabpage_list_wins(0)) do
+      if api.nvim_win_get_config(win).relative == "" then
+        real_wins = real_wins + 1
+      end
+    end
+    return real_wins > 1 and 1 or 0
   end
   return 1
 end
