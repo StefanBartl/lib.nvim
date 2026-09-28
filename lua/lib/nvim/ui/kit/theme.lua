@@ -182,6 +182,41 @@ function M.border_glyphs(resolved)
   return SETS.single
 end
 
+---@internal
+--- `M.apply`'s per-window twin of `materialize`. `KitNormal`/`KitBorder`/
+--- `KitTitle` are fixed names shared by EVERY open kit surface -- fine as
+--- long as every simultaneously-open surface resolves to the same colors,
+--- but toasts are explicitly designed to stack (see `lib.nvim.ui.kit.toast`'s
+--- own docs), and two different levels/`opts.hl` overrides resolve to
+--- different colors. Whichever surface materialized last used to win for
+--- every window still pointing `winhighlight` at those fixed names -- a
+--- still-visible toast (e.g. a yellow WARN "pulling…") would change color
+--- live the instant a differently-themed one opened next to it (e.g. a green
+--- `notify.success` toast), since both windows' `winhighlight` referenced
+--- the SAME group name and only the latest materialize() call's colors
+--- exist for that name at any given moment. Scoping just these three
+--- winhighlight-facing names to `winid` gives every surface its own,
+--- independent set; `KitSelection`/`KitAccent`/`KitMuted`/`KitError`/
+--- `KitFlash`/`KitHover` stay global/fixed (unaffected by this) since other
+--- kit components (`lib.nvim.ui.kit.confirm`, `.chooser`, …) reference those
+--- exact names directly in their own extmarks, not through a window's
+--- `winhighlight`, and aren't implicated in the toast-stacking bug this
+--- fixes.
+---@param resolved Lib.UI.Kit.Theme
+---@param winid integer
+---@return { normal: string, border: string, title: string }
+local function materialize_window_groups(resolved, winid)
+  local names = { normal = "KitNormal", border = "KitBorder", title = "KitTitle" }
+  for key, base_name in pairs(names) do
+    local name = ("%s_%d"):format(base_name, winid)
+    local spec = resolved.hl[key]
+    local opts = type(spec) == "string" and { link = spec } or spec
+    hl.set(name, opts)
+    names[key] = name
+  end
+  return names
+end
+
 --- Apply a resolved theme to an open window: materialize its groups and point
 --- the float's built-in groups at them via winhighlight.
 ---@param winid integer
@@ -191,10 +226,11 @@ function M.apply(winid, resolved)
     return
   end
   materialize(resolved)
+  local names = materialize_window_groups(resolved, winid)
   local winhl = table.concat({
-    "NormalFloat:" .. GROUPS.normal,
-    "FloatBorder:" .. GROUPS.border,
-    "FloatTitle:" .. GROUPS.title,
+    "NormalFloat:" .. names.normal,
+    "FloatBorder:" .. names.border,
+    "FloatTitle:" .. names.title,
   }, ",")
   pcall(vim.api.nvim_set_option_value, "winhighlight", winhl, { win = winid })
 end
