@@ -253,8 +253,18 @@ end
 local function close_window(entry)
   if entry.surf then
     entry.busy = true
-    entry.surf:close()
+    -- pcall, not a bare call: a raised error would otherwise skip the
+    -- `entry.busy = false` below and leave it stuck true forever, silently
+    -- turning every future M.refresh(id) for this chip into a no-op with no
+    -- recovery short of an explicit unmount()+mount(). Re-raised once busy
+    -- is safely cleared, so error visibility is unchanged.
+    local ok, err = pcall(function()
+      entry.surf:close()
+    end)
     entry.busy = false
+    if not ok then
+      error(err, 0)
+    end
   end
   entry.surf = nil
   entry.win = nil
@@ -267,7 +277,9 @@ end
 ---@param entry table
 local function open_window(entry)
   entry.busy = true
-  local surf = surface.open({
+  -- pcall for the same reason close_window() above uses one: a raised error
+  -- must still clear `entry.busy` before propagating, or it gets stuck true.
+  local ok, surf = pcall(surface.open, {
     lines = entry.lines,
     theme = preset_for_shape(entry.shape),
     width = entry.width,
@@ -280,6 +292,9 @@ local function open_window(entry)
     zindex = entry.zindex,
   })
   entry.busy = false
+  if not ok then
+    error(surf, 0)
+  end
   if not surf then
     return
   end

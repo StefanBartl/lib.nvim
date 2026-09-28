@@ -10,6 +10,7 @@ local theme = require("lib.nvim.ui.kit.theme")
 local api = vim.api
 
 ---@class Lib.UI.Kit.Surface
+---@field border string|string[]  # the resolved theme's border, so a caller doesn't have to theme.resolve() again to learn it
 ---@field package _on_close function[]
 ---@field package _closed boolean
 ---@field package _augroup integer|nil
@@ -171,6 +172,11 @@ function M.open(opts)
   local self = setmetatable({
     winid = winid,
     bufnr = bufnr,
+    -- Exposed so a caller that needs to know the resolved border (e.g.
+    -- lib.nvim.ui.kit.toast, to know how many extra rows its box occupies when
+    -- stacking) doesn't have to call theme.resolve(opts.theme) a second
+    -- time itself.
+    border = resolved.border,
     _on_close = {},
     _closed = false,
   }, Surface)
