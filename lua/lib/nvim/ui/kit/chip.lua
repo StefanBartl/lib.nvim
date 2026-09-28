@@ -334,6 +334,18 @@ local function open_window(entry)
       entry.buf = nil
     end
   end)
+  -- `entry.pulse_active = false` alongside this: opening a (re-)created
+  -- window always paints the *steady* colour, never a still-pending pulse's
+  -- override (see below), which ends that pulse's visual effect right here
+  -- -- so the flag that tells M.refresh()/the ColorScheme/VimEnter handlers
+  -- "leave colour alone, a pulse owns it" must end with it, too. Found by
+  -- adversarial review, live-reproduced: leaving it `true` past this point
+  -- let a still-pending pulse's now-stale `pulse_active` keep blocking any
+  -- *unrelated* colour change (a plain M.mount(id, {color=...}), or a
+  -- ColorScheme re-tint) for up to the rest of the original pulse's
+  -- `duration_ms`, even though the window it was guarding had already moved
+  -- on to the steady colour.
+  entry.pulse_active = false
   -- Always resolved fresh from `entry.color` -- never `entry.applied_colors`,
   -- which (re-)opening this window is a bad time to trust: a still-pending
   -- `pulse()` leaves it holding the *pulse* colour, and reusing that here
