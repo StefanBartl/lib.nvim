@@ -73,9 +73,20 @@ local function start(spec, opts, request_cancel)
     return nil
   end
 
-  local width = 40
+  -- Sized to the actual first render, not a fixed 40: a caller that seeds
+  -- text/current/total before this style even starts -- gitsuite's dashboard
+  -- scan calls update() synchronously, ahead of the 150ms start delay, so
+  -- start() never sees the bare "working…" fallback -- can already render a
+  -- line past 40 cells. This style has no wrapping, so the (n/total) counter
+  -- it exists to show would be the first thing silently clipped. No upper
+  -- cap of its own beyond a floor for a very short render: make_scratch
+  -- already clamps to the editor's own width, which is the only ceiling that
+  -- can't itself reintroduce the exact clipping this fixes for a realistic
+  -- (if long) title/text.
+  local line = render_line(spec)
+  local width = math.max(20, vim.fn.strdisplaywidth(line) + 2)
   local surf = kit.surface.open({
-    lines = { render_line(spec) },
+    lines = { line },
     theme = opts.kit_theme,
     width = width,
     height = 1,

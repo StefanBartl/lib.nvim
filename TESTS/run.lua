@@ -49,6 +49,7 @@ local specs = {
   "output_spec.lua",
   "output_viewer_spec.lua",
   "progress_echo_style_spec.lua",
+  "progress_kit_style_spec.lua",
   "autocmd_spec.lua",
   "keymap_registry_spec.lua",
   "count_spec.lua",
