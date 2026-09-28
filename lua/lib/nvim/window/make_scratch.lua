@@ -99,7 +99,9 @@ local function resolve_dimensions(lines, opts)
   local max_w = math.max(1, vim.o.columns - 4)
   local max_h = math.max(1, vim.o.lines - 4)
 
-  -- +2 leaves room for a border; fall back to a comfortable default when empty.
+  -- +2 leaves room for a border; fall back to a comfortable default whenever
+  -- that derived width is 2 cells or less -- not only for literally empty
+  -- `lines`, but also non-empty lines that render at zero display width.
   -- The fallback is for *derived* widths only: an explicit width of 1 or 2 is
   -- what the caller asked for (`@field width` promises "`1` is one cell") and
   -- used to be silently widened to 60 columns. A fraction that rounds down to
@@ -113,7 +115,16 @@ local function resolve_dimensions(lines, opts)
     want_w = math.min(60, max_w)
   end
 
-  local want_h = resolve_size(opts.height, vim.o.lines) or #lines
+  -- Same "a fraction rounding to zero cells counts as not given" rule as
+  -- width above: `0` is truthy in Lua, so `resolve_size(...) or #lines` never
+  -- reached `#lines` for one -- an explicit height fraction small enough to
+  -- floor to zero rows was forced straight to a bare 1 row, discarding
+  -- however many lines the caller actually passed.
+  local given_h = resolve_size(opts.height, vim.o.lines)
+  if given_h and given_h < 1 then
+    given_h = nil
+  end
+  local want_h = given_h or #lines
   if want_h < 1 then
     want_h = 1
   end

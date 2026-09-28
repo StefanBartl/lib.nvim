@@ -97,8 +97,8 @@ local winid, bufnr = window.make_scratch({
 | Option        | Type                                  | Default      | Meaning                                                |
 | ------------- | ------------------------------------- | ------------ | ------------------------------------------------------ |
 | `lines`       | `string[]`                            | `{}`         | initial content                                        |
-| `width`       | `number`                              | content      | strictly between 0 and 1 = fraction of `vim.o.columns`, larger = cells (so `1` is one cell, `2` two); not given (or a fraction rounding to zero cells) = derived from content, or 60 when there is none; clamped to editor |
-| `height`      | `number`                              | line count   | strictly between 0 and 1 = fraction of `vim.o.lines`, larger = cells (so `1` is one row, what a prompt wants); clamped to editor |
+| `width`       | `number`                              | content      | strictly between 0 and 1 = fraction of `vim.o.columns`, larger = cells (so `1` is one cell, `2` two); not given (or a fraction rounding to zero cells) = derived from content, falling back to 60 whenever that derived width is 2 cells or less (no content, or content that renders at zero display width); clamped to editor |
+| `height`      | `number`                              | line count   | strictly between 0 and 1 = fraction of `vim.o.lines`, larger = cells (so `1` is one row, what a prompt wants); not given (or a fraction rounding to zero cells) = the line count; clamped to editor |
 | `relative`    | `"editor"\|"cursor"\|"win"`           | `"editor"`   | anchor of the float                                    |
 | `row` / `col` | `integer`                             | centered     | explicit position (otherwise editor-centered)          |
 | `border`      | `string\|string[]`                    | `"rounded"`  | border style                                           |

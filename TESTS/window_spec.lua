@@ -149,31 +149,58 @@ return function(H)
     -- given (empty content, nothing to derive from) falls back to 60. An
     -- explicit 1 or 2 used to be widened to 60 as well -- a one-cell hint
     -- became a 60-cell bar.
+    -- Each window is closed right after reading the property under test, and
+    -- before the H.eq that checks it -- H.eq raises on mismatch, and
+    -- TESTS/run.lua pcalls this whole spec file as one unit, so a close after
+    -- a failing H.eq would never run: the float leaks for the rest of the
+    -- headless session and every later `do` block in this file is skipped too.
     for _, want in ipairs({ 1, 2, 3 }) do
       local w = make_scratch({ lines = { "x" }, width = want, height = 1, border = "none" })
-      H.eq(
-        vim.api.nvim_win_get_width(w),
-        want,
-        "make_scratch: explicit width " .. want .. " is honoured, not widened to 60"
-      )
+      local got = w and vim.api.nvim_win_get_width(w) or nil
       pcall(vim.api.nvim_win_close, w, true)
+      H.eq(got, want, "make_scratch: explicit width " .. want .. " is honoured, not widened to 60")
     end
 
     local wempty = make_scratch({ lines = {}, border = "none" })
+    local wempty_width = wempty and vim.api.nvim_win_get_width(wempty) or nil
+    pcall(vim.api.nvim_win_close, wempty, true)
     H.eq(
-      vim.api.nvim_win_get_width(wempty),
+      wempty_width,
       math.min(60, math.max(1, vim.o.columns - 4)),
       "make_scratch: no width and no content still falls back to 60"
     )
-    pcall(vim.api.nvim_win_close, wempty, true)
+
+    local wblank = make_scratch({ lines = { "", "" }, border = "none" })
+    local wblank_width = wblank and vim.api.nvim_win_get_width(wblank) or nil
+    pcall(vim.api.nvim_win_close, wblank, true)
+    H.eq(
+      wblank_width,
+      math.min(60, math.max(1, vim.o.columns - 4)),
+      "make_scratch: non-empty but zero-display-width lines still fall back to 60, not just literally empty ones"
+    )
 
     local wfrac = make_scratch({ lines = {}, width = 0.001, border = "none" })
+    local wfrac_width = wfrac and vim.api.nvim_win_get_width(wfrac) or nil
+    pcall(vim.api.nvim_win_close, wfrac, true)
     H.eq(
-      vim.api.nvim_win_get_width(wfrac),
+      wfrac_width,
       math.min(60, math.max(1, vim.o.columns - 4)),
       "make_scratch: a fraction rounding to zero cells counts as not given"
     )
-    pcall(vim.api.nvim_win_close, wfrac, true)
+
+    -- height mirrors width: a fraction that rounds to zero rows must fall
+    -- back to the line count, not get forced down to a bare 1 row (`0` is
+    -- truthy in Lua, so a naive `resolve_size(...) or #lines` never reaches
+    -- `#lines` for it).
+    local many_lines = { "a", "b", "c", "d", "e" }
+    local hfrac = make_scratch({ lines = many_lines, height = 0.001, border = "none" })
+    local hfrac_height = hfrac and vim.api.nvim_win_get_height(hfrac) or nil
+    pcall(vim.api.nvim_win_close, hfrac, true)
+    H.eq(
+      hfrac_height,
+      #many_lines,
+      "make_scratch: a height fraction rounding to zero rows falls back to the line count, not 1"
+    )
 
     vim.fn.screenrow = orig_screenrow
     vim.fn.getmousepos = orig_getmousepos
