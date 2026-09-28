@@ -229,7 +229,7 @@
 ---@field text? string|fun():string              # re-read on every `refresh`; "" hides the chip; embed `\n` for a multi-line box (height follows the line count)
 ---@field visible? boolean|fun():boolean         # default: derived from `text` being non-empty
 ---@field anchor? "bottom-left"|"bottom-right"|"top-left"|"top-right"  # default "bottom-left"
----@field shape? "rounded"|"rect"|"text"         # default "rounded"; "text" has no box at all (no border, no background)
+---@field shape? Lib.UI.Kit.Preset                # default "rounded_chip"; "classic" has no box at all (no border, no background); old names ("rounded"/"rect"/"text") still accepted, see lib.nvim.ui.kit.presets
 ---@field color? Lib.UI.Kit.ChipColor
 ---@field zindex? integer                        # default 60
 
