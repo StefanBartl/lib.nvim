@@ -54,6 +54,22 @@ local function close(winid)
 end
 
 ---@internal
+---Runs `fn` immediately when already on the main loop, otherwise defers it
+---via `vim.schedule`. `nvim_buf_is_valid`/`nvim_buf_set_lines`/
+---`nvim_win_is_valid`/`nvim_win_close` are forbidden in a fast-event context
+---(E5560), and a caller's completion callback (e.g. a `vim.system` exit
+---handler not itself wrapped in `vim.schedule`) isn't guaranteed to already
+---be on the loop -- see `lib.nvim.progress.styles.kit` for the same pattern.
+---@param fn fun()
+local function on_main_loop(fn)
+  if vim.in_fast_event() then
+    vim.schedule(fn)
+  else
+    fn()
+  end
+end
+
+---@internal
 ---@param bufnr integer
 ---@param spec Lib.Progress.Spec
 ---@param request_cancel fun()
@@ -105,7 +121,10 @@ end
 ---@return { winid: integer|nil, bufnr: integer|nil }
 local function update(state, spec)
   if state then
-    set_line(state.bufnr, render_line(spec))
+    local line = render_line(spec)
+    on_main_loop(function()
+      set_line(state.bufnr, line)
+    end)
   end
   return state
 end
@@ -116,10 +135,13 @@ local function finish(state, spec)
   if not state then
     return
   end
-  set_line(state.bufnr, render_line(spec))
-  vim.defer_fn(function()
-    close(state.winid)
-  end, 800)
+  local line = render_line(spec)
+  on_main_loop(function()
+    set_line(state.bufnr, line)
+    vim.defer_fn(function()
+      close(state.winid)
+    end, 800)
+  end)
 end
 
 ---@param state { winid: integer|nil, bufnr: integer|nil }
@@ -129,10 +151,13 @@ local function cancel(state, spec)
     return
   end
   local text = spec.text and spec.text ~= "" and spec.text or "cancelled"
-  set_line(state.bufnr, spec.title .. text)
-  vim.defer_fn(function()
-    close(state.winid)
-  end, 800)
+  local line = spec.title .. text
+  on_main_loop(function()
+    set_line(state.bufnr, line)
+    vim.defer_fn(function()
+      close(state.winid)
+    end, 800)
+  end)
 end
 
 ---@type Lib.Progress.StyleImpl
