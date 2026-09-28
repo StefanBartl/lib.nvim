@@ -401,8 +401,9 @@ end
 ---@param style string
 ---@param framed boolean
 ---@param glyphs table
+---@param groups { border: string, title: string }
 ---@return Lib.UI.Kit.RichItem
-local function frame_row(content, hls, style, framed, glyphs)
+local function frame_row(content, hls, style, framed, glyphs, groups)
   local left, right = PAD, PAD
   if style == "box" then
     left = framed and (PAD .. glyphs.v .. " ") or string.rep(" ", 3)
@@ -422,9 +423,9 @@ local function frame_row(content, hls, style, framed, glyphs)
   if style == "box" and framed then
     local rstart = shift + #content + 1
     out[#out + 1] =
-      { line = 0, col_start = #PAD, col_end = #PAD + #glyphs.v, hl_group = "KitBorder" }
+      { line = 0, col_start = #PAD, col_end = #PAD + #glyphs.v, hl_group = groups.border }
     out[#out + 1] =
-      { line = 0, col_start = rstart, col_end = rstart + #glyphs.v, hl_group = "KitBorder" }
+      { line = 0, col_start = rstart, col_end = rstart + #glyphs.v, hl_group = groups.border }
   end
 
   return {
@@ -481,8 +482,9 @@ end
 ---@param style string
 ---@param width integer  # full window width
 ---@param glyphs table
+---@param groups { border: string, title: string }
 ---@return Lib.UI.Kit.RichItem|nil
-local function group_open(title, style, width, glyphs)
+local function group_open(title, style, width, glyphs, groups)
   local titled = title ~= nil and title ~= ""
 
   if style == "box" then
@@ -495,11 +497,11 @@ local function group_open(title, style, width, glyphs)
     else
       line = PAD .. glyphs.tl .. string.rep(glyphs.h, inner) .. glyphs.tr .. PAD
     end
-    local hls = { { line = 0, col_start = 0, col_end = #line, hl_group = "KitBorder" } }
+    local hls = { { line = 0, col_start = 0, col_end = #line, hl_group = groups.border } }
     if titled then
       local start = #PAD + #glyphs.tl + #glyphs.h + 1
       hls[#hls + 1] =
-        { line = 0, col_start = start, col_end = start + #title, hl_group = "KitTitle" }
+        { line = 0, col_start = start, col_end = start + #title, hl_group = groups.title }
     end
     return decoration(line, hls)
   end
@@ -517,15 +519,15 @@ local function group_open(title, style, width, glyphs)
     local line = PAD .. glyphs.h .. cap .. string.rep(glyphs.h, fill)
     local start = #PAD + #glyphs.h + 1
     return decoration(line, {
-      { line = 0, col_start = 0, col_end = #line, hl_group = "KitBorder" },
-      { line = 0, col_start = start, col_end = start + #title, hl_group = "KitTitle" },
+      { line = 0, col_start = 0, col_end = #line, hl_group = groups.border },
+      { line = 0, col_start = start, col_end = start + #title, hl_group = groups.title },
     })
   end
 
   local line = PAD .. title
   return decoration(
     line,
-    { { line = 0, col_start = #PAD, col_end = #line, hl_group = "KitTitle" } }
+    { { line = 0, col_start = #PAD, col_end = #line, hl_group = groups.title } }
   )
 end
 
@@ -535,13 +537,17 @@ end
 ---@param style string
 ---@param width integer
 ---@param glyphs table
+---@param groups { border: string, title: string }
 ---@return Lib.UI.Kit.RichItem|nil
-local function group_close(style, width, glyphs)
+local function group_close(style, width, glyphs, groups)
   if style ~= "box" then
     return nil
   end
   local line = PAD .. glyphs.bl .. string.rep(glyphs.h, box_inner(width)) .. glyphs.br .. PAD
-  return decoration(line, { { line = 0, col_start = 0, col_end = #line, hl_group = "KitBorder" } })
+  return decoration(
+    line,
+    { { line = 0, col_start = 0, col_end = #line, hl_group = groups.border } }
+  )
 end
 
 --- The divider drawn between two groups in `header`/`plain` style.
@@ -552,10 +558,14 @@ end
 ---@internal
 ---@param width integer  # full window width
 ---@param glyphs table
+---@param groups { border: string, title: string }
 ---@return Lib.UI.Kit.RichItem
-local function divider(width, glyphs)
+local function divider(width, glyphs, groups)
   local line = PAD .. string.rep(glyphs.h, math.max(1, width - 2 * dw(PAD)))
-  return decoration(line, { { line = 0, col_start = 0, col_end = #line, hl_group = "KitBorder" } })
+  return decoration(
+    line,
+    { { line = 0, col_start = 0, col_end = #line, hl_group = groups.border } }
+  )
 end
 
 --- The level currently on screen: `{ opts, items, raw_items, stack }`. The
@@ -607,7 +617,16 @@ local function build_level(opts, raw_items, stack)
   end
 
   local marker = opts.submenu_marker or SUBMENU_MARKER
-  local glyphs = theme.border_glyphs(theme.resolve(opts.theme or "menu")) or FALLBACK_GLYPHS
+  local resolved = theme.resolve(opts.theme or "menu")
+  local glyphs = theme.border_glyphs(resolved) or FALLBACK_GLYPHS
+  -- The window `chooser.open` opens below shares the SAME `theme.apply`
+  -- machinery, so this is the identical group name it will point
+  -- `winhighlight` at -- fetching it here too means the frame/title
+  -- decoration this function draws as buffer text always matches the
+  -- window's own border color instead of a globally-shared, easily
+  -- recolored-by-something-else name (see theme.lua's own doc comment on
+  -- `M.window_groups`).
+  local groups = theme.window_groups(resolved)
 
   local blocks = partition(items)
   local style = resolve_style(opts, blocks)
@@ -644,23 +663,23 @@ local function build_level(opts, raw_items, stack)
     -- framed a loose block in an empty box.
     local open = nil
     if not block.loose then
-      open = group_open(block.title, style, width, glyphs)
+      open = group_open(block.title, style, width, glyphs, groups)
     end
     -- In the frameless styles a titled group announces itself; an untitled
     -- one still needs the divider to be told apart from the group above it.
     if style ~= "box" and i > 1 and not open then
-      push(divider(width, glyphs), false)
+      push(divider(width, glyphs, groups), false)
     end
     if open then
       push(open, false)
     end
     for _, it in ipairs(block.items) do
       local content, hls = content_of(it, cols, marker)
-      push(frame_row(content, hls, style, not block.loose, glyphs), it)
+      push(frame_row(content, hls, style, not block.loose, glyphs, groups), it)
     end
     local close = nil
     if not block.loose then
-      close = group_close(style, width, glyphs)
+      close = group_close(style, width, glyphs, groups)
     end
     if close then
       push(close, false)
