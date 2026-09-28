@@ -226,7 +226,7 @@
 --- Options for `kit.chip.mount`.
 ---@class Lib.UI.Kit.ChipOpts
 ---@field id string                              # stable key; a second `mount` with the same id re-configures it
----@field text? string|fun():string              # re-read on every `refresh`; "" hides the chip
+---@field text? string|fun():string              # re-read on every `refresh`; "" hides the chip; embed `\n` for a multi-line box (height follows the line count)
 ---@field visible? boolean|fun():boolean         # default: derived from `text` being non-empty
 ---@field anchor? "bottom-left"|"bottom-right"|"top-left"|"top-right"  # default "bottom-left"
 ---@field shape? "rounded"|"rect"|"text"         # default "rounded"; "text" has no box at all (no border, no background)
