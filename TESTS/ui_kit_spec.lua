@@ -1406,4 +1406,58 @@ return function(H)
     h.preview:close()
     ok(not h.results:is_valid(), "closing the preview pane directly also closes the results window")
   end
+
+  -- make_scratch used to widen any resolved width <= 2 to 60 columns, even one
+  -- the caller asked for. The kit passes widths straight through, so these are
+  -- the degenerate sizes that change meaning: an explicit 1 or 2, and a layout
+  -- slot in a tiny editor (`math.max(1, w - 2 * BORDER)`).
+  do
+    local function win_width(surf)
+      return vim.api.nvim_win_get_width(surf.winid)
+    end
+
+    for _, want in ipairs({ 1, 2, 3 }) do
+      local surf = assert(
+        kit.surface.open({ lines = { "x" }, width = want, height = 1, enter = false }),
+        "surface opens with an explicit tiny width"
+      )
+      eq(
+        win_width(surf),
+        want,
+        "surface: explicit width " .. want .. " is honoured, not widened to 60"
+      )
+      surf:close()
+    end
+
+    -- No width and nothing to derive one from is the only case that still
+    -- falls back to 60 (clamped to the editor).
+    local empty = assert(kit.surface.open({ lines = {}, enter = false }), "empty surface opens")
+    eq(
+      win_width(empty),
+      math.min(60, math.max(1, vim.o.columns - 4)),
+      "surface: no width and no content still falls back to 60"
+    )
+    empty:close()
+
+    -- An absolute outer width of 4 cells is what a very narrow editor would
+    -- clamp to, without having to resize the editor under the other specs.
+    local tiny = kit.layout.compute({ width = 4, height = 10, rows = { { name = "only" } } })
+    eq(tiny.slots.only.width, 2, "layout: a 4-cell outer width leaves a 2-cell slot")
+    local slot = assert(
+      kit.surface.open(vim.tbl_extend("force", tiny.slots.only, { lines = { "x" }, enter = false })),
+      "a slot surface opens"
+    )
+    eq(win_width(slot), 2, "a 2-cell layout slot opens as wide as the slot, not 60")
+    slot:close()
+
+    -- The menu measures its own width, so an empty one would be the way to land
+    -- on a width <= 2 -- it is rejected up front instead, and opens no window.
+    local wins_before = #vim.api.nvim_list_wins()
+    local silenced_notify = vim.notify
+    vim.notify = function() end
+    local empty_menu = kit.menu({ items = {} })
+    vim.notify = silenced_notify
+    eq(empty_menu, nil, "menu: an empty item list is rejected, not sized to a degenerate width")
+    eq(#vim.api.nvim_list_wins(), wins_before, "menu: the rejected empty menu opens no window")
+  end
 end
