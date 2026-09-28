@@ -14,6 +14,19 @@ local window = require("lib.nvim.window")
 local notify = require("lib.nvim.notify").create("[lib.nvim.progress]")
 
 ---@internal
+---Set to `true` by `finish`/`cancel` the instant they're called (before any
+---scheduling), keyed by `state` (the `{winid, bufnr}` table `start` handed
+---back). `update`'s deferred render checks this before touching the window,
+---so a stale `update` whose render was already queued via `vim.schedule`
+---can't fire *after* `finish`/`cancel` has rendered the final text and
+---overwrite it for the rest of the 800ms close delay -- `init.lua`'s own
+---`done` flag can't help here, since it only blocks a *new*
+---`handle:update()` call, not one whose style-level render was already in
+---flight when `finish`/`cancel` ran. Weak-keyed so an entry is collected
+---once nothing else references `state`.
+local done_states = setmetatable({}, { __mode = "k" })
+
+---@internal
 ---@param spec Lib.Progress.Spec
 ---@return string
 local function render_suffix(spec)
@@ -137,7 +150,25 @@ local function update(state, spec)
   if state then
     local line = render_line(spec)
     on_main_loop(function()
-      set_line(state.bufnr, line)
+      if done_states[state] then
+        -- finish()/cancel() already rendered the final text (and scheduled
+        -- its close) after this render was queued; rendering the stale
+        -- in-progress line now would overwrite that for the rest of the
+        -- close delay.
+        return
+      end
+      local ok, err = pcall(set_line, state.bufnr, line)
+      if not ok then
+        -- Unlike a synchronous update failure, this never reaches
+        -- init.lua's pcall (update() already returned by the time this
+        -- deferred closure runs), so style_failed/schedule_cleanup can't
+        -- engage for it. Close immediately instead of leaving a broken,
+        -- unclosable chip open -- afterward every further render on this
+        -- `state` is a no-op via the `nvim_*_is_valid` guards in
+        -- `set_line`/`close`, so this can't fire more than once per handle.
+        notify.error(("float style update render failed: %s"):format(tostring(err)))
+        close(state.winid)
+      end
     end)
   end
   return state
@@ -149,6 +180,7 @@ local function finish(state, spec)
   if not state then
     return
   end
+  done_states[state] = true
   local line = render_line(spec)
   on_main_loop(function()
     -- pcall'd separately from the `close` scheduling below: a failed render
@@ -169,6 +201,7 @@ local function cancel(state, spec)
   if not state then
     return
   end
+  done_states[state] = true
   local text = spec.text and spec.text ~= "" and spec.text or "cancelled"
   local line = spec.title .. text
   on_main_loop(function()
