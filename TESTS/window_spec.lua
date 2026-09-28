@@ -145,6 +145,36 @@ return function(H)
     H.eq(cfg4.anchor, "NW", "make_scratch: editor-relative float keeps the default NW anchor")
     pcall(vim.api.nvim_win_close, winid4, true)
 
+    -- Explicit widths of 1 and 2 are honoured; only a width that was never
+    -- given (empty content, nothing to derive from) falls back to 60. An
+    -- explicit 1 or 2 used to be widened to 60 as well -- a one-cell hint
+    -- became a 60-cell bar.
+    for _, want in ipairs({ 1, 2, 3 }) do
+      local w = make_scratch({ lines = { "x" }, width = want, height = 1, border = "none" })
+      H.eq(
+        vim.api.nvim_win_get_width(w),
+        want,
+        "make_scratch: explicit width " .. want .. " is honoured, not widened to 60"
+      )
+      pcall(vim.api.nvim_win_close, w, true)
+    end
+
+    local wempty = make_scratch({ lines = {}, border = "none" })
+    H.eq(
+      vim.api.nvim_win_get_width(wempty),
+      math.min(60, math.max(1, vim.o.columns - 4)),
+      "make_scratch: no width and no content still falls back to 60"
+    )
+    pcall(vim.api.nvim_win_close, wempty, true)
+
+    local wfrac = make_scratch({ lines = {}, width = 0.001, border = "none" })
+    H.eq(
+      vim.api.nvim_win_get_width(wfrac),
+      math.min(60, math.max(1, vim.o.columns - 4)),
+      "make_scratch: a fraction rounding to zero cells counts as not given"
+    )
+    pcall(vim.api.nvim_win_close, wfrac, true)
+
     vim.fn.screenrow = orig_screenrow
     vim.fn.getmousepos = orig_getmousepos
     vim.o.lines = orig_lines

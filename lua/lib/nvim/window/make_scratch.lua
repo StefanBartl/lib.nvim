@@ -100,8 +100,16 @@ local function resolve_dimensions(lines, opts)
   local max_h = math.max(1, vim.o.lines - 4)
 
   -- +2 leaves room for a border; fall back to a comfortable default when empty.
-  local want_w = resolve_size(opts.width, vim.o.columns) or (content_width(lines) + 2)
-  if want_w <= 2 then
+  -- The fallback is for *derived* widths only: an explicit width of 1 or 2 is
+  -- what the caller asked for (`@field width` promises "`1` is one cell") and
+  -- used to be silently widened to 60 columns. A fraction that rounds down to
+  -- zero cells counts as "not given".
+  local given_w = resolve_size(opts.width, vim.o.columns)
+  if given_w and given_w < 1 then
+    given_w = nil
+  end
+  local want_w = given_w or (content_width(lines) + 2)
+  if not given_w and want_w <= 2 then
     want_w = math.min(60, max_w)
   end
 
