@@ -669,26 +669,41 @@ function M.pulse(id, opts)
   local transparent = is_transparent_shape(entry.shape)
   apply_colors(entry, resolve_colors(opts.color or "DiagnosticWarn", transparent))
 
-  -- A generation counter, not a captured window handle: an earlier version
-  -- of this guarded on `e.win == win`, the window handle captured just
-  -- above -- which broke if the chip's window closed and reopened while
-  -- the pulse was pending (e.g. a hide/show cycle), silently skipping the
-  -- revert forever since the captured handle could never match again. But
-  -- dropping the check entirely (comparing only "is *some* window live")
-  -- trades that bug for a different one: two overlapping pulse() calls on
-  -- the same id, with the window replaced in between, would then let the
-  -- FIRST pulse's now-window-matching-again revert fire on top of the
-  -- SECOND pulse's still-active colour, cutting it short. A monotonic
-  -- per-entry generation (same shape as sessions.nvim's own
-  -- `hide_generation`, sessions/chip.lua) sidesteps both: each pulse()
-  -- call is only ever reverted by its *own* deferred callback, regardless
-  -- of whether the window in between got replaced.
-  entry.pulse_generation = (entry.pulse_generation or 0) + 1
-  local generation = entry.pulse_generation
+  -- Two checks, not one, because either alone reintroduces a bug this
+  -- function has already been through:
+  --
+  -- * A captured window handle (`e.win == win`, an earlier version of this)
+  --   breaks the moment the chip's window closes and reopens while the
+  --   pulse is pending (e.g. a hide/show cycle) -- the captured handle can
+  --   never match again, so the revert silently never happens.
+  -- * A per-entry generation counter ALONE (a later version of this) fixes
+  --   that, but `M.unmount(id)` followed by `M.mount(id, ...)` for the same
+  --   id allocates a brand-new `entry` table whose own counter restarts
+  --   from scratch -- so a still-pending revert from a pulse on the OLD,
+  --   now-orphaned entry can land on generation 1 of the NEW entry's own
+  --   first pulse purely by numeric coincidence, cutting it short. The old
+  --   entry's pending timer was never cancelled by unmount() either, so it
+  --   still fires.
+  --
+  -- Capturing the entry TABLE itself (not just its id) and requiring
+  -- `chips[id] == target` closes that gap: after unmount()+mount(), the new
+  -- entry is a different table, so a stale callback from the old one no
+  -- longer matches regardless of what its generation counter reads. The
+  -- generation counter (same shape as sessions.nvim's own `hide_generation`,
+  -- sessions/chip.lua) still does its own job for two overlapping pulses on
+  -- the SAME entry (window replaced or not) -- entry identity alone can't
+  -- tell those apart, since it's the same table both times.
+  local target = entry
+  target.pulse_generation = (target.pulse_generation or 0) + 1
+  local generation = target.pulse_generation
   vim.defer_fn(function()
-    local e = chips[id]
-    if e and e.pulse_generation == generation and e.win and api.nvim_win_is_valid(e.win) then
-      apply_colors(e, resolve_colors(e.color, is_transparent_shape(e.shape)))
+    if
+      chips[id] == target
+      and target.pulse_generation == generation
+      and target.win
+      and api.nvim_win_is_valid(target.win)
+    then
+      apply_colors(target, resolve_colors(target.color, is_transparent_shape(target.shape)))
     end
   end, duration)
 end
