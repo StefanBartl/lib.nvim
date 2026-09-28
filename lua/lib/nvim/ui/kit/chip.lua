@@ -31,7 +31,14 @@
 --- `CHIP_TINT`, the same mix `ui.context`'s chip style uses, so it reads as
 --- the same family and re-tints itself on `ColorScheme`), or an explicit
 --- `{ fg, bg }` pair (`"#rrggbb"` strings or 24-bit numbers) that stays fixed
---- across colorschemes. `nil` uses `DEFAULT_HL_GROUP` ("Special").
+--- across colorschemes. `nil` uses `DEFAULT_HL_GROUP` ("Special"). `color`
+--- may also be a zero-arg function returning either shape, re-called fresh
+--- on every `refresh` (same as `text`/`visible`) -- for a colour with no
+--- single stable source, e.g. a host statusline that switches *which*
+--- highlight group it references as the mode changes rather than one group
+--- whose own colour changes. Pair with `opts.track_mode = true` so the chip
+--- actually repaints *when* the mode changes, not just at the next
+--- incidental `refresh()`.
 ---
 --- Each mounted chip gets its own highlight group (`UiKitChip_<id>`) rather
 --- than the shared `Kit*` groups `lib.nvim.ui.kit.theme` materializes -- several
@@ -59,6 +66,7 @@
 local surface = require("lib.nvim.ui.kit.surface")
 local autocmd = require("lib.nvim.bindings.autocmd")
 local presets = require("lib.nvim.ui.kit.presets")
+local theme = require("lib.nvim.ui.kit.theme")
 
 local api = vim.api
 
@@ -138,16 +146,30 @@ end
 ---`transparent` (shape = "classic"): the resolved background is always the
 ---window's own, whatever `color.bg` says -- "classic" means no visible box, a
 ---custom bg would put one back.
----@param color Lib.UI.Kit.ChipColor|nil
+---
+---`color` may be a zero-arg function, re-called fresh here every time --
+---same "always live, never cached" shape `resolve_text`/`resolve_visible`
+---already use. What this is actually for: a consumer that wants the chip to
+---track something with no single stable highlight group of its own (e.g.
+---this host's statusline, which switches *which* `St_<Mode>Mode` group it
+---references as the mode changes, rather than one group whose own colour
+---changes) can compute the group name (or an explicit `{fg,bg}`) itself, on
+---every call, instead of picking one fixed source up front.
+---@param color Lib.UI.Kit.ChipColor|fun():Lib.UI.Kit.ChipColor|nil
 ---@param transparent boolean|nil
 ---@return { fg: integer, bg: integer, themed: boolean }
 local function resolve_colors(color, transparent)
-  if type(color) == "table" then
-    local fg = as_color_number(color.fg) or resolve_hl(DEFAULT_HL_GROUP).fg or 0xc0caf5
-    local bg = transparent and window_bg() or (as_color_number(color.bg) or window_bg())
+  local resolved_color = color
+  if type(color) == "function" then
+    local ok, out = pcall(color)
+    resolved_color = ok and out or nil
+  end
+  if type(resolved_color) == "table" then
+    local fg = as_color_number(resolved_color.fg) or resolve_hl(DEFAULT_HL_GROUP).fg or 0xc0caf5
+    local bg = transparent and window_bg() or (as_color_number(resolved_color.bg) or window_bg())
     return { fg = fg, bg = bg, themed = false }
   end
-  local group = type(color) == "string" and color or DEFAULT_HL_GROUP
+  local group = type(resolved_color) == "string" and resolved_color or DEFAULT_HL_GROUP
   local fg = resolve_hl(group).fg or resolve_hl("Normal").fg or 0xc0caf5
   local bg = transparent and window_bg() or mix(fg, window_bg(), CHIP_TINT)
   return { fg = fg, bg = bg, themed = true }
@@ -247,10 +269,19 @@ local function resolve_visible(v)
 end
 
 ---@internal
----@param shape Lib.UI.Kit.Preset|nil
----@return "rounded"|"minimal"  # a lib.nvim.ui.kit.theme preset name: "rounded" border, or borderless
+---lib.nvim.ui.kit.chip shape -> lib.nvim.ui.kit.theme preset name, for every bordered shape.
+---Anything not listed here (`"chip"`, `"classic"`, an unrecognized value)
+---falls back to `"minimal"` (borderless) below.
+---@type table<string, string>
+local SHAPE_THEME_PRESET = {
+  rounded_chip = "rounded",
+  dock_left = "dock_left",
+}
+
+---@param shape Lib.UI.Kit.Preset|"dock_left"|nil
+---@return string  # a lib.nvim.ui.kit.theme preset name
 local function preset_for_shape(shape)
-  return shape == "rounded_chip" and "rounded" or "minimal"
+  return SHAPE_THEME_PRESET[shape] or "minimal"
 end
 
 ---@internal
@@ -435,15 +466,27 @@ local function reflow()
     for _, entry in ipairs(list) do
       local content_h = entry.height or 1
       local box_h = entry.border == "none" and content_h or (content_h + 2)
-      local row = edge.v == "top" and offset
-        or math.max(0, vim.o.lines - vim.o.cmdheight - status_rows - offset - box_h + 1)
-      -- Flush against the left edge (col 0), not inset by MARGIN -- a
-      -- bordered float's `col` is where its own border starts, so 0 already
-      -- sits exactly at the screen edge without clipping anything. The right
-      -- edge keeps its MARGIN inset so a right-anchored chip isn't flush
-      -- against the terminal's own right border.
-      local col = edge.h == "left" and 0
-        or math.max(0, vim.o.columns - entry.width - MARGIN - (entry.border == "none" and 0 or 2))
+      local row, col
+      if entry.dock and edge.v == "bottom" and status_rows > 0 then
+        -- Sit flush ON the statusline row itself, fused with it, instead of
+        -- floating in this corner's normal separate-box-with-a-gap stack.
+        -- Degrades to the `else` branch below (unchanged) when there is no
+        -- statusline row to dock against at all (`laststatus = 0`, or no
+        -- statusline plugin active) -- `dock` is never a hard requirement
+        -- on one being there.
+        row = vim.o.lines - vim.o.cmdheight - 1
+        col = 0
+      else
+        row = edge.v == "top" and offset
+          or math.max(0, vim.o.lines - vim.o.cmdheight - status_rows - offset - box_h + 1)
+        -- Flush against the left edge (col 0), not inset by MARGIN -- a
+        -- bordered float's `col` is where its own border starts, so 0 already
+        -- sits exactly at the screen edge without clipping anything. The right
+        -- edge keeps its MARGIN inset so a right-anchored chip isn't flush
+        -- against the terminal's own right border.
+        col = edge.h == "left" and 0
+          or math.max(0, vim.o.columns - entry.width - MARGIN - (entry.border == "none" and 0 or 2))
+      end
       pcall(api.nvim_win_set_config, entry.win, {
         relative = "editor",
         row = row,
@@ -526,6 +569,34 @@ local function ensure_hooks()
   })
 end
 
+---@internal
+---Opt-in `ModeChanged` tracking, scoped to the one chip that asks for it --
+---an autocmd id stored on its own entry, not a blanket subscription every
+---`lib.nvim.ui.kit.chip` consumer pays for regardless of whether it wants mode
+---tracking (`ModeChanged` fires on every mode switch, high-frequency enough
+---that this matters). Registers or tears down as `opts.track_mode` flips
+---between `M.mount()` calls; already-matching state is a no-op.
+---@param entry table
+---@param track_mode boolean|nil
+local function ensure_mode_tracking(entry, track_mode)
+  if track_mode ~= nil then
+    entry.track_mode = track_mode
+  end
+  if entry.track_mode and not entry.track_mode_autocmd_id then
+    local group = autocmd.group("UiKitChip", true)
+    local id = entry.id
+    entry.track_mode_autocmd_id = autocmd.create("ModeChanged", function()
+      M.refresh(id)
+    end, {
+      group = group,
+      desc = ("lib.nvim.ui.kit.chip: track mode changes for %q"):format(id),
+    })
+  elseif not entry.track_mode and entry.track_mode_autocmd_id then
+    autocmd.delete(entry.track_mode_autocmd_id)
+    entry.track_mode_autocmd_id = nil
+  end
+end
+
 -- ---------------------------------------------------------------- public API
 
 ---Mount (or re-configure) a chip under `opts.id`. Draws nothing by itself
@@ -569,8 +640,14 @@ function M.mount(opts)
     entry.color = opts.color
   end
   entry.zindex = opts.zindex or entry.zindex or 60
+  -- `false` is as legitimate a value as `true` here (same reasoning as
+  -- `visible` above), so this needs its own nil check too.
+  if opts.dock ~= nil then
+    entry.dock = opts.dock
+  end
 
   ensure_hooks()
+  ensure_mode_tracking(entry, opts.track_mode)
   M.refresh(id)
   return id
 end
@@ -607,7 +684,18 @@ function M.refresh(id)
     width = math.max(width, vim.fn.strdisplaywidth(line))
   end
   entry.width = width + 2
-  entry.border = preset_for_shape(entry.shape) == "minimal" and "none" or "rounded"
+  -- Read straight from `lib.nvim.ui.kit.theme` rather than a hardcoded "minimal" ->
+  -- "none" / anything-else -> "rounded" guess: correct for any preset
+  -- `preset_for_shape` maps to, including `dock_left`'s glyph array, not
+  -- just the two originally hand-coded here. Cached on `entry.shape`, not
+  -- recomputed on every call: `theme.resolve()` deep-copies a whole theme
+  -- table, and `refresh()` runs on every editing-rate dirty-tracking event
+  -- (see the comment on the diffing below) where the shape essentially
+  -- never actually changed since the last call.
+  if entry._border_shape ~= entry.shape then
+    entry.border = theme.resolve(preset_for_shape(entry.shape)).border
+    entry._border_shape = entry.shape
+  end
 
   if not entry.win or not api.nvim_win_is_valid(entry.win) then
     open_window(entry)
@@ -752,6 +840,9 @@ function M.unmount(id)
   local entry = chips[id]
   if not entry then
     return
+  end
+  if entry.track_mode_autocmd_id then
+    autocmd.delete(entry.track_mode_autocmd_id)
   end
   close_window(entry)
   chips[id] = nil
