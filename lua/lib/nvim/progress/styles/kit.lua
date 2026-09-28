@@ -92,6 +92,24 @@ local function maybe_resize(surf, line)
 end
 
 ---@internal
+---Runs `fn` immediately when already on the main loop, otherwise defers it
+---via `vim.schedule`. `surf:is_valid()`/`nvim_win_get_width`/
+---`nvim_win_set_config` are forbidden in a fast-event context (E5560:
+---"nvim_win_is_valid must not be called in a fast event context"), and a
+---caller's completion callback (e.g. a `vim.system` exit handler not itself
+---wrapped in `vim.schedule`) isn't guaranteed to already be on the loop --
+---see `lib.nvim.progress.styles.statusline`'s `request_redraw` for the same
+---pattern.
+---@param fn fun()
+local function on_main_loop(fn)
+  if vim.in_fast_event() then
+    vim.schedule(fn)
+  else
+    fn()
+  end
+end
+
+---@internal
 ---@param bufnr integer
 ---@param spec Lib.Progress.Spec
 ---@param request_cancel fun()
@@ -153,8 +171,10 @@ end
 ---@return any|nil
 local function update(state, spec)
   local line = render_line(spec)
-  maybe_resize(state, line)
-  set_line(state, line)
+  on_main_loop(function()
+    maybe_resize(state, line)
+    set_line(state, line)
+  end)
   return state
 end
 
@@ -165,11 +185,13 @@ local function finish(state, spec)
     return
   end
   local line = render_line(spec)
-  maybe_resize(state, line)
-  set_line(state, line)
-  vim.defer_fn(function()
-    close(state)
-  end, 800)
+  on_main_loop(function()
+    maybe_resize(state, line)
+    set_line(state, line)
+    vim.defer_fn(function()
+      close(state)
+    end, 800)
+  end)
 end
 
 ---@param state any|nil
@@ -180,11 +202,13 @@ local function cancel(state, spec)
   end
   local text = spec.text and spec.text ~= "" and spec.text or "cancelled"
   local line = spec.title .. text
-  maybe_resize(state, line)
-  set_line(state, line)
-  vim.defer_fn(function()
-    close(state)
-  end, 800)
+  on_main_loop(function()
+    maybe_resize(state, line)
+    set_line(state, line)
+    vim.defer_fn(function()
+      close(state)
+    end, 800)
+  end)
 end
 
 ---@type Lib.Progress.StyleImpl

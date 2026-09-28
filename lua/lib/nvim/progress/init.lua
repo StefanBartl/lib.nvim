@@ -47,6 +47,26 @@ local function normalize_title(prefix)
   return prefix
 end
 
+---Best-effort cleanup for a style whose `update`/`finish`/`cancel` just
+---raised: retries the style's own `cancel` on the next main-loop tick, so a
+---window `start` already opened doesn't outlive the failure that disabled
+---the style -- without this, a style whose only error was a transient
+---fast-event-context throw (see `lib.nvim.progress.styles.kit`) permanently
+---orphans its chip, since `finish`/`cancel` both skip any style already
+---marked `style_failed`. Wrapped in `vim.schedule` + `pcall`: even if this
+---retry itself fails (state already gone, or the failure wasn't
+---context-related), it's a silent no-op rather than a second uncaught error.
+---@internal
+---@param style Lib.Progress.StyleImpl
+---@param state any
+---@param fail_spec Lib.Progress.Spec
+---@param opts Lib.Progress.Opts
+local function schedule_cleanup(style, state, fail_spec, opts)
+  vim.schedule(function()
+    pcall(style.cancel, state, fail_spec, opts)
+  end)
+end
+
 ---Safely stop+close a uv timer exactly once (same idempotent pattern as
 ---`lib.nvim.buf_win_tab.capture`).
 ---@internal
@@ -174,6 +194,7 @@ function M.create(opts)
       if started then
         for i, style in ipairs(styles) do
           if not style_failed[i] then
+            local prior_state = style_states[i]
             local ok, result = pcall(style.update, style_states[i], spec(), opts)
             if ok then
               style_states[i] = result
@@ -185,6 +206,7 @@ function M.create(opts)
                   tostring(result)
                 )
               )
+              schedule_cleanup(style, prior_state, spec(), opts)
             end
           end
         end
@@ -208,6 +230,7 @@ function M.create(opts)
           local ok, err = pcall(style.finish, style_states[i], spec(), opts)
           if not ok then
             notify.error(("style #%d failed to finish: %s"):format(i, tostring(err)))
+            schedule_cleanup(style, style_states[i], spec(), opts)
           end
         end
       end
@@ -230,6 +253,7 @@ function M.create(opts)
           local ok, err = pcall(style.cancel, style_states[i], spec(), opts)
           if not ok then
             notify.error(("style #%d failed to cancel: %s"):format(i, tostring(err)))
+            schedule_cleanup(style, style_states[i], spec(), opts)
           end
         end
       end
