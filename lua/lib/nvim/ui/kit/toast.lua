@@ -8,6 +8,7 @@
 
 local surface = require("lib.nvim.ui.kit.surface")
 local autocmd = require("lib.nvim.bindings.autocmd")
+local theme = require("lib.nvim.ui.kit.theme")
 
 local api = vim.api
 
@@ -17,11 +18,19 @@ local DEFAULT_TIMEOUT = 3000
 local WIDTH = 40
 local MARGIN = 2 -- columns from the right edge / rows from the top
 
---- Live toasts, oldest first. Each: { surf = Surface, height = integer }.
+--- Live toasts, oldest first. Each: { surf = Surface, height = integer, bordered = boolean }.
 local stack = {}
 
 ---@internal
 --- Drop dead toasts and reflow the survivors from the top-right corner down.
+---
+--- `row` (per `nvim_win_set_config`) is a bordered float's *content* row --
+--- the border itself is drawn one row above/below that, outside `height` --
+--- so a bordered toast's true on-screen footprint is `height + 2` rows, not
+--- `height`. Advancing `row` by only `t.height + 1` (as if every toast were
+--- borderless) used to leave the two border rows unaccounted for, so the
+--- next toast's top border landed exactly on the previous one's bottom
+--- border -- overwriting it instead of leaving a gap below it.
 local function reflow()
   local live = {}
   for _, t in ipairs(stack) do
@@ -41,7 +50,8 @@ local function reflow()
       width = WIDTH,
       height = t.height,
     })
-    row = row + t.height + 1
+    local box_h = t.bordered and (t.height + 2) or t.height
+    row = row + box_h + 1
   end
 end
 
@@ -70,7 +80,8 @@ function M.open(opts)
     return nil
   end
 
-  local entry = { surf = surf, height = #lines }
+  local entry =
+    { surf = surf, height = #lines, bordered = theme.resolve(opts.theme).border ~= "none" }
   stack[#stack + 1] = entry
   reflow()
 
