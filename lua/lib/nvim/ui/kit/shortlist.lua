@@ -42,6 +42,7 @@
 local layout = require("lib.nvim.ui.kit.layout")
 local chooser = require("lib.nvim.ui.kit.chooser")
 local surface = require("lib.nvim.ui.kit.surface")
+local theme = require("lib.nvim.ui.kit.theme")
 local notify = require("lib.nvim.notify").create("[lib.nvim.ui.kit.shortlist]")
 local autocmd = require("lib.nvim.bindings.autocmd")
 local map = require("lib.nvim.bindings.keymap")
@@ -86,9 +87,11 @@ local SCROLL = {
   half_up = "<C-u>",
 }
 
---- The border group of the window that has focus, and of the one that has not.
+--- The border group of the window that has focus. Stays a fixed, global
+--- name (unlike `BORDER_IDLE` below, computed per-call): only one window is
+--- ever focused at a time, so there is no simultaneous-different-colors
+--- bleed to isolate against here the way there is for the idle border.
 local BORDER_FOCUSED = "KitAccent"
-local BORDER_IDLE = "KitBorder"
 
 ---@internal
 --- One key group as the caller wrote it, cleaned up: the non-empty strings of a
@@ -251,6 +254,14 @@ function M.open(opts)
     return nil
   end
 
+  -- The window `surface.open`/`chooser.open` below open share the SAME
+  -- `theme.apply` machinery, so this is the identical group name they will
+  -- point `winhighlight` at -- resolving it here too means `update_focus`
+  -- (below) can restore the idle border to this popup's own color instead of
+  -- a globally-shared, easily recolored-by-something-else fixed name (see
+  -- theme.lua's own doc comment on `M.window_groups`).
+  local border_idle = theme.window_groups(theme.resolve(opts.theme)).border
+
   local preview_surf = surface.open(vim.tbl_extend("force", geo.slots.preview, {
     theme = opts.theme,
     filetype = opts.preview_filetype,
@@ -357,11 +368,11 @@ function M.open(opts)
     local cur = api.nvim_get_current_win()
     set_border_group(
       results_surf.winid,
-      cur == results_surf.winid and BORDER_FOCUSED or BORDER_IDLE
+      cur == results_surf.winid and BORDER_FOCUSED or border_idle
     )
     set_border_group(
       preview_surf.winid,
-      cur == preview_surf.winid and BORDER_FOCUSED or BORDER_IDLE
+      cur == preview_surf.winid and BORDER_FOCUSED or border_idle
     )
   end
 

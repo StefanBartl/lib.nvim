@@ -208,16 +208,14 @@ end
 --- time.
 ---
 --- `KitSelection`/`KitAccent`/`KitMuted`/`KitError`/`KitFlash`/`KitHover`
---- stay global/fixed, unaffected by this. So, still, do the OTHER two
---- consumers of `KitBorder`/`KitTitle` themselves: `lib.nvim.ui.kit.menu`
---- and `lib.nvim.ui.kit.shortlist` paint their own border/title decoration
---- via extmarks that reference those exact fixed names directly, not
---- through a window's `winhighlight` -- this fix only reaches the native
---- float border/title Neovim itself draws via `winhighlight`. A menu or
---- shortlist open at the same time as a differently-themed surface can
---- still show the same live-recoloring this fix addresses for toasts;
---- narrower in practice (those components are closer to modal, toasts are
---- explicitly meant to stack), but not actually fixed.
+--- stay global/fixed, unaffected by this: nothing draws two of those roles
+--- at once with different colors the way toasts do with border/title.
+--- `lib.nvim.ui.kit.menu` and `lib.nvim.ui.kit.shortlist` paint their OWN
+--- border/title decoration via extmarks (group frames, titled rules) rather
+--- than relying on `winhighlight` alone -- they call
+--- `M.window_groups(resolved)` below for the same reason `M.apply` does, so
+--- their extmarks reference the right scoped names too, not the fixed
+--- globals.
 ---@type table<string, string>
 local window_group_cache = {}
 local window_group_counter = 0
@@ -240,6 +238,23 @@ local function materialize_window_groups(resolved)
     names[role] = name
   end
   return names
+end
+
+--- Public: the same window-scoped `KitNormal_N`/`KitBorder_N`/`KitTitle_N`
+--- group names `M.apply` materializes for `resolved`, for a caller that
+--- paints its OWN decoration via extmarks referencing these names directly
+--- (`lib.nvim.ui.kit.menu`'s group frames, `lib.nvim.ui.kit.shortlist`'s
+--- border) instead of relying solely on `winhighlight`. Safe to call before
+--- the surface that will use them even opens, and safe to call more than
+--- once for the same `resolved` (the cache above returns the same name both
+--- times): Neovim resolves an extmark's highlight group by name at redraw
+--- time, not when the extmark is created, so it doesn't matter whether this
+--- or `M.apply` materializes the group first, as long as both resolve the
+--- same theme.
+---@param resolved Lib.UI.Kit.Theme
+---@return { normal: string, border: string, title: string }
+function M.window_groups(resolved)
+  return materialize_window_groups(resolved)
 end
 
 --- Apply a resolved theme to an open window: materialize its groups and point
