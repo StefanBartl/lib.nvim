@@ -38,11 +38,18 @@
 --- chips, or a chip and a modal kit popup, can be on screen at once with
 --- independently coloured chips instead of fighting over one shared group.
 ---
---- `opts.shape` picks the box: `"rounded"` (the default, a bordered
---- capsule), `"rect"` (borderless, a flat coloured block), or `"text"`
+--- `opts.shape` picks the box, from the shared vocabulary in
+--- `lib.nvim.ui.kit.presets`
+--- (also used by `ui.context`, `ui.tabline`,
+--- `ui.statusline` and third-party consumers like
+--- sessions.nvim/casedesk.nvim): `"rounded_chip"` (the default, a bordered
+--- capsule), `"chip"` (borderless, a flat coloured block), or `"classic"`
 --- (borderless AND background-less -- just the coloured text floating over
 --- whatever is behind it, no box at all; any `color.bg` is ignored for this
---- one since the whole point is having no visible background).
+--- one since the whole point is having no visible background). The old
+--- names (`"rounded"`/`"rect"`/`"text"`) still work, normalized on the way
+--- in -- see
+--- `lib.nvim.ui.kit.presets.normalize()`.
 ---
 --- A floating window belongs to the tabpage it was opened in and simply does
 --- not appear on any other tab -- so a chip that should follow the user
@@ -51,6 +58,7 @@
 
 local surface = require("lib.nvim.ui.kit.surface")
 local autocmd = require("lib.nvim.bindings.autocmd")
+local presets = require("lib.nvim.ui.kit.presets")
 
 local api = vim.api
 
@@ -127,8 +135,8 @@ local function window_bg()
 end
 
 ---@internal
----`transparent` (shape = "text"): the resolved background is always the
----window's own, whatever `color.bg` says -- "text" means no visible box, a
+---`transparent` (shape = "classic"): the resolved background is always the
+---window's own, whatever `color.bg` says -- "classic" means no visible box, a
 ---custom bg would put one back.
 ---@param color Lib.UI.Kit.ChipColor|nil
 ---@param transparent boolean|nil
@@ -225,17 +233,17 @@ local function resolve_visible(v)
 end
 
 ---@internal
----@param shape "rounded"|"rect"|"text"|nil
+---@param shape Lib.UI.Kit.Preset|nil
 ---@return "rounded"|"minimal"  # a lib.nvim.ui.kit.theme preset name: "rounded" border, or borderless
 local function preset_for_shape(shape)
-  return shape == "rounded" and "rounded" or "minimal"
+  return shape == "rounded_chip" and "rounded" or "minimal"
 end
 
 ---@internal
----@param shape "rounded"|"rect"|"text"|nil
----@return boolean  # "text": no visible box, just coloured text over the window behind it
+---@param shape Lib.UI.Kit.Preset|nil
+---@return boolean  # "classic": no visible box, just coloured text over the window behind it
 local function is_transparent_shape(shape)
-  return shape == "text"
+  return shape == "classic"
 end
 
 -- ---------------------------------------------------------------- window lifecycle
@@ -492,7 +500,9 @@ function M.mount(opts)
     entry.visible_src = opts.visible
   end
   entry.anchor = ANCHORS[opts.anchor] and opts.anchor or entry.anchor or "bottom-left"
-  entry.shape = opts.shape or entry.shape or "rounded"
+  entry.shape = presets.normalize(opts.shape, "lib.nvim.ui.kit.chip")
+    or entry.shape
+    or "rounded_chip"
   if opts.color ~= nil then
     entry.color = opts.color
   end
