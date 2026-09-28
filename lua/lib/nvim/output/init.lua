@@ -57,6 +57,16 @@ local function normalize_prefix(prefix)
   return prefix
 end
 
+---Builds the `dump(lines, title)` every non-headless channel shares
+---verbatim: always the viewer, regardless of the channel's own delivery path.
+---@param display_name string Fallback title when `dump` is called without one
+---@return fun(lines: string[], title?: string): Lib.UI.Kit.Surface|nil
+local function make_dump(display_name)
+  return function(lines, title)
+    return require("lib.nvim.output.viewer").show_lines(title or display_name, lines)
+  end
+end
+
 ---@param prefix string
 ---@return Lib.Output.Notifier
 local function headless_notifier(prefix)
@@ -99,17 +109,13 @@ channels.popup = function(prefix, create_opts)
     source = create_opts.source,
     messages = create_opts.messages,
   }) --[[@as Lib.Output.Notifier]]
-  notifier.dump = function(lines, title)
-    return require("lib.nvim.output.viewer").show_lines(title or prefix, lines)
-  end
+  notifier.dump = make_dump(prefix)
   return notifier
 end
 
 channels.vim_notify = function(prefix, _create_opts)
   local notifier = require("lib.nvim.notify").create(prefix) --[[@as Lib.Output.Notifier]]
-  notifier.dump = function(lines, title)
-    return require("lib.nvim.output.viewer").show_lines(title or prefix, lines)
-  end
+  notifier.dump = make_dump(prefix)
   return notifier
 end
 
@@ -135,9 +141,7 @@ channels.echo = function(prefix, _create_opts)
   function notifier.debug(msg, opts)
     notifier.notify(msg, vim.log.levels.DEBUG, opts)
   end
-  function notifier.dump(lines, title)
-    return require("lib.nvim.output.viewer").show_lines(title or normalized, lines)
-  end
+  notifier.dump = make_dump(normalized)
   return notifier
 end
 

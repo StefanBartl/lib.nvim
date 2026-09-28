@@ -133,6 +133,12 @@ Every named style renders the same handle in parallel — a statusline badge
 call site. A bare string is just the one-element case: `style = "notify"`
 behaves exactly as before.
 
+If one style raises (a third-party renderer, or an interactive style like
+`"float"`/`"kit"` whose window the user already closed), it is logged via
+`vim.notify` and disabled for the rest of that handle's lifetime — every
+other requested style keeps rendering normally. A broken style never takes
+its siblings down with it.
+
 ---
 
 ## Notes

@@ -93,6 +93,11 @@ function M.create(opts)
   local fields = {}
   ---@type any[] index-aligned with `styles`
   local style_states = {}
+  ---@type boolean[] index-aligned with `styles`; true once that style has
+  ---raised once -- skipped afterward so one broken renderer (a third-party
+  ---style, a closed window under "float"/"kit") can't stop every other style
+  ---in the list from ever rendering again for this handle
+  local style_failed = {}
   local started = false
   local done = false
   ---@type fun()[]
@@ -105,15 +110,28 @@ function M.create(opts)
     return { title = title, text = fields.text, current = fields.current, total = fields.total }
   end
 
+  local function request_cancel_cb()
+    handle:request_cancel()
+  end
+
   local function do_start()
     if started or done then
       return
     end
     started = true
     for i, style in ipairs(styles) do
-      style_states[i] = style.start(spec(), opts, function()
-        handle:request_cancel()
-      end)
+      local ok, result = pcall(style.start, spec(), opts, request_cancel_cb)
+      if ok then
+        style_states[i] = result
+      else
+        style_failed[i] = true
+        notify.error(
+          ("style #%d failed to start, disabling it for this handle: %s"):format(
+            i,
+            tostring(result)
+          )
+        )
+      end
     end
   end
 
@@ -155,7 +173,20 @@ function M.create(opts)
       end
       if started then
         for i, style in ipairs(styles) do
-          style_states[i] = style.update(style_states[i], spec(), opts)
+          if not style_failed[i] then
+            local ok, result = pcall(style.update, style_states[i], spec(), opts)
+            if ok then
+              style_states[i] = result
+            else
+              style_failed[i] = true
+              notify.error(
+                ("style #%d failed to update, disabling it for this handle: %s"):format(
+                  i,
+                  tostring(result)
+                )
+              )
+            end
+          end
         end
       end
     end,
@@ -173,7 +204,12 @@ function M.create(opts)
         return -- never became visible; a fast operation stays silent
       end
       for i, style in ipairs(styles) do
-        style.finish(style_states[i], spec(), opts)
+        if not style_failed[i] then
+          local ok, err = pcall(style.finish, style_states[i], spec(), opts)
+          if not ok then
+            notify.error(("style #%d failed to finish: %s"):format(i, tostring(err)))
+          end
+        end
       end
     end,
 
@@ -190,7 +226,12 @@ function M.create(opts)
         return
       end
       for i, style in ipairs(styles) do
-        style.cancel(style_states[i], spec(), opts)
+        if not style_failed[i] then
+          local ok, err = pcall(style.cancel, style_states[i], spec(), opts)
+          if not ok then
+            notify.error(("style #%d failed to cancel: %s"):format(i, tostring(err)))
+          end
+        end
       end
     end,
 

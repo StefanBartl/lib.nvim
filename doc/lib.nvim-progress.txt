@@ -98,7 +98,10 @@ handle, with no extra code at the call site: >lua
     local h = progress.create({ title = "[my-plugin]", style = { "statusline", "echo" } })
 <
 A bare string is just the one-element case, so an existing `style = "notify"`
-caller sees no behavior change.
+caller sees no behavior change. If one style raises (a third-party renderer,
+or "float"/"kit" against a window the user already closed), it is logged and
+disabled for the rest of that handle's life; every other requested style
+keeps rendering normally.
 
 Options ~
     title       string      prefix shown in front of every message
