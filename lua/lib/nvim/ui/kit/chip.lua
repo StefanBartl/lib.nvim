@@ -241,10 +241,20 @@ end
 -- ---------------------------------------------------------------- window lifecycle
 
 ---@internal
+---Closing this window fires `WinClosed` synchronously (and `open_window`
+---below fires `WinNew`) -- a consumer wiring its own bookkeeping to those
+---events for every window (e.g. sessions.nvim's dirty-tracking) re-enters
+---`M.refresh(id)` mid-transition, before `entry.win`/`entry.surf` have
+---settled. `entry.busy` makes that reentrant call a no-op instead of
+---racing `open_window`/`close_window`: without it, the reentrant refresh
+---used to open (and then immediately orphan) a second, untracked window --
+---see the "reopen" regression test.
 ---@param entry table
 local function close_window(entry)
   if entry.surf then
+    entry.busy = true
     entry.surf:close()
+    entry.busy = false
   end
   entry.surf = nil
   entry.win = nil
@@ -256,6 +266,7 @@ end
 ---current tabpage, at a throwaway position -- `reflow()` places it for real.
 ---@param entry table
 local function open_window(entry)
+  entry.busy = true
   local surf = surface.open({
     lines = entry.lines,
     theme = preset_for_shape(entry.shape),
@@ -268,6 +279,7 @@ local function open_window(entry)
     focusable = false,
     zindex = entry.zindex,
   })
+  entry.busy = false
   if not surf then
     return
   end
@@ -462,11 +474,14 @@ function M.mount(opts)
 end
 
 ---Re-read `text`/`visible` for `id` and redraw (or hide/show) accordingly.
----A no-op for an id that was never mounted (or already unmounted).
+---A no-op for an id that was never mounted (or already unmounted), or while
+---`open_window`/`close_window` is already mid-transition for it (`entry.busy`
+----- see that function's own comment for why a reentrant call here would
+---otherwise leak a window).
 ---@param id string
 function M.refresh(id)
   local entry = chips[id]
-  if not entry then
+  if not entry or entry.busy then
     return
   end
 
