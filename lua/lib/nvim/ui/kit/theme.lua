@@ -72,6 +72,16 @@ local BUILTIN = {
     ascii_border = true,
     hl = { border = "Comment", accent = "Identifier", title = "Todo" },
   },
+  -- `lib.nvim.ui.kit.chip`'s statusline-docked look: rounded everywhere except the
+  -- left edge, which stays square/glyph-less -- the 8-element array is
+  -- `{ top-left, top, top-right, right, bottom-right, bottom, bottom-left,
+  -- left }`, so this is `rounded`'s own array with both left-side corners
+  -- and the left edge itself blanked out. Meant for a chip sitting flush
+  -- against the screen's left edge and a statusline row, where a rounded
+  -- (or even square) left corner would visibly float free of both.
+  dock_left = {
+    border = { "", "─", "╮", "│", "╯", "─", "", "" },
+  },
   -- `kit.menu`'s default, and its one point of difference is a *coloured*
   -- frame. `FloatBorder` is deliberately quiet in most colorschemes, which is
   -- right for a panel that was already there and wrong for a menu you just
@@ -160,6 +170,14 @@ function M.border_glyphs(resolved)
   end
   if type(b) == "string" and SETS[b] then
     return SETS[b]
+  end
+  -- A raw 8-element array (e.g. `dock_left`'s glyph-less left edge) -- read
+  -- the actual glyphs straight out of it instead of falling back to
+  -- `single`'s, which would misrepresent any preset shaped this way. Order
+  -- per `:h nvim_open_win`: topleft, top, topright, right, bottomright,
+  -- bottom, bottomleft, left.
+  if type(b) == "table" and #b == 8 then
+    return { tl = b[1], tr = b[3], br = b[5], bl = b[7], h = b[2], v = b[4] }
   end
   return SETS.single
 end

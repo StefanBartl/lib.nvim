@@ -219,9 +219,13 @@
 ---@field confirm fun()                                  # SEARCH: same as mark; MARKED: pick the 2nd item, enter COMPARE
 
 --- A `kit.chip` colour: a highlight-group name to tint from (theme-linked,
---- re-tints on `ColorScheme`), or an explicit fixed pair (`"#rrggbb"`
---- strings or 24-bit numbers). `nil` uses the chip's own default group.
----@alias Lib.UI.Kit.ChipColor string|{ fg: string|integer, bg?: string|integer }
+--- re-tints on `ColorScheme`), an explicit fixed pair (`"#rrggbb"` strings
+--- or 24-bit numbers), or a zero-arg function returning either -- re-called
+--- fresh on every `refresh`, same as `text`/`visible`. For a colour with no
+--- single stable source (e.g. a statusline that switches *which* highlight
+--- group it references as the mode changes, rather than one group whose own
+--- colour changes). `nil` uses the chip's own default group.
+---@alias Lib.UI.Kit.ChipColor string|{ fg: string|integer, bg?: string|integer }|fun():(string|{ fg: string|integer, bg?: string|integer }|nil)
 
 --- Options for `kit.chip.mount`.
 ---@class Lib.UI.Kit.ChipOpts
@@ -229,9 +233,11 @@
 ---@field text? string|fun():string              # re-read on every `refresh`; "" hides the chip; embed `\n` for a multi-line box (height follows the line count)
 ---@field visible? boolean|fun():boolean         # default: derived from `text` being non-empty
 ---@field anchor? "bottom-left"|"bottom-right"|"top-left"|"top-right"  # default "bottom-left"
----@field shape? Lib.UI.Kit.Preset                # default "rounded_chip"; "classic" has no box at all (no border, no background); old names ("rounded"/"rect"/"text") still accepted, see lib.nvim.ui.kit.presets
+---@field shape? Lib.UI.Kit.Preset|"dock_left"       # default "rounded_chip"; "classic" has no box at all (no border, no background); "dock_left" rounds every corner but the left one (see `dock`); old names ("rounded"/"rect"/"text") still accepted, see lib.nvim.ui.kit.presets
 ---@field color? Lib.UI.Kit.ChipColor
 ---@field zindex? integer                        # default 60
+---@field dock? boolean                          # sit flush ON the statusline row (col 0, no gap) instead of floating just above it; degrades to the ordinary placement when there is no statusline row to dock against (`laststatus = 0`, or none active). Meant to pair with `shape = "dock_left"`, but independent of it.
+---@field track_mode? boolean                    # refresh() this one chip on every `ModeChanged`, e.g. for a `color` function that tracks the current mode -- opt-in per chip, not a blanket autocmd
 
 --- Options for `kit.chip.pulse`.
 ---@class Lib.UI.Kit.ChipPulseOpts
