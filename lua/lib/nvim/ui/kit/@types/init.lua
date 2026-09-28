@@ -238,6 +238,8 @@
 ---@field zindex? integer                        # default 60
 ---@field dock? boolean                          # sit flush ON the statusline row (col 0, no gap) instead of floating just above it; degrades to the ordinary placement when there is no statusline row to dock against (`laststatus = 0`, or none active). Meant to pair with `shape = "dock_left"`, but independent of it.
 ---@field track_mode? boolean                    # refresh() this one chip on every `ModeChanged`, e.g. for a `color` function that tracks the current mode -- opt-in per chip, not a blanket autocmd
+---@field row_offset? integer                    # default 0; added to the computed row after anchor/dock placement -- a plain per-chip nudge, e.g. to compensate for a specific host terminal's own rendering quirks without hardcoding that terminal's name anywhere in this module. Note: Neovim floating windows are clipped to the actual terminal grid -- a terminal's own OUTER padding (applied around that grid, e.g. WezTerm's `window_padding`) sits entirely outside anything a `col`/`row` value can reach, so this cannot compensate for that specific class of gap; it only ever repositions the chip within the grid Neovim can already draw into.
+---@field col_offset? integer                    # default 0; same as `row_offset`, applied to the computed column. Same clipped-to-the-grid caveat applies.
 
 --- Options for `kit.chip.pulse`.
 ---@class Lib.UI.Kit.ChipPulseOpts

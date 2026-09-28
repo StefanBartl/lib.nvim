@@ -508,6 +508,19 @@ local function reflow()
         col = edge.h == "left" and 0
           or math.max(0, vim.o.columns - entry.width - MARGIN - (entry.border == "none" and 0 or 2))
       end
+      -- A plain per-chip nudge on top of the anchor/dock placement above,
+      -- for a caller that needs to fine-tune this one chip's position for
+      -- reasons local to their own setup (a specific font/cell size, a
+      -- deliberate visual offset from a neighbouring UI element, ...) --
+      -- entirely generic, no awareness of any particular reason baked in
+      -- here. Does NOT reach past what Neovim can already draw into: a
+      -- host terminal's own OUTER padding (applied around its whole grid,
+      -- e.g. WezTerm's `window_padding`) sits outside that grid entirely,
+      -- so no `row`/`col` value, offset or otherwise, can compensate for
+      -- it -- confirmed live, see the `col = -1` revert above this same
+      -- function went through for exactly that reason.
+      row = row + entry.row_offset
+      col = col + entry.col_offset
       pcall(api.nvim_win_set_config, entry.win, {
         relative = "editor",
         row = row,
@@ -683,6 +696,12 @@ function M.mount(opts)
   if opts.dock ~= nil then
     entry.dock = opts.dock
   end
+  -- `0` is truthy in Lua, so the plain `or` idiom (unlike `dock`/`visible`
+  -- above) already does the right thing here: an explicit `opts.row_offset
+  -- = 0` still overwrites a previous nonzero value instead of falling
+  -- through to it.
+  entry.row_offset = opts.row_offset or entry.row_offset or 0
+  entry.col_offset = opts.col_offset or entry.col_offset or 0
 
   ensure_hooks()
   ensure_mode_tracking(entry, opts.track_mode)
