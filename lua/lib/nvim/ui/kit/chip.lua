@@ -468,6 +468,7 @@ local function ensure_hooks()
         and api.nvim_win_is_valid(entry.win)
         and entry.applied_colors
         and entry.applied_colors.themed
+        and not entry.pulse_active
       then
         apply_colors(entry, resolve_colors(entry.color, is_transparent_shape(entry.shape)))
       end
@@ -500,7 +501,7 @@ local function ensure_hooks()
   autocmd.create("VimEnter", function()
     vim.schedule(function()
       for _, entry in pairs(chips) do
-        if entry.win and api.nvim_win_is_valid(entry.win) then
+        if entry.win and api.nvim_win_is_valid(entry.win) and not entry.pulse_active then
           apply_colors(entry, resolve_colors(entry.color, is_transparent_shape(entry.shape)))
         end
       end
@@ -630,24 +631,42 @@ function M.refresh(id)
       pcall(api.nvim_win_set_config, entry.win, wconfig)
     end
 
-    local colors = resolve_colors(entry.color, is_transparent_shape(entry.shape))
-    local applied = entry.applied_colors
-    -- `themed` is compared too, not just the rendered fg/bg: switching
-    -- `entry.color` between a table and a highlight-group name can resolve
-    -- to identical pixels (e.g. a custom fg that happens to match a group's
-    -- fg on a transparent chip, where bg is always `window_bg()` either
-    -- way). Comparing fg/bg alone would then skip `apply_colors` and leave
-    -- `applied_colors.themed` stale -- and the `ColorScheme` handler above
-    -- gates its re-tint on exactly that field, so a chip that just became
-    -- (or stopped being) theme-linked would silently keep the wrong
-    -- behaviour on every future colorscheme change.
-    if
-      not applied
-      or applied.fg ~= colors.fg
-      or applied.bg ~= colors.bg
-      or applied.themed ~= colors.themed
-    then
-      apply_colors(entry, colors)
+    -- Skipped entirely while a pulse is active (`entry.pulse_active`, set by
+    -- M.pulse() and cleared by its own deferred revert): this reconciliation
+    -- exists to keep the window's colour in step with `entry.color`, the
+    -- *steady* configured colour -- exactly what a pulse is a temporary,
+    -- intentional deviation from. Without this guard, `refresh()` running
+    -- for any other reason at all (a consumer's own dirty-tracking autocmd,
+    -- or even a second M.mount() call, which always tail-calls M.refresh())
+    -- during a pulse's `duration_ms` window would see the pulse colour as
+    -- "not what entry.color resolves to" and immediately snap it back,
+    -- cutting the pulse short -- a straight shot around every guard
+    -- M.pulse()'s own deferred callback has, since this path never goes
+    -- through it. sessions.nvim wires refresh() into ordinary
+    -- BufAdd/BufDelete/WinNew/WinClosed/TabNewEntered/TabClosed
+    -- dirty-tracking, so this was reachable on nearly every pulse in
+    -- practice (opening/closing any window, including an unrelated plugin's
+    -- float, during the ~300ms default pulse window).
+    if not entry.pulse_active then
+      local colors = resolve_colors(entry.color, is_transparent_shape(entry.shape))
+      local applied = entry.applied_colors
+      -- `themed` is compared too, not just the rendered fg/bg: switching
+      -- `entry.color` between a table and a highlight-group name can resolve
+      -- to identical pixels (e.g. a custom fg that happens to match a
+      -- group's fg on a transparent chip, where bg is always `window_bg()`
+      -- either way). Comparing fg/bg alone would then skip `apply_colors`
+      -- and leave `applied_colors.themed` stale -- and the `ColorScheme`
+      -- handler above gates its re-tint on exactly that field, so a chip
+      -- that just became (or stopped being) theme-linked would silently
+      -- keep the wrong behaviour on every future colorscheme change.
+      if
+        not applied
+        or applied.fg ~= colors.fg
+        or applied.bg ~= colors.bg
+        or applied.themed ~= colors.themed
+      then
+        apply_colors(entry, colors)
+      end
     end
   end
 
@@ -668,6 +687,12 @@ function M.pulse(id, opts)
   local duration = tonumber(opts.duration_ms) or 300
   local transparent = is_transparent_shape(entry.shape)
   apply_colors(entry, resolve_colors(opts.color or "DiagnosticWarn", transparent))
+  -- `entry.pulse_active`: read by M.refresh()'s colour reconciliation (and
+  -- the ColorScheme/VimEnter handlers in ensure_hooks()) to leave this
+  -- colour alone until the revert below actually runs -- otherwise any of
+  -- those, triggered by anything else entirely, would immediately see the
+  -- pulse colour as "not what entry.color resolves to" and snap it back.
+  entry.pulse_active = true
 
   -- Two checks, not one, because either alone reintroduces a bug this
   -- function has already been through:
@@ -697,13 +722,14 @@ function M.pulse(id, opts)
   target.pulse_generation = (target.pulse_generation or 0) + 1
   local generation = target.pulse_generation
   vim.defer_fn(function()
-    if
-      chips[id] == target
-      and target.pulse_generation == generation
-      and target.win
-      and api.nvim_win_is_valid(target.win)
-    then
-      apply_colors(target, resolve_colors(target.color, is_transparent_shape(target.shape)))
+    if chips[id] == target and target.pulse_generation == generation then
+      -- Cleared even if the window is gone by now: this pulse is over
+      -- either way, and leaving it `true` would wrongly keep M.refresh()'s
+      -- colour reconciliation switched off forever for this entry.
+      target.pulse_active = false
+      if target.win and api.nvim_win_is_valid(target.win) then
+        apply_colors(target, resolve_colors(target.color, is_transparent_shape(target.shape)))
+      end
     end
   end, duration)
 end
