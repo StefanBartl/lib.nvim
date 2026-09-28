@@ -12,6 +12,7 @@
 require("lib.nvim.progress.@types")
 
 local max_float_width = require("lib.nvim.window").max_float_width
+local notify = require("lib.nvim.notify").create("[lib.nvim.progress]")
 
 ---@internal
 ---@param spec Lib.Progress.Spec
@@ -100,10 +101,23 @@ end
 ---wrapped in `vim.schedule`) isn't guaranteed to already be on the loop --
 ---see `lib.nvim.progress.styles.statusline`'s `request_redraw` for the same
 ---pattern.
+---
+---On the deferred path, `fn` runs after `update`/`finish`/`cancel` has
+---already returned -- outside `init.lua`'s `pcall(style.*, ...)`, which only
+---guards the synchronous call. Without its own `pcall` here, a throw inside
+---a deferred `fn` would escape as a raw scheduled-callback error instead of
+---the module's usual `notify.error`, and -- since `init.lua` never saw a
+---failure -- its `schedule_cleanup` retry would never fire either, silently
+---reintroducing the orphaned-chip bug this style was just fixed for.
 ---@param fn fun()
 local function on_main_loop(fn)
   if vim.in_fast_event() then
-    vim.schedule(fn)
+    vim.schedule(function()
+      local ok, err = pcall(fn)
+      if not ok then
+        notify.error(("kit style deferred render failed: %s"):format(tostring(err)))
+      end
+    end)
   else
     fn()
   end
@@ -186,8 +200,15 @@ local function finish(state, spec)
   end
   local line = render_line(spec)
   on_main_loop(function()
-    maybe_resize(state, line)
-    set_line(state, line)
+    -- Each render step is separately pcall'd -- a failed resize must not
+    -- skip the line update -- and `close` must still get scheduled below
+    -- even if both fail, or the window this handle opened would once again
+    -- outlive it.
+    local resize_ok, resize_err = pcall(maybe_resize, state, line)
+    local line_ok, line_err = pcall(set_line, state, line)
+    if not (resize_ok and line_ok) then
+      notify.error(("kit style finish render failed: %s"):format(tostring(resize_err or line_err)))
+    end
     vim.defer_fn(function()
       close(state)
     end, 800)
@@ -203,8 +224,14 @@ local function cancel(state, spec)
   local text = spec.text and spec.text ~= "" and spec.text or "cancelled"
   local line = spec.title .. text
   on_main_loop(function()
-    maybe_resize(state, line)
-    set_line(state, line)
+    -- Same best-effort, independently pcall'd render as `finish` above:
+    -- `close` always gets scheduled, even if rendering the cancelled state
+    -- fails.
+    local resize_ok, resize_err = pcall(maybe_resize, state, line)
+    local line_ok, line_err = pcall(set_line, state, line)
+    if not (resize_ok and line_ok) then
+      notify.error(("kit style cancel render failed: %s"):format(tostring(resize_err or line_err)))
+    end
     vim.defer_fn(function()
       close(state)
     end, 800)
