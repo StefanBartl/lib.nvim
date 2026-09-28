@@ -11,6 +11,7 @@
 require("lib.nvim.progress.@types")
 
 local window = require("lib.nvim.window")
+local notify = require("lib.nvim.notify").create("[lib.nvim.progress]")
 
 ---@internal
 ---@param spec Lib.Progress.Spec
@@ -60,10 +61,23 @@ end
 ---(E5560), and a caller's completion callback (e.g. a `vim.system` exit
 ---handler not itself wrapped in `vim.schedule`) isn't guaranteed to already
 ---be on the loop -- see `lib.nvim.progress.styles.kit` for the same pattern.
+---
+---On the deferred path, `fn` runs after `update`/`finish`/`cancel` has
+---already returned -- outside `init.lua`'s `pcall(style.*, ...)`, which only
+---guards the synchronous call. Without its own `pcall` here, a throw inside
+---a deferred `fn` would escape as a raw scheduled-callback error instead of
+---the module's usual `notify.error`, and -- since `init.lua` never saw a
+---failure -- its `schedule_cleanup` retry would never fire either, silently
+---reintroducing the orphaned-chip bug this style was just fixed for.
 ---@param fn fun()
 local function on_main_loop(fn)
   if vim.in_fast_event() then
-    vim.schedule(fn)
+    vim.schedule(function()
+      local ok, err = pcall(fn)
+      if not ok then
+        notify.error(("float style deferred render failed: %s"):format(tostring(err)))
+      end
+    end)
   else
     fn()
   end
@@ -137,7 +151,12 @@ local function finish(state, spec)
   end
   local line = render_line(spec)
   on_main_loop(function()
-    set_line(state.bufnr, line)
+    -- pcall'd separately from the `close` scheduling below: a failed render
+    -- must not skip closing the window this handle opened.
+    local ok, err = pcall(set_line, state.bufnr, line)
+    if not ok then
+      notify.error(("float style finish render failed: %s"):format(tostring(err)))
+    end
     vim.defer_fn(function()
       close(state.winid)
     end, 800)
@@ -153,7 +172,12 @@ local function cancel(state, spec)
   local text = spec.text and spec.text ~= "" and spec.text or "cancelled"
   local line = spec.title .. text
   on_main_loop(function()
-    set_line(state.bufnr, line)
+    -- Same best-effort render as `finish` above: `close` always gets
+    -- scheduled, even if rendering the cancelled state fails.
+    local ok, err = pcall(set_line, state.bufnr, line)
+    if not ok then
+      notify.error(("float style cancel render failed: %s"):format(tostring(err)))
+    end
     vim.defer_fn(function()
       close(state.winid)
     end, 800)
