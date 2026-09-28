@@ -175,8 +175,14 @@ function M.open(opts)
     -- Exposed so a caller that needs to know the resolved border (e.g.
     -- lib.nvim.ui.kit.toast, to know how many extra rows its box occupies when
     -- stacking) doesn't have to call theme.resolve(opts.theme) a second
-    -- time itself.
-    border = resolved.border,
+    -- time itself. Deep-copied: a table-shaped border (the "ascii" preset,
+    -- or any custom preset registered with one) is otherwise the exact
+    -- same table object theme.lua's `presets` registry holds -- tbl_deep_extend
+    -- doesn't copy a leaf value it takes wholesale from the override side --
+    -- so an in-place edit through this public field would silently corrupt
+    -- that preset for every window opened with it, for the rest of the
+    -- session.
+    border = vim.deepcopy(resolved.border),
     _on_close = {},
     _closed = false,
   }, Surface)
