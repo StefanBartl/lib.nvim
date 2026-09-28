@@ -202,6 +202,26 @@ return function(H)
       "make_scratch: a height fraction rounding to zero rows falls back to the line count, not 1"
     )
 
+    -- Unlike width, height has no "comfort bump" second fallback stage: no
+    -- height option and no content (`#lines == 0`) just floor-clamps to a
+    -- bare 1 row (a 1-cell width would be unreadably thin, but a 1-row float
+    -- for empty content is exactly what a prompt/spacer wants). Deliberate,
+    -- but previously unpinned -- nothing caught a regression that added a
+    -- comfort bump here, or dropped the floor clamp entirely.
+    local hempty = make_scratch({ lines = {}, border = "none" })
+    local hempty_height = hempty and vim.api.nvim_win_get_height(hempty) or nil
+    pcall(vim.api.nvim_win_close, hempty, true)
+    H.eq(hempty_height, 1, "make_scratch: no height and no content falls back to a bare 1 row")
+
+    -- The mainline branch of the given_h guard (a valid explicit cell height,
+    -- not one that rounds to zero) had no direct nvim_win_get_height
+    -- assertion anywhere in this file -- every other explicit-height call
+    -- site above only checks anchor/row/width, never height itself.
+    local hgiven = make_scratch({ lines = { "x" }, height = 7, border = "none" })
+    local hgiven_height = hgiven and vim.api.nvim_win_get_height(hgiven) or nil
+    pcall(vim.api.nvim_win_close, hgiven, true)
+    H.eq(hgiven_height, 7, "make_scratch: an explicit cell height is honoured")
+
     vim.fn.screenrow = orig_screenrow
     vim.fn.getmousepos = orig_getmousepos
     vim.o.lines = orig_lines
