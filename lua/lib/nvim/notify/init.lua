@@ -76,11 +76,13 @@ function M.create(prefix, create_opts)
       popup = default_popup
     end
     if popup then
-      require("lib.nvim.notify.popup").deliver(
-        prefix .. msg,
-        level,
-        { source = source, messages = messages, timeout = opts.timeout, title = opts.title }
-      )
+      require("lib.nvim.notify.popup").deliver(prefix .. msg, level, {
+        source = source,
+        messages = messages,
+        timeout = opts.timeout,
+        title = opts.title,
+        hl = opts.hl,
+      })
       return
     end
 
@@ -90,6 +92,21 @@ function M.create(prefix, create_opts)
   ---@param msg string
   ---@param opts? table
   function notifier.info(msg, opts)
+    notifier.notify(msg, vim.log.levels.INFO, opts)
+  end
+
+  --- INFO-level (so `toast_min_level`/history/`:messages` semantics stay the
+  --- same as `.info`), but rendered with a distinct "success" highlight --
+  --- `vim.log.levels` has no SUCCESS value of its own, so this only changes
+  --- the popup toast's color (`opts.hl`, default "DiagnosticOk"), not the
+  --- level. A caller can override the color via `opts.hl`.
+  ---@param msg string
+  ---@param opts? table
+  function notifier.success(msg, opts)
+    opts = opts or {}
+    if opts.hl == nil then
+      opts = vim.tbl_extend("force", opts, { hl = "DiagnosticOk" })
+    end
     notifier.notify(msg, vim.log.levels.INFO, opts)
   end
 

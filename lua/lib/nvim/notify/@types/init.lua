@@ -17,6 +17,7 @@
 ---@class Lib.Notify.Notifier
 ---@field notify fun(msg: string, level?: integer, opts?: table)
 ---@field info fun(msg: string, opts?: table)
+---@field success fun(msg: string, opts?: table) INFO level, rendered with a "success" highlight (default "DiagnosticOk") when delivered via the popup toast -- see `lib.nvim.notify.popup`'s `hl` opt
 ---@field warn fun(msg: string, opts?: table)
 ---@field error fun(msg: string, opts?: table)
 ---@field debug fun(msg: string, opts?: table)
