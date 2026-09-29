@@ -518,7 +518,13 @@ local function reflow()
       -- e.g. WezTerm's `window_padding`) sits outside that grid entirely,
       -- so no `row`/`col` value, offset or otherwise, can compensate for
       -- it -- confirmed live, see the `col = -1` revert above this same
-      -- function went through for exactly that reason.
+      -- function went through for exactly that reason. A fractional
+      -- offset is accepted but never more precise than its own
+      -- `math.floor()`: `nvim_win_set_config`'s builtin (non-multigrid)
+      -- implementation -- what a plain terminal client uses -- always
+      -- rounds a fractional `row`/`col` down to the nearest integer
+      -- (`:h nvim_open_win()`), so e.g. `col_offset = 0.5` lands on the
+      -- exact same column as `0`, not "half a cell" over.
       row = row + entry.row_offset
       col = col + entry.col_offset
       pcall(api.nvim_win_set_config, entry.win, {
