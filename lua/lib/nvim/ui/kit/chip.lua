@@ -626,6 +626,29 @@ local function ensure_hooks()
     desc = "lib.nvim.ui.kit.chip: re-tint theme-linked chips",
   })
 
+  -- `reflow()`'s own row/col arithmetic (`bottom_statusline_rows()`,
+  -- `vim.o.cmdheight`) reads `laststatus`/`cmdheight` live -- but nothing
+  -- previously re-ran it when either actually CHANGES after a chip has
+  -- already mounted and positioned itself against the old value. Found
+  -- live: a plugin that lazy-loads on `VeryLazy` (`ext_messages`-capable
+  -- message UIs typically do this via `vim.ui_attach`, which flips
+  -- `cmdheight` as a side effect of the UI-capability negotiation itself,
+  -- not a literal `vim.o.cmdheight = 0` line a source grep would catch) can
+  -- change `cmdheight` well after a docked chip already computed
+  -- `row = vim.o.lines - vim.o.cmdheight - 1` against the pre-change value.
+  -- None of `VimResized`/`TabEnter`/`ColorScheme`/`ModeChanged` fire for a
+  -- bare option change, and the one-time `VimEnter`+`vim.schedule()` settle
+  -- pass below eventually catches it too, but only whenever the event loop
+  -- gets around to that specific deferred callback -- on a startup with a
+  -- lot of competing scheduled work (LSP attach, plugin-manager update
+  -- checks, other `vim.schedule`s), that can be seconds later, read as a
+  -- delayed "jump" once the chip finally snaps to the correct row.
+  autocmd.create("OptionSet", reflow, {
+    pattern = "cmdheight,laststatus",
+    group = group,
+    desc = "lib.nvim.ui.kit.chip: re-run reflow() when cmdheight/laststatus change after mount",
+  })
+
   -- A consumer that mounts a chip during plugin-spec loading (`lazy = false`,
   -- e.g. sessions.nvim's `bindings.autocmds.enable()`) does so *before*
   -- `VimEnter` -- before some other startup-time config (a statusline plugin
