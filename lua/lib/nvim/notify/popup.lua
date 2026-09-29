@@ -36,7 +36,6 @@
 --- or call `deliver` directly.
 
 local fast_event = require("lib.nvim.notify.internal.fast_event")
-local strwidth = require("lib.lua.strings.width")
 
 ---@class Lib.Notify.Popup
 local M = {}
@@ -246,6 +245,41 @@ local TITLE_MAX_WIDTH = 40
 -- exception's message) is never anywhere close to this bound.
 local MAX_FIRST_LINE_BYTES = 200
 
+---@internal
+---Truncate `s` to at most `max_cols` DISPLAY COLUMNS, measuring and cutting
+---with Neovim's own `strdisplaywidth`/`strcharpart` throughout (the same
+---pair `wrap()` below already uses) rather than `lib.lua.strings.width`'s
+---hand-maintained Unicode-width table. That table is a deliberate
+---approximation (its own doc comment says so -- built for the
+---editor-independent, `vim.fn`-less context `lib.lua.*` exists for, not
+---needed here) and disagreed with `strdisplaywidth` for some double-width
+---codepoints outside it (newer emoji blocks, e.g.), so a "truncated" title
+---could still overflow the very budget it had just been measured against
+---by the authoritative function. Never splits a character in half.
+---@param s string
+---@param max_cols integer
+---@return string
+local function truncate_to_width(s, max_cols)
+  if vim.fn.strdisplaywidth(s) <= max_cols then
+    return s
+  end
+  local ellipsis_w = vim.fn.strdisplaywidth("…")
+  local budget = max_cols - ellipsis_w
+  if budget < 0 then
+    return ""
+  end
+  local width, cut_chars = 0, 0
+  for i = 0, vim.fn.strchars(s) - 1 do
+    local w = vim.fn.strdisplaywidth(vim.fn.strcharpart(s, i, 1))
+    if width + w > budget then
+      break
+    end
+    width = width + w
+    cut_chars = i + 1
+  end
+  return vim.fn.strcharpart(s, 0, cut_chars) .. "…"
+end
+
 ---Splits `message` into a (title, body) pair for a caller that gave no
 ---`opts.title` of its own: the first line becomes the title (so "[gitsuite]
 ---docmap-desktop: push failed" reads as a title, not buried in the body next
@@ -290,20 +324,14 @@ local function derive_title(message, source, baked_prefix, spec)
       -- `prefix` is kept whole when it fits on its own; a `source` long
       -- enough to fill the entire budget by itself is truncated too
       -- (rather than silently overflowing regardless of first_line).
-      --
-      -- `strwidth.truncate` (not a raw `vim.fn.strcharpart` cut sized from
-      -- a display-width budget), because a *character* count and a
-      -- *column* count are not the same thing: a budget of "39 characters"
-      -- silently allows up to 78 columns of CJK/emoji text through, which
-      -- is the exact bug an earlier version of this had.
       local prefix_width = vim.fn.strdisplaywidth(prefix)
       if prefix_width >= TITLE_MAX_WIDTH then
-        prefix = strwidth.truncate(prefix, TITLE_MAX_WIDTH, { ellipsis = "…" })
+        prefix = truncate_to_width(prefix, TITLE_MAX_WIDTH)
         return prefix, message:sub(nl + 1)
       end
       local budget = TITLE_MAX_WIDTH - prefix_width
       if vim.fn.strdisplaywidth(first_line) > budget then
-        first_line = strwidth.truncate(first_line, budget, { ellipsis = "…" })
+        first_line = truncate_to_width(first_line, budget)
       end
       return prefix .. first_line, message:sub(nl + 1)
     end
@@ -319,10 +347,9 @@ local function derive_title(message, source, baked_prefix, spec)
   if vim.fn.strdisplaywidth(fallback_title) > TITLE_MAX_WIDTH then
     local name_width = vim.fn.strdisplaywidth(spec.name)
     if name_width >= TITLE_MAX_WIDTH then
-      return strwidth.truncate(spec.name, TITLE_MAX_WIDTH, { ellipsis = "…" }), message
+      return truncate_to_width(spec.name, TITLE_MAX_WIDTH), message
     end
-    source_prefix =
-      strwidth.truncate(source_prefix, TITLE_MAX_WIDTH - name_width, { ellipsis = "…" })
+    source_prefix = truncate_to_width(source_prefix, TITLE_MAX_WIDTH - name_width)
     fallback_title = source_prefix .. spec.name
   end
   return fallback_title, message
