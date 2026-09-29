@@ -308,7 +308,24 @@ local function derive_title(message, source, baked_prefix, spec)
       return prefix .. first_line, message:sub(nl + 1)
     end
   end
-  return source_prefix .. spec.name, message
+  -- Same TITLE_MAX_WIDTH budget as the multi-line branch above -- a long or
+  -- wide `source` here (the single-line notify shape, the most common one)
+  -- was never bounded at all before this: `source_prefix .. spec.name` was
+  -- handed to the toast as-is, with no truncation, so a source alone could
+  -- overflow the title bar by an arbitrary amount. `spec.name` itself
+  -- (`"info"`/`"warn"`/`"error"`/...) is always short and kept whole;
+  -- `source_prefix` is what gets truncated into whatever budget remains.
+  local fallback_title = source_prefix .. spec.name
+  if vim.fn.strdisplaywidth(fallback_title) > TITLE_MAX_WIDTH then
+    local name_width = vim.fn.strdisplaywidth(spec.name)
+    if name_width >= TITLE_MAX_WIDTH then
+      return strwidth.truncate(spec.name, TITLE_MAX_WIDTH, { ellipsis = "…" }), message
+    end
+    source_prefix =
+      strwidth.truncate(source_prefix, TITLE_MAX_WIDTH - name_width, { ellipsis = "…" })
+    fallback_title = source_prefix .. spec.name
+  end
+  return fallback_title, message
 end
 
 ---@param message string

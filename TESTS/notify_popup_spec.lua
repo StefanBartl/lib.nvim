@@ -771,4 +771,59 @@ return function(H)
     )
   end)
   popup.clear()
+
+  -- Regression: the SINGLE-LINE fallback title ("source level-name") had no
+  -- width bound at all -- predates every derive_title change this session,
+  -- caught only on a third verification pass. A long or wide `source` here
+  -- (the most common notify shape: a plain single-line message) must fit
+  -- the same 40-column budget the multi-line path already enforces.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    local long_source = "a-very-long-plugin-name-that-exceeds-the-forty-column-budget-easily"
+    popup.deliver("connection refused", vim.log.levels.ERROR, {
+      source = long_source,
+      messages = false,
+    })
+    ok(
+      vim.fn.strdisplaywidth(opened.title) <= 40,
+      ("single-line fallback title %q (%d cols) fits the 40-column budget"):format(
+        opened.title,
+        vim.fn.strdisplaywidth(opened.title)
+      )
+    )
+    ok(vim.endswith(opened.title, "error"), "the level name itself is kept whole, not truncated")
+  end)
+  popup.clear()
+
+  -- Same fallback path, a double-width (CJK) source this time.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    local cjk_source = ("字"):rep(41) -- 82 display columns
+    popup.deliver("connection refused", vim.log.levels.ERROR, {
+      source = cjk_source,
+      messages = false,
+    })
+    ok(
+      vim.fn.strdisplaywidth(opened.title) <= 40,
+      (
+        "single-line fallback title %q (%d cols) fits the 40-column budget for a "
+        .. "double-width source too"
+      ):format(opened.title, vim.fn.strdisplaywidth(opened.title))
+    )
+  end)
+  popup.clear()
 end
