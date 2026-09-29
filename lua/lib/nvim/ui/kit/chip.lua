@@ -316,6 +316,28 @@ local function sanitize_offset(v)
   return v
 end
 
+---@internal
+---A non-negative integer, or `0` (no minimum) for anything else -- same
+---malformed-input reasoning as `sanitize_offset()` above: `min_width` is a
+---generic, optional floor on `entry.width` (itself always computed fresh in
+---`refresh()` from the longest rendered line), not a required option, and
+---must never be able to crash a shared primitive over one caller's bad
+---config. A negative value would silently do nothing (`math.max` with the
+---natural width already wins), which reads as the option being ignored
+---rather than sanitized -- floored to `0` instead, the same "no floor"
+---result reached openly. Floored (not left fractional) for the same reason
+---`row_offset`/`col_offset` document: `nvim_win_set_config`'s width is a
+---cell count, and this primitive owns making that true rather than handing
+---a terminal-dependent rounding surprise downstream.
+---@param v any
+---@return integer
+local function sanitize_min_width(v)
+  if type(v) ~= "number" or v ~= v or v == math.huge or v == -math.huge then
+    return 0
+  end
+  return math.max(0, math.floor(v))
+end
+
 -- ---------------------------------------------------------------- window lifecycle
 
 ---@internal
@@ -744,6 +766,11 @@ function M.mount(opts)
   else
     entry.col_offset = entry.col_offset or 0
   end
+  if opts.min_width ~= nil then
+    entry.min_width = sanitize_min_width(opts.min_width)
+  else
+    entry.min_width = entry.min_width or 0
+  end
 
   ensure_hooks()
   ensure_mode_tracking(entry, opts.track_mode)
@@ -782,7 +809,10 @@ function M.refresh(id)
   for _, line in ipairs(entry.lines) do
     width = math.max(width, vim.fn.strdisplaywidth(line))
   end
-  entry.width = width + 2
+  -- `min_width` is a floor, not a fixed width: content wider than it still
+  -- grows the box past it, same as it always could before this option
+  -- existed.
+  entry.width = math.max(width + 2, entry.min_width or 0)
   -- Read straight from `lib.nvim.ui.kit.theme` rather than a hardcoded "minimal" ->
   -- "none" / anything-else -> "rounded" guess: correct for any preset
   -- `preset_for_shape` maps to, including `dock_left`'s glyph array, not
