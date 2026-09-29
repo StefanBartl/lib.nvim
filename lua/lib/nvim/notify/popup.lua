@@ -115,6 +115,18 @@ local last_entry = nil
 ---raw `s:sub(1, n)` byte cap can split a codepoint's lead byte from its own
 ---continuation bytes, which Neovim then renders as a `<xx>` escape for the
 ---orphaned byte(s) instead of the intended character.
+---
+---Backs off AT MOST 3 bytes -- a well-formed UTF-8 sequence has at most 3
+---continuation bytes after its lead byte, so a real boundary is always
+---within that reach. If none turns up (the bytes around the cut are not
+---valid UTF-8 to begin with -- Latin-1/CP1252 output from some Windows
+---tools, say, which this module's own doc comments cite as a realistic
+---message source), backing off further would just keep walking through
+---more "continuation-shaped" bytes and could silently discard the entire
+---kept prefix instead of stopping near the intended budget. Falling back to
+---the original `n` there accepts the one already-broken byte at the edge --
+---the same trade-off a raw byte cap already made for non-UTF-8 content --
+---rather than trading a cosmetic glitch for real data loss.
 ---@param s string
 ---@param n integer
 ---@return integer
@@ -125,46 +137,55 @@ local function utf8_safe_cut(s, n)
   if n <= 0 then
     return 0
   end
+  local floor = math.max(0, n - 3)
   local m = n
-  -- A continuation byte (10xxxxxx, 0x80-0xBF) right after the cut means `m`
-  -- lands mid-sequence; back up until the next byte is a fresh lead byte (or
-  -- plain ASCII), i.e. an actual character boundary.
-  while m > 0 do
+  while m > floor do
     local b = s:byte(m + 1)
     if not b or b < 0x80 or b >= 0xC0 then
-      break
+      return m
     end
     m = m - 1
   end
-  return m
+  return n
 end
 
 ---@internal
 ---Number of leading characters of `s` that fit within `max_cols` display
----columns, measuring the growing prefix's own `strdisplaywidth` at each step
----rather than summing per-character widths in isolation (that would
----double-count a combining mark, which has a real width alone but
----contributes 0 once attached to its base character in context). Shared by
----`truncate_to_width` (cuts a title to a budget) and `wrap` (cuts a line to
----the toast width): both need "how many characters until display width X",
----not "how many characters" on its own -- `width` is a COLUMN count, and
----double-width text (CJK, many emoji) needs fewer characters than columns to
----fill the same budget.
+---columns. Binary-searches the character index rather than scanning
+---linearly: `f(i) = strdisplaywidth(strcharpart(s, 0, i))` is monotonically
+---non-decreasing in `i` (appending characters -- even zero-width combining
+---marks -- never shrinks display width), so the largest `i` with `f(i) <=
+---max_cols` can be found in O(log n) probes instead of one per character.
+---
+---A linear growing-prefix scan (measuring `f(i)` from scratch at each step,
+---the only way to avoid double-counting a combining mark's width -- see
+---`truncate_to_width`'s doc comment) costs O(i) per step and so degrades to
+---O(n^2) overall; for a string with a long run of zero-width characters
+---before the budget is finally crossed (stacked combining marks, i.e.
+---"zalgo text"), that `n` can be the string's full length, turning a single
+---popup.deliver() call with crafted or pathological input into a
+---multi-second stall on Neovim's main thread. Binary search keeps each of
+---the O(log n) probes at O(n) worst case but the total at O(n log n),
+---closing that off. Shared by `truncate_to_width` (cuts a title to a
+---budget) and `wrap` (cuts a line to the toast width): both need "how many
+---characters until display width X", not "how many characters" on its own
+----- `max_cols` is a COLUMN count, and double-width text (CJK, many emoji)
+---needs fewer characters than columns to fill the same budget.
 ---@param s string
 ---@param max_cols integer
 ---@return integer
 local function width_cut_chars(s, max_cols)
-  if vim.fn.strdisplaywidth(s) <= max_cols then
-    return vim.fn.strchars(s)
-  end
-  local cut_chars = 0
-  for i = 1, vim.fn.strchars(s) do
-    if vim.fn.strdisplaywidth(vim.fn.strcharpart(s, 0, i)) > max_cols then
-      break
+  local total_chars = vim.fn.strchars(s)
+  local lo, hi = 0, total_chars
+  while lo < hi do
+    local mid = lo + math.ceil((hi - lo) / 2)
+    if vim.fn.strdisplaywidth(vim.fn.strcharpart(s, 0, mid)) <= max_cols then
+      lo = mid
+    else
+      hi = mid - 1
     end
-    cut_chars = i
   end
-  return cut_chars
+  return lo
 end
 
 ---Hard-wraps `text` to `width` display columns and caps the line count.

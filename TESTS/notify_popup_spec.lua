@@ -995,10 +995,16 @@ return function(H)
   popup.clear()
 
   -- Regression guard: a single character wider than the entire wrap budget
-  -- (an unusually narrow `width`) used to leave `cut` at 0 characters, so
-  -- `strcharpart(line, cut)` never shrank `line` and the while loop spun
-  -- forever. Taking the one character anyway guarantees progress; if this
-  -- regresses, this test simply hangs instead of failing cleanly.
+  -- (an unusually narrow `width`) used to leave `cut` at 0 characters. That
+  -- does NOT hang -- the pre-existing `if #out > max_lines then break end`
+  -- inside the same while loop already bounds the iteration count on its
+  -- own, regardless of this guard -- it silently DROPS the character
+  -- instead: `strcharpart(line, 0)` with cut=0 returns `line` unchanged, so
+  -- `line` never shrinks and every iteration appends another "" until the
+  -- max_lines cap kicks in and overwrites the lot with the truncation
+  -- marker, losing the one character that was supposed to be shown. Taking
+  -- the character anyway guarantees `line` actually shrinks each iteration,
+  -- so it survives into the output instead of being swallowed.
   with_stubs({
     ["ui.notify"] = false,
     ["ui.kit.toast"] = {
@@ -1009,7 +1015,11 @@ return function(H)
     },
   }, function()
     popup.deliver("字", vim.log.levels.INFO, { width = 1, messages = false })
-    ok(opened ~= nil, "a character wider than the whole wrap width does not hang delivery")
+    eq(
+      opened.message[1],
+      "字",
+      "a character wider than the whole wrap width is still shown, not silently dropped"
+    )
   end)
   popup.clear()
 
@@ -1070,6 +1080,84 @@ return function(H)
       ("字"):rep(10),
       "the toast byte cap backs off to a whole character too, so the surviving first line "
         .. "is not corrupted"
+    )
+  end)
+  popup.clear()
+
+  -- Regression: width_cut_chars() used to be a linear growing-prefix scan
+  -- (measure strdisplaywidth of a 1-char prefix, then 2 chars, then 3, ...),
+  -- which is O(i) per step and O(n^2) overall. For ordinary text the loop
+  -- exits within `width` steps (~38) so this never showed up, but a string
+  -- with a long run of ZERO-WIDTH characters (stacked combining marks --
+  -- "zalgo text") keeps the running display width under budget for the
+  -- whole run, so the fast-path early-return never fires and the scan runs
+  -- nearly to the string's full length -- turning one crafted popup.deliver()
+  -- call (a git branch name, an LSP diagnostic, ...) into a real multi-second
+  -- main-thread stall. The fix binary-searches the cut point instead
+  -- (O(log n) probes), which stays fast regardless of how the width is
+  -- distributed across the string.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    -- ~40000 bytes of U+0301 COMBINING ACUTE ACCENT (2 bytes each, 0 display
+    -- width once attached to a preceding character) followed by one plain
+    -- "e" -- display width stays at 1 for nearly the whole 20000-character
+    -- run, defeating any fast-path check that looks at the whole string.
+    local zalgo = ("\204\129"):rep(20000) .. "e"
+    local start = vim.uv.hrtime()
+    popup.deliver(zalgo, vim.log.levels.INFO, {
+      toast_max_bytes = #zalgo + 10,
+      entry_max_bytes = #zalgo + 10,
+      messages = false,
+    })
+    local elapsed_ms = (vim.uv.hrtime() - start) / 1e6
+    ok(opened ~= nil, "a long combining-mark run still delivers a toast")
+    ok(
+      elapsed_ms < 1000,
+      (
+        "wrapping a %d-character combining-mark run took %.0fms -- width_cut_chars() has "
+        .. "regressed back to its old O(n^2) growing-prefix scan"
+      ):format(vim.fn.strchars(zalgo), elapsed_ms)
+    )
+  end)
+  popup.clear()
+
+  -- Regression: utf8_safe_cut() used to back off byte-by-byte with no
+  -- limit, so a cut point inside a long run of bytes that merely LOOK like
+  -- UTF-8 continuation bytes (0x80-0xBF) -- genuinely non-UTF-8 text, e.g.
+  -- Latin-1/CP1252 output some Windows tools produce, which this module's
+  -- own doc comments cite as a realistic message source -- could walk all
+  -- the way back to 0 and silently discard the ENTIRE kept prefix instead
+  -- of stopping near the intended byte budget. Bounding the backoff to 3
+  -- bytes (the longest a real UTF-8 continuation run can be) and falling
+  -- back to the original cut point when no boundary turns up keeps almost
+  -- all of the budget instead of losing all of it.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    popup.deliver(("\128"):rep(70000), vim.log.levels.INFO, {
+      entry_max_bytes = 65536,
+      messages = false,
+    })
+    local kept = popup.history()[1].message:gsub("\n%.%.%. %(truncated%)$", "")
+    ok(
+      #kept >= 65533,
+      (
+        "non-UTF-8 continuation-byte input kept only %d of the intended 65536 bytes -- "
+        .. "the byte cap threw away far more than the 3-byte backoff bound allows"
+      ):format(#kept)
     )
   end)
   popup.clear()
