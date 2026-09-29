@@ -685,4 +685,62 @@ return function(H)
     )
   end)
   popup.clear()
+
+  -- Regression: the first "already tagged" check compared a fuzzy
+  -- alphanumeric "core" of `source` against the start of `first_line` --
+  -- which meant a direct popup.deliver() call (baked_prefix never set,
+  -- nothing was ever actually baked in) could still have its LEGITIMATE
+  -- source prefix silently stripped, purely because the message's own
+  -- wording happened to start with similar-looking text. The exact
+  -- baked_prefix match must not misfire here: source is always added
+  -- when nothing was actually baked in.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    popup.deliver("Gitsuite failed to load\nsee logs for details", vim.log.levels.ERROR, {
+      source = "gitsuite",
+      messages = false,
+    })
+    eq(
+      opened.title,
+      "gitsuite Gitsuite failed to load",
+      "source is still prepended even when the message's own wording coincidentally "
+        .. "resembles it -- nothing was actually baked in here"
+    )
+  end)
+  popup.clear()
+
+  -- Regression: a `source` whose OWN display width is already at or past
+  -- TITLE_MAX_WIDTH used to be kept "whole" unconditionally, so the
+  -- combined title could overflow the 40-column budget regardless of
+  -- first_line -- the prefix itself must be truncated in that case.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    local huge_source = ("very-long-source-tag-"):rep(3) -- 66 display columns
+    popup.deliver("first line\nmore detail", vim.log.levels.ERROR, {
+      source = huge_source,
+      messages = false,
+    })
+    ok(
+      vim.fn.strdisplaywidth(opened.title) <= 40,
+      ("title %q (%d cols) fits the 40-column budget even when source alone overflows it"):format(
+        opened.title,
+        vim.fn.strdisplaywidth(opened.title)
+      )
+    )
+  end)
+  popup.clear()
 end

@@ -78,6 +78,15 @@ function M.create(prefix, create_opts)
     if popup then
       require("lib.nvim.notify.popup").deliver(prefix .. msg, level, {
         source = source,
+        -- The exact text just baked into `msg` above, for `derive_title`'s
+        -- title/body split to recognize precisely (not guess from `source`,
+        -- which is a separate, often differently-spelled option -- e.g.
+        -- `create("[gitsuite]", { source = "gitsuite" })` -- and comparing
+        -- against it heuristically both missed real duplicates spelled
+        -- differently and, worse, stripped a legitimate `source` prefix
+        -- from a message that merely happened to start with similar words
+        -- but was never actually prefixed by this factory at all).
+        baked_prefix = prefix ~= "" and prefix or nil,
         messages = messages,
         timeout = opts.timeout,
         title = opts.title,
