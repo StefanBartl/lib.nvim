@@ -960,4 +960,117 @@ return function(H)
     ok(opened.title ~= nil, "...and a toast still opens")
   end)
   popup.clear()
+
+  -- Regression: wrap()'s line-splitting used to size its width-budget cut
+  -- point in CHARACTERS ("cut = width", then strcharpart(line, 0, width)),
+  -- but `width` is a COLUMN budget -- the same confusion truncate_to_width()
+  -- (the toast TITLE's own truncation) had five fix rounds ago, just never
+  -- applied to wrap()'s BODY text. For double-width text (CJK, many emoji)
+  -- that let each wrapped line run up to twice the intended column width.
+  -- Default width is 38 columns; a long unbroken run of double-width
+  -- characters has no spaces to break on either, so this exercises the raw
+  -- column-budget cut path directly.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    popup.deliver(("字"):rep(120), vim.log.levels.INFO, { messages = false })
+    ok(#opened.message > 1, "a long CJK run still wraps into several lines")
+    for i, line in ipairs(opened.message) do
+      ok(
+        vim.fn.strdisplaywidth(line) <= 38,
+        ("wrapped CJK line %d %q is %d columns wide, over the 38-column budget"):format(
+          i,
+          line,
+          vim.fn.strdisplaywidth(line)
+        )
+      )
+    end
+  end)
+  popup.clear()
+
+  -- Regression guard: a single character wider than the entire wrap budget
+  -- (an unusually narrow `width`) used to leave `cut` at 0 characters, so
+  -- `strcharpart(line, cut)` never shrank `line` and the while loop spun
+  -- forever. Taking the one character anyway guarantees progress; if this
+  -- regresses, this test simply hangs instead of failing cleanly.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    popup.deliver("字", vim.log.levels.INFO, { width = 1, messages = false })
+    ok(opened ~= nil, "a character wider than the whole wrap width does not hang delivery")
+  end)
+  popup.clear()
+
+  -- Regression: entry_max_bytes truncation cut the raw message with a plain
+  -- `message:sub(1, entry_max)`, unaware of UTF-8 character boundaries. For
+  -- a multibyte character straddling the cut, that left a lone lead byte (or
+  -- a lead byte plus a partial run of continuation bytes) trailing the kept
+  -- text, which Neovim then renders as a `<xx>` escape for the orphaned
+  -- byte(s) instead of just stopping cleanly after the last whole character.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    -- "字" is 3 bytes; a 4-byte cap keeps exactly one whole character (3
+    -- bytes) and must not keep a stray leading byte of the second.
+    popup.deliver(("字"):rep(5), vim.log.levels.INFO, {
+      entry_max_bytes = 4,
+      messages = false,
+    })
+    eq(
+      popup.history()[1].message,
+      "字\n... (truncated)",
+      "the byte cap backs off to the last whole character instead of splitting one in half"
+    )
+  end)
+  popup.clear()
+
+  -- Regression: toast_max_bytes had the identical byte-unaware
+  -- `text:sub(1, max_bytes)` cut inside wrap(). Picking a width that forces
+  -- a second output line keeps the first line (the one that actually
+  -- crosses the byte cap) unmodified by the "... (:Lib notify last)" marker
+  -- wrap() always stamps over the LAST line once truncated -- so the first
+  -- line's own bytes are directly inspectable here.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    -- 50 bytes backs off to 16 whole "字" (48 bytes); at 20 columns per line
+    -- (10 chars of a 2-column character each) that first line is the exact
+    -- 30-byte/10-character prefix, with no stray trailing byte.
+    popup.deliver(("字"):rep(50), vim.log.levels.INFO, {
+      toast_max_bytes = 50,
+      width = 20,
+      messages = false,
+    })
+    eq(
+      opened.message[1],
+      ("字"):rep(10),
+      "the toast byte cap backs off to a whole character too, so the surviving first line "
+        .. "is not corrupted"
+    )
+  end)
+  popup.clear()
 end
