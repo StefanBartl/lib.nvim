@@ -600,4 +600,89 @@ return function(H)
     )
   end)
   popup.clear()
+
+  -- Regression: notify.create(prefix, { source = ... }) bakes `prefix` into
+  -- every message BEFORE popup.deliver ever sees it (notifier.notify does
+  -- `prefix .. msg`) -- so the first line already carries the tag, and
+  -- derive_title used to re-prepend `source` in front of it too, producing
+  -- "gitsuite [gitsuite] push failed" instead of the clean title. Exercised
+  -- through the real create() -> deliver() path, not a direct popup.deliver
+  -- call, since that's what actually reproduced it.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    local n = require("lib.nvim.notify").create("[gitsuite]", { popup = true, source = "gitsuite" })
+    n.error("push failed\n! [rejected] main -> main\nhint: pull first")
+    eq(
+      opened.title,
+      "[gitsuite] push failed",
+      "source is not re-prepended when the message's own first line already carries it"
+    )
+  end)
+  popup.clear()
+
+  -- The un-decorated case still gets its source prepended normally: a
+  -- first line that does NOT already carry the tag (e.g. a raw
+  -- popup.deliver call, no notify.create() prefix involved).
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    popup.deliver("unrelated first line\nmore detail", vim.log.levels.ERROR, {
+      source = "gitsuite",
+      messages = false,
+    })
+    eq(
+      opened.title,
+      "gitsuite unrelated first line",
+      "source IS prepended when the first line doesn't already carry it"
+    )
+  end)
+  popup.clear()
+
+  -- Regression: the TITLE_MAX_WIDTH check used to measure only first_line's
+  -- own width, then concatenate an unmeasured source prefix in front of the
+  -- (already fitted) result -- so the combined title could still overflow
+  -- the toast's ~40-column title bar. The budget must cover prefix + line
+  -- together, with the prefix kept whole and first_line truncated into
+  -- whatever room is left.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    local long_source = "lib.nvim.bindings.usercmd.composer" -- 35 display columns
+    popup.deliver(
+      "a fairly long summary line that fills most of the budget\nmore detail",
+      vim.log.levels.ERROR,
+      { source = long_source, messages = false }
+    )
+    ok(
+      vim.fn.strdisplaywidth(opened.title) <= 40,
+      ("combined title %q (%d cols) fits the 40-column toast title bar"):format(
+        opened.title,
+        vim.fn.strdisplaywidth(opened.title)
+      )
+    )
+    ok(
+      vim.startswith(opened.title, long_source .. " "),
+      "the source prefix itself is kept whole, not truncated"
+    )
+  end)
+  popup.clear()
 end
