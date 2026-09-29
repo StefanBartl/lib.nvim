@@ -36,6 +36,7 @@
 --- or call `deliver` directly.
 
 local fast_event = require("lib.nvim.notify.internal.fast_event")
+local strwidth = require("lib.lua.strings.width")
 
 ---@class Lib.Notify.Popup
 local M = {}
@@ -289,16 +290,20 @@ local function derive_title(message, source, baked_prefix, spec)
       -- `prefix` is kept whole when it fits on its own; a `source` long
       -- enough to fill the entire budget by itself is truncated too
       -- (rather than silently overflowing regardless of first_line).
+      --
+      -- `strwidth.truncate` (not a raw `vim.fn.strcharpart` cut sized from
+      -- a display-width budget), because a *character* count and a
+      -- *column* count are not the same thing: a budget of "39 characters"
+      -- silently allows up to 78 columns of CJK/emoji text through, which
+      -- is the exact bug an earlier version of this had.
       local prefix_width = vim.fn.strdisplaywidth(prefix)
       if prefix_width >= TITLE_MAX_WIDTH then
-        if prefix_width > TITLE_MAX_WIDTH then
-          prefix = vim.fn.strcharpart(prefix, 0, math.max(TITLE_MAX_WIDTH - 1, 0)) .. "…"
-        end
+        prefix = strwidth.truncate(prefix, TITLE_MAX_WIDTH, { ellipsis = "…" })
         return prefix, message:sub(nl + 1)
       end
       local budget = TITLE_MAX_WIDTH - prefix_width
       if vim.fn.strdisplaywidth(first_line) > budget then
-        first_line = vim.fn.strcharpart(first_line, 0, math.max(budget - 1, 0)) .. "…"
+        first_line = strwidth.truncate(first_line, budget, { ellipsis = "…" })
       end
       return prefix .. first_line, message:sub(nl + 1)
     end
