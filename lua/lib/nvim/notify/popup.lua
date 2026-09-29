@@ -109,6 +109,64 @@ local history = {}
 ---@type Lib.Notify.Popup.Entry|nil
 local last_entry = nil
 
+---@internal
+---Backs `n` off to the nearest UTF-8 character boundary at or before it, so
+---`s:sub(1, utf8_safe_cut(s, n))` never lands inside a multibyte sequence. A
+---raw `s:sub(1, n)` byte cap can split a codepoint's lead byte from its own
+---continuation bytes, which Neovim then renders as a `<xx>` escape for the
+---orphaned byte(s) instead of the intended character.
+---@param s string
+---@param n integer
+---@return integer
+local function utf8_safe_cut(s, n)
+  if n >= #s then
+    return #s
+  end
+  if n <= 0 then
+    return 0
+  end
+  local m = n
+  -- A continuation byte (10xxxxxx, 0x80-0xBF) right after the cut means `m`
+  -- lands mid-sequence; back up until the next byte is a fresh lead byte (or
+  -- plain ASCII), i.e. an actual character boundary.
+  while m > 0 do
+    local b = s:byte(m + 1)
+    if not b or b < 0x80 or b >= 0xC0 then
+      break
+    end
+    m = m - 1
+  end
+  return m
+end
+
+---@internal
+---Number of leading characters of `s` that fit within `max_cols` display
+---columns, measuring the growing prefix's own `strdisplaywidth` at each step
+---rather than summing per-character widths in isolation (that would
+---double-count a combining mark, which has a real width alone but
+---contributes 0 once attached to its base character in context). Shared by
+---`truncate_to_width` (cuts a title to a budget) and `wrap` (cuts a line to
+---the toast width): both need "how many characters until display width X",
+---not "how many characters" on its own -- `width` is a COLUMN count, and
+---double-width text (CJK, many emoji) needs fewer characters than columns to
+---fill the same budget.
+---@param s string
+---@param max_cols integer
+---@return integer
+local function width_cut_chars(s, max_cols)
+  if vim.fn.strdisplaywidth(s) <= max_cols then
+    return vim.fn.strchars(s)
+  end
+  local cut_chars = 0
+  for i = 1, vim.fn.strchars(s) do
+    if vim.fn.strdisplaywidth(vim.fn.strcharpart(s, 0, i)) > max_cols then
+      break
+    end
+    cut_chars = i
+  end
+  return cut_chars
+end
+
 ---Hard-wraps `text` to `width` display columns and caps the line count.
 ---@param text string
 ---@param width integer
@@ -123,7 +181,7 @@ local function wrap(text, width, max_lines, max_bytes)
   max_lines = math.max(1, max_lines)
   local truncated = false
   if #text > max_bytes then
-    text = text:sub(1, max_bytes)
+    text = text:sub(1, utf8_safe_cut(text, max_bytes))
     truncated = true
   end
 
@@ -134,11 +192,21 @@ local function wrap(text, width, max_lines, max_bytes)
       out[#out + 1] = ""
     else
       while vim.fn.strdisplaywidth(line) > width do
+        -- `width` is a COLUMN budget, not a character count: sizing `head`
+        -- to `width` characters (as this used to) grabs up to twice the
+        -- intended column width for double-width text (CJK, many emoji) --
+        -- see `width_cut_chars`'s doc comment.
+        local cut = width_cut_chars(line, width)
+        if cut == 0 then
+          -- A single character wider than the whole budget (an unusually
+          -- narrow `width`, or one very wide codepoint) -- take it anyway so
+          -- the loop always shrinks `line` instead of spinning forever.
+          cut = 1
+        end
         -- Prefer a break at the last space inside the window. `cut` counts
         -- characters (strcharpart), while the match position is a byte index,
         -- so convert before comparing.
-        local cut = width
-        local head = vim.fn.strcharpart(line, 0, width)
+        local head = vim.fn.strcharpart(line, 0, cut)
         local space = head:match("^.*() ")
         if space then
           local chars = vim.fn.strchars(head:sub(1, space - 1))
@@ -267,7 +335,10 @@ local MAX_FIRST_LINE_BYTES = 200
 ---character and its own combining mark. Asking "what does the real prefix
 ---built so far actually cost" instead of "what does this one isolated
 ---codepoint cost" gets both double-width text and combining sequences
----right with the same one measurement.
+---right with the same one measurement. That measurement itself lives in
+---`width_cut_chars`, shared with `wrap()`'s line-wrapping below, which used
+---to conflate the same column budget with a character count for its own
+---cut point.
 ---@param s string
 ---@param max_cols integer
 ---@return string
@@ -280,9 +351,10 @@ local function truncate_to_width(s, max_cols)
   -- string built entirely from zero-width codepoints that never trips the
   -- budget check below) would cost an O(n) full scan -- or worse, this
   -- function's own O(n²) growing-prefix measurement -- before truncation
-  -- even starts.
+  -- even starts. `utf8_safe_cut` keeps this raw byte cap from splitting the
+  -- multibyte character straddling byte 2048.
   if #s > 2048 then
-    s = s:sub(1, 2048)
+    s = s:sub(1, utf8_safe_cut(s, 2048))
   end
   if vim.fn.strdisplaywidth(s) <= max_cols then
     return s
@@ -292,13 +364,7 @@ local function truncate_to_width(s, max_cols)
   if budget < 0 then
     return ""
   end
-  local cut_chars = 0
-  for i = 1, vim.fn.strchars(s) do
-    if vim.fn.strdisplaywidth(vim.fn.strcharpart(s, 0, i)) > budget then
-      break
-    end
-    cut_chars = i
-  end
+  local cut_chars = width_cut_chars(s, budget)
   return vim.fn.strcharpart(s, 0, cut_chars) .. "…"
 end
 
@@ -436,7 +502,7 @@ M.deliver = fast_event.guard(function(message, level, opts)
   message = tostring(message):gsub("%z", "\\0")
   local entry_max = opts.entry_max_bytes or config.entry_max_bytes
   if #message > entry_max then
-    message = message:sub(1, entry_max) .. "\n... (truncated)"
+    message = message:sub(1, utf8_safe_cut(message, entry_max)) .. "\n... (truncated)"
   end
 
   ---@type Lib.Notify.Popup.Entry
