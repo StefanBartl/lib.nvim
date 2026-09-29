@@ -743,4 +743,32 @@ return function(H)
     )
   end)
   popup.clear()
+
+  -- Regression: the truncation used to size a plain vim.fn.strcharpart cut
+  -- from a display-width budget -- a CHARACTER count standing in for a
+  -- COLUMN count. For a source made of double-width characters (CJK,
+  -- emoji, ...) that silently let up to 2x the intended budget through.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    local cjk_source = ("字"):rep(30) -- 30 chars, 60 display columns
+    popup.deliver("first line\nmore detail", vim.log.levels.ERROR, {
+      source = cjk_source,
+      messages = false,
+    })
+    ok(
+      vim.fn.strdisplaywidth(opened.title) <= 40,
+      ("title %q (%d cols) fits the 40-column budget for a double-width source too"):format(
+        opened.title,
+        vim.fn.strdisplaywidth(opened.title)
+      )
+    )
+  end)
+  popup.clear()
 end
