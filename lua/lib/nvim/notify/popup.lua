@@ -255,11 +255,35 @@ local MAX_FIRST_LINE_BYTES = 200
 ---needed here) and disagreed with `strdisplaywidth` for some double-width
 ---codepoints outside it (newer emoji blocks, e.g.), so a "truncated" title
 ---could still overflow the very budget it had just been measured against
----by the authoritative function. Never splits a character in half.
+---by the authoritative function.
+---
+---Measures the GROWING PREFIX's own display width on each step, not each
+---character's width in isolation summed up: a combining mark (an accent on
+---a decomposed "e", say) has a real width of its own when
+---`strdisplaywidth`d alone, but contributes 0 once actually attached to its
+---base character in context -- summing isolated per-character widths
+---double-counted exactly that case, both under-filling the budget by
+---roughly half for accented text and risking a cut landing between a base
+---character and its own combining mark. Asking "what does the real prefix
+---built so far actually cost" instead of "what does this one isolated
+---codepoint cost" gets both double-width text and combining sequences
+---right with the same one measurement.
 ---@param s string
 ---@param max_cols integer
 ---@return string
 local function truncate_to_width(s, max_cols)
+  -- Defensive cap, same shape as `MAX_FIRST_LINE_BYTES`/`entry_max_bytes`
+  -- elsewhere in this file: nothing legitimate needs more than a few
+  -- hundred bytes to produce `max_cols` (<=40 in practice) columns of
+  -- visible text, and without this an unreasonably large `s` (a caller bug
+  -- feeding a huge computed string into what should be a short tag, or a
+  -- string built entirely from zero-width codepoints that never trips the
+  -- budget check below) would cost an O(n) full scan -- or worse, this
+  -- function's own O(n²) growing-prefix measurement -- before truncation
+  -- even starts.
+  if #s > 2048 then
+    s = s:sub(1, 2048)
+  end
   if vim.fn.strdisplaywidth(s) <= max_cols then
     return s
   end
@@ -268,14 +292,12 @@ local function truncate_to_width(s, max_cols)
   if budget < 0 then
     return ""
   end
-  local width, cut_chars = 0, 0
-  for i = 0, vim.fn.strchars(s) - 1 do
-    local w = vim.fn.strdisplaywidth(vim.fn.strcharpart(s, i, 1))
-    if width + w > budget then
+  local cut_chars = 0
+  for i = 1, vim.fn.strchars(s) do
+    if vim.fn.strdisplaywidth(vim.fn.strcharpart(s, 0, i)) > budget then
       break
     end
-    width = width + w
-    cut_chars = i + 1
+    cut_chars = i
   end
   return vim.fn.strcharpart(s, 0, cut_chars) .. "…"
 end
@@ -369,7 +391,22 @@ local function show_toast(message, level, opts)
   local hl = opts.hl or spec.hl
   local title, body = opts.title, message
   if not title then
-    title, body = derive_title(message, opts.source, opts.baked_prefix, spec)
+    -- `pcall`ed, not called bare: `derive_title` is reached with
+    -- `opts.source`/`opts.baked_prefix` straight from the caller, and
+    -- `popup.deliver` is a directly callable public API, not gated behind
+    -- `notify.create()` -- a caller passing a non-string there (an `{}` or
+    -- `true` typo'd into `source`) must not turn a notification, often
+    -- itself an error report, into a hard crash instead of just showing
+    -- with the fallback title. The `pcall(toast.open, {...})` a few lines
+    -- below does NOT cover this: its argument table, including this call,
+    -- is built before that pcall's callee ever runs.
+    local ok_title, derived_title, derived_body =
+      pcall(derive_title, message, opts.source, opts.baked_prefix, spec)
+    if ok_title then
+      title, body = derived_title, derived_body
+    else
+      title = spec.name
+    end
   end
   local width = opts.width or config.width
   local max_lines = opts.max_lines or config.max_lines
