@@ -244,6 +244,39 @@ local TITLE_MAX_WIDTH = 40
 -- exception's message) is never anywhere close to this bound.
 local MAX_FIRST_LINE_BYTES = 200
 
+---@internal
+---Bare alphanumeric "core" of a tag string, lowercased -- for comparing a
+---`source` against a message's own leading text independent of decoration
+---(`[]`, a `.nvim` suffix, punctuation) or case.
+---@param s string
+---@return string
+local function tag_core(s)
+  return (s:lower():gsub("%A", ""))
+end
+
+---@internal
+---Whether `first_line` already visibly starts with `source`'s own tag.
+---True for `notify.create(prefix, { source = ... })`'s own usage: that
+---factory bakes `prefix` into every message before `popup.deliver` ever
+---sees it (`notifier.notify` does `prefix .. msg`), so `first_line` already
+---begins with something like `"[gitsuite] "` by the time this runs -- even
+---though `source` itself is typically a shorter, undecorated variant of the
+---same tag (`"gitsuite"`, `"[gitsuite.nvim]"`, ...), not a literal
+---substring match. Comparing `tag_core` of both sides catches that.
+---@param first_line string
+---@param source string
+---@return boolean
+local function already_tagged(first_line, source)
+  local core = tag_core(source)
+  if core == "" then
+    return false
+  end
+  -- A small fixed window past `#source`, not the whole (possibly long)
+  -- first line: only the very start of it could plausibly BE the tag.
+  local head = tag_core(first_line:sub(1, #source + 12))
+  return head:sub(1, #core) == core
+end
+
 ---Splits `message` into a (title, body) pair for a caller that gave no
 ---`opts.title` of its own: the first line becomes the title (so "[gitsuite]
 ---docmap-desktop: push failed" reads as a title, not buried in the body next
@@ -251,6 +284,12 @@ local MAX_FIRST_LINE_BYTES = 200
 ---below it. A single-line message, or one whose first line is empty, keeps
 ---the previous "source level-name" title with the message untouched --
 ---this only kicks in for a message that actually has more to show.
+---
+---`source` is only prepended when `first_line` doesn't already carry that
+---tag (see `already_tagged`) -- a caller going through
+---`notify.create(prefix, { source = ... })` has that prefix baked into
+---`message` already, and re-adding it produced doubled titles like
+---`"gitsuite [gitsuite] push failed"`.
 ---@param message string
 ---@param source string|nil
 ---@param spec { name: string }
@@ -262,10 +301,18 @@ local function derive_title(message, source, spec)
   if nl and nl <= MAX_FIRST_LINE_BYTES then
     local first_line = message:sub(1, nl - 1)
     if first_line ~= "" then
-      if vim.fn.strdisplaywidth(first_line) > TITLE_MAX_WIDTH then
-        first_line = vim.fn.strcharpart(first_line, 0, TITLE_MAX_WIDTH - 1) .. "…"
+      local prefix = (source and not already_tagged(first_line, source)) and source_prefix or ""
+      -- The budget is the WHOLE title (prefix + first_line) against
+      -- TITLE_MAX_WIDTH, not first_line's own width alone -- truncating
+      -- only first_line and then concatenating an unmeasured prefix in
+      -- front of the result could still overflow the toast's title bar.
+      -- `prefix` itself is kept whole (it is the short, load-bearing part);
+      -- what gets truncated is first_line, into whatever budget remains.
+      local budget = TITLE_MAX_WIDTH - vim.fn.strdisplaywidth(prefix)
+      if vim.fn.strdisplaywidth(first_line) > math.max(budget, 1) then
+        first_line = vim.fn.strcharpart(first_line, 0, math.max(budget - 1, 0)) .. "…"
       end
-      return source_prefix .. first_line, message:sub(nl + 1)
+      return prefix .. first_line, message:sub(nl + 1)
     end
   end
   return source_prefix .. spec.name, message
