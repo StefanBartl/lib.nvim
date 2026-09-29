@@ -64,17 +64,22 @@ popup.show_history("myplugin") -- scratch buffer, `q` closes
 popup.clear("myplugin")
 ```
 
-Every message is also written to `:messages` by default via a plain
-`nvim_echo`, so it briefly echoes on screen too -- there is no Neovim API to
-add a message to `:messages` without ever touching the screen. `'more'` is
-toggled off for that call, so a long or multi-line message can never block on
-a `--More--` prompt. Turn the `:messages` write off entirely per notifier, per
-call, or globally if even that brief echo is unwanted:
+A message is recorded in the popup's own history unconditionally --
+`popup.show_history()`/`:Lib notify history`/`:Lib notify last` always have
+the full text -- but is **not** also written to real `:messages` by default:
+there is no Neovim API to add one to `:messages` without a plain `nvim_echo`
+also briefly echoing it on screen (`'more'` toggled off around the call, so
+it can at least never block on a `--More--` prompt), and that flash, on top
+of a chip that already showed the same message, read as a second, confusing
+notification for anything that notifies often (a git dashboard's pull/push,
+say). Opt a notifier, a call, or the whole module back into real `:messages`
+(e.g. for something that must show up there, or for a `noice.nvim` setup
+reading from it) with `messages = true`:
 
 ```lua
-require("lib.nvim.notify").create("[p]", { popup = true, messages = false })
-popup.deliver("x", vim.log.levels.INFO, { messages = false })
-popup.setup({ messages = false }) -- module default
+require("lib.nvim.notify").create("[p]", { popup = true, messages = true })
+popup.deliver("x", vim.log.levels.INFO, { messages = true })
+popup.setup({ messages = true }) -- restores the pre-2026-09-29 default everywhere
 ```
 
 The message is handed to plain `vim.notify` instead when `ui.notify` is

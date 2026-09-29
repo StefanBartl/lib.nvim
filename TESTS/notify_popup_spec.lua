@@ -118,10 +118,13 @@ return function(H)
   end)
   popup.clear()
 
-  -- :messages: written by default, off by option, and never blocks on a
-  -- --More-- prompt even for a long/multi-line message ('more' is toggled
-  -- off for the call) -- see write_messages()'s own doc comment for why it
-  -- no longer tries to hide the echo entirely (Neovim has no API for that).
+  -- :messages: NOT written by default (since 2026-09-29 -- every
+  -- popup-delivered message is unconditionally in the popup's own history
+  -- regardless, see above; real :messages briefly echoes as it records,
+  -- see write_messages()'s own doc comment for why that could not be
+  -- avoided, which is exactly why it is opt-in rather than the default).
+  -- Written on request, and never blocks on a --More-- prompt even for a
+  -- long/multi-line message when it is ('more' is toggled off for the call).
   local function hist_has(text)
     return vim.api.nvim_exec2("messages", { output = true }).output:find(text, 1, true) ~= nil
   end
@@ -134,19 +137,20 @@ return function(H)
       end,
     },
   }, function()
-    popup.deliver("history line one\nline two", vim.log.levels.ERROR, { source = "spec" })
-    ok(hist_has("history line one"), "written to :messages by default")
+    popup.deliver("quiet by default\nline two", vim.log.levels.ERROR, { source = "spec" })
+    ok(not hist_has("quiet by default"), "NOT written to :messages by default")
+    ok(#popup.history() > 0, "but always in the popup's own history regardless")
 
     vim.cmd("messages clear")
-    popup.deliver("quiet message", vim.log.levels.INFO, { source = "spec", messages = false })
-    ok(not hist_has("quiet message"), "per-call messages = false skips :messages")
+    popup.deliver("shown here", vim.log.levels.INFO, { source = "spec", messages = true })
+    ok(hist_has("shown here"), "per-call messages = true opts into :messages")
 
-    popup.setup({ messages = false })
-    popup.deliver("global off", vim.log.levels.INFO)
-    ok(not hist_has("global off"), "setup({ messages = false }) changes the default")
-    popup.deliver("call wins", vim.log.levels.INFO, { messages = true })
-    ok(hist_has("call wins"), "a per-call value beats the module default")
     popup.setup({ messages = true })
+    popup.deliver("global on", vim.log.levels.INFO)
+    ok(hist_has("global on"), "setup({ messages = true }) changes the default")
+    popup.deliver("call wins", vim.log.levels.INFO, { messages = false })
+    ok(not hist_has("call wins"), "a per-call value beats the module default")
+    popup.setup({ messages = false })
   end)
   popup.clear()
 
@@ -164,7 +168,7 @@ return function(H)
     popup.deliver("first use", vim.log.levels.INFO, shared)
     eq(shared.messages, nil, "the caller's opts table is left untouched")
   end)
-  popup.setup({ messages = true })
+  popup.setup({ messages = false })
 
   -- A message far larger than a toast: the toast input stays bounded and the
   -- history entry is capped.
@@ -267,7 +271,11 @@ return function(H)
         end,
       },
     }, function()
-      popup.deliver("float open, still delivered", vim.log.levels.ERROR, { source = "spec" })
+      popup.deliver(
+        "float open, still delivered",
+        vim.log.levels.ERROR,
+        { source = "spec", messages = true }
+      )
     end)
     ok(
       hist_has("float open, still delivered"),
@@ -297,7 +305,7 @@ return function(H)
         end,
       },
     }, function()
-      popup.deliver(("line\n"):rep(500), vim.log.levels.INFO, { source = "spec" })
+      popup.deliver(("line\n"):rep(500), vim.log.levels.INFO, { source = "spec", messages = true })
     end)
     eq(vim.o.more, true, "'more' is restored to what it was, not left toggled off")
     vim.o.more = more_before
@@ -305,7 +313,8 @@ return function(H)
   popup.clear()
 
   -- toast_min_level: below it, the message is recorded but no toast (or
-  -- vim.notify fallback) is shown -- only history/:messages.
+  -- vim.notify fallback) is shown -- only the popup's own history (and
+  -- real :messages too, if opted in).
   do
     local shown_native = {}
     vim.notify = function(msg, level)

@@ -9,13 +9,28 @@
 --- that opens in a scratch buffer, so the full text can be yanked later.
 ---
 --- Delivery order for a message:
----   1. recorded in the popup history (always)
----   1b. written to `:messages` too (default; `messages = false` turns it off),
----      without displaying it -- see `write_messages`
+---   1. recorded in the popup history (always) -- `:Lib notify history`/
+---      `:Lib notify last` read this back in full, regardless of `messages`
+---   1b. ALSO written to real `:messages` when `messages = true` is passed
+---      (default: false, see below) -- see `write_messages`
 ---   2. if `ui.notify` (ui.nvim) is enabled it already turns `vim.notify` into
 ---      toasts, so the message is handed to `vim.notify` to avoid a second popup
 ---   3. else shown via `ui.kit.toast` (soft dependency on ui.nvim)
 ---   4. else, when no toast can be shown, `vim.notify` -- a message is never lost
+---
+--- `messages` defaults to false, not true: Neovim has no API to add a message
+--- to |message-history| without also echoing it (see `write_messages`'s own
+--- doc comment for the two approaches that tried and failed), so a `true`
+--- default meant every popup-delivered message briefly flashed at the bottom
+--- of the screen too, on top of its corner toast -- confusing next to a chip
+--- that already showed it, and especially visible for a plugin (a git
+--- dashboard's pull/push, say) that notifies often. The trade-off: a message
+--- delivered with the default no longer reaches real `:messages` or a
+--- `:messages`-reading tool (`noice.nvim` included) -- `:Lib notify
+--- history`/`:Lib notify last` is the one place its full text is guaranteed
+--- to still be. Pass `messages = true` per call (or `popup.setup({ messages
+--- = true })` to restore the old default everywhere) for a message that must
+--- land in real `:messages` regardless.
 ---
 --- Use it through `require("lib.nvim.notify").create(prefix, { popup = true })`
 --- or call `deliver` directly.
@@ -26,7 +41,7 @@ local fast_event = require("lib.nvim.notify.internal.fast_event")
 local M = {}
 
 ---@class Lib.Notify.Popup.Config
----@field messages boolean Also record every message in `:messages` (default: true)
+---@field messages boolean Also record every message in real `:messages` (default: false -- see the module doc comment for why; `:Lib notify history`/`:Lib notify last` always have the full text regardless)
 ---@field max_lines integer Toast line cap (default 12)
 ---@field width integer Toast wrap width in columns (default 38; ui.kit toasts are 40 columns wide, minus the border)
 ---@field toast_max_bytes integer Bytes of a message considered when wrapping for the toast (default 4000); a message can be arbitrarily large (a whole command's output) but only its head is ever shown in a toast
@@ -49,7 +64,7 @@ local M = {}
 
 ---@type Lib.Notify.Popup.Config
 local config = {
-  messages = true,
+  messages = false,
   max_lines = 12,
   width = 38,
   toast_max_bytes = 4000,
