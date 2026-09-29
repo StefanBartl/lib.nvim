@@ -186,12 +186,12 @@ end
 --- `M.apply`'s per-window twin of `materialize`. `KitNormal`/`KitBorder`/
 --- `KitTitle` are fixed names shared by EVERY open kit surface -- fine as
 --- long as every simultaneously-open surface resolves to the same colors,
---- but toasts are explicitly designed to stack (see `lib.nvim.ui.kit.toast`'s
---- own docs), and two different levels/`opts.hl` overrides resolve to
---- different colors. Whichever surface materialized last used to win for
---- every window still pointing `winhighlight` at those fixed names -- a
---- still-visible toast (e.g. a yellow WARN "pulling…") would change color
---- live the instant a differently-themed one opened next to it (e.g. a green
+--- but toasts are explicitly designed to stack (see `lib.nvim.ui.kit.toast`'s own
+--- docs), and two different levels/`opts.hl` overrides resolve to different
+--- colors. Whichever surface materialized last used to win for every window
+--- still pointing `winhighlight` at those fixed names -- a still-visible
+--- toast (e.g. a yellow WARN "pulling…") would change color live the
+--- instant a differently-themed one opened next to it (e.g. a green
 --- `notify.success` toast), since both windows' `winhighlight` referenced
 --- the SAME group name and only the latest materialize() call's colors
 --- exist for that name at any given moment.
@@ -210,12 +210,11 @@ end
 --- `KitSelection`/`KitAccent`/`KitMuted`/`KitError`/`KitFlash`/`KitHover`
 --- stay global/fixed, unaffected by this: nothing draws two of those roles
 --- at once with different colors the way toasts do with border/title.
---- `lib.nvim.ui.kit.menu` and `lib.nvim.ui.kit.shortlist` paint their OWN
---- border/title decoration via extmarks (group frames, titled rules) rather
---- than relying on `winhighlight` alone -- they call
---- `M.window_groups(resolved)` below for the same reason `M.apply` does, so
---- their extmarks reference the right scoped names too, not the fixed
---- globals.
+--- `lib.nvim.ui.kit.menu` and `lib.nvim.ui.kit.shortlist` paint their OWN border/title
+--- decoration via extmarks (group frames, titled rules) rather than relying
+--- on `winhighlight` alone -- they call `M.window_groups(resolved)` below
+--- for the same reason `M.apply` does, so their extmarks reference the
+--- right scoped names too, not the fixed globals.
 ---@type table<string, string>
 local window_group_cache = {}
 local window_group_counter = 0
@@ -243,14 +242,13 @@ end
 --- Public: the same window-scoped `KitNormal_N`/`KitBorder_N`/`KitTitle_N`
 --- group names `M.apply` materializes for `resolved`, for a caller that
 --- paints its OWN decoration via extmarks referencing these names directly
---- (`lib.nvim.ui.kit.menu`'s group frames, `lib.nvim.ui.kit.shortlist`'s
---- border) instead of relying solely on `winhighlight`. Safe to call before
---- the surface that will use them even opens, and safe to call more than
---- once for the same `resolved` (the cache above returns the same name both
---- times): Neovim resolves an extmark's highlight group by name at redraw
---- time, not when the extmark is created, so it doesn't matter whether this
---- or `M.apply` materializes the group first, as long as both resolve the
---- same theme.
+--- (`lib.nvim.ui.kit.menu`'s group frames, `lib.nvim.ui.kit.shortlist`'s border) instead of
+--- relying solely on `winhighlight`. Safe to call before the surface that
+--- will use them even opens, and safe to call more than once for the same
+--- `resolved` (the cache above returns the same name both times): Neovim
+--- resolves an extmark's highlight group by name at redraw time, not when
+--- the extmark is created, so it doesn't matter whether this or `M.apply`
+--- materializes the group first, as long as both resolve the same theme.
 ---@param resolved Lib.UI.Kit.Theme
 ---@return { normal: string, border: string, title: string }
 function M.window_groups(resolved)
