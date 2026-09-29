@@ -1106,10 +1106,18 @@ return function(H)
     },
   }, function()
     -- ~40000 bytes of U+0301 COMBINING ACUTE ACCENT (2 bytes each, 0 display
-    -- width once attached to a preceding character) followed by one plain
-    -- "e" -- display width stays at 1 for nearly the whole 20000-character
-    -- run, defeating any fast-path check that looks at the whole string.
-    local zalgo = ("\204\129"):rep(20000) .. "e"
+    -- width once attached to a preceding character) followed by 50 plain
+    -- "e" characters. The trailing "e"s must be plural, not a single one:
+    -- wrap()'s outer `while strdisplaywidth(line) > width` loop only calls
+    -- width_cut_chars() at all once the WHOLE remaining line's width
+    -- exceeds the 38-column budget -- a single trailing "e" (total width 1)
+    -- never crosses that budget, so the loop (and width_cut_chars() with
+    -- it) would never run and this test would pass vacuously regardless of
+    -- whether the O(n^2) bug is present. 50 "e"s push the total width to
+    -- 50, past the budget, so width_cut_chars() must actually scan through
+    -- (or binary-search past) the whole 20000-character zero-width run to
+    -- find where the last ~38 columns of budget land near the very end.
+    local zalgo = ("\204\129"):rep(20000) .. ("e"):rep(50)
     local start = vim.uv.hrtime()
     popup.deliver(zalgo, vim.log.levels.INFO, {
       toast_max_bytes = #zalgo + 10,
@@ -1158,6 +1166,39 @@ return function(H)
         "non-UTF-8 continuation-byte input kept only %d of the intended 65536 bytes -- "
         .. "the byte cap threw away far more than the 3-byte backoff bound allows"
       ):format(#kept)
+    )
+  end)
+  popup.clear()
+
+  -- Regression: utf8_safe_cut()'s bounded backoff had an off-by-one --
+  -- `while m > floor do` (floor = n - 3) only ever tested cut points n,
+  -- n-1, n-2, never `floor` itself, so the ONE case the 3-byte bound exists
+  -- to handle -- a well-formed multibyte character whose cut point needs
+  -- the full 3-byte backoff -- fell through to the "not valid UTF-8"
+  -- fallback and returned the original, unclean cut point, splitting the
+  -- character exactly like the pre-fix unbounded version was never
+  -- supposed to. A 4-byte character (U+1F600, 4 bytes) needs exactly 3
+  -- bytes of backoff when the cut lands after its lead byte plus 2
+  -- continuation bytes, missing only the last one -- entry_max_bytes = 53
+  -- against 50 ASCII bytes + the emoji does exactly that.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    popup.deliver(("x"):rep(50) .. "\240\159\152\128", vim.log.levels.INFO, {
+      entry_max_bytes = 53,
+      messages = false,
+    })
+    eq(
+      popup.history()[1].message,
+      ("x"):rep(50) .. "\n... (truncated)",
+      "a cut landing at the maximal 3-byte backoff inside a well-formed 4-byte character "
+        .. "drops the whole character instead of keeping 3 orphaned bytes of it"
     )
   end)
   popup.clear()
