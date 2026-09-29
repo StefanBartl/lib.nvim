@@ -883,4 +883,81 @@ return function(H)
     )
   end)
   popup.clear()
+
+  -- Regression: truncate_to_width() used to sum each character's width IN
+  -- ISOLATION, which double-counts a combining mark (it has a real width
+  -- alone but contributes 0 once attached to its base character) -- both
+  -- under-filling the budget by roughly half for NFD-decomposed accented
+  -- text, and risking a cut landing between a base character and its own
+  -- mark. Measuring the growing prefix's own real width fixes both.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    local decomposed_e = "e\u{0301}" -- NFD: "e" + combining acute accent
+    local accented_source = decomposed_e:rep(10) -- 10 display columns, NOT 20 -- well
+    -- under budget together with "first line" below, so nothing here should
+    -- be truncated at all: this test is purely about the accents surviving.
+    popup.deliver("first line\nmore detail", vim.log.levels.ERROR, {
+      source = accented_source,
+      messages = false,
+    })
+    -- Well under the 40-column budget -- nothing here should be truncated
+    -- at all, so every accent must survive intact.
+    eq(
+      opened.title,
+      accented_source .. " first line",
+      "a combining-mark sequence within budget is not corrupted or "
+        .. "needlessly shortened by the width measurement"
+    )
+  end)
+  popup.clear()
+
+  -- Regression: derive_title()'s argument-table construction (which calls
+  -- derive_title itself) runs BEFORE show_toast()'s own pcall(toast.open,
+  -- {...}) ever starts -- Lua evaluates table-constructor expressions
+  -- first -- so a non-string opts.source used to crash deliver() outright
+  -- instead of degrading to the plain level-name title like every other
+  -- malformed input in this module already does.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    local delivered_ok = pcall(popup.deliver, "first line\nmore detail", vim.log.levels.ERROR, {
+      source = true, ---@diagnostic disable-line: assign-type-mismatch
+      messages = false,
+    })
+    ok(delivered_ok, "a non-string opts.source does not crash delivery")
+    eq(opened.title, "error", "falls back to the bare level name instead of crashing")
+  end)
+  popup.clear()
+
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    local delivered_ok = pcall(popup.deliver, "first line\nmore detail", vim.log.levels.ERROR, {
+      source = "gitsuite",
+      baked_prefix = 42, ---@diagnostic disable-line: assign-type-mismatch
+      messages = false,
+    })
+    ok(delivered_ok, "a non-string baked_prefix does not crash delivery either")
+    ok(opened.title ~= nil, "...and a toast still opens")
+  end)
+  popup.clear()
 end
