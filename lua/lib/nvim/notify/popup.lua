@@ -93,6 +93,7 @@ local LEVELS = {
 
 ---@class Lib.Notify.Popup.Opts
 ---@field source? string Tag for the history and, absent an explicit `title`, the toast title (e.g. "reposcope")
+---@field baked_prefix? string Internal: the exact text `lib.nvim.notify.create()` already prepended to `message`, if any -- lets `derive_title` recognize precisely (not guess from `source`, which is a separate, often differently-spelled option) that a multi-line message's first line already carries this notifier's own tag, so it isn't added a second time. A direct `popup.deliver()` caller (no `create()` involved) never sets this.
 ---@field title? string Overrides the toast's default `source level-name` title (e.g. "sessions.marks"); also passed to the plain `vim.notify` fallback so a rich backend still sees it
 ---@field timeout? integer Toast lifetime in ms (default per level, or config.timeouts[level])
 ---@field messages? boolean Override the module default for writing to `:messages`
@@ -244,39 +245,6 @@ local TITLE_MAX_WIDTH = 40
 -- exception's message) is never anywhere close to this bound.
 local MAX_FIRST_LINE_BYTES = 200
 
----@internal
----Bare alphanumeric "core" of a tag string, lowercased -- for comparing a
----`source` against a message's own leading text independent of decoration
----(`[]`, a `.nvim` suffix, punctuation) or case.
----@param s string
----@return string
-local function tag_core(s)
-  return (s:lower():gsub("%A", ""))
-end
-
----@internal
----Whether `first_line` already visibly starts with `source`'s own tag.
----True for `notify.create(prefix, { source = ... })`'s own usage: that
----factory bakes `prefix` into every message before `popup.deliver` ever
----sees it (`notifier.notify` does `prefix .. msg`), so `first_line` already
----begins with something like `"[gitsuite] "` by the time this runs -- even
----though `source` itself is typically a shorter, undecorated variant of the
----same tag (`"gitsuite"`, `"[gitsuite.nvim]"`, ...), not a literal
----substring match. Comparing `tag_core` of both sides catches that.
----@param first_line string
----@param source string
----@return boolean
-local function already_tagged(first_line, source)
-  local core = tag_core(source)
-  if core == "" then
-    return false
-  end
-  -- A small fixed window past `#source`, not the whole (possibly long)
-  -- first line: only the very start of it could plausibly BE the tag.
-  local head = tag_core(first_line:sub(1, #source + 12))
-  return head:sub(1, #core) == core
-end
-
 ---Splits `message` into a (title, body) pair for a caller that gave no
 ---`opts.title` of its own: the first line becomes the title (so "[gitsuite]
 ---docmap-desktop: push failed" reads as a title, not buried in the body next
@@ -285,31 +253,51 @@ end
 ---the previous "source level-name" title with the message untouched --
 ---this only kicks in for a message that actually has more to show.
 ---
----`source` is only prepended when `first_line` doesn't already carry that
----tag (see `already_tagged`) -- a caller going through
----`notify.create(prefix, { source = ... })` has that prefix baked into
----`message` already, and re-adding it produced doubled titles like
----`"gitsuite [gitsuite] push failed"`.
+---`source` is only prepended when `first_line` doesn't ALREADY start with
+---`baked_prefix` -- the exact text `notify.create(prefix, {...})` prepended
+---to `message` before `popup.deliver` ever saw it. That is a precise check
+---against a known exact string, not a guess against `source` itself: an
+---earlier version compared a fuzzy "core" of `source` to the start of
+---`first_line` instead, which both mismatched a `source` spelled
+---differently from the real baked-in `prefix` (e.g. `"gitsuite"` vs.
+---`"[gitsuite.nvim]"`) AND, worse, could strip a legitimate `source` prefix
+---from a message that simply started with similar-looking words on its own
+---(a direct `popup.deliver()` call, no `create()` involved -- so nothing
+---was ever actually baked in, `baked_prefix` is nil there, and the prefix
+---is always added, matching the library's behavior before this feature
+---existed).
 ---@param message string
 ---@param source string|nil
+---@param baked_prefix string|nil
 ---@param spec { name: string }
 ---@return string title
 ---@return string body
-local function derive_title(message, source, spec)
+local function derive_title(message, source, baked_prefix, spec)
   local source_prefix = source and (source .. " ") or ""
   local nl = message:find("\n", 1, true)
   if nl and nl <= MAX_FIRST_LINE_BYTES then
     local first_line = message:sub(1, nl - 1)
     if first_line ~= "" then
-      local prefix = (source and not already_tagged(first_line, source)) and source_prefix or ""
+      local already_baked = baked_prefix
+        and baked_prefix ~= ""
+        and first_line:sub(1, #baked_prefix) == baked_prefix
+      local prefix = already_baked and "" or source_prefix
       -- The budget is the WHOLE title (prefix + first_line) against
       -- TITLE_MAX_WIDTH, not first_line's own width alone -- truncating
       -- only first_line and then concatenating an unmeasured prefix in
       -- front of the result could still overflow the toast's title bar.
-      -- `prefix` itself is kept whole (it is the short, load-bearing part);
-      -- what gets truncated is first_line, into whatever budget remains.
-      local budget = TITLE_MAX_WIDTH - vim.fn.strdisplaywidth(prefix)
-      if vim.fn.strdisplaywidth(first_line) > math.max(budget, 1) then
+      -- `prefix` is kept whole when it fits on its own; a `source` long
+      -- enough to fill the entire budget by itself is truncated too
+      -- (rather than silently overflowing regardless of first_line).
+      local prefix_width = vim.fn.strdisplaywidth(prefix)
+      if prefix_width >= TITLE_MAX_WIDTH then
+        if prefix_width > TITLE_MAX_WIDTH then
+          prefix = vim.fn.strcharpart(prefix, 0, math.max(TITLE_MAX_WIDTH - 1, 0)) .. "…"
+        end
+        return prefix, message:sub(nl + 1)
+      end
+      local budget = TITLE_MAX_WIDTH - prefix_width
+      if vim.fn.strdisplaywidth(first_line) > budget then
         first_line = vim.fn.strcharpart(first_line, 0, math.max(budget - 1, 0)) .. "…"
       end
       return prefix .. first_line, message:sub(nl + 1)
@@ -332,7 +320,7 @@ local function show_toast(message, level, opts)
   local hl = opts.hl or spec.hl
   local title, body = opts.title, message
   if not title then
-    title, body = derive_title(message, opts.source, spec)
+    title, body = derive_title(message, opts.source, opts.baked_prefix, spec)
   end
   local width = opts.width or config.width
   local max_lines = opts.max_lines or config.max_lines
