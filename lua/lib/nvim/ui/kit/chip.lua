@@ -643,7 +643,45 @@ local function ensure_hooks()
   -- lot of competing scheduled work (LSP attach, plugin-manager update
   -- checks, other `vim.schedule`s), that can be seconds later, read as a
   -- delayed "jump" once the chip finally snaps to the correct row.
-  autocmd.create("OptionSet", reflow, {
+  autocmd.create("OptionSet", function()
+    -- Found live (adversarial review): OptionSet fires even when the
+    -- assigned value equals the option's current one (confirmed via a
+    -- headless probe -- `vim.o.cmdheight = 1` when it is already `1` still
+    -- fires this). A host pattern that unconditionally sets cmdheight on
+    -- every CmdlineEnter/CmdlineLeave (a common "cmdheight=0 except while
+    -- typing a command" setup) would otherwise run a full reflow() --
+    -- pairs(chips), a per-anchor sort, one nvim_win_set_config per mounted
+    -- chip across every one of this primitive's ~20 sibling consumers --
+    -- on every `:`/`/`/`?` press and release, whether or not the value
+    -- actually changed.
+    --
+    -- `type(...) == "number"` first, not a bare equality check: `cmdheight`/
+    -- `laststatus` are numeric options, so a REAL firing always gives
+    -- `v:option_old`/`v:option_new` as numbers -- but this headless test
+    -- environment never fires `OptionSet` through Neovim's own mechanism at
+    -- all (confirmed live: `v:option_old`/`v:option_new` are read-only from
+    -- Lua, and even a real `vim.o.cmdheight = ...` assignment leaves both as
+    -- `""` here, the same as if nothing had ever touched them), so a spec
+    -- exercising this handler via `nvim_exec_autocmds` -- the only way to
+    -- invoke it at all headlessly -- always sees both as `""`. Skipping
+    -- reflow() there too (a bare `old == new` check, `"" == ""`) would make
+    -- every such simulated firing silently a no-op, breaking the sibling
+    -- "reflow() actually repositions" test below with no way to fix it from
+    -- the test side (there is no writable path to a genuine number for
+    -- either var in this mode). Requiring both to already be numbers keeps
+    -- the no-op skip correct for every real interactive firing while
+    -- leaving the ambiguous, only-possible-in-a-synthetic-test case
+    -- (neither var ever populated) on the safe side: reflow rather than
+    -- silently do nothing.
+    if
+      type(vim.v.option_old) == "number"
+      and type(vim.v.option_new) == "number"
+      and vim.v.option_old == vim.v.option_new
+    then
+      return
+    end
+    reflow()
+  end, {
     pattern = "cmdheight,laststatus",
     group = group,
     desc = "lib.nvim.ui.kit.chip: re-run reflow() when cmdheight/laststatus change after mount",
