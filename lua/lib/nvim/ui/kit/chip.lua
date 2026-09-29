@@ -291,6 +291,31 @@ local function is_transparent_shape(shape)
   return shape == "classic"
 end
 
+---@internal
+---A finite number, or `0` for anything else -- `row_offset`/`col_offset`
+---are a generic nudge, not a required option, and this is a shared
+---primitive roughly 20 sibling plugins mount chips through, so a
+---malformed value from any one caller's own (possibly unvalidated, e.g.
+---`sessions.nvim`'s own `cfg.chip.col_offset` leaf) config must never be
+---able to crash `mount()` for it. Found live (adversarial review): a
+---non-number (a boolean, a table, ...) reaching the arithmetic in
+---`reflow()` below throws there -- outside the one `pcall` that only
+---wraps the later `nvim_win_set_config` call -- aborting that whole
+---`reflow()` pass for every anchor group, not just the offending chip.
+---NaN and +-Infinity are rejected too, even though `type()` reports both
+---as `"number"`: Neovim's own `nvim_win_set_config` accepts and silently
+---STORES either with no validation or clamping (confirmed live), which
+---would otherwise strand the chip at an undiagnosable screen position
+---with no error anywhere to point at why.
+---@param v any
+---@return integer
+local function sanitize_offset(v)
+  if type(v) ~= "number" or v ~= v or v == math.huge or v == -math.huge then
+    return 0
+  end
+  return v
+end
+
 -- ---------------------------------------------------------------- window lifecycle
 
 ---@internal
@@ -702,12 +727,23 @@ function M.mount(opts)
   if opts.dock ~= nil then
     entry.dock = opts.dock
   end
-  -- `0` is truthy in Lua, so the plain `or` idiom (unlike `dock`/`visible`
-  -- above) already does the right thing here: an explicit `opts.row_offset
-  -- = 0` still overwrites a previous nonzero value instead of falling
-  -- through to it.
-  entry.row_offset = opts.row_offset or entry.row_offset or 0
-  entry.col_offset = opts.col_offset or entry.col_offset or 0
+  -- `0` is truthy in Lua, so a plain `or` idiom alone (unlike `dock`/
+  -- `visible` above) would already let an explicit `opts.row_offset = 0`
+  -- overwrite a previous nonzero value correctly -- but an explicit nil
+  -- check is still needed here to tell "not passed this call, keep the
+  -- current value" apart from "passed, but malformed" (sanitized to 0,
+  -- which must still overwrite a previous nonzero value, the same as an
+  -- honest `0` would).
+  if opts.row_offset ~= nil then
+    entry.row_offset = sanitize_offset(opts.row_offset)
+  else
+    entry.row_offset = entry.row_offset or 0
+  end
+  if opts.col_offset ~= nil then
+    entry.col_offset = sanitize_offset(opts.col_offset)
+  else
+    entry.col_offset = entry.col_offset or 0
+  end
 
   ensure_hooks()
   ensure_mode_tracking(entry, opts.track_mode)
