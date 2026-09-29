@@ -826,4 +826,61 @@ return function(H)
     )
   end)
   popup.clear()
+
+  -- Regression: truncation used to measure width via vim.fn.strdisplaywidth
+  -- (authoritative) but CUT via lib.lua.strings.width.truncate(), whose
+  -- hand-maintained Unicode-width table is a deliberate approximation and
+  -- disagreed with strdisplaywidth for some double-width codepoints outside
+  -- it (newer emoji blocks) -- so a "truncated" title could still overflow
+  -- the budget it was measured against. Both measuring and cutting now go
+  -- through vim.fn exclusively (same pair wrap() already uses).
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    local melting_face = "\u{1FAE0}" -- outside strwidth's WIDE_RANGES table; strdisplaywidth=2
+    local emoji_source = melting_face:rep(30)
+    popup.deliver("connection refused", vim.log.levels.ERROR, {
+      source = emoji_source,
+      messages = false,
+    })
+    ok(
+      vim.fn.strdisplaywidth(opened.title) <= 40,
+      (
+        "fallback title %q (%d cols) fits the 40-column budget for an emoji "
+        .. "source outside the old approximation table"
+      ):format(opened.title, vim.fn.strdisplaywidth(opened.title))
+    )
+  end)
+  popup.clear()
+
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    local melting_face = "\u{1FAE0}"
+    local emoji_source = melting_face:rep(30)
+    popup.deliver("first line\nmore detail", vim.log.levels.ERROR, {
+      source = emoji_source,
+      messages = false,
+    })
+    ok(
+      vim.fn.strdisplaywidth(opened.title) <= 40,
+      (
+        "multi-line title %q (%d cols) fits the 40-column budget for an emoji "
+        .. "source outside the old approximation table"
+      ):format(opened.title, vim.fn.strdisplaywidth(opened.title))
+    )
+  end)
+  popup.clear()
 end
