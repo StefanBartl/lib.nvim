@@ -51,7 +51,10 @@ local BASE = {
 local BUILTIN = {
   -- Presets differ in border AND in which standard groups their highlights link
   -- to, so they look distinct under *any* colorscheme (no colours are
-  -- hardcoded — everything stays theme-adaptive).
+  -- hardcoded — everything stays theme-adaptive). `hacker` (below) is the one
+  -- deliberate exception: its whole point is a fixed identity that looks the
+  -- same regardless of the active colorscheme, so its `hl` entries are raw
+  -- hex instead of links.
   minimal = {
     border = "none",
     hl = { selection = "Visual", accent = "NonText", muted = "NonText", title = "Comment" },
@@ -91,6 +94,28 @@ local BUILTIN = {
   menu = {
     border = "rounded",
     hl = { border = "Function", title = "Function" },
+  },
+  -- Monochrome green-on-black terminal look, ASCII-boxed like `ascii` above
+  -- but with its own fixed palette instead of that preset's colorscheme-
+  -- linked groups -- picking this preset is asking for the one look that
+  -- does NOT adapt to whatever colorscheme is active. `selection` carries a
+  -- background (a highlighted row reads as a filled block); `accent`/
+  -- `muted`/`error`/`flash`/`hover` stay foreground-only so they still
+  -- compose over whatever `normal`/`selection` background they render on.
+  hacker = {
+    border = { "+", "-", "+", "|", "+", "-", "+", "|" },
+    ascii_border = true,
+    hl = {
+      normal = { fg = "#33ff66", bg = "#060a06" },
+      border = { fg = "#16c60c", bg = "#060a06" },
+      title = { fg = "#16c60c", bg = "#060a06", bold = true },
+      selection = { fg = "#060a06", bg = "#33ff66", bold = true },
+      accent = { fg = "#7cffa0", bold = true },
+      muted = { fg = "#1f7a1f" },
+      error = { fg = "#ff5555" },
+      flash = { fg = "#7cffa0", bold = true },
+      hover = { fg = "#16c60c", underline = true },
+    },
   },
 }
 
