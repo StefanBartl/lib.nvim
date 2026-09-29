@@ -82,9 +82,15 @@ enabled (it already renders toasts) or when no toast can be shown, so a
 message is never lost -- and in both cases `opts.title` (see below) still
 reaches it, for a rich `vim.notify` backend to render.
 `popup.deliver(msg, level, { source, title, timeout })` is the
-direct entry point. `title` overrides the toast's default `source
-level-name` title (e.g. `"sessions.marks"` instead of `"sessions info"`);
-omit it to keep the default. Very large messages stay cheap: the toast wraps only the
+direct entry point. `title` overrides the toast's default title; omit it and
+a multi-line message's own first line becomes the title instead (e.g.
+`"[gitsuite] docmap-desktop: push failed"`, with the rest -- git's own hint
+lines -- as the body), so the one line that actually says what happened
+isn't buried under three lines of explanation. A single-line message, or one
+whose first line is empty or implausibly long (an unbroken block of text
+that happens to carry a trailing `"\n... (truncated)"` from `entry_max_bytes`
+below, say), keeps the previous default: `"source level-name"` (e.g.
+`"sessions info"`), message untouched. Very large messages stay cheap: the toast wraps only the
 first 4000 bytes by default (12 lines max, marked as cut), and a history entry
 keeps at most 64 KB by default. Delivery from a fast event (libuv callback) is
 rescheduled onto the main loop automatically.

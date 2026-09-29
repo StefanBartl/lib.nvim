@@ -526,4 +526,69 @@ return function(H)
     "opts.title also reaches the plain vim.notify fallback"
   )
   popup.clear()
+
+  -- Without an explicit opts.title, a multi-line message's own first line
+  -- becomes the toast title (e.g. a git error's "repo: push failed" summary
+  -- instead of it being buried in the body next to git's own hint lines);
+  -- the body then starts from line 2.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    popup.deliver(
+      "docmap-desktop: push failed\n! [rejected] main -> main\nhint: pull first",
+      vim.log.levels.ERROR,
+      { source = "[gitsuite]", messages = false }
+    )
+    eq(opened.title, "[gitsuite] docmap-desktop: push failed", "first line becomes the title")
+    eq(opened.message[1], "! [rejected] main -> main", "body starts from the second line")
+    eq(opened.message[2], "hint: pull first", "and keeps the rest")
+  end)
+  popup.clear()
+
+  -- A single-line message has nothing to split off: falls back to the
+  -- unchanged "source level-name" title, same as before this feature existed.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    popup.deliver("just one line", vim.log.levels.INFO, { source = "spec", messages = false })
+    eq(opened.title, "spec info", "single-line message keeps the default title")
+    eq(opened.message[1], "just one line", "and the body is the whole message")
+  end)
+  popup.clear()
+
+  -- Regression guard: a message that is one huge unbroken "line" plus
+  -- deliver()'s own entry_max_bytes truncation marker ("\n... (truncated)")
+  -- technically contains a newline too, but the text before it is nowhere
+  -- near title-shaped -- this must NOT be split into a 64KB "title" and a
+  -- one-line "... (truncated)" body; the default title stays.
+  with_stubs({
+    ["ui.notify"] = false,
+    ["ui.kit.toast"] = {
+      open = function(o)
+        opened = o
+        return {}
+      end,
+    },
+  }, function()
+    popup.deliver(("y"):rep(100000), vim.log.levels.INFO, { source = "spec" })
+    eq(opened.title, "spec info", "an oversized single line is not mistaken for a title")
+    eq(
+      opened.message[#opened.message],
+      "... (:Lib notify last)",
+      "the body still shows wrap()'s own cut marker, not deliver()'s truncation text as a lone line"
+    )
+  end)
+  popup.clear()
 end

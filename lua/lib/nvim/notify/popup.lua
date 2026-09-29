@@ -213,6 +213,49 @@ local function ui_notify_active()
     or false
 end
 
+-- A toast's title bar is one line, ~toast-width wide -- a first line longer
+-- than this is truncated with an ellipsis rather than pushed into `wrap()`'s
+-- own (wider) body budget, which would misjudge how much of it actually
+-- fits next to the border decoration.
+local TITLE_MAX_WIDTH = 40
+
+-- A first line further into `message` than this is not a title candidate at
+-- all, however short the *rendered* title would end up -- a message that is
+-- one enormous unbroken line plus `deliver()`'s own appended
+-- "\n... (truncated)" marker (`entry_max_bytes`) technically "has a first
+-- line" by the same `:find("\n", ...)` test below, but treating 64KB of
+-- text as a title and the marker alone as the body would be exactly
+-- backwards. A real title-shaped first line (a git error's summary, an
+-- exception's message) is never anywhere close to this bound.
+local MAX_FIRST_LINE_BYTES = 200
+
+---Splits `message` into a (title, body) pair for a caller that gave no
+---`opts.title` of its own: the first line becomes the title (so "[gitsuite]
+---docmap-desktop: push failed" reads as a title, not buried in the body next
+---to three lines of git's own hint text), the rest is what `wrap()` renders
+---below it. A single-line message, or one whose first line is empty, keeps
+---the previous "source level-name" title with the message untouched --
+---this only kicks in for a message that actually has more to show.
+---@param message string
+---@param source string|nil
+---@param spec { name: string }
+---@return string title
+---@return string body
+local function derive_title(message, source, spec)
+  local source_prefix = source and (source .. " ") or ""
+  local nl = message:find("\n", 1, true)
+  if nl and nl <= MAX_FIRST_LINE_BYTES then
+    local first_line = message:sub(1, nl - 1)
+    if first_line ~= "" then
+      if vim.fn.strdisplaywidth(first_line) > TITLE_MAX_WIDTH then
+        first_line = vim.fn.strcharpart(first_line, 0, TITLE_MAX_WIDTH - 1) .. "…"
+      end
+      return source_prefix .. first_line, message:sub(nl + 1)
+    end
+  end
+  return source_prefix .. spec.name, message
+end
+
 ---@param message string
 ---@param level integer
 ---@param opts Lib.Notify.Popup.Opts
@@ -225,14 +268,17 @@ local function show_toast(message, level, opts)
 
   local spec = LEVELS[level] or LEVELS[vim.log.levels.INFO]
   local hl = opts.hl or spec.hl
-  local title = opts.title or ((opts.source and (opts.source .. " ") or "") .. spec.name)
+  local title, body = opts.title, message
+  if not title then
+    title, body = derive_title(message, opts.source, spec)
+  end
   local width = opts.width or config.width
   local max_lines = opts.max_lines or config.max_lines
   local max_bytes = opts.toast_max_bytes or config.toast_max_bytes
   local timeout = opts.timeout or config.timeouts[level] or spec.timeout
   local ok = pcall(toast.open, {
     title = title,
-    message = wrap(message, width, max_lines, max_bytes),
+    message = wrap(body, width, max_lines, max_bytes),
     timeout = timeout,
     theme = { hl = { border = hl, title = hl } },
   })
