@@ -137,14 +137,20 @@ local function utf8_safe_cut(s, n)
   if n <= 0 then
     return 0
   end
+  -- Backing off 3 bytes means checking 4 candidate cut points -- n itself,
+  -- then n-1, n-2, n-3 -- so the loop must include `floor`, not stop short
+  -- of it: a `while m > floor` guard (checking only n, n-1, n-2) silently
+  -- skipped the maximal-backoff candidate, so a well-formed 4-byte
+  -- character needing the full 3-byte backoff (cut landing right after its
+  -- lead byte + 2 continuation bytes, missing only the last one) fell
+  -- through to the "not valid UTF-8" fallback below and got split anyway --
+  -- exactly the defect this function exists to prevent.
   local floor = math.max(0, n - 3)
-  local m = n
-  while m > floor do
+  for m = n, floor, -1 do
     local b = s:byte(m + 1)
     if not b or b < 0x80 or b >= 0xC0 then
       return m
     end
-    m = m - 1
   end
   return n
 end
