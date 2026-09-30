@@ -164,4 +164,48 @@ function M.insert(buf, win, row, col, text, opts)
   return true
 end
 
+--- Insert several links (one per entry of `links`) at the cursor of `win`.
+--- A single link goes inline, at the cursor, like `insert`. Several go on
+--- lines of their own: they replace the current line when it is blank, else
+--- they are added below it -- splitting a line of prose in the middle to
+--- make room for a list is never what anyone wants. The cursor then goes into
+--- the first link, per the usual rule.
+---@param buf integer
+---@param win integer
+---@param links string[]
+---@param opts? Lib.Markdown.LinkCursor.Opts
+---@return boolean ok false when there is nothing to insert or the buffer/window is unusable
+function M.insert_links(buf, win, links, opts)
+  if #links == 0 then
+    return false
+  end
+  if not (vim.api.nvim_win_is_valid(win) and vim.api.nvim_buf_is_valid(buf)) then
+    return false
+  end
+  local cursor = vim.api.nvim_win_get_cursor(win)
+  if #links == 1 then
+    return M.insert(buf, win, cursor[1] - 1, cursor[2], links[1], opts)
+  end
+
+  if not vim.bo[buf].modifiable then
+    return false
+  end
+  local row = cursor[1] - 1
+  local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1] or ""
+  local first_row
+  if line:match("^%s*$") then
+    first_row = row
+    if not pcall(vim.api.nvim_buf_set_lines, buf, row, row + 1, false, links) then
+      return false
+    end
+  else
+    first_row = row + 1
+    if not pcall(vim.api.nvim_buf_set_lines, buf, row + 1, row + 1, false, links) then
+      return false
+    end
+  end
+  M.place(win, first_row, 0, links, opts)
+  return true
+end
+
 return M

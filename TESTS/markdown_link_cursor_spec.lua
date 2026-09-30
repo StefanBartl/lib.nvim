@@ -65,6 +65,38 @@ return function(H)
   lc.insert(buf, win, 0, 0, "![](a.png)", { enable = false, startinsert = false })
   eq(cursor(), "1:9", "enable = false keeps the old cursor behavior")
 
+  -- insert_links: one inline, several on lines of their own
+  buf, win = scratch({ "prose here" })
+  vim.api.nvim_win_set_cursor(win, { 1, 5 })
+  ok(lc.insert_links(buf, win, { "[a](one.md)" }, { startinsert = false }), "one link: ok")
+  eq(
+    vim.api.nvim_buf_get_lines(buf, 0, -1, false)[1],
+    "prose[a](one.md) here",
+    "one link goes inline at the cursor"
+  )
+  eq(cursor(), "1:15", "…cursor in its path")
+
+  buf, win = scratch({ "prose here", "tail" })
+  vim.api.nvim_win_set_cursor(win, { 1, 3 })
+  lc.insert_links(buf, win, { "[a](one.md)", "[b](two.md)" }, { startinsert = false })
+  eq(
+    table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "|"),
+    "prose here|[a](one.md)|[b](two.md)|tail",
+    "several links go below a non-blank line, prose is never split"
+  )
+  eq(cursor(), "2:10", "…cursor in the FIRST link's path")
+
+  buf, win = scratch({ "", "tail" })
+  vim.api.nvim_win_set_cursor(win, { 1, 0 })
+  lc.insert_links(buf, win, { "[](x.md)", "[b](two.md)" }, { startinsert = false })
+  eq(
+    table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "|"),
+    "[](x.md)|[b](two.md)|tail",
+    "several links replace a blank line"
+  )
+  eq(cursor(), "1:1", "…an empty first title gets the cursor")
+  eq(lc.insert_links(buf, win, {}), false, "no links -> false")
+
   -- a non-modifiable buffer is refused, nothing throws
   buf, win = scratch({ "" })
   vim.bo[buf].modifiable = false
