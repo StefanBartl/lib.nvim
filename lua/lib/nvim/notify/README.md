@@ -110,7 +110,9 @@ local popup = require("lib.nvim.notify").popup
 
 popup.setup({
   max_lines = 12, -- toast line cap
-  width = 38, -- toast wrap width in columns
+  -- width = 38,  -- toast wrap width in columns; unset = follows the toast's own
+  --               -- text budget (40% of the editor by default, see `toast`)
+  -- toast = { width = "40%", min_width = 40, padding = 1 }, -- chip size, forwarded to ui.kit.toast.setup (needs ui.nvim)
   toast_max_bytes = 4000, -- bytes of a message considered when wrapping
   entry_max_bytes = 64 * 1024, -- bytes kept per history entry
   toast_min_level = vim.log.levels.INFO, -- below this: history/:messages only, no toast
