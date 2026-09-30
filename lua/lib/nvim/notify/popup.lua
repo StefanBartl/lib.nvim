@@ -43,7 +43,7 @@ local M = {}
 ---@class Lib.Notify.Popup.Config
 ---@field messages boolean Also record every message in real `:messages` (default: false -- see the module doc comment for why; `:Lib notify history`/`:Lib notify last` always have the full text regardless)
 ---@field max_lines integer Toast line cap (default 12)
----@field width integer Toast wrap width in columns (default 38; ui.kit toasts are 40 columns wide, minus the border)
+---@field width integer|nil Toast wrap width in columns; nil (default) follows the toast's own text budget (`ui.kit.toast.inner_width()`, 40% of the editor minus border/padding), falling back to 38 when ui.nvim's toast is too old to report it
 ---@field toast_max_bytes integer Bytes of a message considered when wrapping for the toast (default 4000); a message can be arbitrarily large (a whole command's output) but only its head is ever shown in a toast
 ---@field entry_max_bytes integer Bytes kept per history entry (default 64 KiB)
 ---@field toast_min_level integer Below this vim.log.levels value: recorded in history/`:messages` only, no toast (default INFO)
@@ -56,6 +56,7 @@ local M = {}
 ---@field messages? boolean
 ---@field max_lines? integer
 ---@field width? integer
+---@field toast? table Forwarded to `ui.kit.toast.setup` (`width`, `min_width`, `padding`: columns or "NN%") when ui.nvim is installed -- the size of the chip itself
 ---@field toast_max_bytes? integer
 ---@field entry_max_bytes? integer
 ---@field toast_min_level? integer
@@ -66,13 +67,15 @@ local M = {}
 local config = {
   messages = false,
   max_lines = 12,
-  width = 38,
+  width = nil, -- nil: follow the toast's text budget (see Lib.Notify.Popup.Config.width)
   toast_max_bytes = 4000,
   entry_max_bytes = 64 * 1024,
   toast_min_level = vim.log.levels.INFO,
   timeouts = {},
   history_full = false,
 }
+
+local FALLBACK_WIDTH = 38 -- wrap width when the toast cannot report its own
 
 local HISTORY_MAX = 200 -- capped number of entries kept, independent of config
 
@@ -502,6 +505,10 @@ local function show_toast(message, level, opts)
     end
   end
   local width = opts.width or config.width
+  if not width then
+    local ok_w, inner = pcall(toast.inner_width)
+    width = ok_w and type(inner) == "number" and inner or FALLBACK_WIDTH
+  end
   local max_lines = opts.max_lines or config.max_lines
   local max_bytes = opts.toast_max_bytes or config.toast_max_bytes
   local timeout = opts.timeout or config.timeouts[level] or spec.timeout
@@ -588,6 +595,14 @@ function M.setup(opts)
   end
   if opts.width ~= nil then
     config.width = opts.width
+  end
+  if type(opts.toast) == "table" then
+    -- The chip's size lives in ui.nvim's toast; without it (or with a version
+    -- that predates `setup`) there is nothing to tune and nothing to raise.
+    local ok_toast, toast = pcall(require, "ui.kit.toast")
+    if ok_toast and type(toast.setup) == "function" then
+      toast.setup(opts.toast)
+    end
   end
   if opts.toast_max_bytes ~= nil then
     config.toast_max_bytes = opts.toast_max_bytes

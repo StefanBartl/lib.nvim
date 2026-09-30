@@ -21,6 +21,53 @@ return function(H)
     end
   end
 
+  -- Wrap width follows the toast's own text budget when it reports one, an
+  -- explicit `width` still wins, and `setup({ toast = ... })` reaches the toast.
+  do
+    local seen_setup
+    local stub_toast = {
+      inner_width = function()
+        return 70
+      end,
+      setup = function(o)
+        seen_setup = o
+      end,
+    }
+    local captured
+    stub_toast.open = function(o)
+      captured = o
+      return {}
+    end
+    with_stubs({
+      ["ui.notify"] = {
+        is_enabled = function()
+          return false
+        end,
+      },
+      ["ui.kit.toast"] = stub_toast,
+    }, function()
+      popup.deliver(("word "):rep(60), vim.log.levels.WARN, { source = "spec" })
+      local widest = 0
+      for _, line in ipairs(captured.message) do
+        widest = math.max(widest, vim.fn.strdisplaywidth(line))
+      end
+      ok(widest > 38 and widest <= 70, "wraps to the toast's inner width, not the fixed 38")
+
+      popup.deliver(("other "):rep(60), vim.log.levels.WARN, { source = "spec", width = 30 })
+      for _, line in ipairs(captured.message) do
+        ok(vim.fn.strdisplaywidth(line) <= 30, "an explicit width still wins")
+      end
+
+      popup.setup({ toast = { width = "30%", min_width = 30 } })
+      ok(
+        seen_setup and seen_setup.width == "30%" and seen_setup.min_width == 30,
+        "setup({ toast }) is forwarded to ui.kit.toast.setup"
+      )
+    end)
+    popup.setup({ width = nil })
+    popup.clear() -- the assertions below count history entries from zero
+  end
+
   -- No toast available: falls back to vim.notify, still records history.
   local native = {}
   local original = vim.notify
