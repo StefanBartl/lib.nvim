@@ -55,4 +55,18 @@ function M.target_window(opts)
   return nil
 end
 
+---Find the window a link/text should be put into from a sidebar or float: the
+---previous window (`:wincmd p`) when it is usable, else `target_window()`.
+---The previous window is what "the window I came from" means to a user, which
+---the first-usable-in-list-order fallback of `target_window()` does not.
+---@param opts? { current_tab_only?: boolean }
+---@return integer|nil winid
+function M.previous_window(opts)
+  local prev = vim.fn.win_getid(vim.fn.winnr("#"))
+  if prev ~= 0 and prev ~= vim.api.nvim_get_current_win() and M.is_usable_window(prev) then
+    return prev
+  end
+  return M.target_window(opts)
+end
+
 return M

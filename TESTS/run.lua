@@ -66,6 +66,7 @@ local specs = {
   "dev_reload_spec.lua",
   "markdown_table_spec.lua",
   "markdown_link_cursor_spec.lua",
+  "window_previous_spec.lua",
   "run_argv_spec.lua",
   "run_spec.lua",
   "spawn_env_spec.lua",
