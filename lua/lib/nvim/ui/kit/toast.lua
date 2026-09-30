@@ -195,9 +195,18 @@ function M.open(opts)
     padded[i] = pad .. line .. pad
   end
 
+  -- The theme's own `zindex.toast` (70), not the `popup` default (50) that
+  -- `surface.open` falls back to: at 50 a toast sat UNDER a snacks picker
+  -- (layout 52, windows 54) and was simply never seen while one was open.
+  local ok_theme, resolved = pcall(function()
+    return require("lib.nvim.ui.kit.theme").resolve(opts.theme)
+  end)
+  local zindex = ok_theme and resolved.zindex and resolved.zindex.toast or nil
+
   local surf = surface.open({
     lines = padded,
     theme = opts.theme,
+    zindex = zindex,
     title = opts.title,
     width = fit_width(content),
     height = #padded,
