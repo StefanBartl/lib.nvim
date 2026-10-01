@@ -203,10 +203,14 @@ M.target_window(opts?: { current_tab_only?: boolean }): integer|nil winid
 
 ### `lib.nvim.window.focus_helpers` (no README)
 ```
-M.ensure_bottom(winid: integer, retries?: integer)   -- default 3 retries via vim.schedule
+M.is_at_bottom(winid: integer): boolean
+M.ensure_bottom(winid: integer, opts?: { retries?, attempts?, retry_delay_ms? })
+  -- retries (default 3): window doesn't exist yet, retried via vim.schedule
+  -- attempts (default 1 = off): cursor-set didn't land at the bottom, retried `retry_delay_ms` (default 60) apart
 M.make_focusable(winid: integer): boolean ok
 M.force_focus(winid: integer): boolean ok
-M.reveal_at_bottom(winid: integer): boolean ok
+M.reveal_at_bottom(winid: integer, opts?: { attempts?, retry_delay_ms? }): boolean ok
+  -- skips `relative == "win"` / degenerate (<=1 cell) windows; runs `normal! G` once focus lands
 ```
 
 ### `lib.nvim.window.open_named_scratch` (documented in directory README)
