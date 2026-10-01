@@ -102,6 +102,20 @@ return function(H)
     eq(#messages.snapshot(), 1, "works correctly after a ring_size change")
   end
 
+  -- A fractional ring_size is floored, not left to corrupt the circular
+  -- buffer's modulo indexing.
+  do
+    local messages = fresh_messages()
+    messages.setup({ ring_size = 2.9 })
+    for i = 1, 6 do
+      messages.push({ content = "m" .. i })
+    end
+    local snap = messages.snapshot()
+    eq(#snap, 2, "a fractional ring_size is floored to 2, not left fractional")
+    eq(snap[1].content, "m5", "oldest surviving entry")
+    eq(snap[2].content, "m6", "newest kept")
+  end
+
   -- since_ms/until_ms filtering.
   do
     local messages = fresh_messages()
