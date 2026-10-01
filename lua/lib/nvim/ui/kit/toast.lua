@@ -27,9 +27,15 @@ local MIN_CONTENT = 10 -- never narrower than this, whatever the user asks for
 ---@field width? integer|string      # Widest a toast may get: columns or "NN%" of the editor width (default "40%")
 ---@field min_width? integer|string  # Narrowest a toast may get: columns or "NN%" (default 40)
 ---@field padding? integer           # Blank columns left and right of the text inside the chip (default 1)
+---@field max_lines? integer         # Most text rows a toast shows; the rest is replaced by an ellipsis row (default 20)
 
----@type { width: integer|string, min_width: integer|string, padding: integer }
-local config = { width = "40%", min_width = 40, padding = 1 }
+-- Bytes of a message that are looked at at all. A toast is a glance, but callers
+-- such as `ui.notify` hand over whole command outputs; wrapping a 64 KB string
+-- costs quadratic time and would produce a float taller than the screen.
+local MAX_BYTES = 8192
+
+---@type { width: integer|string, min_width: integer|string, padding: integer, max_lines: integer }
+local config = { width = "40%", min_width = 40, padding = 1, max_lines = 20 }
 
 --- Live toasts, oldest first. Each: { surf = Surface, height = integer, bordered = boolean, content = integer }.
 local stack = {}
@@ -94,6 +100,9 @@ function M.setup(opts)
   if type(opts.padding) == "number" and opts.padding >= 0 then
     config.padding = math.min(math.floor(opts.padding), 4)
   end
+  if type(opts.max_lines) == "number" and opts.max_lines >= 1 then
+    config.max_lines = math.floor(opts.max_lines)
+  end
 end
 
 --- Widest a toast's content (inside border and padding) can be right now --
@@ -109,11 +118,11 @@ end
 ---@param lines string[]
 ---@param width integer
 ---@return string[]
-local function wrap_lines(lines, width)
+local function wrap_lines(lines, width, max_rows)
   local out = {}
   for _, line in ipairs(lines) do
     local rest = line
-    while vim.fn.strdisplaywidth(rest) > width do
+    while #out <= max_rows and vim.fn.strdisplaywidth(rest) > width do
       local lo, hi = 1, vim.fn.strchars(rest)
       while lo < hi do
         local mid = math.ceil((lo + hi) / 2)
@@ -127,8 +136,22 @@ local function wrap_lines(lines, width)
       rest = vim.fn.strcharpart(rest, lo)
     end
     out[#out + 1] = rest
+    if #out > max_rows then
+      break
+    end
   end
   return out
+end
+
+--- The first `n` bytes of `s`, never cutting a multibyte character in half.
+---@param s string
+---@param n integer
+---@return string
+local function head(s, n)
+  if #s <= n then
+    return s
+  end
+  return s:sub(1, n + vim.str_utf_start(s, n + 1))
 end
 
 --- Width of a toast whose text is `content` columns wide, inside the current limits.
@@ -180,11 +203,17 @@ function M.open(opts)
   opts = opts or {}
   local message = opts.message or ""
   local lines = type(message) == "table" and message
-    or vim.split(tostring(message), "\n", { plain = true })
+    or vim.split(head(tostring(message), MAX_BYTES), "\n", { plain = true })
 
   -- Wrap to what fits, then pad both sides, then measure: the chip is as
-  -- wide as its widest line (see `fit_width`).
-  lines = wrap_lines(lines, M.inner_width())
+  -- wide as its widest line (see `fit_width`). Capped at `max_lines` rows; the
+  -- last visible row becomes an ellipsis when anything was cut.
+  local max_rows = config.max_lines
+  lines = wrap_lines(lines, M.inner_width(), max_rows)
+  if #lines > max_rows then
+    lines = vim.list_slice(lines, 1, max_rows)
+    lines[max_rows] = "…"
+  end
   local content = 0
   for _, line in ipairs(lines) do
     content = math.max(content, vim.fn.strdisplaywidth(line))
