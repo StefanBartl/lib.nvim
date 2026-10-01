@@ -43,8 +43,11 @@ messages.off_message(unsubscribe)
 Attaching as the *only* `ext_messages` listener takes over message **and**
 cmdline rendering from the TUI entirely — nothing gets drawn natively, not
 just "nothing recorded" (verified in a real TUI, not assumed). This module
-therefore only attaches while a renderer already exists (noice loaded, or
-`config.renderer_override`) and detaches the moment that stops being true.
+therefore only attaches while a renderer is actually *running* — not just
+installed: noice stays `require()`-able for the rest of the session after
+`:Noice disable`, so `has_renderer()` checks `noice.config.is_running()`,
+not module-loaded state — (or `config.renderer_override`) and detaches the
+moment that stops being true.
 
 Noice fires no enable/disable event of its own, so nothing can detect a
 `:Noice disable` automatically — call `M.notify_renderer_changed()` after
@@ -52,6 +55,12 @@ toggling it yourself, or call `M.wrap_noice()` once (e.g. from setup) to
 have this module patch `require("noice").enable`/`disable` and do it for
 you. With no renderer at all, the `ext_messages` feed simply doesn't attach
 — `M.push()` (feed 1 above) keeps working regardless.
+
+`vim.ui_attach` hangs indefinitely if called while any floating window is
+already open (notify toasts included) — a `pcall` cannot guard that, since
+it only catches a call that errors, not one that never returns. The attach
+path checks for an open float itself and, if it finds one, defers and
+retries once any window closes, rather than attaching into the hang.
 
 ## API
 
