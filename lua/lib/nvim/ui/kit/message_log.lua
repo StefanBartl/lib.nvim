@@ -113,6 +113,14 @@ function Handle:_redraw()
 
   self.surf:set_lines(lines)
 
+  -- Each arrow hint is its own extmark virt_line -- a real, rendered row in
+  -- the window, just not part of the buffer text -- so the window must be
+  -- at least that many rows taller than the content or the hint is placed
+  -- but has no room to actually show without the user scrolling. Tracked
+  -- alongside the extmark calls below so _resize_to_content gets the true
+  -- visible-row count, not just the buffer's own line count.
+  local visible_rows = #lines
+
   if vim.api.nvim_buf_is_valid(self.surf.bufnr) then
     vim.api.nvim_buf_clear_namespace(self.surf.bufnr, self._hl_ns, 0, -1)
     for lnum, hl in pairs(highlights) do
@@ -124,28 +132,53 @@ function Handle:_redraw()
         virt_lines = { { { "󰁝 more above -- <C-j>", "Comment" } } },
         virt_lines_above = true,
       })
+      visible_rows = visible_rows + 1
     end
     if self.has_more_newer then
       pcall(vim.api.nvim_buf_set_extmark, self.surf.bufnr, self._arrow_ns, #lines - 1, 0, {
         virt_lines = { { { "󰁅 more below -- <C-k>", "Comment" } } },
       })
+      visible_rows = visible_rows + 1
     end
   end
 
-  self:_resize_to_content(#lines)
+  self:_resize_to_content(visible_rows)
+  self:_reveal_more_above_hint()
 end
 
 ---@internal
----Grow/shrink the window to fit `num_lines`, the same way `lib.nvim.window.
----make_scratch`'s own content-derived sizing works (clamped to the editor,
----floored at 2 so the popup never drops below `lib.nvim.window.tag.find()`'s
----`height > 1` floor -- see this module's own commit history for why that
----matters: `M.open()` seeds the window with a 1-line placeholder before the
----first real `_redraw()`, and a sparse live feed can legitimately render
----just one entry). A no-op when the caller passed an explicit `opts.height`
------ that is a deliberate fixed size, not a hint to override.
----@param num_lines integer
-function Handle:_resize_to_content(num_lines)
+---`virt_lines_above` on buffer line 1 is NOT shown by the window's default
+---viewport -- `_resize_to_content` makes room for it, but Neovim still
+---needs an explicit scroll ("topfill", the same field `winsaveview()`
+---reports for diff/virtual-line filler above topline) to actually reveal
+---it; otherwise the row sits there blank and the hint is only visible
+---after the user manually scrolls up (`<C-y>`, discovered live-testing
+---this exact popup). `winrestview` applies a PARTIAL view update -- only
+---`topfill` changes here, cursor/topline are left alone. Harmless no-op
+---for `has_more_newer` (a trailing virt_line needs no such scroll).
+function Handle:_reveal_more_above_hint()
+  if not vim.api.nvim_win_is_valid(self.surf.winid) then
+    return
+  end
+  pcall(vim.api.nvim_win_call, self.surf.winid, function()
+    vim.fn.winrestview({ topfill = self.has_more_older and 1 or 0 })
+  end)
+end
+
+---@internal
+---Grow/shrink the window to fit `num_rows` (buffer lines, PLUS any arrow
+---hint virt_lines the caller already counted in -- a virt_line is a real
+---rendered row with nowhere to go if the window is sized to the buffer's
+---own line count only), the same way `lib.nvim.window.make_scratch`'s own
+---content-derived sizing works (clamped to the editor, floored at 2 so the
+---popup never drops below `lib.nvim.window.tag.find()`'s `height > 1` floor
+----- see this module's own commit history for why that matters: `M.open()`
+---seeds the window with a 1-line placeholder before the first real
+---`_redraw()`, and a sparse live feed can legitimately render just one
+---entry). A no-op when the caller passed an explicit `opts.height` -- that
+---is a deliberate fixed size, not a hint to override.
+---@param num_rows integer
+function Handle:_resize_to_content(num_rows)
   if self.opts.height then
     return
   end
@@ -153,7 +186,7 @@ function Handle:_resize_to_content(num_lines)
     return
   end
   local max_h = math.max(1, vim.o.lines - 4)
-  local height = math.max(2, math.min(num_lines, max_h))
+  local height = math.max(2, math.min(num_rows, max_h))
   pcall(vim.api.nvim_win_set_config, self.surf.winid, { height = height })
 end
 
