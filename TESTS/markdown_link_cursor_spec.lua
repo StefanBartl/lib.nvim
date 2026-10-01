@@ -97,6 +97,31 @@ return function(H)
   eq(cursor(), "1:1", "…an empty first title gets the cursor")
   eq(lc.insert_links(buf, win, {}), false, "no links -> false")
 
+  -- the window no longer shows the buffer the text went into (async insertion,
+  -- the user moved on): nothing is placed, the cursor of that window is left alone
+  do
+    local b1, w1 = scratch({ "one" })
+    local b2 = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_lines(b2, 0, -1, false, { "other buffer, a longer line" })
+    vim.api.nvim_win_set_buf(w1, b2)
+    vim.api.nvim_win_set_cursor(w1, { 1, 3 })
+    ok(
+      lc.insert(b1, w1, 0, 0, "![](a.png)", { startinsert = false }),
+      "the text is still inserted into its own buffer"
+    )
+    eq(vim.api.nvim_buf_get_lines(b1, 0, 1, false)[1], "![](a.png)one", "…there")
+    eq(
+      vim.api.nvim_win_get_cursor(w1)[2],
+      3,
+      "…and the window now showing another buffer keeps its cursor"
+    )
+    eq(
+      lc.place(w1, 0, 0, "[](x)", { startinsert = false }, b1),
+      false,
+      "place(…, buf) refuses a window showing another buffer"
+    )
+  end
+
   -- a non-modifiable buffer is refused, nothing throws
   buf, win = scratch({ "" })
   vim.bo[buf].modifiable = false

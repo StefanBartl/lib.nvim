@@ -108,9 +108,13 @@ end
 ---@param col integer   0-based byte column where `text` starts
 ---@param text string|string[]
 ---@param opts? Lib.Markdown.LinkCursor.Opts
+---@param buf? integer  the buffer `text` was inserted into; when given and `win` no longer shows it (an async insertion, the user moved on) nothing is placed
 ---@return boolean placed false when there was no window / nothing to place
-function M.place(win, row, col, text, opts)
+function M.place(win, row, col, text, opts, buf)
   if not (win and vim.api.nvim_win_is_valid(win)) then
+    return false
+  end
+  if buf and vim.api.nvim_win_get_buf(win) ~= buf then
     return false
   end
   local o = resolve(opts)
@@ -127,8 +131,8 @@ function M.place(win, row, col, text, opts)
     target_col = #lines[#lines] + (#lines == 1 and col or 0)
   end
 
-  local buf = vim.api.nvim_win_get_buf(win)
-  local line = vim.api.nvim_buf_get_lines(buf, target_row, target_row + 1, false)[1]
+  local win_buf = vim.api.nvim_win_get_buf(win)
+  local line = vim.api.nvim_buf_get_lines(win_buf, target_row, target_row + 1, false)[1]
   if not line then
     return false
   end
@@ -160,7 +164,7 @@ function M.insert(buf, win, row, col, text, opts)
   if not pcall(vim.api.nvim_buf_set_text, buf, row, col, row, col, lines) then
     return false
   end
-  M.place(win, row, col, lines, opts)
+  M.place(win, row, col, lines, opts, buf)
   return true
 end
 
@@ -204,7 +208,7 @@ function M.insert_links(buf, win, links, opts)
       return false
     end
   end
-  M.place(win, first_row, 0, links, opts)
+  M.place(win, first_row, 0, links, opts, buf)
   return true
 end
 
