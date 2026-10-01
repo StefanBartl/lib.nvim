@@ -121,16 +121,40 @@ function Handle:_redraw()
     pcall(vim.api.nvim_buf_clear_namespace, self.surf.bufnr, self._arrow_ns, 0, -1)
     if self.has_more_older then
       pcall(vim.api.nvim_buf_set_extmark, self.surf.bufnr, self._arrow_ns, 0, 0, {
-        virt_lines = { { { "󰁝 more above -- <C-k>", "Comment" } } },
+        virt_lines = { { { "󰁝 more above -- <C-j>", "Comment" } } },
         virt_lines_above = true,
       })
     end
     if self.has_more_newer then
       pcall(vim.api.nvim_buf_set_extmark, self.surf.bufnr, self._arrow_ns, #lines - 1, 0, {
-        virt_lines = { { { "󰁅 more below -- <C-j>", "Comment" } } },
+        virt_lines = { { { "󰁅 more below -- <C-k>", "Comment" } } },
       })
     end
   end
+
+  self:_resize_to_content(#lines)
+end
+
+---@internal
+---Grow/shrink the window to fit `num_lines`, the same way `lib.nvim.window.
+---make_scratch`'s own content-derived sizing works (clamped to the editor,
+---floored at 2 so the popup never drops below `lib.nvim.window.tag.find()`'s
+---`height > 1` floor -- see this module's own commit history for why that
+---matters: `M.open()` seeds the window with a 1-line placeholder before the
+---first real `_redraw()`, and a sparse live feed can legitimately render
+---just one entry). A no-op when the caller passed an explicit `opts.height`
+----- that is a deliberate fixed size, not a hint to override.
+---@param num_lines integer
+function Handle:_resize_to_content(num_lines)
+  if self.opts.height then
+    return
+  end
+  if not vim.api.nvim_win_is_valid(self.surf.winid) then
+    return
+  end
+  local max_h = math.max(1, vim.o.lines - 4)
+  local height = math.max(2, math.min(num_lines, max_h))
+  pcall(vim.api.nvim_win_set_config, self.surf.winid, { height = height })
 end
 
 ---@internal
@@ -140,6 +164,16 @@ end
 ---cost of every `_redraw()` for as long as the window stays open. Called
 ---only from `append` -- see `load_more`'s own comment for why pagination
 ---must not be capped the same way.
+---
+---Deliberately does NOT touch `has_more_older`: that flag means "`opts.
+---load_more` can supply older data", set once in `M.open()` and cleared
+---only when `load_more("older")` itself reports nothing left -- trimming
+---changes what's in memory, not whether the data source has more. An
+---earlier version set it here unconditionally, which (a) showed a dead
+---"more above" hint with no `load_more` configured at all (trimming is the
+---only way to reach max_entries, so this path always ran once the cap hit),
+---and (b) could resurrect the hint after `load_more("older")` had already
+---reported exhausted.
 function Handle:_trim()
   local max_entries = self.opts.max_entries
   if not max_entries or #self.entries <= max_entries then
@@ -148,7 +182,6 @@ function Handle:_trim()
   for _ = 1, #self.entries - max_entries do
     table.remove(self.entries, 1)
   end
-  self.has_more_older = true
 end
 
 ---Append newly-arrived entries (a live feed) without discarding history
