@@ -552,6 +552,18 @@ M.deliver = fast_event.guard(function(message, level, opts)
     table.remove(history, 1)
   end
 
+  -- lib.nvim.messages' own attach policy never sees notify/toast traffic
+  -- (see its module doc) -- this is the one place that writes it in
+  -- directly, unconditionally, regardless of toast_min_level below.
+  pcall(function()
+    require("lib.nvim.messages").push({
+      level = level,
+      kind = "notify",
+      content = message,
+      source = opts.source,
+    })
+  end)
+
   -- Resolved into a local: `opts` belongs to the caller, who may reuse it, and
   -- writing the default into it would freeze a later `setup({ messages = ... })`
   -- out of that table.
