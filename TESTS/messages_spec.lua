@@ -243,8 +243,17 @@ return function(H)
     package.loaded["noice.config"] = nil
   end
 
-  -- maybe_attach(): must not call vim.ui_attach while a floating window is
-  -- open (documented hang hazard), and must retry once it closes.
+  -- maybe_attach(): attaches once a renderer exists, even with floating
+  -- windows already open. A prior version additionally refused to attach
+  -- while ANY float was open (a documented, but here unreproduced, hang
+  -- hazard) -- live-tested against the real config on 2026-10-01
+  -- (WKDBooks/.../TOOLS/scripts/tui-spike/s7.lua): that guard made the
+  -- logger never attach at all, since ui.nvim's own statusline chips are
+  -- themselves persistent floats open for the whole session. Two direct
+  -- `vim.ui_attach` probes in that same live session -- with those chip
+  -- floats open, and with this module's own entered/focused popup open --
+  -- both attached in under 2ms, no hang. Removed; see this function's own
+  -- doc comment for the full writeup.
   do
     local messages = fresh_messages()
     package.loaded["noice"] = {}
@@ -270,11 +279,9 @@ return function(H)
 
       messages.notify_renderer_changed()
       vim.wait(50)
-      eq(attach_calls, 0, "did not attach while a floating window was open")
+      eq(attach_calls, 1, "attaches even with a floating window already open")
 
-      vim.api.nvim_win_close(win, true)
-      vim.wait(50)
-      eq(attach_calls, 1, "attached once the floating window closed")
+      pcall(vim.api.nvim_win_close, win, true)
     end)
 
     package.loaded["noice"] = nil

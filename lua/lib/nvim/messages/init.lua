@@ -171,56 +171,34 @@ local function on_ui_event(event, kind, content, replace_last, history)
 end
 
 ---@internal
----Whether any floating window is currently open. `vim.ui_attach` is
----documented (`notify/popup.lua`'s own finding) to hang indefinitely --
----never returning -- if called while one is already open; `pcall` cannot
----protect against a call that never comes back, only against one that
----errors. `maybe_attach` below must check this itself before attaching.
----@return boolean
-local function any_float_open()
-  for _, w in ipairs(vim.api.nvim_list_wins()) do
-    local ok, cfg = pcall(vim.api.nvim_win_get_config, w)
-    if ok and cfg.relative ~= "" then
-      return true
-    end
-  end
-  return false
-end
-
----@type fun()
-local maybe_attach
-
----@internal
----One-shot retry: try `maybe_attach` again the moment any window closes,
----since that is the only signal that a previously-open float might now be
----gone. Re-arming on every `WinClosed` (not just once overall) is cheap and
----correct even if several floats are stacked.
-local function schedule_attach_retry()
-  local group = vim.api.nvim_create_augroup("LibNvimMessagesAttachRetry", { clear = true })
-  vim.api.nvim_create_autocmd("WinClosed", {
-    group = group,
-    once = true,
-    callback = function()
-      maybe_attach()
-    end,
-  })
-end
-
 ---Attach the `ext_messages` logger if a renderer exists and it isn't
----already attached. Deferred (past the current fast-event tick) and
----skipped entirely while any floating window is open, retrying once one
----closes -- see `any_float_open`'s doc comment for why `pcall` alone can't
----guard this.
-maybe_attach = function()
+---already attached. Deferred past the current fast-event tick, pcall-
+---guarded against a genuine error.
+---
+---A prior version of this function also refused to attach while ANY
+---floating window was open, retrying on `WinClosed`, based on a historical
+---finding in `notify/popup.lua`'s own doc comment ("`vim.ui_attach` ...
+---found to hang indefinitely ... once any floating window was already
+---open"). Live-tested against this exact config on 2026-10-01 (real TUI,
+---`-FullConfig`, `WKDBooks/.../TOOLS/scripts/tui-spike/s7.lua`): that guard
+---made the logger never attach at all, because ui.nvim's own statusline
+---chips (`ui.kit.chip`) are themselves persistent floating windows that
+---are open for the entire session -- `any_float_open()` was permanently
+---true, `maybe_attach` deferred forever, and the `ext_messages` feed never
+---worked. Two direct probes in that same session -- `vim.ui_attach` called
+---with those chip floats open, and again while this module's own, entered/
+---focused recent-messages popup was open -- both attached and detached in
+---under 2ms, no hang. The guard was a net loss (total feature breakage
+---traded for a hang this Neovim version/config does not reproduce) and was
+---removed. If a real hang resurfaces, reproduce it with that same harness
+---before re-adding a guard -- and scope it to whatever the real trigger
+---turns out to be, not "any floating window anywhere."
+local function maybe_attach()
   if attached or not has_renderer() then
     return
   end
   vim.schedule(function()
     if attached or not has_renderer() then
-      return
-    end
-    if any_float_open() then
-      schedule_attach_retry()
       return
     end
     ns = ns or vim.api.nvim_create_namespace("lib_nvim_messages")

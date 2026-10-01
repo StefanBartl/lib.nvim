@@ -56,11 +56,17 @@ have this module patch `require("noice").enable`/`disable` and do it for
 you. With no renderer at all, the `ext_messages` feed simply doesn't attach
 — `M.push()` (feed 1 above) keeps working regardless.
 
-`vim.ui_attach` hangs indefinitely if called while any floating window is
-already open (notify toasts included) — a `pcall` cannot guard that, since
-it only catches a call that errors, not one that never returns. The attach
-path checks for an open float itself and, if it finds one, defers and
-retries once any window closes, rather than attaching into the hang.
+A historical finding claimed `vim.ui_attach` could hang indefinitely if
+called while any floating window was already open (a `pcall` could not
+guard that, since it only catches a call that errors, not one that never
+returns). Live-tested against the real config on 2026-10-01 (real TUI,
+`WKDBooks/.../TOOLS/scripts/tui-spike/s7.lua`): a guard built on that
+premise made this module never attach at all, since ui.nvim's own
+statusline chips are themselves persistent floats open for the whole
+session. Two direct `vim.ui_attach` probes in that same live session — one
+with those chip floats open, one with this module's own entered/focused
+popup open — both attached in under 2ms, no hang. The guard was removed;
+see `maybe_attach`'s own doc comment in `init.lua` for the full writeup.
 
 ## API
 
