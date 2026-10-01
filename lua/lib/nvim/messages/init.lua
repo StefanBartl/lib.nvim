@@ -227,7 +227,11 @@ end
 ---@return nil
 function M.setup(opts)
   local new_config = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), opts or {})
-  new_config.ring_size = math.max(1, new_config.ring_size)
+  -- Floored, not just clamped: ring_size indexes the circular buffer via `%`
+  -- (store()/snapshot()), which silently corrupts on a fractional divisor --
+  -- the old array-with-table.remove(1) design tolerated a float harmlessly,
+  -- this one does not.
+  new_config.ring_size = math.max(1, math.floor(new_config.ring_size))
   if new_config.ring_size ~= config.ring_size then
     entries = {}
     head = 1
