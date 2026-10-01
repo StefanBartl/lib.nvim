@@ -88,6 +88,7 @@ local specs = {
   "memo_spec.lua",
   "nvim_helpers_spec.lua",
   "window_spec.lua",
+  "focus_helpers_spec.lua",
   "selection_spec.lua",
   "context_spec.lua",
   "cache_spec.lua",
