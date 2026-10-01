@@ -61,6 +61,12 @@ local config = vim.deepcopy(DEFAULTS)
 ---@type Lib.Messages.Entry[]
 local entries = {}
 
+---@type integer
+local head = 1
+
+---@type integer
+local count = 0
+
 ---@type fun(entry: Lib.Messages.Entry)[]
 local listeners = {}
 
@@ -86,23 +92,41 @@ local function has_renderer()
   if config.renderer_override ~= nil then
     return config.renderer_override
   end
-  return package.loaded["noice"] ~= nil
+  if package.loaded["noice"] == nil then
+    return false
+  end
+  -- `package.loaded["noice"]` stays non-nil for the rest of the session once
+  -- noice has been required, even after `:Noice disable` -- that only flips
+  -- noice's own `Config._running` flag. Checking module-loaded state alone
+  -- would mean this module never detaches again once noice has loaded once.
+  local ok, noice_config = pcall(require, "noice.config")
+  return ok and noice_config.is_running() == true
 end
 
 ---@internal
----Append `entry`, applying `replace_last` and the ring cap. Notifies
----listeners after the entry is actually stored.
+---Append `entry` into the ring (a true circular buffer: `head`/`count`
+---index into a fixed-size `entries`, so both append and eviction are O(1)
+---instead of shifting the whole array on every push once the ring is
+---full). Notifies listeners after the entry is actually stored, over a
+---snapshot of `listeners` -- a listener unsubscribing itself or another
+---mid-dispatch (e.g. a "fire once" pattern via `off_message`) must not
+---perturb the in-progress iteration and silently skip a later listener.
 ---@param entry Lib.Messages.Entry
 local function store(entry)
-  if entry.replace_last and #entries > 0 then
-    entries[#entries] = entry
+  local ring_size = config.ring_size
+  if entry.replace_last and count > 0 then
+    entries[(head + count - 2) % ring_size + 1] = entry
   else
-    entries[#entries + 1] = entry
-    if #entries > config.ring_size then
-      table.remove(entries, 1)
+    if count < ring_size then
+      count = count + 1
+      entries[(head + count - 2) % ring_size + 1] = entry
+    else
+      entries[head] = entry
+      head = head % ring_size + 1
     end
   end
-  for _, fn in ipairs(listeners) do
+  local snapshot = vim.list_extend({}, listeners)
+  for _, fn in ipairs(snapshot) do
     local ok, err = pcall(fn, entry)
     if not ok then
       vim.schedule(function()
@@ -147,16 +171,56 @@ local function on_ui_event(event, kind, content, replace_last, history)
 end
 
 ---@internal
+---Whether any floating window is currently open. `vim.ui_attach` is
+---documented (`notify/popup.lua`'s own finding) to hang indefinitely --
+---never returning -- if called while one is already open; `pcall` cannot
+---protect against a call that never comes back, only against one that
+---errors. `maybe_attach` below must check this itself before attaching.
+---@return boolean
+local function any_float_open()
+  for _, w in ipairs(vim.api.nvim_list_wins()) do
+    local ok, cfg = pcall(vim.api.nvim_win_get_config, w)
+    if ok and cfg.relative ~= "" then
+      return true
+    end
+  end
+  return false
+end
+
+---@type fun()
+local maybe_attach
+
+---@internal
+---One-shot retry: try `maybe_attach` again the moment any window closes,
+---since that is the only signal that a previously-open float might now be
+---gone. Re-arming on every `WinClosed` (not just once overall) is cheap and
+---correct even if several floats are stacked.
+local function schedule_attach_retry()
+  local group = vim.api.nvim_create_augroup("LibNvimMessagesAttachRetry", { clear = true })
+  vim.api.nvim_create_autocmd("WinClosed", {
+    group = group,
+    once = true,
+    callback = function()
+      maybe_attach()
+    end,
+  })
+end
+
 ---Attach the `ext_messages` logger if a renderer exists and it isn't
----already attached. Deferred + pcall-guarded: a prior investigation
----(`notify/popup.lua`'s own doc comment) found `vim.ui_attach` can hang if
----called while a floating window is already open.
-local function maybe_attach()
+---already attached. Deferred (past the current fast-event tick) and
+---skipped entirely while any floating window is open, retrying once one
+---closes -- see `any_float_open`'s doc comment for why `pcall` alone can't
+---guard this.
+maybe_attach = function()
   if attached or not has_renderer() then
     return
   end
   vim.schedule(function()
     if attached or not has_renderer() then
+      return
+    end
+    if any_float_open() then
+      schedule_attach_retry()
       return
     end
     ns = ns or vim.api.nvim_create_namespace("lib_nvim_messages")
@@ -179,10 +243,19 @@ end
 
 ---Change module-wide defaults. Safe to call more than once (e.g. a config
 ---reload) -- resets to `DEFAULTS` merged with `opts`, not an accumulation.
+---A `ring_size` change resets the ring itself: the circular buffer's
+---indices are only valid for the size they were written under.
 ---@param opts? Lib.Messages.Config
 ---@return nil
 function M.setup(opts)
-  config = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), opts or {})
+  local new_config = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), opts or {})
+  new_config.ring_size = math.max(1, new_config.ring_size)
+  if new_config.ring_size ~= config.ring_size then
+    entries = {}
+    head = 1
+    count = 0
+  end
+  config = new_config
   M.notify_renderer_changed()
 end
 
@@ -256,7 +329,8 @@ function M.snapshot(opts)
   end
 
   local out = {}
-  for _, entry in ipairs(entries) do
+  for i = 0, count - 1 do
+    local entry = entries[(head + i - 1) % config.ring_size + 1]
     local in_range = (not opts.since_ms or entry.time_ms >= opts.since_ms)
       and (not opts.until_ms or entry.time_ms <= opts.until_ms)
     local kind_ok = not kinds_filter or kinds_filter[entry.kind]

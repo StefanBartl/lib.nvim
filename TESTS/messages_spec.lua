@@ -58,6 +58,50 @@ return function(H)
     eq(snap[3].content, "m5", "newest kept")
   end
 
+  -- The ring is a true circular buffer: it keeps working correctly across
+  -- many wraps, not just the first eviction.
+  do
+    local messages = fresh_messages()
+    messages.setup({ ring_size = 3 })
+    for i = 1, 10 do
+      messages.push({ content = "m" .. i })
+    end
+    local snap = messages.snapshot()
+    eq(#snap, 3, "still capped at ring_size after many wraps")
+    eq(snap[1].content, "m8", "oldest surviving entry")
+    eq(snap[2].content, "m9", "middle entry")
+    eq(snap[3].content, "m10", "newest kept")
+  end
+
+  -- replace_last still replaces the newest slot correctly after the ring
+  -- has wrapped around at least once.
+  do
+    local messages = fresh_messages()
+    messages.setup({ ring_size = 3 })
+    for i = 1, 4 do
+      messages.push({ content = "m" .. i }) -- m1 evicted; ring holds m2,m3,m4
+    end
+    messages.push({ content = "m4-replaced", replace_last = true })
+    local snap = messages.snapshot()
+    eq(#snap, 3, "replace_last does not grow the ring")
+    eq(snap[1].content, "m2", "oldest unaffected")
+    eq(snap[2].content, "m3", "middle unaffected")
+    eq(snap[3].content, "m4-replaced", "newest slot was replaced, not appended")
+  end
+
+  -- Changing ring_size via setup() resets the ring instead of leaving
+  -- indices computed for the old size.
+  do
+    local messages = fresh_messages()
+    messages.setup({ ring_size = 2 })
+    messages.push({ content = "a" })
+    messages.push({ content = "b" })
+    messages.setup({ ring_size = 5 })
+    eq(#messages.snapshot(), 0, "ring_size change resets the buffer")
+    messages.push({ content = "c" })
+    eq(#messages.snapshot(), 1, "works correctly after a ring_size change")
+  end
+
   -- since_ms/until_ms filtering.
   do
     local messages = fresh_messages()
@@ -108,6 +152,35 @@ return function(H)
     eq(#seen, 1, "listener did not fire after off_message")
   end
 
+  -- A listener unsubscribing (itself or another) mid-dispatch does not
+  -- perturb the in-progress listener loop -- every listener subscribed at
+  -- the start of the push still gets this entry.
+  do
+    local messages = fresh_messages()
+    local seen_a, seen_b, seen_c = {}, {}, {}
+    local handle_a
+    handle_a = messages.on_message(function(entry)
+      seen_a[#seen_a + 1] = entry.content
+      messages.off_message(handle_a)
+    end)
+    messages.on_message(function(entry)
+      seen_b[#seen_b + 1] = entry.content
+    end)
+    messages.on_message(function(entry)
+      seen_c[#seen_c + 1] = entry.content
+    end)
+
+    messages.push({ content = "x" })
+    eq(#seen_a, 1, "A fired once, then unsubscribed itself")
+    eq(#seen_b, 1, "B still fired despite A's mid-dispatch unsubscribe")
+    eq(#seen_c, 1, "C still fired too")
+
+    messages.push({ content = "y" })
+    eq(#seen_a, 1, "A did not fire again (unsubscribed)")
+    eq(#seen_b, 2, "B keeps receiving")
+    eq(#seen_c, 2, "C keeps receiving")
+  end
+
   -- A throwing listener does not break push() or the other listeners.
   do
     local messages = fresh_messages()
@@ -129,6 +202,83 @@ return function(H)
     package.loaded["noice"] = nil
     ok(pcall(messages.wrap_noice), "wrap_noice() does not raise without noice")
     ok(pcall(messages.notify_renderer_changed), "notify_renderer_changed() does not raise")
+  end
+
+  -- has_renderer(): tracks noice's actual running state, not just whether
+  -- the module was ever require()d -- package.loaded["noice"] stays non-nil
+  -- for the rest of the session even after `:Noice disable`.
+  do
+    local messages = fresh_messages()
+    local running = true
+    package.loaded["noice"] = {}
+    package.loaded["noice.config"] = {
+      is_running = function()
+        return running
+      end,
+    }
+
+    local attach_calls, detach_calls = 0, 0
+    H.with_patched(vim, "ui_attach", function()
+      attach_calls = attach_calls + 1
+      return 1
+    end, function()
+      H.with_patched(vim, "ui_detach", function()
+        detach_calls = detach_calls + 1
+      end, function()
+        messages.notify_renderer_changed()
+        vim.wait(50)
+        eq(attach_calls, 1, "attached while noice reports running")
+
+        running = false
+        messages.notify_renderer_changed()
+        eq(
+          detach_calls,
+          1,
+          "detached once noice reports not running, even though the module stays loaded"
+        )
+      end)
+    end)
+
+    package.loaded["noice"] = nil
+    package.loaded["noice.config"] = nil
+  end
+
+  -- maybe_attach(): must not call vim.ui_attach while a floating window is
+  -- open (documented hang hazard), and must retry once it closes.
+  do
+    local messages = fresh_messages()
+    package.loaded["noice"] = {}
+    package.loaded["noice.config"] = {
+      is_running = function()
+        return true
+      end,
+    }
+
+    local attach_calls = 0
+    H.with_patched(vim, "ui_attach", function()
+      attach_calls = attach_calls + 1
+      return 1
+    end, function()
+      local buf = vim.api.nvim_create_buf(false, true)
+      local win = vim.api.nvim_open_win(buf, false, {
+        relative = "editor",
+        width = 10,
+        height = 1,
+        row = 0,
+        col = 0,
+      })
+
+      messages.notify_renderer_changed()
+      vim.wait(50)
+      eq(attach_calls, 0, "did not attach while a floating window was open")
+
+      vim.api.nvim_win_close(win, true)
+      vim.wait(50)
+      eq(attach_calls, 1, "attached once the floating window closed")
+    end)
+
+    package.loaded["noice"] = nil
+    package.loaded["noice.config"] = nil
   end
 
   -- notify.popup's M.deliver pushes into the store directly (not through
