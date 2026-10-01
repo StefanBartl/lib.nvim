@@ -85,6 +85,41 @@
 ---@field filetype? string
 ---@field close_on_focus_lost? boolean                    # dismiss on WinLeave/BufLeave (default true)
 
+--- Options for `message_log` -- a scrollable, time-ordered, paginated,
+--- collapsible entry list popup. Knows nothing about where entries come
+--- from; `time_ms` on an entry just needs to share a clock with `now_ms`
+--- and the other entries (monotonic `vim.uv.hrtime()/1e6` or epoch, either
+--- works -- this module only ever subtracts two of the caller's own values).
+---@class Lib.UI.Kit.MessageLog.Entry
+---@field time_ms? number
+---@field level? integer                                  # vim.log.levels value; only used to pick a highlight
+---@field content string
+---@class Lib.UI.Kit.MessageLog.Opts
+---@field title? string
+---@field entries? Lib.UI.Kit.MessageLog.Entry[]           # initial content, oldest first
+---@field order? "newest_last"|"newest_first"              # default "newest_last"
+---@field collapsed_default? boolean
+---@field load_more? fun(direction: "older"|"newer"): Lib.UI.Kit.MessageLog.Entry[]  # pagination; omit to disable
+---@field format_entry_time? fun(entry: Lib.UI.Kit.MessageLog.Entry, now_ms: number): string  # default: "Ns ago"/"Nm Ns ago"
+---@field now_ms? fun(): number                            # default: vim.uv.hrtime()/1e6
+---@field extra_cheatsheet_lines? string[]                 # appended to the built-in `?` key list
+---@field theme? Lib.UI.Kit.ThemeArg
+---@field width? integer
+---@field height? integer
+---@field relative? "editor"|"cursor"|"win"
+---@field filetype? string
+---@field close_on_focus_lost? boolean                     # default true
+
+---@class Lib.UI.Kit.MessageLog.Handle
+---@field append fun(self: Lib.UI.Kit.MessageLog.Handle, new_entries: Lib.UI.Kit.MessageLog.Entry[])
+---@field load_more fun(self: Lib.UI.Kit.MessageLog.Handle, direction: "older"|"newer")
+---@field set_collapsed fun(self: Lib.UI.Kit.MessageLog.Handle, value?: boolean)
+---@field on_close fun(self: Lib.UI.Kit.MessageLog.Handle, cb: fun())
+---@field close fun(self: Lib.UI.Kit.MessageLog.Handle)
+
+---@class Lib.UI.Kit.MessageLogModule
+---@field open fun(opts: Lib.UI.Kit.MessageLog.Opts): Lib.UI.Kit.MessageLog.Handle|nil
+
 --- One entry of a `kit.menu`. Two shapes are accepted, because this component
 --- doubles as the native renderer for `lib.nvim.contextmenu`: the kit's own
 --- `label`/`action` pair, and nvzone/menu's `name`/`cmd` (with `items` for a
@@ -265,6 +300,7 @@
 ---@field popup fun(opts: table): any            # dispatch on opts.type
 ---@field note fun(opts: Lib.UI.Kit.NoteOpts): Lib.UI.Kit.Surface|nil
 ---@field viewer fun(opts: Lib.UI.Kit.ViewerOpts): Lib.UI.Kit.Surface|nil  # read-only info panel, closes on focus loss
+---@field message_log fun(opts: Lib.UI.Kit.MessageLog.Opts): Lib.UI.Kit.MessageLog.Handle|nil  # paginated/collapsible time-ordered entry list
 ---@field toast fun(opts: table): Lib.UI.Kit.Surface|nil    # ephemeral corner message
 ---@field input fun(opts: Lib.UI.Kit.InputOpts): Lib.UI.Kit.Surface|nil    # single-line insert-mode prompt (secret = true masks it)
 ---@field live_input fun(opts: Lib.UI.Kit.LiveInputOpts): Lib.UI.Kit.Surface|nil  # debounced on_change as you type
