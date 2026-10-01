@@ -12,6 +12,15 @@ local close_on_focus_lost = require("lib.nvim.window.close_on_focus_lost")
 
 local M = {}
 
+-- Module-level, not per-instance: `nvim_create_namespace` has no delete
+-- API, so a namespace created fresh in every `M.open()` (the earlier,
+-- bufnr-suffixed approach) leaked two registry entries per popup for the
+-- life of the session. Every use below is already scoped to `self.surf.
+-- bufnr` explicitly, so sharing one id across concurrently-open instances
+-- is safe -- the same pattern `chooser.lua`/`preview.lua` already use.
+local HL_NS = vim.api.nvim_create_namespace("ui_kit_message_log_hl")
+local ARROW_NS = vim.api.nvim_create_namespace("ui_kit_message_log_arrows")
+
 ---@internal
 local LEVEL_HL = {
   [vim.log.levels.WARN] = "DiagnosticWarn",
@@ -65,7 +74,7 @@ local function render_entry(entry, opts, collapsed, now_ms)
 end
 
 ---@class Lib.UI.Kit.MessageLog.Handle
----@field package surf Lib.UI.Kit.Surface
+---@field surf Lib.UI.Kit.Surface  # the underlying window/buffer -- e.g. for a caller's own window-tag bookkeeping
 ---@field package opts Lib.UI.Kit.MessageLog.Opts
 ---@field package entries table[]  oldest first
 ---@field package collapsed boolean
@@ -124,6 +133,24 @@ function Handle:_redraw()
   end
 end
 
+---@internal
+---Drop the oldest entries past `opts.max_entries` (unset = unbounded, the
+---pre-existing default). Without this, a popup left open against a live
+---feed (`on_message` -> `append`) grows `self.entries` and therefore the
+---cost of every `_redraw()` for as long as the window stays open. Called
+---only from `append` -- see `load_more`'s own comment for why pagination
+---must not be capped the same way.
+function Handle:_trim()
+  local max_entries = self.opts.max_entries
+  if not max_entries or #self.entries <= max_entries then
+    return
+  end
+  for _ = 1, #self.entries - max_entries do
+    table.remove(self.entries, 1)
+  end
+  self.has_more_older = true
+end
+
 ---Append newly-arrived entries (a live feed) without discarding history
 ---already loaded. The caller owns its own subscription to its data source
 ---and is responsible for only calling this with entries that belong here
@@ -136,6 +163,7 @@ function Handle:append(new_entries)
   for _, e in ipairs(new_entries) do
     self.entries[#self.entries + 1] = e
   end
+  self:_trim()
   self:_redraw()
 end
 
@@ -157,6 +185,12 @@ function Handle:load_more(direction)
     self:_redraw()
     return
   end
+  -- `max_entries` (see `_trim`) deliberately does NOT apply here: pagination
+  -- is explicit and self-limiting (a user presses <C-j>/<C-k>, not an
+  -- unbounded live feed), and trimming a direction's own just-loaded
+  -- entries straight back out -- oldest-first, i.e. exactly what
+  -- `load_more("older")` just prepended -- would make paging backward
+  -- through history a no-op once the cap is hit.
   if direction == "older" then
     local merged = {}
     for _, e in ipairs(more) do
@@ -242,8 +276,8 @@ function M.open(opts)
     has_more_older = type(opts.load_more) == "function",
     has_more_newer = false, -- newest loaded entry is "now"; nothing newer until a live append arrives
     now_ms_fn = now_ms_fn,
-    _hl_ns = vim.api.nvim_create_namespace("ui_kit_message_log_hl_" .. surf.bufnr),
-    _arrow_ns = vim.api.nvim_create_namespace("ui_kit_message_log_arrows_" .. surf.bufnr),
+    _hl_ns = HL_NS,
+    _arrow_ns = ARROW_NS,
   }, Handle)
 
   if opts.close_on_focus_lost ~= false then
