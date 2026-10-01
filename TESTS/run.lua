@@ -46,6 +46,7 @@ local specs = {
   "logger_spec.lua",
   "notify_popup_spec.lua",
   "echo_spec.lua",
+  "messages_spec.lua",
   "output_spec.lua",
   "output_viewer_spec.lua",
   "progress_echo_style_spec.lua",
