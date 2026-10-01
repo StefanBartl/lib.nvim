@@ -55,7 +55,7 @@ local M = {}
 ---@class Lib.Notify.Popup.SetupOpts
 ---@field messages? boolean
 ---@field max_lines? integer
----@field width? integer
+---@field width? integer|false  `false` resets to "follow the chip's text budget"
 ---@field toast? table Forwarded to `ui.kit.toast.setup` (`width`, `min_width`, `padding`: columns or "NN%") when ui.nvim is installed -- the size of the chip itself
 ---@field toast_max_bytes? integer
 ---@field entry_max_bytes? integer
@@ -593,7 +593,9 @@ function M.setup(opts)
   if opts.max_lines ~= nil then
     config.max_lines = opts.max_lines
   end
-  if opts.width ~= nil then
+  if opts.width == false then
+    config.width = nil -- back to following the chip's own text budget
+  elseif opts.width ~= nil then
     config.width = opts.width
   end
   if type(opts.toast) == "table" then

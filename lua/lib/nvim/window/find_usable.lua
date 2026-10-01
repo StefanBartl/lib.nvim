@@ -69,4 +69,19 @@ function M.previous_window(opts)
   return M.target_window(opts)
 end
 
+---Find the window a link/text should be inserted into: the CURRENT window when it
+---is a normal editing window (a command typed in the editor), else the previous
+---one (an action fired from a sidebar or float, see `previous_window`). Plain
+---`previous_window()` is wrong for a `:Command` run from the editor itself: it
+---would pick whichever split the user visited before.
+---@param opts? { current_tab_only?: boolean }
+---@return integer|nil winid
+function M.insertion_window(opts)
+  local cur = vim.api.nvim_get_current_win()
+  if M.is_usable_window(cur) then
+    return cur
+  end
+  return M.previous_window(opts)
+end
+
 return M

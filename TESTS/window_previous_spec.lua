@@ -34,4 +34,27 @@ return function(H)
     vim.api.nvim_get_current_win(),
     "single window: falls back to target_window()"
   )
+
+  -- insertion_window: the current window when it is a normal editing window (a command
+  -- typed in the editor), else the previous one (an action from a sidebar/float).
+  vim.cmd("only")
+  local a = vim.api.nvim_get_current_win()
+  vim.cmd("vsplit")
+  local b = vim.api.nvim_get_current_win()
+  vim.api.nvim_set_current_win(a)
+  vim.api.nvim_set_current_win(b)
+  eq(
+    fu.insertion_window(),
+    b,
+    "typed in the editor: the current window, not the one visited before"
+  )
+  local fb = vim.api.nvim_create_buf(false, true)
+  local fw = vim.api.nvim_open_win(
+    fb,
+    true,
+    { relative = "editor", row = 0, col = 0, width = 5, height = 1 }
+  )
+  eq(fu.insertion_window() ~= fw, true, "from a float: never the float")
+  pcall(vim.api.nvim_win_close, fw, true)
+  vim.cmd("only")
 end
