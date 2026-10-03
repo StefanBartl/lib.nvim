@@ -218,6 +218,11 @@ Neovim adapters.
                            render, format_lines/_buffer/_at_cursor/_file);
                            extracted from markdown.nvim and buffer-ctx.nvim,
                            see lua/lib/nvim/markdown/table/README.md
+    lib.nvim.markdown.frontmatter  flat-YAML frontmatter: parse, get/set/patch,
+                           update_text/update change only the touched keys
+                           (byte-exact roundtrip, CRLF/BOM aware, REMOVE
+                           deletes a key); see
+                           lua/lib/nvim/markdown/frontmatter/README.md
     lib.nvim.health         :checkhealth authoring helpers: version_ok(min),
                            check_require(mod, label, level); see
                            lua/lib/nvim/health/README.md

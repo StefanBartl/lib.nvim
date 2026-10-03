@@ -95,6 +95,7 @@ aggregator exists for convenience, not as the entry point.
 | [`lib.nvim.vregex`](../lua/lib/nvim/vregex/README.md) | build `\V`-literal Vim-regex patterns from arbitrary text (`literal`/`escape`) — prevents regex-injection when user/arbitrary text is dropped into a search or `:s` pattern |
 | [`lib.nvim.config.repo_file`](../lua/lib/nvim/config/repo_file/README.md) | Read a repository-local JSON config file and split its keys into an allowlist vs. everything else — the read/decode/split shape `documentation.nvim`'s and `lsp.nvim`'s project-config loaders each built independently before this existed. No path resolution, no warning text: both stay the caller's |
 | [`lib.nvim.checkpoint`](../lua/lib/nvim/checkpoint/README.md) | snapshot a set of files before a destructive multi-file operation (`create`/`restore`/`discard`), byte-exact restore via `fs_copyfile`, built on `cross.fs.mutate` |
+| [`lib.nvim.markdown.frontmatter`](../lua/lib/nvim/markdown/frontmatter/README.md) | flat-YAML frontmatter of a Markdown text/file: `parse` (`meta`/`order`/`body`/`warnings`, BOM + LF/CRLF aware), `patch`/`update_text`/`update` that change **only the touched keys** (unknown keys, comments, body and line endings come back byte-identical; `REMOVE` deletes a key; `create = true`/`add_block` adds a block), atomic byte-exact file write; never throws on malformed text |
 
 Opt-in call counting / usage statistics (`wrap`/`wrap_loaded`, persistence,
 Markdown/browser reports, `:RATelemetry`) moved to
@@ -134,6 +135,7 @@ and are generated on install by your plugin manager (see [Help docs](help.md)).
 - [`lib.lua.range`](../lua/lib/lua/range/README.md)
 - [`lib.nvim.vregex`](../lua/lib/nvim/vregex/README.md) · [`lib.nvim.checkpoint`](../lua/lib/nvim/checkpoint/README.md)
 - [`lib.nvim.config.repo_file`](../lua/lib/nvim/config/repo_file/README.md)
+- [`lib.nvim.markdown.frontmatter`](../lua/lib/nvim/markdown/frontmatter/README.md)
 - [`lib.nvim.cache`](../lua/lib/nvim/cache/README.md)
 
 ### `:help` pages
