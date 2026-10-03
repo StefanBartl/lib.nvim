@@ -171,6 +171,13 @@ local function parse_flow_list(v)
   return items, comment
 end
 
+---Does plain text read as a number in `numbers` mode?
+---@param v string
+---@return boolean
+local function looks_numeric(v)
+  return v:match("^[+-]?%d+%.?%d*$") ~= nil or v:match("^[+-]?%.%d+$") ~= nil
+end
+
 ---Parse what follows `key:` on a line.
 ---@param rest string  text after the colon, empty or starting with whitespace
 ---@param numbers boolean
@@ -217,7 +224,7 @@ local function parse_value(rest, numbers)
   elseif v == "false" then
     return false, comment
   end
-  if numbers and (v:match("^[+-]?%d+%.?%d*$") or v:match("^[+-]?%.%d+$")) then
+  if numbers and looks_numeric(v) then
     return tonumber(v), comment
   end
   return v, comment
@@ -256,6 +263,7 @@ function M.parse(text, opts)
     entries = {},
     opaque = {},
     numbers = numbers,
+    prose = false,
     by_key = {},
   }
 
@@ -277,6 +285,7 @@ function M.parse(text, opts)
   local entries = {}
   local warnings = {}
   local last_kv ---@type Lib.Markdown.Frontmatter.Entry|nil
+  local keyed, stray = 0, 0
   local closed = false
   local lineno = 1
   local len = #text
@@ -303,6 +312,7 @@ function M.parse(text, opts)
         entry.value, entry.comment = value, comment
       end
       last_kv = entry
+      keyed = keyed + 1
     elseif line:match("^%s*$") or line:match("^%s*#") then
       last_kv = nil
     elseif last_kv and (line:match("^[ \t]") or line:match("^%-[ \t]") or line == "-") then
@@ -317,6 +327,7 @@ function M.parse(text, opts)
       end
     else
       last_kv = nil
+      stray = stray + 1
       warnings[#warnings + 1] = ("line %d: not a `key: value` line, kept verbatim"):format(lineno)
     end
     entries[#entries + 1] = entry
@@ -330,6 +341,9 @@ function M.parse(text, opts)
   end
 
   parsed.has_block = true
+  -- Foreign lines and not one `key: value` line: prose between two `---`
+  -- lines (a horizontal rule pair), not frontmatter. Never patched.
+  parsed.prose = keyed == 0 and stray > 0
   parsed.open, parsed.open_eol = first, first_eol
   parsed.body = text:sub(p)
   parsed.entries = entries
@@ -432,10 +446,15 @@ end
 
 ---@param s string
 ---@param in_list boolean
+---@param numbers? boolean  number mode: a scalar that reads as a number must be quoted to stay a string
 ---@return string|nil rendered
 ---@return string|nil err
-local function render_string(s, in_list)
-  if needs_quotes(s) or (in_list and s:find("[,%[%]{}]")) then
+local function render_string(s, in_list, numbers)
+  if
+    needs_quotes(s)
+    or (in_list and s:find("[,%[%]{}]"))
+    or (numbers and not in_list and looks_numeric(s))
+  then
     return quote_double(s)
   end
   return s
@@ -465,7 +484,7 @@ end
 local function prepare_value(value, numbers)
   local t = type(value)
   if t == "string" then
-    local rendered, err = render_string(value, false)
+    local rendered, err = render_string(value, false, numbers)
     return value, rendered, err
   elseif t == "boolean" then
     return value, tostring(value)
@@ -632,6 +651,10 @@ function M.patch(parsed, patch, opts)
     return false, nerr
   end
 
+  if parsed.prose then
+    return false, "the `---` block holds prose, not `key: value` lines, refusing to patch it"
+  end
+
   local any_set = false
   for _, op in ipairs(ops) do
     if not valid_key(op.key) then
@@ -796,7 +819,8 @@ end
 ---@return string|nil err
 local function write_atomic(path, content)
   local target = uv.fs_realpath(path) or path
-  local tmp = target .. ".frontmatter.tmp"
+  -- Unique per process and call: two writers must not share one temp file.
+  local tmp = ("%s.frontmatter.%d.%d.tmp"):format(target, uv.os_getpid(), uv.hrtime())
   local f, open_err = io.open(tmp, "wb")
   if not f then
     return false, "open failed: " .. tostring(open_err)
