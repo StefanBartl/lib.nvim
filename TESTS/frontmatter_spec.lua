@@ -629,7 +629,7 @@ return function(H)
         :gsub("status: open", "status: doing", 1)
         :gsub("done: false\r\n%-%-%-\r\n", "done: false\r\ncreated: 2026-10-03\r\n---\r\n", 1)
     eq(get(path), expected, "file updated byte-exactly (CRLF, no trailing newline kept)")
-    eq(vim.uv.fs_stat(path .. ".frontmatter.tmp"), nil, "no temp file left behind")
+    eq(vim.fn.glob(path .. ".frontmatter.*"), "", "no temp file left behind")
 
     -- Unchanged patch: no write at all (the file is left alone).
     local before = vim.uv.fs_stat(path)
@@ -663,5 +663,66 @@ return function(H)
 
     os.remove(path)
     os.remove(plain)
+  end
+
+  -- ------------------------------------------- numbers mode: strings survive
+  do
+    local p = parse("---\na: 1\n---\n", { numbers = true })
+    for _, v in ipairs({ "42", "007", "-3", "1.5", ".5" }) do
+      ok(fm.set(p, "s", v), "set failed for " .. v)
+      eq(p.meta.s, v, "meta keeps the string " .. v)
+      local back = parse(fm.serialize(p), { numbers = true })
+      eq(back.meta.s, v, "a re-read yields the same string " .. v)
+      eq(type(back.meta.s), "string", "still a string " .. v)
+    end
+    -- A real number stays a bare number in that mode.
+    ok(fm.set(p, "n", 7), "set number")
+    eq(parse(fm.serialize(p), { numbers = true }).meta.n, 7, "number roundtrips as number")
+    -- Without the mode nothing changes: the string is written bare.
+    eq(
+      upd("---\na: 1\n---\n", { s = "42" }),
+      "---\na: 1\ns: 42\n---\n",
+      "default mode writes it bare"
+    )
+  end
+
+  -- ------------------------------------- prose between two `---` is no block
+  do
+    local text = "---\nSome text\n---\n"
+    local p = parse(text)
+    eq(p.prose, true, "prose block is flagged")
+    local out, err = fm.update_text(text, { c = "1" }, { create = true })
+    eq(out, nil, "patching prose is refused")
+    ok(err and err:find("prose"), "error names the reason")
+    eq(fm.serialize(p), text, "parse still roundtrips byte-exactly")
+    -- Mixed blocks and empty blocks are still patchable.
+    eq(parse("---\na: 1\nstray\n---\n").prose, false, "a block with keys is not prose")
+    eq(parse("---\n---\n").prose, false, "an empty block is not prose")
+    eq(upd("---\n---\n", { c = "1" }), "---\nc: 1\n---\n", "empty block patchable")
+    eq(
+      upd("---\na: 1\nstray\n---\n", { c = "1" }),
+      "---\na: 1\nstray\nc: 1\n---\n",
+      "mixed block patchable"
+    )
+  end
+
+  -- ------------------------------------------- temp name is unique per write
+  do
+    local path = H.tmpfile(".md")
+    local f = assert(io.open(path, "wb"))
+    f:write("---\na: 1\n---\n")
+    f:close()
+    -- A leftover temp file under the old fixed name must neither break nor be
+    -- reused by the next write.
+    local stale = path .. ".frontmatter.tmp"
+    local sf = assert(io.open(stale, "wb"))
+    sf:write("stale")
+    sf:close()
+    ok(fm.update(path, { a = "2" }), "update beside a stale temp file")
+    local rf = assert(io.open(stale, "rb"))
+    eq(rf:read("*a"), "stale", "the fixed legacy temp name is not touched")
+    rf:close()
+    os.remove(stale)
+    os.remove(path)
   end
 end

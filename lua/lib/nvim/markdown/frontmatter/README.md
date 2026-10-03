@@ -19,7 +19,9 @@ shape and keeps everything else verbatim.
 * **A block** is a leading `---` line (after an optional UTF-8 BOM), `key: value`
   lines, and the next `---` line. The first line of the text must be the
   opening delimiter; a `---` later in the body is body. A block that is never
-  closed is *not* a block (`parsed.unterminated`).
+  closed is *not* a block (`parsed.unterminated`). Two `---` lines around prose
+  (no `key: value` line, only foreign lines) parse and roundtrip, but are
+  flagged `parsed.prose` and refused by `patch`.
 * **Values:** a plain or quoted (`"..."` / `'...'`) string, `true`/`false`
   (returned as booleans), or an inline list `[a, b, "c, d"]` (returned as
   `string[]`). Number-looking and date-looking values stay **strings**
@@ -82,7 +84,7 @@ fm.add_block(text, { title = "T" })                      -- same, fails if a blo
 | `update(path, patch, opts?)` | `ok, err` | atomic, byte-exact, skips an unchanged write |
 | `REMOVE` | `vim.NIL` | patch value that deletes a key |
 
-`parsed` fields: `has_block`, `unterminated`, `bom`, `eol` (`"\n"`/`"\r\n"`),
+`parsed` fields: `has_block`, `unterminated`, `prose`, `bom`, `eol` (`"\n"`/`"\r\n"`),
 `meta`, `order`, `body`, `warnings`, `raw_lines`, `opaque`. (`entries`,
 `by_key`, `numbers`, `open`/`close` are the machinery behind `serialize`; use
 the functions rather than editing them.)

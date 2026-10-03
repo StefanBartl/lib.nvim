@@ -19,6 +19,7 @@
 --- The result of `parse`. Treat it as read-only except through `patch`/`set`.
 ---@class Lib.Markdown.Frontmatter.Parsed
 ---@field has_block boolean               # A closed `---` ... `---` block was found.
+---@field prose boolean                   # The block has foreign lines and no `key: value` line; `patch` refuses it.
 ---@field unterminated boolean            # The text starts with `---` but no closing line follows.
 ---@field bom string                      # `"\239\187\191"` when the text starts with a BOM, else `""`.
 ---@field eol string                      # The block's line ending (the first line's, default `"\n"`).
