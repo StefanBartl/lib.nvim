@@ -76,6 +76,7 @@ local specs = {
   "wslpath_spec.lua",
   "system_job_spec.lua",
   "system_lines_spec.lua",
+  "system_rpc_pipe_spec.lua",
   "ui_kit_spec.lua",
   "ui_kit_message_log_spec.lua",
   "icons_spec.lua",
