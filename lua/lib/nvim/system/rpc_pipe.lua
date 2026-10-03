@@ -51,11 +51,7 @@ function M.setup(opts)
     end
   end
 
-  --- CDX: duplicates Windows detection instead of reusing
-  --- `lib.nvim.cross.platform.is_windows`, which the sibling `system.env`
-  --- module uses for exactly this so detection logic stays in one place.
-  local is_windows = package.config:sub(1, 1) == "\\"
-  if not is_windows then
+  if not require("lib.nvim.cross.platform.is_windows")() then
     dbg("skipping: not Windows")
     return
   end
