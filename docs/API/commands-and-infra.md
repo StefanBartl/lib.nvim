@@ -743,12 +743,13 @@ M.publish_globals(opts?: { fields? })         -- mirrors snapshot fields to vim.
 ```
 
 ### `lib.nvim.system.rpc_pipe`
-Predictable RPC server on a Windows named pipe (no-op off Windows).
+Predictable RPC server on a Windows named pipe (no-op off Windows). The address is
+**not** exported as `NVIM_LISTEN_ADDRESS` unless `export = true` (children inherit it and die).
 ```
-M.setup(opts?: { debug?, allow_override? })
-M.is_active(): boolean
-M.get_address(): string|nil
-M.clear()
+M.setup(opts?: { debug?, allow_override?, export? (default false), pipe? })
+M.is_active(): boolean        -- a pipe was started (or found pre-set)
+M.get_address(): string|nil   -- the pipe name to connect to
+M.clear()                     -- stop the pipe setup started, unset an exported variable
 ```
 
 ### `lib.nvim.system.info`

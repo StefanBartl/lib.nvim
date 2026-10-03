@@ -126,6 +126,8 @@ address. It is a no-op off Windows and stays out of the way inside test runners
 require("lib.nvim.system.rpc_pipe").setup({
   debug = false,          -- emit vim.notify debug/warn messages
   allow_override = true,  -- respect a pre-set NVIM_LISTEN_ADDRESS (default)
+  export = false,         -- also write the address to NVIM_LISTEN_ADDRESS (default: no)
+  pipe = nil,             -- pipe name instead of \\.\pipe\nvim-<USERNAME>
 })
 ```
 
@@ -134,18 +136,26 @@ Behavior:
 * On non-Windows: returns immediately.
 * In a detected test environment: skips setup (keeps neotest & friends happy).
 * If `NVIM_LISTEN_ADDRESS` is already set and `allow_override` is true: leaves
-  it untouched.
-* Otherwise: `serverstart(\\.\pipe\nvim-<USERNAME>)` and export
-  `NVIM_LISTEN_ADDRESS`. Failures fall back silently (only surfaced with
-  `debug = true`).
+  it untouched and reports it as the address.
+* Otherwise: `serverstart(\\.\pipe\nvim-<USERNAME>)`. Failures fall back
+  silently (only surfaced with `debug = true`).
+
+**Why the address is not exported by default.** `NVIM_LISTEN_ADDRESS` is
+inherited by every child process, and a child `nvim` honours it at startup: it
+tries to bind the pipe its parent already holds and exits with
+`Failed $NVIM_LISTEN_ADDRESS: address already in use` (exit 1). That killed
+`:terminal nvim`, `GIT_EDITOR=nvim`, headless test runs and any plugin job that
+starts a Neovim. Tools connect by the pipe name (`get_address()`), not through
+the variable. Pass `export = true` only for a consumer that really reads the
+variable, and strip it again for the children that start Neovim.
 
 ### Introspection helpers
 
 ```lua
 local rpc = require("lib.nvim.system.rpc_pipe")
-rpc.is_active()    -- boolean: is NVIM_LISTEN_ADDRESS set?
-rpc.get_address()  -- string|nil: current address
-rpc.clear()        -- unset NVIM_LISTEN_ADDRESS (useful in tests)
+rpc.is_active()    -- boolean: a pipe was started (or found pre-set)
+rpc.get_address()  -- string|nil: the pipe name to connect to
+rpc.clear()        -- stop the pipe setup started, unset an exported variable (useful in tests)
 ```
 
 ---

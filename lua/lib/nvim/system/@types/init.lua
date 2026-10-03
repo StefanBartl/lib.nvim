@@ -49,7 +49,7 @@
 
 --- `lib.nvim.system.rpc_pipe` module surface.
 ---@class Lib.System.RpcPipe
----@field setup fun(opts?: { debug?: boolean, allow_override?: boolean }): nil
+---@field setup fun(opts?: { debug?: boolean, allow_override?: boolean, export?: boolean, pipe?: string }): nil
 ---@field is_active fun(): boolean
 ---@field get_address fun(): string|nil
 ---@field clear fun(): nil
