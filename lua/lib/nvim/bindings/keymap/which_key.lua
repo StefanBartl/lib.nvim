@@ -58,8 +58,10 @@ local watching = false
 ---@internal
 ---which-key, only when it is ALREADY loaded. Never `require`s it: under a lazy
 ---plugin manager a `require` is the load trigger, and registering a group label
----during startup used to pull the whole plugin in (9-17 ms) for a popup nobody
----has opened yet -- which-key is meant to load on the first `<leader>`.
+---during startup used to pull the whole plugin in (9-17 ms) onto the startup
+---path. which-key is expected to load after the first frame (a consumer spec
+---with `event = "VeryLazy"`, as the author's config uses) or, failing that, on
+---its first key trigger such as `<leader>`; queued deliveries are flushed then.
 ---@return table|nil
 local function loaded_wk()
   local mod = package.loaded["which-key"]
