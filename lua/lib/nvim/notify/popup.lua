@@ -36,6 +36,7 @@
 --- or call `deliver` directly.
 
 local fast_event = require("lib.nvim.notify.internal.fast_event")
+local strings = require("lib.lua.strings.core")
 
 ---@class Lib.Notify.Popup
 local M = {}
@@ -217,7 +218,7 @@ local function wrap(text, width, max_lines, max_bytes)
 
   local out = {}
   for _, raw in ipairs(vim.split(text, "\n", { plain = true })) do
-    local line = require("lib.lua.strings.core").rtrim((raw:gsub("\t", "  ")))
+    local line = strings.rtrim((raw:gsub("\t", "  ")))
     if line == "" then
       out[#out + 1] = ""
     else

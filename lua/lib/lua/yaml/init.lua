@@ -27,13 +27,15 @@
 --- or "explicitly null" — callers that care about the distinction cannot
 --- rely on `simple_parse`'s output alone.
 
+local strings = require("lib.lua.strings.core")
+
 local M = {}
 
 ---@internal
 ---@param s string
 ---@return string
 local function trim(s)
-  return require("lib.lua.strings.core").trim(s)
+  return strings.trim(s)
 end
 
 ---@internal

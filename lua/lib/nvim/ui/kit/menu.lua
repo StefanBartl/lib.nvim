@@ -63,6 +63,7 @@ local chooser = require("lib.nvim.ui.kit.chooser")
 local theme = require("lib.nvim.ui.kit.theme")
 local map = require("lib.nvim.bindings.keymap")
 local notify = require("lib.nvim.notify").create("[lib.nvim.ui.kit.menu]")
+local strings = require("lib.lua.strings.core")
 
 local M = {}
 
@@ -138,7 +139,7 @@ local function label_of(it)
   else
     s = tostring(it.label or it.name or it.text or "")
   end
-  return require("lib.lua.strings.core").trim(s)
+  return strings.trim(s)
 end
 
 --- An item's icon, or the empty string. Never part of the label -- see the

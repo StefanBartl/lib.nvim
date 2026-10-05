@@ -13,6 +13,7 @@
 --- spec file handed to it, and nothing here executes a command.
 
 local yaml = require("lib.lua.yaml")
+local strings = require("lib.lua.strings.core")
 
 local M = {}
 
@@ -43,7 +44,7 @@ local function extract_blocks(text)
   local capturing = false
   local buf = {}
   for line in (text .. "\n"):gmatch("(.-)\n") do
-    local trimmed = require("lib.lua.strings.core").trim(line)
+    local trimmed = strings.trim(line)
     if not capturing then
       if is_block_open(trimmed) then
         capturing = true
