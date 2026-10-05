@@ -179,4 +179,50 @@ return function(H)
     surf:close()
     vim.o.columns = orig_columns
   end
+
+  -- The <Esc> cancel prompt names the operation by its title; a blank or missing title
+  -- falls back to "This operation" instead of asking " is still running" (a nil title never gets
+  -- this far: render_line concatenates it when the style starts).
+  do
+    local function esc_callback(bufnr)
+      for _, map in ipairs(vim.api.nvim_buf_get_keymap(bufnr, "n")) do
+        if map.lhs == "<Esc>" then
+          return map.callback
+        end
+      end
+    end
+    local function prompt_for(title)
+      local seen
+      local orig_confirm = vim.fn.confirm
+      vim.fn.confirm = function(msg)
+        seen = msg
+        return 2
+      end
+      local surf = kit_style.start(
+        { title = title, text = "", current = nil, total = nil },
+        {},
+        function() end
+      )
+      local ok, err = pcall(esc_callback(surf.bufnr))
+      vim.fn.confirm = orig_confirm
+      surf:close()
+      H.ok(ok, "kit style: the <Esc> handler runs (" .. tostring(err) .. ")")
+      return seen
+    end
+    H.eq(
+      prompt_for("[p] building  "),
+      "[p] building is still running. Abort it?",
+      "kit style: a title is named, trailing blanks dropped"
+    )
+    H.eq(
+      prompt_for("   "),
+      "This operation is still running. Abort it?",
+      "kit style: a blank title falls back to 'This operation'"
+    )
+    H.eq(
+      prompt_for(""),
+      "This operation is still running. Abort it?",
+      "kit style: an empty title falls back to 'This operation'"
+    )
+  end
 end
