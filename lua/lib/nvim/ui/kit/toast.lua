@@ -14,6 +14,7 @@
 
 local surface = require("lib.nvim.ui.kit.surface")
 local autocmd = require("lib.nvim.bindings.autocmd")
+local strings = require("lib.lua.strings.core")
 
 local api = vim.api
 
@@ -46,7 +47,9 @@ local function valid_size(v)
   if type(v) == "number" then
     return v > 0
   end
-  return type(v) == "string" and v:match("^%s*%d+%.?%d*%s*%%?%s*$") ~= nil
+  -- Trimmed first: the two `%s*` around the optional `%` made a number followed
+  -- by a long whitespace run and then something else quadratic.
+  return type(v) == "string" and strings.trim(v):match("^%d+%.?%d*%s*%%?$") ~= nil
 end
 
 --- Columns for a size spec (`40` or `"40%"`) on an editor `columns` wide.
