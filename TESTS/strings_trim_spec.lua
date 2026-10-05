@@ -52,4 +52,24 @@ return function(H)
     end)
     ok(ms < 500, ("trim of the %s case took %.0f ms (linear time expected)"):format(label, ms))
   end
+
+  -- ----------------------------------------------------------------- rtrim
+  local rtrim = require("lib.lua.strings.core").rtrim
+  eq(rtrim("  x  "), "  x", "rtrim keeps the indentation")
+  eq(rtrim("   "), "", "rtrim of blanks is empty")
+  eq(rtrim(nil), "", "rtrim of a non-string is empty")
+  local ms_r = elapsed_ms(function()
+    ok(#rtrim("a" .. (" "):rep(40000) .. "b") > 0, "rtrim inner run")
+    ok(#rtrim((" "):rep(40000)) == 0, "rtrim blank run")
+  end)
+  ok(ms_r < 500, ("rtrim took %.0f ms"):format(ms_r))
+
+  -- --------------------------------------------- callers that used to be quadratic
+  local run = (" "):rep(40000)
+  local loc = require("lib.lua.strings.location").parse_location
+  eq(loc("  a.lua:3:4  ").path, "a.lua", "parse_location still trims")
+  local ms_l = elapsed_ms(function()
+    loc("a" .. run .. "b:1")
+  end)
+  ok(ms_l < 500, ("parse_location took %.0f ms"):format(ms_l))
 end

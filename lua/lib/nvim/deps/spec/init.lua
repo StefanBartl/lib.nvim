@@ -43,7 +43,7 @@ local function extract_blocks(text)
   local capturing = false
   local buf = {}
   for line in (text .. "\n"):gmatch("(.-)\n") do
-    local trimmed = line:match("^%s*(.-)%s*$")
+    local trimmed = require("lib.lua.strings.core").trim(line)
     if not capturing then
       if is_block_open(trimmed) then
         capturing = true

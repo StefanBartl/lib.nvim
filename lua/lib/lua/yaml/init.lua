@@ -33,7 +33,7 @@ local M = {}
 ---@param s string
 ---@return string
 local function trim(s)
-  return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+  return require("lib.lua.strings.core").trim(s)
 end
 
 ---@internal

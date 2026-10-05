@@ -81,6 +81,7 @@ require("lib.nvim.net.curl.@types")
 
 local nvim_json = require("lib.nvim.json")
 local line_stream = require("lib.nvim.system.lines")
+local strings = require("lib.lua.strings.core")
 
 local M = {}
 
@@ -357,7 +358,8 @@ local function parse_raw_response(output)
     end
 
     local lines = vim.split(block, "\r?\n")
-    local code, text = lines[1]:match("^HTTP/[%d%.]+%s+(%d+)%s*(.-)%s*$")
+    local code, text = lines[1]:match("^HTTP/[%d%.]+%s+(%d+)%s*(.*)$")
+    text = text and strings.trim(text)
     if not code then
       return nil, "malformed status line: " .. lines[1]
     end
@@ -369,7 +371,8 @@ local function parse_raw_response(output)
     else
       local headers = {}
       for i = 2, #lines do
-        local k, v = lines[i]:match("^([^:]+):%s*(.-)%s*$")
+        local k, v = lines[i]:match("^([^:]+):%s*(.*)$")
+        v = v and strings.trim(v)
         if k then
           headers[k:lower()] = v
         end

@@ -25,6 +25,22 @@ function S.trim(s)
   return s:sub(first, last)
 end
 
+---Trim trailing whitespace only (leading indentation is kept), in linear time.
+---Non-string input gives `""`.
+---@nodiscard
+---@param s any
+---@return string
+function S.rtrim(s)
+  if type(s) ~= "string" then
+    return ""
+  end
+  local last = #s
+  while last > 0 and s:find("^%s", last) do
+    last = last - 1
+  end
+  return s:sub(1, last)
+end
+
 ---@nodiscard
 ---@param s string
 ---@param prefix string
