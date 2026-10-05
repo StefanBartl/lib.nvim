@@ -138,9 +138,7 @@ local function label_of(it)
   else
     s = tostring(it.label or it.name or it.text or "")
   end
-  s = s:gsub("^%s+", "")
-  s = s:gsub("%s+$", "")
-  return s
+  return require("lib.lua.strings.core").trim(s)
 end
 
 --- An item's icon, or the empty string. Never part of the label -- see the

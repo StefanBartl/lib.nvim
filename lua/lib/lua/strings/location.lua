@@ -14,7 +14,7 @@ function M.parse_location(str)
   if type(str) ~= "string" then
     return nil
   end
-  local s = str:match("^%s*(.-)%s*$")
+  local s = require("lib.lua.strings.core").trim(str)
 
   local path, line, col = s:match("^(.-):(%d+):(%d+)$")
   if path then

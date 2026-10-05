@@ -217,7 +217,7 @@ local function wrap(text, width, max_lines, max_bytes)
 
   local out = {}
   for _, raw in ipairs(vim.split(text, "\n", { plain = true })) do
-    local line = raw:gsub("\t", "  "):gsub("%s+$", "")
+    local line = require("lib.lua.strings.core").rtrim((raw:gsub("\t", "  ")))
     if line == "" then
       out[#out + 1] = ""
     else
