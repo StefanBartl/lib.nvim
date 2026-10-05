@@ -3,6 +3,10 @@
 
 local S = {}
 
+---Trim leading and trailing whitespace, in linear time. The usual
+---`s:gsub("%s+$", "")` retries the rest of a whitespace run from every byte
+---inside it, so one value with 40 000 spaces in the middle cost seconds (SEC-32);
+---this walks the trailing run once. Non-string input trims to `""`.
 ---@nodiscard
 ---@param s any
 ---@return string
@@ -10,7 +14,15 @@ function S.trim(s)
   if type(s) ~= "string" then
     return ""
   end
-  return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+  local first = s:find("%S")
+  if not first then
+    return ""
+  end
+  local last = #s
+  while last > first and s:find("^%s", last) do
+    last = last - 1
+  end
+  return s:sub(first, last)
 end
 
 ---@nodiscard
