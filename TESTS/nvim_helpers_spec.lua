@@ -339,6 +339,27 @@ return function(H)
   eq(raw, "a\nb\n", "fs.write.to_file: no CRLF translation on write (binary mode)")
   eq(read(crlf_check_p), "a\nb\n", "fs.read: no CRLF collapsing on read (binary mode)")
 
+  -- fs.write.atomic: byte-exact (no newline appended), replaces, leaves no temp file, creates parents on request
+  local write_atomic = require("lib.nvim.fs.write.atomic")
+  local atomic_p = tmp .. "/atomic_check.txt"
+  ok(write_atomic(atomic_p, "no newline at the end"), "fs.write.atomic: writes")
+  eq(read(atomic_p), "no newline at the end", "fs.write.atomic: appends nothing")
+  ok(write_atomic(atomic_p, "second"), "fs.write.atomic: replaces an existing file")
+  eq(read(atomic_p), "second", "fs.write.atomic: new content")
+  local leftovers = vim.fn.glob(tmp .. "/atomic_check.txt.*", false, true)
+  eq(#leftovers, 0, "fs.write.atomic: no temp file is left behind")
+  local no_parent_ok = write_atomic(tmp .. "/atomic_new_dir/f.txt", "x")
+  eq(
+    no_parent_ok,
+    false,
+    "fs.write.atomic: a missing parent is an error unless mkdirp is asked for"
+  )
+  ok(
+    write_atomic(tmp .. "/atomic_new_dir/f.txt", "x", { mkdirp = true }),
+    "fs.write.atomic: mkdirp creates it"
+  )
+  eq(select(1, write_atomic("", "x")), false, "fs.write.atomic: an empty path is refused")
+
   local write_append = require("lib.nvim.fs.write.append")
   local append_p = tmp .. "/append_check.txt"
   ok(write_append(append_p, "x\n"), "fs.write.append: first append")

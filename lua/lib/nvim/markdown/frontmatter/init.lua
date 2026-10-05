@@ -858,37 +858,15 @@ function M.read(path, opts)
   return M.parse(content, opts)
 end
 
----Byte-exact atomic write: a sibling temp file, then a rename over the target.
----(`fs.write.to_file` is not used: it appends a newline to content that lacks
----one, which would change a file whose body does not end in one.)
+---Byte-exact atomic write over the real file behind `path` (see `lib.nvim.fs.write.atomic`: no newline appended,
+---flushed, mode kept).
 ---@param path string
 ---@param content string
 ---@return boolean ok
 ---@return string|nil err
 local function write_atomic(path, content)
   local target = uv.fs_realpath(path) or path
-  -- Unique per process and call: two writers must not share one temp file.
-  local tmp = ("%s.frontmatter.%d.%d.tmp"):format(target, uv.os_getpid(), uv.hrtime())
-  local f, open_err = io.open(tmp, "wb")
-  if not f then
-    return false, "open failed: " .. tostring(open_err)
-  end
-  local ok_write, write_err = f:write(content)
-  local ok_close, close_err = f:close()
-  if not ok_write or not ok_close then
-    pcall(os.remove, tmp)
-    return false, "write failed: " .. tostring(write_err or close_err)
-  end
-  local st = uv.fs_stat(target)
-  if st then
-    pcall(uv.fs_chmod, tmp, st.mode % 4096)
-  end
-  local ok_rename, rename_err = mutate.rename_file(tmp, target)
-  if not ok_rename then
-    pcall(os.remove, tmp)
-    return false, "rename failed: " .. tostring(rename_err)
-  end
-  return true
+  return require("lib.nvim.fs.write.atomic")(target, content, { tag = "frontmatter" })
 end
 
 ---Apply `patch` to the file at `path`. Nothing is written when the patch
