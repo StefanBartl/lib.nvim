@@ -22,7 +22,6 @@
 require("lib.nvim.markdown.frontmatter.@types")
 
 local fs_read = require("lib.nvim.fs.read")
-local mutate = require("lib.nvim.cross.fs.mutate")
 
 local uv = vim.uv or vim.loop
 
