@@ -47,9 +47,15 @@ local function valid_size(v)
   if type(v) == "number" then
     return v > 0
   end
+  if type(v) ~= "string" then
+    return false
+  end
   -- Trimmed first: the two `%s*` around the optional `%` made a number followed
-  -- by a long whitespace run and then something else quadratic.
-  return type(v) == "string" and strings.trim(v):match("^%d+%.?%d*%s*%%?$") ~= nil
+  -- by a long whitespace run and then something else quadratic. A size spec is
+  -- a few characters, and the cap also bounds the `%d+%.?%d*` backtracking
+  -- here and in resolve_cols, which only ever sees strings this accepted.
+  local s = strings.trim(v)
+  return #s <= 32 and s:match("^%d+%.?%d*%s*%%?$") ~= nil
 end
 
 --- Columns for a size spec (`40` or `"40%"`) on an editor `columns` wide.
