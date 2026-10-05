@@ -136,6 +136,9 @@ async.Semaphore.new({permits})                                 *async.Semaphore*
     Methods: ~
         :acquire()   Take a permit, suspending until one is free. Awaitable.
         :release()   Give a permit back.
+        :with(body, ...)  Hold a permit around body(...), released also
+                     when body throws; returns `ok, ...` like
+                     lib.lua.error.safe_call. Awaitable.
 
     Example -- cap concurrent work at four: >
       local sem = async.Semaphore.new(4)

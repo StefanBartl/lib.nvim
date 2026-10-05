@@ -35,7 +35,7 @@ handle.stop() -- safe to call more than once
 
 | Function                          | Returns                    | Meaning                                                    |
 |-------------------------------------|------------------------------|---------------------------------------------------------------|
-| `M.start(path, on_change, opts)`    | `Lib.Fs.Watch.Handle\|nil, string\|nil` | A handle with `stop()`, or `nil` + error if `fs_event` setup failed |
+| `M.start(path, on_change, opts)`    | `Lib.Fs.Watch.Handle\|nil, string\|nil` | A handle with `stop()`, or `nil` + error if `fs_event` setup failed or libuv refused to start it (e.g. the path does not exist) |
 
 `on_change(path, filename, events)` receives the `path` passed to `start`
 (not necessarily the exact changed file — `filename` is that, when the

@@ -42,6 +42,7 @@
 require("lib.nvim.async.@types")
 
 local class = require("lib.lua.class")
+local error_mod = require("lib.lua.error")
 
 -- LuaJIT (Neovim's Lua runtime) has neither `table.pack` nor Lua 5.2+'s
 -- `table.unpack` — only the global `unpack`, and no `pack` at all.
@@ -181,6 +182,23 @@ function Semaphore:release()
   else
     self.permits = self.permits + 1
   end
+end
+
+--- Run `body(...)` while holding a permit, releasing it on every path: a
+--- normal return and an error in `body` alike. Awaitable (`body` may itself
+--- `await`; the yield crosses the guarding `xpcall` on LuaJIT).
+---
+--- `acquire` + `release` by hand leak the permit when `body` throws, which
+--- starves every later acquirer; this is the leak-proof form.
+---@param body fun(...): ...
+---@param ... any Forwarded to `body`
+---@return boolean ok
+---@return any ... `body`'s return values, or a structured `LibErrorValue` (`lib.lua.error.safe_call`) when it threw
+function Semaphore:with(body, ...)
+  self:acquire()
+  local outcome = pack(error_mod.safe_call(body, ...))
+  self:release()
+  return unpack(outcome, 1, outcome.n)
 end
 
 M.Semaphore = Semaphore

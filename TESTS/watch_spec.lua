@@ -105,6 +105,19 @@ return function(H)
     return handle
   end
 
+  -- -------------------------------------------------- nonexistent path
+
+  -- libuv reports a failed start as a `nil, err` return; the watcher must
+  -- surface it instead of handing back a handle that never fires.
+  do
+    local missing, missing_err = watch.start(tmp .. "/does-not-exist", function() end)
+    eq(missing, nil, "watch.start: nonexistent path yields no handle")
+    ok(
+      type(missing_err) == "string" and missing_err:find("fs_event start failed", 1, true) ~= nil,
+      "watch.start: nonexistent path yields an error message"
+    )
+  end
+
   -- ------------------------------------------------------- basic callback
 
   local basic_seen = {}

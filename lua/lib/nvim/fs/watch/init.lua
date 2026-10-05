@@ -52,17 +52,26 @@ function M.start(path, on_change, opts)
     on_change(path, filename, events)
   end, opts.debounce_ms or 200)
 
-  local start_ok = pcall(function()
-    ev:start(path, { recursive = opts.recursive or false }, function(cb_err, filename, events)
+  -- libuv reports a failed start (e.g. ENOENT for a missing path) as a
+  -- `nil, err` return, not by raising -- so the return value has to be read,
+  -- or a watcher on a path that does not exist looks like a live one.
+  local start_ok, start_res, start_err = pcall(
+    ev.start,
+    ev,
+    path,
+    { recursive = opts.recursive or false },
+    function(cb_err, filename, events)
       if cb_err then
         return
       end
       d.call(filename, events)
-    end)
-  end)
-  if not start_ok then
+    end
+  )
+  if not start_ok or start_res == nil then
     pcall(ev.close, ev)
-    return nil, "fs_event start failed for path: " .. path
+    d.cancel()
+    return nil,
+      "fs_event start failed for path: " .. path .. (start_err and (" (" .. start_err .. ")") or "")
   end
 
   local stopped = false
