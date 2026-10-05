@@ -24,6 +24,7 @@
 ---@field waiters fun(...)[] Suspended acquirers, longest-waiting first.
 ---@field acquire fun(self: Lib.Async.Semaphore) Take a permit, suspending until one is free.
 ---@field release fun(self: Lib.Async.Semaphore) Give a permit back, handing it straight to a waiter if there is one.
+---@field with fun(self: Lib.Async.Semaphore, body: function, ...: any): boolean, ... Hold a permit around `body(...)`, released also when `body` throws (`ok, ...` like `lib.lua.error.safe_call`).
 
 ---@class Lib.Async.CondvarClass
 ---@field new fun(): Lib.Async.Condvar

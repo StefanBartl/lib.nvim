@@ -39,4 +39,4 @@ local ok2, failure = err.safe_call(risky, nil, 2)
 | ------------------ | ------------------------------------------------------------------------ |
 | `new(k, m, d)`      | `LibErrorValue` table                                                    |
 | `is(v)`             | `boolean`                                                                 |
-| `safe_call(fn,...)` | `true, <fn's return values...>` on success; `false, LibErrorValue` on failure |
+| `safe_call(fn,...)` | `true, <fn's return values...>` on success; `false, LibErrorValue` on failure (`message` = error + traceback; a non-string error such as `error({ code = 7 })` is kept in `data`) |

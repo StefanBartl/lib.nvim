@@ -92,6 +92,39 @@ return function(H)
   ok(E.is(ferr), "error.safe_call: failure yields a structured error")
   eq(ferr.kind, "runtime_error", "error.safe_call: failure kind")
   ok(tostring(ferr.message):match("boom") ~= nil, "error.safe_call: traceback mentions the error")
+  ok(
+    tostring(ferr.message):match("stack traceback") ~= nil,
+    "error.safe_call: message carries a stack traceback"
+  )
+
+  -- A non-string error value (a table, a number, nil) must not make
+  -- safe_call itself throw: the original value rides in `data`, the traceback
+  -- in `message`.
+  local payload = { code = 7 }
+  local tok, terr = E.safe_call(function()
+    error(payload)
+  end)
+  ok(not tok, "error.safe_call: table error reports failure")
+  ok(E.is(terr), "error.safe_call: table error yields a structured error")
+  ok(terr.data == payload, "error.safe_call: the thrown table is kept as data (identity)")
+  ok(
+    tostring(terr.message):match("stack traceback") ~= nil,
+    "error.safe_call: table error still carries a traceback"
+  )
+  local nok, nerr = E.safe_call(function()
+    error(42)
+  end)
+  -- LuaJIT turns a number error into a position-prefixed string before the
+  -- handler sees it, so this takes the plain string path.
+  ok(
+    not nok and E.is(nerr) and tostring(nerr.message):match("42") ~= nil,
+    "error.safe_call: number error yields a structured error naming the number"
+  )
+  local zok, zerr = E.safe_call(function()
+    error(nil)
+  end)
+  ok(not zok and E.is(zerr), "error.safe_call: nil error yields a structured error")
+  eq(ferr.data, nil, "error.safe_call: a string error leaves data nil")
 
   -- --------------------------------------------------------------- lib.lua.yaml
   local yaml = require("lib.lua.yaml")

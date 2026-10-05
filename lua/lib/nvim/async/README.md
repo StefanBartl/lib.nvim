@@ -65,6 +65,12 @@ async.run(function()
 end)
 ```
 
+`acquire`/`release` by hand leak the permit when the body throws. The
+leak-proof form is `sem:with(body, ...)`: it holds a permit around
+`body(...)`, releases it on every path and returns `ok, ...` like
+`lib.lua.error.safe_call` (a structured error with a traceback on failure).
+`body` may itself `await`.
+
 ### Condvar
 
 Suspend until another coroutine signals:
@@ -88,7 +94,7 @@ cv:notify_one()      -- or cv:notify_all()
 | `async.await(starter)`             | Suspend until `starter(resume)` fires `resume`; returns what it was given |
 | `async.run(body, on_done?, opts?)` | Drive an `await`-using coroutine; `on_done` gets `body`'s return values, `vim.schedule`-dispatched |
 | `async.wrap(fn, argc)`             | Callback-style `fn` (callback last, at position `argc`) → awaitable        |
-| `async.Semaphore.new(permits)`     | `:acquire()` (awaitable), `:release()`                                     |
+| `async.Semaphore.new(permits)`     | `:acquire()` (awaitable), `:release()`, `:with(body, ...)` (acquire, run guarded, always release) |
 | `async.Condvar.new()`              | `:wait()` (awaitable), `:notify_one()`, `:notify_all()`                    |
 
 `opts` for `run`:

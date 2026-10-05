@@ -266,6 +266,54 @@ return function(H)
     eq(results[1], "recycled", "Semaphore: an uncontended release restores the permit")
   end
 
+  -- `Semaphore:with` releases the permit when the body throws, passes
+  -- return values through, and still caps the parallelism.
+  do
+    local sem = async.Semaphore.new(1)
+    local results = run_sync(function()
+      local ok1, err1 = sem:with(function()
+        error("body boom")
+      end)
+      local ok2, a, b = sem:with(function(x)
+        sleep(5) -- the yield crosses the guarding xpcall
+        return x, "two"
+      end, "one")
+      return ok1,
+        err1.kind,
+        tostring(err1.message):match("body boom") ~= nil,
+        ok2,
+        a,
+        b,
+        sem.permits
+    end)
+    eq(results[1], false, "Semaphore:with: a throwing body reports ok=false")
+    eq(results[2], "runtime_error", "Semaphore:with: the error is a structured safe_call error")
+    ok(results[3], "Semaphore:with: the traceback names the error")
+    eq(results[4], true, "Semaphore:with: the permit came back (the next call acquires)")
+    eq(results[5], "one", "Semaphore:with: arguments are forwarded")
+    eq(results[6], "two", "Semaphore:with: return values pass through")
+    eq(results[7], 1, "Semaphore:with: no permit leaked")
+
+    local sem2 = async.Semaphore.new(2)
+    local running, max_running, finished = 0, 0, 0
+    for _ = 1, 6 do
+      async.run(function()
+        sem2:with(function()
+          running = running + 1
+          max_running = math.max(max_running, running)
+          sleep(10)
+          running = running - 1
+        end)
+        finished = finished + 1
+      end)
+    end
+    vim.wait(5000, function()
+      return finished == 6
+    end, 5)
+    eq(finished, 6, "Semaphore:with: all six workers completed")
+    eq(max_running, 2, "Semaphore(2):with: parallelism is capped at the permit count")
+  end
+
   -- --------------------------------------------------------------- Condvar
 
   do
