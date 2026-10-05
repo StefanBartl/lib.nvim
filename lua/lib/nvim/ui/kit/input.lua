@@ -64,7 +64,9 @@ local function trigger_completion(bufnr, winid, completion)
   local line = api.nvim_buf_get_lines(bufnr, 0, 1, false)[1] or ""
   local col = api.nvim_win_get_cursor(winid)[2]
   local prefix = line:sub(1, col)
-  local frag = prefix:match("%S*$") or ""
+  -- Scanned from the end: `match("%S*$")` retries the rest of a long word from
+  -- every start byte, which is quadratic for one pasted line without spaces.
+  local frag = prefix:reverse():match("^%S*"):reverse()
   local ok, matches = pcall(fn.getcompletion, frag, completion)
   if not ok or not matches or #matches == 0 then
     return
