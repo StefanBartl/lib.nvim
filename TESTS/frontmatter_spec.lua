@@ -725,4 +725,61 @@ return function(H)
     os.remove(stale)
     os.remove(path)
   end
+
+  -- ------------------ a long whitespace run is read in linear time (SEC-32)
+  -- `s:gsub("%s+$", "")`, `s:match("^%s*(.-)%s*$")` and `s:find("%s+#")` retry
+  -- the rest of a whitespace run from every byte inside it: 40 000 spaces took
+  -- ~6 s, 160 000 took ~100 s, on a single line. 200 000 spaces would run for
+  -- minutes with the old code, so the bound below fails loudly instead of flaking.
+  do
+    local run = (" "):rep(200000)
+    local limit_ms = 3000
+
+    ---@param label string
+    ---@param text string
+    ---@return table
+    local function timed_parse(label, text)
+      local t0 = vim.uv.hrtime()
+      local p = parse(text)
+      local ms = (vim.uv.hrtime() - t0) / 1e6
+      ok(ms < limit_ms, ("%s took %.0f ms (limit %d)"):format(label, ms, limit_ms))
+      eq(fm.serialize(p), text, label .. ": still byte-exact")
+      return p
+    end
+
+    local p = timed_parse("run inside a plain value", "---\ntitle: a" .. run .. "b\n---\n")
+    eq(p.meta.title, "a" .. run .. "b", "the inner run stays part of the value")
+
+    p = timed_parse("trailing run after a plain value", "---\ntitle: abc" .. run .. "\n---\n")
+    eq(p.meta.title, "abc", "trailing whitespace is trimmed")
+
+    p = timed_parse("run before a comment", "---\ntitle: abc" .. run .. "# not a comment\n---\n")
+    eq(p.meta.title, "abc", "a whitespace run followed by # starts the comment")
+    eq(p.by_key.title.comment, run .. "# not a comment", "the comment keeps its leading run")
+
+    p = timed_parse("run inside a list item", "---\ntags: [a" .. run .. "b, c" .. run .. "]\n---\n")
+    eq(#p.meta.tags, 2, "two list items")
+    eq(p.meta.tags[1], "a" .. run .. "b", "inner run of a list item kept")
+    eq(p.meta.tags[2], "c", "trailing run of a list item trimmed")
+
+    p = timed_parse("value is only whitespace", "---\ntitle:" .. run .. "\n---\n")
+    eq(p.meta.title, "", "an empty value")
+
+    -- The comment search keeps its meaning on ordinary input: the value ends
+    -- at the first whitespace run that is directly followed by `#`.
+    local cases = {
+      { "abc # note", "abc", " # note" },
+      { "abc  \t# note   ", "abc", "  \t# note" },
+      { "a#b # c", "a#b", " # c" },
+      { "a #b #c", "a", " #b #c" },
+      { "x#y", "x#y", nil },
+    }
+    for _, c in ipairs(cases) do
+      local q = parse("---\nk: " .. c[1] .. "\n---\n")
+      eq(q.meta.k, c[2], "value of " .. c[1])
+      eq(q.by_key.k.comment, c[3], "comment of " .. c[1])
+    end
+    -- A value that starts with `#` is a comment on an empty value.
+    eq(parse("---\nk: #lead\n---\n").meta.k, "", "a value starting with # is empty")
+  end
 end

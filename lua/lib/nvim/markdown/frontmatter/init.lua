@@ -41,10 +41,58 @@ local BOM = "\239\187\191"
 -- Reading
 -- ─────────────────────────────────────────────────────────────────────────────
 
+---Index of the last byte of `s` that is not whitespace (0 when there is none).
+---Walks back from the end, so it is linear in the trailing run. The obvious
+---`s:gsub("%s+$", "")` and `s:match("^%s*(.-)%s*$")` retry the whole rest of a
+---whitespace run from every byte inside it: 40 000 spaces cost about 6 s, 160 000
+---about 100 s, on one frontmatter line (SEC-32).
+---@param s string
+---@return integer
+local function last_non_space(s)
+  local i = #s
+  while i > 0 and s:find("^%s", i) do
+    i = i - 1
+  end
+  return i
+end
+
+---@param s string
+---@return string
+local function rtrim(s)
+  return s:sub(1, last_non_space(s))
+end
+
 ---@param s string
 ---@return string
 local function trim(s)
-  return (s:match("^%s*(.-)%s*$"))
+  local first = s:find("%S")
+  if not first then
+    return ""
+  end
+  return s:sub(first, last_non_space(s))
+end
+
+---Start of the first whitespace run that is directly followed by `#` (a YAML
+---comment), or nil. The same match as `s:find("%s+#")`, without that pattern's
+---quadratic retry inside a long whitespace run.
+---@param s string
+---@return integer|nil
+local function find_comment_start(s)
+  local init = 1
+  while true do
+    local hash = s:find("#", init, true)
+    if not hash then
+      return nil
+    end
+    if hash > 1 and s:find("^%s", hash - 1) then
+      local start = hash - 1
+      while start > 1 and s:find("^%s", start - 1) do
+        start = start - 1
+      end
+      return start
+    end
+    init = hash + 1
+  end
 end
 
 ---Split one line off `text` at `pos`. The line ending is returned separately
@@ -118,7 +166,7 @@ local function scan_tail(rest)
     return nil, true
   end
   if rest:match("^%s+#") then
-    return (rest:gsub("%s+$", "")), true
+    return rtrim(rest), true
   end
   return nil, false
 end
@@ -191,7 +239,7 @@ local function parse_value(rest, numbers)
   end
   local first = v:sub(1, 1)
   if first == "#" then
-    return "", (rest:gsub("%s+$", ""))
+    return "", rtrim(rest)
   elseif first == '"' or first == "'" then
     local content, j = scan_quoted(v, 1)
     if not content then
@@ -213,12 +261,12 @@ local function parse_value(rest, numbers)
   end
 
   local comment
-  local s = v:find("%s+#")
+  local s = find_comment_start(v)
   if s then
-    comment = (v:sub(s):gsub("%s+$", ""))
+    comment = rtrim(v:sub(s))
     v = v:sub(1, s - 1)
   end
-  v = v:gsub("%s+$", "")
+  v = rtrim(v)
   if v == "true" then
     return true, comment
   elseif v == "false" then
