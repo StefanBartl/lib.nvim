@@ -6,14 +6,12 @@ local expand_path = require("lib.nvim.cross.fs.expand_path")
 
 local M = {}
 
---- Trim leading/trailing ASCII whitespace.
+--- Trim leading/trailing ASCII whitespace (linear time; one implementation,
+--- `lib.lua.strings.core.trim`). Non-string input trims to `""`.
 ---@param s any
 ---@return string
 function M.trim(s)
-  if type(s) ~= "string" then
-    return ""
-  end
-  return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+  return require("lib.lua.strings.core").trim(s)
 end
 
 --- Clamp number into [min,max] (inclusive); nil min/max are ignored.
