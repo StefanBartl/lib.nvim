@@ -12,6 +12,7 @@ require("lib.nvim.progress.@types")
 
 local window = require("lib.nvim.window")
 local notify = require("lib.nvim.notify").create("[lib.nvim.progress]")
+local strings = require("lib.lua.strings.core")
 
 ---@internal
 ---Set to `true` by `finish`/`cancel` the instant they're called (before any
@@ -102,8 +103,10 @@ end
 ---@param request_cancel fun()
 local function bind_cancel_on_escape(bufnr, spec, request_cancel)
   vim.keymap.set("n", "<Esc>", function()
-    local label = spec.title ~= "" and require("lib.lua.strings.core").rtrim(spec.title)
-      or "This operation"
+    local label = strings.rtrim(spec.title)
+    if label == "" then
+      label = "This operation"
+    end
     local choice = vim.fn.confirm(label .. " is still running. Abort it?", "&Yes\n&No", 2)
     if choice == 1 then
       request_cancel()

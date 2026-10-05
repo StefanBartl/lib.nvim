@@ -140,10 +140,11 @@ end
 function M.parse_row(line)
   local cells = {}
   local trimmed = trim(line)
-  local inner = trimmed:match("^|(.-)%s*|$") or trimmed:match("^|(.*)|$")
-  if not inner then
+  -- Not `^|(.-)%s*|$`: that retries a whitespace run from every byte inside it (SEC-32).
+  if #trimmed < 2 or trimmed:sub(1, 1) ~= "|" or trimmed:sub(-1) ~= "|" then
     return cells
   end
+  local inner = strings.rtrim(trimmed:sub(2, -2))
   for cell in (inner .. "|"):gmatch("(.-)|") do
     cells[#cells + 1] = trim(cell)
   end
