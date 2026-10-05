@@ -135,6 +135,22 @@ return function(H)
   local gfm = render.markdown_table({ "A", "B" }, { { "a|b", "plain" } })
   ok(gfm:find("a\\|b", 1, true) ~= nil, "render.markdown_table: a literal | is escaped")
 
+  -- A backslash in front of the pipe is doubled first: `a\|b` -> `a\\\|b` (an escaped backslash,
+  -- then an escaped pipe). Plain `\|` would read as `\\` + a live separator and add a column.
+  local bs = string.char(92)
+  local with_bs = render.markdown_table({ "A" }, { { "a" .. bs .. "|b" } })
+  ok(
+    with_bs:find("a" .. bs .. bs .. bs .. "|b", 1, true) ~= nil,
+    "render.markdown_table: a backslash run in front of | is doubled"
+  )
+  local long_run = string.rep(bs, 30000) .. "|"
+  local t0 = vim.uv.hrtime()
+  render.markdown_table({ "A" }, { { long_run } })
+  ok(
+    (vim.uv.hrtime() - t0) / 1e9 < 0.5,
+    "render.markdown_table: a long backslash run is linear (SEC-32)"
+  )
+
   -- Column alignment measured in display width, not byte length: "café" is
   -- 5 bytes (é is 2 UTF-8 bytes) but only 4 display cells, one narrower
   -- than "abcde" (5 bytes AND 5 display cells). If padding used byte

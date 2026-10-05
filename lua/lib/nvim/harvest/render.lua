@@ -27,7 +27,26 @@ local M = {}
 local function cell(v)
   local s = tostring(v == nil and "" or v)
   s = s:gsub("[\r\n]+", " ")
-  s = s:gsub("|", "\\|")
+  -- A backslash run in front of a pipe is doubled first: `\|` would otherwise read as an escaped
+  -- backslash plus a live separator (`\\|`), and the row would grow a column. One linear pass, not a
+  -- `(\\*)|` pattern, which retries a long backslash run from every start position (SEC-32).
+  local out, i, len = {}, 1, #s
+  while i <= len do
+    local j = s:find("\\", i, true)
+    if not j then
+      out[#out + 1] = s:sub(i)
+      break
+    end
+    out[#out + 1] = s:sub(i, j - 1)
+    local k = j
+    while s:byte(k + 1) == 92 do
+      k = k + 1
+    end
+    local run = s:sub(j, k)
+    out[#out + 1] = (s:byte(k + 1) == 124) and (run .. run) or run
+    i = k + 1
+  end
+  s = table.concat(out):gsub("|", "\\|")
   return s
 end
 
