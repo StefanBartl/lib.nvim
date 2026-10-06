@@ -143,13 +143,24 @@ return function(H)
     with_bs:find("a" .. bs .. bs .. bs .. "|b", 1, true) ~= nil,
     "render.markdown_table: a backslash run in front of | is doubled"
   )
-  local long_run = string.rep(bs, 30000) .. "|"
-  local t0 = vim.uv.hrtime()
-  render.markdown_table({ "A" }, { { long_run } })
-  ok(
-    (vim.uv.hrtime() - t0) / 1e9 < 0.5,
-    "render.markdown_table: a long backslash run is linear (SEC-32)"
-  )
+  -- Three shapes: a run before a pipe (cheap even for a quadratic pattern), and the runs WITHOUT a pipe, which a
+  -- naive `(\\+)|` gsub takes seconds on -- the spec must be able to fail on that regression.
+  for name, long_run in pairs({
+    ["before a pipe"] = string.rep(bs, 30000) .. "|",
+    ["alone"] = string.rep(bs, 30000),
+    ["then a letter"] = string.rep(bs, 30000) .. "x",
+  }) do
+    local t0 = vim.uv.hrtime()
+    local out = render.markdown_table({ "A" }, { { long_run } })
+    ok(
+      (vim.uv.hrtime() - t0) / 1e9 < 0.5,
+      "render.markdown_table: a long backslash run " .. name .. " is linear (SEC-32)"
+    )
+    ok(
+      out:find(string.rep(bs, 30000), 1, true) ~= nil,
+      "and the run itself is kept (" .. name .. ")"
+    )
+  end
 
   -- Column alignment measured in display width, not byte length: "café" is
   -- 5 bytes (é is 2 UTF-8 bytes) but only 4 display cells, one narrower

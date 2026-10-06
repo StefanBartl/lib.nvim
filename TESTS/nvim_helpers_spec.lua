@@ -348,6 +348,18 @@ return function(H)
   eq(read(atomic_p), "second", "fs.write.atomic: new content")
   local leftovers = vim.fn.glob(tmp .. "/atomic_check.txt.*", false, true)
   eq(#leftovers, 0, "fs.write.atomic: no temp file is left behind")
+  -- A read-only target: on Windows the rename over it fails (on POSIX it succeeds); either way no temp file stays,
+  -- not even an unremovable read-only one (`os.remove` could not delete it, `uv.fs_unlink` can).
+  local ro_p = tmp .. "/atomic_readonly.txt"
+  assert(write_atomic(ro_p, "first"))
+  vim.uv.fs_chmod(ro_p, 292) -- 0444
+  write_atomic(ro_p, "second")
+  eq(
+    #vim.fn.glob(tmp .. "/atomic_readonly.txt.*", false, true),
+    0,
+    "fs.write.atomic: no temp file next to a read-only target"
+  )
+  vim.uv.fs_chmod(ro_p, 420) -- 0644
   local no_parent_ok = write_atomic(tmp .. "/atomic_new_dir/f.txt", "x")
   eq(
     no_parent_ok,
