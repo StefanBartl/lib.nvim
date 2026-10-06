@@ -155,6 +155,29 @@ return function(H)
     )
   end
 
+  -- ------------------------------------------------------------------ forget
+
+  do
+    local f_keep = dir .. "/forget_keep.txt"
+    local f_new = dir .. "/forget_new.txt"
+    local f_other = dir .. "/forget_other.txt"
+    write_file(f_keep, "before")
+    write_file(f_other, "other before")
+    local fcp = assert(checkpoint.create({ f_keep, f_new, f_other }, { dir = checkpoint_root }))
+    -- someone else rewrote `f_keep` and created `f_new` after the snapshot; this run touched `f_other`
+    write_file(f_keep, "theirs")
+    write_file(f_new, "theirs, new")
+    write_file(f_other, "ours")
+    eq(checkpoint.forget(fcp, f_keep), true, "forget: a tracked path answers true")
+    eq(checkpoint.forget(fcp, f_new), true, "forget: a tracked, not-yet-existing path answers true")
+    eq(checkpoint.forget(fcp, dir .. "/never_tracked.txt"), false, "forget: an untracked path answers false")
+    checkpoint.restore(fcp)
+    eq(read_file(f_keep), "theirs", "forget: the forgotten file is not overwritten by the restore")
+    eq(read_file(f_new), "theirs, new", "forget: the forgotten new file is not deleted by the restore")
+    eq(read_file(f_other), "other before", "forget: the other entries are still restored")
+    checkpoint.discard(fcp)
+  end
+
   -- ------------------------------------------------- create: input validation
 
   do

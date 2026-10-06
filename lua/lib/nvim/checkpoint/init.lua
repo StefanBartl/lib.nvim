@@ -124,6 +124,27 @@ function M.restore(checkpoint)
   return #errors == 0, errors
 end
 
+---Stop tracking `path`: a later `restore` neither overwrites nor deletes it. For a file the guarded operation did not
+---touch after all -- it was created or rewritten by someone else in between (another process finished the same job
+---first), so the snapshot of it is stale and the restore would destroy THEIR result.
+---@param checkpoint Lib.Checkpoint
+---@param path string
+---@return boolean dropped Whether an entry for `path` was tracked.
+function M.forget(checkpoint, path)
+  local dropped = false
+  for i = #checkpoint.entries, 1, -1 do
+    local entry = checkpoint.entries[i]
+    if entry.path == path then
+      if entry.backup then
+        mutate.delete_file(entry.backup)
+      end
+      table.remove(checkpoint.entries, i)
+      dropped = true
+    end
+  end
+  return dropped
+end
+
 ---Delete `checkpoint`'s backup files. Call this once the guarded operation
 ---either succeeded (backups no longer needed) or was already restored.
 ---

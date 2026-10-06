@@ -24,5 +24,6 @@
 ---@field create fun(paths: string[], opts?: Lib.Checkpoint.CreateOpts): Lib.Checkpoint|nil, string|nil
 ---@field restore fun(checkpoint: Lib.Checkpoint): boolean, Lib.Checkpoint.RestoreError[]
 ---@field discard fun(checkpoint: Lib.Checkpoint): boolean
+---@field forget fun(checkpoint: Lib.Checkpoint, path: string): boolean
 
 return {}
