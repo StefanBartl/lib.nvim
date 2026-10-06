@@ -176,6 +176,7 @@ local p = kit.picker({
   text = function(t) return t.title end,        -- what the prompt's words are matched against (default: item.text)
   format = function(t) return { { t.title, "Title" }, { " " .. t.status, "Comment" } } end,
   preview = function(t, surface) surface:set_lines(read_lines(t.path)) end,   -- follows the cursor item
+  selectable = function(t) return not t.heading end,   -- rows that cannot be submitted, marked or rested on (headings)
   keys = { ["<M-d>"] = function(h) finish(h.marked()) end },                 -- lhs -> function(handle), in the prompt
   title = "Tasks", results_width = 0.6,
   on_submit = function(idx, line, item) open(item) end,
