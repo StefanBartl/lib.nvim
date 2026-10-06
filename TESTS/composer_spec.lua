@@ -256,6 +256,69 @@ return function(H)
     )
   end
 
+  -- A variadic last arg keeps completing past the declared slots; without it
+  -- the completion ends where the schema does (the unchanged default).
+  do
+    local fields = { "title", "number", "path" }
+    argtypes.register("VARIADIC_DEMO_FIELD", {
+      validate = function(raw)
+        return true, raw, nil
+      end,
+      complete = function(lead)
+        return argtypes.prefix(fields, lead)
+      end,
+    })
+    local function root_with(variadic)
+      return tree.build({
+        {
+          path = { "copy" },
+          args = {
+            { name = "what", type = "VARIADIC_DEMO_FIELD", optional = true },
+            { name = "more", type = "VARIADIC_DEMO_FIELD", optional = true, variadic = variadic },
+          },
+          flags = { { name = "sep", type = "STRING" } },
+          run = function() end,
+        },
+      })
+    end
+    local plain, var = root_with(nil), root_with(true)
+    eq(
+      join(complete.candidates(var, "", "Demo copy title number ")),
+      "title,number,path",
+      "complete: a variadic last arg is offered for the third token"
+    )
+    eq(
+      join(complete.candidates(var, "p", "Demo copy title number --sep=x p")),
+      "path",
+      "complete: the variadic arg stays prefix-filtered, flags do not occupy a slot"
+    )
+    eq(
+      join(complete.candidates(var, "", "Demo copy a b c d ")),
+      "title,number,path",
+      "complete: and for every token after that"
+    )
+    eq(
+      join(complete.candidates(plain, "", "Demo copy title number ")),
+      "",
+      "complete: without variadic the third token has no candidates"
+    )
+    eq(
+      join(complete.candidates(var, "", "Demo copy ")),
+      "title,number,path",
+      "complete: the declared slots are unchanged"
+    )
+    eq(
+      format.arg_token({ name = "more", optional = true, variadic = true }),
+      "[{more} ...]",
+      "format: a variadic arg is shown with a trailing ..."
+    )
+    eq(
+      format.arg_token({ name = "more", optional = true }),
+      "[{more}]",
+      "format: a plain arg is unchanged"
+    )
+  end
+
   -- committed-token extraction (bang + trailing lead handling)
   do
     eq(

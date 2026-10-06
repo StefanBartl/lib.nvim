@@ -165,6 +165,13 @@ function M.candidates(root, arg_lead, cmd_line)
   elseif route and route.args then
     -- Otherwise we are completing a positional argument of the matched route.
     local spec = route.args[filled + 1]
+    if not spec then
+      -- Past the declared slots: a variadic last arg keeps completing.
+      local last = route.args[#route.args]
+      if last and last.variadic then
+        spec = last
+      end
+    end
     if spec then
       out = argtypes.complete(arg_lead, spec, cmd_line)
     end

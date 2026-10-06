@@ -71,7 +71,8 @@ Each `run` receives a context table:
     ctx.pos     coerced positional args, in order
     ctx.flags   coerced --flag/-x values, keyed by FlagSpec.name
     ctx.kv      coerced bare key=value pairs, keyed by KvSpec.key
-    ctx.rest    leftover tokens beyond the declared schema
+    ctx.rest    leftover tokens beyond the declared schema (raw; an ArgSpec with
+                `variadic = true` as the LAST arg keeps completing them)
     ctx.path    the literal path that matched, e.g. { "surround" }
     ctx.bang    true when invoked as :Verb!
     ctx.range   { line1, line2, count, range }
