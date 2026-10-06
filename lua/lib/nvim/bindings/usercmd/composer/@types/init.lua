@@ -34,6 +34,7 @@
 ---@field values?   string[]                        # completion-only hints for a STRING arg (not enforced)
 ---@field optional? boolean                         # default false
 ---@field default?  any                             # value bound when an optional arg is omitted
+---@field variadic? boolean                         # on the LAST arg only: more tokens than declared slots keep completing with this spec, and usage/docs show `...`. Parsing is unchanged -- the extra tokens still arrive raw in `ctx.rest`, for the handler to read
 
 --- One `--flag` accepted by a route, parsed out of its token tail before
 --- positional binding. Opt-in per route: a route with no `flags` behaves

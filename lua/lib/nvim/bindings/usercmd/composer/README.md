@@ -117,7 +117,7 @@ defaults to `0` when called with no argument.
 | `ctx.pos`   | coerced positional args, in order                          |
 | `ctx.flags` | coerced `--flag`/`-x` values, keyed by `FlagSpec.name`      |
 | `ctx.kv`    | coerced bare `key=value` pairs, keyed by `KvSpec.key`       |
-| `ctx.rest`  | leftover tokens beyond the declared schema                 |
+| `ctx.rest`  | leftover tokens beyond the declared schema (raw, not validated) |
 | `ctx.path`  | the literal path that matched (e.g. `{ "surround" }`)      |
 | `ctx.bang`  | `true` when invoked as `:Verb!`                            |
 | `ctx.range` | `{ line1, line2, count, range, mode, col1, col2 }` — see below|
@@ -236,6 +236,16 @@ composer.verb("Replace", {
   },
 })
 ```
+
+### Open-ended positionals (`variadic`)
+
+A route whose handler reads an unbounded list of tokens (`:Case clipboard
+number title path ...`) declares its **last** arg `variadic = true`. Tokens
+past the declared slots then keep completing with that arg's type, and the
+usage line shows `[{more} ...]`. Nothing else changes: parsing, validation of
+the declared slots and `ctx.rest` (the extra tokens, raw) behave as before, so
+the handler still reads and validates them itself. A route without `variadic`
+completes nothing past its last slot, as always.
 
 Flags may appear **anywhere** in the tail — before, after, or between
 positionals (`:Replace --dry foo bar` and `:Replace foo bar --dry` are

@@ -18,6 +18,9 @@ function M.arg_token(spec)
   else
     inner = "{" .. spec.name .. "}"
   end
+  if spec.variadic then
+    inner = inner .. " ..."
+  end
   if spec.optional then
     return "[" .. inner .. "]"
   end

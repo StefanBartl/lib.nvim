@@ -46,7 +46,8 @@ desc?: string                          -- command description
 default?: fun(ctx)                     -- handler for bare :Verb (no route path)
 routes?: RouteSpec[]                   -- the route tree; each route:
   path: string[]                       -- literal subcommand tokens ({} = verb's root route)
-  args?: ArgSpec[]                     -- { name, type, optional?, enum?, values? }
+  args?: ArgSpec[]                     -- { name, type, optional?, enum?, values?, variadic? }
+                                        --   variadic (last arg only): tokens past the declared slots keep completing with it and usage shows `...`; they still arrive raw in ctx.rest
                                         --   types: STRING (default), INT, FLOAT, BOOL, PATH, DIR, FILE, BUFFER, WINDOW, custom
   flags?: FlagSpec[]                   -- --flag/-x parsing: { name, short?, bool?, type?, enum?, repeatable? }
   kv?: KvSpec[]                        -- bare key=value parsing: { key, type?, enum?, default? }
