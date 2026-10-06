@@ -47,6 +47,7 @@ creation along with everything else.
 | --- | --- |
 | `checkpoint.create(paths, opts?)` | Snapshot every existing file in `paths`; returns `checkpoint\|nil, err`. On partial failure (one file fails to back up), any already-copied backups and the checkpoint directory are cleaned up before returning — a failed `create()` leaves nothing behind |
 | `checkpoint.restore(checkpoint)` | Copy every backed-up file back verbatim, delete any file that didn't exist before; returns `ok, errors[]` (best-effort — one failure doesn't stop the rest) |
+| `checkpoint.forget(checkpoint, path)` | Stop tracking `path`: a later `restore` neither overwrites nor deletes it (its backup is dropped). For a file someone else created or rewrote in between, whose snapshot is stale; returns whether `path` was tracked |
 | `checkpoint.discard(checkpoint)` | Delete the checkpoint's backup directory; call once the guarded operation succeeded or was already restored. Idempotent — discarding an already-discarded checkpoint returns `true` |
 
 `opts` for `create`:
