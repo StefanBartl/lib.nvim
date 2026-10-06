@@ -165,6 +165,29 @@ local p = kit.picker({
 -- p.query() / p.set_results(lines) / p.move(delta) / p.submit() / p.close()
 ```
 
+#### Item mode (a list of items with marks, highlights and a preview)
+
+With `items` (or `format`) the results slot lists ITEMS instead of plain lines:
+
+```lua
+local p = kit.picker({
+  items = tasks,
+  key = function(t) return t.id end,            -- identity for marks and the cursor (default: the item itself)
+  text = function(t) return t.title end,        -- what the prompt's words are matched against (default: item.text)
+  format = function(t) return { { t.title, "Title" }, { " " .. t.status, "Comment" } } end,
+  preview = function(t, surface) surface:set_lines(read_lines(t.path)) end,   -- follows the cursor item
+  keys = { ["<M-d>"] = function(h) finish(h.marked()) end },                 -- lhs -> function(handle), in the prompt
+  title = "Tasks", results_width = 0.6,
+  on_submit = function(idx, line, item) open(item) end,
+  on_close = function() end,
+})
+-- <Tab> marks and moves down. p.current() / p.marked() / p.set_items(items, { cursor_key?, keep_marks? }) /
+-- p.set_title(t) / p.is_closed()
+```
+
+The words typed in the prompt filter the list (every word must occur, any case); an empty result stays open.
+`set_items` keeps the cursor on its item and the marks of items that are still there.
+
 `kit.picker({ prompt = "plain" })` falls back to a bare
 `kit.layout.template("picker")` whose prompt slot you wire yourself.
 
