@@ -36,8 +36,8 @@ local function move_in(win, buf, delta)
   pcall(api.nvim_win_set_cursor, win, { line, 0 })
 end
 
---- Open an interactive picker.
----@param opts table  # { theme?, debounce?, on_change(query), on_submit(idx, text), prompt? }
+--- Open an interactive picker. Item mode (`items` / `format`): see the README of the kit.
+---@param opts table  # { theme?, debounce?, on_change(query), on_submit(idx, text, item?), prompt?, items?, format?(item), text?(item), key?(item), selectable?(item), preview?(item, surface), keys?, marks?, title?, results_width?, on_close? }
 ---@return table|nil  # handle: { slots, query(), set_results(lines), move(delta), submit(), close() }
 function M.open(opts)
   opts = opts or {}
@@ -52,7 +52,15 @@ function M.open(opts)
   local on_submit = opts.on_submit or function(_, _) end
   local debounce_ms = tonumber(opts.debounce) or 80
 
-  local group = layout.mount(layout.templates.picker.spec, {
+  -- `opts.results_width` (0..1, default 0.4) trades preview room for result room: a list of long rows wants more.
+  local spec = layout.templates.picker.spec
+  if opts.results_width then
+    spec = vim.deepcopy(spec)
+    local width = math.min(0.9, math.max(0.1, opts.results_width))
+    spec.rows[2].cols[1].width = width
+    spec.rows[2].cols[2].width = 1 - width
+  end
+  local group = layout.mount(spec, {
     theme = opts.theme,
     enter = "prompt",
     slot = {
@@ -101,7 +109,7 @@ function M.open(opts)
   ---names locally, and a fixed `{"prompt", "results"}` loop silently left it
   ---stuck at its open-time position and size on every resize.
   local function relayout()
-    local geo = layout.compute(layout.templates.picker.spec)
+    local geo = layout.compute(spec)
     for name, g in pairs(geo.slots) do
       local surf = group.slots[name]
       if surf and surf:is_valid() then
@@ -177,6 +185,232 @@ function M.open(opts)
     finish_close()
   end
 
+  -- ── item mode ──────────────────────────────────────────────────────────────
+  -- `opts.items` (or `opts.format`) turns the results slot into a list of ITEMS: rendered through `format` (text parts
+  -- with highlight groups), filtered by the words typed in the prompt (every word must occur, any case), with marks
+  -- (<Tab>), the current/marked items for caller actions, a preview slot filled by `opts.preview(item, surface)` and
+  -- `set_items` to replace the list while keeping the cursor item and the marks.
+  local item_mode = opts.items ~= nil or opts.format ~= nil
+  ---@type any[]
+  local items = opts.items or {}
+  ---@type any[]
+  local shown = {}
+  ---@type table<any, boolean>
+  local marked = {}
+  local ns = api.nvim_create_namespace("lib_kit_picker_items")
+  local closed = false
+  prompt:on_close(function()
+    closed = true
+    if opts.on_close then
+      pcall(opts.on_close)
+    end
+  end)
+
+  local function text_of(item)
+    if opts.text then
+      return opts.text(item)
+    end
+    return type(item) == "table" and item.text or tostring(item)
+  end
+  local function key_of(item)
+    return opts.key and opts.key(item) or item
+  end
+  local function selectable(item)
+    return not opts.selectable or opts.selectable(item) ~= false
+  end
+
+  ---@return any|nil
+  local function current_item()
+    if not results:is_valid() then
+      return nil
+    end
+    return shown[api.nvim_win_get_cursor(results.winid)[1]]
+  end
+
+  local function sync_preview()
+    local preview = group.slots.preview
+    if opts.preview and preview and preview:is_valid() then
+      local item = current_item()
+      if item ~= nil then
+        pcall(opts.preview, item, preview)
+      else
+        preview:set_lines({})
+      end
+    end
+  end
+
+  ---@param cursor_key any|nil  # The item the cursor goes back to (default: the first row).
+  local function render(cursor_key)
+    if not results:is_valid() then
+      return
+    end
+    local words = {}
+    for w in handle.query():lower():gmatch("%S+") do
+      words[#words + 1] = w
+    end
+    shown = {}
+    local lines, spans = {}, {}
+    for _, item in ipairs(items) do
+      local hay = text_of(item):lower()
+      local hit = true
+      for _, w in ipairs(words) do
+        if not hay:find(w, 1, true) then
+          hit = false
+          break
+        end
+      end
+      if hit then
+        shown[#shown + 1] = item
+        local line = marked[key_of(item)] and "+ " or "  "
+        local line_spans = {}
+        local parts = opts.format and opts.format(item) or text_of(item)
+        if type(parts) == "string" then
+          parts = { { parts } }
+        end
+        for _, part in ipairs(parts) do
+          local piece = (part[1]:gsub("[\r\n]", " "))
+          if part[2] then
+            line_spans[#line_spans + 1] = { #line, #line + #piece, part[2] }
+          end
+          line = line .. piece
+        end
+        lines[#lines + 1] = line
+        spans[#spans + 1] = line_spans
+      end
+    end
+    results:set_lines(lines)
+    api.nvim_buf_clear_namespace(results.bufnr, ns, 0, -1)
+    for i, line_spans in ipairs(spans) do
+      if marked[key_of(shown[i])] then
+        pcall(
+          api.nvim_buf_set_extmark,
+          results.bufnr,
+          ns,
+          i - 1,
+          0,
+          { end_col = 1, hl_group = "DiagnosticOk" }
+        )
+      end
+      for _, sp in ipairs(line_spans) do
+        pcall(
+          api.nvim_buf_set_extmark,
+          results.bufnr,
+          ns,
+          i - 1,
+          sp[1],
+          { end_col = sp[2], hl_group = sp[3] }
+        )
+      end
+    end
+    local row = 1
+    if cursor_key ~= nil then
+      for i, item in ipairs(shown) do
+        if key_of(item) == cursor_key then
+          row = i
+          break
+        end
+      end
+    end
+    pcall(api.nvim_win_set_cursor, results.winid, { math.min(row, math.max(1, #shown)), 0 })
+    sync_preview()
+  end
+
+  if item_mode then
+    -- the typed words filter the list (a caller's own `on_change` still wins)
+    if not opts.on_change then
+      on_change = function()
+        local item = current_item()
+        render(item ~= nil and key_of(item) or nil)
+      end
+    end
+    local plain_move = handle.move
+    function handle.move(delta)
+      plain_move(delta)
+      sync_preview()
+    end
+
+    ---The item under the cursor.
+    ---@return any|nil
+    function handle.current()
+      return current_item()
+    end
+
+    ---The marked items, in list order.
+    ---@return any[]
+    function handle.marked()
+      local out = {}
+      for _, item in ipairs(items) do
+        if marked[key_of(item)] then
+          out[#out + 1] = item
+        end
+      end
+      return out
+    end
+
+    ---Replace the list. The cursor stays on its item (`cursor_key` names another one), the marks of items that
+    ---are still there stay unless `keep_marks == false`.
+    ---@param new_items any[]
+    ---@param o? { cursor_key?: any, keep_marks?: boolean }
+    function handle.set_items(new_items, o)
+      o = o or {}
+      local item = current_item()
+      local cursor = o.cursor_key
+      if cursor == nil and item ~= nil then
+        cursor = key_of(item)
+      end
+      items = new_items or {}
+      local present = {}
+      for _, it in ipairs(items) do
+        present[key_of(it)] = true
+      end
+      for k in pairs(marked) do
+        if o.keep_marks == false or not present[k] then
+          marked[k] = nil
+        end
+      end
+      render(cursor)
+    end
+
+    ---Mark or unmark the item under the cursor and move down.
+    function handle.toggle_mark()
+      local item = current_item()
+      if item == nil or not selectable(item) then
+        return
+      end
+      local k = key_of(item)
+      marked[k] = (not marked[k]) or nil
+      render(k)
+      handle.move(1)
+    end
+
+    ---@param title string|nil
+    function handle.set_title(title)
+      results:set_title(title)
+    end
+
+    ---@return boolean
+    function handle.is_closed()
+      return closed
+    end
+
+    -- Submit with the item: on_submit(idx, text, item).
+    function handle.submit()
+      if not results:is_valid() then
+        return
+      end
+      local idx = api.nvim_win_get_cursor(results.winid)[1]
+      local item = shown[idx]
+      local text = api.nvim_buf_get_lines(results.bufnr, idx - 1, idx, false)[1]
+      finish_close()
+      if item ~= nil then
+        on_submit(idx, text, item)
+      end
+    end
+    if opts.title then
+      handle.set_title(opts.title)
+    end
+  end
+
   -- Debounced query notifications.
   local function schedule_change()
     stop_timer()
@@ -225,7 +459,19 @@ function M.open(opts)
     handle.move(-1)
   end, mo)
   map({ "i", "n" }, "<Esc>", finish_close, mo)
+  if item_mode and opts.marks ~= false then
+    map({ "i", "n" }, "<Tab>", handle.toggle_mark, mo)
+  end
+  -- Caller keys: lhs -> function(handle), in the prompt window (insert and normal mode).
+  for lhs, fn in pairs(opts.keys or {}) do
+    map({ "i", "n" }, lhs, function()
+      fn(handle)
+    end, mo)
+  end
 
+  if item_mode then
+    render(nil)
+  end
   prompt:focus()
   vim.cmd("startinsert")
 

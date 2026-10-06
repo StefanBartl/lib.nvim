@@ -170,10 +170,18 @@ return function(H)
     write_file(f_other, "ours")
     eq(checkpoint.forget(fcp, f_keep), true, "forget: a tracked path answers true")
     eq(checkpoint.forget(fcp, f_new), true, "forget: a tracked, not-yet-existing path answers true")
-    eq(checkpoint.forget(fcp, dir .. "/never_tracked.txt"), false, "forget: an untracked path answers false")
+    eq(
+      checkpoint.forget(fcp, dir .. "/never_tracked.txt"),
+      false,
+      "forget: an untracked path answers false"
+    )
     checkpoint.restore(fcp)
     eq(read_file(f_keep), "theirs", "forget: the forgotten file is not overwritten by the restore")
-    eq(read_file(f_new), "theirs, new", "forget: the forgotten new file is not deleted by the restore")
+    eq(
+      read_file(f_new),
+      "theirs, new",
+      "forget: the forgotten new file is not deleted by the restore"
+    )
     eq(read_file(f_other), "other before", "forget: the other entries are still restored")
     checkpoint.discard(fcp)
   end
