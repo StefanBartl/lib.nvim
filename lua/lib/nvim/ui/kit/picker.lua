@@ -202,7 +202,15 @@ function M.open(opts)
   prompt:on_close(function()
     closed = true
     if opts.on_close then
-      pcall(opts.on_close)
+      local ran, err = pcall(opts.on_close)
+      if not ran then
+        vim.schedule(function()
+          vim.notify(
+            "lib.nvim.ui.kit.picker: on_close failed: " .. tostring(err),
+            vim.log.levels.WARN
+          )
+        end)
+      end
     end
   end)
 
@@ -219,8 +227,18 @@ function M.open(opts)
     return not opts.selectable or opts.selectable(item) ~= false
   end
 
+  ---The typed words are applied with a debounce; an action that reads the list (current, marked, submit, a caller
+  ---key) must see the list of what is in the prompt NOW, not of the previous keystroke.
+  local function flush()
+    if timer then
+      stop_timer()
+      on_change(handle.query())
+    end
+  end
+
   ---@return any|nil
   local function current_item()
+    flush()
     if not results:is_valid() then
       return nil
     end
@@ -232,7 +250,11 @@ function M.open(opts)
     if opts.preview and preview and preview:is_valid() then
       local item = current_item()
       if item ~= nil then
-        pcall(opts.preview, item, preview)
+        local drawn, err = pcall(opts.preview, item, preview)
+        if not drawn then
+          -- never leave the previous item's text next to the new cursor row
+          pcall(preview.set_lines, preview, { "(preview failed: " .. tostring(err) .. ")" })
+        end
       else
         preview:set_lines({})
       end
@@ -302,10 +324,20 @@ function M.open(opts)
         )
       end
     end
-    local row = 1
+    local row
     if cursor_key ~= nil then
       for i, item in ipairs(shown) do
         if key_of(item) == cursor_key then
+          row = i
+          break
+        end
+      end
+    end
+    if not row then
+      -- the first row that can be acted on (a heading is not one)
+      row = 1
+      for i, item in ipairs(shown) do
+        if selectable(item) then
           row = i
           break
         end
@@ -325,7 +357,17 @@ function M.open(opts)
     end
     local plain_move = handle.move
     function handle.move(delta)
+      flush()
       plain_move(delta)
+      -- step over rows that cannot be acted on (headings), at most once around the list
+      local step = delta < 0 and -1 or 1
+      for _ = 1, #shown do
+        local item = shown[api.nvim_win_get_cursor(results.winid)[1]]
+        if item == nil or selectable(item) then
+          break
+        end
+        plain_move(step)
+      end
       sync_preview()
     end
 
@@ -338,6 +380,7 @@ function M.open(opts)
     ---The marked items, in list order.
     ---@return any[]
     function handle.marked()
+      flush()
       local out = {}
       for _, item in ipairs(items) do
         if marked[key_of(item)] then
@@ -379,7 +422,23 @@ function M.open(opts)
       end
       local k = key_of(item)
       marked[k] = (not marked[k]) or nil
-      render(k)
+      -- flip the two-byte prefix of THIS row in place: a full render per <Tab> is thousands of extmarks
+      local buf = results.bufnr
+      local row = api.nvim_win_get_cursor(results.winid)[1] - 1
+      local was_modifiable = api.nvim_get_option_value("modifiable", { buf = buf })
+      api.nvim_set_option_value("modifiable", true, { buf = buf })
+      pcall(api.nvim_buf_set_text, buf, row, 0, row, 2, { marked[k] and "+ " or "  " })
+      api.nvim_set_option_value("modifiable", was_modifiable, { buf = buf })
+      for _, mark in
+        ipairs(api.nvim_buf_get_extmarks(buf, ns, { row, 0 }, { row, 0 }, { details = true }))
+      do
+        if mark[4].hl_group == "DiagnosticOk" then
+          api.nvim_buf_del_extmark(buf, ns, mark[1])
+        end
+      end
+      if marked[k] then
+        pcall(api.nvim_buf_set_extmark, buf, ns, row, 0, { end_col = 1, hl_group = "DiagnosticOk" })
+      end
       handle.move(1)
     end
 
@@ -398,13 +457,15 @@ function M.open(opts)
       if not results:is_valid() then
         return
       end
+      flush()
       local idx = api.nvim_win_get_cursor(results.winid)[1]
       local item = shown[idx]
+      if item == nil or not selectable(item) then
+        return -- an empty list or a heading: nothing to submit, the picker stays open
+      end
       local text = api.nvim_buf_get_lines(results.bufnr, idx - 1, idx, false)[1]
       finish_close()
-      if item ~= nil then
-        on_submit(idx, text, item)
-      end
+      on_submit(idx, text, item)
     end
     if opts.title then
       handle.set_title(opts.title)

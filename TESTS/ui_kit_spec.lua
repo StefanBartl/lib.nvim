@@ -903,6 +903,72 @@ return function(H)
     vim.cmd("stopinsert")
   end
 
+  -- item mode, review round: no stale list after a fast keystroke, headings, failing preview, marks in place
+  do
+    local rows = {}
+    for i = 1, 50 do
+      rows[#rows + 1] = { id = i, text = "T-" .. i }
+    end
+    table.insert(rows, 1, { id = 0, text = "HEADING", heading = true })
+    local fail_preview = false
+    local submitted
+    local rp = assert(kit.picker({
+      items = rows,
+      key = function(item)
+        return item.id
+      end,
+      selectable = function(item)
+        return not item.heading
+      end,
+      format = function(item)
+        return { { item.text, "Title" } }
+      end,
+      preview = function(item, surface)
+        if fail_preview then
+          error("boom")
+        end
+        surface:set_lines({ "preview " .. item.id })
+      end,
+      on_submit = function(_, _, item)
+        submitted = item.id
+      end,
+    }))
+    eq(
+      rp.current().id,
+      1,
+      "the cursor starts on the first row that can be acted on, not on the heading"
+    )
+    rp.move(-1) -- wraps to the last row, never rests on the heading
+    ok(rp.current().id ~= 0)
+    -- a fast keystroke: the list is flushed before it is read
+    vim.api.nvim_buf_set_lines(rp.slots.prompt.bufnr, 0, -1, false, { "T-42" })
+    vim.api.nvim_exec_autocmds("TextChangedI", { buffer = rp.slots.prompt.bufnr })
+    eq(rp.current().id, 42, "current() sees the typed query at once")
+    -- marks flip in place
+    local before = #vim.api.nvim_buf_get_lines(rp.slots.results.bufnr, 0, -1, false)
+    rp.toggle_mark()
+    eq(#rp.marked(), 1)
+    eq(#vim.api.nvim_buf_get_lines(rp.slots.results.bufnr, 0, -1, false), before)
+    eq(vim.api.nvim_buf_get_lines(rp.slots.results.bufnr, 0, 1, false)[1], "+ T-42")
+    -- a preview that raises says so instead of keeping the old text
+    vim.api.nvim_buf_set_lines(rp.slots.prompt.bufnr, 0, -1, false, { "" })
+    rp.set_items(rows)
+    fail_preview = true
+    rp.move(1)
+    ok(
+      vim.api
+        .nvim_buf_get_lines(rp.slots.preview.bufnr, 0, 1, false)[1]
+        :find("preview failed", 1, true) ~= nil
+    )
+    -- nothing to submit: an empty list keeps the picker open
+    vim.api.nvim_buf_set_lines(rp.slots.prompt.bufnr, 0, -1, false, { "no-such-text" })
+    vim.api.nvim_exec_autocmds("TextChangedI", { buffer = rp.slots.prompt.bufnr })
+    rp.submit()
+    ok(not rp.is_closed() and submitted == nil, "an empty list stays open")
+    rp.close()
+    vim.cmd("stopinsert")
+  end
+
   -- plain mode falls back to a bare template mount
   local plain = assert(kit.picker({ prompt = "plain" }), "plain picker mounts")
   ok(plain.slots.prompt:is_valid(), "plain picker has slots")
