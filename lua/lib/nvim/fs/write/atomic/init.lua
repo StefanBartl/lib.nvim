@@ -45,12 +45,14 @@ return function(path, content, opts)
   end
   local closed, close_err = uv.fs_close(fd)
   if not wrote or wrote ~= #content or not closed then
-    pcall(os.remove, tmp)
+    -- `uv.fs_unlink`, not `os.remove`: on Windows `os.remove` cannot delete the read-only temp file the fchmod of a
+    -- read-only target produced, and a stray temp file would be left next to the file per attempt.
+    pcall(uv.fs_unlink, tmp)
     return false, "write failed: " .. tostring(write_err or close_err or tmp)
   end
   local renamed, rename_err = require("lib.nvim.cross.fs.mutate").rename_file(tmp, path)
   if not renamed then
-    pcall(os.remove, tmp)
+    pcall(uv.fs_unlink, tmp)
     return false, "rename failed: " .. tostring(rename_err)
   end
   return true, nil
