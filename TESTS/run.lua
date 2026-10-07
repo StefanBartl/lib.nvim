@@ -84,6 +84,7 @@ local specs = {
   "ui_kit_form_back_spec.lua",
   "ui_kit_sheet_spec.lua",
   "ui_kit_winfixbuf_spec.lua",
+  "ui_kit_insert_chain_spec.lua",
   "icons_spec.lua",
   "ui_hl_persist_spec.lua",
   "ui_winhighlight_spec.lua",

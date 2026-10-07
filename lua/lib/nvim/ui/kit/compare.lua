@@ -51,6 +51,7 @@
 --- for a caller that wants it — out of scope for now.
 
 local surface = require("lib.nvim.ui.kit.surface")
+local input = require("lib.nvim.ui.kit.input")
 local map = require("lib.nvim.bindings.keymap")
 local notify = require("lib.nvim.notify").create("[lib.nvim.ui.kit.compare]")
 
@@ -395,6 +396,8 @@ function M.open(opts)
     render_results()
     render_preview()
     surfaces.prompt:focus()
+    -- A prompt that closes while its callback opens this one must leave Insert mode on.
+    input.mark_opened()
     vim.cmd("startinsert")
   end
 
