@@ -29,8 +29,10 @@
 --- `<S-Tab>` advance/retreat the selection instead of re-triggering, and
 --- `<CR>` accepts the highlighted candidate instead of submitting the whole
 --- prompt (a second `<CR>` submits, exactly like confirming a shell
---- completion then pressing enter again). A fragment that holds a backtick is
---- never completed: `getcompletion()` would run the span between backticks
+--- completion then pressing enter again). With `"file"` or `"dir"` and more than 300
+--- matches the list is built from one directory listing instead (no `stat` per match,
+--- sorted, cut to 300): `getcompletion()` took half a second for five thousand files.
+--- A fragment that holds a backtick is never completed: `getcompletion()` would run the span between backticks
 --- through the shell, and a pasted line is not to be trusted with that.
 ---
 --- `opts.on_back` makes the prompt one step of a larger flow (`kit.form` with
@@ -219,6 +221,68 @@ local function apply_mask(bufnr, ns, mask)
   conceal_line(bufnr, ns, 0, mask)
 end
 
+--- More path candidates than this are not a menu to read -- typing the next letter
+--- narrows them faster than scrolling does -- and `getcompletion()` pays a file-system
+--- `stat` per match, ~0.1 ms each: a directory of five thousand files froze the
+--- editor for half a second at every <Tab>. Past this many the list is built without.
+local MAX_PATH_MATCHES = 300
+
+---@internal
+---The candidates for a path fragment that matches MORE than `MAX_PATH_MATCHES` entries
+---of its directory, built from one directory listing (the entry types come with it, no
+---`stat`), sorted the way `getcompletion()` sorts and cut to that many. nil for
+---anything else -- a pattern, a directory that cannot be listed, a fragment with few
+---matches -- which is `getcompletion()`'s as before.
+---@param frag string
+---@param dirs_only boolean
+---@return string[]|nil
+local function many_path_matches(frag, dirs_only)
+  if frag:find("[*?%[{]") then
+    return nil -- a pattern: only getcompletion() expands those
+  end
+  local cut = frag:find("[/\\][^/\\]*$")
+  local head = cut and frag:sub(1, cut) or ""
+  local name = cut and frag:sub(cut + 1) or frag
+  local dir = head == "" and "." or expand_path(head)
+  local handle = uv.fs_scandir(dir)
+  if not handle then
+    return nil
+  end
+  local fold = vim.o.fileignorecase
+  local want = fold and name:lower() or name
+  local dotted = name:sub(1, 1) == "." -- dot files only when asked for by name
+  local found = {}
+  while true do
+    local entry, kind = uv.fs_scandir_next(handle)
+    if not entry then
+      break
+    end
+    local key = fold and entry:lower() or entry
+    if (dotted or entry:sub(1, 1) ~= ".") and key:sub(1, #want) == want then
+      if kind ~= "file" and kind ~= "directory" then
+        -- a link, or a file system that does not say: the target decides
+        local st = uv.fs_stat(dir .. "/" .. entry)
+        kind = st and st.type or "file"
+      end
+      if kind == "directory" or not dirs_only then
+        found[#found + 1] =
+          { key = key, text = head .. entry .. (kind == "directory" and "/" or "") }
+      end
+    end
+  end
+  if #found <= MAX_PATH_MATCHES then
+    return nil
+  end
+  table.sort(found, function(a, b)
+    return a.key < b.key
+  end)
+  local out = {}
+  for i = 1, MAX_PATH_MATCHES do
+    out[i] = found[i].text
+  end
+  return out
+end
+
 ---@internal
 ---Complete the fragment before the cursor via `vim.fn.getcompletion()` and
 ---open the native completion popup at the right start column. The line is the
@@ -242,9 +306,14 @@ local function trigger_completion(bufnr, winid, completion)
   if frag:find("`", 1, true) then
     return
   end
-  local ok, matches = pcall(fn.getcompletion, frag, completion)
-  if not ok or not matches or #matches == 0 then
-    return
+  local matches = (completion == "file" or completion == "dir")
+    and many_path_matches(frag, completion == "dir")
+  if not matches then
+    local ok, got = pcall(fn.getcompletion, frag, completion)
+    if not ok or not got or #got == 0 then
+      return
+    end
+    matches = got
   end
   -- getcompletion() returns full replacement strings (e.g. "/etc/passwd" for
   -- fragment "/etc/pas"), so complete()'s start column is where `frag` began.
