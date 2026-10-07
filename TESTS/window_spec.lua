@@ -255,4 +255,19 @@ return function(H)
     vim.o.scrolloff = saved_so
     vim.o.sidescrolloff = saved_siso
   end
+
+  -- A line with a newline in it is refused by the API: make_scratch still raises,
+  -- but the buffer it made a moment before is gone again (it stayed behind,
+  -- never shown and never wiped, once per failing call).
+  do
+    local make_scratch = require("lib.nvim.window.make_scratch")
+    local before = #vim.api.nvim_list_bufs()
+    local raised, err = pcall(make_scratch, { lines = { "a\nb" } })
+    H.ok(not raised, "make_scratch: a line with a newline still raises")
+    H.ok(
+      tostring(err):find("newlines", 1, true) ~= nil,
+      "make_scratch: and says why: " .. tostring(err)
+    )
+    H.eq(#vim.api.nvim_list_bufs(), before, "make_scratch: the buffer it made is not left behind")
+  end
 end
