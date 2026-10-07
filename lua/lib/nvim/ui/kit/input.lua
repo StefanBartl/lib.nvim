@@ -25,8 +25,27 @@
 --- `<CR>` accepts the highlighted candidate instead of submitting the whole
 --- prompt (a second `<CR>` submits, exactly like confirming a shell
 --- completion then pressing enter again).
+---
+--- `opts.on_back` makes the prompt one step of a larger flow (`kit.form` with
+--- `back = true`): `<BS>` on an EMPTY line, `<S-Tab>` and `<C-p>` close the
+--- prompt and call `on_back(line)` -- the line as it stood, so the caller can
+--- keep a half-typed answer -- instead of `on_submit`/`on_cancel`. A press of
+--- those keys while a completion popup is open still belongs to the popup,
+--- and without `on_back` none of the three is touched.
+---
+--- `opts.buttons` adds a clickable row of `[ Label ]` buttons under the field
+--- (`{ { id = "back"|"skip"|"submit", label = "..." }, ... }`; `submit` is
+--- `<CR>`, `skip` is `<Esc>`, `back` is the `on_back` keys, and a `back` button
+--- is dropped when there is no `on_back`). `<Down>` (and `<Tab>`, unless
+--- `completion` owns it) moves the focus from the field onto the row, starting
+--- on the `submit` button; there `h`/`l`/arrows/`<Tab>`/`<S-Tab>` move it,
+--- `<CR>` presses the focused button, `<Esc>` still cancels and `<Up>`/`k`/`i`/
+--- `a` return to the field. A left click on a button focuses *and* presses it
+--- in one action, exactly as in `kit.confirm`. The row's layout, focus
+--- highlight and hit-test are `lib.nvim.ui.kit.buttons`, shared with `kit.confirm`.
 
 local surface = require("lib.nvim.ui.kit.surface")
+local buttons = require("lib.nvim.ui.kit.buttons")
 local expand_path = require("lib.nvim.cross.fs.expand_path")
 
 local api = vim.api
@@ -34,6 +53,55 @@ local autocmd = require("lib.nvim.bindings.autocmd")
 local fn = vim.fn
 
 local M = {}
+
+--- Extmark namespace of the focus highlight on the button row.
+local BTN_NS = api.nvim_create_namespace("lib_kit_input_buttons")
+
+--- How many prompts have ever been opened. `finish` compares it before and
+--- after the callbacks it runs to tell whether one of them opened the next
+--- prompt of a chain.
+---@type integer
+local opened = 0
+
+--- The ids `opts.buttons` understands.
+---@type table<string, true>
+local BUTTON_IDS = { back = true, skip = true, submit = true }
+
+---@internal
+--- Hand `keys` back to Neovim un-remapped and AHEAD of whatever is still
+--- queued, for a mapping that only wants to intercept some presses of a key
+--- (`<BS>` on an empty line, `<S-Tab>` with no popup open). Appending them
+--- instead would reorder a pasted or fast-typed run.
+---@param keys string
+local function pass_through(keys)
+  api.nvim_feedkeys(api.nvim_replace_termcodes(keys, true, false, true), "ni", false)
+end
+
+---@internal
+--- Split `opts.buttons` into parallel id/label lists. Unknown ids, labels that
+--- are not strings and a `back` button without an `on_back` to call are
+--- dropped: a button that can do nothing is worse than no button.
+---@param opts table
+---@return string[] ids
+---@return string[] labels
+local function resolve_buttons(opts)
+  local ids, labels = {}, {}
+  if type(opts.buttons) ~= "table" then
+    return ids, labels
+  end
+  for _, b in ipairs(opts.buttons) do
+    if
+      type(b) == "table"
+      and BUTTON_IDS[b.id]
+      and type(b.label) == "string"
+      and (b.id ~= "back" or type(opts.on_back) == "function")
+    then
+      ids[#ids + 1] = b.id
+      labels[#labels + 1] = b.label
+    end
+  end
+  return ids, labels
+end
 
 ---@internal
 ---Re-conceal every character of the input's single line with `mask`.
@@ -77,10 +145,11 @@ local function trigger_completion(bufnr, winid, completion)
 end
 
 --- Open a single-line input.
----@param opts table  # { title|prompt, default, theme, width, relative, on_submit, on_cancel, expand_env, secret, mask, completion }
+---@param opts table  # { title|prompt, default, theme, width, relative, on_submit, on_cancel, expand_env, secret, mask, completion, on_back, buttons }
 --- `expand_env = true` runs the submitted line through `lib.nvim.cross.fs.expand_path`
 --- (`~`, `$VAR`, `${VAR}`, `%VAR%`) before it reaches `on_submit` — opt-in, for
 --- callers that know they're prompting for a path.
+--- `on_back` / `buttons`: see the module doc — opt-in, nothing changes without them.
 ---@return Lib.UI.Kit.Surface|nil
 function M.open(opts)
   opts = opts or {}
@@ -91,12 +160,23 @@ function M.open(opts)
   -- ellipsis) instead of wrapping, so widen the box to fit it.
   local title_width = title and vim.fn.strdisplaywidth(title) or 0
 
+  local btn_ids, btn_labels = resolve_buttons(opts)
+  local has_buttons = #btn_ids > 0
+  local can_back = type(opts.on_back) == "function"
+
+  local width = opts.width or math.max(40, title_width)
+  if has_buttons and width >= 1 then
+    -- A row clipped by the border has buttons the mouse cannot hit. (A
+    -- fraction of the editor, `width < 1`, is left to make_scratch.)
+    width = math.max(width, buttons.row_width(btn_labels) + 2)
+  end
+
   local surf = surface.open({
-    lines = { opts.default or "" },
+    lines = has_buttons and { opts.default or "", "" } or { opts.default or "" },
     theme = opts.theme,
     title = title,
-    width = opts.width or math.max(40, title_width),
-    height = 1,
+    width = width,
+    height = has_buttons and 2 or 1,
     relative = opts.relative or "cursor",
     enter = true,
     modifiable = true,
@@ -107,8 +187,37 @@ function M.open(opts)
     return nil
   end
 
+  opened = opened + 1
   local bufnr = surf.bufnr
   local done = false
+
+  ---@return string
+  local function get_line()
+    return api.nvim_buf_get_lines(bufnr, 0, 1, false)[1] or ""
+  end
+
+  -- The button row, when there is one: line 2 of the buffer. `btn_focus` is the
+  -- 1-based button the focus is on, nil while it is in the field (line 1).
+  local btn_focus = nil
+  local ranges = {}
+  local default_btn = 1 -- where <Down>/<Tab> land: the button <CR> would press anyway
+  for i, id in ipairs(btn_ids) do
+    if id == "submit" then
+      default_btn = i
+    end
+  end
+
+  if has_buttons then
+    local line
+    -- Laid out after the window exists, so the row is centered in the width
+    -- the float actually got (make_scratch clamps it to the editor).
+    line, ranges = buttons.layout(btn_labels, api.nvim_win_get_width(surf.winid), 1)
+    -- No undo step for it: `u` in the field must never reach the button row.
+    local undolevels = vim.bo[bufnr].undolevels
+    vim.bo[bufnr].undolevels = -1
+    api.nvim_buf_set_lines(bufnr, 1, 2, false, { line })
+    vim.bo[bufnr].undolevels = undolevels
+  end
 
   if opts.secret then
     local ns = api.nvim_create_namespace("lib_kit_input_secret_" .. bufnr)
@@ -123,26 +232,185 @@ function M.open(opts)
     })
   end
 
-  local function finish(submit)
+  --- `action`: `true` submits (<CR>), `false` cancels (<Esc>), `"back"` steps
+  --- back (`on_back`).
+  ---@param action boolean|"back"
+  local function finish(action)
     if done then
       return
     end
     done = true
-    local line = api.nvim_buf_get_lines(bufnr, 0, 1, false)[1] or ""
-    -- Leave insert mode before closing to avoid a lingering mode state.
+    local line = get_line()
+    local opened_before = opened
+    surf:close()
+    local ok, err = pcall(function()
+      if action == "back" then
+        if opts.on_back then
+          opts.on_back(line)
+        end
+      elseif action then
+        if opts.expand_env then
+          line = expand_path(line)
+        end
+        if opts.on_submit then
+          opts.on_submit(line)
+        end
+      elseif opts.on_cancel then
+        opts.on_cancel()
+      end
+    end)
+    -- Leave insert mode now that the prompt is gone (a lingering mode state
+    -- otherwise) -- unless a callback opened the next prompt of a chain (a
+    -- form's next field, or the one before it). That prompt is waiting for
+    -- Insert mode, and `:startinsert` is ignored while this one's is still on:
+    -- stopping here as well would strand it in Normal mode, where the first
+    -- thing typed is a command.
+    if opened == opened_before then
+      pcall(function()
+        vim.cmd("stopinsert")
+      end)
+    end
+    if not ok then
+      error(err, 0)
+    end
+  end
+
+  --- Press button `i`: each one is one of the keys that already do it.
+  ---@param i integer
+  local function press(i)
+    local id = btn_ids[i]
+    if id == "back" then
+      finish("back")
+    elseif id == "skip" then
+      finish(false)
+    else
+      finish(true)
+    end
+  end
+
+  local function paint()
+    buttons.paint(bufnr, BTN_NS, ranges, btn_focus)
+  end
+
+  --- Put the cursor on the focused button. Leaving insert mode (which is what
+  --- a `<Down>` from the field is about to do) steps the cursor one column
+  --- left, so aim one column right of the box's start to land on it.
+  local function park_cursor()
+    local r = ranges[btn_focus]
+    if r then
+      local from_insert = api.nvim_get_mode().mode:sub(1, 1) == "i"
+      pcall(api.nvim_win_set_cursor, surf.winid, { 2, r.start_col + (from_insert and 1 or 0) })
+    end
+  end
+
+  local focus_field
+  local function move_focus(delta)
+    if not btn_focus then
+      return
+    end
+    btn_focus = buttons.wrap(btn_focus, delta, #btn_ids)
+    paint()
+    park_cursor()
+  end
+
+  -- Normal-mode keys that only mean something while the focus is on the row.
+  -- Bound on entering it and removed on leaving it, so the field keeps every
+  -- native key (`h`, `i`, ...) the rest of the time. Keys the field also
+  -- binds (<Tab>, <S-Tab>, <Down>, <CR>, <Esc>) are static and check
+  -- `btn_focus` themselves instead.
+  local button_keys = {
+    {
+      { "l", "<Right>" },
+      function()
+        move_focus(1)
+      end,
+    },
+    {
+      { "h", "<Left>" },
+      function()
+        move_focus(-1)
+      end,
+    },
+    {
+      { "<Up>", "k", "i", "a", "I", "A" },
+      function()
+        focus_field()
+      end,
+    },
+  }
+
+  ---@param bind boolean
+  local function set_button_keys(bind)
+    for _, entry in ipairs(button_keys) do
+      for _, lhs in ipairs(entry[1]) do
+        if bind then
+          vim.keymap.set("n", lhs, entry[2], { buffer = bufnr, nowait = true })
+        else
+          pcall(vim.keymap.del, "n", lhs, { buffer = bufnr })
+        end
+      end
+    end
+  end
+
+  --- Move the focus from the field onto the button row (on `submit` unless
+  --- told otherwise). The buffer is locked while it is there, so no stray
+  --- edit key can touch the labels.
+  ---@param index? integer
+  local function focus_buttons(index)
+    if not has_buttons or btn_focus then
+      return
+    end
+    btn_focus = index or default_btn
     pcall(function()
       vim.cmd("stopinsert")
     end)
-    surf:close()
-    if submit then
-      if opts.expand_env then
-        line = expand_path(line)
+    vim.bo[bufnr].modifiable = false
+    set_button_keys(true)
+    paint()
+    park_cursor()
+  end
+
+  --- Move the focus from the button row back into the field, in insert mode
+  --- at byte column `col` (the end of the line when nil or past it). With the
+  --- focus already in the field it only places the cursor.
+  ---@param col? integer
+  function focus_field(col)
+    local line = get_line()
+    if not btn_focus then
+      if col then
+        pcall(api.nvim_win_set_cursor, surf.winid, { 1, math.min(col, #line) })
       end
-      if opts.on_submit then
-        opts.on_submit(line)
-      end
-    elseif opts.on_cancel then
-      opts.on_cancel()
+      return
+    end
+    btn_focus = nil
+    set_button_keys(false)
+    paint()
+    vim.bo[bufnr].modifiable = true
+    if col and col < #line then
+      pcall(api.nvim_win_set_cursor, surf.winid, { 1, col })
+      vim.cmd("startinsert")
+    else
+      pcall(api.nvim_win_set_cursor, surf.winid, { 1, #line })
+      vim.cmd("startinsert!")
+    end
+  end
+
+  --- A left click: on a button it focuses *and* presses it (as in
+  --- `kit.confirm`); elsewhere in this float it puts the cursor on the field's
+  --- text; anywhere else it is the click it would have been without this
+  --- mapping. Hit-tested from `getmousepos()` rather than from where the
+  --- cursor ended up, which is not something Neovim promises for a mapped
+  --- `<LeftMouse>`.
+  local function on_click()
+    local i, pos = buttons.hit(ranges, surf.winid)
+    if i then
+      btn_focus = i
+      paint()
+      press(i)
+    elseif not pos then
+      pass_through("<LeftMouse>")
+    elseif pos.line == 1 then
+      focus_field(pos.column - 1)
     end
   end
 
@@ -164,6 +432,94 @@ function M.open(opts)
     end, { buffer = bufnr, nowait = true, expr = true })
   end
 
+  local key_opts = { buffer = bufnr, nowait = true }
+
+  if can_back then
+    -- Going back must not eat text: <BS> is only "back" once there is nothing
+    -- left for it to delete, and a popup that is open keeps <C-p>.
+    vim.keymap.set({ "i", "n" }, "<BS>", function()
+      if btn_focus then
+        return
+      end
+      if get_line() == "" then
+        finish("back")
+      else
+        pass_through("<BS>")
+      end
+    end, key_opts)
+    vim.keymap.set({ "i", "n" }, "<C-p>", function()
+      if btn_focus then
+        return
+      end
+      if fn.pumvisible() == 1 then
+        pass_through("<C-p>")
+      else
+        finish("back")
+      end
+    end, key_opts)
+  end
+
+  if can_back or has_buttons then
+    -- Replaces the completion block's <S-Tab> above: same popup behaviour,
+    -- plus what it does with the popup closed.
+    vim.keymap.set({ "i", "n" }, "<S-Tab>", function()
+      if btn_focus then
+        move_focus(-1)
+      elseif fn.pumvisible() == 1 then
+        pass_through("<C-p>")
+      elseif can_back then
+        finish("back")
+      end
+    end, key_opts)
+  end
+
+  if has_buttons then
+    if not opts.completion then
+      vim.keymap.set("i", "<Tab>", function()
+        focus_buttons()
+      end, key_opts)
+    end
+    vim.keymap.set("n", "<Tab>", function()
+      if btn_focus then
+        move_focus(1)
+      else
+        focus_buttons()
+      end
+    end, key_opts)
+    vim.keymap.set({ "i", "n" }, "<Down>", function()
+      if btn_focus then
+        return
+      end
+      if fn.pumvisible() == 1 then
+        pass_through("<Down>")
+      else
+        focus_buttons()
+      end
+    end, key_opts)
+    vim.keymap.set({ "i", "n" }, "<LeftMouse>", on_click, key_opts)
+
+    -- The two lines are two places for the cursor, not one text: keep it on
+    -- the field (or on the focused button) whatever tried to move it (`j`,
+    -- `<C-o>G`, ...), so an edit can never land on the labels.
+    autocmd.create({ "CursorMoved", "CursorMovedI" }, function()
+      if not surf:is_valid() then
+        return
+      end
+      local row = api.nvim_win_get_cursor(surf.winid)[1]
+      if btn_focus then
+        if row ~= 2 then
+          park_cursor()
+        end
+      elseif row ~= 1 then
+        pcall(api.nvim_win_set_cursor, surf.winid, { 1, #get_line() })
+      end
+    end, {
+      buffer = bufnr,
+      record = false,
+      desc = "lib.nvim.ui.kit.input: keep the cursor on the field or the focused button",
+    })
+  end
+
   vim.keymap.set({ "i", "n" }, "<CR>", function()
     -- Accept the highlighted completion candidate instead of submitting the
     -- whole prompt; a second <CR> (pum now closed) submits as usual. This
@@ -173,6 +529,11 @@ function M.open(opts)
     -- returning it keeps that whole call chain outside of textlock.
     if opts.completion and fn.pumvisible() == 1 then
       api.nvim_feedkeys(api.nvim_replace_termcodes("<C-y>", true, false, true), "n", false)
+      return
+    end
+    -- With the focus on the button row, <CR> presses the focused button.
+    if btn_focus then
+      press(btn_focus)
       return
     end
     finish(true)
