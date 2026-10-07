@@ -398,6 +398,47 @@ local function keymap_expr(lhs)
   end
 end
 
+--- Flags and key=value pairs (`kind = "flag"|"kv"`) that show no text in the
+--- float, for one verb or -- without a name -- every verb registered in this
+--- process. A `--no-x` negation counts as described when `--x` is. Meant for
+--- a plugin's own spec ("every option I ship is explained") and for audits.
+---@param verb? string
+---@return { verb: string, route: string, kind: "flag"|"kv", name: string }[]
+function M.undocumented(verb)
+  local out = {}
+  for _, handle in ipairs(registry.all()) do
+    local name = handle:name()
+    if verb == nil or verb == name then
+      for _, route in ipairs(handle:spec().routes or {}) do
+        local path = table.concat(route.path, " ")
+        for _, f in ipairs(route.flags or {}) do
+          if not entries_mod.flag_desc(route, f) then
+            out[#out + 1] = { verb = name, route = path, kind = "flag", name = f.name }
+          end
+        end
+        for _, k in ipairs(route.kv or {}) do
+          if not k.desc or k.desc == "" then
+            out[#out + 1] = { verb = name, route = path, kind = "kv", name = k.key }
+          end
+        end
+      end
+    end
+  end
+  table.sort(out, function(a, b)
+    if a.verb ~= b.verb then
+      return a.verb < b.verb
+    end
+    if a.route ~= b.route then
+      return a.route < b.route
+    end
+    if a.kind ~= b.kind then
+      return a.kind < b.kind
+    end
+    return a.name < b.name
+  end)
+  return out
+end
+
 --- Map (or re-map) the cheatsheet key in command-line mode.
 ---@param lhs string|false|nil  # false/nil removes it
 function M.set_keymap(lhs)

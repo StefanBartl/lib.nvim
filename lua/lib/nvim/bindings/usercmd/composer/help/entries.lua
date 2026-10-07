@@ -86,6 +86,28 @@ local function flag_used(spec, tok)
   return spec.short ~= nil and tok == "-" .. spec.short
 end
 
+--- The one-line text of a flag: its own `desc`, or -- for a `no-<name>`
+--- negation that carries none -- the negated flag's text behind "Off: ", so
+--- the dozens of `--no-x` twins (replacer.nvim has 20) need no text of their
+--- own. nil when there is nothing to show.
+---@param route Lib.UserCmd.Composer.Route
+---@param spec Lib.UserCmd.Composer.FlagSpec
+---@return string|nil
+function M.flag_desc(route, spec)
+  if spec.desc and spec.desc ~= "" then
+    return spec.desc
+  end
+  local positive = spec.name:match("^no%-(.+)$")
+  if positive then
+    for _, other in ipairs(route.flags or {}) do
+      if other.name == positive and other.desc and other.desc ~= "" then
+        return "Off: " .. other.desc
+      end
+    end
+  end
+  return nil
+end
+
 ---@internal
 --- The flag rows of a route (without those already given, unless repeatable).
 ---@param route Lib.UserCmd.Composer.Route
@@ -115,7 +137,7 @@ local function flag_entries(route, tail)
         label = label,
         insert = "--" .. spec.name .. (needs_value and "=" or ""),
         partial = needs_value,
-        desc = spec.desc,
+        desc = M.flag_desc(route, spec),
       }
     end
   end
