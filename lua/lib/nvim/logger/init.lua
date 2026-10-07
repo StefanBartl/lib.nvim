@@ -39,6 +39,7 @@ local G = {
   registry = {}, -- all live loggers (for inspector / checkhealth)
   defaults = vim.deepcopy(config.defaults),
   command_installed = false,
+  command_scheduled = false,
 }
 
 -- ---------------------------------------------------------------------------
@@ -110,6 +111,21 @@ local function resolve_file(name, file)
   return sinks.default_path(name)
 end
 
+---Install the `:LibLogger` control command. Idempotent. `new()` schedules this
+---once after the first logger is created; call it directly when the command is
+---needed synchronously (a setup function, a test).
+---@return boolean installed  # false when the command could not be registered
+function M.install_command()
+  if G.command_installed then
+    return true
+  end
+  local ok = pcall(function()
+    require("lib.nvim.logger.command").install(M)
+  end)
+  G.command_installed = ok
+  return ok
+end
+
 ---Create a new logger.
 ---@param opts? Lib.Logger.Options
 ---@return Lib.Logger.Instance
@@ -138,6 +154,10 @@ function M.new(opts)
     extra_sinks = {},
   }
 
+  -- Crash capture is armed by the first record (set further down).
+  local want_capture = false
+  local arm_capture
+
   -- Core dispatch. `src_level = 4`: getinfo(4) from here lands on the user's
   -- call site (do_log -> level closure -> user).
   ---@internal
@@ -158,6 +178,11 @@ function M.new(opts)
 
     local record = Record.build(name, level, msg, ctx, call_opts, inst.src, inst.redact, 4, limits)
     inst.ring:push(record)
+
+    if want_capture then
+      want_capture = false
+      arm_capture()
+    end
 
     -- notify sink
     local want_notify
@@ -319,8 +344,11 @@ function M.new(opts)
     end
   end
 
-  -- Crash-capture safety net: flush the ring on editor exit.
-  if opts.capture ~= false and inst.file then
+  -- Crash-capture safety net: flush the ring on editor exit. Armed by the
+  -- first record, not here: `new()` runs at `require` time in most plugins and
+  -- a module must not register an augroup merely by being loaded (LUA-92). A
+  -- logger that never logs has nothing in its ring to flush anyway.
+  arm_capture = function()
     -- Raw nvim_create_augroup on purpose, not autocmd.group(): that caches by
     -- name and would stop re-clearing on a second logger.new() for the same
     -- `name` (e.g. a hot-reloaded plugin), leaving the previous instance's
@@ -333,14 +361,18 @@ function M.new(opts)
       desc = "lib.nvim.logger: flush ring buffer on exit",
     })
   end
+  want_capture = opts.capture ~= false and inst.file ~= nil
 
   G.registry[#G.registry + 1] = inst
 
-  -- Installing the control command the first time any logger is created.
-  if not G.command_installed then
-    G.command_installed = true
-    pcall(function()
-      require("lib.nvim.logger.command").install(M)
+  -- The control command is installed once, right after the first logger is
+  -- created, but not inside `new()`: that runs at `require` time in most
+  -- plugins and a module must not register a command merely by being loaded
+  -- (LUA-92). Call `install_command()` to have it at once.
+  if not G.command_installed and not G.command_scheduled then
+    G.command_scheduled = true
+    vim.schedule(function()
+      M.install_command()
     end)
   end
 

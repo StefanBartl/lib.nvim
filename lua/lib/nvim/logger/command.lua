@@ -1,7 +1,7 @@
 ---@module 'lib.nvim.logger.command'
 --- Registers the `:LibLogger` control command so a developer can flip logging
 --- on/off, change the level, inspect recent records, and dump/clear at runtime
---- without restarting Neovim. Installed once, on first `logger.new()`.
+--- without restarting Neovim. Installed once, shortly after the first `logger.new()` (or by `logger.install_command()`).
 
 local M = {}
 

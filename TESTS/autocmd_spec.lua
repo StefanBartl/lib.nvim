@@ -264,4 +264,47 @@ return function(H)
   local direct = autocmd.augroup.create.clear("spec.autocmd.direct")
   eq(type(direct), "number", "augroup.create.clear(): returns an augroup id")
   vim.api.nvim_del_augroup_by_id(direct)
+  -- ------------------------------------------- clearing forgets the records
+  -- Regression: get_augroup(name, { clear = true }) and augroup.create.clear
+  -- cleared natively but kept the records, so every setup() grew the registry
+  -- with ghosts of autocmds that no longer fire (K2 in cascade, spotlight ...).
+  do
+    local name = "lib_nvim_spec_forget_" .. tostring(vim.uv.hrtime())
+    for _ = 1, 3 do
+      local id = autocmd.get_augroup(name, { clear = true })
+      autocmd.create("User", function() end, { group = id, pattern = "LibNvimSpecForget" })
+    end
+    eq(
+      #autocmd.registered({ group = name }),
+      1,
+      "get_augroup(clear): one record after three setups"
+    )
+    eq(#vim.api.nvim_get_autocmds({ group = name }), 1, "get_augroup(clear): one live autocmd")
+
+    -- An id handed to create() is attributed to the group name.
+    local id = autocmd.get_augroup(name)
+    autocmd.create("User", function() end, { group = id, pattern = "LibNvimSpecForget2" })
+    eq(#autocmd.registered({ group = name }), 2, "a record made through the id names the group")
+
+    autocmd.augroup.create.clear(name)
+    eq(
+      #autocmd.registered({ group = name }),
+      0,
+      "augroup.create.clear forgets the records of the group"
+    )
+    vim.api.nvim_del_augroup_by_name(name)
+
+    -- A prefixed group is cleared and forgotten under its full name.
+    local pname = "lib_nvim_spec_forget_p_" .. tostring(vim.uv.hrtime())
+    for _ = 1, 2 do
+      local pid = autocmd.get_augroup("g", { clear = true, prefix = pname })
+      autocmd.create("User", function() end, { group = pid, pattern = "LibNvimSpecForget3" })
+    end
+    eq(
+      #autocmd.registered({ group = pname .. ".g" }),
+      1,
+      "prefixed group: one record after two setups"
+    )
+    vim.api.nvim_del_augroup_by_name(pname .. ".g")
+  end
 end

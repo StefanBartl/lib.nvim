@@ -73,12 +73,33 @@ return function(H)
     lock.who(path, function(h, e)
       holders, werr, done = h, e, true
     end)
-    vim.wait(20000, function()
+    -- Wait on the callback, not on a clock: a cold PowerShell on a loaded CI
+    -- runner has needed far longer than the desktop's second or two (the
+    -- lookup flaked at 20 s). `who` kills the process and answers with an
+    -- error at its own 60 s timeout, so 90 s only ever expires when the
+    -- callback truly never comes -- which still fails this spec.
+    vim.wait(90000, function()
       return done
-    end, 50)
+    end, 20)
     eq(done, true, "who: the lookup calls back within the timeout")
     eq(werr, nil, "who: an unlocked file is not an error: " .. tostring(werr))
     ok(type(holders) == "table" and #holders == 0, "who: an unlocked file has no holders")
+
+    -- The timeout is the lookup's own: a lookup that cannot finish in time is
+    -- answered with an error rather than never.
+    local tdone, tholders, terr = false, nil, nil
+    lock.who(path, function(h, e)
+      tholders, terr, tdone = h, e, true
+    end, { timeout = 1 })
+    vim.wait(90000, function()
+      return tdone
+    end, 20)
+    eq(tdone, true, "who: a timed-out lookup still calls back")
+    eq(tholders, nil, "who: a timed-out lookup has no holder list")
+    ok(
+      tostring(terr):find("timed out", 1, true) ~= nil,
+      "who: the error says it timed out: " .. tostring(terr)
+    )
   end
 
   -- report() stitches probe + holders into one block regardless of platform.
@@ -88,9 +109,9 @@ return function(H)
     lock.report(path, function(l)
       lines, done = l, true
     end)
-    vim.wait(20000, function()
+    vim.wait(90000, function()
       return done
-    end, 50)
+    end, 20)
     eq(done, true, "report: calls back")
     local text = table.concat(lines or {}, "\n")
     ok(text:find("rename probe:", 1, true) ~= nil, "report: includes the probe section")

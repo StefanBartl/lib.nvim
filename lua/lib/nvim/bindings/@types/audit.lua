@@ -12,6 +12,7 @@
 ---@field name string
 ---@field path string
 ---@field desc string
+---@field values string[]|nil  # what the route's positional arguments accept (enum / values / custom completer); read by `gaps`
 
 ---@class Lib.Bindings.Audit.KeyTier
 ---@field lhs string

@@ -170,9 +170,15 @@ end
 ---Asynchronous: the lookup spawns PowerShell, which takes a moment to compile
 ---the shim. An empty list means nothing holds the file right now — for a lock
 ---that has already passed, that is the expected answer.
+---
+---The callback always comes: a lookup that does not finish within
+---`opts.timeout` ms (default 60000, generous on purpose: a cold PowerShell on
+---a loaded CI runner needs far longer than on a desktop) is killed and
+---answered with `(nil, "holder lookup timed out ...")` instead of never.
 ---@param path string  Absolute path to query.
 ---@param cb fun(holders: Lib.Cross.Fs.Lock.Holder[]|nil, err: string|nil)
-function M.who(path, cb)
+---@param opts? { timeout?: integer }
+function M.who(path, cb, opts)
   if not is_windows() then
     cb(nil, "holder lookup is Windows-only (Restart Manager)")
     return
@@ -185,10 +191,15 @@ function M.who(path, cb)
   end
 
   local exe = (fn.executable("pwsh") == 1) and "pwsh" or "powershell"
+  local timeout = (opts and opts.timeout) or 60000
   vim.system(
     { exe, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script, "-Path", path },
-    { text = true },
+    { text = true, timeout = timeout },
     vim.schedule_wrap(function(res)
+      if res.code == 124 then -- vim.system reports its own timeout kill as 124
+        cb(nil, ("holder lookup timed out after %d ms"):format(timeout))
+        return
+      end
       if res.code ~= 0 then
         cb(nil, vim.trim(res.stderr or "") ~= "" and vim.trim(res.stderr) or "query failed")
         return

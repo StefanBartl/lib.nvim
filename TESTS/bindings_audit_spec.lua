@@ -89,4 +89,52 @@ return function(H)
   ok(#lines > 0, "lines() renders something")
   local gap_lines = audit.gap_lines(nil)
   ok(#gap_lines > 0, "gap_lines() renders something")
+  -- --------------------------------------- positional arguments are not routes
+  -- Regression (18 false K12 warnings in open.nvim): `:Open [target]` is ONE
+  -- root route whose positional argument takes `brave`, `chrome` ...; the
+  -- keymap actions of those handlers have their command counterpart in the
+  -- argument's values, which `gaps` did not read.
+  do
+    local composer = require("lib.nvim.bindings.usercmd.composer")
+    composer.register_type("AUDIT_SPEC_TARGET", {
+      validate = function(raw)
+        return true, raw, nil
+      end,
+      complete = function()
+        return { "zorblax", "quuxify" }
+      end,
+    })
+    composer.verb("AuditArgCmd", {
+      desc = "audit spec positional carrier",
+      routes = {
+        {
+          path = {},
+          args = {
+            { name = "target", type = "AUDIT_SPEC_TARGET", optional = true },
+            { name = "kind", type = "STRING", values = { "plinkoid" }, optional = true },
+            { name = "mode", enum = { "gnarfle" }, optional = true },
+          },
+          desc = "carrier",
+          run = function() end,
+        },
+      },
+    })
+    local acts = {}
+    for _, n in ipairs({ "zorblax", "quuxify", "plinkoid", "gnarfle", "wibblenot" }) do
+      acts[n] = { default = "<Plug>(auditarg-" .. n .. ")", rhs = function() end, desc = "x" }
+    end
+    keymap.register("auditarg", { prefix = "<Plug>(auditarg-", actions = acts })
+
+    local gapped = {}
+    for _, g in ipairs(audit.gaps(nil)) do
+      if g.surface == "auditarg" then
+        gapped[g.name] = true
+      end
+    end
+    ok(not gapped.zorblax, "a custom type's completer values cover the action")
+    ok(not gapped.quuxify, "a custom type's completer values cover the action (2)")
+    ok(not gapped.plinkoid, "a STRING argument's `values` cover the action")
+    ok(not gapped.gnarfle, "an `enum` argument's members cover the action")
+    ok(gapped.wibblenot, "an action named by no route and no argument value stays a gap")
+  end
 end

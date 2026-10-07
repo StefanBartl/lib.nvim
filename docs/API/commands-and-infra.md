@@ -455,7 +455,7 @@ inst.counters(): table<string,integer>
 inst.add_sink(fn: fun(record))
 ```
 
-`:LibLogger` command (installed on first `logger.new()`): `show [n]`,
+`:LibLogger` command (scheduled right after the first `logger.new()`, never at `require`; `logger.install_command()` installs it at once): `show [n]`,
 `on|off`, `level <l>`, `dump`, `clear`, `tags`.
 
 ---
