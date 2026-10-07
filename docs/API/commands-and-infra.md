@@ -681,6 +681,7 @@ M.coalesce(...): T|nil                          -- first non-nil
 M.path_kind(p): "file"|"directory"|""
 M.normalize_path(p): string                     -- ~/$VAR/%VAR% expansion then vim.fs.normalize
 M.dedup_strings(list): string[]                 -- order-preserving
+M.normalize_switch_group(v, key?): table|nil    -- false -> {enable=false} (key names the switch), true -> {}, table -> deep copy, else nil (REL-20)
 ```
 
 ---

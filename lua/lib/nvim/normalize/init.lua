@@ -45,6 +45,7 @@ M.coalesce = utils.coalesce
 M.path_kind = utils.path_kind
 M.normalize_path = utils.normalize_path
 M.dedup_strings = utils.dedup_strings
+M.normalize_switch_group = utils.normalize_switch_group
 
 ---@type Lib.Normalize
 return M
