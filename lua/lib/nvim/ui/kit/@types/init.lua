@@ -212,6 +212,7 @@
 ---@field required? boolean               # a blank value is rejected
 ---@field validate? fun(value: string): boolean?, string?  # truthy ok accepts; falsy rejects with the message (not called for an empty optional field)
 ---@field live? boolean                   # validate on every edit, not only after the field has been left
+---@field depends_on? string|string[]     # name(s) of fields this one's validity depends on: checked again when one of them changes (if it has a value or a message to speak of)
 ---@field expand_env? boolean             # text: run the answer through lib.nvim.cross.fs.expand_path
 ---@field completion? string              # text: a getcompletion() type; <Tab> completes
 ---@field secret? boolean                 # text: mask the value as you type

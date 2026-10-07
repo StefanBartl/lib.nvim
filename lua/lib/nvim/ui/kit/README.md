@@ -372,7 +372,10 @@ expand_env?, completion?, secret?, mask?, choices? }`:
 - A field is checked when the user **leaves** it and on **submit**. A field that
   shows an error is checked again on every edit, so the message goes away the
   moment the value is right; `live = true` checks a field on every edit from the
-  start.
+  start. `depends_on = "other"` (or a list of names) is for a validity that
+  depends on another field — a number that has to be free in the chosen area: the
+  field is checked again whenever one of those changes (when it has a value or a
+  message showing; a blank, untouched one stays quiet).
 - Submit is blocked while any field fails, and the focus jumps to the first
   invalid one. The window is resized to what is shown (a row per message), so
   the sheet grows and shrinks, staying centered.
