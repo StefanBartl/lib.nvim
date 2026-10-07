@@ -96,6 +96,9 @@ s:close()
 `open(opts)` accepts `lines`, `theme`, `title`, `title_pos`, `width`, `height`,
 `relative`, `row`, `col`, `zindex`, `enter`, `focusable`, `nice_quit`,
 `filetype`, `modifiable`, `wo`, `bo`. Returns the handle, or `nil` on failure.
+The window is `winfixbuf` unless `wo.winfixbuf = false`: a surface lives and dies
+with its one buffer, so `<C-o>`, `:bnext` or `:e` in it fail with E1513 instead of
+swapping the user's file in and wiping the component's buffer from under it.
 
 ## Components
 

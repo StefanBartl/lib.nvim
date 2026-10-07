@@ -159,7 +159,12 @@ function M.open(opts)
     filetype = opts.filetype,
     modifiable = opts.modifiable,
     nice_quit = opts.nice_quit,
-    wo = opts.wo,
+    -- A float lives and dies with its one buffer (`bufhidden = "wipe"`). A jump
+    -- (`<C-o>`, `<C-^>`), `:bnext` or `:e` in a Normal-mode row would swap the user's
+    -- file into it and wipe that buffer, stranding the component with its window
+    -- still open and no callback ever fired. `winfixbuf` makes those fail with
+    -- E1513 instead; a caller that wants the old behaviour passes `wo.winfixbuf = false`.
+    wo = vim.tbl_extend("keep", opts.wo or {}, { winfixbuf = true }),
     bo = opts.bo,
   })
 
