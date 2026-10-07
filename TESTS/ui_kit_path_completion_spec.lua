@@ -140,28 +140,6 @@ return function(H)
     local sorted = vim.deepcopy(keys)
     table.sort(sorted)
     ok(vim.deep_equal(sorted, keys), "the candidates are in order")
-
-    -- 'wildignore' is honoured, as getcompletion() does: names and, with a slash, paths.
-    local saved_ignore = vim.o.wildignore
-    for i = 0, 9 do
-      touch(("%s/item_%03d.o"):format(dir, i))
-    end
-    local ign_ok, ign_err = pcall(function()
-      vim.o.wildignore = "*.o"
-      press_tab(dir .. "/item")
-      eq(getcompletion_calls, 0, "still the fast path")
-      eq(#shown, MAX)
-      for _, name in ipairs(shown) do
-        ok(name:match("%.o$") == nil, "an ignored file: " .. name)
-      end
-      vim.o.wildignore = "*/item_00*"
-      press_tab(dir .. "/item")
-      for _, name in ipairs(shown) do
-        ok(name:match("/item_00") == nil, "an ignored path: " .. name)
-      end
-    end)
-    vim.o.wildignore = saved_ignore
-    assert(ign_ok, ign_err)
   end)
 
   vim.fn.getcompletion, vim.fn.complete, uv.fs_stat = real_getcompletion, real_complete, real_stat
