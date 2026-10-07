@@ -144,6 +144,53 @@ return function(H)
     assert(fn_ok, fn_err)
   end
 
+  --- <Tab> on `frag`, under every combination of the case options, has to give what the
+  --- real getcompletion() gives: its list cut to what a menu holds when it has more than
+  --- that (and then it is not asked), getcompletion() itself otherwise. With
+  --- `via_getcompletion` it is getcompletion() that has to answer however long its list
+  --- is -- names the big list cannot order the way it does.
+  local function check_like_getcompletion(frag, label, via_getcompletion)
+    for _, case in ipairs({ { true, false }, { false, false }, { false, true }, { true, true } }) do
+      local where = ("%s with 'fileignorecase' %s, 'wildignorecase' %s"):format(
+        label,
+        tostring(case[1]),
+        tostring(case[2])
+      )
+      with_case_options(case[1], case[2], function()
+        local full = vim.tbl_map(function(name)
+          return (name:gsub("\\", "/"))
+        end, real_getcompletion(frag, "file"))
+        press_tab(frag)
+        if via_getcompletion or #full <= MAX then
+          eq(getcompletion_calls, 1, where .. ": getcompletion() answers")
+        else
+          eq(getcompletion_calls, 0, where .. ": the big list answers")
+          same(shown, vim.list_slice(full, 1, MAX), where)
+        end
+      end)
+    end
+  end
+
+  --- Whether the directory lists each of `names` as it was created (a file system that
+  --- normalizes Unicode -- HFS+ -- does not, and the spec has nothing to say there).
+  local function listed_verbatim(d, names)
+    local at = {}
+    local handle = real_scandir(d)
+    while handle do
+      local entry = real_scandir_next(handle)
+      if not entry then
+        break
+      end
+      at[entry] = true
+    end
+    for _, name in ipairs(names) do
+      if not at[name] then
+        return false
+      end
+    end
+    return true
+  end
+
   local dirs_made = {}
   local done, err = pcall(function()
     local dir = make_dir(MAX + 100, 0)
@@ -405,6 +452,71 @@ return function(H)
       same(vim.list_slice(forward, 1, 3), { "fake/ZEBRA", "fake/Zebra", "fake/zebra" }, "tie order")
       same(backward, forward, "the order of the listing does not show")
     end)
+
+    -- Where a non-ASCII character is involved Neovim's own folding decides what matches:
+    -- toupper() turns U+0131 (dotless i) into "I", which Neovim's folding does not, and
+    -- leaves the Kelvin sign (U+212A) alone, which Neovim folds to "k".
+    local folding = new_dir()
+    dirs_made[#dirs_made + 1] = folding
+    local dotless, kelvin = vim.fn.nr2char(0x131), vim.fn.nr2char(0x212A)
+    for i = 0, MAX do
+      touch(("%s/item%sx%03d"):format(folding, dotless, i))
+      touch(("%s/item%sx%03d"):format(folding, kelvin, i))
+    end
+    touch(folding .. "/itemIa")
+    touch(folding .. "/itemia")
+    for _, frag in ipairs({
+      "itemI",
+      "itemi",
+      "item" .. dotless,
+      "itemk",
+      "itemK",
+      "item" .. kelvin,
+    }) do
+      check_like_getcompletion(folding .. "/" .. frag, vim.inspect(frag))
+    end
+    with_case_options(true, true, function()
+      ok(
+        #real_getcompletion(folding .. "/item" .. dotless, "file") > MAX,
+        "dotless i family is long"
+      )
+    end)
+
+    -- "U" is no prefix of "U" + U+0308 (an umlaut written as two characters, as macOS
+    -- writes them): getcompletion() lists the four plain names, the bytes would list 305.
+    local marked = new_dir()
+    dirs_made[#dirs_made + 1] = marked
+    local marked_names = { "Ua", "Ub", "Uber", "Ubz" }
+    for i = 0, MAX do
+      marked_names[#marked_names + 1] = ("U%sz%03d"):format(vim.fn.nr2char(0x308), i)
+    end
+    for _, name in ipairs(marked_names) do
+      touch(marked .. "/" .. name)
+    end
+    if listed_verbatim(marked, marked_names) then
+      check_like_getcompletion(marked .. "/U", "U")
+      check_like_getcompletion(marked .. "/u", "u")
+    end
+
+    -- pathcmp() skips a combining mark, so "Abe" + U+0308 + "x" sorts beside "Abex"; ordered
+    -- by bytes it would come behind "Abez". Not worth reproducing: it is getcompletion()'s,
+    -- however many names match -- and the big list again once none of them is a candidate.
+    local ordered = new_dir()
+    dirs_made[#dirs_made + 1] = ordered
+    local ordered_names = { "Abex", "Abey", "Abez", "Abe\204\136x", "Abe\204\136y" }
+    for i = 0, MAX do
+      ordered_names[#ordered_names + 1] = ("Abz%03d"):format(i)
+    end
+    for _, name in ipairs(ordered_names) do
+      touch(ordered .. "/" .. name)
+    end
+    if listed_verbatim(ordered, ordered_names) then
+      with_case_options(true, false, function()
+        ok(#real_getcompletion(ordered .. "/Ab", "file") > MAX, "more than a menu holds")
+      end)
+      check_like_getcompletion(ordered .. "/Ab", "Ab", true)
+      check_like_getcompletion(ordered .. "/Abz", "Abz")
+    end
 
     -- A fragment with a NUL byte (no file name holds one) is getcompletion()'s and must
     -- not raise E976 out of the mapping: the fold of a non-ASCII name goes through
