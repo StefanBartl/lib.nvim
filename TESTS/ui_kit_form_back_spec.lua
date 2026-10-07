@@ -161,22 +161,86 @@ return function(H)
     close_floats()
   end
 
-  -- <BS> only goes back on an empty field; <C-p> goes back too.
+  -- <BS> only goes back on an empty field; <C-p> goes back too. The clock the
+  -- held-key guard reads is stubbed, so "a moment later" is a number.
+  do
+    local real_hrtime, now_ms = vim.uv.hrtime, 0
+    vim.uv.hrtime = function()
+      return now_ms * 1e6
+    end
+    local done, err = pcall(function()
+      open_form(THREE, { back = true })
+      type_into_field("one")
+      keys("<CR>")
+      type_into_field("xy")
+      vim.api.nvim_win_set_cursor(0, { 1, 1 })
+      keys("<BS>")
+      eq(title_now(), "B (2/3)", "<BS> on a field with text is not back")
+      eq(vim.api.nvim_win_get_cursor(0)[2], 0, "it is still the native <BS>")
+      type_into_field("")
+      now_ms = now_ms + 1000 -- a deliberate press, not a held key repeating
+      keys("<BS>")
+      eq(title_now(), "A (1/3)", "<BS> on an empty field goes back")
+      keys("<CR>")
+      keys("<C-p>")
+      eq(title_now(), "A (1/3)", "<C-p> goes back")
+      close_floats()
+
+      -- A held <BS> empties the field and stops there: the repeats are not
+      -- presses, or it would delete every earlier answer on its way back.
+      open_form(THREE, { back = true })
+      type_into_field("1")
+      keys("<CR>")
+      type_into_field("2")
+      keys("<CR>")
+      type_into_field("z")
+      keys("<BS>")
+      type_into_field("")
+      for _ = 1, 40 do
+        now_ms = now_ms + 30
+        keys("<BS>")
+        eq(title_now(), "C (3/3)", "a repeat is not a press")
+      end
+      now_ms = now_ms + 400
+      keys("<BS>")
+      eq(title_now(), "B (2/3)", "a press after a pause goes back")
+      eq(field_text(), "2", "to an answer that is still there")
+      close_floats()
+    end)
+    vim.uv.hrtime = real_hrtime
+    ok(done, tostring(err))
+  end
+
+  -- The button row stays right under a one-line field and in view: a paste
+  -- that carries a newline is joined, a window scrolled sideways by a long
+  -- answer gets the row shifted by the same amount (and is still clickable).
   do
     open_form(THREE, { back = true })
-    type_into_field("one")
-    keys("<CR>")
-    type_into_field("xy")
-    vim.api.nvim_win_set_cursor(0, { 1, 1 })
-    keys("<BS>")
-    eq(title_now(), "B (2/3)", "<BS> on a field with text is not back")
-    eq(vim.api.nvim_win_get_cursor(0)[2], 0, "it is still the native <BS>")
-    type_into_field("")
-    keys("<BS>")
-    eq(title_now(), "A (1/3)", "<BS> on an empty field goes back")
-    keys("<CR>")
-    keys("<C-p>")
-    eq(title_now(), "A (1/3)", "<C-p> goes back")
+    local row = vim.api.nvim_buf_get_lines(0, 1, 2, false)[1]
+    vim.api.nvim_buf_set_lines(0, 0, 1, false, { "some/path", "" })
+    vim.cmd("doautocmd <nomodeline> TextChanged")
+    eq(
+      table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), "|"),
+      "some/path|" .. row,
+      "a pasted newline goes"
+    )
+    vim.api.nvim_buf_set_lines(0, 0, 1, false, { "one", "two", "" })
+    vim.cmd("doautocmd <nomodeline> TextChanged")
+    eq(
+      table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), "|"),
+      "one two|" .. row,
+      "lines are joined"
+    )
+    type_into_field(string.rep("x", 80))
+    vim.fn.winrestview({ leftcol = 30 })
+    vim.cmd("doautocmd <nomodeline> CursorMovedI")
+    eq(
+      vim.api.nvim_buf_get_lines(0, 1, 2, false)[1],
+      string.rep(" ", 30) .. row,
+      "the row follows the scroll"
+    )
+    click_button("Next ↵")
+    eq(title_now(), "B (2/3)", "and a click where it is drawn presses it")
     close_floats()
   end
 
