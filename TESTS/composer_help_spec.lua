@@ -218,6 +218,13 @@ return function(H)
   end
   eq(hint_row.selectable, false, "ui: hint row is inert")
   ok(hint_row.lines[1]:find("what to wrap", 1, true) ~= nil, "ui: description is drawn")
+  local long = help_ui.build_items({
+    { kind = "sub", label = "a", insert = "a", desc = string.rep("long ", 100) },
+  })
+  ok(
+    vim.fn.strdisplaywidth(long[1].lines[1]) <= vim.o.columns,
+    "ui: a long description is cut to the screen"
+  )
   local _, none = help_ui.build_items({ { kind = "hint", label = "{x}" } })
   eq(none, nil, "ui: nothing pickable -> no first item")
 
