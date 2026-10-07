@@ -64,6 +64,7 @@ return function(H)
   local getcompletion_calls, stat_calls, shown, shown_col = 0, 0, nil, nil
   local real_getcompletion, real_complete, real_stat =
     vim.fn.getcompletion, vim.fn.complete, uv.fs_stat
+  local real_scandir_next = uv.fs_scandir_next
 
   --- <Tab> in a prompt of `completion` type, with `line` typed and the cursor at its end.
   local function press_tab(line, completion)
@@ -82,9 +83,18 @@ return function(H)
   vim.fn.complete = function(col, items)
     shown_col, shown = col, items
   end
-  uv.fs_stat = function(...)
+  local function counting_stat(...)
     stat_calls = stat_calls + 1
     return real_stat(...)
+  end
+  uv.fs_stat = counting_stat
+
+  --- The same listing, but it does not say what an entry is -- what a link, a junction
+  --- and a file system without `d_type` do: the code has to `stat` those.
+  local function hide_entry_kinds()
+    uv.fs_scandir_next = function(handle)
+      return (real_scandir_next(handle))
+    end
   end
 
   local dirs_made = {}
@@ -130,6 +140,53 @@ return function(H)
     press_tab(dir .. "/", "dir")
     eq(getcompletion_calls, 1, "no directory among all those files")
 
+    -- A listing that does not say what an entry is (a link, a junction, a file system
+    -- without d_type): `stat` is asked for those, but only up to one past the menu, and
+    -- not at all when too few entries match to need the list.
+    hide_entry_kinds()
+    press_tab(dir .. "/item")
+    eq(getcompletion_calls, 0, "unknown types: getcompletion() is still not asked")
+    ok(stat_calls <= MAX + 1, stat_calls .. " stats for " .. MAX + 100 .. " matches")
+    eq(#shown, MAX)
+    eq(shown[1], dir .. "/item_000")
+    eq(shown[MAX], dir .. "/item_" .. ("%03d"):format(MAX - 1))
+    press_tab(dir .. "/item_00")
+    eq(getcompletion_calls, 1, "few matches: getcompletion() has them")
+    eq(stat_calls, 0, "and nothing was stat'ed on the way")
+    press_tab(dir .. "/", "dir")
+    eq(getcompletion_calls, 1, "no directory among all those files, types unknown")
+
+    -- A directory of unknown type gets its slash and is what completion = "dir" keeps.
+    press_tab(dirs .. "/", "dir")
+    eq(#shown, MAX)
+    for _, name in ipairs(shown) do
+      ok(name:match("^" .. vim.pesc(dirs) .. "/sub_%d+/$") ~= nil, "a directory: " .. name)
+    end
+    press_tab(dirs .. "/", "file")
+    local listed = {}
+    for i = 0, 19 do
+      listed[#listed + 1] = ("%s/item_%03d"):format(dirs, i)
+    end
+    listed[#listed + 1] = dirs .. "/other.txt"
+    for i = 0, MAX - 22 do
+      listed[#listed + 1] = ("%s/sub_%03d/"):format(dirs, i)
+    end
+    ok(vim.deep_equal(listed, shown), "files, then directories with their slash")
+
+    -- An entry that cannot be stat'ed (a broken link) is taken for a file.
+    uv.fs_stat = function()
+      stat_calls = stat_calls + 1
+    end
+    press_tab(dir .. "/item")
+    eq(#shown, MAX)
+    for _, name in ipairs(shown) do
+      ok(name:match("/$") == nil, "a file: " .. name)
+    end
+    press_tab(dirs .. "/", "dir")
+    eq(getcompletion_calls, 1, "no directory among them: getcompletion() has it")
+    uv.fs_stat = counting_stat
+    uv.fs_scandir_next = real_scandir_next
+
     -- Sorted the way getcompletion() sorts.
     touch(dir .. "/Item_upper")
     press_tab(dir .. "/item")
@@ -161,6 +218,7 @@ return function(H)
   end)
 
   vim.fn.getcompletion, vim.fn.complete, uv.fs_stat = real_getcompletion, real_complete, real_stat
+  uv.fs_scandir_next = real_scandir_next
   close_floats()
   for _, d in ipairs(dirs_made) do
     vim.fn.delete(d, "rf")
