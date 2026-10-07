@@ -194,11 +194,15 @@ end
 ---@param mask string
 local function conceal_line(bufnr, ns, row, mask)
   local line = api.nvim_buf_get_lines(bufnr, row, row + 1, false)[1] or ""
-  local nchars = vim.fn.strchars(line)
-  for i = 0, nchars - 1 do
-    local s = vim.fn.byteidx(line, i)
-    local e = vim.fn.byteidx(line, i + 1)
-    pcall(api.nvim_buf_set_extmark, bufnr, ns, row, s, { end_col = e, conceal = mask })
+  -- One string per character (a base plus its combining marks is one), walked once:
+  -- `byteidx(line, i)` rescans the line from its start for every `i`, which made this
+  -- quadratic in the length of a pasted token -- and `lib.nvim.ui.kit.sheet` runs it for every
+  -- secret row at every repaint.
+  local col = 0
+  for _, ch in ipairs(fn.split(line, "\\zs")) do
+    local stop = col + #ch
+    api.nvim_buf_set_extmark(bufnr, ns, row, col, { end_col = stop, conceal = mask })
+    col = stop
   end
 end
 
