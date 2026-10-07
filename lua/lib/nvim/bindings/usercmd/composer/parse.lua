@@ -207,7 +207,15 @@ function M.dispatch(cmd_name, spec, root, opts, notify)
 
   local args, pos, leftover, err = bind_args(route, positionals)
   if err then
-    notify.error(("%s\n  %s"):format(err, format.invocation(cmd_name, route)))
+    local text = ("%s\n  %s"):format(err, format.invocation(cmd_name, route))
+    -- A missing argument is "what comes next?": the help float answers that
+    -- (the values of the enum, the hint of a free one). A value that was
+    -- given but is wrong keeps the plain message.
+    if err:find("^missing required argument") then
+      M.show_usage(notify, "error", text, fargs, err, opts)
+    else
+      notify.error(text)
+    end
     return
   end
 
