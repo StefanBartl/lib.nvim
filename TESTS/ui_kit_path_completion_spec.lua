@@ -140,6 +140,24 @@ return function(H)
     local sorted = vim.deepcopy(keys)
     table.sort(sorted)
     ok(vim.deep_equal(sorted, keys), "the candidates are in order")
+
+    -- 'wildignore' is not applied: getcompletion() without `filtered` does not apply it
+    -- either, so what <Tab> lists must not depend on the directory size.
+    local wild = make_dir(MAX + 10, 0)
+    dirs_made[#dirs_made + 1] = wild
+    touch(wild .. "/aaa.o")
+    local saved_wild = vim.o.wildignore
+    vim.o.wildignore = "*.o,item_00*"
+    local wild_ok, wild_err = pcall(function()
+      local expected = vim.tbl_map(function(name)
+        return (name:gsub("\\", "/"))
+      end, real_getcompletion(wild .. "/", "file"))
+      ok(vim.tbl_contains(expected, wild .. "/aaa.o"), "getcompletion() keeps an ignored file")
+      press_tab(wild .. "/")
+      ok(vim.deep_equal(vim.list_slice(expected, 1, MAX), shown), "the big list matches it")
+    end)
+    vim.o.wildignore = saved_wild
+    assert(wild_ok, wild_err)
   end)
 
   vim.fn.getcompletion, vim.fn.complete, uv.fs_stat = real_getcompletion, real_complete, real_stat
