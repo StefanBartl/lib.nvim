@@ -56,7 +56,7 @@ local M = {}
 ---@param name string
 ---@param spec Lib.UserCmd.Composer.Spec
 ---@param root Lib.UserCmd.Composer.Node
----@return { error: fun(msg), info: fun(msg), help: fun(tokens: string[], reason: string|nil, fallback: fun()): boolean }
+---@return { error: fun(msg), info: fun(msg), help: fun(tokens: string[], reason: string|nil, fallback: fun(), opts: table|nil): boolean }
 local function make_deferred_notify(name, spec, root)
   local notify = require("lib.nvim.notify").create(spec.notify_prefix or ("[" .. name .. "]"))
   return {
@@ -72,14 +72,15 @@ local function make_deferred_notify(name, spec, root)
     end,
     -- Opt-in help float in place of the usage text. Read on every call (the
     -- setup may come after the verb) and false while the verb is off.
-    help = function(tokens, reason, fallback)
+    help = function(tokens, reason, fallback, opts)
       return require("lib.nvim.bindings.usercmd.composer.help").on_dispatch(
         name,
         spec,
         root,
         tokens,
         reason,
-        fallback
+        fallback,
+        opts
       )
     end,
   }

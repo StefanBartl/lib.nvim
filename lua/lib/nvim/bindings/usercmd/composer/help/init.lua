@@ -92,7 +92,9 @@ end
 ---@param line string
 local function feed_cmdline(line)
   local keys = vim.api.nvim_replace_termcodes(":", true, false, true)
-  vim.api.nvim_feedkeys(keys .. line, "nt", false)
+  -- Control characters (a literal <CR> typed with <C-v>) would execute the
+  -- line instead of restoring it.
+  vim.api.nvim_feedkeys(keys .. line:gsub("%c", ""), "nt", false)
 end
 
 --- Open the float for a state and wire the pick back into the command line.
@@ -123,7 +125,13 @@ function M.open(root, state, opts)
         end
       end,
     })
-  return ok and opened == true
+  opened = ok and opened == true
+  -- The key already left the command line: when no float came up, give the
+  -- line back instead of leaving the user with nothing.
+  if not opened and opts.restore then
+    feed_cmdline(opts.restore)
+  end
+  return opened
 end
 
 ---@internal
@@ -165,15 +173,26 @@ end
 ---@param tokens string[]  # literal tokens that matched
 ---@param reason? string   # why (e.g. "unknown subcommand 'x'"); becomes the float title
 ---@param fallback? fun()   # runs (scheduled) when the float could not open: shows the old notification
+---@param cmd_opts? table   # command callback args: the range and bang the user typed
 ---@return boolean
-function M.on_dispatch(name, spec, root, tokens, reason, fallback)
+function M.on_dispatch(name, spec, root, tokens, reason, fallback, cmd_opts)
   if not M.enabled(spec) then
     return false
   end
   if #vim.api.nvim_list_uis() == 0 then
     return false
   end
-  local base = name .. " " .. (#tokens > 0 and (table.concat(tokens, " ") .. " ") or "")
+  local range = ""
+  if cmd_opts and (cmd_opts.range or 0) > 0 then
+    range = cmd_opts.range == 1 and tostring(cmd_opts.line1)
+      or (cmd_opts.line1 .. "," .. cmd_opts.line2)
+  end
+  local bang = (cmd_opts and cmd_opts.bang) and "!" or ""
+  local base = range
+    .. name
+    .. bang
+    .. " "
+    .. (#tokens > 0 and (table.concat(tokens, " ") .. " ") or "")
   local state = { name = name, base = base, committed = tokens, lead = "" }
   local title = reason and (":" .. name .. " - " .. reason) or nil
   -- Scheduled: the command that called us is still on the stack, and a float
@@ -199,7 +218,8 @@ local function keymap_expr(lhs)
     local state = M.parse_line(line)
     local spec = state and verb_tree(state.name)
     if not (state and spec and M.enabled(spec)) then
-      return ""
+      -- Not ours: the key keeps whatever it types without the mapping.
+      return vim.api.nvim_replace_termcodes(lhs, true, false, true)
     end
     -- Leave the command line, then open the float from normal mode: a float
     -- cannot take focus while the command line is active.

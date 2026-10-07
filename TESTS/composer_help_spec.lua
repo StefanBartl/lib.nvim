@@ -142,6 +142,15 @@ return function(H)
   local kv_value = entries.compute(root, { "surround", "quote" }, "view=v")
   eq(table.concat(labels(kv_value.items, "value"), ","), "vsplit", "key= lists its enum, narrowed")
 
+  -- `--mode <lead>`: the value is the next token.
+  local spaced = entries.compute(root, { "surround", "quote", "--mode" }, "")
+  eq(table.concat(labels(spaced.items, "value"), ","), "a,b", "--flag <lead> lists its enum")
+
+  -- Past a bare `--` everything is positional: no flag / kv rows.
+  local dashed = entries.compute(root, { "surround", "--" }, "")
+  eq(#labels(dashed.items, "flag"), 0, "after -- no flags")
+  eq(#labels(dashed.items, "kv"), 0, "after -- no key=value")
+
   -- A route hidden by `available` is not offered (same filter as <Tab>).
   local gated = tree.build({
     { path = { "yes" }, run = noop },
@@ -309,6 +318,35 @@ return function(H)
     end,
   }, with_help, {})
   eq(default_ran, true, "dispatch: spec.default keeps precedence")
+
+  -- Range and bang survive into the float's base line.
+  local seen_base
+  local real_open2 = help.open
+  help.open = function(_, st)
+    seen_base = st.base
+    return true
+  end
+  local ui_real = vim.api.nvim_list_uis
+  vim.api.nvim_list_uis = function()
+    return { {} }
+  end
+  local flush = vim.schedule
+  vim.schedule = function(fn)
+    fn()
+  end
+  help.on_dispatch(
+    "HelpDemo",
+    { help = true },
+    root,
+    { "ui" },
+    nil,
+    nil,
+    { range = 2, line1 = 3, line2 = 5, bang = true }
+  )
+  vim.schedule = flush
+  vim.api.nvim_list_uis = ui_real
+  help.open = real_open2
+  eq(seen_base, "3,5HelpDemo! ui ", "on_dispatch: range and bang are kept")
 
   -- on_dispatch: off for a verb that did not opt in, and without a UI.
   eq(help.on_dispatch("HelpDemo", spec, root, {}), false, "on_dispatch: not opted in")
