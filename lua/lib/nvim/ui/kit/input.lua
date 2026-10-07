@@ -230,6 +230,24 @@ end
 local MAX_PATH_MATCHES = 300
 
 ---@internal
+---The 'wildignore' patterns as regexes, built once per listing: `getcompletion()` drops
+---the entries they match, so the listing built here has to as well. A pattern with a
+---slash is tried against the whole path, any other against the entry's name -- as Vim
+---does. An unreadable pattern is left out.
+---@return { re: vim.regex, path: boolean }[]
+local function ignore_patterns()
+  local out = {}
+  local case = vim.o.wildignorecase and "\\c" or "\\C"
+  for _, pat in ipairs(vim.split(vim.o.wildignore, ",", { plain = true, trimempty = true })) do
+    local ok, re = pcall(vim.regex, case .. vim.fn.glob2regpat(pat))
+    if ok and re then
+      out[#out + 1] = { re = re, path = pat:find("/", 1, true) ~= nil }
+    end
+  end
+  return out
+end
+
+---@internal
 ---The candidates for a path fragment that matches MORE than `MAX_PATH_MATCHES` entries
 ---of its directory, built from one directory listing (the entry types come with it, no
 ---`stat`), sorted the way `getcompletion()` sorts and cut to that many. nil for
@@ -253,6 +271,7 @@ local function many_path_matches(frag, dirs_only)
   local fold = vim.o.fileignorecase
   local want = fold and name:lower() or name
   local dotted = name:sub(1, 1) == "." -- dot files only when asked for by name
+  local ignored = ignore_patterns()
   local found = {}
   while true do
     local entry, kind = uv.fs_scandir_next(handle)
@@ -261,6 +280,11 @@ local function many_path_matches(frag, dirs_only)
     end
     local key = fold and entry:lower() or entry
     if (dotted or entry:sub(1, 1) ~= ".") and key:sub(1, #want) == want then
+      for _, p in ipairs(ignored) do
+        if p.re:match_str(p.path and (head .. entry) or entry) then
+          goto continue -- before the `stat` below: an ignored entry costs none
+        end
+      end
       if kind ~= "file" and kind ~= "directory" then
         -- a link, or a file system that does not say: the target decides
         local st = uv.fs_stat(dir .. "/" .. entry)
@@ -271,6 +295,7 @@ local function many_path_matches(frag, dirs_only)
           { key = key, text = head .. entry .. (kind == "directory" and "/" or "") }
       end
     end
+    ::continue::
   end
   if #found <= MAX_PATH_MATCHES then
     return nil
