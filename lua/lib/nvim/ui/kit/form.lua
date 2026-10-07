@@ -25,7 +25,7 @@
 ---   - from field `i > 1`, `<BS>` on an EMPTY field, `<S-Tab>` or `<C-p>` (or
 ---     the `[← Back]` button) reopens field `i - 1` with its previous answer
 ---     as the editable text, so only the correction has to be typed. The first
----     field has no back.
+---     field has no back (unless `opts.on_back` is given, see below).
 ---   - answers survive the round trip in both directions: what was typed in
 ---     the field being left is kept as that field's text for when the user
 ---     comes back to it, so going back and forth loses nothing.
@@ -36,6 +36,14 @@
 ---     `[Next ↵]` (`[Done ↵]` on the last field: it is `<CR>`). `<Down>` or
 ---     `<Tab>` moves the focus onto it; see `lib.nvim.ui.kit.input` for its keys.
 --- `<Esc>` keeps its meaning on every field, back-navigated to or not.
+---
+--- `opts.on_back(values)` (opt-in, only with `back = true`) gives the first field
+--- a back as well, for a form that is itself one step of a longer flow: the
+--- same keys and the `[← Back]` button close the form and call `on_back` with the
+--- answers so far -- the first field's text as it stood included, and the ones
+--- the user had typed further on and walked back from -- so the caller can open
+--- whatever comes before it and, coming forward again, reopen the form with those
+--- answers as `default`s. Neither `on_submit` nor `on_cancel` fires then.
 
 local input = require("lib.nvim.ui.kit.input")
 
@@ -47,10 +55,11 @@ local M = {}
 ---@param i integer  # 1-based step
 ---@param n integer  # number of steps
 ---@param field table
+---@param leave boolean  # the form has an `on_back`, so the first field has a Back too
 ---@return table[]
-local function button_row(i, n, field)
+local function button_row(i, n, field, leave)
   local row = {}
-  if i > 1 then
+  if i > 1 or leave then
     row[#row + 1] = { id = "back", label = "← Back" }
   end
   if not field.required then
@@ -61,13 +70,14 @@ local function button_row(i, n, field)
 end
 
 --- Open a sequential multi-field form.
----@param opts table  # { fields = { { name, label|prompt, default?, required?, expand_env?, theme?, width?, relative? }, ... }, theme?, width?, relative?, back?, on_submit(values: table), on_cancel? }
+---@param opts table  # { fields = { { name, label|prompt, default?, required?, expand_env?, theme?, width?, relative? }, ... }, theme?, width?, relative?, back?, on_back?(values: table), on_submit(values: table), on_cancel? }
 ---@return Lib.UI.Kit.Surface|nil  # the first field's input surface (nil if `fields` is empty)
 function M.open(opts)
   opts = opts or {}
   local fields = opts.fields or {}
   local values = {}
   local back = opts.back == true
+  local leave = back and type(opts.on_back) == "function"
 
   local function step(i)
     local field = fields[i]
@@ -96,8 +106,13 @@ function M.open(opts)
           values[field.name] = line
           step(i - 1)
         end
+      elseif leave then
+        on_back = function(line)
+          values[field.name] = line
+          opts.on_back(values)
+        end
       end
-      buttons = button_row(i, #fields, field)
+      buttons = button_row(i, #fields, field, leave)
     end
 
     local surf = input.open({

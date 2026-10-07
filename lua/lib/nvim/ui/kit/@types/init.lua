@@ -196,6 +196,7 @@
 ---@field width? integer
 ---@field relative? "editor"|"cursor"|"win"
 ---@field back? boolean                    # opt-in back navigation: <BS> on an empty field / <S-Tab> / <C-p> / [← Back] reopen the previous field with its answer; "(i/n)" in the title; a [← Back] [Skip] [Next ↵] button row under the field (default off: nothing below changes)
+---@field on_back? fun(values: table<string, string>)  # only with `back`: gives the FIRST field a back too (same keys, a `[← Back]` button); closes the form and calls this with the answers so far -- neither `on_submit` nor `on_cancel` fires. For a form that is one step of a longer flow
 ---@field on_submit fun(values: table<string, string>)
 ---@field on_cancel? fun()
 
