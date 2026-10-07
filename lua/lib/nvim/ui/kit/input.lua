@@ -259,14 +259,19 @@ end
 ---which is an answer too: `getcompletion()` would stat each of them once more for the
 ---same result. A link that leads nowhere has no type and is left out, as `getcompletion()`
 ---leaves it. A fragment with too few candidates to need the list costs no `stat`. nil for
----anything else -- a pattern, a directory that cannot be listed, a fragment with few
----candidates -- which is `getcompletion()`'s as before.
+---anything else -- a pattern, a fragment with a NUL byte, a directory that cannot be
+---listed, a fragment with few candidates -- which is `getcompletion()`'s as before.
 ---@param frag string
 ---@param dirs_only boolean
 ---@return string[]|nil
 local function many_path_matches(frag, dirs_only)
   if frag:find("[*?%[{]") then
     return nil -- a pattern: only getcompletion() expands those
+  end
+  if frag:find("\0", 1, true) then
+    -- No file name holds a NUL, and one in a Lua string reaches `vim.fn` (`fold_key`) as
+    -- a Blob: E976. getcompletion() refuses such a fragment itself, under its `pcall`.
+    return nil
   end
   local cut = frag:find("[/\\][^/\\]*$")
   local head = cut and frag:sub(1, cut) or ""

@@ -406,6 +406,17 @@ return function(H)
       same(backward, forward, "the order of the listing does not show")
     end)
 
+    -- A fragment with a NUL byte (no file name holds one) is getcompletion()'s and must
+    -- not raise E976 out of the mapping: the fold of a non-ASCII name goes through
+    -- `toupper()`, and a NUL in a Lua string reaches `vim.fn` as a Blob.
+    with_case_options(true, false, function()
+      for _, line in ipairs({ "\195\164\0x", "ab\0x", dir .. "/\195\164\0x", dir .. "/item_\0" }) do
+        local pressed, press_err = pcall(press_tab, line)
+        ok(pressed, "<Tab> on " .. vim.inspect(line) .. ": " .. tostring(press_err))
+        eq(getcompletion_calls, 1, "getcompletion() has it: " .. vim.inspect(line))
+      end
+    end)
+
     -- 'wildignore' is not applied: getcompletion() without `filtered` does not apply it
     -- either, so what <Tab> lists must not depend on the directory size.
     local wild = make_dir(MAX + 10, 0)
