@@ -159,4 +159,57 @@ return function(H)
   ---@diagnostic disable-next-line: param-type-mismatch
   slog.add_sink("not a function")
   eq(pcall(slog.info, "still fine"), true, "add_sink ignores a non-function")
+  -- ------------------------------------------- nothing is registered at require
+  -- A plugin creates its logger at `require` time; that must not register a
+  -- command or an augroup (LUA-92). The command follows shortly after, the
+  -- crash-capture group with the first record.
+  do
+    local saved = {}
+    for k in pairs(package.loaded) do
+      if k == "lib.nvim.logger" or k:find("^lib%.nvim%.logger%.") then
+        saved[k] = package.loaded[k]
+        package.loaded[k] = nil
+      end
+    end
+    pcall(vim.api.nvim_del_user_command, "LibLogger")
+    pcall(vim.api.nvim_del_augroup_by_name, "lib_logger_lazyreq")
+
+    local F = require("lib.nvim.logger")
+    local lfile = H.tmpfile("-lazy.jsonl")
+    local lazylog = F.new({ name = "lazyreq", notify_level = "off", file = lfile })
+    eq(vim.fn.exists(":LibLogger"), 0, "new() registers no command synchronously")
+    eq(
+      pcall(vim.api.nvim_get_autocmds, { group = "lib_logger_lazyreq" }),
+      false,
+      "new() creates no augroup"
+    )
+
+    ok(
+      vim.wait(2000, function()
+        return vim.fn.exists(":LibLogger") == 2
+      end, 10),
+      "the command appears shortly after the first logger"
+    )
+
+    lazylog.info("first record")
+    eq(
+      #vim.api.nvim_get_autocmds({ group = "lib_logger_lazyreq" }),
+      1,
+      "the first record arms crash capture"
+    )
+    lazylog.info("second record")
+    eq(#vim.api.nvim_get_autocmds({ group = "lib_logger_lazyreq" }), 1, "capture is armed once")
+
+    eq(F.install_command(), true, "install_command() is idempotent")
+    pcall(vim.api.nvim_del_augroup_by_name, "lib_logger_lazyreq")
+
+    for k in pairs(package.loaded) do
+      if k == "lib.nvim.logger" or k:find("^lib%.nvim%.logger%.") then
+        package.loaded[k] = nil
+      end
+    end
+    for k, v in pairs(saved) do
+      package.loaded[k] = v
+    end
+  end
 end

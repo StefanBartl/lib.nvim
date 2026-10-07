@@ -130,7 +130,7 @@ Appends JSONL (one JSON object per line). Default:
 
 ## `:LibLogger` command
 
-Installed on the first `logger.new()`:
+Installed shortly after the first `logger.new()` (scheduled, so merely requiring a module that creates a logger registers nothing; `require("lib.nvim.logger").install_command()` installs it at once):
 
 ```
 :LibLogger show [n]   recent records in a float

@@ -79,6 +79,18 @@ local function forget_group(group_name)
   records = kept
 end
 
+---Forget every record belonging to the augroup `name`.
+---
+---For code that clears or replaces a group by another route than `group()` /
+---`get_augroup()` (`augroup.create.clear` does): Neovim drops the autocmds of
+---a cleared group, so their records must go too or the registry grows on every
+---`setup()`.
+---@param name string
+---@return nil
+function M.forget_group(name)
+  forget_group(name)
+end
+
 ---Every autocmd created through this module, newest last.
 ---
 ---What `:checkhealth`, a generated bindings page and a "what fires on
@@ -199,15 +211,24 @@ function M.get_augroup(name, opts)
   local full_name = opts.prefix and (opts.prefix .. "." .. name) or name
 
   if cache[full_name] == nil then
+    if opts.clear == true then
+      -- A group of this name may already exist (a reloaded module has a fresh
+      -- cache): clearing it drops its autocmds, so drop their records too.
+      forget_group(full_name)
+    end
     cache[full_name] = vim.api.nvim_create_augroup(full_name, {
       clear = opts.clear == true,
     })
   elseif opts.clear == true then
     -- Re-requesting with `clear` must still clear, same as `group()` above:
     -- the caller is rebuilding its autocommands, and a cache hit that skips
-    -- the re-clear leaves the old ones registered alongside the new.
+    -- the re-clear leaves the old ones registered alongside the new. The
+    -- records of the cleared autocmds go with them, or the registry grows on
+    -- every setup() and lists autocmds that no longer fire.
+    forget_group(full_name)
     cache[full_name] = vim.api.nvim_create_augroup(full_name, { clear = true })
   end
+  group_names[cache[full_name]] = full_name
 
   return cache[full_name]
 end

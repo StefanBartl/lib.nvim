@@ -79,6 +79,48 @@ function M.keymap_actions(root)
   return actions
 end
 
+---@internal
+--- Positional argument types whose candidates are the filesystem, the buffer
+--- list or the like: not a vocabulary of the command, so not read for values.
+local NON_VOCABULARY_TYPES = {
+  INT = true,
+  FLOAT = true,
+  BOOL = true,
+  PATH = true,
+  DIR = true,
+  FILE = true,
+  BUFFER = true,
+  WINDOW = true,
+}
+
+---@internal
+--- The values a route's positional arguments accept (`enum`, `values`, what a
+--- custom type's completer offers for an empty lead). `:Open [target]` is one
+--- root route, and `brave`, `chrome` ... are values of `target`, not routes:
+--- the keymap actions `open_brave` ... have their command counterpart there.
+---@param args table[]|nil
+---@param argtypes table
+---@return string[]|nil
+local function arg_values(args, argtypes)
+  if type(args) ~= "table" then
+    return nil
+  end
+  local out = {}
+  for _, spec in ipairs(args) do
+    if type(spec) == "table" and not NON_VOCABULARY_TYPES[spec.type] then
+      local ok_c, cands = pcall(argtypes.complete, "", spec)
+      if ok_c and type(cands) == "table" then
+        for i = 1, math.min(#cands, 200) do
+          if type(cands[i]) == "string" then
+            out[#out + 1] = cands[i]
+          end
+        end
+      end
+    end
+  end
+  return #out > 0 and out or nil
+end
+
 ---Every command route currently registered — composer verbs expanded to
 ---their subcommand paths, plain `usercmd.create()` calls as `(plain)`.
 ---
@@ -90,6 +132,7 @@ end
 ---@param root string|nil  scope the *plain* half of the list to sources under this directory
 ---@return Lib.Bindings.Audit.CmdRoute[]
 function M.command_routes(root)
+  local argtypes = require("lib.nvim.bindings.usercmd.composer.argtypes")
   local usercmd = require("lib.nvim.bindings.usercmd")
   local composer = require("lib.nvim.bindings.usercmd.composer")
 
@@ -105,8 +148,12 @@ function M.command_routes(root)
       end
       for _, r in ipairs(spec.routes or {}) do
         local path = table.concat(r.path or {}, " ")
-        routes[#routes + 1] =
-          { name = name, path = path ~= "" and path or "(root)", desc = r.desc or "" }
+        routes[#routes + 1] = {
+          name = name,
+          path = path ~= "" and path or "(root)",
+          desc = r.desc or "",
+          values = arg_values(r.args, argtypes),
+        }
       end
     else
       routes[#routes + 1] = { name = name, path = "?", desc = "(spec not readable)" }
@@ -421,6 +468,10 @@ function M.gaps(root)
     parts[#parts + 1] = r.name
     parts[#parts + 1] = r.path
     parts[#parts + 1] = r.desc
+    -- A positional argument's values count as the route's vocabulary.
+    if r.values then
+      parts[#parts + 1] = table.concat(r.values, " ")
+    end
   end
   local blob = table.concat(parts, " "):lower()
   local blob_words = words(blob)

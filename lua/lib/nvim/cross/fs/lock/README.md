@@ -42,7 +42,7 @@ lock.report(path, function(lines) print(table.concat(lines, "\n")) end)
 |---|---|
 | `supported()` | `true` on Windows. `probe` works everywhere; only holder lookup is Windows-only. |
 | `probe(path)` | Renames the file aside and back, returning `(ok, err)`. Restores on success; a failed *restore* is reported as an error naming the parked path. |
-| `who(path, cb)` | `cb(holders, err)`; `holders` is a possibly-empty list of `{ pid, name, app }`. |
+| `who(path, cb, opts?)` | `cb(holders, err)`; `holders` is a possibly-empty list of `{ pid, name, app }`. The callback always comes: a lookup slower than `opts.timeout` ms (default 60000) is killed and answered with `(nil, "holder lookup timed out ...")`. |
 | `report(path, cb)` | `cb(lines)` — path facts + probe + holders, uniformly worded. |
 
 `probe` renames rather than opens on purpose: a rename is the operation that
