@@ -505,6 +505,9 @@ function M.open(opts)
     if not prompt_open then
       pcall(vim.cmd, "stopinsert")
     end
+    if any_secret then
+      input.scrub_insert_traces()
+    end
     if not called then
       error(err, 0)
     end

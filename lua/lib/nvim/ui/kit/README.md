@@ -442,7 +442,12 @@ underlying buffer still holds the real text — `on_submit` reads it straight
 off the buffer — but it's never echoed on screen, undo is disabled on that
 buffer (`undolevels = -1`), and (like every kit scratch buffer) it was never
 written to disk in the first place (`swapfile = false`) and is wiped the
-moment the float closes.
+moment the float closes. The Insert run that typed it is also what the `.`
+register (`:registers`, `<C-r>.`) and the redo buffer keep -- a `.` in any buffer
+would type the password there -- so when the prompt closes (submitted, cancelled or
+closed from outside; the same goes for a `kit.sheet` with a `secret` field) they are
+overwritten with an empty run. A macro being recorded (`q`) still holds the keys it
+saw, as it does for `vim.fn.inputsecret`.
 
 ```lua
 kit.input({

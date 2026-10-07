@@ -13,7 +13,11 @@
 --- default; buffer-local `undolevels = -1` additionally keeps the plaintext
 --- out of the undo tree. It was never written to disk in the first place —
 --- every kit scratch buffer already has `swapfile = false` (make_scratch),
---- and the buffer is wiped when the float closes (`bufhidden = "wipe"`).
+--- and the buffer is wiped when the float closes (`bufhidden = "wipe"`). The
+--- Insert run that typed it is also what the `.` register and the redo buffer
+--- keep, so once the prompt is gone those are overwritten by an empty run
+--- (`M.scrub_insert_traces`); a macro that is being recorded keeps the keys it
+--- saw, as it does for `inputsecret()`.
 ---
 --- `opts.completion = "file"` (or any other `getcompletion()` type: "dir",
 --- "shellcmd", "buffer", ...) is a `completion = "file"` cmdline-input
@@ -94,6 +98,49 @@ end
 ---@return integer
 function M.opened_count()
   return opened
+end
+
+--- The group of the one `InsertLeave` hook `scrub_insert_traces` may leave waiting.
+--- Asking for it again clears it, so a second request replaces the first.
+local SCRUB_GROUP = "lib_kit_input_scrub"
+
+---@internal
+--- Overwrite what the last Insert run left behind, by running an empty one in a
+--- buffer nobody sees.
+local function scrub_now()
+  local buf = api.nvim_create_buf(false, true)
+  pcall(api.nvim_buf_call, buf, function()
+    vim.cmd("silent! noautocmd normal! i\27")
+  end)
+  pcall(api.nvim_buf_delete, buf, { force = true })
+end
+
+--- A secret that was typed into a prompt is still the last Insert run when the
+--- prompt is gone: the `.` register holds it (`:registers`, `<C-r>.`), and the redo
+--- buffer replays it -- a `.` in any buffer types the password there. Neither is
+--- a place `undolevels = -1` reaches. This overwrites both with an empty run (a
+--- `.` afterwards does nothing but step the cursor left, like `i<Esc>`).
+---
+--- Never synchronously: the register is written when the Insert run ENDS, which
+--- for a prompt that closes is after its mapping returns. And not while the run
+--- is still on (a callback opened the next prompt of a chain, which carries it
+--- on): that waits for the `InsertLeave` that ends it. A macro being recorded
+--- keeps the keys it saw, as `inputsecret()` does.
+function M.scrub_insert_traces()
+  vim.schedule(function()
+    if api.nvim_get_mode().mode:sub(1, 1) == "i" then
+      autocmd.create("InsertLeave", function()
+        vim.schedule(scrub_now)
+      end, {
+        group = autocmd.group(SCRUB_GROUP, true),
+        once = true,
+        record = false,
+        desc = "lib.nvim.ui.kit.input: scrub the secret out of the last Insert run",
+      })
+      return
+    end
+    scrub_now()
+  end)
 end
 
 --- The ids `opts.buttons` understands.
@@ -330,6 +377,9 @@ function M.open(opts)
       pcall(function()
         vim.cmd("stopinsert")
       end)
+    end
+    if opts.secret then
+      M.scrub_insert_traces()
     end
     if not ok then
       error(err, 0)
