@@ -50,9 +50,10 @@
 --- under their field, and the window is resized to what is shown, so the sheet
 --- grows by a row per message and shrinks when they go.
 ---
---- The returned surface carries four extra methods, for callers that drive it
+--- The returned surface carries five extra methods, for callers that drive it
 --- from code and for specs: `surf:submit()`, `surf:cancel()`,
---- `surf:focus_field(name|index)` and `surf:state()` (`{ focus, values, errors }`).
+--- `surf:focus_field(name|index)`, `surf:validate()` (check every field now, so the
+--- messages show, without submitting) and `surf:state()` (`{ focus, values, errors }`).
 
 local surface = require("lib.nvim.ui.kit.surface")
 local buttons = require("lib.nvim.ui.kit.buttons")
@@ -474,16 +475,23 @@ function M.open(opts)
     end
   end
 
-  local function submit()
-    if done then
-      return
-    end
+  --- Check every field; the position of the first one that fails, nil when all pass.
+  ---@return integer|nil
+  local function check_all()
     local first
     for i = 1, n do
       if not check(i) and not first then
         first = i
       end
     end
+    return first
+  end
+
+  local function submit()
+    if done then
+      return
+    end
+    local first = check_all()
     if first then
       goto_pos(first)
       return
@@ -801,6 +809,16 @@ function M.open(opts)
   --- Cancel as if `<Esc>` were pressed.
   function surf.cancel()
     finish(false)
+  end
+
+  --- Check every field now, so every message shows, without submitting or moving
+  --- the focus. Whether they all passed.
+  ---@return boolean
+  function surf.validate()
+    local first = check_all()
+    paint()
+    fit()
+    return first == nil
   end
 
   --- Put the focus on a field, by name or position.

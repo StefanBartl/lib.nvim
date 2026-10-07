@@ -303,7 +303,10 @@ field (a `<BS>` less than 300 ms after the previous one is the key repeating,
 not a press); a long answer that scrolls the field sideways keeps the row in
 view, and a paste with a newline stays one line. Underneath, `kit.input` takes
 `on_back = function(line) end` and `buttons = { { id = "back" | "skip" |
-"submit", label = "…" }, … }`. The full description is in `ui.nvim`'s
+"submit", label = "…" }, … }`. A form that is itself one step of a longer flow
+can also pass `on_back = function(values) end`: the first field then has a back
+too, which closes the form and hands the answers so far on (neither `on_submit`
+nor `on_cancel` fires). The full description is in `ui.nvim`'s
 `lua/ui/kit/README.md`.
 
 ### Sheet (every field at once)
@@ -396,9 +399,11 @@ and the form's. A paste with a newline in it is joined into its row with a
 space. `KitAccent` marks the focused field's label, `KitMuted` the others,
 `KitError` the messages and the `*` of a required field.
 
-The returned surface has four extra methods, for driving a sheet from code and
-from specs: `s:submit()`, `s:cancel()`, `s:focus_field(name | index)` and
-`s:state()` (`{ focus = <field name | "submit" | "cancel">, values, errors }`).
+The returned surface has five extra methods, for driving a sheet from code and
+from specs: `s:submit()`, `s:cancel()`, `s:focus_field(name | index)`,
+`s:validate()` (check every field now so the messages show, without submitting;
+returns whether all passed — for a sheet opened with values that may already be
+wrong) and `s:state()` (`{ focus = <field name | "submit" | "cancel">, values, errors }`).
 Opening options: `focus` (field name or position to start on), `width`
 (default 60), `relative` (default `"editor"`), `theme`.
 
