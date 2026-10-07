@@ -13,6 +13,9 @@ local M = {}
 --- off the screen.
 local LABEL_MAX = 34
 
+--- Share of the screen width the float may take.
+local WIDTH_SHARE = 0.8
+
 --- Marker after a group, which opens a further level of subcommands.
 local GROUP_MARK = " ›"
 
@@ -60,6 +63,9 @@ function M.build_items(entries)
     end
   end
   label_w = math.min(label_w, LABEL_MAX)
+  -- The float never grows past this share of the screen; a longer
+  -- description is cut with an ellipsis rather than pushing the float off it.
+  local desc_budget = math.max(16, math.floor(vim.o.columns * WIDTH_SHARE) - label_w - 6)
 
   local items, first = {}, nil
   for _, e in ipairs(entries) do
@@ -78,7 +84,7 @@ function M.build_items(entries)
       local hls = { { line = 0, col_start = 1, col_end = #text, hl_group = "KitAccent" } }
       if e.desc and e.desc ~= "" then
         local gap = "  "
-        local desc = (e.desc:gsub("[\r\n]+", " "))
+        local desc = clip((e.desc:gsub("[\r\n]+", " ")), desc_budget)
         hls[#hls + 1] = {
           line = 0,
           col_start = #text + #gap,
