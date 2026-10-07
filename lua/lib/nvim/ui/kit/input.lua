@@ -30,9 +30,10 @@
 --- `<CR>` accepts the highlighted candidate instead of submitting the whole
 --- prompt (a second `<CR>` submits, exactly like confirming a shell
 --- completion then pressing enter again). With `"file"` or `"dir"` and more than 300
---- matches the list is built from one directory listing instead (no `stat` per match,
---- matched and sorted as `getcompletion()` does, cut to 300): `getcompletion()` took half
---- a second for five thousand files.
+--- candidates (entries the fragment starts; for `"dir"` the files among them count) the
+--- list is built from one directory listing instead (no `stat` per candidate, matched and
+--- sorted as `getcompletion()` does, cut to 300): `getcompletion()` took half a second
+--- for five thousand files.
 --- A fragment that holds a backtick is never completed: `getcompletion()` would run
 --- the span between backticks through the shell, and a pasted line is not to be
 --- trusted with that.
@@ -227,8 +228,11 @@ end
 
 --- More path candidates than this are not a menu to read -- typing the next letter
 --- narrows them faster than scrolling does -- and `getcompletion()` pays a file-system
---- `stat` per match, ~0.1 ms each: a directory of five thousand files froze the
+--- `stat` per candidate, ~0.1 ms each: a directory of five thousand files froze the
 --- editor for half a second at every <Tab>. Past this many the list is built without.
+--- A candidate is an entry whose name starts with the fragment, whatever it is: with
+--- `completion = "dir"` the files among them count as well, `getcompletion()` pays for
+--- those too before it drops them.
 local MAX_PATH_MATCHES = 300
 
 ---@internal
@@ -245,15 +249,18 @@ local function fold_key(s)
 end
 
 ---@internal
----The candidates for a path fragment that matches MORE than `MAX_PATH_MATCHES` entries
----of its directory, built from one directory listing, matched and ordered the way
+---The candidates for a path fragment that MORE than `MAX_PATH_MATCHES` entries of its
+---directory start with, built from one directory listing, matched and ordered the way
 ---`getcompletion()` does and cut to that many. The listing says what an entry is, so a
 ---file or a directory costs no `stat`; a link, or a file system that does not say, is
----asked about only in the ordered list and only until `MAX_PATH_MATCHES + 1` entries are
----accepted (with `dirs_only`, one per link until enough directories are found), and a
----fragment with too few matches to need the list costs none. nil for anything else -- a
----pattern, a directory that cannot be listed, a fragment with few matches -- which is
----`getcompletion()`'s as before.
+---asked about only in the ordered list and only until `MAX_PATH_MATCHES` entries are
+---accepted. With `dirs_only` that can be every link of the directory (a link to a file is
+---no directory), and the list is then the whole answer -- possibly short, possibly empty,
+---which is an answer too: `getcompletion()` would stat each of them once more for the
+---same result. A link that leads nowhere has no type and is left out, as `getcompletion()`
+---leaves it. A fragment with too few candidates to need the list costs no `stat`. nil for
+---anything else -- a pattern, a directory that cannot be listed, a fragment with few
+---candidates -- which is `getcompletion()`'s as before.
 ---@param frag string
 ---@param dirs_only boolean
 ---@return string[]|nil
@@ -275,23 +282,25 @@ local function many_path_matches(frag, dirs_only)
   local fold = fic or vim.o.wildignorecase or is_windows()
   local want = fold and fold_key(name) or name
   local dotted = name:sub(1, 1) == "." -- dot files only when asked for by name
-  local found = {}
+  local seen = 0 -- every candidate: what `getcompletion()` has to look at
+  local found = {} -- the ones that can still be an answer
   while true do
     local entry, kind = uv.fs_scandir_next(handle)
     if not entry then
       break
     end
     local key = fold and fold_key(entry) or entry
-    if
-      (dotted or entry:sub(1, 1) ~= ".")
-      and key:sub(1, #want) == want
-      and not (dirs_only and kind == "file") -- a file is no directory, and need not be counted
-    then
-      found[#found + 1] = { key = fic and key or entry, name = entry, kind = kind }
+    if (dotted or entry:sub(1, 1) ~= ".") and key:sub(1, #want) == want then
+      seen = seen + 1
+      -- a file is no directory, and need not be kept
+      if not (dirs_only and kind == "file") then
+        found[#found + 1] = { key = fic and key or entry, name = entry, kind = kind }
+      end
     end
   end
-  -- Too few candidates for a long list, whatever their types turn out to be.
-  if #found <= MAX_PATH_MATCHES then
+  -- Too few candidates for a long list, whatever their types turn out to be: up to
+  -- this many `getcompletion()` costs a few tens of milliseconds and stays the authority.
+  if seen <= MAX_PATH_MATCHES then
     return nil
   end
   table.sort(found, function(a, b)
@@ -302,22 +311,21 @@ local function many_path_matches(frag, dirs_only)
   end)
   local out = {}
   for _, it in ipairs(found) do
-    local kind = it.kind
-    -- The entry after the last one shown only proves that the list is long, so it has
-    -- a type looked up only where `dirs_only` can still drop it.
-    if kind ~= "file" and kind ~= "directory" and (dirs_only or #out < MAX_PATH_MATCHES) then
-      -- a link, or a file system that does not say: the target decides
-      local st = uv.fs_stat(dir .. "/" .. it.name)
-      kind = st and st.type or "file"
+    if #out == MAX_PATH_MATCHES then
+      break -- the menu is full; what follows would only be cut
     end
-    if kind == "directory" or not dirs_only then
-      if #out == MAX_PATH_MATCHES then
-        return out
-      end
+    local kind = it.kind
+    if kind ~= "file" and kind ~= "directory" then
+      -- a link, or a file system that does not say: the target decides. A link that leads
+      -- nowhere has no type, and `getcompletion()` lists none of those either.
+      local st = uv.fs_stat(dir .. "/" .. it.name)
+      kind = st and st.type
+    end
+    if kind == "directory" or (kind and not dirs_only) then
       out[#out + 1] = head .. it.name .. (kind == "directory" and "/" or "")
     end
   end
-  return nil -- not enough entries came through for a long list
+  return out -- every candidate has been looked at: this is the answer, short or empty or not
 end
 
 ---@internal
@@ -347,10 +355,13 @@ local function trigger_completion(bufnr, winid, completion)
     and many_path_matches(frag, completion == "dir")
   if not matches then
     local ok, got = pcall(fn.getcompletion, frag, completion)
-    if not ok or not got or #got == 0 then
+    if not ok or not got then
       return
     end
     matches = got
+  end
+  if #matches == 0 then
+    return -- nothing to offer: `complete()` is not called with an empty list
   end
   -- getcompletion() returns full replacement strings (e.g. "/etc/passwd" for
   -- fragment "/etc/pas"), so complete()'s start column is where `frag` began.
