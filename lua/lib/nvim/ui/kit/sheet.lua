@@ -269,6 +269,9 @@ function M.open(opts)
     return nil
   end
 
+  -- A window to be typed into: a prompt that closes while its callback opens this
+  -- sheet must leave Insert mode on (see `input.mark_opened`).
+  input.mark_opened()
   local bufnr, winid = surf.bufnr, surf.winid
   local centered = relative == "editor"
   local max_height = math.max(3, vim.o.lines - 6)
@@ -469,7 +472,10 @@ function M.open(opts)
 
   --- Leave the sheet. Callbacks run after the window is gone; Insert mode (which
   --- is the editor's, not the window's) is left unless a callback has just
-  --- opened a modifiable float -- the next prompt of a chain, waiting for it.
+  --- opened a window to type into -- the next prompt of a chain, waiting for it:
+  --- one that counts itself with `input.mark_opened`, or any other modifiable float
+  --- that the focus did not return to (the window this one was opened from is one
+  --- that was there before: it is not waiting for anything).
   ---@param ok boolean
   local function finish(ok)
     if done then
@@ -478,7 +484,9 @@ function M.open(opts)
     done = true
     local values = ok and collect() or nil
     views[winid] = nil
+    local opened_before = input.opened_count()
     surf:close()
+    local back_to = api.nvim_get_current_win()
     local cb = ok and opts.on_submit or opts.on_cancel
     local called, err = pcall(function()
       if cb then
@@ -486,8 +494,12 @@ function M.open(opts)
       end
     end)
     local cur = api.nvim_get_current_win()
-    local prompt_open = api.nvim_win_get_config(cur).relative ~= ""
-      and vim.bo[api.nvim_win_get_buf(cur)].modifiable
+    local prompt_open = input.opened_count() ~= opened_before
+      or (
+        cur ~= back_to
+        and api.nvim_win_get_config(cur).relative ~= ""
+        and vim.bo[api.nvim_win_get_buf(cur)].modifiable
+      )
     if not prompt_open then
       pcall(vim.cmd, "stopinsert")
     end

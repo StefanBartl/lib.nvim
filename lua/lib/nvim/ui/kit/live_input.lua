@@ -9,6 +9,7 @@
 --- one `kit.picker`'s prompt slot uses internally.
 
 local surface = require("lib.nvim.ui.kit.surface")
+local input = require("lib.nvim.ui.kit.input")
 
 local api = vim.api
 local autocmd = require("lib.nvim.bindings.autocmd")
@@ -132,6 +133,8 @@ function M.open(opts)
   -- Place the cursor at end of the default text and enter insert mode.
   if surf:is_valid() then
     api.nvim_win_set_cursor(surf.winid, { 1, #(opts.default or "") })
+    -- A prompt that closes while its callback opens this one must leave Insert mode on.
+    input.mark_opened()
     vim.cmd("startinsert!")
   end
 

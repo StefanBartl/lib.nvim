@@ -73,11 +73,28 @@ local BS_RUN_MS = 300
 --- Extmark namespace of the focus highlight on the button row.
 local BTN_NS = api.nvim_create_namespace("lib_kit_input_buttons")
 
---- How many prompts have ever been opened. `finish` compares it before and
---- after the callbacks it runs to tell whether one of them opened the next
---- prompt of a chain.
+--- How many windows to be typed into have ever been opened: this prompt, and
+--- whatever else calls `M.mark_opened` (a sheet, a picker, a live_input, a compare).
+--- `finish` compares it before and after the callbacks it runs to tell whether one
+--- of them opened the next prompt of a chain.
 ---@type integer
 local opened = 0
+
+--- A component that has just opened a window to type into, and asks for Insert mode
+--- with `:startinsert`, says so here. A prompt that closes while a callback opens
+--- one of these must not stop Insert mode: `:startinsert` is ignored while the
+--- closing prompt's own Insert mode is still on, and the new window would stand in
+--- Normal mode, where the first thing typed is a command.
+function M.mark_opened()
+  opened = opened + 1
+end
+
+--- The number `M.mark_opened` has counted so far: read it before something that may
+--- open such a window and compare after.
+---@return integer
+function M.opened_count()
+  return opened
+end
 
 --- The ids `opts.buttons` understands.
 ---@type table<string, true>
@@ -225,7 +242,7 @@ function M.open(opts)
     return nil
   end
 
-  opened = opened + 1
+  M.mark_opened()
   local bufnr = surf.bufnr
   local done = false
 
@@ -294,7 +311,8 @@ function M.open(opts)
     end)
     -- Leave insert mode now that the prompt is gone (a lingering mode state
     -- otherwise) -- unless a callback opened the next prompt of a chain (a
-    -- form's next field, or the one before it). That prompt is waiting for
+    -- form's next field, or the one before it; a sheet, a picker, a live_input:
+    -- anything that counts itself with `mark_opened`). That prompt is waiting for
     -- Insert mode, and `:startinsert` is ignored while this one's is still on:
     -- stopping here as well would strand it in Normal mode, where the first
     -- thing typed is a command.
