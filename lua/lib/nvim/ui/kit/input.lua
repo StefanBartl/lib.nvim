@@ -1,6 +1,7 @@
 ---@module 'lib.nvim.ui.kit.input'
 --- Input component: a single-line themed prompt (a `vim.ui.input` replacement).
---- Opens focused in insert mode; `<CR>` submits the line, `<Esc>` cancels.
+--- Opens focused in insert mode; `<CR>` submits the line, `<Esc>` cancels. It is
+--- one line: a newline in `opts.default` (or in a button label) becomes a space.
 ---
 --- `opts.secret = true` masks the displayed content character-by-character
 --- via `conceal` (each char replaced with `opts.mask`, default `"*"`) — a
@@ -283,8 +284,12 @@ function M.open(opts)
     bo.undolevels = -1
   end
 
+  -- The line must be one line: a newline in a buffer line is an error in
+  -- `nvim_buf_set_lines` (a default from a data file, say, with a multi-line note).
+  local default = (tostring(opts.default or ""):gsub("[\r\n]+", " "))
+
   local surf = surface.open({
-    lines = has_buttons and { opts.default or "", "" } or { opts.default or "" },
+    lines = has_buttons and { default, "" } or { default },
     theme = opts.theme,
     title = title,
     width = width,
@@ -761,7 +766,7 @@ function M.open(opts)
 
   -- Place the cursor at end of the default text and enter insert mode.
   if surf:is_valid() then
-    api.nvim_win_set_cursor(surf.winid, { 1, #(opts.default or "") })
+    api.nvim_win_set_cursor(surf.winid, { 1, #default })
     vim.cmd("startinsert!")
   end
 
