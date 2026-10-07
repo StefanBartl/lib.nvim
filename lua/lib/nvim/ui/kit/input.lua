@@ -231,10 +231,14 @@ local MAX_PATH_MATCHES = 300
 
 ---@internal
 ---The candidates for a path fragment that matches MORE than `MAX_PATH_MATCHES` entries
----of its directory, built from one directory listing (the entry types come with it, no
----`stat`), sorted the way `getcompletion()` sorts and cut to that many. nil for
----anything else -- a pattern, a directory that cannot be listed, a fragment with few
----matches -- which is `getcompletion()`'s as before.
+---of its directory, built from one directory listing, sorted the way `getcompletion()`
+---sorts and cut to that many. The listing says what an entry is, so a file or a
+---directory costs no `stat`; a link, or a file system that does not say, is asked about
+---only in the sorted list and only until `MAX_PATH_MATCHES + 1` entries are accepted
+---(with `dirs_only`, one per link until enough directories are found), and a fragment
+---with too few matches to need the list costs none. nil for anything else -- a pattern,
+---a directory that cannot be listed, a fragment with few matches -- which is
+---`getcompletion()`'s as before.
 ---@param frag string
 ---@param dirs_only boolean
 ---@return string[]|nil
@@ -260,18 +264,15 @@ local function many_path_matches(frag, dirs_only)
       break
     end
     local key = fold and entry:lower() or entry
-    if (dotted or entry:sub(1, 1) ~= ".") and key:sub(1, #want) == want then
-      if kind ~= "file" and kind ~= "directory" then
-        -- a link, or a file system that does not say: the target decides
-        local st = uv.fs_stat(dir .. "/" .. entry)
-        kind = st and st.type or "file"
-      end
-      if kind == "directory" or not dirs_only then
-        found[#found + 1] =
-          { key = key, text = head .. entry .. (kind == "directory" and "/" or "") }
-      end
+    if
+      (dotted or entry:sub(1, 1) ~= ".")
+      and key:sub(1, #want) == want
+      and not (dirs_only and kind == "file") -- a file is no directory, and need not be counted
+    then
+      found[#found + 1] = { key = key, name = entry, kind = kind }
     end
   end
+  -- Too few candidates for a long list, whatever their types turn out to be.
   if #found <= MAX_PATH_MATCHES then
     return nil
   end
@@ -279,10 +280,23 @@ local function many_path_matches(frag, dirs_only)
     return a.key < b.key
   end)
   local out = {}
-  for i = 1, MAX_PATH_MATCHES do
-    out[i] = found[i].text
+  for _, it in ipairs(found) do
+    local kind = it.kind
+    -- The entry after the last one shown only proves that the list is long, so it has
+    -- a type looked up only where `dirs_only` can still drop it.
+    if kind ~= "file" and kind ~= "directory" and (dirs_only or #out < MAX_PATH_MATCHES) then
+      -- a link, or a file system that does not say: the target decides
+      local st = uv.fs_stat(dir .. "/" .. it.name)
+      kind = st and st.type or "file"
+    end
+    if kind == "directory" or not dirs_only then
+      if #out == MAX_PATH_MATCHES then
+        return out
+      end
+      out[#out + 1] = head .. it.name .. (kind == "directory" and "/" or "")
+    end
   end
-  return out
+  return nil -- not enough entries came through for a long list
 end
 
 ---@internal
