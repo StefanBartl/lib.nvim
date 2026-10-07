@@ -310,6 +310,9 @@ return function(H)
       assert(kit.input({ prompt = "Path", completion = "file" }), "completion input opens")
     local tab_map = vim.fn.maparg("<Tab>", "i", false, true)
     eq(tab_map.buffer, 1, "opts.completion registers a buffer-local <Tab> mapping")
+    -- Not an <expr> mapping: complete() raises E565 under the textlock of one, and the
+    -- pcall around it hid that (ui.nvim's TESTS/ui_kit_input_ui_spec.lua opens the popup).
+    eq(tab_map.expr, 0, "<Tab> is no <expr> mapping")
     local stab_map = vim.fn.maparg("<S-Tab>", "i", false, true)
     eq(stab_map.buffer, 1, "opts.completion registers a buffer-local <S-Tab> mapping")
 
