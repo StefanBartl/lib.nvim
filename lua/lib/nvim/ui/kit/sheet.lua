@@ -6,7 +6,7 @@
 --- short chain of prompts.
 ---
 --- Field contract: `{ name, label?, kind?, default?, required?, validate?,
---- live?, expand_env?, completion?, secret?, mask?, choices? }`. `name` is the
+--- live?, depends_on?, expand_env?, completion?, secret?, mask?, choices? }`. `name` is the
 --- key the answer is stored under in the table handed to `on_submit`.
 ---   - `kind = "text"` (the default) is an editable line, like `kit.input`:
 ---     `default`, `expand_env`, `completion` and `secret` work the same.
@@ -25,6 +25,10 @@
 ---     shows an error is checked again on every edit (so the message goes away
 ---     the moment the value is fixed), and `live = true` checks a field on every
 ---     edit from the start.
+---   - `depends_on = "other"` (or a list of names) says that this field's validity
+---     depends on those fields -- a number that has to be free in the chosen area:
+---     it is checked again when one of them changes, as long as it has a value or an
+---     error to speak of (an untouched, blank one stays quiet).
 ---   - submit is blocked while any field fails, and the focus jumps to the
 ---     first one that does.
 ---
@@ -157,6 +161,9 @@ local function normalize(raw, index)
     required = raw.required == true,
     validate = type(raw.validate) == "function" and raw.validate or nil,
     live = raw.live == true,
+    depends_on = type(raw.depends_on) == "string" and { raw.depends_on }
+      or type(raw.depends_on) == "table" and raw.depends_on
+      or {},
     expand_env = raw.expand_env == true,
     completion = type(raw.completion) == "string" and raw.completion or nil,
     secret = raw.secret == true,
@@ -268,6 +275,7 @@ function M.open(opts)
   local win_w = api.nvim_win_get_width(winid)
   local text_w = math.max(10, win_w - col_w)
   local done = false
+  local started = false
 
   ---@type integer  # 1..n: a field; n+1, n+2: the Submit and Cancel buttons
   local focus = 1
@@ -421,9 +429,11 @@ function M.open(opts)
       return
     end
     local old = focus
-    if p ~= old and old <= n then
+    -- The first call only puts the focus somewhere: no field has been left yet.
+    if started and p ~= old and old <= n then
       check(old)
     end
+    started = true
     focus = p
     local f = fields[p]
     if f and f.kind == "text" then
@@ -475,6 +485,23 @@ function M.open(opts)
     end
   end
 
+  --- Check again the fields that name field `i` in `depends_on`. Only one that has
+  --- something to say -- a value, or a message already showing -- so a field the
+  --- user has not got to yet stays quiet.
+  ---@param i integer
+  local function recheck_dependents(i)
+    local name = fields[i].name
+    for j, g in ipairs(fields) do
+      if
+        j ~= i
+        and vim.tbl_contains(g.depends_on, name)
+        and (errors[j] ~= nil or vim.trim(value_of(j)) ~= "")
+      then
+        check(j)
+      end
+    end
+  end
+
   --- Check every field; the position of the first one that fails, nil when all pass.
   ---@return integer|nil
   local function check_all()
@@ -522,6 +549,7 @@ function M.open(opts)
     if errors[i] or f.live then
       check(i)
     end
+    recheck_dependents(i)
     paint()
     fit()
   end
@@ -671,6 +699,7 @@ function M.open(opts)
       if errors[focus] or f.live then
         check(focus)
       end
+      recheck_dependents(focus)
     end
     paint()
     fit()
