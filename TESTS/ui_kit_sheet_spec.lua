@@ -121,4 +121,36 @@ return function(H)
   eq(result.area, "one")
   eq(result.title, "a title")
   ok(not surf:is_valid(), "and closes")
+
+  -- A refused click on [ Submit ] must not stop Insert mode on its way: the click
+  -- used to move the focus onto the button first (a stopinsert that lands once the
+  -- mapping returns), so the startinsert of the refused submit, which puts the focus
+  -- back on the bad field, was ignored and the field stood in Normal mode.
+  surf = open(FIELDS)
+  eq(surf:state().focus, "number")
+  local stops = 0
+  local real_cmd = vim.cmd
+  vim.cmd = setmetatable({}, {
+    __call = function(_, c, ...)
+      if c == "stopinsert" then
+        stops = stops + 1
+      end
+      return real_cmd(c, ...)
+    end,
+    __index = real_cmd,
+  })
+  local real_mousepos = vim.fn.getmousepos
+  local button_line = api.nvim_buf_get_lines(surf.bufnr, 4, 5, false)[1]
+  local from = assert(button_line:find("[ Submit ]", 1, true))
+  vim.fn.getmousepos = function()
+    return { winid = surf.winid, line = 5, column = from + 2 }
+  end
+  local clicked, click_err = pcall(vim.fn.maparg("<LeftMouse>", "n", false, true).callback)
+  vim.cmd = real_cmd
+  vim.fn.getmousepos = real_mousepos
+  assert(clicked, click_err)
+  eq(surf:state().focus, "number", "the blank required field has the focus again")
+  eq(result, nil, "the submit was refused")
+  eq(stops, 0, "nothing stopped Insert mode on the way")
+  close_floats()
 end
