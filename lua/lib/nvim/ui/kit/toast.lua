@@ -205,11 +205,33 @@ local function reflow()
   end
 end
 
+-- Same bug class as PERF-92 (`ui.screenkey`, `lib.nvim.ui.kit.{compare,picker,
+-- chooser}`): `reflow()` only ran when a toast opened or closed, so a
+-- `VimResized` while one was up left it pinned to the corner computed at the
+-- editor's PREVIOUS size until the next open/close reflowed it -- and
+-- `M.open`'s `timeout = 0` disables the auto-dismiss entirely, so that
+-- window is not bounded the way a default 3s toast's is. Registered once, on
+-- the first toast (requiring the module registers nothing, LUA-92), not
+-- per-toast: `reflow()` is already idempotent over an empty `stack`, so there
+-- is nothing to enable/disable.
+local resize_hooked = false
+local function hook_resize()
+  if resize_hooked then
+    return
+  end
+  resize_hooked = true
+  autocmd.create("VimResized", reflow, {
+    group = autocmd.group("lib_kit_toast_resize", true),
+    desc = "lib.nvim.ui.kit.toast: keep the stack pinned to its corner",
+  })
+end
+
 --- Show a toast.
 ---@param opts table  # { message, title?, theme?, timeout? }
 ---@return Lib.UI.Kit.Surface|nil
 function M.open(opts)
   opts = opts or {}
+  hook_resize()
   local message = opts.message or ""
   local lines = type(message) == "table" and message
     or vim.split(head(tostring(message), MAX_BYTES), "\n", { plain = true })
@@ -274,19 +296,6 @@ function M.open(opts)
 
   return surf
 end
-
--- Same bug class as PERF-92 (`ui.screenkey`, `lib.nvim.ui.kit.{compare,picker,
--- chooser}`): `reflow()` only ran when a toast opened or closed, so a
--- `VimResized` while one was up left it pinned to the corner computed at the
--- editor's PREVIOUS size until the next open/close reflowed it -- and
--- `M.open`'s `timeout = 0` disables the auto-dismiss entirely, so that
--- window is not bounded the way a default 3s toast's is. Registered once at
--- module load, not per-toast: `reflow()` is already idempotent over an empty
--- `stack`, so there is nothing to enable/disable.
-autocmd.create("VimResized", reflow, {
-  group = autocmd.group("lib_kit_toast_resize", true),
-  desc = "lib.nvim.ui.kit.toast: keep the stack pinned to its corner",
-})
 
 --- Number of live toasts (also prunes dead ones).
 ---@return integer

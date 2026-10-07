@@ -240,8 +240,8 @@ Note: the `hl.*` keys (`title`, `selection`, `accent`, …) are **highlight-grou
 links**, not text — e.g. `hl.title = "ErrorMsg"` recolors titles. A broken
 config shows an error instead of throwing. Press `q` to close.
 
-`:KitPreview` is available as soon as `lib.nvim.ui.kit` is loaded (e.g. after a
-`require("lib.nvim.ui.kit")` or `require("lib").kit` in your config).
+`:KitPreview` is registered by `require("lib.nvim.ui.kit").setup()`; loading the
+kit alone registers nothing, and `kit.preview()` registers it on the way.
 
 ## 7. Highlight groups
 
