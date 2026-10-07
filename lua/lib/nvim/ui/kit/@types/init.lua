@@ -48,7 +48,7 @@
 ---@field filetype? string
 ---@field modifiable? boolean
 ---@field on_close? fun()        # called once when the window closes (any cause)
----@field wo? table<string, any>
+---@field wo? table<string, any>  # window options; `winfixbuf = true` unless given (a jump or `:e` in the float must not swap its buffer)
 ---@field bo? table<string, any>
 
 --- Handle returned by `kit.surface.open` — a themed float + lifecycle.

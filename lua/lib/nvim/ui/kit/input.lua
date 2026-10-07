@@ -231,6 +231,11 @@ function M.open(opts)
 
   ---@return string
   local function get_line()
+    -- The buffer can be gone while the window lives on (a forced swap of the buffer
+    -- shown in it): `finish` must still run, through `surf:on_close`, or no callback fires.
+    if not api.nvim_buf_is_valid(bufnr) then
+      return ""
+    end
     return api.nvim_buf_get_lines(bufnr, 0, 1, false)[1] or ""
   end
 
