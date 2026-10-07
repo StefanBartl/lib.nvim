@@ -366,6 +366,17 @@ flags = { { name = "dry", bool = true, desc = "only report" } },
 kv    = { { key = "view", enum = { "split", "vsplit" }, desc = "where to open" } },
 ```
 
+A `--no-x` twin without a text of its own shows `Off: <text of --x>`, so a
+family of negations needs one line each only for the positive flag.
+
+`composer.help.undocumented(verb?)` lists the flags and `key=` pairs of a verb
+(or of every registered one) that show no text -- handy as a one-line spec in a
+plugin that wants "every option I ship is explained":
+
+```lua
+assert(#require("lib.nvim.bindings.usercmd.composer").help.undocumented("MyVerb") == 0)
+```
+
 `composer.help` exposes the pieces (`parse_line`, `insertion`, `open`,
 `from_cmdline`, `set_keymap`); the option list itself is the pure
 `require("lib.nvim.bindings.usercmd.composer.help.entries").compute(root, committed_tokens, lead)`.

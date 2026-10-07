@@ -189,6 +189,7 @@
 ---@field enabled      fun(spec: Lib.UserCmd.Composer.Spec|nil): boolean
 ---@field parse_line   fun(line: string): Lib.UserCmd.Composer.Help.State|nil
 ---@field sanitize     fun(line: string): string
+---@field undocumented fun(verb?: string): { verb: string, route: string, kind: "flag"|"kv", name: string }[]
 ---@field insertion    fun(state: Lib.UserCmd.Composer.Help.State, entry: Lib.UserCmd.Composer.Help.Entry): string
 ---@field open         fun(root: Lib.UserCmd.Composer.Node, state: Lib.UserCmd.Composer.Help.State, opts?: { title?: string, restore?: string }): boolean
 ---@field from_cmdline fun(line: string, restore_if_refused?: boolean): boolean

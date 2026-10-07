@@ -563,6 +563,57 @@ return function(H)
   eq(#fed, 0, "from_cmdline: nothing is fed without the restore flag")
   vim.api.nvim_feedkeys = real_feedkeys
 
+  -- ------------------------------------------------------------ flag / kv texts
+  -- A `--no-x` twin shows "Off: <text of --x>" without a text of its own.
+  local neg_root = tree.build({
+    {
+      path = { "go" },
+      flags = {
+        { name = "word", bool = true, desc = "Match whole words" },
+        { name = "no-word", bool = true },
+        { name = "no-orphan", bool = true },
+        { name = "own", bool = true, desc = "Has its own" },
+        { name = "no-own", bool = true, desc = "Own negation text" },
+      },
+      kv = { { key = "view", desc = "Where to open" }, { key = "bare" } },
+      run = noop,
+    },
+  })
+  local neg = entries.compute(neg_root, { "go" }, "")
+  local by_label = {}
+  for _, e in ipairs(neg.items) do
+    by_label[e.label] = e.desc
+  end
+  eq(by_label["--no-word"], "Off: Match whole words", "no-x: derived from --x")
+  eq(by_label["--no-orphan"], nil, "no-x: nothing to derive from stays empty")
+  eq(by_label["--no-own"], "Own negation text", "no-x: an own text wins")
+
+  -- undocumented(): flags / kv pairs of a registered verb that show no text.
+  composer.verb("ComposerHelpSpecDocs", {
+    routes = {
+      {
+        path = { "x" },
+        flags = {
+          { name = "word", bool = true, desc = "w" },
+          { name = "no-word", bool = true },
+          { name = "loose", bool = true },
+        },
+        kv = { { key = "view", desc = "v" }, { key = "bare" } },
+        run = noop,
+      },
+    },
+  })
+  local missing = {}
+  for _, m in ipairs(help.undocumented("ComposerHelpSpecDocs")) do
+    missing[#missing + 1] = m.kind .. ":" .. m.name
+  end
+  eq(
+    table.concat(missing, ","),
+    "flag:loose,kv:bare",
+    "undocumented: lists what shows no text (no-x derived counts as text)"
+  )
+  ok(#help.undocumented() >= 2, "undocumented: without a name it covers every verb")
+
   -- ------------------------------------------------------------ keymap
   local lhs = "<F19>"
   composer.setup({ help = { keymap = lhs } })
