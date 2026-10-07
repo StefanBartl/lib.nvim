@@ -563,6 +563,30 @@ return function(H)
   eq(#fed, 0, "from_cmdline: nothing is fed without the restore flag")
   vim.api.nvim_feedkeys = real_feedkeys
 
+  -- A flag with completion-only `values` lists them like an enum (args and key= already did).
+  local hint_root = tree.build({
+    {
+      path = { "go" },
+      flags = { { name = "sep", values = { "comma", "tab" }, desc = "Separator" } },
+      run = noop,
+    },
+  })
+  eq(
+    table.concat(labels(entries.compute(hint_root, { "go", "--sep" }, "").items, "value"), ","),
+    "comma,tab",
+    "--flag <lead>: values are listed"
+  )
+  eq(
+    table.concat(labels(entries.compute(hint_root, { "go" }, "--sep=").items, "value"), ","),
+    "comma,tab",
+    "--flag=: values are listed"
+  )
+  for _, e in ipairs(entries.compute(hint_root, { "go" }, "").items) do
+    if e.kind == "flag" then
+      eq(e.label, "--sep=<comma|tab>", "flag row shows the hinted values")
+    end
+  end
+
   -- ------------------------------------------------------------ flag / kv texts
   -- A `--no-x` twin shows "Off: <text of --x>" without a text of its own.
   local neg_root = tree.build({

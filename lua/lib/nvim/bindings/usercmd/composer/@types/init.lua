@@ -48,6 +48,7 @@
 ---@field bool?       boolean                         # presence-only flag, no value consumed, e.g. --dry
 ---@field optional_value? boolean                    # value may be omitted: --name binds true, --name=value binds the value. Never consumes the next token (unlike a plain value flag), so a positional may follow the bare form. Ignored when bool=true
 ---@field enum?       string[]                        # closed set for the value (ignored when bool=true)
+---@field values?     string[]                        # completion-only hints for the value (not enforced, unlike enum); listed in the help float like an enum (ignored when bool=true)
 ---@field repeatable? boolean                         # collect every occurrence into an array (ctx.flags.name = {...})
 ---@field default?    any                             # value bound when the flag is never passed
 ---@field desc?       string                          # one short line for the help float
