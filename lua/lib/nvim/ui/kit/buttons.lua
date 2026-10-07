@@ -24,7 +24,8 @@ local GAP = "  "
 ---@param label string
 ---@return string
 function M.box(label)
-  return "[ " .. label .. " ]"
+  -- A label is one line of text: a newline in one is an error in `nvim_buf_set_lines`.
+  return "[ " .. (tostring(label):gsub("[\r\n]+", " ")) .. " ]"
 end
 
 --- Display width of the whole row, before any centering. What a caller sizes
