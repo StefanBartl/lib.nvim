@@ -24,7 +24,9 @@
 --- `<S-Tab>` advance/retreat the selection instead of re-triggering, and
 --- `<CR>` accepts the highlighted candidate instead of submitting the whole
 --- prompt (a second `<CR>` submits, exactly like confirming a shell
---- completion then pressing enter again).
+--- completion then pressing enter again). A fragment that holds a backtick is
+--- never completed: `getcompletion()` would run the span between backticks
+--- through the shell, and a pasted line is not to be trusted with that.
 ---
 --- `opts.on_back` makes the prompt one step of a larger flow (`kit.form` with
 --- `back = true`): `<BS>` on an EMPTY line, `<S-Tab>` and `<C-p>` close the
@@ -164,6 +166,13 @@ local function trigger_completion(bufnr, winid, completion)
   -- Scanned from the end: `match("%S*$")` retries the rest of a long word from
   -- every start byte, which is quadratic for one pasted line without spaces.
   local frag = prefix:reverse():match("^%S*"):reverse()
+  -- getcompletion() hands a backtick span in its argument to 'shell' (the
+  -- "file", "dir", "shellcmd" and "file_in_path" types), and the fragment is text
+  -- from wherever the user pasted it: never pass one on (SEC-34). A backtick
+  -- belongs to no sensible file-name fragment anyway.
+  if frag:find("`", 1, true) then
+    return
+  end
   local ok, matches = pcall(fn.getcompletion, frag, completion)
   if not ok or not matches or #matches == 0 then
     return

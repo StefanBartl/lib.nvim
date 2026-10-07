@@ -313,6 +313,40 @@ return function(H)
     local stab_map = vim.fn.maparg("<S-Tab>", "i", false, true)
     eq(stab_map.buffer, 1, "opts.completion registers a buffer-local <S-Tab> mapping")
 
+    -- What <Tab> hands to getcompletion(): the whitespace-delimited run that ends
+    -- at the cursor, and never one with a backtick in it -- getcompletion() runs
+    -- a backtick span through 'shell' (SEC-34). The two vim.fn calls are stubbed
+    -- (the popup needs Insert mode); only the fragment is read.
+    do
+      local real_getcompletion, real_complete = vim.fn.getcompletion, vim.fn.complete
+      local seen_frag
+      vim.fn.getcompletion = function(frag)
+        seen_frag = frag
+        return { "x" }
+      end
+      vim.fn.complete = function() end
+      local function press_tab(line, col)
+        seen_frag = nil
+        vim.api.nvim_buf_set_lines(comp.bufnr, 0, -1, false, { line })
+        vim.api.nvim_win_set_cursor(comp.winid, { 1, col })
+        tab_map.callback()
+        return seen_frag
+      end
+      local ok_run, err = pcall(function()
+        eq(press_tab("cd /etc/pas", 11), "/etc/pas", "the fragment is the run before the cursor")
+        eq(press_tab("`touch${IFS}x`", 14), nil, "a backtick fragment never reaches getcompletion")
+        eq(press_tab("cd a`b", 6), nil, "a backtick anywhere in the fragment blocks it")
+        eq(
+          press_tab("`x` /etc/pas", 12),
+          "/etc/pas",
+          "a backtick before the whitespace is not part of it"
+        )
+        eq(press_tab("ab`cd", 2), "ab", "a backtick behind the cursor blocks nothing")
+      end)
+      vim.fn.getcompletion, vim.fn.complete = real_getcompletion, real_complete
+      assert(ok_run, err)
+    end
+
     -- <CR>/<Esc> still submit/cancel normally (pum never opens here, so this
     -- exercises the same finish() path as plain kit.input).
     local comp_submitted
