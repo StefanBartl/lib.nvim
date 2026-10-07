@@ -55,8 +55,9 @@ local M = {}
 --- prefix).
 ---@param name string
 ---@param spec Lib.UserCmd.Composer.Spec
----@return { error: fun(msg), info: fun(msg) }
-local function make_deferred_notify(name, spec)
+---@param root Lib.UserCmd.Composer.Node
+---@return { error: fun(msg), info: fun(msg), help: fun(tokens: string[], reason: string|nil, fallback: fun()): boolean }
+local function make_deferred_notify(name, spec, root)
   local notify = require("lib.nvim.notify").create(spec.notify_prefix or ("[" .. name .. "]"))
   return {
     error = function(msg)
@@ -68,6 +69,18 @@ local function make_deferred_notify(name, spec)
       vim.schedule(function()
         notify.info(msg)
       end)
+    end,
+    -- Opt-in help float in place of the usage text. Read on every call (the
+    -- setup may come after the verb) and false while the verb is off.
+    help = function(tokens, reason, fallback)
+      return require("lib.nvim.bindings.usercmd.composer.help").on_dispatch(
+        name,
+        spec,
+        root,
+        tokens,
+        reason,
+        fallback
+      )
     end,
   }
 end
@@ -205,7 +218,7 @@ local function register(name, spec)
   spec.routes = spec.routes or {}
 
   local root = tree.build(spec.routes)
-  local deferred = make_deferred_notify(name, spec)
+  local deferred = make_deferred_notify(name, spec, root)
 
   local handler = function(opts)
     return parse.dispatch(name, spec, root, opts, deferred)
@@ -330,7 +343,19 @@ end
 function M.setup(opts)
   opts = opts or {}
   registry.configure(opts.docs)
+  if opts.help ~= nil then
+    require("lib.nvim.bindings.usercmd.composer.help").setup(opts.help)
+  end
 end
+
+--- The option float: cheatsheet key in the command line and a replacement for
+--- the usage notification. Opt-in -- see `composer.help`.
+---@type Lib.UserCmd.Composer.Help
+M.help = setmetatable({}, {
+  __index = function(_, k)
+    return require("lib.nvim.bindings.usercmd.composer.help")[k]
+  end,
+})
 
 --- Register a custom argument type (validation + completion).
 ---@param name string

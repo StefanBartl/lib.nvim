@@ -98,12 +98,31 @@ local function bind_args(route, rest)
   return args, pos, leftover, nil
 end
 
+--- Report "this level has no handler": the help float when the notifier
+--- offers one and takes over, otherwise the usage text exactly as before.
+--- `notify.help` is optional (`composer/init.lua` supplies it, and it answers
+--- false while the verb has not opted in), so a bare notifier -- every spec
+--- that injects its own -- behaves as it always did.
+---@param notify { error: fun(msg), info: fun(msg), help?: fun(tokens: string[], reason: string|nil, fallback: fun()): boolean }
+---@param level "info"|"error"
+---@param text string      # the notification text
+---@param tokens string[]  # literal tokens that matched (the level to show)
+---@param reason? string   # float title when the cause is an unknown token
+function M.show_usage(notify, level, text, tokens, reason)
+  local function fallback()
+    notify[level](text)
+  end
+  if not (notify.help and notify.help(tokens, reason, fallback)) then
+    fallback()
+  end
+end
+
 --- Handle one `:Verb …` invocation.
 ---@param cmd_name string
 ---@param spec Lib.UserCmd.Composer.Spec
 ---@param root Lib.UserCmd.Composer.Node
 ---@param opts Lib.UserCommand.Args   # nvim callback args
----@param notify { error: fun(msg), info: fun(msg) }
+---@param notify { error: fun(msg), info: fun(msg), help?: fun(tokens: string[], reason: string|nil, fallback: fun()): boolean }
 function M.dispatch(cmd_name, spec, root, opts, notify)
   local fargs = opts.fargs or {}
 
@@ -119,7 +138,7 @@ function M.dispatch(cmd_name, spec, root, opts, notify)
       return spec.default(M.build_ctx({}, {}, {}, {}, {}, {}, opts))
     end
     if not root.route then
-      notify.info(M.usage(cmd_name, root))
+      M.show_usage(notify, "info", M.usage(cmd_name, root), {})
       return
     end
   end
@@ -133,14 +152,24 @@ function M.dispatch(cmd_name, spec, root, opts, notify)
     -- Either the first unmatched token is a bad subcommand, or a valid group
     -- prefix was given without a leaf. Point at the offending token.
     local bad = fargs[consumed + 1]
+    local matched = { unpack(fargs, 1, consumed) }
     if bad then
-      notify.error(("unknown subcommand '%s'.\n%s"):format(bad, M.usage(cmd_name, root)))
+      M.show_usage(
+        notify,
+        "error",
+        ("unknown subcommand '%s'.\n%s"):format(bad, M.usage(cmd_name, root)),
+        matched,
+        ("unknown subcommand '%s'"):format(bad)
+      )
     else
-      notify.error(
+      M.show_usage(
+        notify,
+        "error",
         ("'%s' needs a subcommand.\n%s"):format(
           table.concat({ cmd_name, unpack(fargs, 1, consumed) }, " "),
           M.usage(cmd_name, root)
-        )
+        ),
+        matched
       )
     end
     return

@@ -49,7 +49,7 @@ end
 --- time `<Tab>` walks into them.
 ---@param node Lib.UserCmd.Composer.Node
 ---@return boolean
-local function child_visible(node)
+function M.child_visible(node)
   local route = node.route
   if not route then
     return true
@@ -146,7 +146,7 @@ function M.candidates(root, arg_lead, cmd_line)
   if next(node.children) ~= nil and filled == 0 then
     local visible_keys = {}
     for _, k in ipairs(tree.child_keys(node)) do
-      if child_visible(node.children[k]) then
+      if M.child_visible(node.children[k]) then
         visible_keys[#visible_keys + 1] = k
       end
     end

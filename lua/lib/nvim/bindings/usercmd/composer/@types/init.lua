@@ -34,6 +34,8 @@
 ---@field values?   string[]                        # completion-only hints for a STRING arg (not enforced)
 ---@field optional? boolean                         # default false
 ---@field default?  any                             # value bound when an optional arg is omitted
+---@field desc?     string                          # one short line for the help float (what the argument is for)
+---@field enum_desc? table<string, string>          # value -> one short line, shown next to each `enum`/`values` entry in the help float
 ---@field variadic? boolean                         # on the LAST arg only: more tokens than declared slots keep completing with this spec, and usage/docs show `...`. Parsing is unchanged -- the extra tokens still arrive raw in `ctx.rest`, for the handler to read
 
 --- One `--flag` accepted by a route, parsed out of its token tail before
@@ -48,6 +50,8 @@
 ---@field enum?       string[]                        # closed set for the value (ignored when bool=true)
 ---@field repeatable? boolean                         # collect every occurrence into an array (ctx.flags.name = {...})
 ---@field default?    any                             # value bound when the flag is never passed
+---@field desc?       string                          # one short line for the help float
+---@field enum_desc?  table<string, string>           # value -> one short line for each `enum` entry in the help float
 
 --- One bare `key=value` pair (no dashes) accepted by a route, parsed out of
 --- its token tail before positional binding. Opt-in per route: an
@@ -60,6 +64,8 @@
 ---@field enum?   string[]                        # closed set for the value; validated + completed (see argtypes.validate)
 ---@field values? string[]                        # completion-only hints for a STRING value (not enforced, unlike enum) — same argtypes.STRING.complete a plain ArgSpec uses
 ---@field default? any                            # value bound when the key is never passed
+---@field desc?    string                          # one short line for the help float
+---@field enum_desc? table<string, string>         # value -> one short line for each `enum` entry in the help float
 
 --- One node of the route tree (see `composer.tree`): literal `children` and an
 --- optional terminal `route`.
@@ -95,6 +101,7 @@
 ---@field buffer?  boolean|integer                           # register buffer-locally: true = current buffer, or an explicit bufnr. Default: nil (global)
 ---@field visual?  Lib.UserCmd.Composer.VisualMode[]         # default `visual` allowlist for routes that declare none of their own
 ---@field notify_prefix? string                              # notify() bracket prefix for this verb's dispatch errors/usage. Default: "[Name]" (the verb name) — override when it doesn't already identify your plugin, e.g. two verbs from one plugin that should share one prefix
+---@field help?    boolean                                   # help float (cheatsheet + replaces the usage notification) for this verb: true = on, false = off, nil = follows `setup({ help = { enable } })` (default off -- opt-in)
 ---@field src?     string                                    # override the `file:line` recorded in `usercmd.registered()`. The composer already walks past itself to the declaring file, so this is only for a wrapper of your own that declares verbs on someone else's behalf
 
 --- Range info handed to a route's handler via `ctx.range`. `mode`/`col1`/`col2`
@@ -167,8 +174,26 @@
 ---@field path string
 ---@field mode "replace"|"section"
 
+--- Help float settings (`composer.setup({ help = ... })`). All of it is opt-in.
+---@class Lib.UserCmd.Composer.HelpOpts
+---@field enable? boolean   # turn the help on for every verb that does not say `help = false` (default false: only verbs with `help = true`)
+---@field keymap? string|false  # Cmdline-mode key that opens the cheatsheet for the verb being typed (default: none)
+
 ---@class Lib.UserCmd.Composer.SetupOpts
 ---@field docs? Lib.UserCmd.Composer.DocsOpts
+---@field help? Lib.UserCmd.Composer.HelpOpts
+
+--- `lib.nvim.bindings.usercmd.composer.help`: the option float (see its module doc).
+---@class Lib.UserCmd.Composer.Help
+---@field cfg          { enable: boolean, keymap: string|false|nil }
+---@field enabled      fun(spec: Lib.UserCmd.Composer.Spec|nil): boolean
+---@field parse_line   fun(line: string): Lib.UserCmd.Composer.Help.State|nil
+---@field insertion    fun(state: Lib.UserCmd.Composer.Help.State, entry: Lib.UserCmd.Composer.Help.Entry): string
+---@field open         fun(root: Lib.UserCmd.Composer.Node, state: Lib.UserCmd.Composer.Help.State, opts?: { title?: string, restore?: string }): boolean
+---@field from_cmdline fun(line: string): boolean
+---@field on_dispatch  fun(name: string, spec: Lib.UserCmd.Composer.Spec, root: Lib.UserCmd.Composer.Node, tokens: string[], reason?: string, fallback?: fun()): boolean
+---@field set_keymap   fun(lhs: string|false|nil)
+---@field setup        fun(opts?: Lib.UserCmd.Composer.HelpOpts)
 
 ---@class Lib.UserCmd.Composer
 ---@field verb             fun(name: string, spec?: Lib.UserCmd.Composer.Spec): Lib.UserCmd.Composer.Handle
@@ -179,5 +204,6 @@
 ---@field check_all        fun(): table<string, Lib.UserCmd.Composer.CheckResult[]>
 ---@field checkhealth      fun(name_or_handle: string|Lib.UserCmd.Composer.Handle)
 ---@field notify_check_all fun(): boolean ok_overall
+---@field help             Lib.UserCmd.Composer.Help
 
 return {}

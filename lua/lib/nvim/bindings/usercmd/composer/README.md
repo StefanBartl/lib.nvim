@@ -317,6 +317,59 @@ used exclusively. `flags` and `kv` compose freely on the same route
 (`ctx.flags` and `ctx.kv` are both populated; parsing runs flags first, then
 kv, then whatever's left binds to `args`).
 
+## Help float (option cheatsheet) — opt-in
+
+`<Tab>` completes names but cannot say what they do. The help float lists the
+options of the level you are on, one line each (`option  description`), and
+`<CR>` puts the pick on the command line:
+
+```
+╭─ :Clipboard ──────────────────────────╮
+│ Subcommands                           │
+│ path ›  reports, notes, config, ...   │
+│ reports  Copy the path of reports     │
+╰───────────────────────────────────────╯
+```
+
+It is **off** until you ask for it:
+
+```lua
+composer.setup({ help = { keymap = "<C-\\>h" } })   -- cheatsheet key (command-line mode)
+composer.verb("Clipboard", { help = true, ... })    -- opt this verb in
+composer.setup({ help = { enable = true } })        -- or: every verb, minus `help = false`
+```
+
+A verb is on when `spec.help == true`, or `help.enable` is set and
+`spec.help ~= false`. Two ways in:
+
+- **The key.** Type `:Verb sub ` and press `help.keymap`: the float opens for
+  that level *before* anything is wrong — subcommands, a group's children,
+  the next argument's `enum` values, `--flags`, `key=` pairs, and the values
+  of `--flag=` / `key=`. A pick lands on the command line and you press the key
+  again for the next level; `<Esc>` puts your line back as it was. A partly
+  typed token (`:Verb su`) narrows the list by prefix. The key does nothing on
+  a verb that is not on (and on any non-composer command line).
+- **Instead of the usage notification.** A bare `:Verb`, an unfinished group
+  (`:Cdx prompt`) or an unknown subcommand opens the float for that level
+  instead of printing `Usage: …`. Without a UI, or if the float cannot open,
+  the notification is shown exactly as before. `spec.default` still wins for a
+  bare verb.
+
+Descriptions come from what the specs already carry (`route.desc`) plus two
+optional fields for the lower levels, kept to a line:
+
+```lua
+args  = { { name = "kind", enum = { "quote", "paren" },
+            enum_desc = { quote = "double quotes", paren = "parentheses" },
+            desc = "what to wrap with" } },
+flags = { { name = "dry", bool = true, desc = "only report" } },
+kv    = { { key = "view", enum = { "split", "vsplit" }, desc = "where to open" } },
+```
+
+`composer.help` exposes the pieces (`parse_line`, `insertion`, `open`,
+`from_cmdline`, `set_keymap`); the option list itself is the pure
+`require("lib.nvim.bindings.usercmd.composer.help.entries").compute(root, committed_tokens, lead)`.
+
 ## Documentation generation
 
 The route tree drives docs too:

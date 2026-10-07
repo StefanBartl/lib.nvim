@@ -112,6 +112,7 @@ local specs = {
   "neotree_watch_spec.lua",
   "watch_spec.lua",
   "composer_spec.lua",
+  "composer_help_spec.lua",
   "telemetry_wrap_spec.lua",
   "git_spec.lua",
   "git_status_spec.lua",
