@@ -31,7 +31,10 @@
 --- prompt and call `on_back(line)` -- the line as it stood, so the caller can
 --- keep a half-typed answer -- instead of `on_submit`/`on_cancel`. A press of
 --- those keys while a completion popup is open still belongs to the popup,
---- and without `on_back` none of the three is touched.
+--- and without `on_back` none of the three is touched. A `<BS>` that follows
+--- another one of the same prompt by less than 300 ms is a held key repeating,
+--- not a new press, and never goes back (see `BS_RUN_MS`): holding it down
+--- empties the field and stops there instead of deleting the answers before it.
 ---
 --- `opts.buttons` adds a clickable row of `[ Label ]` buttons under the field
 --- (`{ { id = "back"|"skip"|"submit", label = "..." }, ... }`; `submit` is
@@ -43,6 +46,10 @@
 --- `a` return to the field. A left click on a button focuses *and* presses it
 --- in one action, exactly as in `kit.confirm`. The row's layout, focus
 --- highlight and hit-test are `lib.nvim.ui.kit.buttons`, shared with `kit.confirm`.
+--- The row is line 2 of the buffer, so it is kept honest: it is laid out again,
+--- shifted, when a long answer scrolls the window sideways (every line goes
+--- with it), and a paste or `<C-j>` that splits the field into several lines
+--- is joined back into one with a space, the row put back under it.
 
 local surface = require("lib.nvim.ui.kit.surface")
 local buttons = require("lib.nvim.ui.kit.buttons")
@@ -51,8 +58,15 @@ local expand_path = require("lib.nvim.cross.fs.expand_path")
 local api = vim.api
 local autocmd = require("lib.nvim.bindings.autocmd")
 local fn = vim.fn
+local uv = vim.uv or vim.loop
 
 local M = {}
+
+--- A `<BS>` on an empty field that follows another `<BS>` of the same field
+--- within this many milliseconds is a held key repeating, not a new press (a
+--- terminal cannot tell the two apart): it does not go back. A repeat runs at
+--- ~30 Hz; a deliberate second press after emptying a field takes longer.
+local BS_RUN_MS = 300
 
 --- Extmark namespace of the focus highlight on the button row.
 local BTN_NS = api.nvim_create_namespace("lib_kit_input_buttons")
@@ -200,23 +214,13 @@ function M.open(opts)
   -- 1-based button the focus is on, nil while it is in the field (line 1).
   local btn_focus = nil
   local ranges = {}
+  local row_text = "" -- what line 2 holds right now
+  local row_scroll = 0 -- the window's `leftcol` that `row_text` was laid out for
   local default_btn = 1 -- where <Down>/<Tab> land: the button <CR> would press anyway
   for i, id in ipairs(btn_ids) do
     if id == "submit" then
       default_btn = i
     end
-  end
-
-  if has_buttons then
-    local line
-    -- Laid out after the window exists, so the row is centered in the width
-    -- the float actually got (make_scratch clamps it to the editor).
-    line, ranges = buttons.layout(btn_labels, api.nvim_win_get_width(surf.winid), 1)
-    -- No undo step for it: `u` in the field must never reach the button row.
-    local undolevels = vim.bo[bufnr].undolevels
-    vim.bo[bufnr].undolevels = -1
-    api.nvim_buf_set_lines(bufnr, 1, 2, false, { line })
-    vim.bo[bufnr].undolevels = undolevels
   end
 
   if opts.secret then
@@ -301,6 +305,91 @@ function M.open(opts)
       local from_insert = api.nvim_get_mode().mode:sub(1, 1) == "i"
       pcall(api.nvim_win_set_cursor, surf.winid, { 2, r.start_col + (from_insert and 1 or 0) })
     end
+  end
+
+  --- Run `write` with the buffer writable and no undo recorded for it: the row
+  --- is not the user's to edit (the buffer is locked while the buttons have the
+  --- focus), and `u` in the field must never reach it.
+  ---@param write fun()
+  local function write_silently(write)
+    local modifiable = vim.bo[bufnr].modifiable
+    local undolevels = vim.bo[bufnr].undolevels
+    vim.bo[bufnr].modifiable = true
+    vim.bo[bufnr].undolevels = -1
+    local ok, err = pcall(write)
+    vim.bo[bufnr].undolevels = undolevels
+    vim.bo[bufnr].modifiable = modifiable
+    if not ok then
+      error(err, 0)
+    end
+  end
+
+  --- Lay the button row out, again when the window has scrolled sideways. A
+  --- long answer scrolls the whole window, every line with it, so a row laid out
+  --- for column 0 would end up off screen: it is padded by the same amount
+  --- instead, which keeps it where it was drawn. The click ranges are byte
+  --- columns of the line -- what `getmousepos()` reports, scrolled or not -- so
+  --- they move with the padding.
+  ---@param force? boolean  # lay out even when the scroll is the one the row was drawn for
+  local function layout_row(force)
+    local scroll = api.nvim_win_call(surf.winid, function()
+      return fn.winsaveview().leftcol
+    end)
+    if scroll == row_scroll and not force then
+      return
+    end
+    row_scroll = scroll
+    -- Laid out after the window exists, so the row is centered in the width the
+    -- float actually got (make_scratch clamps it to the editor).
+    local text, laid = buttons.layout(btn_labels, api.nvim_win_get_width(surf.winid), 1)
+    if scroll > 0 then
+      text = string.rep(" ", scroll) .. text
+      for _, r in ipairs(laid) do
+        r.start_col = r.start_col + scroll
+        r.end_col = r.end_col + scroll
+      end
+    end
+    ranges = laid
+    row_text = text
+    write_silently(function()
+      api.nvim_buf_set_lines(bufnr, 1, 2, false, { text })
+    end)
+    paint()
+    if btn_focus then
+      park_cursor()
+    end
+  end
+
+  --- The field is one line and the row sits right under it. A paste with a
+  --- newline in it (a clipboard that ends in one is the usual case) or a `<C-j>`
+  --- splits the field and pushes the row out of the two lines the window shows:
+  --- join what was typed back into one line and put the row under it again.
+  local function keep_layout()
+    if btn_focus then
+      return -- the buffer is locked: nothing can have been typed
+    end
+    local lines = api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    if #lines == 2 and lines[2] == row_text then
+      return
+    end
+    if lines[#lines] == row_text then
+      lines[#lines] = nil
+    end
+    local parts = {}
+    for _, l in ipairs(lines) do
+      if l ~= "" then
+        parts[#parts + 1] = l
+      end
+    end
+    local field = table.concat(parts, " ")
+    write_silently(function()
+      api.nvim_buf_set_lines(bufnr, 0, -1, false, { field, row_text })
+    end)
+    pcall(api.nvim_win_set_cursor, surf.winid, { 1, #field })
+  end
+
+  if has_buttons then
+    layout_row(true)
   end
 
   local focus_field
@@ -436,15 +525,23 @@ function M.open(opts)
 
   if can_back then
     -- Going back must not eat text: <BS> is only "back" once there is nothing
-    -- left for it to delete, and a popup that is open keeps <C-p>.
+    -- left for it to delete, and a popup that is open keeps <C-p>. A key held
+    -- down repeats faster than anyone presses it again: the repeat that finds
+    -- the field emptied by the run before it is swallowed (and counts as part
+    -- of the run), or one held <BS> would walk back through every earlier
+    -- field and delete each answer in turn.
+    local last_bs ---@type number|nil  # ms clock of the previous <BS> of this field
     vim.keymap.set({ "i", "n" }, "<BS>", function()
       if btn_focus then
         return
       end
-      if get_line() == "" then
-        finish("back")
-      else
+      local now = uv.hrtime() / 1e6
+      local in_run = last_bs ~= nil and now - last_bs < BS_RUN_MS
+      last_bs = now
+      if get_line() ~= "" then
         pass_through("<BS>")
+      elseif not in_run then
+        finish("back")
       end
     end, key_opts)
     vim.keymap.set({ "i", "n" }, "<C-p>", function()
@@ -500,24 +597,32 @@ function M.open(opts)
 
     -- The two lines are two places for the cursor, not one text: keep it on
     -- the field (or on the focused button) whatever tried to move it (`j`,
-    -- `<C-o>G`, ...), so an edit can never land on the labels.
-    autocmd.create({ "CursorMoved", "CursorMovedI" }, function()
-      if not surf:is_valid() then
-        return
-      end
-      local row = api.nvim_win_get_cursor(surf.winid)[1]
-      if btn_focus then
-        if row ~= 2 then
-          park_cursor()
+    -- `<C-o>G`, ...), so an edit can never land on the labels. The same hook
+    -- keeps the row under the field when the text around it changed shape
+    -- (a paste) and in view when the window scrolled (a long answer).
+    autocmd.create(
+      { "CursorMoved", "CursorMovedI", "TextChanged", "TextChangedI", "TextChangedP" },
+      function()
+        if not surf:is_valid() then
+          return
         end
-      elseif row ~= 1 then
-        pcall(api.nvim_win_set_cursor, surf.winid, { 1, #get_line() })
-      end
-    end, {
-      buffer = bufnr,
-      record = false,
-      desc = "lib.nvim.ui.kit.input: keep the cursor on the field or the focused button",
-    })
+        keep_layout()
+        layout_row()
+        local row = api.nvim_win_get_cursor(surf.winid)[1]
+        if btn_focus then
+          if row ~= 2 then
+            park_cursor()
+          end
+        elseif row ~= 1 then
+          pcall(api.nvim_win_set_cursor, surf.winid, { 1, #get_line() })
+        end
+      end,
+      {
+        buffer = bufnr,
+        record = false,
+        desc = "lib.nvim.ui.kit.input: keep the field one line, the row under it and in view",
+      }
+    )
   end
 
   vim.keymap.set({ "i", "n" }, "<CR>", function()

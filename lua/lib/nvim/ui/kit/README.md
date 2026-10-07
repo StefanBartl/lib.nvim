@@ -23,6 +23,13 @@
 > them in CI (it already checks this repository out at `ci-verified`) and
 > fails naming the file. **A fix made in `ui.nvim` has to be mirrored
 > here**, or this copy silently keeps the bug for every consumer above.
+>
+> **One feature was mirrored too (2026-10-07):** `kit.form`'s opt-in `back`
+> navigation, with `kit.input`'s `on_back`/`buttons` and the `ui.kit.buttons`
+> helper under it. The drift spec compares code, not intent, so a kit feature
+> left on one side is a red CI run; the feature is off unless asked for, so
+> this library's own call sites behave as before. Everything else above still
+> holds: build new callers against `ui.nvim`.
 
 A themed, composable UI toolkit. Pick a preset once and every popup is visually
 coordinated, or override colors/borders per call. Built in layers on top of
@@ -288,7 +295,10 @@ field has no back; the title reads `Label (2/5)`. A button row sits under the
 field — `[← Back]`, `[Skip]` (not on a `required` field) and `[Next ↵]`
 (`[Done ↵]` on the last) — a left click presses one, and `<Down>`/`<Tab>` move
 the focus onto the row (`h`/`l`/arrows/`<Tab>` move it, `<CR>` presses,
-`<Up>`/`k`/`i`/`a` return to the field). Underneath, `kit.input` takes
+`<Up>`/`k`/`i`/`a` return to the field). A `<BS>` held down stops at the empty
+field (a `<BS>` less than 300 ms after the previous one is the key repeating,
+not a press); a long answer that scrolls the field sideways keeps the row in
+view, and a paste with a newline stays one line. Underneath, `kit.input` takes
 `on_back = function(line) end` and `buttons = { { id = "back" | "skip" |
 "submit", label = "…" }, … }`. The full description is in `ui.nvim`'s
 `lua/ui/kit/README.md`.
