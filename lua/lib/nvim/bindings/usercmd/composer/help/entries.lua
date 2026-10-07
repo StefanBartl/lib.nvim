@@ -129,7 +129,8 @@ local function flag_entries(route, tail)
       -- binds true): the bare form is what gets inserted, `=value` is typed on.
       local needs_value = not spec.bool and not spec.optional_value
       if not spec.bool then
-        local value = spec.enum and ("<" .. table.concat(spec.enum, "|") .. ">") or "<value>"
+        local closed = spec.enum or spec.values
+        local value = closed and ("<" .. table.concat(closed, "|") .. ">") or "<value>"
         label = label .. (spec.optional_value and ("[=" .. value .. "]") or ("=" .. value))
       end
       out[#out + 1] = {
@@ -223,8 +224,9 @@ local function value_of_lead(route, lead, kv_only)
   if fname then
     for _, spec in ipairs(route.flags or {}) do
       if spec.name == fname and not spec.bool then
-        if spec.enum and #spec.enum > 0 then
-          return value_entries(spec.enum, spec.enum_desc, "--" .. fname .. "=")
+        local closed = spec.enum or spec.values
+        if closed and #closed > 0 then
+          return value_entries(closed, spec.enum_desc, "--" .. fname .. "=")
         end
         return {
           {
@@ -279,8 +281,9 @@ local function pending_flag_value(route, committed)
   if not spec or spec.bool or spec.optional_value then
     return nil
   end
-  if spec.enum and #spec.enum > 0 then
-    return value_entries(spec.enum, spec.enum_desc, nil)
+  local closed = spec.enum or spec.values
+  if closed and #closed > 0 then
+    return value_entries(closed, spec.enum_desc, nil)
   end
   return { { kind = "hint", label = shown .. " <value>", desc = spec.desc or spec.type } }
 end
