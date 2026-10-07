@@ -351,7 +351,7 @@ kit.sheet({
 ```
 
 **Fields.** `{ name, label?, kind?, default?, required?, validate?, live?,
-expand_env?, completion?, secret?, mask?, choices? }`:
+depends_on?, expand_env?, completion?, secret?, mask?, choices? }`:
 
 - `kind = "text"` (default) is an editable line like [`kit.input`](#components):
   `default`, `expand_env`, `completion` and `secret` behave the same. The

@@ -288,6 +288,10 @@ function M.open(opts)
   local errors = {}
   local ranges = {} ---@type Lib.UI.Kit.ButtonRange[]
   local btn_line = ""
+  --- Puts the rows back as the layout wants them (defined below): `goto_pos` and
+  --- `submit` run it first, so they never work from a layout a paste has broken.
+  ---@type fun()
+  local keep_layout
 
   views[winid] = view
 
@@ -428,7 +432,14 @@ function M.open(opts)
     if done or not surf:is_valid() then
       return
     end
+    -- Keys that arrive in one go (a macro, a paste that carries a tab) can get here
+    -- before the `TextChanged` of the row being left: settle the layout and take that
+    -- row's text now, or a later repair would write a stale copy back over it.
+    keep_layout()
     local old = focus
+    if old <= n and fields[old].kind == "text" then
+      cache[old] = row_text(old)
+    end
     -- The first call only puts the focus somewhere: no field has been left yet.
     if started and p ~= old and old <= n then
       check(old)
@@ -518,6 +529,7 @@ function M.open(opts)
     if done then
       return
     end
+    keep_layout()
     local first = check_all()
     if first then
       goto_pos(first)
@@ -661,7 +673,10 @@ function M.open(opts)
   --- case), `<C-j>` or a `dd` from `<C-o>` change the number of lines, which
   --- are the layout: join what was pasted into the field's row again, or put the
   --- rows back as they were, and rewrite the button row under them.
-  local function keep_layout()
+  keep_layout = function()
+    if not surf:is_valid() then
+      return
+    end
     local count = api.nvim_buf_line_count(bufnr)
     if count == n + 2 then
       return
