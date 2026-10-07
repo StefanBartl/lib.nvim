@@ -19,6 +19,8 @@
 ---
 ---@field path_kind fun(p: string): string # Determine path type using libuv if available. Returns: "file", "directory", or "" (does not exist/unavailable).
 ---
+---@field normalize_switch_group fun(value: any, key?: string): table|nil # Boolean written for a feature-switch group: false -> { enable = false } (`key` names the switch), true -> {}, table -> deep copy, anything else -> nil (REL-20).
+---
 ---@field dedup_strings fun(list: Lib.Normalize.StringList): Lib.Normalize.StringList # Deduplicate string list while preserving first occurrence order. Non-string entries are filtered out.
 
 return {}

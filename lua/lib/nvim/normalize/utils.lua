@@ -43,6 +43,33 @@ function M.coalesce(...)
   return nil
 end
 
+--- Normalize a feature-switch group written as a boolean (REL-20).
+---
+--- A config group (`keymaps`, `usercmds`, ...) is a table with an `enable`
+--- switch, but `keymaps = false` is the natural way to say "none of it". Written
+--- in place of the table it would replace the defaults through a deep merge (and
+--- the code indexing it would raise), or be dropped as mistyped. The one
+--- agreed form is the table with an `enable` key:
+---   * `false` -> `{ enable = false }`
+---   * `true`  -> `{}` (the defaults decide)
+---   * table   -> a deep copy (the caller's input is never changed)
+---   * anything else (nil, string, number) -> nil: the caller keeps its defaults.
+--- `key` names the switch (default `"enable"`; only a plugin with a legacy
+--- spelling such as `"preset"` passes another one).
+---@param value any
+---@param key? string switch field name (default "enable")
+---@return table|nil
+function M.normalize_switch_group(value, key)
+  if value == false then
+    return { [key or "enable"] = false }
+  elseif value == true then
+    return {}
+  elseif type(value) == "table" then
+    return vim.deepcopy(value)
+  end
+  return nil
+end
+
 --- Deduplicate a string list while preserving order.
 ---@param list Lib.Normalize.StringList
 ---@return Lib.Normalize.StringList

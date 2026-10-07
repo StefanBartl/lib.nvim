@@ -68,4 +68,24 @@ normalize.coalesce(a, b, c)          -- first non-nil argument
 normalize.path_kind(p)               -- "file" | "directory" | "" (via vim.uv.fs_stat)
 normalize.normalize_path(p)          -- ~/$VAR/%VAR% expansion (lib.nvim.cross.fs.expand_path) then vim.fs.normalize
 normalize.dedup_strings(list)        -- order-preserving, string entries only
+normalize.normalize_switch_group(v, key)  -- keymaps = false -> { enable = false }, see below
+```
+
+## Switch groups (`keymaps = false`, REL-20)
+
+A feature group (`keymaps`, `usercmds`, ...) is a table with an `enable`
+switch, but `setup({ keymaps = false })` is the natural way to say "none of
+it", and must neither raise nor leave the keys bound. **The agreed form is the
+table with `enable`** (conformance rule K3 of testing.nvim): `false` is
+translated into `{ enable = false }`, `true` into `{}`, a table is copied, and
+anything else gives `nil` (the caller keeps its defaults). The input is never
+changed.
+
+```lua
+opts.keymaps = normalize.normalize_switch_group(opts.keymaps) -- before the deep merge
+normalize.normalize_switch_group(false)             --> { enable = false }
+normalize.normalize_switch_group(true)              --> {}
+normalize.normalize_switch_group({ enable = true }) --> a deep copy
+normalize.normalize_switch_group("x")               --> nil
+normalize.normalize_switch_group(false, "preset")   --> { preset = false }  -- legacy spelling only
 ```
