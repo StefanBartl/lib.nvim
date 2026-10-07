@@ -188,9 +188,10 @@
 ---@field cfg          { enable: boolean, keymap: string|false|nil }
 ---@field enabled      fun(spec: Lib.UserCmd.Composer.Spec|nil): boolean
 ---@field parse_line   fun(line: string): Lib.UserCmd.Composer.Help.State|nil
+---@field sanitize     fun(line: string): string
 ---@field insertion    fun(state: Lib.UserCmd.Composer.Help.State, entry: Lib.UserCmd.Composer.Help.Entry): string
 ---@field open         fun(root: Lib.UserCmd.Composer.Node, state: Lib.UserCmd.Composer.Help.State, opts?: { title?: string, restore?: string }): boolean
----@field from_cmdline fun(line: string): boolean
+---@field from_cmdline fun(line: string, restore_if_refused?: boolean): boolean
 ---@field on_dispatch  fun(name: string, spec: Lib.UserCmd.Composer.Spec, root: Lib.UserCmd.Composer.Node, tokens: string[], reason?: string, fallback?: fun(), cmd_opts?: table): boolean
 ---@field set_keymap   fun(lhs: string|false|nil)
 ---@field setup        fun(opts?: Lib.UserCmd.Composer.HelpOpts)

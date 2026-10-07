@@ -454,6 +454,115 @@ return function(H)
   eq(opened, nil, "from_cmdline: nothing opened in the refused cases")
   help.open = real_open
 
+  -- ------------------------------------------------------------ review round 3
+  -- A trailing escaped blank keeps the token open (nvim hands `my\ ` over as the lead).
+  s = help.parse_line("Verb set my\\ ")
+  eq(s.lead, "my\\ ", "parse: a trailing escaped blank is still the lead")
+  eq(table.concat(s.committed, "|"), "set", "parse: ... and not a committed token")
+  s = help.parse_line("Verb set my\\  ")
+  eq(
+    table.concat(s.committed, "|"),
+    "set|my ",
+    "parse: escaped blank plus a real one closes the token"
+  )
+
+  -- sanitize: only printable, well-formed UTF-8 is replayed through the typeahead.
+  eq(help.sanitize("a\rb\nc\td\0e\127f"), "abcdef", "sanitize: control characters go")
+  eq(
+    help.sanitize("x\226\128\148y"),
+    "x\226\128\148y",
+    "sanitize: a valid byte-0x80 character stays"
+  )
+  eq(help.sanitize("a\128KAb"), "aKAb", "sanitize: a stray 0x80 (<kEnter> as 80 4b 41) goes")
+  eq(help.sanitize("a\194\133b"), "ab", "sanitize: C1 controls go")
+  eq(help.sanitize("a\237\160\128b"), "ab", "sanitize: surrogates go")
+  eq(help.sanitize("a\192\175b"), "ab", "sanitize: overlong forms go")
+  eq(
+    help.sanitize("héllo wörld ✓"),
+    "héllo wörld ✓",
+    "sanitize: plain UTF-8 text is untouched"
+  )
+
+  -- A short flag waits for its value just like the long one.
+  local short_root = tree.build({
+    {
+      path = { "go" },
+      args = { { name = "x", enum = { "x1", "x2" } } },
+      flags = {
+        { name = "mode", short = "m", enum = { "a", "b" } },
+        { name = "changed", short = "c", optional_value = true },
+      },
+      run = noop,
+    },
+  })
+  local short = entries.compute(short_root, { "go", "-m" }, "")
+  eq(table.concat(labels(short.items, "value"), ","), "a,b", "-m <lead> lists the enum of --mode")
+  -- An optional_value flag is offered bare, with the value shown as optional.
+  local opt_flag = entries.compute(short_root, { "go" }, "")
+  for _, e in ipairs(opt_flag.items) do
+    if e.kind == "flag" and e.label:find("^%-%-changed") then
+      eq(e.insert, "--changed", "optional_value: the bare form is inserted")
+      eq(e.partial, false, "optional_value: no trailing '='")
+      ok(
+        e.label:find("[=<value>]", 1, true) ~= nil,
+        "optional_value: the label shows '=value' as optional"
+      )
+    end
+  end
+
+  -- A group summary stops evaluating predicates once the line is full.
+  local calls_made = 0
+  local many = {}
+  for i = 1, 60 do
+    many[#many + 1] = {
+      path = { "grp", ("k%02d"):format(i) },
+      check = function()
+        calls_made = calls_made + 1
+        return true
+      end,
+      run = noop,
+    }
+  end
+  entries.compute(tree.build(many), {}, "")
+  ok(
+    calls_made < 20,
+    "summarize: stops once the summary line is full (" .. calls_made .. " predicate calls)"
+  )
+
+  -- Wide characters are cut by cells: a CJK description never outgrows the float.
+  local wide = help_ui.build_items({
+    { kind = "sub", label = string.rep("界", 40), insert = "a", desc = string.rep("界", 200) },
+  })
+  ok(
+    vim.fn.strdisplaywidth(wide[1].lines[1]) <= math.floor(vim.o.columns * 0.8) + 4,
+    "ui: wide characters are cut by display cells"
+  )
+
+  -- The key is swallowed when it is a Meta key (unmapped it would cancel the line), else kept.
+  composer.setup({ help = { keymap = "<M-F18>" } })
+  local meta_map = vim.fn.maparg("<M-F18>", "c", false, true)
+  eq(meta_map.callback(), "", "keymap: a Meta key is swallowed outside a help line")
+  composer.setup({ help = { keymap = "<F19>" } })
+  eq(
+    vim.fn.maparg("<F19>", "c", false, true).callback(),
+    "<F19>",
+    "keymap: other keys type themselves"
+  )
+  composer.setup({ help = { keymap = false } })
+
+  -- from_cmdline(line, true) gives the line back when it is not a help-enabled composer verb.
+  local fed = {}
+  local real_feedkeys = vim.api.nvim_feedkeys
+  vim.api.nvim_feedkeys = function(keys)
+    fed[#fed + 1] = keys
+  end
+  eq(help.from_cmdline("NotAVerbAnywhere x", true), false, "from_cmdline: refused")
+  eq(fed[1], ":NotAVerbAnywhere x", "from_cmdline: the left command line is put back")
+  fed = {}
+  help.from_cmdline("NotAVerbAnywhere x")
+  eq(#fed, 0, "from_cmdline: nothing is fed without the restore flag")
+  vim.api.nvim_feedkeys = real_feedkeys
+
   -- ------------------------------------------------------------ keymap
   local lhs = "<F19>"
   composer.setup({ help = { keymap = lhs } })

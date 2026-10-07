@@ -53,7 +53,8 @@ end
 --- Split on whitespace that is not escaped with a backslash, as the command
 --- line does for `-nargs=*`: `my\ file` stays one token (kept raw).
 ---@param text string
----@return string[]
+---@return string[] tokens
+---@return boolean open  # the last token is still being typed (text does not end in unescaped whitespace)
 local function split_tokens(text)
   local out, cur, i = {}, {}, 1
   while i <= #text do
@@ -72,10 +73,11 @@ local function split_tokens(text)
       i = i + 1
     end
   end
-  if #cur > 0 then
+  local open = #cur > 0
+  if open then
     out[#out + 1] = table.concat(cur)
   end
-  return out
+  return out, open
 end
 
 ---@internal
@@ -107,11 +109,11 @@ function M.parse_line(line)
   if rest ~= "" and not rest:match("^%s") then
     return nil
   end
-  local raw = split_tokens(rest)
-  local lead = ""
-  if rest ~= "" and not rest:match("%s$") then
-    lead = table.remove(raw)
-  end
+  -- Whether the last token is still open is the tokenizer's call, not
+  -- "does the text end in a blank": `my\ ` ends in one, yet nvim hands that
+  -- to a completion function as the lead `my\ `.
+  local raw, open = split_tokens(rest)
+  local lead = open and table.remove(raw) or ""
   local tokens = {}
   for i, tok in ipairs(raw) do
     tokens[i] = unescape(tok)
@@ -133,14 +135,63 @@ function M.insertion(state, entry)
   return state.base .. text .. (entry.partial and "" or " ")
 end
 
+--- Well-formed UTF-8 sequences (RFC 3629: no overlongs, no surrogates, nothing
+--- above U+10FFFF), longest alternatives first. Anything that does not start
+--- one of these at the current byte is dropped by `sanitize`.
+---@type string[]
+local UTF8_SEQ = {
+  "[\1-\127]",
+  "[\194-\223][\128-\191]",
+  "\224[\160-\191][\128-\191]",
+  "[\225-\236][\128-\191][\128-\191]",
+  "\237[\128-\159][\128-\191]",
+  "[\238-\239][\128-\191][\128-\191]",
+  "\240[\144-\191][\128-\191][\128-\191]",
+  "[\241-\243][\128-\191][\128-\191][\128-\191]",
+  "\244[\128-\143][\128-\191][\128-\191]",
+}
+
+--- What may be replayed through the typeahead: printable text only. Control
+--- characters (a literal <CR> typed with <C-v>) would execute the line instead
+--- of restoring it, and so would a stray byte 0x80 -- `nvim_feedkeys` reads
+--- `0x80 'K' 'A'` as <kEnter> -- so everything that is not well-formed UTF-8
+--- (and the C1 controls U+0080..U+009F) is dropped, byte for byte.
+---@param line string
+---@return string
+local function sanitize(line)
+  local out, i, n = {}, 1, #line
+  while i <= n do
+    local len
+    for _, pat in ipairs(UTF8_SEQ) do
+      local _, e = line:find("^" .. pat, i)
+      if e then
+        len = e - i + 1
+        break
+      end
+    end
+    if len then
+      local seq = line:sub(i, i + len - 1)
+      -- Controls are not text: ASCII 1..31 and DEL, and the C1 range (C2 80..C2 9F).
+      local control = (len == 1 and (seq:byte() < 32 or seq == "\127"))
+        or seq:find("^\194[\128-\159]")
+      if not control then
+        out[#out + 1] = seq
+      end
+    end
+    -- A byte that starts no well-formed sequence (and NUL) is skipped alone.
+    i = i + (len or 1)
+  end
+  return table.concat(out)
+end
+
+M.sanitize = sanitize
+
 ---@internal
 --- Put `line` on the command line, cursor at its end, ready to type on.
 ---@param line string
 local function feed_cmdline(line)
   local keys = vim.api.nvim_replace_termcodes(":", true, false, true)
-  -- Control characters (a literal <CR> typed with <C-v>) would execute the
-  -- line instead of restoring it.
-  vim.api.nvim_feedkeys(keys .. line:gsub("%c", ""), "nt", true)
+  vim.api.nvim_feedkeys(keys .. sanitize(line), "nt", true)
 end
 
 --- Open the float for a state and wire the pick back into the command line.
@@ -153,6 +204,10 @@ function M.open(root, state, opts)
   if #vim.api.nvim_list_uis() == 0 then
     return false
   end
+  -- The chooser is a normal-mode list: from an insert-mode mapping, or a
+  -- pending insert (`i<C-o>:Verb`), <CR> would type a newline into it instead
+  -- of picking.
+  pcall(vim.cmd, "stopinsert")
   local result = entries_mod.compute(root, state.committed, state.lead)
   local title = opts.title
   if not title then
@@ -202,17 +257,22 @@ end
 --- Open the cheatsheet for the verb typed in `line`. False when `line` is not
 --- a composer verb with the help turned on.
 ---@param line string
+---@param restore_if_refused? boolean  # the command line was already left: put it back when this is not a help-enabled composer verb
 ---@return boolean opened
-function M.from_cmdline(line)
+function M.from_cmdline(line, restore_if_refused)
+  local restore = line:match("^:") and line:sub(2) or line
   local state = M.parse_line(line)
-  if not state then
+  local spec, root
+  if state then
+    spec, root = verb_tree(state.name)
+  end
+  if not (state and spec and root and M.enabled(spec)) then
+    if restore_if_refused then
+      feed_cmdline(restore)
+    end
     return false
   end
-  local spec, root = verb_tree(state.name)
-  if not spec or not root or not M.enabled(spec) then
-    return false
-  end
-  return M.open(root, state, { restore = line:match("^:") and line:sub(2) or line })
+  return M.open(root, state, { restore = restore })
 end
 
 --- The `deps.help` hook for `parse.dispatch`: shows the level reached by
@@ -257,25 +317,82 @@ function M.on_dispatch(name, spec, root, tokens, reason, fallback, cmd_opts)
 end
 
 ---@internal
+--- The lazy.nvim plugin that has not loaded yet and owns the user command
+--- `name` (a stub until then: no composer handle exists to look at), or nil.
+--- Soft: nothing happens without lazy.nvim.
+---@param name string
+---@return string|nil plugin
+local function lazy_owner(name)
+  local cfg = package.loaded["lazy.core.config"]
+  if not (cfg and type(cfg.plugins) == "table") then
+    return nil
+  end
+  for plugin_name, plugin in pairs(cfg.plugins) do
+    if not (plugin._ and plugin._.loaded) then
+      local cmds = plugin.cmd
+      if type(cmds) == "string" then
+        cmds = { cmds }
+      end
+      if type(cmds) == "table" and vim.tbl_contains(cmds, name) then
+        return plugin_name
+      end
+    end
+  end
+  return nil
+end
+
+---@internal
+--- What the key returns when the line is not ours. A Meta key does nothing
+--- useful unmapped in the command line (Neovim reads <M-h> as <Esc>h: the line
+--- is cancelled and an `h` follows), so it is swallowed; any other key keeps
+--- typing itself.
+---@param lhs string
+---@return string
+local function passthrough(lhs)
+  if lhs:lower():find("^<[ma]%-") then
+    return ""
+  end
+  return lhs
+end
+
+---@internal
 --- The expr-mapping body of the cheatsheet key.
 ---@param lhs string
 ---@return fun(): string
 local function keymap_expr(lhs)
   return function()
     if vim.fn.getcmdtype() ~= ":" then
-      return lhs
+      return passthrough(lhs)
     end
     local line = vim.fn.getcmdline()
     local state = M.parse_line(line)
-    local spec = state and verb_tree(state.name)
-    if not (state and spec and M.enabled(spec)) then
-      -- Not ours: the key keeps whatever it types without the mapping.
-      return lhs
+    if not state then
+      return passthrough(lhs)
     end
-    -- Leave the command line, then open the float from normal mode: a float
-    -- cannot take focus while the command line is active.
+    local spec = verb_tree(state.name)
+    if spec then
+      if not M.enabled(spec) then
+        return passthrough(lhs)
+      end
+      -- Leave the command line, then open the float from normal mode: a float
+      -- cannot take focus while the command line is active.
+      vim.schedule(function()
+        M.from_cmdline(line)
+      end)
+      return "<C-c>"
+    end
+    -- No composer handle yet: either not a composer verb, or a lazy stub whose
+    -- plugin has not loaded (and so has not registered its verb). Load the
+    -- latter; the line comes back if it turns out not to be ours after all.
+    local owner = lazy_owner(state.name)
+    if not owner then
+      return passthrough(lhs)
+    end
     vim.schedule(function()
-      M.from_cmdline(line)
+      pcall(function()
+        require("lazy").load({ plugins = { owner }, wait = true })
+      end)
+      M.from_cmdline(line, true)
     end)
     return "<C-c>"
   end

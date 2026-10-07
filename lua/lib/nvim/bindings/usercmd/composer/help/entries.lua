@@ -36,10 +36,16 @@ local SUMMARY_MAX = 44
 ---@param node Lib.UserCmd.Composer.Node
 ---@return string
 local function summarize(node)
-  local keys = {}
+  local keys, len = {}, 0
   for _, k in ipairs(tree.child_keys(node)) do
     if complete.child_visible(node.children[k]) then
       keys[#keys + 1] = k
+      -- Enough to fill the line (keys are sorted, so the shown prefix is the
+      -- same): the rest would only run more `check`/`available` predicates.
+      len = len + #k + 2
+      if len > SUMMARY_MAX + 4 then
+        break
+      end
     end
   end
   local text = table.concat(keys, ", ")
@@ -97,14 +103,18 @@ local function flag_entries(route, tail)
     end
     if not used or spec.repeatable then
       local label = "--" .. spec.name .. (spec.short and ("|-" .. spec.short) or "")
+      -- A flag whose value is optional is complete on its own (`--changed`
+      -- binds true): the bare form is what gets inserted, `=value` is typed on.
+      local needs_value = not spec.bool and not spec.optional_value
       if not spec.bool then
-        label = label .. (spec.enum and ("=<" .. table.concat(spec.enum, "|") .. ">") or "=<value>")
+        local value = spec.enum and ("<" .. table.concat(spec.enum, "|") .. ">") or "<value>"
+        label = label .. (spec.optional_value and ("[=" .. value .. "]") or ("=" .. value))
       end
       out[#out + 1] = {
         kind = "flag",
         label = label,
-        insert = "--" .. spec.name .. (spec.bool and "" or "="),
-        partial = not spec.bool,
+        insert = "--" .. spec.name .. (needs_value and "=" or ""),
+        partial = needs_value,
         desc = spec.desc,
       }
     end
@@ -228,19 +238,29 @@ end
 ---@return Lib.UserCmd.Composer.Help.Entry[]|nil
 local function pending_flag_value(route, committed)
   local last = committed[#committed]
-  local name = route and last and last:match("^%-%-([%w_%-]+)$")
-  if not name then
+  if not (route and last) then
     return nil
   end
-  for _, spec in ipairs(route.flags or {}) do
-    if spec.name == name and not spec.bool and not spec.optional_value then
-      if spec.enum and #spec.enum > 0 then
-        return value_entries(spec.enum, spec.enum_desc, nil)
+  -- `--name` or its short alias `-x`: both take the next token as the value.
+  local spec = flags.find_short_spec(route, last)
+  local shown = "-" .. (spec and spec.short or "")
+  if not spec then
+    local name = last:match("^%-%-([%w_%-]+)$")
+    for _, candidate in ipairs(name and route.flags or {}) do
+      if candidate.name == name then
+        spec = candidate
+        shown = "--" .. name
+        break
       end
-      return { { kind = "hint", label = "--" .. name .. " <value>", desc = spec.desc or spec.type } }
     end
   end
-  return nil
+  if not spec or spec.bool or spec.optional_value then
+    return nil
+  end
+  if spec.enum and #spec.enum > 0 then
+    return value_entries(spec.enum, spec.enum_desc, nil)
+  end
+  return { { kind = "hint", label = shown .. " <value>", desc = spec.desc or spec.type } }
 end
 
 ---@internal
