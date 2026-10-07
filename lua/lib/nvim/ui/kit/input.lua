@@ -242,10 +242,29 @@ local MAX_PATH_MATCHES = 300
 ---and the small letters. Lower-cased, `item_1` would come before `itemA` where
 ---`getcompletion()` has it behind. A name with a non-ASCII byte goes through `toupper()`:
 ---`string.upper` folds ASCII only and would leave an a-umlaut behind a capital U-umlaut.
+---That orders names; whether one STARTS with a fragment is not settled by it where a
+---non-ASCII byte is involved (see `prefix_regex`).
 ---@param s string
 ---@return string
 local function fold_key(s)
   return s:find("[\128-\255]") and fn.toupper(s) or s:upper()
+end
+
+---@internal
+---Neovim's own "starts with `name`" test, for the names the byte comparison of
+---`many_path_matches` cannot judge. `toupper()` and Neovim's case folding (`utf_fold()`)
+---do not fall together: upper-cased, a dotless i (U+0131) would be an "I" and the Kelvin
+---sign (U+212A) stay apart from "k", where Neovim has it the other way round. And Neovim
+---refuses a match whose next character is a combining mark -- "U" is no prefix of "U" plus
+---U+0308 -- which no byte comparison sees. `\V`: `name` is literal text, but for the
+---backslash. `\c` or `\C` is said outright, whatever 'ignorecase' says.
+---@param name string
+---@param fold boolean
+---@return vim.regex|nil  # nil when the pattern does not compile
+local function prefix_regex(name, fold)
+  local ok, re =
+    pcall(vim.regex, "^" .. (fold and "\\c" or "\\C") .. "\\V" .. (name:gsub("\\", "\\\\")))
+  return ok and re or nil
 end
 
 ---@internal
@@ -258,9 +277,16 @@ end
 ---no directory), and the list is then the whole answer -- possibly short, possibly empty,
 ---which is an answer too: `getcompletion()` would stat each of them once more for the
 ---same result. A link that leads nowhere has no type and is left out, as `getcompletion()`
----leaves it. A fragment with too few candidates to need the list costs no `stat`. nil for
----anything else -- a pattern, a fragment with a NUL byte, a directory that cannot be
----listed, a fragment with few candidates -- which is `getcompletion()`'s as before.
+---leaves it. A fragment with too few candidates to need the list costs no `stat`.
+---
+---Whether an entry starts with the fragment is a byte comparison, folded to upper case
+---where Neovim ignores case -- except where a non-ASCII byte is involved, when Neovim's own
+---regex engine decides (`prefix_regex`), as it does for `getcompletion()`. A candidate
+---with a combining mark has an order only `getcompletion()` knows (`pathcmp()` skips the
+---mark), so the list is left to it.
+---
+---nil for anything else -- a pattern, a fragment with a NUL byte, a directory that cannot
+---be listed, a fragment with few candidates -- which is `getcompletion()`'s as before.
 ---@param frag string
 ---@param dirs_only boolean
 ---@return string[]|nil
@@ -286,26 +312,61 @@ local function many_path_matches(frag, dirs_only)
   local fic = vim.o.fileignorecase
   local fold = fic or vim.o.wildignorecase or is_windows()
   local want = fold and fold_key(name) or name
+  local ascii_want = not name:find("[\128-\255]")
   local dotted = name:sub(1, 1) == "." -- dot files only when asked for by name
+  local re ---@type vim.regex|false|nil  # Neovim's matcher, built at the first entry that needs it
+  --- Does `entry` start with `name`, as Neovim has it?
+  ---@param entry string
+  ---@return boolean
+  local function by_regex(entry)
+    if re == nil then
+      re = prefix_regex(name, fold) or false
+    end
+    return re and re:match_str(entry) ~= nil or false
+  end
   local seen = 0 -- every candidate: what `getcompletion()` has to look at
+  local composing = false -- a candidate with a combining mark: its order is `getcompletion()`'s
   local found = {} -- the ones that can still be an answer
   while true do
     local entry, kind = uv.fs_scandir_next(handle)
     if not entry then
       break
     end
-    local key = fold and fold_key(entry) or entry
-    if (dotted or entry:sub(1, 1) ~= ".") and key:sub(1, #want) == want then
-      seen = seen + 1
-      -- a file is no directory, and need not be kept
-      if not (dirs_only and kind == "file") then
-        found[#found + 1] = { key = fic and key or entry, name = entry, kind = kind }
+    if dotted or entry:sub(1, 1) ~= "." then
+      local wide = entry:find("[\128-\255]") ~= nil -- a non-ASCII byte in the name
+      local key = fold and fold_key(entry) or entry
+      local hit
+      if fold and (wide or not ascii_want) then
+        hit = by_regex(entry) -- a non-ASCII byte on either side
+      else
+        hit = key:sub(1, #want) == want
+        if hit and wide and not fold then
+          -- the next character may be a combining mark (U+0300 and up start with CC or later)
+          local after = entry:byte(#name + 1)
+          if after and after >= 0xCC then
+            hit = by_regex(entry)
+          end
+        end
+      end
+      if hit then
+        seen = seen + 1
+        -- a file is no directory, and need not be kept
+        if not (dirs_only and kind == "file") then
+          found[#found + 1] = { key = fic and key or entry, name = entry, kind = kind }
+          if wide and not composing and entry:find("[\204-\255]") then
+            composing = fn.strchars(entry) ~= fn.strchars(entry, 1)
+          end
+        end
       end
     end
   end
+  if re == false then
+    return nil -- Neovim's matcher could not be built: nothing above can be relied on
+  end
   -- Too few candidates for a long list, whatever their types turn out to be: up to
   -- this many `getcompletion()` costs a few tens of milliseconds and stays the authority.
-  if seen <= MAX_PATH_MATCHES then
+  -- Names it orders by rules this list does not know are its as well.
+  if seen <= MAX_PATH_MATCHES or composing then
     return nil
   end
   table.sort(found, function(a, b)
@@ -330,7 +391,7 @@ local function many_path_matches(frag, dirs_only)
       out[#out + 1] = head .. it.name .. (kind == "directory" and "/" or "")
     end
   end
-  return out -- every candidate has been looked at: this is the answer, short or empty or not
+  return out -- the walk is done: this is the answer, cut to a menu, and short or empty or not
 end
 
 ---@internal
