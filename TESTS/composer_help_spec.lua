@@ -146,10 +146,40 @@ return function(H)
   local spaced = entries.compute(root, { "surround", "quote", "--mode" }, "")
   eq(table.concat(labels(spaced.items, "value"), ","), "a,b", "--flag <lead> lists its enum")
 
-  -- Past a bare `--` everything is positional: no flag / kv rows.
+  -- Past a bare `--` flags stop (flags.split), key=value does not (kv.split).
   local dashed = entries.compute(root, { "surround", "--" }, "")
   eq(#labels(dashed.items, "flag"), 0, "after -- no flags")
-  eq(#labels(dashed.items, "kv"), 0, "after -- no key=value")
+  eq(#labels(dashed.items, "kv"), 1, "after -- key=value is still offered")
+
+  -- Past `--`: no flag values either, but key=value stays (kv.split ignores `--`).
+  local dashed_value = entries.compute(root, { "surround", "--", "--mode" }, "")
+  eq(#labels(dashed_value.items, "value"), 0, "after -- '--mode' is a positional, not a flag")
+  eq(
+    table.concat(labels(dashed_value.items, "hint"), ","),
+    "{target}",
+    "after -- the next argument is asked for"
+  )
+  eq(
+    table.concat(labels(dashed_value.items, "kv"), ","),
+    "view=<split|vsplit>",
+    "after -- key=value is still offered"
+  )
+
+  -- optional_value flags never take the next token (flags.split), so strip must not either.
+  local opt_root = tree.build({
+    {
+      path = { "go" },
+      args = { { name = "x", enum = { "x1", "x2" } }, { name = "y", enum = { "y1", "y2" } } },
+      flags = { { name = "changed", optional_value = true } },
+      run = noop,
+    },
+  })
+  local opt = entries.compute(opt_root, { "go", "--changed", "x1" }, "")
+  eq(
+    table.concat(labels(opt.items, "value"), ","),
+    "y1,y2",
+    "optional_value flag does not swallow the positional"
+  )
 
   -- A route hidden by `available` is not offered (same filter as <Tab>).
   local gated = tree.build({
@@ -188,6 +218,12 @@ return function(H)
   eq(s.name, "Verb", "parse: range prefix and bang are skipped")
   eq(s.base, "'<,'>Verb! sub ", "parse: base keeps range and bang")
   eq(s.lead, "arg", "parse: lead after a range")
+
+  s = help.parse_line("Verb set my\\ key ")
+  eq(table.concat(s.committed, "|"), "set|my key", "parse: an escaped space stays inside one token")
+  s = help.parse_line("Verb set my\\ ke")
+  eq(s.lead, "my\\ ke", "parse: the lead keeps its escape")
+  eq(s.base, "Verb set ", "parse: base stops before the whole escaped token")
 
   eq(help.parse_line("set number"), nil, "parse: lower-case builtin is not a verb")
   eq(help.parse_line("Verb=1"), nil, "parse: name glued to a symbol is not a verb")
@@ -358,6 +394,33 @@ return function(H)
   vim.api.nvim_list_uis = ui_real
   help.open = real_open2
   eq(seen_base, "3,5HelpDemo! ui ", "on_dispatch: range and bang are kept")
+  help.open = function(_, st)
+    seen_base = st.base
+    return true
+  end
+  vim.api.nvim_list_uis = function()
+    return { {} }
+  end
+  vim.schedule = function(fn)
+    fn()
+  end
+  help.on_dispatch(
+    "HelpDemo",
+    { help = true },
+    root,
+    { "set", "my key", "a\\b" },
+    nil,
+    nil,
+    { range = 1, line1 = 42, line2 = 3 }
+  )
+  vim.schedule = flush
+  vim.api.nvim_list_uis = ui_real
+  help.open = real_open2
+  eq(
+    seen_base,
+    "3HelpDemo set my\\ key a\\\\b ",
+    "on_dispatch: count form keeps the typed count; tokens are re-escaped"
+  )
 
   -- on_dispatch: off for a verb that did not opt in, and without a UI.
   eq(help.on_dispatch("HelpDemo", spec, root, {}), false, "on_dispatch: not opted in")

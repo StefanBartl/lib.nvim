@@ -209,14 +209,14 @@ function M.strip(route, tokens)
     if not stopped and tok == "--" then
       stopped = true
     elseif not stopped and short_spec then
-      if not short_spec.bool then
+      if not short_spec.bool and not short_spec.optional_value then
         i = i + 1 -- also skip the value token
       end
     elseif not stopped and is_flag_token(tok) then
       local body = tok:sub(3)
       if not body:find("=", 1, true) then
         local spec = find_spec(route, body)
-        if spec and not spec.bool then
+        if spec and not spec.bool and not spec.optional_value then
           i = i + 1 -- also skip the value token
         end
       end

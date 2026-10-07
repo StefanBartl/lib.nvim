@@ -181,12 +181,13 @@ end
 --- The section an `--name=<lead>` / `key=<lead>` lead is typing a value for.
 ---@param route Lib.UserCmd.Composer.Route|nil
 ---@param lead string
+---@param kv_only? boolean  # after a bare `--`: only `key=` values are still special
 ---@return Lib.UserCmd.Composer.Help.Entry[]|nil
-local function value_of_lead(route, lead)
+local function value_of_lead(route, lead, kv_only)
   if not route then
     return nil
   end
-  local fname = lead:match("^%-%-([%w_%-]+)=")
+  local fname = (not kv_only) and lead:match("^%-%-([%w_%-]+)=") or nil
   if fname then
     for _, spec in ipairs(route.flags or {}) do
       if spec.name == fname and not spec.bool then
@@ -291,8 +292,9 @@ function M.compute(root, committed, lead)
     end
   end
 
-  -- Everything after a bare `--` is positional (flags.split stops there), so
-  -- no flag or key=value rows are offered -- or counted as used -- past it.
+  -- Everything after a bare `--` is positional for FLAGS (flags.split stops
+  -- there), so no flag rows or flag values are offered past it. key=value
+  -- pairs are another matter: kv.split knows nothing of `--`, so they stay.
   local after_dashes = false
   for _, tok in ipairs(tail) do
     if tok == "--" then
@@ -301,7 +303,12 @@ function M.compute(root, committed, lead)
     end
   end
 
-  local value_section = value_of_lead(route, lead) or pending_flag_value(route, committed)
+  local value_section
+  if not after_dashes then
+    value_section = value_of_lead(route, lead) or pending_flag_value(route, committed)
+  else
+    value_section = value_of_lead(route, lead, true)
+  end
   if value_section then
     add("Value", value_section)
   else
@@ -332,8 +339,8 @@ function M.compute(root, committed, lead)
       end
       if not after_dashes then
         add("Flags", flag_entries(route, tail))
-        add("Key=value", kv_entries(route, tail))
       end
+      add("Key=value", kv_entries(route, tail))
     end
   end
 

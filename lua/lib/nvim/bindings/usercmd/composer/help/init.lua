@@ -49,6 +49,51 @@ function M.enabled(spec)
   return M.cfg.enable == true
 end
 
+---@internal
+--- Split on whitespace that is not escaped with a backslash, as the command
+--- line does for `-nargs=*`: `my\ file` stays one token (kept raw).
+---@param text string
+---@return string[]
+local function split_tokens(text)
+  local out, cur, i = {}, {}, 1
+  while i <= #text do
+    local c = text:sub(i, i)
+    if c == "\\" and i < #text then
+      cur[#cur + 1] = text:sub(i, i + 1)
+      i = i + 2
+    elseif c:match("%s") then
+      if #cur > 0 then
+        out[#out + 1] = table.concat(cur)
+        cur = {}
+      end
+      i = i + 1
+    else
+      cur[#cur + 1] = c
+      i = i + 1
+    end
+  end
+  if #cur > 0 then
+    out[#out + 1] = table.concat(cur)
+  end
+  return out
+end
+
+---@internal
+--- The value of a raw token (`my\ file` -> `my file`), as `fargs` carries it.
+---@param tok string
+---@return string
+local function unescape(tok)
+  return (tok:gsub("\\(.)", "%1"))
+end
+
+---@internal
+--- Back to command-line spelling: whitespace and backslashes escaped.
+---@param tok string
+---@return string
+local function escape(tok)
+  return (tok:gsub("([\\%s])", "\\%1"))
+end
+
 --- Split a command line into verb, finished tokens and the token being typed.
 --- Understands a range/count prefix (`'<,'>`, `5,10`) and a bang. Pure.
 ---@param line string  # without the leading colon, as `getcmdline()` gives it
@@ -62,13 +107,14 @@ function M.parse_line(line)
   if rest ~= "" and not rest:match("^%s") then
     return nil
   end
-  local tokens = {}
-  for tok in rest:gmatch("%S+") do
-    tokens[#tokens + 1] = tok
-  end
+  local raw = split_tokens(rest)
   local lead = ""
   if rest ~= "" and not rest:match("%s$") then
-    lead = table.remove(tokens)
+    lead = table.remove(raw)
+  end
+  local tokens = {}
+  for i, tok in ipairs(raw) do
+    tokens[i] = unescape(tok)
   end
   local base = line:sub(1, #line - #lead)
   if not base:match("%s$") then
@@ -94,7 +140,7 @@ local function feed_cmdline(line)
   local keys = vim.api.nvim_replace_termcodes(":", true, false, true)
   -- Control characters (a literal <CR> typed with <C-v>) would execute the
   -- line instead of restoring it.
-  vim.api.nvim_feedkeys(keys .. line:gsub("%c", ""), "nt", false)
+  vim.api.nvim_feedkeys(keys .. line:gsub("%c", ""), "nt", true)
 end
 
 --- Open the float for a state and wire the pick back into the command line.
@@ -113,23 +159,28 @@ function M.open(root, state, opts)
     local path = table.concat(state.committed, " ")
     title = ":" .. state.name .. (path ~= "" and (" " .. path) or "")
   end
+  local restored = false
+  local function restore()
+    if opts.restore and not restored then
+      restored = true
+      feed_cmdline(opts.restore)
+    end
+  end
   local ok, opened =
     pcall(require("lib.nvim.bindings.usercmd.composer.help.ui").open, result.items, {
       title = title,
       on_pick = function(entry)
+        restored = true
         feed_cmdline(M.insertion(state, entry))
       end,
-      on_cancel = function()
-        if opts.restore then
-          feed_cmdline(opts.restore)
-        end
-      end,
+      on_cancel = restore,
     })
   opened = ok and opened == true
   -- The key already left the command line: when no float came up, give the
-  -- line back instead of leaving the user with nothing.
-  if not opened and opts.restore then
-    feed_cmdline(opts.restore)
+  -- line back instead of leaving the user with nothing (once -- the float's
+  -- own cancel path may have done it already).
+  if not opened then
+    restore()
   end
   return opened
 end
@@ -184,7 +235,7 @@ function M.on_dispatch(name, spec, root, tokens, reason, fallback, cmd_opts)
   end
   local range = ""
   if cmd_opts and (cmd_opts.range or 0) > 0 then
-    range = cmd_opts.range == 1 and tostring(cmd_opts.line1)
+    range = cmd_opts.range == 1 and tostring(cmd_opts.line2)
       or (cmd_opts.line1 .. "," .. cmd_opts.line2)
   end
   local bang = (cmd_opts and cmd_opts.bang) and "!" or ""
@@ -192,7 +243,7 @@ function M.on_dispatch(name, spec, root, tokens, reason, fallback, cmd_opts)
     .. name
     .. bang
     .. " "
-    .. (#tokens > 0 and (table.concat(tokens, " ") .. " ") or "")
+    .. (#tokens > 0 and (table.concat(vim.tbl_map(escape, tokens), " ") .. " ") or "")
   local state = { name = name, base = base, committed = tokens, lead = "" }
   local title = reason and (":" .. name .. " - " .. reason) or nil
   -- Scheduled: the command that called us is still on the stack, and a float
@@ -212,21 +263,21 @@ end
 local function keymap_expr(lhs)
   return function()
     if vim.fn.getcmdtype() ~= ":" then
-      return vim.api.nvim_replace_termcodes(lhs, true, false, true)
+      return lhs
     end
     local line = vim.fn.getcmdline()
     local state = M.parse_line(line)
     local spec = state and verb_tree(state.name)
     if not (state and spec and M.enabled(spec)) then
       -- Not ours: the key keeps whatever it types without the mapping.
-      return vim.api.nvim_replace_termcodes(lhs, true, false, true)
+      return lhs
     end
     -- Leave the command line, then open the float from normal mode: a float
     -- cannot take focus while the command line is active.
     vim.schedule(function()
       M.from_cmdline(line)
     end)
-    return vim.api.nvim_replace_termcodes("<C-c>", true, false, true)
+    return "<C-c>"
   end
 end
 
