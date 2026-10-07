@@ -530,13 +530,15 @@ function M.open(opts)
   if opts.completion then
     -- <Tab>/<S-Tab> drive the native pum once it's open (advance/retreat);
     -- otherwise <Tab> triggers completion and <S-Tab> is a no-op literal tab.
+    -- <Tab> is NOT an <expr> mapping: `complete()` raises E565 under the textlock
+    -- one holds, and `trigger_completion`'s pcall swallowed it, so <Tab> did nothing.
     vim.keymap.set("i", "<Tab>", function()
       if fn.pumvisible() == 1 then
-        return api.nvim_replace_termcodes("<C-n>", true, false, true)
+        pass_through("<C-n>")
+      else
+        trigger_completion(bufnr, surf.winid, opts.completion)
       end
-      trigger_completion(bufnr, surf.winid, opts.completion)
-      return ""
-    end, { buffer = bufnr, nowait = true, expr = true })
+    end, { buffer = bufnr, nowait = true })
     vim.keymap.set("i", "<S-Tab>", function()
       if fn.pumvisible() == 1 then
         return api.nvim_replace_termcodes("<C-p>", true, false, true)
