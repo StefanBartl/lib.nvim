@@ -226,6 +226,16 @@ function M.open(opts)
     width = math.max(width, buttons.row_width(btn_labels) + 2)
   end
 
+  -- No auto-indent in a prompt. A line opened by a linewise paste or `<C-j>` makes
+  -- Neovim remember an indent it added, and `stopinsert` then deletes the white space
+  -- under the cursor -- which `park_cursor` leaves on the space after the `[` of a
+  -- button when it moves the focus onto the row: the row came back one space short
+  -- and `keep_layout` folded it into the answer.
+  local bo = { autoindent = false, smartindent = false, cindent = false }
+  if opts.secret then
+    bo.undolevels = -1
+  end
+
   local surf = surface.open({
     lines = has_buttons and { opts.default or "", "" } or { opts.default or "" },
     theme = opts.theme,
@@ -236,7 +246,7 @@ function M.open(opts)
     enter = true,
     modifiable = true,
     wo = opts.secret and { conceallevel = 2, concealcursor = "nvic" } or nil,
-    bo = opts.secret and { undolevels = -1 } or nil,
+    bo = bo,
   })
   if not surf then
     return nil
