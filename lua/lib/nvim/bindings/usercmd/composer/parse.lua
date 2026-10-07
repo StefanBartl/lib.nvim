@@ -103,16 +103,17 @@ end
 --- `notify.help` is optional (`composer/init.lua` supplies it, and it answers
 --- false while the verb has not opted in), so a bare notifier -- every spec
 --- that injects its own -- behaves as it always did.
----@param notify { error: fun(msg), info: fun(msg), help?: fun(tokens: string[], reason: string|nil, fallback: fun()): boolean }
+---@param notify { error: fun(msg), info: fun(msg), help?: fun(tokens: string[], reason: string|nil, fallback: fun(), opts: table|nil): boolean }
 ---@param level "info"|"error"
 ---@param text string      # the notification text
 ---@param tokens string[]  # literal tokens that matched (the level to show)
 ---@param reason? string   # float title when the cause is an unknown token
-function M.show_usage(notify, level, text, tokens, reason)
+---@param opts? table      # the command callback args: range and bang survive into the float
+function M.show_usage(notify, level, text, tokens, reason, opts)
   local function fallback()
     notify[level](text)
   end
-  if not (notify.help and notify.help(tokens, reason, fallback)) then
+  if not (notify.help and notify.help(tokens, reason, fallback, opts)) then
     fallback()
   end
 end
@@ -122,7 +123,7 @@ end
 ---@param spec Lib.UserCmd.Composer.Spec
 ---@param root Lib.UserCmd.Composer.Node
 ---@param opts Lib.UserCommand.Args   # nvim callback args
----@param notify { error: fun(msg), info: fun(msg), help?: fun(tokens: string[], reason: string|nil, fallback: fun()): boolean }
+---@param notify { error: fun(msg), info: fun(msg), help?: fun(tokens: string[], reason: string|nil, fallback: fun(), opts: table|nil): boolean }
 function M.dispatch(cmd_name, spec, root, opts, notify)
   local fargs = opts.fargs or {}
 
@@ -138,7 +139,7 @@ function M.dispatch(cmd_name, spec, root, opts, notify)
       return spec.default(M.build_ctx({}, {}, {}, {}, {}, {}, opts))
     end
     if not root.route then
-      M.show_usage(notify, "info", M.usage(cmd_name, root), {})
+      M.show_usage(notify, "info", M.usage(cmd_name, root), {}, nil, opts)
       return
     end
   end
@@ -159,7 +160,8 @@ function M.dispatch(cmd_name, spec, root, opts, notify)
         "error",
         ("unknown subcommand '%s'.\n%s"):format(bad, M.usage(cmd_name, root)),
         matched,
-        ("unknown subcommand '%s'"):format(bad)
+        ("unknown subcommand '%s'"):format(bad),
+        opts
       )
     else
       M.show_usage(
@@ -169,7 +171,9 @@ function M.dispatch(cmd_name, spec, root, opts, notify)
           table.concat({ cmd_name, unpack(fargs, 1, consumed) }, " "),
           M.usage(cmd_name, root)
         ),
-        matched
+        matched,
+        nil,
+        opts
       )
     end
     return

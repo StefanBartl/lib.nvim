@@ -220,6 +220,29 @@ local function value_of_lead(route, lead)
 end
 
 ---@internal
+--- `--name <lead>`: the flag's value is the next token (flags.split accepts
+--- that spelling), so the line is waiting for one of its enum values.
+---@param route Lib.UserCmd.Composer.Route|nil
+---@param committed string[]
+---@return Lib.UserCmd.Composer.Help.Entry[]|nil
+local function pending_flag_value(route, committed)
+  local last = committed[#committed]
+  local name = route and last and last:match("^%-%-([%w_%-]+)$")
+  if not name then
+    return nil
+  end
+  for _, spec in ipairs(route.flags or {}) do
+    if spec.name == name and not spec.bool and not spec.optional_value then
+      if spec.enum and #spec.enum > 0 then
+        return value_entries(spec.enum, spec.enum_desc, nil)
+      end
+      return { { kind = "hint", label = "--" .. name .. " <value>", desc = spec.desc or spec.type } }
+    end
+  end
+  return nil
+end
+
+---@internal
 --- Keep the pickable entries whose `insert` starts with `lead`.
 ---@param entries Lib.UserCmd.Composer.Help.Entry[]
 ---@param lead string
@@ -268,7 +291,17 @@ function M.compute(root, committed, lead)
     end
   end
 
-  local value_section = value_of_lead(route, lead)
+  -- Everything after a bare `--` is positional (flags.split stops there), so
+  -- no flag or key=value rows are offered -- or counted as used -- past it.
+  local after_dashes = false
+  for _, tok in ipairs(tail) do
+    if tok == "--" then
+      after_dashes = true
+      break
+    end
+  end
+
+  local value_section = value_of_lead(route, lead) or pending_flag_value(route, committed)
   if value_section then
     add("Value", value_section)
   else
@@ -297,8 +330,10 @@ function M.compute(root, committed, lead)
       if spec then
         add("Argument", arg_entries(spec))
       end
-      add("Flags", flag_entries(route, tail))
-      add("Key=value", kv_entries(route, tail))
+      if not after_dashes then
+        add("Flags", flag_entries(route, tail))
+        add("Key=value", kv_entries(route, tail))
+      end
     end
   end
 
