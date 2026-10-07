@@ -17,6 +17,7 @@
 ---                                 on_answer(nil) for a custom choice list.
 
 local surface = require("lib.nvim.ui.kit.surface")
+local buttons = require("lib.nvim.ui.kit.buttons")
 local map = require("lib.nvim.bindings.keymap")
 
 local api = vim.api
@@ -44,44 +45,9 @@ local function center(s, width)
 end
 
 ---@internal
---- Build the centered button line and each button's byte-column range.
----@param labels string[]
----@param width integer
----@param row integer  # 0-based buffer row the buttons live on
----@return string line, table ranges
-local function build_button_line(labels, width, row)
-  local btns = {}
-  for i, l in ipairs(labels) do
-    btns[i] = "[ " .. l .. " ]"
-  end
-  local joined = table.concat(btns, "  ")
-  local pad = math.max(0, math.floor((width - vim.fn.strdisplaywidth(joined)) / 2))
-  local line = string.rep(" ", pad) .. joined
-
-  local ranges = {}
-  local col = pad
-  for i, btn in ipairs(btns) do
-    ranges[i] = { row = row, start_col = col, end_col = col + #btn }
-    col = col + #btn + 2 -- account for the two-space separator
-  end
-  return line, ranges
-end
-
----@internal
 --- Repaint the focus highlight on the current button.
 local function render_focus()
-  local buf = state.surf and state.surf.bufnr
-  if not buf or not api.nvim_buf_is_valid(buf) then
-    return
-  end
-  api.nvim_buf_clear_namespace(buf, state.ns, 0, -1)
-  local r = state.ranges[state.focus]
-  if r then
-    pcall(api.nvim_buf_set_extmark, buf, state.ns, r.row, r.start_col, {
-      end_col = r.end_col,
-      hl_group = "KitSelection",
-    })
-  end
+  buttons.paint(state.surf and state.surf.bufnr, state.ns, state.ranges, state.focus)
 end
 
 --- Whether a confirm dialog is currently open.
@@ -110,28 +76,14 @@ function M.current_focus()
 end
 
 ---@internal
---- Which button (if any) the mouse is currently over, by hit-testing
---- `getmousepos()` against `state.ranges`. Reads live mouse state rather
---- than relying on the click having already moved the cursor first — that
---- ordering isn't a contract Neovim makes for a mapped `<LeftMouse>`, so
---- hit-testing the click position directly is the only version-independent
---- way to know which button was actually hit.
+--- Which button (if any) the mouse is currently over -- the hit-test itself
+--- (live `getmousepos()` against `state.ranges`) is `lib.nvim.ui.kit.buttons.hit`.
 ---@return integer|nil
 local function button_at_mousepos()
   if not M.is_open() then
     return nil
   end
-  local pos = vim.fn.getmousepos()
-  if pos.winid ~= state.surf.winid then
-    return nil
-  end
-  local row, col = pos.line - 1, pos.column - 1 -- getmousepos() is 1-based
-  for i, r in ipairs(state.ranges) do
-    if r.row == row and col >= r.start_col and col < r.end_col then
-      return i
-    end
-  end
-  return nil
+  return (buttons.hit(state.ranges, state.surf.winid))
 end
 
 --- Focus and confirm whichever button is under the mouse, if any. A click
@@ -154,11 +106,7 @@ function M.move(delta)
   if not M.is_open() then
     return
   end
-  local n = #state.labels
-  if n == 0 then
-    return
-  end
-  state.focus = (state.focus - 1 + delta) % n + 1
+  state.focus = buttons.wrap(state.focus, delta, #state.labels)
   render_focus()
 end
 
@@ -210,11 +158,7 @@ function M.open(opts)
   end
 
   -- Width: fit the wider of the question and the button row, plus margin.
-  local btns_join = {}
-  for i, l in ipairs(labels) do
-    btns_join[i] = "[ " .. l .. " ]"
-  end
-  local btn_w = vim.fn.strdisplaywidth(table.concat(btns_join, "  "))
+  local btn_w = buttons.row_width(labels)
   local q_w = 0
   for _, ql in ipairs(qlines) do
     q_w = math.max(q_w, vim.fn.strdisplaywidth(ql))
@@ -228,7 +172,7 @@ function M.open(opts)
   end
   lines[#lines + 1] = ""
   local button_row = #lines -- 0-based row of the button line (current #lines before append)
-  local button_line, ranges = build_button_line(labels, width, button_row)
+  local button_line, ranges = buttons.layout(labels, width, button_row)
   lines[#lines + 1] = button_line
 
   local surf = surface.open({

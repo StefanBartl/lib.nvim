@@ -19,18 +19,55 @@
 ---     or `""`) and the form continues to the next field (matches
 ---     sandbox.nvim's Name/Ports/Volumes/Env fields: Esc = "leave this one
 ---     blank", not "cancel everything").
+---
+--- `opts.back = true` (opt-in; without it the form behaves exactly as above)
+--- lets the user walk back through the chain to fix an earlier answer:
+---   - from field `i > 1`, `<BS>` on an EMPTY field, `<S-Tab>` or `<C-p>` (or
+---     the `[← Back]` button) reopens field `i - 1` with its previous answer
+---     as the editable text, so only the correction has to be typed. The first
+---     field has no back.
+---   - answers survive the round trip in both directions: what was typed in
+---     the field being left is kept as that field's text for when the user
+---     comes back to it, so going back and forth loses nothing.
+---   - the title carries a step indicator, "Label (2/5)" (left out for a
+---     one-field form).
+---   - a clickable row sits under the field: `[← Back]` (not on the first
+---     field), `[Skip]` (not on a `required` one: it is `<Esc>`) and
+---     `[Next ↵]` (`[Done ↵]` on the last field: it is `<CR>`). `<Down>` or
+---     `<Tab>` moves the focus onto it; see `lib.nvim.ui.kit.input` for its keys.
+--- `<Esc>` keeps its meaning on every field, back-navigated to or not.
 
 local input = require("lib.nvim.ui.kit.input")
 
 local M = {}
 
+--- The button row of one step: Back unless it is the first field, Skip unless
+--- it is `required` (skipping *is* what `<Esc>` does there, and on a required
+--- field that aborts), and the one that submits.
+---@param i integer  # 1-based step
+---@param n integer  # number of steps
+---@param field table
+---@return table[]
+local function button_row(i, n, field)
+  local row = {}
+  if i > 1 then
+    row[#row + 1] = { id = "back", label = "← Back" }
+  end
+  if not field.required then
+    row[#row + 1] = { id = "skip", label = "Skip" }
+  end
+  row[#row + 1] = { id = "submit", label = i < n and "Next ↵" or "Done ↵" }
+  return row
+end
+
 --- Open a sequential multi-field form.
----@param opts table  # { fields = { { name, label|prompt, default?, required?, expand_env?, theme?, width?, relative? }, ... }, theme?, width?, relative?, on_submit(values: table), on_cancel? }
+---@param opts table  # { fields = { { name, label|prompt, default?, required?, expand_env?, theme?, width?, relative? }, ... }, theme?, width?, relative?, back?, on_submit(values: table), on_cancel? }
 ---@return Lib.UI.Kit.Surface|nil  # the first field's input surface (nil if `fields` is empty)
 function M.open(opts)
   opts = opts or {}
   local fields = opts.fields or {}
   local values = {}
+  local back = opts.back == true
 
   local function step(i)
     local field = fields[i]
@@ -41,14 +78,38 @@ function M.open(opts)
       return nil
     end
 
+    local label = field.label or field.prompt
+    local title = label
+    local default = field.default
+    local on_back, buttons
+    if back then
+      if #fields > 1 then
+        local at = ("(%d/%d)"):format(i, #fields)
+        title = label and (label .. " " .. at) or at
+      end
+      -- What the user typed or was shown last time round, else the declared default.
+      if values[field.name] ~= nil then
+        default = values[field.name]
+      end
+      if i > 1 then
+        on_back = function(line)
+          values[field.name] = line
+          step(i - 1)
+        end
+      end
+      buttons = button_row(i, #fields, field)
+    end
+
     local surf = input.open({
-      title = field.label or field.prompt,
-      prompt = field.label or field.prompt,
-      default = field.default,
+      title = title,
+      prompt = title,
+      default = default,
       theme = field.theme or opts.theme,
       width = field.width or opts.width,
       relative = field.relative or opts.relative,
       expand_env = field.expand_env,
+      on_back = on_back,
+      buttons = buttons,
       on_submit = function(line)
         values[field.name] = line
         step(i + 1)

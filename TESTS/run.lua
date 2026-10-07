@@ -81,6 +81,7 @@ local specs = {
   "system_rpc_pipe_spec.lua",
   "ui_kit_spec.lua",
   "ui_kit_message_log_spec.lua",
+  "ui_kit_form_back_spec.lua",
   "icons_spec.lua",
   "ui_hl_persist_spec.lua",
   "ui_winhighlight_spec.lua",
