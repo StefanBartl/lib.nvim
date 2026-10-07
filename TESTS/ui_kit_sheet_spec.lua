@@ -84,6 +84,9 @@ return function(H)
   eq(lines[2], "one", "a select shows its first choice")
   ok(lines[5]:find("[ Submit ]  [ Cancel ]", 1, true) ~= nil, "the button row")
   eq(surf:state().focus, "number")
+  for _, name in ipairs({ "autoindent", "smartindent", "cindent" }) do
+    eq(vim.bo[surf.bufnr][name], false, name .. " is off in a sheet")
+  end
   close_floats()
   local via_popup = kit.popup({ type = "sheet", fields = FIELDS, on_submit = function() end })
   ok(via_popup ~= nil and via_popup:is_valid(), "kit.popup({ type = 'sheet' })")

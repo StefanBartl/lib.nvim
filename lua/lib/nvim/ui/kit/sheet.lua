@@ -258,7 +258,9 @@ function M.open(opts)
       linebreak = false,
       statuscolumn = STATUSCOLUMN,
     }, any_secret and { conceallevel = 2, concealcursor = "nvic" } or {}),
-    bo = { undolevels = -1 },
+    -- No auto-indent either: it is what made a prompt's button row come back one
+    -- space short (see `lib.nvim.ui.kit.input`); the same cursor parking could do it here.
+    bo = { undolevels = -1, autoindent = false, smartindent = false, cindent = false },
   })
   if not surf then
     -- `surface.open` failed -- a genuine break, not a user-driven cancel.

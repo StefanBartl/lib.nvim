@@ -272,6 +272,22 @@ return function(H)
   vim.cmd("stopinsert")
   plain_sec:close()
 
+  -- No auto-indent in a prompt (with or without buttons, secret or not): an indent
+  -- Neovim added to a line opened by a paste is deleted by `stopinsert` under the
+  -- cursor, which `park_cursor` leaves on a space of the button row.
+  for _, o in ipairs({
+    {},
+    { buttons = { { id = "submit", label = "OK" } } },
+    { secret = true },
+  }) do
+    local r = kit.input(o)
+    for _, name in ipairs({ "autoindent", "smartindent", "cindent" }) do
+      eq(vim.bo[r.bufnr][name], false, name .. " is off in a prompt")
+    end
+    vim.cmd("stopinsert")
+    r:close()
+  end
+
   -- input(completion = "file"): file-path completion (vim.fn.inputsecret's
   -- cousin, `completion = "file"` on the old vim.fn.input). `vim.fn.complete()`
   -- itself only works in real Insert mode, which this headless -l runner
