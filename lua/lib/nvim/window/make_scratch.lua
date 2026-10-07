@@ -150,7 +150,14 @@ local function create_buffer(lines, opts)
   api.nvim_set_option_value("swapfile", false, { buf = bufnr })
 
   if #lines > 0 then
-    api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+    local set_ok, set_err = pcall(api.nvim_buf_set_lines, bufnr, 0, -1, false, lines)
+    if not set_ok then
+      -- A line with a newline in it (the API refuses those) must not leave the
+      -- buffer made a few lines up behind, never shown and never wiped: take it
+      -- out again and raise as before.
+      pcall(api.nvim_buf_delete, bufnr, { force = true })
+      error("make_scratch: " .. tostring(set_err), 0)
+    end
   end
 
   if opts.filetype ~= nil then
