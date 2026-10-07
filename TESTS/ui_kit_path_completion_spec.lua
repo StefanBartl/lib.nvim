@@ -8,9 +8,11 @@
 --
 -- `getcompletion(frag, "file")` pays a file-system `stat` per match -- about a tenth
 -- of a millisecond each -- so a directory of five thousand files froze the editor for
--- half a second at every <Tab>. With more than 300 matches the candidates are built
--- from one directory listing, without a `stat`, sorted and cut to 300. Everything
--- else -- few matches, a pattern, another completion type, a directory that cannot
+-- half a second at every <Tab>. With more than 300 candidates (entries that start
+-- with the fragment, the files among them for completion = "dir") the list is built
+-- from one directory listing, without a `stat`, sorted and cut to 300; for "dir" it is
+-- the whole answer, however few directories there are among the files. Everything
+-- else -- few candidates, a pattern, another completion type, a directory that cannot
 -- be listed -- is `getcompletion()`'s as before; it is stubbed here, which is what
 -- tells the two paths apart.
 --
@@ -183,15 +185,37 @@ return function(H)
       ok(name:match("^" .. vim.pesc(dirs) .. "/sub_%d+/$") ~= nil, "a directory: " .. name)
     end
     press_tab(dir .. "/", "dir")
-    eq(getcompletion_calls, 1, "no directory among all those files")
+    eq(getcompletion_calls, 0, "all those files and no directory: the listing has the answer")
+    eq(shown, nil, "an empty list opens no popup")
+
+    -- The files count among the candidates for "dir", and the listing is the whole answer
+    -- however few directories hide among them.
+    local few = make_dir(MAX + 100, 3)
+    dirs_made[#dirs_made + 1] = few
+    press_tab(few .. "/", "dir")
+    eq(getcompletion_calls, 0, "three directories among all those files: the listing has them")
+    eq(stat_calls, 0, "and nothing is stat'ed")
+    ok(
+      vim.deep_equal({ few .. "/sub_000/", few .. "/sub_001/", few .. "/sub_002/" }, shown),
+      "the three directories"
+    )
+    local edge = make_dir(MAX - 2, 1) -- MAX - 2 items, one directory and other.txt: MAX
+    dirs_made[#dirs_made + 1] = edge
+    press_tab(edge .. "/", "dir")
+    eq(getcompletion_calls, 1, "exactly MAX candidates are getcompletion()'s")
+    local over = make_dir(MAX - 1, 1) -- one candidate more
+    dirs_made[#dirs_made + 1] = over
+    press_tab(over .. "/", "dir")
+    eq(getcompletion_calls, 0, "one more is the first list built from the listing")
+    ok(vim.deep_equal({ over .. "/sub_000/" }, shown), "its one directory")
 
     -- A listing that does not say what an entry is (a link, a junction, a file system
-    -- without d_type): `stat` is asked for those, but only up to one past the menu, and
+    -- without d_type): `stat` is asked for those, but only until the menu is full, and
     -- not at all when too few entries match to need the list.
     hide_entry_kinds()
     press_tab(dir .. "/item")
     eq(getcompletion_calls, 0, "unknown types: getcompletion() is still not asked")
-    ok(stat_calls <= MAX + 1, stat_calls .. " stats for " .. MAX + 100 .. " matches")
+    ok(stat_calls <= MAX, stat_calls .. " stats for " .. MAX + 100 .. " matches")
     eq(#shown, MAX)
     eq(shown[1], dir .. "/item_000")
     eq(shown[MAX], dir .. "/item_" .. ("%03d"):format(MAX - 1))
@@ -199,7 +223,9 @@ return function(H)
     eq(getcompletion_calls, 1, "few matches: getcompletion() has them")
     eq(stat_calls, 0, "and nothing was stat'ed on the way")
     press_tab(dir .. "/", "dir")
-    eq(getcompletion_calls, 1, "no directory among all those files, types unknown")
+    eq(getcompletion_calls, 0, "no directory among all those files, types unknown: whole answer")
+    ok(stat_calls <= MAX + 101, "each of the entries stat'ed once: " .. stat_calls)
+    eq(shown, nil, "and no popup for it")
 
     -- A directory of unknown type gets its slash and is what completion = "dir" keeps.
     press_tab(dirs .. "/", "dir")
@@ -218,19 +244,72 @@ return function(H)
     end
     ok(vim.deep_equal(listed, shown), "files, then directories with their slash")
 
-    -- An entry that cannot be stat'ed (a broken link) is taken for a file.
+    -- An entry that cannot be stat'ed (a broken link) is left out, as getcompletion()
+    -- leaves it: here the first ten items.
+    uv.fs_stat = function(path)
+      stat_calls = stat_calls + 1
+      if path:match("/item_00%d$") then
+        return nil
+      end
+      return real_stat(path)
+    end
+    press_tab(dir .. "/item")
+    eq(getcompletion_calls, 0, "the list is the answer")
+    eq(#shown, MAX, "the broken ones do not fill the menu")
+    eq(shown[1], dir .. "/item_010")
+    eq(shown[MAX], dir .. "/item_309")
+    local short = make_dir(MAX + 10, 0)
+    dirs_made[#dirs_made + 1] = short
+    press_tab(short .. "/item")
+    eq(getcompletion_calls, 0, "every candidate has been looked at: the list is whole")
+    eq(#shown, MAX)
+    eq(shown[1], short .. "/item_010")
+    eq(shown[MAX], short .. "/item_309")
+    -- Nothing at all can be stat'ed: nothing to show, and nothing to ask getcompletion().
     uv.fs_stat = function()
       stat_calls = stat_calls + 1
     end
     press_tab(dir .. "/item")
-    eq(#shown, MAX)
-    for _, name in ipairs(shown) do
-      ok(name:match("/$") == nil, "a file: " .. name)
-    end
+    eq(getcompletion_calls, 0, "nothing to show is an answer too")
+    eq(shown, nil, "and no popup opens for it")
     press_tab(dirs .. "/", "dir")
-    eq(getcompletion_calls, 1, "no directory among them: getcompletion() has it")
+    eq(getcompletion_calls, 0, "no directory among them")
+    eq(shown, nil)
     uv.fs_stat = counting_stat
+
+    -- Every entry of unknown type stat'ed once, and getcompletion() not asked afterwards:
+    -- links to files in a directory of two directories.
+    local links = make_dir(2 * MAX + 100, 2)
+    dirs_made[#dirs_made + 1] = links
+    press_tab(links .. "/", "dir")
+    eq(getcompletion_calls, 0, "the walk's list is the answer")
+    ok(stat_calls <= 2 * MAX + 103, stat_calls .. " stats for " .. 2 * MAX + 103 .. " candidates")
+    ok(vim.deep_equal({ links .. "/sub_000/", links .. "/sub_001/" }, shown), "its two directories")
     uv.fs_scandir_next = real_scandir_next
+
+    -- A real link that leads nowhere (a junction on Windows, where a plain symlink needs a
+    -- privilege): listed by neither getcompletion() nor the big list. Skipped where the
+    -- system lets this spec create none.
+    local dangling = make_dir(MAX + 20, 0)
+    dirs_made[#dirs_made + 1] = dangling
+    local made = 0
+    for i = 1, 3 do
+      local link = ("%s/brk%03d"):format(dangling, i)
+      local target = link .. ".target"
+      vim.fn.mkdir(target, "p")
+      local linked = uv.fs_symlink(target, link, { dir = true, junction = true })
+      vim.fn.delete(target, "d")
+      if linked and real_stat(link) == nil then
+        made = made + 1
+      end
+    end
+    if made > 0 then
+      local expected = real_list(dangling .. "/")
+      eq(#expected, MAX, "broken links: more than a menu holds, so the big list runs")
+      press_tab(dangling .. "/")
+      eq(getcompletion_calls, 0, "broken links: the big list, not getcompletion()")
+      same(shown, expected, "broken links")
+    end
 
     -- The same entries in the same order as the real getcompletion(), whatever
     -- 'fileignorecase' and 'wildignorecase' say. The names tell the cases apart and
