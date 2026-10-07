@@ -660,7 +660,11 @@ function M.open(opts)
   local function on_click()
     local b, pos = buttons.hit(ranges, winid)
     if b then
-      goto_pos(n + b)
+      -- No `goto_pos(n + b)` first: it stops Insert mode (which only takes effect once
+      -- this mapping returns), and a refused submit then puts the focus back on the
+      -- first bad field with a `startinsert` that is ignored while Insert mode is still
+      -- on -- the field would end up in Normal mode, typed text being commands. A
+      -- refused submit moves the focus itself; a pressed button needs none.
       press(b)
     elseif not pos then
       pass_through("<LeftMouse>")
