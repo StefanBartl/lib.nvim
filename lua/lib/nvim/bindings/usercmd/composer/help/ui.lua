@@ -38,7 +38,14 @@ local function clip(s, w)
   if vim.fn.strdisplaywidth(s) <= w then
     return s
   end
-  return vim.fn.strcharpart(s, 0, math.max(1, w - 1)) .. "…"
+  -- Cut by cells, not characters: a wide (CJK, emoji) character is two.
+  local keep = math.max(1, w - 1)
+  local cut = vim.fn.strcharpart(s, 0, keep)
+  while keep > 1 and vim.fn.strdisplaywidth(cut) > w - 1 do
+    keep = keep - 1
+    cut = vim.fn.strcharpart(s, 0, keep)
+  end
+  return cut .. "…"
 end
 
 --- Rich chooser items for `entries`. Headings are dropped when there is only
