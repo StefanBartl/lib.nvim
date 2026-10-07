@@ -216,7 +216,7 @@ function M.open(opts)
   -- field) and a space before the value.
   local label_w, any_secret = 0, false
   for _, f in ipairs(fields) do
-    label_w = math.max(label_w, math.min(fn.strdisplaywidth(f.label), 24))
+    label_w = math.max(label_w, math.min(fn.strdisplaywidth(f.label), 30))
     any_secret = any_secret or f.secret
   end
   local col_w = label_w + 2
@@ -695,11 +695,17 @@ function M.open(opts)
     keep_layout()
     local f = fields[focus]
     if f and f.kind == "text" then
-      cache[focus] = row_text(focus)
-      if errors[focus] or f.live then
-        check(focus)
+      -- `TextChanged` also fires once for the writes that built the sheet, and for
+      -- anything else that changed no text: only a row that really changed is checked,
+      -- so a `live` field is not flagged just because the sheet opened.
+      local text = row_text(focus)
+      if text ~= cache[focus] then
+        cache[focus] = text
+        if errors[focus] or f.live then
+          check(focus)
+        end
+        recheck_dependents(focus)
       end
-      recheck_dependents(focus)
     end
     paint()
     fit()
