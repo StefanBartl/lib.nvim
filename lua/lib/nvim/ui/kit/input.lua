@@ -32,8 +32,9 @@
 --- completion then pressing enter again). With `"file"` or `"dir"` and more than 300
 --- matches the list is built from one directory listing instead (no `stat` per match,
 --- sorted, cut to 300): `getcompletion()` took half a second for five thousand files.
---- A fragment that holds a backtick is never completed: `getcompletion()` would run the span between backticks
---- through the shell, and a pasted line is not to be trusted with that.
+--- A fragment that holds a backtick is never completed: `getcompletion()` would run
+--- the span between backticks through the shell, and a pasted line is not to be
+--- trusted with that.
 ---
 --- `opts.on_back` makes the prompt one step of a larger flow (`kit.form` with
 --- `back = true`): `<BS>` on an EMPTY line, `<S-Tab>` and `<C-p>` close the
@@ -127,8 +128,9 @@ end
 --- Never synchronously: the register is written when the Insert run ENDS, which
 --- for a prompt that closes is after its mapping returns. And not while the run
 --- is still on (a callback opened the next prompt of a chain, which carries it
---- on): that waits for the `InsertLeave` that ends it. A macro being recorded
---- keeps the keys it saw, as `inputsecret()` does.
+--- on): that waits for the `InsertLeave` that ends it (a `<C-o>` fires one too, and
+--- has finished the run so far: what is typed after it is another run). A macro being
+--- recorded keeps the keys it saw, as `inputsecret()` does.
 function M.scrub_insert_traces()
   vim.schedule(function()
     if api.nvim_get_mode().mode:sub(1, 1) == "i" then
