@@ -6,8 +6,23 @@
 ---@field tag? string Prefix for the default error notification (default `"lib.nvim.async"`); ignored when `on_error` is set.
 ---@field on_error? fun(err: any) Called instead of the default `vim.notify` when the coroutine body raises. Not `vim.schedule`-wrapped — it may run in a fast-event context.
 
+---Options for `require("lib.nvim.async").map_limit`.
+---@class Lib.Async.MapLimitOpts
+---@field on_progress? fun(done_count: integer, total: integer, index: integer, result: any, err: any) Called (`vim.schedule`d) after every finished item, in the order they finished -- not item order.
+
+---Something that can be stopped: the handle `map_limit` returns, and what a worker may
+---return so that `stop()` on the run can kill it (`run_async_captured`, `lib.nvim.git`'s
+---`*_async` helpers).
+---@class Lib.Async.Stoppable
+---@field stop fun() Stop the work; harmless to call after it finished.
+
+---The callback-style worker `map_limit` fans out: start the work for `item`, call `done`
+---exactly once when finished, optionally return a `Lib.Async.Stoppable`.
+---@alias Lib.Async.MapLimitWorker fun(item: any, index: integer, done: fun(result: any, err: any)): Lib.Async.Stoppable|nil
+
 ---@class Lib.Async
 ---@field await fun(starter: fun(resume: fun(...))): ... Suspend until `starter` calls its `resume`.
+---@field map_limit fun(items: any[], limit: integer, worker: Lib.Async.MapLimitWorker, on_done: fun(results: any[], errors: any[], stopped: boolean), opts?: Lib.Async.MapLimitOpts): Lib.Async.Stoppable # Run a callback-style worker over every item with at most `limit` in flight; results in item order, `stop()` kills what is still running.
 ---@field run fun(body: function, on_done?: function, opts?: Lib.Async.RunOpts) Drive an `await`-using coroutine to completion.
 ---@field wrap fun(fn: function, argc: integer): fun(...): ... Turn a callback-style function (callback last, at position `argc`) into an awaitable one.
 ---@field Semaphore Lib.Async.SemaphoreClass

@@ -240,6 +240,169 @@ end
 M.Condvar = Condvar
 
 -- =========================================================
+-- Bounded fan-out
+-- =========================================================
+
+--- Run a callback-style `worker` over every item with **at most `limit` of
+--- them in flight**, collect the results in item order, and tell the caller
+--- when the last one finished (or when it stopped the run).
+---
+--- The shape every "do this for each of N repositories/files/servers" feature
+--- hand-builds: start `limit` jobs, start the next one whenever one finishes,
+--- count down, call back. It exists once here because the hand-built copies
+--- each get a different corner wrong -- re-entrancy (a worker that finishes
+--- synchronously), a throwing worker that stalls the run, a late result after
+--- the caller gave up.
+---
+--- `worker(item, index, done)` starts the work for one item and must call
+--- `done(result, err)` **exactly once** when it is finished (a second call is
+--- ignored). It may return a handle with a `stop()` method -- what
+--- `run_async_captured` and the `*_async` helpers of `lib.nvim.git` return --
+--- so `stop` on the run can kill whatever is still in flight. A worker that
+--- *throws* counts as finished with that error; it neither stalls the run nor
+--- escapes into the caller. A worker that never calls `done` stalls the run,
+--- as it would any hand-built pool.
+---
+--- `on_progress` (after every finished item) and `on_done` are
+--- `vim.schedule`d, in the order the events happened, so they are always safe
+--- to use `vim.api` in. `worker` is not: it is called synchronously -- for the
+--- first `limit` items from inside this function, for the rest from whichever
+--- call of `done` freed a slot, i.e. in the context `done` was called from.
+--- That is the main loop for `run_async_captured` and every `*_async` helper
+--- (they all `vim.schedule` their callback); a worker driven by a raw libuv
+--- callback must not touch `vim.api` itself.
+---
+--- `on_done(results, errors, stopped)`: `results[i]` and `errors[i]` belong to
+--- `items[i]` (both sparse: a successful item has no error, a failed one
+--- usually no result). After `stop()` they hold what had finished by then,
+--- `stopped` is `true`, and anything finishing later is discarded.
+---@generic T
+---@param items T[]
+---@param limit integer Maximum in-flight workers; clamped to at least 1.
+---@param worker fun(item: T, index: integer, done: fun(result: any, err: any)): { stop: fun() }|nil
+---@param on_done fun(results: any[], errors: any[], stopped: boolean)
+---@param opts? Lib.Async.MapLimitOpts
+---@return { stop: fun() } handle `stop()` kills in-flight workers that returned a handle, starts no further ones and calls `on_done(..., true)` once; a no-op after the run finished.
+function M.map_limit(items, limit, worker, on_done, opts)
+  if type(items) ~= "table" then
+    error("lib.nvim.async.map_limit: `items` must be a list", 2)
+  end
+  if type(worker) ~= "function" or type(on_done) ~= "function" then
+    error("lib.nvim.async.map_limit: `worker` and `on_done` must be functions", 2)
+  end
+  opts = opts or {}
+  limit = tonumber(limit) or 1
+  if limit ~= limit then -- NaN: `math.max(1, nan)` would stay NaN and start nothing
+    limit = 1
+  end
+  limit = math.max(1, math.floor(limit))
+
+  local total = #items
+  local results, errors = {}, {}
+  local in_flight = {} ---@type table<integer, { stop?: fun() }>
+  local next_index, running, completed = 1, 0, 0
+  local finished, pumping = false, false
+
+  local function finish(stopped)
+    if finished then
+      return
+    end
+    finished = true
+    vim.schedule(function()
+      on_done(results, errors, stopped)
+    end)
+  end
+
+  local pump
+
+  local function start(index)
+    local called = false
+
+    local function done(result, err)
+      if called then
+        return
+      end
+      called = true
+      in_flight[index] = nil
+      if finished then
+        return -- the run was stopped; a late result has nowhere to go
+      end
+      running = running - 1
+      completed = completed + 1
+      results[index] = result
+      errors[index] = err
+      if opts.on_progress then
+        local count = completed
+        vim.schedule(function()
+          opts.on_progress(count, total, index, result, err)
+        end)
+      end
+      if completed == total then
+        finish(false)
+      else
+        pump()
+      end
+    end
+
+    local ok, handle = pcall(worker, items[index], index, done)
+    if not ok then
+      done(nil, handle) -- `handle` is the error here, whatever was thrown
+    elseif type(handle) == "table" and not called then
+      if finished then
+        -- The worker stopped the run while it was starting: nobody will ever
+        -- stop this one, so it is stopped here.
+        if type(handle.stop) == "function" then
+          pcall(handle.stop)
+        end
+      else
+        in_flight[index] = handle
+      end
+    end
+  end
+
+  -- A worker that finishes synchronously calls `done` -> `pump` from inside
+  -- `start`; without the guard that recursion is as deep as the item list.
+  pump = function()
+    if pumping then
+      return
+    end
+    pumping = true
+    while not finished and running < limit and next_index <= total do
+      local index = next_index
+      next_index = next_index + 1
+      running = running + 1
+      start(index)
+    end
+    pumping = false
+  end
+
+  if total == 0 then
+    finish(false)
+  else
+    pump()
+  end
+
+  return {
+    stop = function()
+      if finished then
+        return
+      end
+      -- Mark the run finished BEFORE stopping anything: a worker handle whose
+      -- stop() reports back through `done` (a timer, a cancelled request)
+      -- would otherwise count as a normal completion and start the next item.
+      local handles = in_flight
+      in_flight = {}
+      finish(true)
+      for _, handle in pairs(handles) do
+        if type(handle.stop) == "function" then
+          pcall(handle.stop)
+        end
+      end
+    end,
+  }
+end
+
+-- =========================================================
 -- Supersession
 -- =========================================================
 

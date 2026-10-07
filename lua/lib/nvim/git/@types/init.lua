@@ -27,9 +27,95 @@
 ---@field blame_porcelain fun(path: string, opts?: { first?: integer, last?: integer, dir?: string }, git_cmd?: string): Lib.Git.BlameEntry[]|nil, string|nil # Blame a file (or a line range) via `git blame --porcelain`. nil only on a git-invocation failure -- an empty file is `{}`.
 ---@field blame_porcelain_async fun(path: string, opts: { first?: integer, last?: integer, dir?: string }|nil, on_done: fun(entries: Lib.Git.BlameEntry[]|nil, err: string|nil), git_cmd?: string): { stop: fun() } # Async counterpart to blame_porcelain -- prefer on a repeated/automatic trigger (e.g. CursorHold).
 ---@field clear_line_diff fun(ns:integer):fun(buf:integer):nil # Create a buffer-scoped function that clears all virtual text in the given namespace. This function binds the namespace once and returns a callback suitable for autocmd usage.
+---@field run fun(args: string[], opts?: Lib.Git.RunOpts, git_cmd?: string): Lib.Git.RunResult # Run `git <args>` and report exit code, both streams and whether it timed out. The generic runner; blocks the caller.
+---@field run_async fun(args: string[], opts: Lib.Git.RunOpts|nil, on_done: fun(result: Lib.Git.RunResult), git_cmd?: string): { stop: fun() } # Async counterpart to run.
+---@field parse_log fun(raw: string, opts?: { left_right?: boolean, name_status?: boolean }): Lib.Git.LogEntry[]|nil, string|nil # Pure parser for the NUL-separated `git log` output that `log` runs; strict, an unexpected shape is an error.
+---@field log fun(range?: string, opts?: Lib.Git.LogOpts, git_cmd?: string): Lib.Git.LogEntry[]|nil, string|nil # The commits of a revision range, parsed, in one process (bodies and, with `name_status`, changed files included). An empty range is `{}`; nil + err when git failed.
+---@field log_async fun(range: string|nil, opts: Lib.Git.LogOpts|nil, on_done: fun(entries: Lib.Git.LogEntry[]|nil, err: string|nil), git_cmd?: string): { stop: fun() } # Async counterpart to log.
+---@field rev_parse fun(rev: string, opts?: Lib.Git.RevParseOpts, git_cmd?: string): string|nil, string|nil # Resolve a revision to its full object name (`git rev-parse --verify`); `short` and `commit` options.
+---@field merge_base fun(a: string, b: string, opts?: Lib.Git.RunOpts, git_cmd?: string): string|nil, string|nil # The best common ancestor of two revisions; nil + "no common ancestor" for unrelated histories.
+---@field is_ancestor fun(ancestor: string, rev: string, opts?: Lib.Git.RunOpts, git_cmd?: string): boolean|nil, string|nil # Whether `ancestor` is reachable from `rev`; nil + err when git could not tell.
+---@field rev_parse_async fun(rev: string, opts: Lib.Git.RevParseOpts|nil, on_done: fun(sha: string|nil, err: string|nil), git_cmd?: string): { stop: fun() } # Async counterpart to rev_parse.
+---@field merge_base_async fun(a: string, b: string, opts: Lib.Git.RunOpts|nil, on_done: fun(sha: string|nil, err: string|nil), git_cmd?: string): { stop: fun() } # Async counterpart to merge_base.
+---@field is_ancestor_async fun(ancestor: string, rev: string, opts: Lib.Git.RunOpts|nil, on_done: fun(answer: boolean|nil, err: string|nil), git_cmd?: string): { stop: fun() } # Async counterpart to is_ancestor.
+---@field tags fun(opts?: Lib.Git.TagsOpts, git_cmd?: string): Lib.Git.Tag[]|nil, string|nil # Tags with annotation flag, peeled commit, creator time and subject, in one process; `merged`/`no_merged` select the tags of a range.
+---@field tags_async fun(opts: Lib.Git.TagsOpts|nil, on_done: fun(tags: Lib.Git.Tag[]|nil, err: string|nil), git_cmd?: string): { stop: fun() } # Async counterpart to tags.
+---@field LOG_FORMAT string # The `--format=` argument `log` passes, for a caller that runs `git log -z` itself and feeds `parse_log`.
 
 -- Lib.Git.Opts, Lib.Git.StatusEntry/StatusMap and Lib.Git.BlameEntry are
 -- declared in git/init.lua, right above the functions that use them -- not
--- duplicated here.
+-- duplicated here. The types of the run/log/tags section live below.
+
+---Options of every function that runs `git` and reports a result: `Lib.Git.Opts`
+---(`dir`) plus a timeout, an environment and the knobs a caller reading someone
+---else's repository needs.
+---@class Lib.Git.RunOpts : Lib.Git.Opts
+---@field timeout_ms? integer Kill git after this many milliseconds; the result is then `timed_out` (exit code 124). Only the direct child is killed, not a process tree it spawned (e.g. `git-remote-https` of a fetch).
+---@field env? table<string, string> Extra environment variables, merged over the inherited ones.
+---@field no_lazy_fetch? boolean Never fetch missing objects of a partial (blobless) clone: sets `GIT_NO_LAZY_FETCH=1` (git 2.44+) **and** passes `-c protocol.allow=never`, so it holds on older git too. git then fails on a missing object instead of silently fetching it -- no network, no write into the clone. The same switch blocks every transport, so a command that really needs the network (`fetch`) fails under it.
+---@field read_only? boolean Add `--no-optional-locks`, so the call never takes the index lock. `run`/`run_async` only; the functions that only read (`log`, `rev_parse`, ...) always set it.
+---@field input? string Standard input. `run`/`run_async` only.
+---@field binary? boolean Deliver stdout byte for byte (no `\r\n` rewriting). `run`/`run_async` only; `log` and `tags` always do.
+
+---What `run` and `run_async` report -- `lib.nvim.cross.run_argv`'s result: `ok` (exit code 0
+---and not killed by a signal), `code` (`124` after `opts.timeout_ms`, `128 + signal` when a
+---signal killed git, `-1` when git could not be started at all), `signal`, `stdout`,
+---`stderr` (`nil` only on Neovim without `vim.system`, which cannot separate the streams;
+---for a spawn failure it is the reason) and `timed_out`.
+---@class Lib.Git.RunResult : Lib.RunArgv.Result
+
+---Options of `log` and `log_async`.
+---@class Lib.Git.LogOpts : Lib.Git.RunOpts
+---@field name_status? boolean Add the changed files of every commit (`--name-status --no-renames`) as `entry.files`. Renames are reported as a delete plus an add: rename detection needs file contents and breaks in a blobless clone.
+---@field left_right? boolean Set `entry.side` for a symmetric range `A...B`.
+---@field reverse? boolean Oldest first (`--reverse`).
+---@field topo_order? boolean Never show a commit before all its children (`--topo-order`).
+---@field no_merges? boolean Skip merge commits.
+---@field first_parent? boolean Follow only the first parent of each merge.
+---@field max_count? integer At most this many commits (`--max-count`).
+---@field skip? integer Skip this many commits first (`--skip`).
+---@field paths? string[] Only commits touching these paths (after `--`).
+
+---One commit, as `log` returns it.
+---@class Lib.Git.LogEntry
+---@field sha string Full object name (40 or, with SHA-256, 64 hex digits).
+---@field parents string[] Parent object names; empty for a root commit, two or more for a merge.
+---@field author string
+---@field email string
+---@field author_time integer|nil Unix time of the author date.
+---@field commit_time integer|nil Unix time of the *committer* date -- the one that places the commit in the history.
+---@field refs string[] Ref names pointing at the commit, as git prints them: `"HEAD -> main"`, `"tag: v1.0"`, `"origin/main"`.
+---@field subject string First line of the message, `\r\n` normalised.
+---@field body string The rest of the message, trailing whitespace removed, `\r\n` normalised.
+---@field side? "<"|">"|"-" With `left_right`: `>` only reachable from the right of `A...B`, `<` only from the left, `-` a boundary commit.
+---@field files? Lib.Git.LogFile[] With `name_status`: the changed files. Empty for an empty commit and -- unless `first_parent` is set, which diffs a merge against its first parent -- for a merge.
+
+---One changed file of a commit.
+---@class Lib.Git.LogFile
+---@field status string Single-letter git status (`A`dded, `M`odified, `D`eleted, `T`ype change, ...), with a similarity score for `R`/`C` (`R100`).
+---@field path string The path after the change; paths are exact (`-z`), never C-quoted.
+---@field orig_path? string The source of an `R`/`C`.
+
+---Options of `rev_parse`.
+---@class Lib.Git.RevParseOpts : Lib.Git.RunOpts
+---@field short? boolean|integer Abbreviate the result (`true`: git's default length, a number: that many digits -- git never goes below 4).
+---@field commit? boolean Peel to a commit (`<rev>^{commit}`): a tag name gives the commit it points to, not the tag object.
+
+---Options of `tags`.
+---@class Lib.Git.TagsOpts : Lib.Git.RunOpts
+---@field merged? string Only tags reachable from this revision.
+---@field no_merged? string Only tags *not* reachable from this revision.
+---@field pattern? string A glob on the tag name (`"v1.*"`).
+---@field limit? integer At most this many tags (`0` is no tags, not "unlimited" as for git's own `--count=0`).
+---@field sort? "newest"|"oldest"|"version" By creator date, newest first (default); oldest first; by version number, highest first.
+
+---One tag, as `tags` returns it.
+---@class Lib.Git.Tag
+---@field name string
+---@field sha string The commit the tag points to (peeled for an annotated tag).
+---@field object string The tag's own object name -- equal to `sha` for a lightweight tag.
+---@field annotated boolean A tag object (with a message and tagger) rather than a bare ref.
+---@field time integer|nil Creator time: the tagger date of an annotated tag, the commit date of a lightweight one.
+---@field subject string First line of the tag message (annotated) or of the commit (lightweight).
 
 return {}

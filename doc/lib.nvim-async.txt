@@ -126,6 +126,49 @@ async.wrap({fn}, {argc})                                            *async.wrap*
     Callers may pass fewer than `argc - 1` arguments (a uv function with
     optional parameters); the callback still lands in slot {argc}.
 
+async.map_limit({items}, {limit}, {worker}, {on_done}, {opts})  *async.map_limit*
+
+    Run a callback-style {worker} over every item with AT MOST {limit} in
+    flight; collect the results in item order.
+
+    {worker}(item, index, done) starts the work and must call
+    `done(result, err)` exactly once (a second call is ignored). It may
+    return a handle with a `stop()` method, so that `stop()` on the run can
+    kill what is still in flight. A worker that throws counts as finished
+    with that error. A worker that never calls `done` stalls the run.
+
+    Parameters: ~
+        {items}    (any[])        The list to fan out over.
+        {limit}    (integer)      Maximum in-flight workers; at least 1.
+        {worker}   (function)     As above.
+        {on_done}  (function)     on_done(results, errors, stopped);
+                                  `vim.schedule`-dispatched, exactly once.
+                                  results[i] and errors[i] belong to items[i].
+        {opts}     (table|nil)    See below.
+
+    Options: ~
+        {on_progress}  (function)  on_progress(count, total, index, result,
+                                   err) after every finished item, in
+                                   completion order; `vim.schedule`-dispatched.
+
+    Return: ~
+        {stop}  A table with `stop()`: stops in-flight workers that returned
+                a handle, starts no further ones and calls
+                on_done(..., true). Anything finishing later is discarded.
+                No-op after the run finished.
+
+    A worker that finishes synchronously is fine: the loop is guarded against
+    re-entrancy, so a long list of such workers does not recurse.
+
+    Example -- the last commits of every repository, four at a time: >
+      async.map_limit(repos, 4, function(repo, _, done)
+        return require("lib.nvim.git").log_async(
+          "HEAD", { dir = repo, max_count = 5 }, done)
+      end, function(results, errors, stopped)
+        -- results[i] / errors[i] belong to repos[i]
+      end)
+<
+
 ================================================================================
 CONTROL PRIMITIVES                                               *async-control*
 

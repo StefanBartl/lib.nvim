@@ -3,9 +3,38 @@
 
 local M = {}
 
---- Options of the `*_captured` runners.
+--- Options of the `*_captured` and `*_result` runners.
 ---@class Lib.RunArgv.Opts
 ---@field binary? boolean Deliver stdout byte for byte (`vim.system` `text = false`): no `\r\n` -> `\n` rewriting, `NUL` and non-UTF-8 bytes intact. Needs Neovim 0.10+ (`vim.system`); the legacy fallback ignores it.
+---@field timeout_ms? integer Kill the process (SIGTERM) after this many milliseconds; the run then ends with exit code `124`, the `timeout(1)` convention. Only the direct child is killed, not a process tree it spawned. Needs `vim.system`; the legacy fallback ignores it.
+---@field env? table<string, string> Extra environment variables, merged over the inherited environment (an unset name stays inherited). Needs `vim.system`; the legacy fallback ignores it.
+---@field cwd? string Working directory of the child. Needs `vim.system`; the legacy fallback ignores it.
+
+--- The result of `run_blocking_result`.
+---@class Lib.RunArgv.Result
+---@field ok boolean `code == 0`. A process that was killed by a signal is **not** ok.
+---@field code integer Exit code: `124` after `opts.timeout_ms`, `128 + signal` when a signal killed the process (the shell convention; the OS reports exit status 0 for it), `-1` when `cmd[1]` could not be spawned at all
+---@field signal integer The signal that terminated the process, `0` if none (always `0` on the legacy fallback)
+---@field stdout string
+---@field stderr string|nil Captured stderr (`""` when empty); `nil` only on the legacy fallback, which cannot separate the streams. For a spawn failure it holds the reason.
+---@field timed_out boolean The run hit `opts.timeout_ms` (`code == 124` with a timeout set). A process that merely exits 124 by itself is not a timeout.
+
+---@internal
+--- Translate our options into `vim.system` options. One place, so the
+--- blocking and the async runner cannot drift apart.
+---@param input string|nil
+---@param opts Lib.RunArgv.Opts|nil
+---@return table
+local function system_opts(input, opts)
+  opts = opts or {}
+  return {
+    text = not opts.binary,
+    stdin = input,
+    timeout = opts.timeout_ms,
+    env = opts.env,
+    cwd = opts.cwd,
+  }
+end
 
 ---@param cmd string[]
 ---@param input? string
@@ -54,9 +83,8 @@ end
 ---@return string output Captured stdout, both on success and failure
 function M.run_blocking_captured(cmd, input, opts)
   if vim.system then
-    local text = not (opts and opts.binary)
     local ok, res = pcall(function()
-      return vim.system(cmd, { text = text, stdin = input }):wait()
+      return vim.system(cmd, system_opts(input, opts)):wait()
     end)
     if not ok then
       return false, tostring(res)
@@ -68,6 +96,64 @@ function M.run_blocking_captured(cmd, input, opts)
   -- `opts.binary` cannot be honoured.
   local out = vim.fn.system(cmd, input or "")
   return vim.v.shell_error == 0, out
+end
+
+--- Like `run_blocking_captured`, but reports **everything** the process did as
+--- one table: exit code, both streams and whether it ran into
+--- `opts.timeout_ms`. `run_blocking_captured` folds all of that into a bare
+--- `ok, stdout`, which is enough to ask "what did it print" and not enough to
+--- tell a failure's reason (stderr), a timeout (`124`) and a spawn failure
+--- (`-1`) apart -- the three things a caller reporting an error to the user
+--- needs.
+---
+--- Blocks the caller like `run_blocking_captured` does; for anything that can
+--- take longer than a few milliseconds use `run_async_captured`, which carries
+--- the same options and reports the same four values.
+---@param cmd string[]
+---@param input? string
+---@param opts? Lib.RunArgv.Opts
+---@return Lib.RunArgv.Result
+function M.run_blocking_result(cmd, input, opts)
+  if not vim.system then
+    -- Legacy fallback: no separate stderr, no timeout/env/cwd.
+    local out = vim.fn.system(cmd, input or "")
+    local code = vim.v.shell_error
+    return { ok = code == 0, code = code, signal = 0, stdout = out, stderr = nil, timed_out = false }
+  end
+
+  -- vim.system raises synchronously when cmd[1] cannot be spawned at all
+  -- (e.g. ENOENT): the same guard as in the other runners, reported as a
+  -- failed result instead of an error escaping to the caller.
+  local ok, res = pcall(function()
+    return vim.system(cmd, system_opts(input, opts)):wait()
+  end)
+  if not ok then
+    return {
+      ok = false,
+      code = -1,
+      signal = 0,
+      stdout = "",
+      stderr = tostring(res),
+      timed_out = false,
+    }
+  end
+
+  -- A process killed by a signal (the OOM killer, a crash) reports exit status
+  -- 0 with `signal` set: counting that as success would hand the caller an
+  -- empty or cut-short output as a valid answer. 128 + signal is the shell's
+  -- convention for it. A timeout already has a non-zero code (124).
+  local code, signal = res.code, res.signal or 0
+  if code == 0 and signal ~= 0 then
+    code = 128 + signal
+  end
+  return {
+    ok = code == 0,
+    code = code,
+    signal = signal,
+    stdout = res.stdout or "",
+    stderr = res.stderr or "",
+    timed_out = opts ~= nil and opts.timeout_ms ~= nil and code == 124,
+  }
 end
 
 --- Asynchronous counterpart to `run_blocking_captured`: spawns `cmd` and hands
@@ -106,7 +192,7 @@ end
 --- content as a signal needs to tell "this platform genuinely doesn't know"
 --- apart from "known and empty" rather than get a confident wrong answer.
 ---@param cmd string[]
----@param on_done fun(ok: boolean, output: string, code: integer, stderr: string|nil)
+---@param on_done fun(ok: boolean, output: string, code: integer, stderr: string|nil, signal: integer|nil) `signal` (5th) is the terminating signal, `0` if none, `nil` on the legacy fallback. `ok` is the exit code alone, as it always was -- a process killed by a signal still reads `ok = true`, `code = 0`; a caller that must tell checks `signal`.
 ---@param input? string
 ---@param opts? Lib.RunArgv.Opts
 ---@return { stop: fun() } handle
@@ -130,16 +216,15 @@ function M.run_async_captured(cmd, on_done, input, opts)
   -- (e.g. ENOENT) rather than delivering a failed SystemCompleted -- guard it
   -- so that case reaches on_done like every other failure, instead of an
   -- uncaught error escaping into the caller's stack.
-  local text = not (opts and opts.binary)
-  local ok_spawn, job = pcall(vim.system, cmd, { text = text, stdin = input }, function(res)
+  local ok_spawn, job = pcall(vim.system, cmd, system_opts(input, opts), function(res)
     vim.schedule(function()
-      on_done(res.code == 0, res.stdout or "", res.code, res.stderr or "")
+      on_done(res.code == 0, res.stdout or "", res.code, res.stderr or "", res.signal or 0)
     end)
   end)
 
   if not ok_spawn then
     vim.schedule(function()
-      on_done(false, tostring(job), -1, "")
+      on_done(false, tostring(job), -1, "", 0)
     end)
     return { stop = function() end }
   end

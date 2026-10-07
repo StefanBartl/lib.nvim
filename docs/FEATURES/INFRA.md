@@ -128,7 +128,10 @@ first.
 - **Module:** `lib.nvim.git` (`in_git_repo`, `repo_root`, `current_branch`,
   `is_dirty`, `is_tracked`, `upstream`, `ahead_behind`, `head_short_hash`,
   `status_porcelain`, `status_porcelain_async`, `parse_status`, `show`,
-  `show_async`, `info`)
+  `show_async`, `info`; for reading other repositories' history: `run`,
+  `run_async`, `log`, `log_async`, `parse_log`, `rev_parse`, `merge_base`,
+  `is_ancestor`, `tags`, plus the commit/compare/tag URLs of
+  `lib.nvim.git.remote`)
 
 ## Async/blocking HTTP via curl
 

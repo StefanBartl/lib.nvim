@@ -60,9 +60,10 @@ end
 
 ---Classify a remote host. `github.com`/`gitlab.com`/`codeberg.org` are
 ---built in; anything else is looked up in `hosts_cfg` (a caller-supplied
----map, e.g. gitsuite.nvim's `cfg.browse.hosts`).
+---map, e.g. gitsuite.nvim's `cfg.browse.hosts`). Without a map only the
+---three built-in hosts are known -- `nil`, not an error, for any other.
 ---@param host string
----@param hosts_cfg table<string, "github"|"gitlab"|"codeberg">
+---@param hosts_cfg? table<string, "github"|"gitlab"|"codeberg">
 ---@return "github"|"gitlab"|"codeberg"|nil
 function M.host_kind(host, hosts_cfg)
   if host == "github.com" then
@@ -74,7 +75,7 @@ function M.host_kind(host, hosts_cfg)
   if host == "codeberg.org" then
     return "codeberg"
   end
-  return hosts_cfg[host]
+  return hosts_cfg and hosts_cfg[host] or nil
 end
 
 ---Build a web URL for a file (optionally with a line anchor) or, with
@@ -110,6 +111,59 @@ function M.build(kind, remote, branch, rel_path, first, last)
     return ("%s/src/branch/%s/%s%s"):format(base, enc_branch, enc_path, anchor)
   end
   return ("%s/blob/%s/%s%s"):format(base, enc_branch, enc_path, anchor)
+end
+
+---@internal
+---@param remote { host: string, owner: string, repo: string }
+---@return string
+local function repo_base(remote)
+  return ("https://%s/%s/%s"):format(remote.host, remote.owner, remote.repo)
+end
+
+---Web URL of one commit. GitLab keeps its `/-/` namespace; GitHub, Codeberg
+---and the Gitea/Forgejo forks that share Codeberg's shape use `/commit/`.
+---`sha` is anything the host resolves (a full or abbreviated hash, a branch
+---or tag name); it is percent-encoded like every other path part.
+---@param kind "github"|"gitlab"|"codeberg"
+---@param remote { host: string, owner: string, repo: string }
+---@param sha string
+---@return string
+function M.commit_url(kind, remote, sha)
+  local seg = encode_path(sha)
+  if kind == "gitlab" then
+    return ("%s/-/commit/%s"):format(repo_base(remote), seg)
+  end
+  return ("%s/commit/%s"):format(repo_base(remote), seg)
+end
+
+---Web URL comparing two revisions: what `head` has that `base` lacks. The
+---three-dot form (`base...head`, the merge-base based diff) is the one every
+---host accepts as the web page of a comparison.
+---@param kind "github"|"gitlab"|"codeberg"
+---@param remote { host: string, owner: string, repo: string }
+---@param base string
+---@param head string
+---@return string
+function M.compare_url(kind, remote, base, head)
+  local range = ("%s...%s"):format(encode_path(base), encode_path(head))
+  if kind == "gitlab" then
+    return ("%s/-/compare/%s"):format(repo_base(remote), range)
+  end
+  return ("%s/compare/%s"):format(repo_base(remote), range)
+end
+
+---Web URL of a tag: the release page on GitHub/Codeberg (which also exists
+---for a tag without release notes), the tag page on GitLab.
+---@param kind "github"|"gitlab"|"codeberg"
+---@param remote { host: string, owner: string, repo: string }
+---@param tag string
+---@return string
+function M.tag_url(kind, remote, tag)
+  local seg = encode_path(tag)
+  if kind == "gitlab" then
+    return ("%s/-/tags/%s"):format(repo_base(remote), seg)
+  end
+  return ("%s/releases/tag/%s"):format(repo_base(remote), seg)
 end
 
 return M

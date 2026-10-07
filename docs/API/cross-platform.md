@@ -265,11 +265,19 @@ Blocks the caller.
 
 ```
 M.run_blocking(cmd: string[], input?: string): boolean, string|nil
-M.run_blocking_captured(cmd: string[], input?: string, opts?: { binary?: boolean }): boolean ok, string output
+M.run_blocking_captured(cmd: string[], input?: string, opts?: Lib.RunArgv.Opts): boolean ok, string output
   -- like run_blocking, but always also returns captured stdout, success or failure;
   -- text mode by default (\r\n -> \n), opts.binary = byte-exact stdout
-M.run_async_captured(cmd: string[], on_done: fun(ok, output, code), input?: string, opts?: { binary?: boolean }): { stop: fun() }
-  -- non-blocking counterpart; on_done is always vim.schedule-dispatched; stop() sends sigterm
+M.run_blocking_result(cmd: string[], input?: string, opts?: Lib.RunArgv.Opts): { ok, code, signal, stdout, stderr, timed_out }
+  -- everything the process did in one table; code 124 = timed out, 128+signal = killed by a signal
+  -- (ok = false then), -1 = could not be started
+M.run_async_captured(cmd: string[], on_done: fun(ok, output, code, stderr, signal), input?: string, opts?: Lib.RunArgv.Opts): { stop: fun() }
+  -- non-blocking counterpart; on_done is always vim.schedule-dispatched; stop() sends sigterm;
+  -- ok/code are the bare exit status (a signal-killed process reads ok = true) - check `signal`
+
+Lib.RunArgv.Opts = { binary?: boolean, timeout_ms?: integer, env?: table<string,string>, cwd?: string }
+  -- timeout_ms: SIGTERM after that long -> exit code 124 (direct child only, not a process tree)
+  -- env: merged over the inherited environment; timeout_ms/env/cwd need vim.system (0.10+)
 ```
 
 ---

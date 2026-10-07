@@ -53,11 +53,62 @@ local ok, blob = run_argv.run_blocking_captured(
 `lib.nvim.cross.open_default` uses `run_blocking_captured` to resolve a WSL
 path via `wslpath -w`.
 
+### Options: `binary`, `timeout_ms`, `env`, `cwd`
+
+The `*_captured` and `*_result` runners take one options table:
+
+| Option | Meaning |
+| --- | --- |
+| `binary` | stdout byte for byte (see above). |
+| `timeout_ms` | Kill the process (SIGTERM) after this long. The run then ends with **exit code `124`**, the `timeout(1)` convention. Only the direct child is killed, not a process tree it spawned (on Windows, `taskkill /T` is the tool for that). |
+| `env` | Extra environment variables, **merged over** the inherited environment — a name you do not set stays inherited. |
+| `cwd` | Working directory of the child. |
+
+All three need `vim.system` (Neovim 0.10+); the legacy fallback ignores them.
+
+```lua
+local ok, out = run_argv.run_blocking_captured(
+  { "git", "fetch" }, nil, { timeout_ms = 60000, env = { GIT_TERMINAL_PROMPT = "0" } }
+)
+```
+
+### `run_blocking_result(cmd, input?, opts?) -> result`
+
+`run_blocking_captured` folds everything into `ok, stdout`: enough to ask "what
+did it print", not enough to tell a failure's **reason**, a **timeout** and a
+**spawn failure** apart — the three things a caller reporting an error to the
+user needs. `run_blocking_result` returns one table instead:
+
+```lua
+local res = run_argv.run_blocking_result({ "git", "status" }, nil, { timeout_ms = 5000 })
+-- { ok = false, code = 128, stdout = "", stderr = "fatal: not a git repository…", timed_out = false }
+```
+
+| Field | Meaning |
+| --- | --- |
+| `ok` | `code == 0` — a process **killed by a signal is not ok** |
+| `code` | the exit code; `124` after `timeout_ms`; `128 + signal` when a signal killed the process; `-1` when `cmd[1]` could not be started |
+| `signal` | the terminating signal, `0` if none |
+| `stdout` | captured stdout |
+| `stderr` | captured stderr (`""` when empty); for a spawn failure the reason; `nil` only on the legacy fallback, which cannot separate the streams |
+| `timed_out` | the run hit `timeout_ms` (`code == 124` with a timeout set; a process that exits 124 by itself is not a timeout) |
+
+The signal row is the reason this function exists in this shape: the OS
+reports **exit status 0** for a process the OOM killer or a crash took down, so
+`ok = (code == 0)` alone hands a cut-short output to the caller as a valid
+answer.
+
+Blocks the caller exactly like `run_blocking_captured`; for anything that can
+take longer than a few milliseconds use `run_async_captured`, which carries the
+same options and reports the same four values.
+
 ### `run_async_captured(cmd, on_done, input?, opts?) -> handle`
 
-Asynchronous counterpart to `run_blocking_captured` (same `opts.binary`):
+Asynchronous counterpart to `run_blocking_captured` (same `opts`):
 spawns `cmd` and hands
-the outcome to `on_done(ok, output, code)` instead of blocking the UI thread
+the outcome to `on_done(ok, output, code, stderr, signal)` instead of blocking the UI thread
+(`ok` is the exit status alone, as it always was — a process killed by a signal still
+reads `ok = true, code = 0`; the 5th argument `signal` is how a caller tells)
 until the process exits. `run_blocking`/`run_blocking_captured` are, by a
 wide margin, the biggest source of UI freezes across the plugins built on
 this library — anything that can take longer than a few milliseconds

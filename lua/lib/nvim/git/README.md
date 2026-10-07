@@ -9,7 +9,8 @@ cwd-implicit ones as `git -C <dir>`.
 
 Every function here is side-effect free except `checkout` (see
 [below](#checking-out-a-branch)), which is a real filesystem/index mutation
-by design.
+by design, and `run`/`run_async` (see [Running git](#running-git-and-reading-someone-elses-history)),
+the generic escape hatch that runs whatever subcommand it is handed.
 
 ## Usage
 
@@ -113,10 +114,13 @@ git.refs(nil, { remotes = false, tags = false })  -- local branches only
 
 Two details matter more than they look:
 
-- **Sorted by commit date, newest first.** `git for-each-ref` defaults to
+- **Sorted by creator date, newest first.** `git for-each-ref` defaults to
   refname order, which puts whatever starts with `a` ahead of the branch you
-  were on ten seconds ago. `-committerdate` puts the likely answer in the
-  first few candidates.
+  were on ten seconds ago. `-creatordate` puts the likely answer in the
+  first few candidates. It is `creatordate`, not `committerdate`: an
+  *annotated* tag has no committer, so `committerdate` left every annotated
+  tag undated and sorted them all to the bottom; for a branch or a
+  lightweight tag the two are the same.
 - **Remote branches keep their prefix** (`origin/main`, not `main`), because
   that is how git itself accepts them as a revision. Stripping it would also
   collide with the identically named local branch.
@@ -194,6 +198,164 @@ to diff or hash, which is why this goes through `run_argv`'s `binary` option.
   (`nil, "…invalid revision…"`): it is glued to the front of one argument, and
   an option such as `--pretty=format:X` would make git succeed with output
   that is not the file.
+
+## Running git and reading someone else's history
+
+Added for consumers that read the history of repositories the editor does not
+own — a plugin manager's clones, the rows of a multi-repo overview. They need
+what the helpers above do not expose: a **timeout**, an **environment**, the
+**exit code** and **stderr**. Everything in this section takes
+`Lib.Git.RunOpts` — `opts.dir` plus:
+
+| Option | Meaning |
+| --- | --- |
+| `timeout_ms` | Kill git after this long; the result is `timed_out` (exit code `124`). Only the direct child dies, not a process tree it spawned. |
+| `env` | Extra environment variables, merged over the inherited ones. |
+| `no_lazy_fetch` | Never fetch missing objects of a partial (**blobless**) clone: git then *fails* on a missing object instead of quietly fetching it from the remote — no network, no write into the clone. Sets `GIT_NO_LAZY_FETCH=1` (git 2.44+; an explicit `env` entry of the same name wins) **and** passes `-c protocol.allow=never`, so it holds on older git too. The same switch blocks every transport, so a command that really needs the network (`fetch`) fails under it. |
+| `read_only` | `--no-optional-locks`. `run`/`run_async` only; the read functions below always set it. |
+| `input`, `binary` | stdin / byte-exact stdout. `run`/`run_async` only. |
+
+### `run` / `run_async` — the generic runner
+
+```lua
+local res = git.run({ "rev-parse", "HEAD" }, { dir = repo, timeout_ms = 5000 })
+-- { ok = true, code = 0, stdout = "…\n", stderr = "", timed_out = false }
+
+git.run_async({ "log", "--stat" }, { dir = repo, no_lazy_fetch = true }, function(res)
+  -- runs on the main loop (vim.schedule)
+end)
+```
+
+`args` is what comes after `git` (and after `-C <opts.dir>`, which is added for
+you). **Nothing validates the subcommand** — a caller that must stay read-only
+restricts the verbs itself. The result reports everything: `code` is `124`
+after `timeout_ms` (`timed_out`; a git that merely exits 124 by itself is not a
+timeout), `128 + signal` when a signal killed git (`signal` holds it — the OS
+reports exit status 0 for such a process, which must not read as success; `ok`
+is `false` then), and `-1` when git could not be started at all, in which case
+`stdout` is `""` and `stderr` holds the reason (without Neovim's `file:line`
+stamp). `stderr` is `nil` only on a Neovim without `vim.system`.
+
+### `log` / `log_async` / `parse_log` — commits, bodies and files in one process
+
+```lua
+local commits, err = git.log("v1.2.0..v1.3.0", {
+  dir = clone,
+  name_status = true,   -- entry.files: { status, path, orig_path? } per commit
+  no_lazy_fetch = true, -- never fetch missing blobs of a blobless clone
+  timeout_ms = 30000,
+})
+-- { { sha, parents, author, email, author_time, commit_time,
+--     refs = { "HEAD -> main", "tag: v1.3.0" }, subject, body, files }, … }
+```
+
+`range` is anything `git log` takes as one argument; `nil` is `HEAD`. A range
+without commits is `{}`; `nil` plus a reason means git failed (unknown
+revision, a repository without commits, not a repository, timeout). Newest
+commit first; `reverse`, `topo_order`, `no_merges`, `first_parent`,
+`max_count`, `skip` and `paths` do what the git flags of the same name do.
+
+- **`A...B` with `left_right`** sets `entry.side`: `>` for a commit only
+  reachable from `B`, `<` for one only reachable from `A`. One call tells a
+  fast-forward (`<` empty) from a rewound or diverged history.
+- **`commit_time` is the committer time.** After a rebase the author time can
+  be years older than the commit's place in the history.
+- **One process** for the commits, their bodies *and* (with `name_status`)
+  their changed files. Renames are reported as a delete plus an add
+  (`--no-renames`): rename detection needs file contents and breaks halfway
+  through in a blobless clone.
+- **`subject`/`body` are normalised** (`\r\n` → `\n`, no trailing whitespace);
+  paths are exact (`-z`), never C-quoted.
+- **Hostile commit text is safe.** Fields and records are separated by `NUL`,
+  and a commit message can never contain one (git's message buffer ends at the
+  first `NUL`), so a message cannot forge a second commit. Treat the *text* as
+  untrusted all the same — it can still contain terminal escape sequences.
+  Trimming a message is linear even for a body of a million blanks.
+- **Blobless clones:** `log` (with `name_status`) reads only commit and tree
+  objects, so it works offline. Pair it with `no_lazy_fetch = true` to
+  *guarantee* nothing is fetched.
+- **A range named like a file is fine.** `--` always follows the range, so a
+  `doc` branch next to a `doc` directory is not "ambiguous".
+- **`files` of a merge** are empty — unless `first_parent` is set, which diffs a
+  merge against its first parent.
+- **The user's git config is pinned where it would break the parse:** the
+  output encoding (`--encoding=UTF-8`) and the root commit's files (`--root`).
+  `log.excludeDecoration` cannot be overridden from the command line and still
+  hides matching names from `refs`.
+- **No default timeout** — pass `timeout_ms` for a repository you do not own.
+  `git` inherits `GIT_DIR`/`GIT_WORK_TREE` from the editor's environment, which
+  win over `-C`; and `dir` is only where git starts looking, so a plugin
+  directory without its own `.git` inside another repository reads *that*
+  one.
+
+`parse_log(raw, { left_right, name_status })` is the pure parser, for a caller
+that runs git itself (`git log -z git.LOG_FORMAT [--name-status --no-renames]`;
+`git.LOG_FORMAT` is the `--format=` argument `log` uses). It is
+strict — a stray token, a cut-short record or a hash that is not 40/64 hex
+digits is `nil, err`, never a guess.
+
+### `rev_parse`, `merge_base`, `is_ancestor`
+
+```lua
+git.rev_parse("v2", { dir = repo })                      --> full object name (the tag object)
+git.rev_parse("v2", { dir = repo, commit = true })       --> the commit it points to
+git.rev_parse("HEAD", { dir = repo, short = 8 })         --> 8 digits
+git.merge_base("main", "feature", { dir = repo })        --> sha, or nil, "no common ancestor"
+git.is_ancestor(old, new, { dir = repo })                --> true (fast-forward) | false | nil, err
+```
+
+`is_ancestor` is three-valued on purpose: `false` ("not an ancestor — rewound
+or diverged") must not be confused with `nil` ("git could not tell": unknown
+revision, not a repository, timeout, killed by a signal). A revision that starts
+with `-` (`--all`) or contains a line break is refused rather than handed to git
+as an option. `short = n` asks for `n` digits; git never goes below 4.
+
+All four have an `_async` twin with the same arguments plus `on_done`
+(`rev_parse_async`, `merge_base_async`, `is_ancestor_async`, `tags_async`),
+`vim.schedule`-dispatched and returning a `{ stop }` handle — the form to hand
+to `lib.nvim.async.map_limit` when many repositories are asked at once. A
+refused call (a bad revision) reports through `on_done` asynchronously too.
+
+### `tags` — one process, with the metadata a changelog needs
+
+```lua
+git.tags({ dir = repo })                                 --> newest creator date first
+git.tags({ dir = repo, merged = new, no_merged = old })  --> the tags an update brought in
+git.tags({ dir = repo, sort = "version", pattern = "v1.*", limit = 5 })
+-- { { name, sha, object, annotated, time, subject }, … }
+```
+
+`sha` is the commit a tag points to (peeled out of an annotated tag),
+`object` the tag's own object (equal to `sha` for a lightweight tag). `time` is
+the tagger date of an annotated tag and the commit date of a lightweight one;
+`subject` the first line of the tag message (annotated) or of the commit.
+`sort` is `"newest"` (default), `"oldest"` or `"version"` (so `v1.10` is above
+`v1.2`). `limit = 0` is no tags (git's own `--count=0` would mean all). Reads
+only ref and tag objects, so it works in a blobless clone, offline.
+
+## Remote URLs: `lib.nvim.git.remote`
+
+Pure — no process, no `vim.api` — parsing and building for GitHub, GitLab,
+Codeberg and self-hosted instances a caller declares:
+
+```lua
+local remote = require("lib.nvim.git.remote")
+
+local r = remote.parse_remote(git.remote_url(nil, { dir = repo })) --> { host, owner, repo }
+local kind = remote.host_kind(r.host)                      --> "github" | "gitlab" | "codeberg" | nil
+-- host_kind(host, hosts_cfg): hosts_cfg maps a self-hosted host name to its kind; optional
+
+remote.build(kind, r, "main", "lua/a.lua", 10, 20)      -- a file with a line range
+remote.commit_url(kind, r, sha)                          -- …/commit/<sha>      (GitLab: …/-/commit/<sha>)
+remote.compare_url(kind, r, old, new)                    -- …/compare/old...new (GitLab: …/-/compare/…)
+remote.tag_url(kind, r, "v1.2.3")                        -- …/releases/tag/v1.2.3 (GitLab: …/-/tags/v1.2.3)
+```
+
+Every path part is percent-encoded segment by segment (a `/` in a branch or
+tag name stays the separator). Nothing is shelled out or fetched — the URL is
+only built. The GitHub shapes are the ones every GitHub link uses; the
+GitLab and Gitea/Forgejo (Codeberg) shapes are the documented ones, not
+verified against a live instance here.
 
 ## Diagnostics cleanup helper
 

@@ -50,6 +50,11 @@ end
 --- index (`status`): without it git opportunistically takes `index.lock`,
 --- which makes a concurrent `git commit`/`git add` of the user fail with
 --- "index.lock exists" whenever an automatic refresh happens to overlap it.
+---
+--- `opts.no_lazy_fetch` (a `Lib.Git.RunOpts` field) adds `-c protocol.allow=never`:
+--- the `GIT_NO_LAZY_FETCH` variable that goes with it only exists since git 2.44,
+--- and without a transport a partial clone's lazy fetch cannot reach its remote
+--- on any version -- the object it needs is reported missing instead.
 ---@param bin string
 ---@param opts Lib.Git.Opts|nil
 ---@param args string[]
@@ -65,6 +70,9 @@ local function git_argv(bin, opts, args, read_only)
     )
   end
   local argv = { bin }
+  if opts and opts.no_lazy_fetch then
+    vim.list_extend(argv, { "-c", "protocol.allow=never" })
+  end
   if read_only then
     argv[#argv + 1] = "--no-optional-locks"
   end
@@ -273,8 +281,11 @@ end
 --- Built for `<Tab>` completion of a "which revision?" argument, which is why
 --- the ordering matters more than it looks: `git for-each-ref` defaults to
 --- refname order, so a plain listing puts whatever starts with "a" in front
---- of the branch you were on ten seconds ago. `-committerdate` puts the
---- answer the user most likely wants within the first few candidates.
+--- of the branch you were on ten seconds ago. `-creatordate` puts the
+--- answer the user most likely wants within the first few candidates. It is
+--- `creatordate`, not `committerdate`: an *annotated* tag has no committer, so
+--- `committerdate` left every annotated tag undated and sorted them all to the
+--- bottom of the list; for a branch or a lightweight tag the two are the same.
 ---
 --- Remote branches are offered with their remote prefix (`origin/main`) and
 --- local ones without, because that is exactly how git itself accepts them
@@ -302,7 +313,7 @@ function M.refs(dir, opts, git_cmd)
     end
     vim.list_extend(argv, {
       "for-each-ref",
-      "--sort=-committerdate",
+      "--sort=-creatordate",
       ("--format=%%(refname:strip=%d)"):format(strip),
       pattern,
     })
@@ -595,6 +606,784 @@ function M.show_async(rev, path, opts, on_done, git_cmd)
   return require("lib.nvim.cross.run_argv").run_async_captured(argv, function(ok, out)
     on_done(show_result(ok, out, what))
   end, nil, { binary = true })
+end
+
+-- =========================================================
+-- Running git, history and tags
+-- =========================================================
+--
+-- Added for consumers that read the history of *other people's* repositories
+-- (a plugin manager's clones): they need a timeout, an environment, the exit
+-- code and stderr, none of which the helpers above expose. Every function in
+-- this section takes `Lib.Git.RunOpts`; apart from `run`/`run_async` (which
+-- run whatever they are handed) none of them writes to the repository.
+
+---@internal
+--- `Lib.Git.RunOpts` -> the `lib.nvim.cross.run_argv` options. `no_lazy_fetch`
+--- is sugar for one environment variable (and a `-c` in `git_argv`); an
+--- explicit `opts.env` entry of the same name wins over it.
+---@param opts Lib.Git.RunOpts|nil
+---@return Lib.RunArgv.Opts
+local function runner_opts(opts)
+  opts = opts or {}
+  local env = opts.env
+  if opts.no_lazy_fetch then
+    env = vim.tbl_extend("force", { GIT_NO_LAZY_FETCH = "1" }, env or {})
+  end
+  return { binary = opts.binary, timeout_ms = opts.timeout_ms, env = env }
+end
+
+---@internal
+--- Options for a function that only reads: `--no-optional-locks` (a query must
+--- never make the user's own `git add` fail with "index.lock exists") on top of
+--- whatever the caller passed.
+---@param opts Lib.Git.RunOpts|nil
+---@return Lib.Git.RunOpts
+local function read_opts(opts)
+  return vim.tbl_extend("force", opts or {}, { read_only = true })
+end
+
+---@internal
+--- The full argv for `M.run`/`M.run_async`.
+---@param args any
+---@param opts Lib.Git.RunOpts|nil
+---@param git_cmd string|nil
+---@return string[]
+local function run_argv_for(args, opts, git_cmd)
+  if type(args) ~= "table" or #args == 0 then
+    error('lib.nvim.git.run: `args` must be a non-empty list of strings, e.g. { "log", "-1" }', 3)
+  end
+  return git_argv(git_cmd or "git", opts, args, opts ~= nil and opts.read_only == true)
+end
+
+---@internal
+--- Refuse a revision that cannot safely be glued into an argv: one starting
+--- with `-` would be read by git as an option (`--output=<file>` writes a
+--- file), one with a line break or `NUL` is never a revision.
+---@param rev any
+---@param what string The git subcommand, for the message.
+---@return string|nil err
+local function bad_rev(rev, what)
+  if type(rev) ~= "string" or rev == "" or rev:sub(1, 1) == "-" or rev:find("[%z\r\n]") then
+    return ("git %s: invalid revision %s"):format(what, vim.inspect(rev))
+  end
+  return nil
+end
+
+---@internal
+--- `vim.system` raises when it cannot start the command at all, and raises
+--- with level 1, so the reason arrives as `vim/_core/system.lua:324: ENOENT: ...`:
+--- Neovim's own source position, noise to the person reading the message.
+--- Removes exactly that leading stamp, once -- and only a stamp that points into
+--- Neovim's runtime (`vim/...lua:N: `), so a message without one that merely
+--- quotes a `something.lua:12:` from the command is left alone. Only ever
+--- applied to a spawn failure (code `-1`); `docs/conventions.md` explains why
+--- this is the one place the "no pattern stripping" rule gives way: the stamp
+--- is created by Neovim's code, which this library cannot ask to raise with
+--- level 0.
+---@param msg string
+---@return string
+local function unstamp(msg)
+  return (msg:gsub("^.-vim[/\\][%w_/\\]*%.lua:%d+: ", "", 1))
+end
+
+---@internal
+--- Make a spawn failure look the same from the blocking and the async runner:
+--- code `-1`, empty stdout, the reason in stderr without Neovim's position.
+--- (`run_async_captured` reports that reason in the stdout slot.)
+---@param res Lib.RunArgv.Result
+---@return Lib.RunArgv.Result
+local function normalize_result(res)
+  if res.code == -1 then
+    local reason = res.stderr
+    if reason == nil or reason == "" then
+      reason = res.stdout
+    end
+    res.stdout = ""
+    res.stderr = unstamp(reason or "")
+    res.timed_out = false
+  end
+  return res
+end
+
+---@internal
+--- Run an argv through `run_argv` and normalise the result.
+---@param argv string[]
+---@param input string|nil
+---@param ropts Lib.RunArgv.Opts
+---@return Lib.RunArgv.Result
+local function exec(argv, input, ropts)
+  return normalize_result(
+    require("lib.nvim.cross.run_argv").run_blocking_result(argv, input, ropts)
+  )
+end
+
+---@internal
+--- Async counterpart of `exec`: `on_done` gets the normalised result. The
+--- async runner reports `ok` from the exit code alone, so a process killed by
+--- a signal (exit code 0, `signal` 9 on POSIX) is turned into a failure here --
+--- exactly what `run_blocking_result` does for the blocking runner.
+---@param argv string[]
+---@param input string|nil
+---@param ropts Lib.RunArgv.Opts
+---@param on_done fun(res: Lib.RunArgv.Result)
+---@return { stop: fun() }
+local function exec_async(argv, input, ropts, on_done)
+  return require("lib.nvim.cross.run_argv").run_async_captured(
+    argv,
+    function(ok, stdout, code, stderr, signal)
+      signal = signal or 0
+      if code == 0 and signal ~= 0 then
+        ok, code = false, 128 + signal
+      end
+      on_done(normalize_result({
+        ok = ok,
+        code = code,
+        signal = signal,
+        stdout = stdout,
+        stderr = stderr,
+        timed_out = ropts.timeout_ms ~= nil and code == 124,
+      }))
+    end,
+    input,
+    ropts
+  )
+end
+
+---@internal
+--- The reason a failed run goes to the user with: a timeout says so, a signal
+--- says so, otherwise git's own stderr (also the reason of a spawn failure),
+--- otherwise the code.
+---@param res Lib.RunArgv.Result
+---@param what string e.g. "git log"
+---@param opts Lib.Git.RunOpts|nil
+---@return string
+local function failure_message(res, what, opts)
+  if res.timed_out then
+    return ("%s timed out after %d ms"):format(what, opts and opts.timeout_ms or 0)
+  end
+  if (res.signal or 0) ~= 0 then
+    return ("%s was terminated by signal %d"):format(what, res.signal)
+  end
+  local detail = vim.trim(res.stderr or "")
+  if detail ~= "" then
+    return detail
+  end
+  return ("%s failed (exit code %d)"):format(what, res.code)
+end
+
+--- Run `git <args>` and report **everything** it did: exit code, both streams
+--- and whether it ran into `opts.timeout_ms`. The generic runner the helpers
+--- above are too specialised to be -- for a caller that needs a timeout, an
+--- environment, git's stderr or the exit code.
+---
+--- `args` is what comes after `git` (and after `-C <opts.dir>`, which is added
+--- for you). Nothing here validates the subcommand: this is the escape hatch,
+--- so a caller that must stay read-only restricts the verbs itself.
+---
+--- Blocks the caller; `run_async` for anything that can take a moment.
+---@param args string[] E.g. `{ "log", "-1", "--format=%H" }`.
+---@param opts? Lib.Git.RunOpts
+---@param git_cmd? string
+---@return Lib.Git.RunResult
+function M.run(args, opts, git_cmd)
+  local argv = run_argv_for(args, opts, git_cmd)
+  return exec(argv, opts and opts.input or nil, runner_opts(opts))
+end
+
+--- Async counterpart to `run`.
+---@param args string[]
+---@param opts Lib.Git.RunOpts|nil
+---@param on_done fun(result: Lib.Git.RunResult) Always invoked via `vim.schedule` -- safe to touch buffers, windows and `vim.fn.*`.
+---@param git_cmd? string
+---@return { stop: fun() } handle Kills the underlying job; harmless to call after it has finished.
+function M.run_async(args, opts, on_done, git_cmd)
+  local argv = run_argv_for(args, opts, git_cmd)
+  return exec_async(argv, opts and opts.input or nil, runner_opts(opts), on_done)
+end
+
+---@internal
+--- Split on `NUL`, keeping empty tokens; a trailing `NUL` does not add one.
+---@param raw string
+---@return string[]
+local function split_nul(raw)
+  local out, pos, len = {}, 1, #raw
+  while pos <= len do
+    local nul = raw:find("\0", pos, true)
+    if not nul then
+      out[#out + 1] = raw:sub(pos)
+      break
+    end
+    out[#out + 1] = raw:sub(pos, nul - 1)
+    pos = nul + 1
+  end
+  return out
+end
+
+---@internal
+--- `\r\n` -> `\n` and no trailing whitespace: a commit authored on Windows
+--- carries `\r` in its subject and body. The trailing whitespace is cut by
+--- scanning back from the end: the obvious `gsub("%s+$", "")` retries at every
+--- position of a whitespace run and is quadratic in its length, so one hostile
+--- commit with a body of 100 000 spaces would freeze the editor for seconds.
+---@param text string
+---@return string
+local function clean_message(text)
+  text = text:gsub("\r\n", "\n")
+  local last = #text
+  while last > 0 do
+    local byte = text:byte(last)
+    if byte == 32 or (byte >= 9 and byte <= 13) then
+      last = last - 1
+    else
+      break
+    end
+  end
+  return text:sub(1, last)
+end
+
+-- One record per commit: a `RS` marker, ten `NUL`-terminated fields, then (with
+-- `name_status`) the `--name-status` entries. `NUL` is the separator on purpose:
+-- git's message buffer ends at the first `NUL`, so a commit message can never
+-- contain one -- unlike `RS`/`US`, which a hostile repository could put into a
+-- subject to forge a second record.
+local LOG_FORMAT = "--format=%x1e%H%x00%P%x00%an%x00%ae%x00%at%x00%ct%x00%m%x00%D%x00%s%x00%b%x00"
+local LOG_RECORD_MARK = "\30"
+
+--- The `--format=` argument `M.log` passes. Exported so a caller that runs
+--- `git log -z` itself and hands the output to `parse_log` cannot drift from it.
+M.LOG_FORMAT = LOG_FORMAT
+
+--- Parse the output of the `git log` that `M.log` runs -- the pure half, for a
+--- caller that runs git itself. The expected command is
+--- `git log -z M.LOG_FORMAT [--name-status --no-renames]`.
+---
+--- Strict on purpose: the format is fixed, so anything that does not fit
+--- (a stray token, a record cut short, a hash that is not 40/64 hex digits)
+--- means a different git or a broken pipe, and is an error rather than a
+--- guess. A hostile commit message cannot trip it -- see `LOG_FORMAT`.
+---@param raw string
+---@param opts? { left_right?: boolean, name_status?: boolean } Which flags the log was run with; they decide whether `side` and `files` exist.
+---@return Lib.Git.LogEntry[]|nil entries
+---@return string|nil err
+function M.parse_log(raw, opts)
+  if type(raw) ~= "string" then
+    return nil, "git log: output is not a string"
+  end
+  opts = opts or {}
+  local tokens = split_nul(raw)
+  local n = #tokens
+  local entries = {}
+  local i = 1
+  while i <= n do
+    local sha = tokens[i]:match("^" .. LOG_RECORD_MARK .. "(%x+)$")
+    if not sha or (#sha ~= 40 and #sha ~= 64) then
+      return nil, ("git log: malformed output (token %d is not a commit record)"):format(i)
+    end
+    -- ten fields and the record terminator (an empty token)
+    if i + 10 > n then
+      return nil, "git log: truncated output"
+    end
+    if tokens[i + 10] ~= "" then
+      return nil, ("git log: malformed output (record %s is not terminated)"):format(sha:sub(1, 8))
+    end
+
+    ---@type Lib.Git.LogEntry
+    local entry = {
+      sha = sha,
+      parents = vim.split(tokens[i + 1], " ", { plain = true, trimempty = true }),
+      author = tokens[i + 2],
+      email = tokens[i + 3],
+      author_time = tonumber(tokens[i + 4]),
+      commit_time = tonumber(tokens[i + 5]),
+      refs = vim.split(tokens[i + 7], ", ", { plain = true, trimempty = true }),
+      subject = clean_message(tokens[i + 8]),
+      body = clean_message(tokens[i + 9]),
+    }
+    if opts.left_right then
+      local side = tokens[i + 6]
+      entry.side = (side == "<" or side == ">" or side == "-") and side or nil
+    end
+    i = i + 11
+
+    if opts.name_status then
+      local files = {}
+      while i <= n do
+        -- The first entry of a record carries the blank line git prints between
+        -- the message and the file list as a leading "\n".
+        local status = tokens[i]:match("^\n?([ACDMRTUXB]%d*)$")
+        if not status then
+          break
+        end
+        local kind = status:sub(1, 1)
+        if kind == "R" or kind == "C" then
+          local old_path, new_path = tokens[i + 1], tokens[i + 2]
+          if not new_path then
+            return nil, "git log: truncated output"
+          end
+          files[#files + 1] = { status = status, path = new_path, orig_path = old_path }
+          i = i + 3
+        else
+          local path = tokens[i + 1]
+          if not path then
+            return nil, "git log: truncated output"
+          end
+          files[#files + 1] = { status = status, path = path }
+          i = i + 2
+        end
+      end
+      entry.files = files
+    end
+
+    entries[#entries + 1] = entry
+  end
+  return entries, nil
+end
+
+---@internal
+--- A count `git` takes as an integer: whole, not negative, and small enough to
+--- print as one (no `inf`, no exponent form).
+---@param v any
+---@return boolean
+local function is_count(v)
+  return type(v) == "number" and v >= 0 and v == math.floor(v) and v <= 2 ^ 53
+end
+
+---@internal
+--- The argv for `M.log`/`M.log_async`.
+---@param range string|nil
+---@param opts Lib.Git.LogOpts
+---@param bin string
+---@return string[]|nil argv nil when the arguments are unusable
+---@return string|nil err
+local function log_argv(range, opts, bin)
+  if range ~= nil and range ~= "" then
+    local err = bad_rev(range, "log")
+    if err then
+      return nil, err
+    end
+  else
+    range = nil
+  end
+  for _, key in ipairs({ "max_count", "skip" }) do
+    if opts[key] ~= nil and not is_count(opts[key]) then
+      return nil,
+        ("git log: `%s` must be a non-negative integer, got %s"):format(key, vim.inspect(opts[key]))
+    end
+  end
+
+  -- `--encoding` and `--root` pin two things the user's config could change
+  -- (`i18n.logOutputEncoding`, `log.showRoot`) and break the result.
+  local args = { "log", "-z", "--no-color", "--no-show-signature", "--encoding=UTF-8", LOG_FORMAT }
+  if opts.name_status then
+    -- `--no-renames` also keeps this working in a blobless clone: rename
+    -- detection needs file contents, and a clone without them fails halfway
+    -- through the output.
+    vim.list_extend(args, { "--name-status", "--no-renames", "--root" })
+  end
+  if opts.left_right then
+    args[#args + 1] = "--left-right"
+  end
+  if opts.reverse then
+    args[#args + 1] = "--reverse"
+  end
+  if opts.topo_order then
+    args[#args + 1] = "--topo-order"
+  end
+  if opts.no_merges then
+    args[#args + 1] = "--no-merges"
+  end
+  if opts.first_parent then
+    args[#args + 1] = "--first-parent"
+  end
+  if opts.max_count ~= nil then
+    args[#args + 1] = ("--max-count=%d"):format(opts.max_count)
+  end
+  if opts.skip ~= nil then
+    args[#args + 1] = ("--skip=%d"):format(opts.skip)
+  end
+  if range then
+    args[#args + 1] = range
+  end
+  -- Always the `--`: without it git refuses a range as "ambiguous" the moment a
+  -- file of the same name exists in the work tree (a `doc` directory next to a
+  -- `doc` branch, a `v1` file next to a `v1` tag).
+  args[#args + 1] = "--"
+  for _, path in ipairs(opts.paths or {}) do
+    if type(path) ~= "string" or path == "" or path:find("%z") then
+      return nil, ("git log: invalid path %s"):format(vim.inspect(path))
+    end
+    args[#args + 1] = path
+  end
+  return git_argv(bin, opts, args, true)
+end
+
+---@internal
+---@param res Lib.RunArgv.Result
+---@param opts Lib.Git.LogOpts
+---@return Lib.Git.LogEntry[]|nil
+---@return string|nil
+local function log_result(res, opts)
+  if not res.ok then
+    return nil, failure_message(res, "git log", opts)
+  end
+  return M.parse_log(res.stdout, opts)
+end
+
+--- The commits of a revision range, parsed (`git log`). Built for reading the
+--- history of repositories the editor does not own: safe against hostile commit
+--- text, boundable with `opts.timeout_ms` (there is no default), and cheap --
+--- **one** process for the commits, their bodies and (with `name_status`)
+--- their changed files.
+---
+--- `range` is anything `git log` takes as one argument: `HEAD`, `main`,
+--- `v1..v2`, `A..B`, or `A...B` with `left_right` (then `entry.side` says on
+--- which side of the symmetric difference a commit lies -- `>` only in `B`,
+--- `<` only in `A`). `nil` is `HEAD`. A range with no commits is `{}`; `nil`
+--- plus a reason means git failed (unknown revision, no commits yet, not a
+--- repository, timeout).
+---
+--- Order is git's default (newest first); `reverse` and `topo_order` change it.
+--- `commit_time` is the *committer* time -- after a rebase the author time can
+--- be years older than the commit's place in the history.
+---
+--- In a **blobless clone** (`--filter=blob:none`) this works offline, also with
+--- `name_status` -- but only with `no_lazy_fetch = true` is it *guaranteed* never
+--- to fetch: pair the two when reading someone else's clones.
+---@param range? string
+---@param opts? Lib.Git.LogOpts
+---@param git_cmd? string
+---@return Lib.Git.LogEntry[]|nil entries
+---@return string|nil err
+function M.log(range, opts, git_cmd)
+  opts = opts or {}
+  local argv, err = log_argv(range, opts, git_cmd or "git")
+  if not argv then
+    return nil, err
+  end
+  local ropts = runner_opts(opts)
+  ropts.binary = true
+  return log_result(exec(argv, nil, ropts), opts)
+end
+
+---@internal
+--- Report a refused call the way a run would: through `on_done`, scheduled.
+---@param on_done function
+---@param err string
+---@return { stop: fun() }
+local function refused(on_done, err)
+  vim.schedule(function()
+    on_done(nil, err)
+  end)
+  return { stop = function() end }
+end
+
+--- Async counterpart to `log` -- prefer it on any trigger that can fire for
+--- many repositories at once.
+---@param range string|nil
+---@param opts Lib.Git.LogOpts|nil
+---@param on_done fun(entries: Lib.Git.LogEntry[]|nil, err: string|nil) Always invoked via `vim.schedule` -- safe to touch buffers, windows and `vim.fn.*`.
+---@param git_cmd? string
+---@return { stop: fun() } handle Kills the underlying job; harmless to call after it has finished.
+function M.log_async(range, opts, on_done, git_cmd)
+  opts = opts or {}
+  local argv, err = log_argv(range, opts, git_cmd or "git")
+  if not argv then
+    return refused(on_done, err)
+  end
+  local ropts = runner_opts(opts)
+  ropts.binary = true
+  return exec_async(argv, nil, ropts, function(res)
+    on_done(log_result(res, opts))
+  end)
+end
+
+-- Each query below is a pair of functions: one that builds the git arguments
+-- (or refuses with a reason) and one that reads the result. The blocking
+-- function and its `_async` twin share both, so they cannot drift apart.
+
+---@internal
+--- Run a query's arguments and read the result. `args` is `nil` when the call
+--- was refused, and `interpret` is then the reason.
+---@param args string[]|nil
+---@param interpret function|string
+---@param opts Lib.Git.RunOpts|nil
+---@param git_cmd string|nil
+---@return any
+---@return string|nil
+local function query(args, interpret, opts, git_cmd)
+  if not args then
+    return nil, interpret
+  end
+  return interpret(M.run(args, read_opts(opts), git_cmd))
+end
+
+---@internal
+---@param args string[]|nil
+---@param interpret function|string
+---@param opts Lib.Git.RunOpts|nil
+---@param on_done function
+---@param git_cmd string|nil
+---@return { stop: fun() }
+local function query_async(args, interpret, opts, on_done, git_cmd)
+  if not args then
+    return refused(on_done, interpret)
+  end
+  return M.run_async(args, read_opts(opts), function(res)
+    on_done(interpret(res))
+  end, git_cmd)
+end
+
+---@internal
+---@param rev string
+---@param opts Lib.Git.RevParseOpts|nil
+---@return string[]|nil args
+---@return function|string interpret
+local function rev_parse_job(rev, opts)
+  local bad = bad_rev(rev, "rev-parse")
+  if bad then
+    return nil, bad
+  end
+  opts = opts or {}
+  local args = { "rev-parse", "--verify" }
+  if opts.short then
+    args[#args + 1] = type(opts.short) == "number" and ("--short=%d"):format(opts.short)
+      or "--short"
+  end
+  args[#args + 1] = opts.commit and (rev .. "^{commit}") or rev
+  return args,
+    function(res)
+      if not res.ok then
+        return nil, failure_message(res, "git rev-parse", opts)
+      end
+      local sha = vim.trim(res.stdout)
+      if sha == "" then
+        return nil, "git rev-parse printed nothing"
+      end
+      return sha, nil
+    end
+end
+
+--- Resolve a revision to its full object name (`git rev-parse --verify`).
+---@param rev string A branch, tag, hash, `HEAD~3`, ... Must not start with `-`.
+---@param opts? Lib.Git.RevParseOpts
+---@param git_cmd? string
+---@return string|nil sha nil when `rev` does not resolve (or git failed)
+---@return string|nil err
+function M.rev_parse(rev, opts, git_cmd)
+  local args, interpret = rev_parse_job(rev, opts)
+  return query(args, interpret, opts, git_cmd)
+end
+
+--- Async counterpart to `rev_parse`.
+---@param rev string
+---@param opts Lib.Git.RevParseOpts|nil
+---@param on_done fun(sha: string|nil, err: string|nil) Always invoked via `vim.schedule`.
+---@param git_cmd? string
+---@return { stop: fun() } handle
+function M.rev_parse_async(rev, opts, on_done, git_cmd)
+  local args, interpret = rev_parse_job(rev, opts)
+  return query_async(args, interpret, opts, on_done, git_cmd)
+end
+
+---@internal
+---@param a string
+---@param b string
+---@param opts Lib.Git.RunOpts|nil
+---@return string[]|nil args
+---@return function|string interpret
+local function merge_base_job(a, b, opts)
+  local bad = bad_rev(a, "merge-base") or bad_rev(b, "merge-base")
+  if bad then
+    return nil, bad
+  end
+  return { "merge-base", a, b }, function(res)
+    if not res.ok then
+      -- Exit 1 without a message is git's "no common ancestor", not a failure.
+      if res.code == 1 and vim.trim(res.stderr or "") == "" then
+        return nil, "no common ancestor"
+      end
+      return nil, failure_message(res, "git merge-base", opts)
+    end
+    local sha = vim.trim(res.stdout)
+    if sha == "" then
+      return nil, "no common ancestor"
+    end
+    return sha, nil
+  end
+end
+
+--- The best common ancestor of two revisions (`git merge-base`).
+---@param a string
+---@param b string
+---@param opts? Lib.Git.RunOpts
+---@param git_cmd? string
+---@return string|nil sha nil when there is none (unrelated histories) or git failed
+---@return string|nil err
+function M.merge_base(a, b, opts, git_cmd)
+  local args, interpret = merge_base_job(a, b, opts)
+  return query(args, interpret, opts, git_cmd)
+end
+
+--- Async counterpart to `merge_base`.
+---@param a string
+---@param b string
+---@param opts Lib.Git.RunOpts|nil
+---@param on_done fun(sha: string|nil, err: string|nil) Always invoked via `vim.schedule`.
+---@param git_cmd? string
+---@return { stop: fun() } handle
+function M.merge_base_async(a, b, opts, on_done, git_cmd)
+  local args, interpret = merge_base_job(a, b, opts)
+  return query_async(args, interpret, opts, on_done, git_cmd)
+end
+
+---@internal
+---@param ancestor string
+---@param rev string
+---@param opts Lib.Git.RunOpts|nil
+---@return string[]|nil args
+---@return function|string interpret
+local function is_ancestor_job(ancestor, rev, opts)
+  local bad = bad_rev(ancestor, "merge-base") or bad_rev(rev, "merge-base")
+  if bad then
+    return nil, bad
+  end
+  return { "merge-base", "--is-ancestor", ancestor, rev }, function(res)
+    if res.ok then
+      return true, nil
+    end
+    -- Only a clean exit 1 is "no"; a signal, a timeout and a spawn failure all
+    -- leave the answer unknown.
+    if res.code == 1 and (res.signal or 0) == 0 then
+      return false, nil
+    end
+    return nil, failure_message(res, "git merge-base", opts)
+  end
+end
+
+--- Whether `ancestor` is reachable from `rev` (`git merge-base --is-ancestor`):
+--- `true` for a fast-forward away, `false` for a rewound or diverged history.
+--- A revision counts as its own ancestor.
+---@param ancestor string
+---@param rev string
+---@param opts? Lib.Git.RunOpts
+---@param git_cmd? string
+---@return boolean|nil answer nil when git could not tell (unknown revision, not a repository, timeout)
+---@return string|nil err
+function M.is_ancestor(ancestor, rev, opts, git_cmd)
+  local args, interpret = is_ancestor_job(ancestor, rev, opts)
+  return query(args, interpret, opts, git_cmd)
+end
+
+--- Async counterpart to `is_ancestor`.
+---@param ancestor string
+---@param rev string
+---@param opts Lib.Git.RunOpts|nil
+---@param on_done fun(answer: boolean|nil, err: string|nil) Always invoked via `vim.schedule`.
+---@param git_cmd? string
+---@return { stop: fun() } handle
+function M.is_ancestor_async(ancestor, rev, opts, on_done, git_cmd)
+  local args, interpret = is_ancestor_job(ancestor, rev, opts)
+  return query_async(args, interpret, opts, on_done, git_cmd)
+end
+
+local TAG_FORMAT = "--format=%(refname:strip=2)%00%(objectname)%00%(*objectname)%00"
+  .. "%(objecttype)%00%(creatordate:unix)%00%(contents:subject)"
+local TAG_SORTS = { newest = "-creatordate", oldest = "creatordate", version = "-v:refname" }
+
+---@internal
+---@param opts Lib.Git.TagsOpts|nil
+---@return Lib.Git.TagsOpts
+local function tags_opts(opts)
+  -- binary: the NUL-separated format must reach us byte for byte.
+  return vim.tbl_extend("force", opts or {}, { binary = true })
+end
+
+---@internal
+---@param opts Lib.Git.TagsOpts
+---@return string[]|nil args
+---@return function|string interpret
+local function tags_job(opts)
+  local sort = TAG_SORTS[opts.sort or "newest"]
+  if not sort then
+    return nil, ("git tags: unknown sort %s"):format(vim.inspect(opts.sort))
+  end
+  local args = { "for-each-ref", "--sort=" .. sort, TAG_FORMAT }
+  if opts.limit ~= nil then
+    if not is_count(opts.limit) then
+      return nil,
+        ("git tags: `limit` must be a non-negative integer, got %s"):format(vim.inspect(opts.limit))
+    end
+    -- `--count=0` means "no limit" to git, the opposite of what was asked.
+    if opts.limit > 0 then
+      args[#args + 1] = ("--count=%d"):format(opts.limit)
+    end
+  end
+  for _, key in ipairs({ "merged", "no_merged" }) do
+    if opts[key] ~= nil then
+      local bad = bad_rev(opts[key], "for-each-ref")
+      if bad then
+        return nil, bad
+      end
+      args[#args + 1] = (key == "merged" and "--merged=" or "--no-merged=") .. opts[key]
+    end
+  end
+  if opts.pattern ~= nil and (type(opts.pattern) ~= "string" or opts.pattern:find("[%z\r\n]")) then
+    return nil, ("git tags: invalid pattern %s"):format(vim.inspect(opts.pattern))
+  end
+  args[#args + 1] = "refs/tags/" .. (opts.pattern or "")
+
+  return args,
+    function(res)
+      if not res.ok then
+        return nil, failure_message(res, "git for-each-ref", opts)
+      end
+      if opts.limit == 0 then
+        return {}, nil
+      end
+      local tags = {}
+      for line in res.stdout:gmatch("[^\n]+") do
+        local f = split_nul((line:gsub("\r$", "")))
+        local peeled = f[3] or ""
+        tags[#tags + 1] = {
+          name = f[1] or "",
+          sha = peeled ~= "" and peeled or (f[2] or ""),
+          object = f[2] or "",
+          annotated = f[4] == "tag",
+          time = tonumber(f[5]),
+          subject = f[6] or "",
+        }
+      end
+      return tags, nil
+    end
+end
+
+--- The repository's tags with the metadata a changelog view needs, one
+--- `git for-each-ref` process. Annotated tags are told apart from lightweight
+--- ones, the commit a tag *points to* is peeled out of an annotated tag, and
+--- `merged`/`no_merged` answer "which tags does this range contain" --
+--- `{ merged = new, no_merged = old }` is the release list of an update.
+---
+--- Reads only ref and tag objects, so it works in a blobless clone, offline.
+---@param opts? Lib.Git.TagsOpts
+---@param git_cmd? string
+---@return Lib.Git.Tag[]|nil tags nil when git failed; no tags is `{}`
+---@return string|nil err
+function M.tags(opts, git_cmd)
+  opts = tags_opts(opts)
+  local args, interpret = tags_job(opts)
+  return query(args, interpret, opts, git_cmd)
+end
+
+--- Async counterpart to `tags`.
+---@param opts Lib.Git.TagsOpts|nil
+---@param on_done fun(tags: Lib.Git.Tag[]|nil, err: string|nil) Always invoked via `vim.schedule`.
+---@param git_cmd? string
+---@return { stop: fun() } handle
+function M.tags_async(opts, on_done, git_cmd)
+  opts = tags_opts(opts)
+  local args, interpret = tags_job(opts)
+  return query_async(args, interpret, opts, on_done, git_cmd)
 end
 
 --- One blamed line, as `blame_porcelain` returns it.

@@ -87,6 +87,52 @@ end, function(msg) vim.notify(msg) end)
 cv:notify_one()      -- or cv:notify_all()
 ```
 
+### map_limit — a bounded fan-out over callback-style workers
+
+"Do this for each of N repositories/files/servers, at most `limit` at a time":
+
+```lua
+local git = require("lib.nvim.git")
+
+local handle = async.map_limit(repos, 4, function(repo, index, done)
+  -- start the work; call done(result, err) exactly once when it finishes.
+  -- Returning a handle with stop() lets handle.stop() kill what is in flight.
+  return git.log_async("HEAD", { dir = repo, max_count = 5 }, done)
+end, function(results, errors, stopped)
+  -- vim.schedule-dispatched. results[i] / errors[i] belong to repos[i].
+end, {
+  on_progress = function(count, total, index, result, err) end,
+})
+
+-- handle.stop(): stop in-flight workers that returned a handle, start no more,
+-- call on_done(..., true) once; anything finishing later is discarded.
+```
+
+Unlike `Semaphore`, the worker is a plain callback function — no coroutine, so
+it fits `run_async_captured` and every `*_async` helper as they are. The
+semantics worth knowing:
+
+- **A worker that finishes synchronously is fine.** The loop is guarded
+  against re-entrancy, so 20 000 workers calling `done` immediately neither
+  recurse nor overflow the stack.
+- **A worker that throws is that item's error**, in `errors[i]` — it neither
+  stalls the run nor escapes into the caller. A worker that never calls `done`
+  stalls the run, as with any hand-built pool.
+- **`done` is idempotent**: a second call (or a call after `stop()`) is
+  ignored.
+- **`on_progress` and `on_done` never run in a fast-event context.** They are
+  `vim.schedule`d (progress after every finished item, in completion order), in
+  the order the events happened. `worker` is called synchronously — from inside
+  `map_limit` for the first `limit` items, and for the rest in whatever context
+  `done` was called from. That is the main loop for `run_async_captured` and every
+  `*_async` helper; a worker driven by a raw libuv callback must not touch
+  `vim.api` itself.
+- **`stop()` ends the run first, then stops the workers**, so a worker handle
+  whose `stop()` reports back through `done` cannot start the next item, and a
+  handle a worker returns after it stopped the run is stopped too. The error a
+  worker throws reaches `errors[i]` unchanged (a table stays a table).
+- `limit` is clamped to at least 1; an empty list still reports (asynchronously).
+
 ## API
 
 | Function                        | Meaning                                                                 |
@@ -94,6 +140,7 @@ cv:notify_one()      -- or cv:notify_all()
 | `async.await(starter)`             | Suspend until `starter(resume)` fires `resume`; returns what it was given |
 | `async.run(body, on_done?, opts?)` | Drive an `await`-using coroutine; `on_done` gets `body`'s return values, `vim.schedule`-dispatched |
 | `async.wrap(fn, argc)`             | Callback-style `fn` (callback last, at position `argc`) → awaitable        |
+| `async.map_limit(items, limit, worker, on_done, opts?)` | Run a callback-style `worker(item, index, done)` over every item, at most `limit` in flight; `on_done(results, errors, stopped)`; returns `{ stop }` |
 | `async.Semaphore.new(permits)`     | `:acquire()` (awaitable), `:release()`, `:with(body, ...)` (acquire, run guarded, always release) |
 | `async.Condvar.new()`              | `:wait()` (awaitable), `:notify_one()`, `:notify_all()`                    |
 
