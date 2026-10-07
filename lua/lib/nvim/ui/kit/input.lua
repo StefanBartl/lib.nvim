@@ -118,6 +118,24 @@ local function resolve_buttons(opts)
 end
 
 ---@internal
+---Conceal every character of buffer row `row` (0-based) with `mask`, on top of
+---whatever `ns` already holds. Shared with `lib.nvim.ui.kit.sheet`, whose secret fields
+---are rows of one buffer.
+---@param bufnr integer
+---@param ns integer
+---@param row integer
+---@param mask string
+local function conceal_line(bufnr, ns, row, mask)
+  local line = api.nvim_buf_get_lines(bufnr, row, row + 1, false)[1] or ""
+  local nchars = vim.fn.strchars(line)
+  for i = 0, nchars - 1 do
+    local s = vim.fn.byteidx(line, i)
+    local e = vim.fn.byteidx(line, i + 1)
+    pcall(api.nvim_buf_set_extmark, bufnr, ns, row, s, { end_col = e, conceal = mask })
+  end
+end
+
+---@internal
 ---Re-conceal every character of the input's single line with `mask`.
 ---@param bufnr integer
 ---@param ns integer
@@ -127,24 +145,21 @@ local function apply_mask(bufnr, ns, mask)
     return
   end
   api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
-  local line = api.nvim_buf_get_lines(bufnr, 0, 1, false)[1] or ""
-  local nchars = vim.fn.strchars(line)
-  for i = 0, nchars - 1 do
-    local s = vim.fn.byteidx(line, i)
-    local e = vim.fn.byteidx(line, i + 1)
-    pcall(api.nvim_buf_set_extmark, bufnr, ns, 0, s, { end_col = e, conceal = mask })
-  end
+  conceal_line(bufnr, ns, 0, mask)
 end
 
 ---@internal
 ---Complete the fragment before the cursor via `vim.fn.getcompletion()` and
----open the native completion popup at the right start column.
+---open the native completion popup at the right start column. The line is the
+---one the cursor is on: the prompt's own single line here, a field's row for
+---`lib.nvim.ui.kit.sheet`, which shares this.
 ---@param bufnr integer
 ---@param winid integer
 ---@param completion string  # a `getcompletion()` type, e.g. "file", "dir"
 local function trigger_completion(bufnr, winid, completion)
-  local line = api.nvim_buf_get_lines(bufnr, 0, 1, false)[1] or ""
-  local col = api.nvim_win_get_cursor(winid)[2]
+  local cursor = api.nvim_win_get_cursor(winid)
+  local line = api.nvim_buf_get_lines(bufnr, cursor[1] - 1, cursor[1], false)[1] or ""
+  local col = cursor[2]
   local prefix = line:sub(1, col)
   -- Scanned from the end: `match("%S*$")` retries the rest of a long word from
   -- every start byte, which is quadratic for one pasted line without spaces.
@@ -658,5 +673,10 @@ function M.open(opts)
 
   return surf
 end
+
+--- The two helpers `lib.nvim.ui.kit.sheet` shares (its fields are rows of one buffer, so
+--- it cannot reuse the single-line prompt itself).
+M.conceal_line = conceal_line
+M.complete = trigger_completion
 
 return M

@@ -113,6 +113,8 @@ kit.popup({ type = "input", prompt = "Path", completion = "file", on_submit = fu
 kit.popup({ type = "live_input", prompt = "Filter", on_change = function(query) end })
 kit.popup({ type = "form", fields = { { name = "image", label = "Image", required = true } },
             on_submit = function(values) end })
+kit.popup({ type = "sheet", fields = { { name = "image", label = "Image", required = true }, { name = "tag", label = "Tag" } },
+            on_submit = function(values) end })
 kit.popup({ type = "select", message = "Pick", selection = { "a", "b" }, on_select = function(c, i) end })
 kit.popup({ type = "prompt", question = "Delete?", answer_type = "confirm", on_answer = function(yes) end })
 ```
@@ -125,6 +127,7 @@ kit.popup({ type = "prompt", question = "Delete?", answer_type = "confirm", on_a
 | `input`  | single-line insert-mode prompt; `<CR>` submits, `<Esc>` cancels; `secret = true` masks it as you type; `completion = "file"` (or any `getcompletion()` type) wires `<Tab>` to the native completion popup |
 | `live_input` | like `input`, but also debounces keystrokes into `on_change(query)` as you type — for filter/search boxes |
 | `form`   | sequential multi-field prompt — chained `input`s collected into one keyed table; `<Esc>` skips an optional field, aborts on a `required` one; `back = true` adds [back navigation](#form-multi-field) (`<BS>` on an empty field, `<S-Tab>`, a `[← Back] [Skip] [Next ↵]` button row, "(2/5)" in the title) |
+| `sheet`  | every field of a form at once in ONE float — a labelled row each, inline validation (`required`, `validate`) shown under the field, `[ Submit ] [ Cancel ]` buttons; see [Sheet](#sheet-every-field-at-once) |
 | `select` | native themed list chooser (single/multi; `j`/`k`, `<CR>`, `<Tab>` mark) |
 | `prompt` | ask: `answer_type = "confirm"` (yes/no → boolean) or `"text"` |
 | `confirm` | button dialog — horizontal buttons, `h`/`l`/arrows move, `<CR>` confirm, `<Esc>` cancel, left click confirms a button directly (the button row is `lib.nvim.ui.kit.buttons`, shared with the form's) |
@@ -302,6 +305,102 @@ view, and a paste with a newline stays one line. Underneath, `kit.input` takes
 `on_back = function(line) end` and `buttons = { { id = "back" | "skip" |
 "submit", label = "…" }, … }`. The full description is in `ui.nvim`'s
 `lua/ui/kit/README.md`.
+
+### Sheet (every field at once)
+
+`kit.sheet(opts)` (or `kit.popup({ type = "sheet", ... })`) is the other shape
+of a form: not one prompt per field in a row, but ONE float that shows every
+field at once, a row each with its label. Use it when the answers belong
+together and the person should see — and be able to fix — all of them before
+committing; `kit.form` stays the right tool for a short chain of questions.
+Same callbacks (`on_submit(values)` / `on_cancel()`), same keyed result table,
+so `kit.sync(kit.sheet, opts)` works too.
+
+```lua
+kit.sheet({
+  title = "New case",
+  fields = {
+    { name = "number", label = "Case number", required = true, live = true,
+      validate = function(v)
+        if v:match("^%d+$") then return true end
+        return false, "digits only"            -- the message shows under the field
+      end },
+    { name = "area", label = "Area", kind = "select", choices = { "EMEA", "APAC" } },
+    { name = "title", label = "Title" },
+    { name = "token", label = "Token", secret = true },
+  },
+  submit_label = "Create", cancel_label = "Abort",     -- default "Submit" / "Cancel"
+  on_submit = function(values) end,  -- { number = "...", area = "EMEA", title = "...", token = "..." }
+  on_cancel = function() end,
+})
+```
+
+```text
+╭────────────────────────── New case ──────────────────────────╮
+│Case number* 12x                                              │
+│             ✗ digits only                                    │
+│Area         EMEA   ◂ ▸                                       │
+│Title        Printer on fire                                  │
+│Token        ********                                         │
+│                                                              │
+│                   [ Create ]  [ Abort ]                      │
+╰──────────────────────────────────────────────────────────────╯
+```
+
+**Fields.** `{ name, label?, kind?, default?, required?, validate?, live?,
+expand_env?, completion?, secret?, mask?, choices? }`:
+
+- `kind = "text"` (default) is an editable line like [`kit.input`](#components):
+  `default`, `expand_env`, `completion` and `secret` behave the same. The
+  field's row opens in Insert mode.
+- `kind = "select"` with `choices` (a list of strings) is a fixed choice shown
+  with `◂ ▸`: `h`/`l` (or the arrows) cycle it, `<CR>`/`<Space>` open
+  `kit.select` over the choices and a pick moves on to the next field.
+  `default` names the choice shown first.
+
+**Validation, next to the field.**
+
+- `required = true` rejects a blank value ("required", or `opts.required_message`).
+- `validate(value) -> ok, err` rejects when `ok` is falsy, showing `err`
+  ("invalid" without one) as red text (`KitError`) in a line under the field. It
+  is not called for an empty optional field, so it never has to handle `""`;
+  `value` is what `on_submit` will get (after `expand_env`); a validator that
+  raises is a rejection with the error as its message.
+- A field is checked when the user **leaves** it and on **submit**. A field that
+  shows an error is checked again on every edit, so the message goes away the
+  moment the value is right; `live = true` checks a field on every edit from the
+  start.
+- Submit is blocked while any field fails, and the focus jumps to the first
+  invalid one. The window is resized to what is shown (a row per message), so
+  the sheet grows and shrinks, staying centered.
+
+**Keys** (the same in Insert mode on a text row and in Normal mode elsewhere):
+
+| Key | Does |
+| --- | --- |
+| `<Tab>` / `<S-Tab>` | next / previous field, then the two buttons, wrapping |
+| `<Down>` / `<Up>` (`j` / `k` in Normal mode) | the same without wrapping |
+| `<CR>` | next field; on the last field it presses the Submit button; on a select it opens the chooser; on a button it presses it |
+| `<Esc>` | cancel the whole sheet, from anywhere |
+| left click | focus the field under the pointer (cursor at the click), or press the button (needs `:set mouse=a`) |
+| `h` / `l`, `<Space>` | on the button row: move along / press; on a select: cycle / open the chooser |
+
+On a field with `completion`, `<Tab>` is the completion key (as in `kit.input`)
+and `<S-Tab>` still goes back unless a popup is open; move on with `<Down>`/`<CR>`.
+
+**Drawn how.** The buffer holds only the values, one per line (then a blank line
+and the buttons); the labels are the window's `'statuscolumn'`. So an edit can
+never touch a label, the cursor cannot land on one, and a long value wraps under
+the value column. The button row is `lib.nvim.ui.kit.buttons`, shared with `kit.confirm`
+and the form's. A paste with a newline in it is joined into its row with a
+space. `KitAccent` marks the focused field's label, `KitMuted` the others,
+`KitError` the messages and the `*` of a required field.
+
+The returned surface has four extra methods, for driving a sheet from code and
+from specs: `s:submit()`, `s:cancel()`, `s:focus_field(name | index)` and
+`s:state()` (`{ focus = <field name | "submit" | "cancel">, values, errors }`).
+Opening options: `focus` (field name or position to start on), `width`
+(default 60), `relative` (default `"editor"`), `theme`.
 
 ### Live input (debounced on_change)
 

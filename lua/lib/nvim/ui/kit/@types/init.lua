@@ -199,6 +199,45 @@
 ---@field on_submit fun(values: table<string, string>)
 ---@field on_cancel? fun()
 
+--- One field of a `kit.sheet`. `name` is the key its answer is stored under in
+--- the table handed to `on_submit`.
+---@class Lib.UI.Kit.SheetField
+---@field name string                     # result table key
+---@field label? string                   # the row's label (alias: prompt; default: name)
+---@field prompt? string
+---@field kind? "text"|"select"           # default "text"; "select" needs `choices`
+---@field default? string                 # text: the initial value; select: the choice shown first
+---@field choices? string[]               # select: the fixed choices (h/l cycle, <CR>/<Space> open kit.select)
+---@field required? boolean               # a blank value is rejected
+---@field validate? fun(value: string): boolean?, string?  # truthy ok accepts; falsy rejects with the message (not called for an empty optional field)
+---@field live? boolean                   # validate on every edit, not only after the field has been left
+---@field expand_env? boolean             # text: run the answer through lib.nvim.cross.fs.expand_path
+---@field completion? string              # text: a getcompletion() type; <Tab> completes
+---@field secret? boolean                 # text: mask the value as you type
+---@field mask? string                    # placeholder char when secret = true (default "*")
+
+--- Options for `kit.sheet` / `kit.popup({ type = "sheet" })`.
+---@class Lib.UI.Kit.SheetOpts
+---@field fields Lib.UI.Kit.SheetField[]
+---@field title? string
+---@field submit_label? string             # default "Submit"
+---@field cancel_label? string             # default "Cancel"
+---@field required_message? string         # shown under a blank required field (default "required")
+---@field focus? string|integer            # field (name or position) the sheet opens on; default the first
+---@field theme? Lib.UI.Kit.ThemeArg
+---@field width? integer                   # default 60 (never wider than the editor)
+---@field relative? "editor"|"cursor"|"win"  # default "editor" (centered, and kept centered as it grows)
+---@field on_submit fun(values: table<string, string>)
+---@field on_cancel? fun()
+
+--- What `kit.sheet` returns: its surface plus four methods, for driving it from
+--- code and from specs.
+---@class Lib.UI.Kit.Sheet : Lib.UI.Kit.Surface
+---@field submit fun(self: Lib.UI.Kit.Sheet)                       # as if Submit were pressed (validation included)
+---@field cancel fun(self: Lib.UI.Kit.Sheet)                       # as if <Esc> were pressed
+---@field focus_field fun(self: Lib.UI.Kit.Sheet, which: string|integer)  # focus a field by name or position
+---@field state fun(self: Lib.UI.Kit.Sheet): { focus: string, values: table<string, string>, errors: table<string, string> }  # focus = a field name, "submit" or "cancel"
+
 --- Options for `kit.input` / `kit.popup({ type = "input" })`.
 ---@class Lib.UI.Kit.InputOpts
 ---@field title? string                   # alias: prompt
@@ -323,6 +362,7 @@
 ---@field input fun(opts: Lib.UI.Kit.InputOpts): Lib.UI.Kit.Surface|nil    # single-line insert-mode prompt (secret = true masks it)
 ---@field live_input fun(opts: Lib.UI.Kit.LiveInputOpts): Lib.UI.Kit.Surface|nil  # debounced on_change as you type
 ---@field form fun(opts: Lib.UI.Kit.FormOpts): Lib.UI.Kit.Surface|nil  # sequential multi-field prompt
+---@field sheet fun(opts: Lib.UI.Kit.SheetOpts): Lib.UI.Kit.Sheet|nil     # every field at once in one float, inline validation, Submit/Cancel buttons
 ---@field select fun(opts: table): any                       # native themed list chooser (single/multi)
 ---@field prompt fun(opts: table): any                       # ask: confirm (yes/no) or text
 ---@field picker fun(opts: table): table|nil                 # interactive picker (prompt drives results)

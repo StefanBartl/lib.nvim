@@ -29,6 +29,7 @@ local live_input = require("lib.nvim.ui.kit.live_input")
 local select = require("lib.nvim.ui.kit.select")
 local prompt = require("lib.nvim.ui.kit.prompt")
 local form = require("lib.nvim.ui.kit.form")
+local sheet = require("lib.nvim.ui.kit.sheet")
 local sync = require("lib.nvim.ui.kit.sync")
 local chooser = require("lib.nvim.ui.kit.chooser")
 local compare = require("lib.nvim.ui.kit.compare")
@@ -109,6 +110,15 @@ end
 ---@return Lib.UI.Kit.Surface|nil
 function M.form(opts)
   return form.open(opts)
+end
+
+--- Open ONE float with every field of a form at once (one labelled row each,
+--- inline validation, a Submit/Cancel button row). The keyed result of
+--- `on_submit` is `kit.form`'s. See lib.nvim.ui.kit.sheet for the field contract.
+---@param opts Lib.UI.Kit.SheetOpts
+---@return Lib.UI.Kit.Sheet|nil
+function M.sheet(opts)
+  return sheet.open(opts)
 end
 
 --- Open a live-incremental input: like `kit.input`, but also debounces
@@ -207,6 +217,7 @@ local COMPONENTS = {
   input = input.open,
   live_input = live_input.open,
   form = form.open,
+  sheet = sheet.open,
   select = select.open,
   prompt = prompt.open,
   picker = picker.open,
@@ -220,8 +231,8 @@ local COMPONENTS = {
 }
 
 --- Friendly front door: dispatch on `opts.type` (default "note"). Supported
---- types: note, viewer, message_log, toast, input, live_input, form, select,
---- prompt, picker, confirm, menu, compare, shortlist, progress.
+--- types: note, viewer, message_log, toast, input, live_input, form, sheet,
+--- select, prompt, picker, confirm, menu, compare, shortlist, progress.
 ---@param opts table
 ---@return any
 function M.popup(opts)
