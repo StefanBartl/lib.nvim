@@ -56,6 +56,15 @@ return function(H)
     nil,
     "host_kind: nil for an unrecognized, unconfigured host"
   )
+  -- No hosts table at all used to raise ("attempt to index a nil value"): only
+  -- the three built-in hosts are known then.
+  H.eq(remote.host_kind("github.com"), "github", "host_kind: built-in host without a hosts table")
+  H.eq(remote.host_kind("codeberg.org", nil), "codeberg", "host_kind: ... for every built-in host")
+  H.eq(
+    remote.host_kind("git.example.org", nil),
+    nil,
+    "host_kind: an unknown host without a hosts table is nil, not an error"
+  )
 
   -- ── build ────────────────────────────────────────────────────────────────
   local gh_remote = { host = "github.com", owner = "StefanBartl", repo = "gitsuite.nvim" }
@@ -120,5 +129,60 @@ return function(H)
     remote.build("github", gh_remote, "feature/x?y", "a.lua"),
     "https://github.com/StefanBartl/gitsuite.nvim/blob/feature/x%3Fy/a.lua",
     "build: percent-encodes '?' in a branch name, but keeps its own real '/' namespace separator intact"
+  )
+
+  -- ── commit_url / compare_url / tag_url ───────────────────────────────────
+  local sha = "4fbc0bbfacb53d23907fa8a61afbbdf717889b80"
+  H.eq(
+    remote.commit_url("github", gh_remote, sha),
+    "https://github.com/StefanBartl/gitsuite.nvim/commit/" .. sha,
+    "commit_url: github"
+  )
+  H.eq(
+    remote.commit_url("gitlab", gitlab_remote, sha),
+    "https://gitlab.com/owner/repo/-/commit/" .. sha,
+    "commit_url: gitlab keeps its /-/ namespace"
+  )
+  H.eq(
+    remote.commit_url("codeberg", codeberg_remote, sha:sub(1, 8)),
+    "https://codeberg.org/owner/repo/commit/4fbc0bbf",
+    "commit_url: codeberg, an abbreviated hash"
+  )
+
+  H.eq(
+    remote.compare_url("github", gh_remote, "v1.0.0", "v1.1.0"),
+    "https://github.com/StefanBartl/gitsuite.nvim/compare/v1.0.0...v1.1.0",
+    "compare_url: github, three dots"
+  )
+  H.eq(
+    remote.compare_url("gitlab", gitlab_remote, "f873ec29", "e289100f"),
+    "https://gitlab.com/owner/repo/-/compare/f873ec29...e289100f",
+    "compare_url: gitlab"
+  )
+  H.eq(
+    remote.compare_url("codeberg", codeberg_remote, "main", "feature/x"),
+    "https://codeberg.org/owner/repo/compare/main...feature/x",
+    "compare_url: a branch with a namespace keeps its '/'"
+  )
+  H.eq(
+    remote.compare_url("github", gh_remote, "a#1", "b c"),
+    "https://github.com/StefanBartl/gitsuite.nvim/compare/a%231...b%20c",
+    "compare_url: '#' and a space are percent-encoded on each side"
+  )
+
+  H.eq(
+    remote.tag_url("github", gh_remote, "v1.2.3"),
+    "https://github.com/StefanBartl/gitsuite.nvim/releases/tag/v1.2.3",
+    "tag_url: github, the release page"
+  )
+  H.eq(
+    remote.tag_url("gitlab", gitlab_remote, "v1.2.3"),
+    "https://gitlab.com/owner/repo/-/tags/v1.2.3",
+    "tag_url: gitlab"
+  )
+  H.eq(
+    remote.tag_url("codeberg", codeberg_remote, "rel/v1#rc"),
+    "https://codeberg.org/owner/repo/releases/tag/rel/v1%23rc",
+    "tag_url: codeberg, '#' encoded, a namespace '/' kept"
   )
 end

@@ -76,5 +76,15 @@ position from user data. Errors that come from outside Lua (`vim.json.decode`
 fails in C) have no prefix to begin with, so there is nothing for a stripper
 to do but undo damage lib.nvim inflicted on itself.
 
+**The one exception** is a failure to *start a process*: `vim.system` raises
+(with level 1, from Neovim's own `vim/_core/system.lua`) when `cmd[1]` cannot be
+spawned, so the reason arrives as `vim/_core/system.lua:324: ENOENT: …` — a stamp
+this library did not create and cannot ask to be suppressed. `lib.nvim.git`
+removes exactly that one leading stamp, once, and only where the failure is a
+spawn failure (exit code `-1`), and only if it points into Neovim's runtime
+(`vim/….lua:N: `): a message that merely quotes some other `file.lua:12:` from
+the command is left alone. That is why the guard is anchored on `vim/` rather than
+on `:%d+:` alone.
+
 Pin the behaviour in the spec: assert the actionable text is present *and*
 that `%.lua:%d+:` is absent (or, for a re-raise, occurs exactly once).

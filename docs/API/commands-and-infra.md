@@ -557,7 +557,29 @@ M.parse_status(raw: string): table<string, {code, orig_path}>   -- pure, `-z` ou
 M.show(rev: string, path: string, opts?: {dir?}, git_cmd?: string): string|nil, err?   -- file content at a revision, byte for byte ("" = index, ":1/:2/:3" = merge stages)
 M.show_async(rev: string, path: string, opts: {dir?}|nil, on_done: fun(content|nil, err|nil), git_cmd?: string): { stop }
 M.clear_line_diff(ns: integer): fun(buf: integer): nil
+
+-- Running git / reading someone else's history (Lib.Git.RunOpts = opts.dir + timeout_ms, env, no_lazy_fetch, read_only, input, binary)
+M.run(args: string[], opts?: Lib.Git.RunOpts, git_cmd?: string): { ok, code, stdout, stderr, timed_out }   -- generic runner; does NOT validate the subcommand
+M.run_async(args: string[], opts: Lib.Git.RunOpts|nil, on_done: fun(result), git_cmd?: string): { stop }
+M.log(range?: string, opts?: Lib.Git.LogOpts, git_cmd?: string): Lib.Git.LogEntry[]|nil, err?   -- commits + bodies (+ files with name_status) in ONE process; NUL-separated, a hostile message cannot forge a record
+M.log_async(range: string|nil, opts: Lib.Git.LogOpts|nil, on_done: fun(entries|nil, err|nil), git_cmd?: string): { stop }
+M.parse_log(raw: string, opts?: { left_right?, name_status? }): Lib.Git.LogEntry[]|nil, err?   -- pure, strict
+M.rev_parse(rev: string, opts?: Lib.Git.RevParseOpts, git_cmd?: string): string|nil, err?       -- full object name; short / commit (peel) options
+M.merge_base(a: string, b: string, opts?: Lib.Git.RunOpts, git_cmd?: string): string|nil, err?  -- nil, "no common ancestor" for unrelated histories
+M.is_ancestor(ancestor: string, rev: string, opts?: Lib.Git.RunOpts, git_cmd?: string): boolean|nil, err?   -- nil = git could not tell
+M.tags(opts?: Lib.Git.TagsOpts, git_cmd?: string): Lib.Git.Tag[]|nil, err?   -- name, sha (peeled), object, annotated, time, subject; merged / no_merged / pattern / limit / sort
+M.rev_parse_async / merge_base_async / is_ancestor_async / tags_async         -- same arguments plus `on_done` before `git_cmd`; vim.schedule-dispatched; return { stop }
+M.LOG_FORMAT: string                                                           -- the --format= argument `log` passes (for a caller that runs `git log -z` itself)
 ```
+
+A killed git (OOM, crash) is a **failure** everywhere here (`code = 128 + signal`, `signal` set), never an
+empty answer; `no_lazy_fetch` sets `GIT_NO_LAZY_FETCH=1` and `-c protocol.allow=never`, so it holds on git < 2.44.
+
+`lib.nvim.git.remote` (pure, no process): `parse_remote(url)`, `host_kind(host, hosts_cfg?)`
+(`hosts_cfg` is optional), `build(kind, remote, branch, rel_path?, first?, last?)` and the
+history URLs `commit_url(kind, remote, sha)`, `compare_url(kind, remote, base, head)` (three-dot)
+and `tag_url(kind, remote, tag)` — GitHub / GitLab (`/-/` namespace) / Codeberg shapes, every
+path part percent-encoded.
 
 ---
 
