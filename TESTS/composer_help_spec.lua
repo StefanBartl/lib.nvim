@@ -300,6 +300,17 @@ return function(H)
   eq(calls[3][1], "ui", "dispatch: unknown token shows the matched level")
   eq(calls[3][2], "unknown subcommand 'nope'", "dispatch: unknown token becomes the title")
 
+  -- A missing required argument opens the float at that level, too; a wrong value does not.
+  calls = {}
+  texts = {}
+  dispatch(spec, with_help, { "surround" })
+  eq(calls[1][1], "surround", "dispatch: missing argument shows the route's level")
+  ok(calls[1][2]:find("^missing required argument"), "dispatch: the missing argument is the title")
+  calls = {}
+  dispatch(spec, with_help, { "surround", "bogus" })
+  eq(#calls, 0, "dispatch: an invalid value is not a help case")
+  ok(texts[1]:find("^error:argument"), "dispatch: an invalid value keeps its message")
+
   local declining = vim.tbl_extend("force", plain, {
     help = function()
       return false

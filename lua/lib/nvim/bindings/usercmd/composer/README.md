@@ -350,7 +350,7 @@ A verb is on when `spec.help == true`, or `help.enable` is set and
   typed token (`:Verb su`) narrows the list by prefix. The key does nothing on
   a verb that is not on (and on any non-composer command line).
 - **Instead of the usage notification.** A bare `:Verb`, an unfinished group
-  (`:Cdx prompt`) or an unknown subcommand opens the float for that level
+  (`:Cdx prompt`), an unknown subcommand or a missing required argument opens the float for that level
   instead of printing `Usage: …`. Without a UI, or if the float cannot open,
   the notification is shown exactly as before. `spec.default` still wins for a
   bare verb.
