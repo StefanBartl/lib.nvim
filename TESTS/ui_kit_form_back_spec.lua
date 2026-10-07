@@ -161,6 +161,31 @@ return function(H)
     close_floats()
   end
 
+  -- `on_back` gives the FIRST field a back as well: the form closes and hands the
+  -- answers so far on, without a submit or a cancel.
+  do
+    local left
+    local r = open_form(THREE, {
+      back = true,
+      on_back = function(values)
+        left = values
+      end,
+    })
+    eq(button_row_text(), "[ ← Back ]  [ Skip ]  [ Next ↵ ]", "first field: Back with on_back")
+    type_into_field("one")
+    keys("<CR>")
+    type_into_field("two")
+    keys("<S-Tab>")
+    type_into_field("ONE")
+    keys("<S-Tab>")
+    ok(left ~= nil, "on_back fired from the first field")
+    eq(left.a, "ONE", "the first field's text as it stood")
+    eq(left.b, "two", "an answer walked back from is handed on too")
+    eq(r.values, nil, "no submit")
+    eq(r.cancelled, nil, "no cancel")
+    close_floats()
+  end
+
   -- <BS> only goes back on an empty field; <C-p> goes back too. The clock the
   -- held-key guard reads is stubbed, so "a moment later" is a number.
   do
