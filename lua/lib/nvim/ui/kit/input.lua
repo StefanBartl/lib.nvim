@@ -31,7 +31,8 @@
 --- prompt (a second `<CR>` submits, exactly like confirming a shell
 --- completion then pressing enter again). With `"file"` or `"dir"` and more than 300
 --- matches the list is built from one directory listing instead (no `stat` per match,
---- sorted, cut to 300): `getcompletion()` took half a second for five thousand files.
+--- matched and sorted as `getcompletion()` does, cut to 300): `getcompletion()` took half
+--- a second for five thousand files.
 --- A fragment that holds a backtick is never completed: `getcompletion()` would run
 --- the span between backticks through the shell, and a pasted line is not to be
 --- trusted with that.
@@ -64,6 +65,7 @@
 local surface = require("lib.nvim.ui.kit.surface")
 local buttons = require("lib.nvim.ui.kit.buttons")
 local expand_path = require("lib.nvim.cross.fs.expand_path")
+local is_windows = require("lib.nvim.cross.platform.is_windows")
 
 local api = vim.api
 local autocmd = require("lib.nvim.bindings.autocmd")
@@ -230,14 +232,27 @@ end
 local MAX_PATH_MATCHES = 300
 
 ---@internal
+---A file name folded for matching and ordering where Neovim ignores case: upper-cased,
+---because Neovim's `pathcmp()` -- what `getcompletion()` orders by -- compares through
+---`mb_toupper()`, and the characters `[ ] ^ _` and the backtick sort between the capitals
+---and the small letters. Lower-cased, `item_1` would come before `itemA` where
+---`getcompletion()` has it behind. A name with a non-ASCII byte goes through `toupper()`:
+---`string.upper` folds ASCII only and would leave an a-umlaut behind a capital U-umlaut.
+---@param s string
+---@return string
+local function fold_key(s)
+  return s:find("[\128-\255]") and fn.toupper(s) or s:upper()
+end
+
+---@internal
 ---The candidates for a path fragment that matches MORE than `MAX_PATH_MATCHES` entries
----of its directory, built from one directory listing, sorted the way `getcompletion()`
----sorts and cut to that many. The listing says what an entry is, so a file or a
----directory costs no `stat`; a link, or a file system that does not say, is asked about
----only in the sorted list and only until `MAX_PATH_MATCHES + 1` entries are accepted
----(with `dirs_only`, one per link until enough directories are found), and a fragment
----with too few matches to need the list costs none. nil for anything else -- a pattern,
----a directory that cannot be listed, a fragment with few matches -- which is
+---of its directory, built from one directory listing, matched and ordered the way
+---`getcompletion()` does and cut to that many. The listing says what an entry is, so a
+---file or a directory costs no `stat`; a link, or a file system that does not say, is
+---asked about only in the ordered list and only until `MAX_PATH_MATCHES + 1` entries are
+---accepted (with `dirs_only`, one per link until enough directories are found), and a
+---fragment with too few matches to need the list costs none. nil for anything else -- a
+---pattern, a directory that cannot be listed, a fragment with few matches -- which is
 ---`getcompletion()`'s as before.
 ---@param frag string
 ---@param dirs_only boolean
@@ -254,8 +269,11 @@ local function many_path_matches(frag, dirs_only)
   if not handle then
     return nil
   end
-  local fold = vim.o.fileignorecase
-  local want = fold and name:lower() or name
+  -- Neovim matches case-blind under 'fileignorecase' or 'wildignorecase' (and always on
+  -- Windows, whose directory search is), but orders case-blind under 'fileignorecase' only.
+  local fic = vim.o.fileignorecase
+  local fold = fic or vim.o.wildignorecase or is_windows()
+  local want = fold and fold_key(name) or name
   local dotted = name:sub(1, 1) == "." -- dot files only when asked for by name
   local found = {}
   while true do
@@ -263,13 +281,13 @@ local function many_path_matches(frag, dirs_only)
     if not entry then
       break
     end
-    local key = fold and entry:lower() or entry
+    local key = fold and fold_key(entry) or entry
     if
       (dotted or entry:sub(1, 1) ~= ".")
       and key:sub(1, #want) == want
       and not (dirs_only and kind == "file") -- a file is no directory, and need not be counted
     then
-      found[#found + 1] = { key = key, name = entry, kind = kind }
+      found[#found + 1] = { key = fic and key or entry, name = entry, kind = kind }
     end
   end
   -- Too few candidates for a long list, whatever their types turn out to be.
@@ -277,7 +295,10 @@ local function many_path_matches(frag, dirs_only)
     return nil
   end
   table.sort(found, function(a, b)
-    return a.key < b.key
+    if a.key ~= b.key then
+      return a.key < b.key
+    end
+    return a.name < b.name -- names that fold alike: not left to the order of the listing
   end)
   local out = {}
   for _, it in ipairs(found) do
