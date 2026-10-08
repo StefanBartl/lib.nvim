@@ -4,7 +4,8 @@
 --- one line: a newline in `opts.default` (or in a button label) becomes a space.
 ---
 --- `opts.secret = true` masks the displayed content character-by-character
---- via `conceal` (each char replaced with `opts.mask`, default `"*"`) — a
+--- via `conceal` (each char replaced with `opts.mask`, default `"*"`, which is also what
+--- a mask that is not a string becomes) — a
 --- `vim.fn.inputsecret` replacement. The mask is re-derived from the actual
 --- buffer content on every edit (paste, backspace, mid-line insert all just
 --- work, no keystroke-diffing needed) rather than tracked in a shadow
@@ -603,7 +604,10 @@ function M.open(opts)
 
   if opts.secret then
     local ns = api.nvim_create_namespace("lib_kit_input_secret_" .. bufnr)
-    local mask = opts.mask or "*"
+    -- `conceal` takes a string: any other type (a number, `true`, a table from a config that
+    -- was passed through) would raise out of `TextChanged` after `apply_mask` had cleared the
+    -- marks, and leave the secret on screen. `lib.nvim.ui.kit.sheet` makes the same choice.
+    local mask = type(opts.mask) == "string" and opts.mask or "*"
     apply_mask(bufnr, ns, mask)
     autocmd.create({ "TextChangedI", "TextChanged" }, function()
       apply_mask(bufnr, ns, mask)
