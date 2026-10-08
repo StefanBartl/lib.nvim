@@ -99,6 +99,11 @@ M.run = log.wrap(M.run, "run")
 -- 3) VimLeavePre flush (automatic when capture=true and a file sink is set)
 ```
 
+The `VimLeavePre` hook is registered by the first record, not by `new()`. A
+first record that arrives from a fast event (a `vim.uv` timer, a `vim.system`
+exit callback) does not throw for it: the hook is registered from the main loop
+right after.
+
 `log.flush()` / `log.snapshot()` / `log.clear()` operate on the ring buffer.
 
 ## Counters and extra sinks
