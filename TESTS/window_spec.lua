@@ -270,4 +270,22 @@ return function(H)
     )
     H.eq(#vim.api.nvim_list_bufs(), before, "make_scratch: the buffer it made is not left behind")
   end
+
+  -- A NUL byte in a line (a case title read from a file, a pasted name) is measured as the
+  -- `^@` it is drawn as: `strdisplaywidth()` raises E976 on a NUL in a Lua string, so a single
+  -- such line kept the whole list -- every `kit.select`, `kit.viewer` and `kit.note` goes through
+  -- here -- from opening. The float is as wide as one with two plain characters in its place.
+  do
+    local make_scratch = require("lib.nvim.window.make_scratch")
+    local nul = string.char(0)
+    local opened, winid =
+      pcall(make_scratch, { lines = { "ab" .. nul .. "cd", "x" }, border = "none" })
+    H.ok(opened and winid ~= nil, "make_scratch: a line with a NUL opens: " .. tostring(winid))
+    local width = opened and winid and vim.api.nvim_win_get_width(winid) or nil
+    pcall(vim.api.nvim_win_close, winid, true)
+    local control = make_scratch({ lines = { "abxxcd", "x" }, border = "none" })
+    local control_width = vim.api.nvim_win_get_width(control)
+    pcall(vim.api.nvim_win_close, control, true)
+    H.eq(width, control_width, "make_scratch: the NUL counts two cells, as drawn")
+  end
 end
