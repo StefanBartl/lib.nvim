@@ -268,6 +268,42 @@ local function prefix_regex(name, fold)
 end
 
 ---@internal
+---Sort key of the candidates that may hold a combining mark, as `pathcmp()` -- what
+---`getcompletion()` orders by -- has it: it steps over a character and the marks after it
+---as one (`utfc_ptr2len`) but compares only the first code point of each. "Abe" + U+0308 +
+---"x" therefore sorts beside "Abex", where its bytes would put it behind "Abez". Rewrites
+---`key` of those candidates to the sequence of their base characters; names that then share
+---a key stay with the caller's tie-break (`getcompletion()` leaves those to an unstable
+---`qsort`, which nothing can reproduce).
+---
+---`wides` are the indices into `found` of the candidates with a byte from CC on: U+0300, the
+---first mark of all, starts with CC 80, so no other name can hold one. Whether any of them
+---does is asked once, of all the names together: asked per name, a big directory of Cyrillic
+---or CJK names (every one has such a byte) paid two `vim.fn` calls each for an answer that
+---is nearly always no.
+---@param found {key: string, name: string, kind: string?}[]
+---@param wides integer[]
+local function order_by_base_characters(found, wides)
+  local names = {}
+  for i = 1, #wides do
+    names[i] = found[wides[i]].name
+  end
+  local joined = table.concat(names, "\n")
+  if fn.strchars(joined) == fn.strchars(joined, 1) then
+    return -- no mark among them (strchars() counts a mark of its own, unless told to skip it)
+  end
+  for i = 1, #wides do
+    local it = found[wides[i]]
+    local bases = {}
+    for _, cluster in ipairs(fn.split(it.key, "\\zs")) do
+      -- the first code point of the cluster; bytes that are no UTF-8 are their own character
+      bases[#bases + 1] = cluster:match("^[\1-\127\194-\244][\128-\191]*") or cluster
+    end
+    it.key = table.concat(bases)
+  end
+end
+
+---@internal
 ---The candidates for a path fragment that MORE than `MAX_PATH_MATCHES` entries of its
 ---directory start with, built from one directory listing, matched and ordered the way
 ---`getcompletion()` does and cut to that many. The listing says what an entry is, so a
@@ -281,9 +317,9 @@ end
 ---
 ---Whether an entry starts with the fragment is a byte comparison, folded to upper case
 ---where Neovim ignores case -- except where a non-ASCII byte is involved, when Neovim's own
----regex engine decides (`prefix_regex`), as it does for `getcompletion()`. A candidate
----with a combining mark has an order only `getcompletion()` knows (`pathcmp()` skips the
----mark), so the list is left to it.
+---regex engine decides (`prefix_regex`), as it does for `getcompletion()`. A name with a
+---combining mark is ordered by its base characters, as `pathcmp()` does
+---(`order_by_base_characters`).
 ---
 ---nil for anything else -- a pattern, a fragment with a NUL byte, a directory that cannot
 ---be listed, a fragment with few candidates -- which is `getcompletion()`'s as before.
@@ -325,8 +361,8 @@ local function many_path_matches(frag, dirs_only)
     return re and re:match_str(entry) ~= nil or false
   end
   local seen = 0 -- every candidate: what `getcompletion()` has to look at
-  local composing = false -- a candidate with a combining mark: its order is `getcompletion()`'s
   local found = {} -- the ones that can still be an answer
+  local wides = {} -- the indices into `found` of those that may hold a combining mark
   while true do
     local entry, kind = uv.fs_scandir_next(handle)
     if not entry then
@@ -353,8 +389,8 @@ local function many_path_matches(frag, dirs_only)
         -- a file is no directory, and need not be kept
         if not (dirs_only and kind == "file") then
           found[#found + 1] = { key = fic and key or entry, name = entry, kind = kind }
-          if wide and not composing and entry:find("[\204-\255]") then
-            composing = fn.strchars(entry) ~= fn.strchars(entry, 1)
+          if wide and entry:find("[\204-\255]") then
+            wides[#wides + 1] = #found
           end
         end
       end
@@ -365,10 +401,10 @@ local function many_path_matches(frag, dirs_only)
   end
   -- Too few candidates for a long list, whatever their types turn out to be: up to
   -- this many `getcompletion()` costs a few tens of milliseconds and stays the authority.
-  -- Names it orders by rules this list does not know are its as well.
-  if seen <= MAX_PATH_MATCHES or composing then
+  if seen <= MAX_PATH_MATCHES then
     return nil
   end
+  order_by_base_characters(found, wides)
   table.sort(found, function(a, b)
     if a.key ~= b.key then
       return a.key < b.key
