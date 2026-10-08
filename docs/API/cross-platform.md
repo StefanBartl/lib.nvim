@@ -277,6 +277,9 @@ M.run_async_captured(cmd: string[], on_done: fun(ok, output, code, stderr, signa
 
 Lib.RunArgv.Opts = { binary?: boolean, timeout_ms?: integer, max_output_bytes?: integer, env?: table<string,string>, cwd?: string }
   -- timeout_ms: SIGTERM after that long -> exit code 124 (Windows: whole tree; async answers at the deadline + grace)
+  --   the deadline is a timer of the runner itself (started once the process is spawned), not vim.system's `timeout`:
+  --   a fired deadline always reports code 124, timed_out = true and a non-zero signal (15; 9 when SIGTERM was
+  --   ignored and the process was killed 1.5 s later), even if the child handles SIGTERM and exits 0 (Neovim does)
   -- max_output_bytes: stop the process past that much stdout -> exit code 125 (OUTPUT_LIMIT_CODE)
   -- env: merged over the inherited environment; timeout_ms/env/cwd need vim.system (0.10+)
 ```

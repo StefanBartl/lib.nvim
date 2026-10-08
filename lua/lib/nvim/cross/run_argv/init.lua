@@ -20,7 +20,7 @@ local GRACE_MS = 1500
 --- Options of the `*_captured` and `*_result` runners.
 ---@class Lib.RunArgv.Opts
 ---@field binary? boolean Deliver stdout byte for byte (`vim.system` `text = false`): no `\r\n` -> `\n` rewriting, `NUL` and non-UTF-8 bytes intact. Needs Neovim 0.10+ (`vim.system`); the legacy fallback ignores it.
----@field timeout_ms? integer Kill the process (SIGTERM) after this many milliseconds; the run then ends with exit code `124`, the `timeout(1)` convention. On Windows the whole process tree is killed (`taskkill /T`); elsewhere only the direct child is, so a grandchild that keeps the output pipes open can delay their closing -- the async runner settles at the deadline (plus a short grace) anyway, the blocking runner returns once `wait()` gives up. Needs `vim.system`; the legacy fallback ignores it.
+---@field timeout_ms? integer Kill the process (SIGTERM) after this many milliseconds; the run then ends with exit code `124`, the `timeout(1)` convention, whatever the child made of the signal (a child that handles SIGTERM and exits 0, as Neovim does, is a timeout all the same). The deadline is a timer of our own, started once the process is spawned; a child that ignores SIGTERM is killed (SIGKILL) `1500` ms later. On Windows the whole process tree is killed (`taskkill /T`); elsewhere only the direct child is, so a grandchild that keeps the output pipes open can delay their closing -- the async runner settles at the deadline (plus a short grace) anyway, the blocking runner returns once `wait()` gives up. Needs `vim.system`; the legacy fallback ignores it.
 ---@field max_output_bytes? integer Stop the process once its stdout exceeds this many bytes: the run then ends with exit code `125` (`M.OUTPUT_LIMIT_CODE`), `stdout` holds what fitted and `stderr` says why. A process whose output is the data (`git log` of a repository somebody else wrote) can print gigabytes from a tiny input; without a cap all of it is collected in memory. Needs `vim.system`; the legacy fallback ignores it.
 ---@field env? table<string, string> Extra environment variables, merged over the inherited environment (an unset name stays inherited). Needs `vim.system`; the legacy fallback ignores it.
 ---@field cwd? string Working directory of the child. Needs `vim.system`; the legacy fallback ignores it.
@@ -32,7 +32,7 @@ local GRACE_MS = 1500
 ---@field signal integer The signal that terminated the process, `0` if none (always `0` on the legacy fallback)
 ---@field stdout string
 ---@field stderr string|nil Captured stderr (`""` when empty); `nil` only on the legacy fallback, which cannot separate the streams. For a spawn failure it holds the reason.
----@field timed_out boolean The run hit `opts.timeout_ms`: the process was killed for it (`code == 124` with a signal set, or reached only after the deadline). A process that merely exits 124 by itself, early, is not a timeout.
+---@field timed_out boolean The run hit `opts.timeout_ms`: the process was killed for it (`code == 124` and a non-zero `signal`: 15, or 9 when SIGTERM was ignored). A process that merely exits 124 by itself is not a timeout.
 
 ---@internal
 --- Best effort: kill a process AND its children. `vim.system`'s own timeout and
@@ -105,29 +105,50 @@ local function over_message(sink)
 end
 
 ---@internal
---- The terminating signal to report. `vim.system` stops a process that outlived
---- `timeout_ms` with SIGTERM and reports exit code 124 -- but a child that handles
---- SIGTERM (Neovim itself does) exits normally and the signal reads 0. Exit code
---- 124 once the deadline has (nearly) passed is therefore a timeout all the same:
---- report SIGTERM so that "killed for the timeout" stays `code == 124 and signal ~= 0`.
---- (Half the budget, not all of it: libuv timers run on a cached loop time and
---- fire early by whatever the spawn took.)
----@param code integer
----@param signal integer
----@param started integer  `uv.hrtime()` when the process was started.
+--- The deadline of a run: a timer WE own, so "timed out" is a fact we set, not
+--- something inferred. `vim.system`'s own `timeout` cannot be used for that: it
+--- reports exit code 124 only if the child then exits with 0 or 1, and `signal` is
+--- 0 for a child that handles SIGTERM (Neovim does). Inferring it from the clock is
+--- no better: libuv timers run on a cached loop time and fire early by however
+--- long the loop was not iterated (`uv.update_time()` first narrows that, it does
+--- not close it).
+---@class Lib.RunArgv.Deadline
+---@field fired boolean SIGTERM was sent because the deadline passed.
+---@field timer uv.uv_timer_t|nil
+
+---@param get_job fun(): table|nil
 ---@param opts Lib.RunArgv.Opts|nil
----@return integer
-local function effective_signal(code, signal, started, opts)
-  if
-    signal == 0
-    and code == 124
-    and opts
-    and type(opts.timeout_ms) == "number"
-    and (uv.hrtime() - started) / 1e6 >= opts.timeout_ms / 2
-  then
-    return 15
+---@param on_fired fun()|nil Runs (in the libuv callback) after the SIGTERM.
+---@return Lib.RunArgv.Deadline|nil
+local function start_deadline(get_job, opts, on_fired)
+  local ms = opts and opts.timeout_ms
+  if type(ms) ~= "number" or ms ~= ms or ms < 0 then
+    return nil
   end
-  return signal
+  local d = { fired = false, timer = uv.new_timer() }
+  uv.update_time()
+  d.timer:start(ms, 0, function()
+    local job = get_job()
+    if not job then
+      return
+    end
+    d.fired = true
+    kill_tree(job.pid)
+    pcall(job.kill, job, "sigterm")
+    if on_fired then
+      on_fired()
+    end
+  end)
+  return d
+end
+
+---@param d Lib.RunArgv.Deadline|nil
+local function stop_deadline(d)
+  if d and d.timer then
+    pcall(d.timer.stop, d.timer)
+    pcall(d.timer.close, d.timer)
+    d.timer = nil
+  end
 end
 
 ---@internal
@@ -142,7 +163,6 @@ local function system_opts(input, opts, sink)
   return {
     text = not opts.binary,
     stdin = input,
-    timeout = opts.timeout_ms,
     env = opts.env,
     cwd = opts.cwd,
     stdout = sink and sink.handler or nil,
@@ -196,7 +216,7 @@ end
 ---@return string output Captured stdout, both on success and failure
 function M.run_blocking_captured(cmd, input, opts)
   if vim.system then
-    local job
+    local job, deadline
     local sink = new_sink(opts, function()
       if job then
         kill_tree(job.pid)
@@ -205,8 +225,13 @@ function M.run_blocking_captured(cmd, input, opts)
     end)
     local ok, res = pcall(function()
       job = vim.system(cmd, system_opts(input, opts, sink))
-      return job:wait()
+      deadline = start_deadline(function()
+        return job
+      end, opts)
+      return job:wait(deadline and (opts.timeout_ms + GRACE_MS) or nil)
     end)
+    local timed_out = deadline ~= nil and deadline.fired
+    stop_deadline(deadline)
     if not ok then
       return false, tostring(res)
     end
@@ -217,9 +242,9 @@ function M.run_blocking_captured(cmd, input, opts)
       return false, sink and sink_stdout(sink, opts) or ""
     end
     if sink then
-      return res.code == 0 and not sink.over, sink_stdout(sink, opts)
+      return res.code == 0 and not sink.over and not timed_out, sink_stdout(sink, opts)
     end
-    return res.code == 0, res.stdout or ""
+    return res.code == 0 and not timed_out, res.stdout or ""
   end
 
   -- Legacy fallback (Neovim < 0.10): no byte-exact mode exists here, so
@@ -251,8 +276,7 @@ function M.run_blocking_result(cmd, input, opts)
     return { ok = code == 0, code = code, signal = 0, stdout = out, stderr = nil, timed_out = false }
   end
 
-  local job
-  local started = uv.hrtime()
+  local job, deadline
   local sink = new_sink(opts, function()
     if job then
       kill_tree(job.pid)
@@ -264,8 +288,13 @@ function M.run_blocking_result(cmd, input, opts)
   -- failed result instead of an error escaping to the caller.
   local ok, res = pcall(function()
     job = vim.system(cmd, system_opts(input, opts, sink))
-    return job:wait()
+    deadline = start_deadline(function()
+      return job
+    end, opts)
+    -- `wait(ms)` that runs out sends SIGKILL: the escalation for a child that ignores SIGTERM.
+    return job:wait(deadline and (opts.timeout_ms + GRACE_MS) or nil)
   end)
+  stop_deadline(deadline)
   if not ok then
     return {
       ok = false,
@@ -298,7 +327,11 @@ function M.run_blocking_result(cmd, input, opts)
   -- empty or cut-short output as a valid answer. 128 + signal is the shell's
   -- convention for it. A timeout already has a non-zero code (124).
   local code, signal = res.code, res.signal or 0
-  signal = effective_signal(code, signal, started, opts)
+  local timed_out = deadline ~= nil and deadline.fired
+  if timed_out then
+    -- the deadline decides, whatever the child made of the SIGTERM
+    code, signal = 124, (signal ~= 0 and signal or 15)
+  end
   if code == 0 and signal ~= 0 then
     code = 128 + signal
   end
@@ -316,9 +349,8 @@ function M.run_blocking_result(cmd, input, opts)
     signal = signal,
     stdout = stdout,
     stderr = stderr,
-    -- killed for the timeout (`signal` already says so after the deadline, see
-    -- `effective_signal`); a process that exits 124 by itself is not one
-    timed_out = has_timeout and code == 124 and signal ~= 0,
+    -- a process that merely exits 124 by itself is not one
+    timed_out = timed_out and not (sink and sink.over),
   }
 end
 
@@ -383,9 +415,8 @@ function M.run_async_captured(cmd, on_done, input, opts)
     return { stop = function() end }
   end
 
-  local job, timer
+  local job, deadline
   local finished = false
-  local started = uv.hrtime()
   local sink = new_sink(opts, function()
     if job then
       kill_tree(job.pid)
@@ -400,11 +431,7 @@ function M.run_async_captured(cmd, on_done, input, opts)
       return
     end
     finished = true
-    if timer then
-      pcall(timer.stop, timer)
-      pcall(timer.close, timer)
-      timer = nil
-    end
+    stop_deadline(deadline)
     vim.schedule(function()
       on_done(ok, output, code, stderr, signal)
     end)
@@ -422,7 +449,11 @@ function M.run_async_captured(cmd, on_done, input, opts)
         code, stderr = M.OUTPUT_LIMIT_CODE, over_message(sink)
       end
     end
-    settle(code == 0, stdout, code, stderr, effective_signal(code, res.signal or 0, started, opts))
+    local signal = res.signal or 0
+    if deadline and deadline.fired and not (sink and sink.over) then
+      code, signal = 124, (signal ~= 0 and signal or 15)
+    end
+    settle(code == 0, stdout, code, stderr, signal)
   end)
 
   if not ok_spawn then
@@ -435,23 +466,33 @@ function M.run_async_captured(cmd, on_done, input, opts)
   -- fires once every pipe is closed: a descendant that keeps one open (the real
   -- git behind the Windows `cmd\git.exe` wrapper) would delay the answer for as
   -- long as it lives. Settle at the deadline (plus a short grace) instead.
-  if opts and type(opts.timeout_ms) == "number" and opts.timeout_ms >= 0 then
-    timer = uv.new_timer()
-    timer:start(opts.timeout_ms + GRACE_MS, 0, function()
-      if finished then
+  deadline = start_deadline(
+    function()
+      return job
+    end,
+    opts,
+    function()
+      -- SIGTERM went out; a child that ignores it, or a descendant that keeps the
+      -- pipes open, gets the answer settled after the grace period.
+      if not (deadline and deadline.timer) then
         return
       end
-      kill_tree(job.pid)
-      pcall(job.kill, job, "sigkill")
-      settle(
-        false,
-        sink and sink_stdout(sink, opts) or "",
-        124,
-        "timed out; the process did not exit",
-        9
-      )
-    end)
-  end
+      deadline.timer:start(GRACE_MS, 0, function()
+        if finished then
+          return
+        end
+        kill_tree(job.pid)
+        pcall(job.kill, job, "sigkill")
+        settle(
+          false,
+          sink and sink_stdout(sink, opts) or "",
+          124,
+          "timed out; the process did not exit",
+          9
+        )
+      end)
+    end
+  )
 
   return {
     stop = function()
