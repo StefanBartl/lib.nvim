@@ -32,6 +32,53 @@ local function group_exists(id)
   return (pcall(vim.api.nvim_get_autocmds, { group = id }))
 end
 
+---@type table<string, integer>
+local cache = {}
+
+--- Prune once the three caches together hold more than this many entries;
+--- doubles with the live count, so a long-lived plugin never prunes per call.
+local PRUNE_ABOVE = 64
+
+---@internal
+--- Drop the cache entries of augroups Neovim no longer knows.
+---
+--- Callers delete groups behind this module's back (`nvim_del_augroup_by_id`
+--- when a popup closes); the ids stayed in `groups`, `group_names` and `cache`
+--- for good, two stale entries per popup. Every cache entry costs one
+--- `nvim_get_autocmds` call here, which is why this runs only when the caches
+--- have outgrown `PRUNE_ABOVE`, not on every lookup. The records of a dead
+--- group stay: they are the caller's to forget (`forget_group`, or
+--- `record = false` for a throwaway).
+local function prune_dead_groups()
+  local size = 0
+  for _ in pairs(group_names) do
+    size = size + 1
+  end
+  if size <= PRUNE_ABOVE then
+    return
+  end
+  local alive = {}
+  for id in pairs(group_names) do
+    alive[id] = group_exists(id)
+  end
+  for id in pairs(alive) do
+    if not alive[id] then
+      group_names[id] = nil
+    end
+  end
+  for name, id in pairs(groups) do
+    if alive[id] == false then
+      groups[name] = nil
+    end
+  end
+  for name, id in pairs(cache) do
+    if alive[id] == false then
+      cache[name] = nil
+    end
+  end
+  PRUNE_ABOVE = math.max(PRUNE_ABOVE, size)
+end
+
 --- Every autocmd this module created, in creation order.
 ---
 --- Recorded rather than catalogued by hand. A plugin's own list of "what
@@ -192,13 +239,11 @@ function M.group(name, clear)
   if clear == true then
     forget_group(name)
   end
+  prune_dead_groups()
   groups[name] = vim.api.nvim_create_augroup(name, { clear = clear == true })
   group_names[groups[name]] = name
   return groups[name]
 end
-
----@type table<string, integer>
-local cache = {}
 
 --- Augroup registry: create or look up an augroup, optionally namespaced with
 --- `opts.prefix` and deduplicated by the resulting full name. Unlike `group()`
@@ -216,6 +261,7 @@ function M.get_augroup(name, opts)
       -- cache): clearing it drops its autocmds, so drop their records too.
       forget_group(full_name)
     end
+    prune_dead_groups()
     cache[full_name] = vim.api.nvim_create_augroup(full_name, {
       clear = opts.clear == true,
     })
@@ -231,6 +277,17 @@ function M.get_augroup(name, opts)
   group_names[cache[full_name]] = full_name
 
   return cache[full_name]
+end
+
+---@internal
+--- Entries held by the group caches (`group_names`); for specs.
+---@return integer
+function M._cache_size()
+  local n = 0
+  for _ in pairs(group_names) do
+    n = n + 1
+  end
+  return n
 end
 
 ---Create an autocmd and record it, unless `opts.record` is `false`.
