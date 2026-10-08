@@ -365,11 +365,15 @@ function M.open(opts)
       api.nvim_buf_set_lines(pbuf, 0, 1, false, { query_text })
     end
 
+    -- Buffer-local and in no group: one group shared by every compare, cleared at each
+    -- mount, took the hooks of a compare that was already open away (its query was never
+    -- re-run again). The autocmd goes with the prompt buffer, which is wiped when the
+    -- state is left; `record = false` as for every throwaway hook (see `lib.nvim.ui.kit.surface`).
     autocmd.create({ "TextChangedI", "TextChanged" }, function()
       schedule_change(pbuf)
     end, {
-      group = autocmd.group("lib_kit_compare", true),
       buffer = pbuf,
+      record = false,
       desc = "lib.nvim.ui.kit.compare: query changed",
     })
 

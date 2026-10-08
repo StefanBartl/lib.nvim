@@ -115,9 +115,14 @@ function M.open(opts)
     end
   end
 
+  -- Buffer-local and in no group: one group shared by every live_input, cleared at each
+  -- open, took the TextChanged hooks of the one that was already open away, and its
+  -- `on_change` was never called again. The autocmd goes with the buffer (wiped when the
+  -- float closes); `record = false` as for every throwaway hook of one float (see
+  -- `lib.nvim.ui.kit.surface`).
   autocmd.create({ "TextChangedI", "TextChanged" }, schedule_change, {
-    group = autocmd.group("lib_kit_live_input", true),
     buffer = bufnr,
+    record = false,
     desc = "lib.nvim.ui.kit.live_input: query changed",
   })
 
