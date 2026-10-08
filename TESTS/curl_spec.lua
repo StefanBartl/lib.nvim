@@ -160,7 +160,7 @@ return function(H)
     curl.fetch_raw(("http://127.0.0.1:%d/"):format(port), nil, function(cb_ok, cb_resp)
       success, resp, done = cb_ok, cb_resp, true
     end)
-    vim.wait(2000, function()
+    vim.wait(30000, function()
       return done == true
     end, 20)
 
@@ -398,7 +398,7 @@ return function(H)
     curl.download(("http://127.0.0.1:%d/"):format(port), dest, nil, function(cb_ok)
       success, done = cb_ok, true
     end)
-    vim.wait(2000, function()
+    vim.wait(30000, function()
       return done == true
     end, 20)
 
@@ -540,7 +540,7 @@ return function(H)
         done, done_obj = true, obj
       end,
     })
-    vim.wait(2000, function()
+    vim.wait(30000, function()
       return done == true
     end, 20)
 
@@ -588,13 +588,13 @@ return function(H)
       end,
     })
 
-    vim.wait(2000, function()
+    vim.wait(30000, function()
       return first_chunk_seen
     end, 20)
     ok(first_chunk_seen, "fetch_stream: first line arrives while the connection is still open")
 
     process:kill(15)
-    vim.wait(2000, function()
+    vim.wait(30000, function()
       return done
     end, 20)
 

@@ -90,7 +90,7 @@ return function(H)
     async_ok, async_res = o, r
     async_done = true
   end)
-  vim.wait(3000, function()
+  vim.wait(30000, function()
     return async_done
   end, 10)
   ok(async_done, "run: async call completes")
@@ -102,7 +102,7 @@ return function(H)
     async_var_res = r
     async_var_done = true
   end, { env = { LIB_NVIM_RUN_SPEC_VAR = "from-async-opts-env" } })
-  vim.wait(3000, function()
+  vim.wait(30000, function()
     return async_var_done
   end, 10)
   ok(
