@@ -161,6 +161,24 @@ return function(H)
   eq(slow.code, 124, "run_blocking_result: ... with the timeout(1) exit code")
   eq(slow.ok, false, "run_blocking_result: ... and not ok")
 
+  -- A child that catches SIGTERM and exits normally reports no signal; the deadline still
+  -- makes it a timeout (this is what a CI runner's nvim does when it is the sleeper).
+  if vim.fn.has("win32") == 0 and vim.fn.executable("sh") == 1 then
+    local trapped = run_argv.run_blocking_result(
+      { "sh", "-c", "trap 'exit 0' TERM; while :; do sleep 0.05; done" },
+      nil,
+      { timeout_ms = 300 }
+    )
+    eq(trapped.code, 124, "run_blocking_result: a child that traps SIGTERM: the timeout code")
+    eq(trapped.timed_out, true, "run_blocking_result: ... is still timed out")
+    local early = run_argv.run_blocking_result(
+      { "sh", "-c", "exit 124" },
+      nil,
+      { timeout_ms = 20000 }
+    )
+    eq(early.timed_out, false, "run_blocking_result: an early exit 124 of its own is no timeout")
+  end
+
   -- the same options on the older runners
   local cap_ok_, cap_out_ = run_argv.run_blocking_captured(probe_argv, nil, {
     env = { LIB_SPEC_VAR = "captured" },
