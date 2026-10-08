@@ -312,12 +312,9 @@ return function(H)
   -- not stay in the id caches for good.
   do
     local before = autocmd._cache_size()
-    local ids = {}
+    -- one popup after the other: its group is created, then deleted when it closes
     for i = 1, 150 do
-      ids[i] = autocmd.group("LibNvimSpecChurn" .. i)
-    end
-    for _, id in ipairs(ids) do
-      vim.api.nvim_del_augroup_by_id(id)
+      vim.api.nvim_del_augroup_by_id(autocmd.group("LibNvimSpecChurn" .. i))
     end
     local survivor = autocmd.group("LibNvimSpecChurnSurvivor")
     ok(
