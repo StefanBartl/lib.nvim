@@ -192,15 +192,32 @@ local function resolve_buttons(opts)
 end
 
 ---@internal
+---`s` with every NUL byte replaced by an SOH, for a `vim.fn` call that only measures or
+---splits it: a NUL in a Lua string reaches `vim.fn` as a Blob (E976). An SOH is one byte
+---and one character as well, and drawn as wide (`^A` and `^@` are two cells), so offsets
+---and widths come out as they would for the NUL. The pattern is `%z`: `"\0"` matches
+---nothing in LuaJIT. Anything that is not a string is returned as it is.
+---@param s any
+---@return any
+local function nul_safe(s)
+  if type(s) == "string" and s:find("\0", 1, true) then
+    return (s:gsub("%z", "\1"))
+  end
+  return s
+end
+
+---@internal
 ---Conceal every character of buffer row `row` (0-based) with `mask`, on top of
 ---whatever `ns` already holds. Shared with `lib.nvim.ui.kit.sheet`, whose secret fields
----are rows of one buffer.
+---are rows of one buffer. A NUL in the line (a paste, `<C-v>000`) is masked like any
+---other character: the split below would raise out of the `TextChanged` handler instead,
+---after the namespace had been cleared, and leave the whole secret on screen.
 ---@param bufnr integer
 ---@param ns integer
 ---@param row integer
 ---@param mask string
 local function conceal_line(bufnr, ns, row, mask)
-  local line = api.nvim_buf_get_lines(bufnr, row, row + 1, false)[1] or ""
+  local line = nul_safe(api.nvim_buf_get_lines(bufnr, row, row + 1, false)[1] or "")
   -- One string per character (a base plus its combining marks is one), walked once:
   -- `byteidx(line, i)` rescans the line from its start for every `i`, which made this
   -- quadratic in the length of a pasted token -- and `lib.nvim.ui.kit.sheet` runs it for every
@@ -488,7 +505,7 @@ function M.open(opts)
   -- A float's title is drawn within its content width; a title longer than
   -- the default 40 cols gets silently truncated by Neovim (with a leading
   -- ellipsis) instead of wrapping, so widen the box to fit it.
-  local title_width = title and vim.fn.strdisplaywidth(title) or 0
+  local title_width = title and vim.fn.strdisplaywidth(nul_safe(title)) or 0
 
   local btn_ids, btn_labels = resolve_buttons(opts)
   local has_buttons = #btn_ids > 0

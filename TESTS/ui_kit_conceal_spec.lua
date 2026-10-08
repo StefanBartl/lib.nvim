@@ -112,4 +112,46 @@ return function(H)
   api.nvim_buf_delete(buf, { force = true })
   eq(count, 29997, "one mark per character of a long line")
   ok(ms < 1500, ("masking 30 000 characters took %.0f ms"):format(ms))
+
+  -- A NUL byte in text that goes through `vim.fn`. A NUL in a Lua string reaches it as a
+  -- Blob, and `split()` or `strdisplaywidth()` raise E976 on it. The mask is re-applied from
+  -- a `TextChanged` handler that clears its namespace first: a raise there left every
+  -- character of the secret unmasked, on screen. A NUL gets into a prompt by a paste or
+  -- `<C-v>000`, or through `default`; a title is measured when the prompt opens.
+  local nul = string.char(0)
+  local nul_ok, nul_ranges, nul_all = pcall(masked, "abc" .. nul .. "def")
+  ok(nul_ok, "conceal_line does not raise on a NUL: " .. tostring(nul_ranges))
+  eq(nul_ranges, "0-1,1-2,2-3,3-4,4-5,5-6,6-7", "one mark per character, the NUL included")
+  ok(nul_all, "each one carries the mask")
+  eq((masked("e\204\129" .. nul)), "0-3,3-4", "a base with its combining mark, then the NUL")
+
+  local kit = require("lib.nvim.ui.kit")
+  local surfaces = {}
+  local nul_done, nul_err = pcall(function()
+    local surf = kit.input({ secret = true, relative = "editor" })
+    surfaces[#surfaces + 1] = surf
+    local secret_ns = api.nvim_create_namespace("lib_kit_input_secret_" .. surf.bufnr)
+    local function marks()
+      return #api.nvim_buf_get_extmarks(surf.bufnr, secret_ns, 0, -1, {})
+    end
+    api.nvim_buf_set_lines(surf.bufnr, 0, -1, false, { "abcdef" })
+    api.nvim_exec_autocmds("TextChanged", { buffer = surf.bufnr })
+    eq(marks(), 6, "six characters, six marks")
+    api.nvim_buf_set_lines(surf.bufnr, 0, -1, false, { "abc" .. nul .. "def" })
+    api.nvim_exec_autocmds("TextChanged", { buffer = surf.bufnr })
+    eq(marks(), 7, "the NUL is masked as well, and the rest still is")
+
+    local defaulted = kit.input({ secret = true, default = "a" .. nul .. "b", relative = "editor" })
+    surfaces[#surfaces + 1] = defaulted
+    local default_ns = api.nvim_create_namespace("lib_kit_input_secret_" .. defaulted.bufnr)
+    eq(#api.nvim_buf_get_extmarks(defaulted.bufnr, default_ns, 0, -1, {}), 3, "a default: masked")
+
+    local titled = kit.input({ title = "case" .. nul .. "title", relative = "editor" })
+    ok(titled ~= nil, "a title with a NUL opens a prompt")
+    surfaces[#surfaces + 1] = titled
+  end)
+  for _, surf in ipairs(surfaces) do
+    pcall(surf.close, surf)
+  end
+  assert(nul_done, nul_err)
 end
