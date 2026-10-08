@@ -384,6 +384,11 @@ is written once and shown for every argument of that type. An enum with a
 built-in types (`INT`, `PATH` ...) show their name. `help.undocumented(verb,
 { args = true })` lists arguments that still say nothing.
 
+A level whose only row is such a free-text argument (no enum values, flags or
+`key=` pairs) has nothing to pick, but the text is the whole answer: the float
+opens with that one row, `<CR>` does nothing there, and `<Esc>` gives the line
+back. Only a level with no row at all (a route without arguments) opens no float.
+
 `composer.help` exposes the pieces (`parse_line`, `insertion`, `open`,
 `from_cmdline`, `set_keymap`); the option list itself is the pure
 `require("lib.nvim.bindings.usercmd.composer.help.entries").compute(root, committed_tokens, lead)`.

@@ -499,16 +499,21 @@ return function(H)
   eq(table.concat(labels(short.items, "value"), ","), "a,b", "-m <lead> lists the enum of --mode")
   -- An optional_value flag is offered bare, with the value shown as optional.
   local opt_flag = entries.compute(short_root, { "go" }, "")
+  local changed_row
   for _, e in ipairs(opt_flag.items) do
     if e.kind == "flag" and e.label:find("^%-%-changed") then
-      eq(e.insert, "--changed", "optional_value: the bare form is inserted")
-      eq(e.partial, false, "optional_value: no trailing '='")
-      ok(
-        e.label:find("[=<value>]", 1, true) ~= nil,
-        "optional_value: the label shows '=value' as optional"
-      )
+      changed_row = e
     end
   end
+  -- Judged only once the row is known to exist: a loop that asserts inside its
+  -- `if` passes just as well when the row has gone missing.
+  ok(changed_row ~= nil, "optional_value: the flag row is listed")
+  eq(changed_row.insert, "--changed", "optional_value: the bare form is inserted")
+  eq(changed_row.partial, false, "optional_value: no trailing '='")
+  ok(
+    changed_row.label:find("[=<value>]", 1, true) ~= nil,
+    "optional_value: the label shows '=value' as optional"
+  )
 
   -- A group summary stops evaluating predicates once the line is full.
   local calls_made = 0
@@ -581,11 +586,14 @@ return function(H)
     "comma,tab",
     "--flag=: values are listed"
   )
+  local sep_row
   for _, e in ipairs(entries.compute(hint_root, { "go" }, "").items) do
     if e.kind == "flag" then
-      eq(e.label, "--sep=<comma|tab>", "flag row shows the hinted values")
+      sep_row = e
     end
   end
+  ok(sep_row ~= nil, "flag row: the flag with hinted values is listed")
+  eq(sep_row.label, "--sep=<comma|tab>", "flag row shows the hinted values")
 
   -- ------------------------------------------------------------ flag / kv texts
   -- A `--no-x` twin shows "Off: <text of --x>" without a text of its own.
@@ -708,6 +716,400 @@ return function(H)
     0,
     "undocumented: positional arguments only count on request"
   )
+
+  -- ------------------------------------------------------------ opening the float
+  -- Run `fn` with the given `{ table, key, value }` replacements in place and put
+  -- them back whatever happens inside: a stub that leaks would reach every later
+  -- spec of the run (TESTS/run.lua loads them all into one Neovim).
+  local function with_stubs(stubs, fn)
+    local before = {}
+    for i, st in ipairs(stubs) do
+      before[i] = st[1][st[2]]
+      st[1][st[2]] = st[3]
+    end
+    local ran, err = pcall(fn)
+    for i = #stubs, 1, -1 do
+      stubs[i][1][stubs[i][2]] = before[i]
+    end
+    if not ran then
+      error(err, 0)
+    end
+  end
+
+  local chooser = require("lib.nvim.ui.kit.chooser")
+  ---@return integer|nil
+  local function chooser_win()
+    for _, w in ipairs(vim.api.nvim_list_wins()) do
+      if vim.bo[vim.api.nvim_win_get_buf(w)].filetype == "lib-kit-chooser" then
+        return w
+      end
+    end
+  end
+
+  local open_state = { name = "Demo", base = "Demo go ", committed = { "go" }, lead = "" }
+  local bad_root = tree.build({
+    {
+      path = { "go" },
+      flags = { { name = "x", enum = { "a", true } } },
+      run = noop,
+    },
+  })
+  ok(not pcall(entries.compute, bad_root, { "go" }, ""), "open: the broken spec does raise")
+
+  local fed_keys, notified = {}, {}
+  local ui_calls = 0
+  local ui_script = function() end
+  with_stubs({
+    {
+      vim.api,
+      "nvim_list_uis",
+      function()
+        return { {} }
+      end,
+    },
+    {
+      vim.api,
+      "nvim_feedkeys",
+      function(keys)
+        fed_keys[#fed_keys + 1] = keys
+      end,
+    },
+    {
+      vim,
+      "notify",
+      function(msg, level)
+        notified[#notified + 1] = { msg, level }
+      end,
+    },
+    {
+      help_ui,
+      "open",
+      function(rows, o)
+        ui_calls = ui_calls + 1
+        return ui_script(rows, o)
+      end,
+    },
+  }, function()
+    local function reset()
+      fed_keys, notified, ui_calls = {}, {}, 0
+    end
+
+    -- A pick lands on the line; the chooser's close handler (which also fires
+    -- after a pick) must not put the old line back over it.
+    reset()
+    ui_script = function(_, o)
+      o.on_pick({ kind = "sub", label = "show", insert = "show" })
+      o.on_cancel()
+      return true
+    end
+    eq(help.open(root, open_state, { restore = "Demo go " }), true, "open: a pick opens")
+    eq(#fed_keys, 1, "open: a pick feeds the line once")
+    eq(fed_keys[1], ":Demo go show ", "open: ... with the pick on it")
+
+    -- Esc: the typed line comes back, once, however often the cancel path fires.
+    reset()
+    local seen_opts
+    ui_script = function(_, o)
+      seen_opts = o
+      return true
+    end
+    eq(help.open(root, open_state, { restore = "Demo go " }), true, "open: the float is up")
+    eq(#fed_keys, 0, "open: nothing is fed while the float is up")
+    seen_opts.on_cancel()
+    seen_opts.on_cancel()
+    eq(#fed_keys, 1, "open: Esc restores the line exactly once")
+    eq(fed_keys[1], ":Demo go ", "open: ... as it was typed")
+
+    -- No float (the chooser reports a failed open as a cancel AND returns nil):
+    -- the line is restored once, not twice.
+    reset()
+    ui_script = function(_, o)
+      o.on_cancel()
+      return false
+    end
+    eq(help.open(root, open_state, { restore = "Demo go " }), false, "open: no float")
+    eq(#fed_keys, 1, "open: no float -> the line comes back exactly once")
+
+    -- A float that raises is no float.
+    reset()
+    ui_script = function()
+      error("boom")
+    end
+    eq(help.open(root, open_state, { restore = "Demo go " }), false, "open: a raising ui")
+    eq(#fed_keys, 1, "open: ... gives the line back")
+
+    -- A spec the option list cannot be built from: the line comes back and the
+    -- cause is named, instead of an error out of the scheduled key callback.
+    reset()
+    ui_script = function()
+      return true
+    end
+    local raised, opened_bad = pcall(help.open, bad_root, open_state, { restore = "Demo go " })
+    ok(raised, "open: a throwing spec does not raise out of open")
+    eq(opened_bad, false, "open: ... and opens nothing")
+    eq(ui_calls, 0, "open: ... the float is not even tried")
+    eq(#fed_keys, 1, "open: ... the typed line comes back")
+    eq(fed_keys[1], ":Demo go ", "open: ... unchanged")
+    eq(#notified, 1, "open: ... the cause is reported once")
+    eq(notified[1][2], vim.log.levels.WARN, "open: ... as a warning")
+    ok(notified[1][1]:find("could not be built", 1, true) ~= nil, "open: ... which says so")
+    help.from_cmdline("ComposerHelpSpecNone x", true)
+    eq(fed_keys[2], ":ComposerHelpSpecNone x", "from_cmdline: the refused line still comes back")
+
+    -- ... and the dispatch path runs its fallback (the usage text) instead of nothing.
+    reset()
+    local flush_schedule = vim.schedule
+    vim.schedule = function(f)
+      f()
+    end
+    local fallbacks = 0
+    local took_over = help.on_dispatch("Demo", { help = true }, bad_root, { "go" }, nil, function()
+      fallbacks = fallbacks + 1
+    end)
+    vim.schedule = flush_schedule
+    eq(took_over, true, "on_dispatch: the hook takes over first")
+    eq(fallbacks, 1, "on_dispatch: a throwing spec falls back to the usage text")
+  end)
+
+  -- A level whose only row is a free-text argument has nothing to pick, but its
+  -- text is the whole answer: the float opens (a real chooser, no stub) and Esc
+  -- gives the line back.
+  local free_root = tree.build({
+    {
+      path = { "go" },
+      args = {
+        { name = "note", desc = "Free text for the note" },
+        { name = "more", desc = "More text for the note" },
+      },
+      run = noop,
+    },
+    { path = { "nop" }, run = noop },
+  })
+  local free_items = entries.compute(free_root, { "go" }, "").items
+  local _, free_first = help_ui.build_items(free_items)
+  eq(free_first, nil, "hint-only: premise -- nothing on the level is pickable")
+  eq(help_ui.open({}, { on_pick = noop }), false, "hint-only: no rows at all -> no float")
+  eq(
+    help_ui.open(entries.compute(free_root, { "nop" }, "").items, { on_pick = noop }),
+    false,
+    "hint-only: a level with nothing to say -> no float"
+  )
+  with_stubs({
+    {
+      vim.api,
+      "nvim_list_uis",
+      function()
+        return { {} }
+      end,
+    },
+    {
+      vim.api,
+      "nvim_feedkeys",
+      function(keys)
+        fed_keys[#fed_keys + 1] = keys
+      end,
+    },
+  }, function()
+    fed_keys = {}
+    local esc, tab = string.char(27), string.char(9)
+    local hostile = {
+      name = "Demo",
+      base = "Demo go ",
+      committed = { "go", "x" .. esc .. "]0;evil" .. tab .. string.char(7) },
+      lead = "",
+    }
+    eq(
+      help.open(free_root, hostile, { restore = "Demo go " }),
+      true,
+      "hint-only: the float opens for a level with only a free-text argument"
+    )
+    ok(chooser.is_open(), "hint-only: the chooser is up")
+    local win = chooser_win()
+    ok(win ~= nil, "hint-only: ... in a window")
+    local line = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)[1]
+    ok(line:find("{more}", 1, true) ~= nil, "hint-only: the row names the argument")
+    ok(line:find("More text for the note", 1, true) ~= nil, "hint-only: ... and carries its text")
+    eq(vim.wo[win].cursorline, false, "hint-only: no row is lit as if it were picked")
+
+    -- The float's title is spelled out, never drawn as raw control characters.
+    local cfg_title = vim.api.nvim_win_get_config(win).title
+    local title = type(cfg_title) == "table" and cfg_title[1][1] or cfg_title
+    eq(title:find("[%z\1-\31\127]"), nil, "title: no raw control character reaches the float")
+    eq(
+      title,
+      ":Demo go x^[]0;evil^I^G",
+      "title: ... they are spelled out the way Neovim shows them"
+    )
+
+    chooser.submit()
+    ok(chooser.is_open(), "hint-only: <CR> on an inert row leaves the float open")
+    eq(#fed_keys, 0, "hint-only: ... and puts nothing on the line")
+    chooser.close()
+    ok(
+      vim.wait(500, function()
+        return #fed_keys > 0
+      end),
+      "hint-only: closing the float restores the line"
+    )
+    eq(#fed_keys, 1, "hint-only: ... once")
+    eq(fed_keys[1], ":Demo go ", "hint-only: ... as typed")
+
+    -- A level with something to pick keeps the lit row.
+    fed_keys = {}
+    eq(help.open(root, open_state, { restore = "Demo go " }), true, "pickable: opens")
+    eq(vim.wo[chooser_win()].cursorline, true, "pickable: the cursor row stays lit")
+    chooser.close()
+    vim.wait(100)
+  end)
+
+  -- A raw token is read the way Neovim's own `-nargs=*` splitting reads it: only
+  -- `\\` and `\<blank>` are unescaped, every other backslash stays (a Windows
+  -- path, a `\--dry`, which is a positional and not the flag).
+  do
+    local got
+    vim.api.nvim_create_user_command("ComposerHelpSpecFargs", function(o)
+      got = o.fargs
+    end, { nargs = "*" })
+    local lines = {
+      [[C:\Users\bartl\x a\ b a\\b \--dry view=C:\tmp\a.txt]],
+      [[my\ file two\\ three]],
+      [[\a\\\ b\\\\c d\e]],
+      [[plain --dry key=v]],
+    }
+    for _, typed in ipairs(lines) do
+      got = nil
+      vim.cmd("ComposerHelpSpecFargs " .. typed)
+      local st = help.parse_line("ComposerHelpSpecFargs " .. typed .. " ")
+      eq(
+        vim.inspect(st.committed),
+        vim.inspect(got),
+        "parse_line: tokens equal Neovim's fargs for " .. typed
+      )
+    end
+    vim.api.nvim_del_user_command("ComposerHelpSpecFargs")
+    eq(
+      help.parse_line([[V C:\Users\x ]]).committed[1],
+      [[C:\Users\x]],
+      "parse_line: a Windows path keeps its backslashes"
+    )
+    local windows_root = tree.build({
+      { path = { "go" }, flags = { { name = "dry", bool = true } }, run = noop },
+    })
+    local flags_left =
+      entries.compute(windows_root, help.parse_line([[V go \--dry ]]).committed, "")
+    local has_dry = false
+    for _, e in ipairs(flags_left.items) do
+      has_dry = has_dry or (e.kind == "flag" and e.label == "--dry")
+    end
+    eq(has_dry, true, "parse_line: `\\--dry` is a positional, so --dry is still on offer")
+  end
+
+  -- ------------------------------------------------------------ the key itself
+  -- The expr mapping, driven with a stubbed command line: the verb that is on
+  -- leaves the line and schedules the float, everything else keeps its key.
+  do
+    local line_now, type_now = "", ":"
+    local scheduled = {}
+    local lazy_loaded
+    local opened_from
+    local prev_lazy_cfg, prev_lazy = package.loaded["lazy.core.config"], package.loaded["lazy"]
+    local fed_here = {}
+    package.loaded["lazy.core.config"] = {
+      plugins = {
+        ["lazy-stub.nvim"] = { cmd = { "ComposerHelpSpecLazy" }, _ = { loaded = false } },
+        ["lazy-str.nvim"] = { cmd = "ComposerHelpSpecLazyStr", _ = { loaded = false } },
+        ["lazy-done.nvim"] = { cmd = { "ComposerHelpSpecDone" }, _ = { loaded = true } },
+      },
+    }
+    package.loaded["lazy"] = {
+      load = function(o)
+        lazy_loaded = o
+      end,
+    }
+    composer.setup({ help = { keymap = "<F19>" } })
+    local fn = vim.fn.maparg("<F19>", "c", false, true).callback
+    local real_open_key = help.open
+    help.open = function(r, st, o)
+      opened_from = { root = r, state = st, opts = o }
+      return true
+    end
+    local function key(cmdtype, line)
+      type_now, line_now = cmdtype, line
+      scheduled = {}
+      return fn()
+    end
+    local ok_run, err = pcall(function()
+      with_stubs({
+        {
+          vim.fn,
+          "getcmdtype",
+          function()
+            return type_now
+          end,
+        },
+        {
+          vim.fn,
+          "getcmdline",
+          function()
+            return line_now
+          end,
+        },
+        {
+          vim,
+          "schedule",
+          function(f)
+            scheduled[#scheduled + 1] = f
+          end,
+        },
+        {
+          vim.api,
+          "nvim_feedkeys",
+          function(keys)
+            fed_here[#fed_here + 1] = keys
+          end,
+        },
+      }, function()
+        eq(key("/", "ComposerHelpSpecVerb ui "), "<F19>", "key: a search line keeps the key")
+        eq(key(":", "set nu"), "<F19>", "key: not a verb keeps the key")
+        eq(key(":", "ComposerHelpSpecOff "), "<F19>", "key: a verb that is off keeps the key")
+        eq(#scheduled, 0, "key: ... and opens nothing")
+        eq(key(":", "NoSuchVerbAnywhere x"), "<F19>", "key: an unknown verb keeps the key")
+        eq(#scheduled, 0, "key: ... without a lazy owner nothing is loaded")
+
+        eq(key(":", "ComposerHelpSpecVerb ui "), "<C-c>", "key: a verb that is on leaves the line")
+        eq(#scheduled, 1, "key: ... and schedules the float")
+        eq(opened_from, nil, "key: ... which is not opened inside the mapping")
+        scheduled[1]()
+        eq(opened_from.state.name, "ComposerHelpSpecVerb", "key: the float opens for that verb")
+        eq(
+          opened_from.opts.restore,
+          "ComposerHelpSpecVerb ui ",
+          "key: ... and Esc restores the line"
+        )
+
+        -- A verb whose plugin has not loaded yet is a lazy stub: load it, then go on.
+        opened_from = nil
+        eq(key(":", "ComposerHelpSpecLazy x"), "<C-c>", "key: a lazy stub leaves the line")
+        scheduled[1]()
+        eq(lazy_loaded.plugins[1], "lazy-stub.nvim", "key: ... its owner is loaded")
+        eq(lazy_loaded.wait, true, "key: ... and waited for")
+        eq(
+          fed_here[#fed_here],
+          ":ComposerHelpSpecLazy x",
+          "key: ... the line comes back if it was not ours"
+        )
+        eq(opened_from, nil, "key: ... and no float for a verb that never registered")
+        eq(key(":", "ComposerHelpSpecLazyStr x"), "<C-c>", "key: `cmd` may be a plain string")
+        eq(key(":", "ComposerHelpSpecDone x"), "<F19>", "key: a loaded plugin is no lazy stub")
+      end)
+    end)
+    help.open = real_open_key
+    package.loaded["lazy.core.config"], package.loaded["lazy"] = prev_lazy_cfg, prev_lazy
+    composer.setup({ help = { keymap = false } })
+    if not ok_run then
+      error(err, 0)
+    end
+  end
 
   -- ------------------------------------------------------------ keymap
   local lhs = "<F19>"
