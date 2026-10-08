@@ -179,6 +179,67 @@ return function(H)
     eq(early.timed_out, false, "run_blocking_result: an early exit 124 of its own is no timeout")
   end
 
+  -- The deadline is our own timer, so a loop that was not iterated for a while before
+  -- the call (libuv's cached time is then stale and a timer armed on it fires early)
+  -- must not turn a timeout into "not timed out": busy-wait first, then run a child
+  -- that handles SIGTERM and exits 0 (what Neovim does).
+  do
+    local posix = vim.fn.has("win32") == 0 and vim.fn.executable("sh") == 1
+    local term_argv = posix and { "sh", "-c", "trap 'exit 0' TERM; while :; do sleep 0.05; done" }
+      or sleeper_argv
+    local function stall(ms)
+      local t = vim.uv.hrtime()
+      while (vim.uv.hrtime() - t) / 1e6 < ms do
+      end
+    end
+
+    stall(230)
+    local stalled = run_argv.run_blocking_result(term_argv, nil, { timeout_ms = 300 })
+    eq(stalled.timed_out, true, "run_blocking_result: a stalled loop before the call: timed out")
+    eq(stalled.code, 124, "run_blocking_result: ... code 124")
+    ok(stalled.signal ~= 0, "run_blocking_result: ... with a non-zero signal")
+
+    stall(230)
+    local c_ok = run_argv.run_blocking_captured(term_argv, nil, { timeout_ms = 300 })
+    eq(c_ok, false, "run_blocking_captured: a stalled loop before the call: a failure")
+    stall(230)
+    local c_ok2 =
+      run_argv.run_blocking_captured(term_argv, nil, { timeout_ms = 300, max_output_bytes = 1000 })
+    eq(c_ok2, false, "run_blocking_captured: ... also with an output cap")
+
+    stall(230)
+    local s_done, s_res
+    run_argv.run_async_captured(term_argv, function(_, _, code_, _, sig_)
+      s_done, s_res = true, { code = code_, signal = sig_ }
+    end, nil, { timeout_ms = 300 })
+    vim.wait(8000, function()
+      return s_done
+    end, 20)
+    ok(s_done, "run_async_captured: a stalled loop before the call: on_done fires")
+    eq((s_res or {}).code, 124, "run_async_captured: ... code 124")
+    ok(((s_res or {}).signal or 0) ~= 0, "run_async_captured: ... with a non-zero signal")
+
+    if posix then
+      -- A child that ignores SIGTERM is killed (SIGKILL) after the grace period.
+      local stubborn_argv = { "sh", "-c", "trap '' TERM; while :; do sleep 0.05; done" }
+      local stubborn = run_argv.run_blocking_result(stubborn_argv, nil, { timeout_ms = 2000 })
+      eq(stubborn.timed_out, true, "run_blocking_result: a child ignoring SIGTERM: timed out")
+      eq(stubborn.code, 124, "run_blocking_result: ... code 124")
+      eq(stubborn.signal, 9, "run_blocking_result: ... killed with SIGKILL")
+
+      local b_done, b_res
+      run_argv.run_async_captured(stubborn_argv, function(_, _, code_, _, sig_)
+        b_done, b_res = true, { code = code_, signal = sig_ }
+      end, nil, { timeout_ms = 2000 })
+      vim.wait(12000, function()
+        return b_done
+      end, 20)
+      ok(b_done, "run_async_captured: a child ignoring SIGTERM: on_done fires")
+      eq((b_res or {}).code, 124, "run_async_captured: ... code 124")
+      eq((b_res or {}).signal, 9, "run_async_captured: ... signal 9")
+    end
+  end
+
   -- the same options on the older runners
   local cap_ok_, cap_out_ = run_argv.run_blocking_captured(probe_argv, nil, {
     env = { LIB_SPEC_VAR = "captured" },
