@@ -302,6 +302,69 @@ return function(H)
   on_cc = vim.fn.getcompletion([[ComposerQuotesSpecOn "foo bar" baz ]], "cmdline")
   ok(not vim.tbl_contains(on_cc, "cwd"), "e2e: the flag is read on every call, not frozen")
 
+  -- ------------------------------------------------------------ dispatch
+  -- The flag and argument checks see the tokens the handler will see: a quoted
+  -- run that holds a flag-looking word is text, and `"a"b` is two arguments.
+  local captured, notes
+  local function run_spec(quotes)
+    return {
+      desc = "Quotes dispatch demo",
+      quotes = quotes,
+      routes = {
+        {
+          path = {},
+          args = {
+            { name = "old", type = "STRING" },
+            { name = "new", type = "STRING", optional = true },
+          },
+          flags = { { name = "dry", bool = true } },
+          run = function(ctx)
+            captured = ctx
+          end,
+        },
+      },
+    }
+  end
+  composer.verb("ComposerQuotesRunOn", run_spec(true))
+  composer.verb("ComposerQuotesRunOff", run_spec(nil))
+  local real_notify = vim.notify
+  vim.notify = function(msg)
+    notes = (notes or "") .. tostring(msg) .. "\n"
+  end
+  local dispatch_ok, dispatch_err = pcall(function()
+    captured, notes = nil, nil
+    vim.cmd([[ComposerQuotesRunOn "x --dry" y]])
+    ok(captured ~= nil, "dispatch: a quoted flag-looking word does not reject the line")
+    eq(captured and captured.args.old, "x --dry", "dispatch: ... it binds as one argument")
+    eq(captured and captured.args.new, "y", "dispatch: ... and the next token is the next argument")
+    ok(
+      captured and not captured.flags.dry,
+      "dispatch: ... and --dry inside the quote is not a flag"
+    )
+
+    captured = nil
+    vim.cmd([[ComposerQuotesRunOn "a"b]])
+    eq(captured and captured.args.old, "a", "dispatch: a quote closed mid-token ends the token")
+    eq(captured and captured.args.new, "b", "dispatch: ... and what follows is the next argument")
+
+    captured = nil
+    vim.cmd([[ComposerQuotesRunOn "foo bar" --dry]])
+    ok(captured and captured.flags.dry, "dispatch: a real flag after a quoted run is still a flag")
+
+    captured, notes = nil, nil
+    vim.cmd([[ComposerQuotesRunOff "x --dry" y]])
+    ok(
+      captured == nil,
+      'dispatch: without `quotes` the blank split stays (flag `--dry"` is refused)'
+    )
+  end)
+  vim.notify = real_notify
+  if not dispatch_ok then
+    error(dispatch_err, 0)
+  end
+
+  pcall(vim.api.nvim_del_user_command, "ComposerQuotesRunOn")
+  pcall(vim.api.nvim_del_user_command, "ComposerQuotesRunOff")
   pcall(vim.api.nvim_del_user_command, "ComposerQuotesSpecOn")
   pcall(vim.api.nvim_del_user_command, "ComposerQuotesSpecOff")
 end

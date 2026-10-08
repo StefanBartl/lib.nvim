@@ -8,6 +8,7 @@ local argtypes = require("lib.nvim.bindings.usercmd.composer.argtypes")
 local format = require("lib.nvim.bindings.usercmd.composer.format")
 local flags = require("lib.nvim.bindings.usercmd.composer.flags")
 local kv = require("lib.nvim.bindings.usercmd.composer.kv")
+local quoted_tokens = require("lib.nvim.bindings.usercmd.composer.tokens")
 
 local M = {}
 
@@ -126,6 +127,15 @@ end
 ---@param notify { error: fun(msg), info: fun(msg), help?: fun(tokens: string[], reason: string|nil, fallback: fun(), opts: table|nil): boolean }
 function M.dispatch(cmd_name, spec, root, opts, notify)
   local fargs = opts.fargs or {}
+  -- A verb that reads its quotes itself (`spec.quotes`) is validated on the
+  -- tokens it will see: with Neovim's blank split `"x --dry" y` would bind the
+  -- flag `--dry"`, and `"a"b` would count as one argument instead of two.
+  if spec.quotes == true and type(opts.args) == "string" then
+    fargs = {}
+    for i, part in ipairs((quoted_tokens.split_quoted(opts.args))) do
+      fargs[i] = part.value
+    end
+  end
 
   -- Bare `:Verb` (no tokens): an explicit spec.default always wins. Otherwise,
   -- if a `path = {}` root route is registered, fall through to the normal
