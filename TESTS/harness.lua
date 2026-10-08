@@ -49,7 +49,9 @@ end
 --- afterwards whatever happens inside `fn` -- including a raised assertion. A
 --- bare "patch, call, restore" sequence skips the restore when `fn` raises,
 --- leaving the replacement in place for the rest of the shared test run
---- (`TESTS/run.lua` loads every spec into one Neovim instance).
+--- (`TESTS/run.lua` loads every spec into one Neovim instance). The error is
+--- re-raised unchanged: `error(err, 0)` adds no position, where `assert(ok, err)`
+--- put "TESTS/harness.lua:NN:" in front of every failure message of every user.
 ---@param target table
 ---@param key any
 ---@param value any
@@ -59,7 +61,9 @@ function H.with_patched(target, key, value, fn)
   target[key] = value
   local ok, err = pcall(fn)
   target[key] = orig
-  assert(ok, err)
+  if not ok then
+    error(err, 0)
+  end
 end
 
 --- Run `fn` with `stdpath("config")` answering `link`, restoring the real one
