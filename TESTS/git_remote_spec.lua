@@ -185,4 +185,79 @@ return function(H)
     "https://codeberg.org/owner/repo/releases/tag/rel/v1%23rc",
     "tag_url: codeberg, '#' encoded, a namespace '/' kept"
   )
+
+  -- ── a remote URL is text from a repository's own config: parts are validated ──
+  for _, hostile in ipairs({
+    "https://github.com/o?x=1/r.git",
+    "https://github.com/o#frag/r.git",
+    "https://github.com/o p/r q.git",
+    "https://github.com/o\nx/r.git",
+    "https://github.com/o)[x](https://evil.example)/r.git",
+    "https://github.com/o/r\27]0;pwn.git",
+    "https://github.com/../r.git",
+    "https://github.com/o/..",
+    "https://github.com/o/%2e%2e.git",
+    "https://[::1]/o/r.git",
+    "https://git hub.com/o/r.git",
+    "https://github.com/o//r.git",
+  }) do
+    H.eq(remote.parse_remote(hostile), nil, "parse_remote: refuses " .. vim.inspect(hostile))
+  end
+  H.ok(
+    vim.deep_equal(
+      remote.parse_remote("https://gitlab.com/group/sub.group/sub-2/repo_x.git"),
+      { host = "gitlab.com", owner = "group/sub.group/sub-2", repo = "repo_x" }
+    ),
+    "parse_remote: GitLab subgroups and the usual name characters still parse"
+  )
+
+  -- host spelling: case, ports, scp-like users
+  H.ok(
+    vim.deep_equal(
+      remote.parse_remote("https://GitHub.com/o/r"),
+      { host = "github.com", owner = "o", repo = "r" }
+    ),
+    "parse_remote: the host is lower-cased"
+  )
+  H.eq(remote.host_kind("github.com"), "github", "host_kind: after lower-casing")
+  H.eq(remote.host_kind("GitHub.COM"), "github", "host_kind: ... and for a mixed-case host")
+  H.eq(
+    remote.parse_remote("https://github.com:443/o/r").host,
+    "github.com",
+    "parse_remote: the default https port is dropped"
+  )
+  H.eq(
+    remote.parse_remote("ssh://git@git.example.org:2222/o/r.git").host,
+    "git.example.org",
+    "parse_remote: the ssh port is not the web port"
+  )
+  H.eq(
+    remote.parse_remote("https://git.example.org:8443/o/r.git").host,
+    "git.example.org:8443",
+    "parse_remote: a non-default web port is kept"
+  )
+  H.ok(
+    vim.deep_equal(
+      remote.parse_remote("org-1@github.com:o/r.git"),
+      { host = "github.com", owner = "o", repo = "r" }
+    ),
+    "parse_remote: an scp-like remote with a user other than git"
+  )
+  H.eq(
+    remote.host_kind("Git.Example.Org", { ["git.example.org"] = "gitlab" }),
+    "gitlab",
+    "host_kind: a configured host is matched case-insensitively"
+  )
+
+  -- builders never emit dot segments
+  H.eq(
+    remote.commit_url("github", { host = "github.com", owner = "o", repo = "r" }, "../../x/y"),
+    "https://github.com/o/r/commit/x/y",
+    "commit_url: '..' segments of the ref are dropped"
+  )
+  H.eq(
+    remote.build("github", { host = "github.com", owner = "o", repo = "r" }, "main", "a/../b.lua"),
+    "https://github.com/o/r/blob/main/a/b.lua",
+    "build: '..' segments of the path are dropped"
+  )
 end

@@ -352,6 +352,117 @@ return function(H)
   end)
   H.eq(sort_box.a, nil, "tags_async: an unknown sort is refused asynchronously")
 
+  -- ── no_lazy_fetch also pins GIT_ALLOW_PROTOCOL ─────────────────────────
+  -- (a per-protocol `protocol.<name>.allow` in a repository's config beats
+  -- `-c protocol.allow=never`; GIT_ALLOW_PROTOCOL beats both)
+  local proto_probe = H.tmpfile(".lua")
+  vim.fn.writefile({ 'io.stdout:write(os.getenv("GIT_ALLOW_PROTOCOL") or "unset")' }, proto_probe)
+  local proto_git = { "-n", "-i", "NONE", "--headless", "-u", "NONE", "-l", proto_probe }
+  H.eq(
+    git.run(proto_git, nil, vim.v.progpath).stdout,
+    "unset",
+    "run: GIT_ALLOW_PROTOCOL is not touched unless asked"
+  )
+  H.eq(
+    git.run(proto_git, { no_lazy_fetch = true }, vim.v.progpath).stdout,
+    "none",
+    "run: no_lazy_fetch sets GIT_ALLOW_PROTOCOL=none"
+  )
+  H.eq(
+    git.run(
+      proto_git,
+      { no_lazy_fetch = true, env = { GIT_ALLOW_PROTOCOL = "https" } },
+      vim.v.progpath
+    ).stdout,
+    "https",
+    "run: an explicit GIT_ALLOW_PROTOCOL wins over the no_lazy_fetch default"
+  )
+  vim.fn.delete(proto_probe)
+
+  -- ── rev_parse of a full hash that is not in the repository ──────────────
+  local extra = F.init("-git-run-extra")
+  F.write(extra .. "/a.txt", "a\n")
+  local e1 = F.commit(extra, "one", { when = BASE + 100 })
+  H.eq(git.rev_parse(e1, { dir = extra }), e1, "rev_parse: a full hash that exists resolves")
+  H.eq(
+    git.rev_parse(("1"):rep(40), { dir = extra }),
+    nil,
+    "rev_parse: a well-formed full hash of an object that does not exist is not 'resolved'"
+  )
+  H.eq(
+    git.rev_parse("HEAD:a.txt", { dir = extra }),
+    F.git(extra, { "rev-parse", "HEAD:a.txt" }),
+    "rev_parse: other forms are untouched"
+  )
+
+  -- ── tags: only a tag that points at a commit says commit = true ─────────
+  F.git(extra, { "tag", "light" })
+  F.git(extra, { "tag", "-a", "-m", "annotated", "ann" })
+  F.git(extra, { "tag", "-a", "-m", "nested", "nested", "ann" })
+  F.git(extra, { "tag", "treetag", "HEAD^{tree}" })
+  F.git(extra, { "tag", "blobtag", "HEAD:a.txt" })
+  F.git(extra, { "tag", "-a", "-m", "on a tree", "anntree", "HEAD^{tree}" })
+  local by_name = {}
+  for _, t in ipairs(git.tags({ dir = extra }) or {}) do
+    by_name[t.name] = t
+  end
+  for name, want in pairs({
+    light = true,
+    ann = true,
+    nested = true,
+    treetag = false,
+    blobtag = false,
+    anntree = false,
+  }) do
+    H.ok(by_name[name] ~= nil, "tags: " .. name .. " is listed")
+    H.eq((by_name[name] or {}).commit, want, "tags: " .. name .. " .commit")
+  end
+  H.eq(by_name.light.sha, e1, "tags: a lightweight tag on a commit has that commit as sha")
+  H.eq(by_name.ann.sha, e1, "tags: an annotated one is peeled")
+  H.eq(by_name.treetag.time, nil, "tags: a tag on a tree has no commit date")
+
+  -- ── merge_base: a killed process is 'unknown', not 'no common ancestor' ─
+  local run_argv = require("lib.nvim.cross.run_argv")
+  local mb_box
+  H.with_patched(run_argv, "run_async_captured", function(_, on_done)
+    -- Windows reports a stop()ped process as exit code 1 with a signal
+    vim.schedule(function()
+      on_done(false, "", 1, "", 15)
+    end)
+    return { stop = function() end }
+  end, function()
+    git.merge_base_async("main", "side", { dir = extra }, function(sha, err)
+      mb_box = { sha = sha, err = err }
+    end)
+    wait_for(function()
+      return mb_box ~= nil
+    end)
+  end)
+  H.eq(mb_box and mb_box.sha, nil, "merge_base_async: a killed process gives no answer")
+  H.ok(
+    mb_box and mb_box.err and mb_box.err:find("signal 15", 1, true),
+    "merge_base_async: ... and says it was terminated, not 'no common ancestor'"
+  )
+
+  -- ── the async runner answers at the deadline, once ─────────────────────
+  local calls = 0
+  local late_box
+  git.run_async(
+    { "-n", "-i", "NONE", "--headless", "-u", "NONE", "-l", sleeper },
+    { timeout_ms = 200 },
+    function(res)
+      calls = calls + 1
+      late_box = res
+    end,
+    vim.v.progpath
+  )
+  wait_for(function()
+    return late_box ~= nil
+  end)
+  vim.wait(300) -- a second delivery would show up here
+  H.eq(calls, 1, "run_async timeout: on_done is called exactly once")
+  H.eq((late_box or {}).timed_out, true, "run_async timeout: ... and it is a timeout")
+
   F.cleanup()
   vim.fn.delete(probe)
   vim.fn.delete(sleeper)

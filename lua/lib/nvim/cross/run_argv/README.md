@@ -53,14 +53,15 @@ local ok, blob = run_argv.run_blocking_captured(
 `lib.nvim.cross.open_default` uses `run_blocking_captured` to resolve a WSL
 path via `wslpath -w`.
 
-### Options: `binary`, `timeout_ms`, `env`, `cwd`
+### Options: `binary`, `timeout_ms`, `max_output_bytes`, `env`, `cwd`
 
 The `*_captured` and `*_result` runners take one options table:
 
 | Option | Meaning |
 | --- | --- |
 | `binary` | stdout byte for byte (see above). |
-| `timeout_ms` | Kill the process (SIGTERM) after this long. The run then ends with **exit code `124`**, the `timeout(1)` convention. Only the direct child is killed, not a process tree it spawned (on Windows, `taskkill /T` is the tool for that). |
+| `timeout_ms` | Kill the process (SIGTERM) after this long. The run then ends with **exit code `124`**, the `timeout(1)` convention. On Windows the whole process tree is killed (`taskkill /T`); elsewhere only the direct child, so a grandchild keeping the output pipes open can delay their closing — the **async** runner answers at the deadline plus a short grace anyway, the blocking one returns when `wait()` gives up (never an error from an empty result). |
+| `max_output_bytes` | Stop the process once its stdout exceeds this many bytes: **exit code `125`** (`run_argv.OUTPUT_LIMIT_CODE`), `stdout` holds what fitted, `stderr` says why. For commands whose output is somebody else's data. |
 | `env` | Extra environment variables, **merged over** the inherited environment — a name you do not set stays inherited. |
 | `cwd` | Working directory of the child. |
 
@@ -91,7 +92,7 @@ local res = run_argv.run_blocking_result({ "git", "status" }, nil, { timeout_ms 
 | `signal` | the terminating signal, `0` if none |
 | `stdout` | captured stdout |
 | `stderr` | captured stderr (`""` when empty); for a spawn failure the reason; `nil` only on the legacy fallback, which cannot separate the streams |
-| `timed_out` | the run hit `timeout_ms` (`code == 124` with a timeout set; a process that exits 124 by itself is not a timeout) |
+| `timed_out` | the run was killed for `timeout_ms` (`code == 124` with a signal set; a process that exits 124 by itself is not a timeout, with or without `timeout_ms`) |
 
 The signal row is the reason this function exists in this shape: the OS
 reports **exit status 0** for a process the OOM killer or a crash took down, so

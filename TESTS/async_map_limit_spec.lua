@@ -325,6 +325,30 @@ return function(H)
   H.eq(type(thrown_value), "table", "map_limit: a thrown table stays a table")
   H.eq(thrown_value.code, 7, "map_limit: ... with its content")
 
+  -- ── a worker that throws a falsy value is still a failed item ────────────
+  local falsy_done
+  async.map_limit({ 1, 2, 3, 4 }, 2, function(item, _, done)
+    if item == 2 then
+      error(nil)
+    elseif item == 3 then
+      error(false)
+    end
+    done(item * 10)
+  end, function(results, errors)
+    falsy_done = { results = results, errors = errors }
+  end)
+  H.ok(
+    wait_for(function()
+      return falsy_done ~= nil
+    end),
+    "map_limit: the run completes although workers threw error(nil) and error(false)"
+  )
+  H.ok(falsy_done.errors[2], "map_limit: error(nil) is recorded as an error")
+  H.ok(falsy_done.errors[3], "map_limit: error(false) is recorded as an error")
+  H.eq(falsy_done.results[2], nil, "map_limit: ... without a result")
+  H.eq(falsy_done.results[1], 10, "map_limit: the other items are unaffected")
+  H.eq(falsy_done.results[4], 40, "map_limit: ... all of them")
+
   -- ── argument checks are programming errors ──────────────────────────────
   H.eq(pcall(async.map_limit, "nope", 1, function() end, function() end), false, "items: a list")
   H.eq(pcall(async.map_limit, {}, 1, nil, function() end), false, "worker: a function")

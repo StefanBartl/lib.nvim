@@ -211,9 +211,10 @@ what the helpers above do not expose: a **timeout**, an **environment**, the
 
 | Option | Meaning |
 | --- | --- |
-| `timeout_ms` | Kill git after this long; the result is `timed_out` (exit code `124`). Only the direct child dies, not a process tree it spawned. |
+| `timeout_ms` | Kill git after this long; the result is `timed_out` (exit code `124`). On Windows the whole process tree is killed; elsewhere only the direct child. The async runner answers at the deadline plus a short grace even when a descendant keeps the pipes open. |
+| `max_output_bytes` | Stop git once its stdout exceeds this many bytes: the result is `ok = false`, `code = 125`, `stderr` says why. One commit with a huge message makes `log` print gigabytes from a tiny object; without a cap all of it is held in memory. |
 | `env` | Extra environment variables, merged over the inherited ones. |
-| `no_lazy_fetch` | Never fetch missing objects of a partial (**blobless**) clone: git then *fails* on a missing object instead of quietly fetching it from the remote — no network, no write into the clone. Sets `GIT_NO_LAZY_FETCH=1` (git 2.44+; an explicit `env` entry of the same name wins) **and** passes `-c protocol.allow=never`, so it holds on older git too. The same switch blocks every transport, so a command that really needs the network (`fetch`) fails under it. |
+| `no_lazy_fetch` | Never fetch missing objects of a partial (**blobless**) clone: git then *fails* on a missing object instead of quietly fetching it from the remote — no network, no write into the clone. Sets `GIT_NO_LAZY_FETCH=1` (git 2.44+, the primary lock) and `GIT_ALLOW_PROTOCOL=none` (every git since 2.10; an explicit `env` entry of the same name wins) **and** passes `-c protocol.allow=never`. `GIT_ALLOW_PROTOCOL` is what holds on older git and against a `protocol.<name>.allow` in the repository's or the user's config, which beats `-c protocol.allow=never`. The same switch blocks every transport, so a command that really needs the network (`fetch`) fails under it. |
 | `read_only` | `--no-optional-locks`. `run`/`run_async` only; the read functions below always set it. |
 | `input`, `binary` | stdin / byte-exact stdout. `run`/`run_async` only. |
 
@@ -255,7 +256,7 @@ local commits, err = git.log("v1.2.0..v1.3.0", {
 without commits is `{}`; `nil` plus a reason means git failed (unknown
 revision, a repository without commits, not a repository, timeout). Newest
 commit first; `reverse`, `topo_order`, `no_merges`, `first_parent`,
-`max_count`, `skip` and `paths` do what the git flags of the same name do.
+`max_count` and `skip` do what the git flags of the same name do; `paths` are taken **literally** (`a[1].txt` is that file, not a glob; pass `pathspecs = true` for git's pathspec semantics). `refs` is git's decoration list and also holds the pseudo-decorations `grafted` (shallow boundary) and `replaced`. A date with hundreds of digits in a hostile commit gives `nil`, not `inf`.
 
 - **`A...B` with `left_right`** sets `entry.side`: `>` for a commit only
   reachable from `B`, `<` for one only reachable from `A`. One call tells a
@@ -324,11 +325,11 @@ refused call (a bad revision) reports through `on_done` asynchronously too.
 git.tags({ dir = repo })                                 --> newest creator date first
 git.tags({ dir = repo, merged = new, no_merged = old })  --> the tags an update brought in
 git.tags({ dir = repo, sort = "version", pattern = "v1.*", limit = 5 })
--- { { name, sha, object, annotated, time, subject }, … }
+-- { { name, sha, object, annotated, commit, time, subject }, … }
 ```
 
-`sha` is the commit a tag points to (peeled out of an annotated tag),
-`object` the tag's own object (equal to `sha` for a lightweight tag). `time` is
+`sha` is the object a tag points to (peeled out of an annotated tag) — a commit when `commit` is `true`; a tag on a tree or a blob has `commit = false` and no `time`.
+`object` is the tag's own object (equal to `sha` for a lightweight tag). `time` is
 the tagger date of an annotated tag and the commit date of a lightweight one;
 `subject` the first line of the tag message (annotated) or of the commit.
 `sort` is `"newest"` (default), `"oldest"` or `"version"` (so `v1.10` is above
@@ -396,8 +397,8 @@ remote.compare_url(kind, r, old, new)                    -- …/compare/old...ne
 remote.tag_url(kind, r, "v1.2.3")                        -- …/releases/tag/v1.2.3 (GitLab: …/-/tags/v1.2.3)
 ```
 
-Every path part is percent-encoded segment by segment (a `/` in a branch or
-tag name stays the separator). Nothing is shelled out or fetched — the URL is
+`parse_remote` validates what it returns (a remote URL is text from a repository's own config): a plain DNS-style host (lower-cased, the ssh port dropped), owner segments and a repo name of letters, digits, `.`, `_`, `-`; anything else — `?`, `#`, spaces, control characters, `..` — gives `nil`. Every ref/path part is percent-encoded segment by segment (a `/` in a branch or
+tag name stays the separator; `.` and `..` segments are dropped). Nothing is shelled out or fetched — the URL is
 only built. The GitHub shapes are the ones every GitHub link uses; the
 GitLab and Gitea/Forgejo (Codeberg) shapes are the documented ones, not
 verified against a live instance here.

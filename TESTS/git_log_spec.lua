@@ -513,10 +513,107 @@ return function(H)
       stat.stderr and stat.stderr:find("fetch", 1, true),
       "no_lazy_fetch: ... complaining about the object it could not fetch"
     )
+    -- ... also where the clone's own (or the user's global) config allows a
+    -- transport: a per-protocol `protocol.file.allow=always` beats
+    -- `-c protocol.allow=never` but not GIT_ALLOW_PROTOCOL. git < 2.44 is
+    -- simulated by switching GIT_NO_LAZY_FETCH off again.
+    F.git(clone, { "config", "protocol.file.allow", "always" })
+    local old_git = git.run(
+      { "log", "--stat" },
+      { dir = clone, no_lazy_fetch = true, env = { GIT_NO_LAZY_FETCH = "0" } }
+    )
+    H.eq(
+      old_git.ok,
+      false,
+      "no_lazy_fetch: holds without GIT_NO_LAZY_FETCH although the clone's config allows the transport"
+    )
+
     -- the same call without the option is allowed to fetch (and, here, does)
     local fetched = git.run({ "log", "--stat" }, { dir = clone })
     H.eq(fetched.ok, true, "control: without no_lazy_fetch git fetches the missing blobs")
   end
+
+  -- ── paths are literal, an order file cannot break the log, hostile dates ──
+  local lit = F.init("-literal-paths")
+  F.write(lit .. "/a1.txt", "1\n")
+  F.commit(lit, "touches a1", { when = 1700000100 })
+  F.write(lit .. "/a[1].txt", "1\n")
+  F.commit(lit, "touches a[1]", { when = 1700000200 })
+  local function subjects(entries)
+    local out = {}
+    for _, e in ipairs(entries or {}) do
+      out[#out + 1] = e.subject
+    end
+    return table.concat(out, ",")
+  end
+  H.eq(
+    subjects(git.log("HEAD", { dir = lit, paths = { "a[1].txt" } })),
+    "touches a[1]",
+    "log paths: a path is literal -- a[1].txt is not the glob that matches a1.txt"
+  )
+  H.eq(
+    subjects(git.log("HEAD", { dir = lit, paths = { "*.txt" } })),
+    "",
+    "log paths: ... and * is not a wildcard"
+  )
+  H.eq(
+    subjects(git.log("HEAD", { dir = lit, paths = { "a[1].txt" }, pathspecs = true })),
+    "touches a[1],touches a1",
+    "log paths: pathspecs = true asks for git's pathspec semantics (the glob also matches a1.txt)"
+  )
+
+  F.git(lit, { "config", "diff.orderFile", "no-such-order-file.txt" })
+  local ordered, ordered_err = git.log("HEAD", { dir = lit, name_status = true })
+  H.ok(
+    ordered,
+    "log: a diff.orderFile that does not exist does not break name_status: "
+      .. tostring(ordered_err)
+  )
+  H.eq(#(ordered or {}), 2, "log: ... and both commits come back")
+
+  -- a commit object with a committer date of 400 digits (git accepts it unless
+  -- fsckObjects is on): `tonumber` would make it `inf`
+  local tree = F.git(lit, { "rev-parse", "HEAD^{tree}" })
+  local raw_commit = ("tree %s\nauthor T <t@x.y> %s +0000\ncommitter T <t@x.y> %s +0000\n\nhuge date\n"):format(
+    tree,
+    ("9"):rep(400),
+    ("9"):rep(400)
+  )
+  local made = vim
+    .system(
+      { "git", "-C", lit, "hash-object", "-t", "commit", "-w", "--literally", "--stdin" },
+      { stdin = raw_commit, text = true }
+    )
+    :wait()
+  if made.code == 0 then
+    F.git(lit, { "update-ref", "refs/heads/huge-date", vim.trim(made.stdout) })
+    local huge = git.log("huge-date", { dir = lit, max_count = 1 })
+    H.ok(huge and huge[1], "log: a commit with a 400-digit date is listed")
+    H.eq((huge or { {} })[1].commit_time, nil, "log: ... its date is nil, not inf")
+    H.eq((huge or { {} })[1].author_time, nil, "log: ... also the author date")
+  end
+
+  -- ── max_output_bytes: one huge message cannot fill the editor's memory ─────
+  local fat = F.init("-fat-message")
+  F.write(fat .. "/f.txt", "1\n")
+  F.commit(fat, "big\n\n" .. ("y"):rep(20000), { when = 1700000100 })
+  local capped = git.run({ "log", "-1", "--format=%B" }, { dir = fat, max_output_bytes = 1000 })
+  H.eq(capped.ok, false, "run max_output_bytes: output past the cap is a failure")
+  H.eq(capped.code, 125, "run max_output_bytes: ... with the output-limit code")
+  H.ok(#capped.stdout <= 1000, "run max_output_bytes: ... stdout is cut at the cap")
+  H.ok(
+    capped.stderr:find("exceeded", 1, true) ~= nil,
+    "run max_output_bytes: ... and the reason is in stderr"
+  )
+  local capped_log, capped_log_err = git.log("HEAD", { dir = fat, max_output_bytes = 1000 })
+  H.eq(
+    capped_log,
+    nil,
+    "log max_output_bytes: a log past the cap is an error, not a truncated list"
+  )
+  H.ok(capped_log_err and capped_log_err ~= "", "log max_output_bytes: ... with a reason")
+  local roomy = git.log("HEAD", { dir = fat, max_output_bytes = 1024 * 1024 })
+  H.eq(#(roomy or {}), 1, "log max_output_bytes: under the cap nothing changes")
 
   F.cleanup()
 end
