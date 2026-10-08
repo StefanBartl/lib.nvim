@@ -299,6 +299,12 @@ M.as_neotree_names(): string[]                -- basenames only, for Neo-tree hi
 return function(path: string): string|nil content, string|nil err   -- binary mode, byte-exact
 ```
 
+### `lib.nvim.fs.read_bounded` (see README)
+```
+return function(path: string, max_bytes: integer): string|nil content, string|nil err
+-- regular files of at most max_bytes only (stat before open): no FIFO hang, no device, no huge file
+```
+
 ### `lib.nvim.fs.write.to_file` (see README)
 Synchronous, byte-exact write (creates parent dir, truncates, binary
 `"wb"`, appends trailing newline if missing).

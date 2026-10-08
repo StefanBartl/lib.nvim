@@ -95,5 +95,8 @@ M.truncate = require("lib.lua.strings.width").truncate
 
 M.width = require("lib.lua.strings.width")
 
+-- safe module: untrusted text -> text that is safe to show (reach it through `M.safe`)
+M.safe = require("lib.lua.strings.safe")
+
 ---@type Lib.Strings
 return M
