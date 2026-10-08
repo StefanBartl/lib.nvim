@@ -307,4 +307,24 @@ return function(H)
     )
     vim.api.nvim_del_augroup_by_name(pname .. ".g")
   end
+
+  -- Groups deleted behind the module's back (a popup's per-window group) must
+  -- not stay in the id caches for good.
+  do
+    local before = autocmd._cache_size()
+    local ids = {}
+    for i = 1, 150 do
+      ids[i] = autocmd.group("LibNvimSpecChurn" .. i)
+    end
+    for _, id in ipairs(ids) do
+      vim.api.nvim_del_augroup_by_id(id)
+    end
+    local survivor = autocmd.group("LibNvimSpecChurnSurvivor")
+    ok(
+      autocmd._cache_size() < before + 100,
+      "dead groups are pruned from the caches once they have outgrown the threshold"
+    )
+    eq(autocmd.group("LibNvimSpecChurnSurvivor"), survivor, "a live group keeps its cached id")
+    vim.api.nvim_del_augroup_by_id(survivor)
+  end
 end
