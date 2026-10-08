@@ -78,6 +78,9 @@ return function(H)
     "\1",
     "\127",
     "\194\160", -- U+00A0
+    "\194\173", -- U+00AD, soft hyphen
+    "\194\133", -- U+0085, a C1 control
+    "\194\159", -- U+009F, the last C1 control
     "\195\164", -- a-umlaut
     "\195\188", -- u-umlaut
     "a\204\136", -- a + U+0308 (NFD)
@@ -203,14 +206,20 @@ return function(H)
   for i = 1, 20000 do
     many[i] = ("caf\101\204\129_%06d.txt"):format(i)
   end
-  local want, wides = listing(many)
-  local got = listing(many)
-  local t0 = uv.hrtime()
-  reference(want, wides, false)
-  local slow = uv.hrtime() - t0
-  t0 = uv.hrtime()
-  input.order_by_base_characters(got, wides, false)
-  local quick = uv.hrtime() - t0
+  -- Best of three for each: one stall on a busy machine must not decide the ratio. Fresh
+  -- lists every round: a list that was ordered once holds its keys already.
+  local slow, quick = math.huge, math.huge
+  local want, wides, got
+  for _ = 1, 3 do
+    want, wides = listing(many)
+    got = listing(many)
+    local t0 = uv.hrtime()
+    reference(want, wides, false)
+    slow = math.min(slow, uv.hrtime() - t0)
+    t0 = uv.hrtime()
+    input.order_by_base_characters(got, wides, false)
+    quick = math.min(quick, uv.hrtime() - t0)
+  end
   eq(got[777].key, want[777].key, "the same key")
   ok(quick * 2 < slow, ("%.0f ms against %.0f ms"):format(quick / 1e6, slow / 1e6))
 end
