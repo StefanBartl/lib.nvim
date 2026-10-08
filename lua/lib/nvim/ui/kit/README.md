@@ -109,6 +109,12 @@ anything that records or shows keystrokes as they are typed reads the mark and
 leaves that buffer's keys out -- `ui.screenkey` of ui.nvim does, and the name is the
 same in ui.nvim's copy of the kit, so one HUD sees the prompts of both.
 
+The `TextChanged` hooks of a prompt -- the re-mask of a secret `kit.input`, the
+debounce of `kit.live_input` and of `kit.compare`'s query -- are in no group:
+buffer-local autocmds, `record = false`, that go with their buffer when the float
+closes. A group shared by every prompt and cleared at each open took the hooks of the
+prompt that was already open away (its `on_change` was never called again, a secret
+typed after that showed in clear text).
 
 ## Components
 
