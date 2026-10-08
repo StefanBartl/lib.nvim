@@ -5,7 +5,7 @@
 ---
 --- `opts.secret = true` masks the displayed content character-by-character
 --- via `conceal` (each char replaced with `opts.mask`, default `"*"`, which is also what
---- a mask that is not a string becomes) — a
+--- a mask that is not a string, or that nvim cannot show, becomes) — a
 --- `vim.fn.inputsecret` replacement. The mask is re-derived from the actual
 --- buffer content on every edit (paste, backspace, mid-line insert all just
 --- work, no keystroke-diffing needed) rather than tracked in a shadow
@@ -211,6 +211,16 @@ local function conceal_line(bufnr, ns, row, mask)
   -- `byteidx(line, i)` rescans the line from its start for every `i`, which made this
   -- quadratic in the length of a pasted token -- and `lib.nvim.ui.kit.sheet` runs it for every
   -- secret row at every repaint.
+  -- nvim refuses a mask that does not start with a printable character (a newline, NUL,
+  -- escape, a lone continuation byte, U+200B ...) and asks only for that first one. Raised
+  -- from the loop below, after the caller cleared the namespace, it would leave the secret
+  -- on screen.
+  local ok, probe = pcall(api.nvim_buf_set_extmark, bufnr, ns, row, 0, { conceal = mask })
+  if ok then
+    api.nvim_buf_del_extmark(bufnr, ns, probe)
+  else
+    mask = "*"
+  end
   local col = 0
   for _, ch in ipairs(fn.split(line, "\\zs")) do
     local stop = col + #ch
@@ -274,6 +284,33 @@ local function prefix_regex(name, fold)
 end
 
 ---@internal
+---`key` without its marks U+0300..U+036F (bytes CC 80..BF and CD 80..AF) -- the base
+---characters the split in `order_by_base_characters` leaves -- for a name of nothing but ASCII,
+---Latin-1 and those marks: `e` + U+0301, the macOS way. The split costs ten times what these
+---few patterns do. nil for any other name, which is left to the split: one with a byte that
+---makes no such character (a mark behind it is then a character of its own, not a part of
+---it), one with a mark where nothing stands before it to take it in (no separator in front),
+---one with a control character or U+00AD (they take no mark, to `strchars()`), or any other
+---character.
+---@param key string
+---@param after_sep boolean
+---@return string|nil
+local function without_common_marks(key, after_sep)
+  if
+    key:find("[\194\195][\204\205]") -- a mark cut a character in two
+    or key:find("\194[\128-\159\173]") -- U+0080..U+009F and U+00AD
+    or (not after_sep and key:find("^[\204\205]")) -- a mark with no base
+  then
+    return nil
+  end
+  local plain = key:gsub("\204[\128-\191]", ""):gsub("\205[\128-\175]", "")
+  if plain:gsub("[\194\195][\128-\191]", ""):find("[%c\128-\255]") then
+    return nil
+  end
+  return plain
+end
+
+---@internal
 ---Sort key of the candidates that may hold a combining mark, as `pathcmp()` -- what
 ---`getcompletion()` orders by -- has it: it steps over a character and the marks after it
 ---as one (`utfc_ptr2len`) but compares only the first code point of each. "Abe" + U+0308 +
@@ -290,7 +327,8 @@ end
 ---each name is asked on its own (a pair of `strchars()`, about 1.5 us) and only those that
 ---hold a mark are taken apart (`split()`, about 20 us): a directory of five thousand Cyrillic
 ---names and one written the macOS way would otherwise split every one of them for keys that
----come out as they went in.
+---come out as they went in. Of those, a name that is nothing but ASCII, Latin-1 and the
+---marks U+0300..U+036F is not taken apart either (`without_common_marks`).
 ---
 ---`after_sep`: a separator stands right before the name in what `pathcmp()` compares -- the
 ---path has a directory part -- and a mark at the very start of a name belongs to that
@@ -315,7 +353,10 @@ local function order_by_base_characters(found, wides, after_sep)
   for i = 1, #wides do
     local it = found[wides[i]]
     local text = lead .. it.key
-    if fn.strchars(text) ~= fn.strchars(text, 1) then
+    local plain = without_common_marks(it.key, after_sep)
+    if plain then
+      it.key = plain
+    elseif fn.strchars(text) ~= fn.strchars(text, 1) then
       local clusters = fn.split(text, "\\zs")
       local bases = {}
       for c = first, #clusters do
@@ -1039,5 +1080,6 @@ end
 --- it cannot reuse the single-line prompt itself).
 M.conceal_line = conceal_line
 M.complete = trigger_completion
+M.order_by_base_characters = order_by_base_characters
 
 return M
