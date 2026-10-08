@@ -482,6 +482,74 @@ return function(H)
       )
     end)
 
+    -- Neovim's regex says where in a name the fragment is; "starts with" is the question. Left
+    -- unanchored it answers yes for every name that has the fragment anywhere: three names begin
+    -- with an e-acute, 306 more only have one behind an "x", and getcompletion() lists the three
+    -- (so few that it is the one asked), where the regex alone offered 300. A dot is a character
+    -- of its own in a name, not "any character": 150 files begin with "resume" (with the accents)
+    -- and a dot, 306 more with the same letters and an "X" where the dot is; read as a pattern
+    -- the dot took the second kind in as well. And without 'fileignorecase' and 'wildignorecase'
+    -- (and off Windows) "ITEM_" and a capital a-umlaut is no "item_" and a small one: three
+    -- names have the small letter, 306 the capital ones; the regex says `\C` outright, left to
+    -- 'ignorecase' it took the capital names in as well. Where the case is folded both
+    -- spellings are a match, and the list is as long as getcompletion()'s.
+    local e_acute = "\195\169" -- U+E9
+    local resume = "r\195\169sum\195\169"
+    for _, case in ipairs({
+      {
+        label = "anchored",
+        frag = e_acute,
+        names = function()
+          local out = {}
+          for i = 0, 2 do
+            out[#out + 1] = ("%s%03d"):format(e_acute, i)
+          end
+          for i = 0, MAX + 5 do
+            out[#out + 1] = ("x%s%03d"):format(e_acute, i)
+          end
+          return out
+        end,
+      },
+      {
+        label = "literal",
+        frag = resume .. ".",
+        names = function()
+          local out = {}
+          for i = 0, 149 do
+            out[#out + 1] = ("%s.pdf%03d"):format(resume, i)
+          end
+          for i = 0, MAX + 5 do
+            out[#out + 1] = ("%sX%03d"):format(resume, i)
+          end
+          return out
+        end,
+      },
+      {
+        label = "case",
+        frag = "item_\195\164",
+        names = function()
+          local out = {}
+          for i = 0, 2 do
+            out[#out + 1] = ("item_\195\164%03d"):format(i)
+          end
+          for i = 0, MAX + 5 do
+            out[#out + 1] = ("ITEM_\195\132%03d"):format(i + 10)
+          end
+          return out
+        end,
+      },
+    }) do
+      local textual = new_dir()
+      dirs_made[#dirs_made + 1] = textual
+      local textual_names = case.names()
+      for _, name in ipairs(textual_names) do
+        touch(textual .. "/" .. name)
+      end
+      if listed_verbatim(textual, textual_names) then
+        check_like_getcompletion(textual .. "/" .. case.frag, "non-ASCII fragment, " .. case.label)
+      end
+    end
+
     -- "U" is no prefix of "U" + U+0308 (an umlaut written as two characters, as macOS
     -- writes them): getcompletion() lists the four plain names, the bytes would list 305.
     local marked = new_dir()
