@@ -569,6 +569,73 @@ local function run(H)
       )
     end)
   end
+
+  -- ── network verbs: no interactive prompt, a deadline ─────────────────────
+  -- Neovim cannot answer a prompt git raises itself, so fetch/pull/push run with
+  -- GIT_TERMINAL_PROMPT=0 and a 120 s deadline unless the caller says otherwise.
+  do
+    local run_argv = require("lib.nvim.cross.run_argv")
+    local original = run_argv.run_async_captured
+    local repo = tmpdir("-git-sync-net-opts")
+    git_run(repo, { "init", "-q", "-b", "main" })
+
+    --- Run `verb` with a fake runner; returns the runner options it received and the result.
+    ---@param verb string
+    ---@param opts table
+    ---@param reply fun(ropts: table): boolean, string, integer, string, integer
+    local function drive(verb, opts, reply)
+      local seen, result
+      local fake = function(argv, on_done, input, ropts)
+        if vim.tbl_contains(argv, "rev-parse") then
+          return original(argv, on_done, input, ropts)
+        end
+        seen = ropts
+        vim.schedule(function()
+          on_done(reply(ropts))
+        end)
+        return { stop = function() end }
+      end
+      H.with_patched(run_argv, "run_async_captured", fake, function()
+        opts.dir = repo
+        git[verb .. "_async"](opts, function(ok, err)
+          result = { ok = ok, err = err }
+        end)
+        wait_for(function()
+          return result ~= nil
+        end)
+      end)
+      return seen, result
+    end
+
+    local function fine()
+      return true, "", 0, "", 0
+    end
+
+    for _, verb in ipairs({ "fetch", "pull", "push" }) do
+      local seen = drive(verb, {}, fine)
+      H.eq(seen.env.GIT_TERMINAL_PROMPT, "0", verb .. "_async: GIT_TERMINAL_PROMPT=0 by default")
+      H.eq(seen.timeout_ms, 120000, verb .. "_async: 120 s deadline by default")
+
+      seen =
+        drive(verb, { env = { GIT_TERMINAL_PROMPT = "1", GIT_X = "y" }, timeout_ms = 5000 }, fine)
+      H.eq(seen.env.GIT_TERMINAL_PROMPT, "1", verb .. "_async: opts.env wins over the default")
+      H.eq(seen.env.GIT_X, "y", verb .. "_async: opts.env is passed through")
+      H.eq(seen.timeout_ms, 5000, verb .. "_async: opts.timeout_ms replaces the deadline")
+
+      seen = drive(verb, { timeout_ms = false }, fine)
+      H.eq(seen.timeout_ms, nil, verb .. "_async: timeout_ms = false waits forever")
+
+      local _, res = drive(verb, { timeout_ms = 3000 }, function()
+        return false, "", 124, "", 15
+      end)
+      H.eq(res.ok, false, verb .. "_async: a timeout is a failure")
+      H.eq(
+        res.err,
+        ("git %s timed out after 3s"):format(verb),
+        verb .. "_async: the error names the deadline"
+      )
+    end
+  end
 end
 
 return function(H)

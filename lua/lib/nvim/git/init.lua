@@ -496,7 +496,7 @@ end
 ---    in the stdout slot, where "git fetch failed (exit code -1)" would hide
 ---    it; it is in `stderr` here, without Neovim's own `file:line` stamp.
 ---@param argv string[]
----@param on_done fun(ok: boolean, stdout: string, code: integer, stderr: string|nil)
+---@param on_done fun(ok: boolean, stdout: string, code: integer, stderr: string|nil, timed_out: boolean|nil)
 ---@param input string|nil
 ---@param ropts Lib.RunArgv.Opts|nil e.g. `{ binary = true }`
 ---@return { stop: fun() } handle
@@ -505,11 +505,56 @@ local function run_sync_async(argv, on_done, input, ropts)
     argv,
     function(ok, stdout, code, stderr, signal)
       local res = async_result(ok, stdout, code, stderr, signal, ropts)
-      on_done(res.ok, res.stdout, res.code, res.stderr)
+      on_done(res.ok, res.stdout, res.code, res.stderr, res.timed_out)
     end,
     input,
     ropts
   )
+end
+
+--- Deadline of one network git process (`fetch`, `pull`, `push`) when the caller
+--- passes no `opts.timeout_ms`.
+local NET_TIMEOUT_MS = 120000
+
+---@internal
+--- Runner options of the network verbs. Neovim has no terminal to type into, so
+--- a prompt git raises itself (https credentials, `Username for ...`) would hang
+--- the job forever: `GIT_TERMINAL_PROMPT=0` makes git fail instead. Credential
+--- helpers are untouched. `opts.env` wins over the default, `opts.timeout_ms`
+--- replaces the deadline (`false` = none).
+---@param opts Lib.Git.RunOpts|nil `timeout_ms` may also be `false` (no deadline).
+---@return Lib.RunArgv.Opts
+local function net_ropts(opts)
+  opts = opts or {}
+  local ms = opts.timeout_ms
+  if ms == nil then
+    ms = NET_TIMEOUT_MS
+  elseif ms == false then
+    ms = nil
+  end
+  return {
+    timeout_ms = ms,
+    env = vim.tbl_extend("force", { GIT_TERMINAL_PROMPT = "0" }, opts.env or {}),
+  }
+end
+
+---@internal
+--- The failure text of a network verb: git's own stderr, the deadline when it
+--- was the cause (git's stderr is empty after the kill), else the exit code.
+---@param verb string
+---@param stderr string|nil
+---@param code integer
+---@param timed_out boolean|nil
+---@param ropts Lib.RunArgv.Opts
+---@return string
+local function net_err(verb, stderr, code, timed_out, ropts)
+  if timed_out then
+    return ("git %s timed out after %ds"):format(verb, math.floor(ropts.timeout_ms / 1000))
+  end
+  if stderr and stderr ~= "" then
+    return stderr
+  end
+  return ("git %s failed (exit code %d)"):format(verb, code)
 end
 
 ---@internal
@@ -1676,16 +1721,16 @@ end
 --- failure (`err` = "git fetch failed (exit code 143)" for SIGTERM), never a
 --- success; so is a git that cannot be started (`err` = the reason). `on_done`
 --- still fires once after `stop()` -- with that failure.
----@param opts? Lib.Git.Opts
+---@param opts? Lib.Git.RunOpts
 ---@param on_done fun(ok: boolean, err: string|nil, changed: boolean|nil)
 ---@param git_cmd? string
 ---@return { stop: fun() } handle
 function M.fetch_async(opts, on_done, git_cmd)
   local argv = git_argv(git_cmd or "git", opts, { "fetch", "--all", "--prune" })
-  return run_sync_async(argv, function(ok, _stdout, code, stderr)
+  local ropts = net_ropts(opts)
+  return run_sync_async(argv, function(ok, _stdout, code, stderr, timed_out)
     if not ok then
-      stderr = stderr or ""
-      on_done(false, (stderr ~= "" and stderr) or ("git fetch failed (exit code %d)"):format(code))
+      on_done(false, net_err("fetch", stderr, code, timed_out, ropts))
       return
     end
     -- `stderr` is `nil` only on the legacy (pre-`vim.system`) fallback,
@@ -1702,7 +1747,7 @@ function M.fetch_async(opts, on_done, git_cmd)
       changed = stderr:match("%S") ~= nil
     end
     on_done(true, nil, changed)
-  end)
+  end, nil, ropts)
 end
 
 ---@internal
@@ -1784,7 +1829,7 @@ end
 --- emptiness the *before* read can hit. Reports `changed = nil` (honestly
 --- unknown) rather than comparing a real `before` hash against a `nil`
 --- that would otherwise silently guess `true`.
----@param opts? Lib.Git.Opts
+---@param opts? Lib.Git.RunOpts
 ---@param on_done fun(ok: boolean, err: string|nil, changed: boolean|nil)
 ---@param git_cmd? string
 ---@return { stop: fun() } handle
@@ -1796,13 +1841,13 @@ function M.pull_async(opts, on_done, git_cmd)
       return
     end
     local argv = git_argv(git_cmd or "git", opts, { "pull", "--ff-only" })
-    active.stop = run_sync_async(argv, function(ok, _stdout, code, stderr)
+    local ropts = net_ropts(opts)
+    active.stop = run_sync_async(argv, function(ok, _stdout, code, stderr, timed_out)
       if cancelled then
         return
       end
       if not ok then
-        stderr = stderr or ""
-        on_done(false, (stderr ~= "" and stderr) or ("git pull failed (exit code %d)"):format(code))
+        on_done(false, net_err("pull", stderr, code, timed_out, ropts))
         return
       end
       active.stop = head_hash_async(opts, function(after, after_ok)
@@ -1815,7 +1860,7 @@ function M.pull_async(opts, on_done, git_cmd)
         end
         on_done(true, nil, before ~= after)
       end, git_cmd).stop
-    end).stop
+    end, nil, ropts).stop
   end, git_cmd).stop
   return {
     stop = function()
@@ -1831,20 +1876,20 @@ end
 --- failure (`err` = "git push failed (exit code 143)" for SIGTERM), never a
 --- success: the push did not finish. `on_done` still fires once after `stop()`
 --- -- with that failure.
----@param opts? Lib.Git.Opts
+---@param opts? Lib.Git.RunOpts
 ---@param on_done fun(ok: boolean, err: string|nil)
 ---@param git_cmd? string
 ---@return { stop: fun() } handle
 function M.push_async(opts, on_done, git_cmd)
   local argv = git_argv(git_cmd or "git", opts, { "push" })
-  return run_sync_async(argv, function(ok, _stdout, code, stderr)
+  local ropts = net_ropts(opts)
+  return run_sync_async(argv, function(ok, _stdout, code, stderr, timed_out)
     if not ok then
-      stderr = stderr or ""
-      on_done(false, (stderr ~= "" and stderr) or ("git push failed (exit code %d)"):format(code))
+      on_done(false, net_err("push", stderr, code, timed_out, ropts))
       return
     end
     on_done(true, nil)
-  end)
+  end, nil, ropts)
 end
 
 --- Fetch, then fast-forward pull -- the pair every "bring this repo level
@@ -1871,7 +1916,7 @@ end
 --- is killed, decides this, not the fetch's own `ok`: a killed process and a
 --- git that failed on its own are not told apart by that alone (a kill reads
 --- as exit code 1 on Windows, as exit code 0 with `signal` 15 on POSIX).
----@param opts? Lib.Git.Opts
+---@param opts? Lib.Git.RunOpts
 ---@param on_done fun(ok: boolean, err: string|nil, changed: boolean|nil)
 ---@param git_cmd? string
 ---@return { stop: fun() } handle
