@@ -31,6 +31,7 @@ lib.nvim.window/
 ├── make_scratch.lua         -- scratch buffer + float in one call
 ├── nice_quit.lua            -- q / <Esc> to close (normal mode)
 ├── set_title.lua            -- set / clear a float title
+├── printable_title.lua      -- (internal) a title with control characters spelled out
 ├── close_on_focus_lost.lua  -- auto-close on focus loss
 ├── center.lua               -- re-center a float
 ├── open_named_scratch.lua   -- named, de-duplicated scratch split
@@ -102,7 +103,7 @@ local winid, bufnr = window.make_scratch({
 | `relative`    | `"editor"\|"cursor"\|"win"`           | `"editor"`   | anchor of the float                                    |
 | `row` / `col` | `integer`                             | centered     | explicit position (otherwise editor-centered)          |
 | `border`      | `string\|string[]`                    | `"rounded"`  | border style                                           |
-| `title`       | `string`                              | –            | title (only visible with a border)                     |
+| `title`       | `string`                              | –            | title (only visible with a border); control characters in it are spelled out (`^[`), never drawn raw |
 | `title_pos`   | `"left"\|"center"\|"right"`           | –            | title position                                         |
 | `focusable`   | `boolean`                             | `true`       | focusable                                              |
 | `enter`       | `boolean`                             | `true`       | focus the new window immediately                       |
@@ -155,6 +156,13 @@ window.set_title(winid, nil)   -- remove title
 
 > **Note:** Neovim stores and shows a float title only if the float has a
 > **border**. Without a border the title has no effect (a debug hint is emitted).
+
+> **Note:** a title is text a caller may have built from typed or pasted input
+> (a file name, a command line). Neovim draws a plain-string title cell by cell,
+> control characters included, and the TUI writes those to the terminal as they
+> are (an ESC ] 0 ; ... BEL sets the terminal's window title). `set_title` and
+> `make_scratch` therefore spell them out the way Neovim shows them in a buffer
+> (`^[`, `^G`, `^I`, `<9b>`); an ordinary title is passed through untouched.
 
 ---
 

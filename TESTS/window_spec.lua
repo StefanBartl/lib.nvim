@@ -288,4 +288,81 @@ return function(H)
     pcall(vim.api.nvim_win_close, control, true)
     H.eq(width, control_width, "make_scratch: the NUL counts two cells, as drawn")
   end
+
+  -- A float title is spelled out, never drawn raw: `nvim_open_win` / `nvim_win_set_config` keep
+  -- the control characters of a plain-string title as grid cells of their own, which the TUI
+  -- writes to the terminal verbatim (an ESC ] 0 ; ... BEL in a pasted file name sets the
+  -- terminal's window title). Every kit float titles itself through here.
+  do
+    local printable = require("lib.nvim.window.printable_title")
+    local esc, bel = string.char(27), string.char(7)
+    H.eq(printable("plain title"), "plain title", "printable_title: plain text is untouched")
+    H.eq(
+      printable("héllo › ✓"),
+      "héllo › ✓",
+      "printable_title: printable UTF-8 is untouched"
+    )
+    H.eq(printable(""), "", "printable_title: the empty title stays empty")
+    H.eq(printable(nil), nil, "printable_title: nil stays nil")
+    H.eq(
+      printable("x" .. esc .. "[31my" .. bel .. "z"),
+      "x^[[31my^Gz",
+      "printable_title: ESC and BEL are spelled out"
+    )
+    H.eq(printable("a\tb\nc"), "a^Ib^@c", "printable_title: TAB and LF are not exempt")
+    H.eq(printable("a" .. string.char(127) .. "b"), "a^?b", "printable_title: DEL is spelled out")
+    H.eq(
+      printable("a" .. string.char(194, 155) .. "b"),
+      "a<9b>b",
+      "printable_title: the C1 control CSI (U+009B) is spelled out"
+    )
+    H.eq(
+      printable("a" .. string.char(155) .. "b"),
+      "a<9b>b",
+      "printable_title: ... so is the stray byte that Neovim would read as one"
+    )
+    H.eq(
+      printable("a" .. string.char(0) .. "b"),
+      "a^@b",
+      "printable_title: a NUL is the ^@ it is drawn as, not an E976"
+    )
+    local chunks = { { "x" .. esc } }
+    H.eq(printable(chunks), chunks, "printable_title: a chunk list is Neovim's to spell out")
+
+    local function frame_title(win)
+      local cfg = vim.api.nvim_win_get_config(win)
+      return cfg.title and cfg.title[1] and cfg.title[1][1] or nil
+    end
+    local hostile = "my" .. esc .. "]0;evil" .. bel .. ".txt"
+    local shown = "my^[]0;evil^G.txt"
+
+    local make_scratch = require("lib.nvim.window.make_scratch")
+    local winid = make_scratch({ lines = { "body" }, title = hostile })
+    H.eq(frame_title(winid), shown, "make_scratch: a hostile title is spelled out")
+    local set_title = require("lib.nvim.window.set_title")
+    H.ok(set_title(winid, "Child"), "set_title: plain title applies")
+    H.eq(frame_title(winid), "Child", "set_title: ... as it is")
+    H.ok(set_title(winid, hostile), "set_title: a hostile title applies")
+    H.eq(frame_title(winid), shown, "set_title: ... spelled out")
+    H.ok(set_title(winid, hostile, { pos = "center" }), "set_title: ... with a position too")
+    H.eq(frame_title(winid), shown, "set_title: ... spelled out with a position as well")
+    pcall(vim.api.nvim_win_close, winid, true)
+
+    -- The chooser rewrites its title in place when a menu walks into a submenu.
+    local chooser = require("lib.nvim.ui.kit.chooser")
+    chooser.open({ items = { "a", "b" }, title = "top", on_select = function() end })
+    H.ok(chooser.is_open(), "chooser.set_items: fixture is open")
+    H.ok(
+      chooser.set_items({ items = { "c", "d" }, title = hostile }),
+      "chooser.set_items: replaces the list"
+    )
+    local chooser_win
+    for _, w in ipairs(vim.api.nvim_list_wins()) do
+      if vim.bo[vim.api.nvim_win_get_buf(w)].filetype == "lib-kit-chooser" then
+        chooser_win = w
+      end
+    end
+    H.eq(frame_title(chooser_win), shown, "chooser.set_items: a hostile title is spelled out")
+    chooser.close()
+  end
 end
