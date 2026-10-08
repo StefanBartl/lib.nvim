@@ -546,6 +546,80 @@ return function(H)
       eq(shown[7], single .. "/" .. single_mark, "after item_005")
     end
 
+    -- What the question for combining marks costs is two `vim.fn` calls: strchars() asks, and
+    -- split() takes a name apart. Counting them tells whether a name was asked about, or taken
+    -- apart, that did not have to be -- which no result shows: a name without a mark comes out
+    -- of the walk with the key it went in with. Only the calls whose text holds a byte that
+    -- `pattern` matches are counted (the prompt itself asks others).
+    local function press_tab_counting(line, pattern)
+      local real_split, real_strchars = vim.fn.split, vim.fn.strchars
+      local splits, asked = 0, 0
+      vim.fn.split = function(s, ...)
+        if type(s) == "string" and s:find(pattern) then
+          splits = splits + 1
+        end
+        return real_split(s, ...)
+      end
+      vim.fn.strchars = function(s, ...)
+        if type(s) == "string" and s:find(pattern) then
+          asked = asked + 1
+        end
+        return real_strchars(s, ...)
+      end
+      local counted, counted_err = pcall(press_tab, line)
+      vim.fn.split, vim.fn.strchars = real_split, real_strchars
+      assert(counted, counted_err)
+      return splits, asked
+    end
+
+    -- More Cyrillic names than a menu holds (every one has a byte from CC on, so every one is a
+    -- candidate for a combining mark). Without a mark in any of them one pair of strchars() for
+    -- the whole directory says so and no name is taken apart: asked per name, or not asked at
+    -- all, every <Tab> would pay a split() per name (20 us each) for keys that come out as they
+    -- went in. With one name written the macOS way among them, only that name is taken apart
+    -- (all of them were, 140 ms per <Tab> instead of 35 at five thousand names), and it still
+    -- sorts by its base characters.
+    local cyrillic = "\208\186\208\184\209\128_" -- U+43A U+438 U+440
+    local cyrillic_marked = cyrillic .. "00\204\1815x" -- U+0301 is CC 81, after kir_005
+    for _, with_mark in ipairs({ false, true }) do
+      local crowded = new_dir()
+      dirs_made[#dirs_made + 1] = crowded
+      local crowded_names = {}
+      for i = 0, MAX + 9 do
+        crowded_names[#crowded_names + 1] = ("%s%03d"):format(cyrillic, i)
+      end
+      if with_mark then
+        crowded_names[#crowded_names + 1] = cyrillic_marked
+      end
+      for _, name in ipairs(crowded_names) do
+        touch(crowded .. "/" .. name)
+      end
+      if listed_verbatim(crowded, crowded_names) then
+        for _, case in ipairs({ { true, false }, { false, false }, { false, true }, { true, true } }) do
+          local where = ("%s with 'fileignorecase' %s, 'wildignorecase' %s"):format(
+            with_mark and "one marked name" or "no marked name",
+            tostring(case[1]),
+            tostring(case[2])
+          )
+          with_case_options(case[1], case[2], function()
+            local splits, asked = press_tab_counting(crowded .. "/" .. cyrillic, "[\208\209]")
+            eq(getcompletion_calls, 0, where .. ": the big list answers")
+            if with_mark then
+              eq(splits, 1, where .. ": the marked name alone was taken apart")
+              eq(shown[7], crowded .. "/" .. cyrillic_marked, where .. ": after kir_005")
+            else
+              eq(#shown, MAX, where)
+              eq(splits, 0, where .. ": no name was taken apart")
+              ok(asked <= 2, where .. ": " .. asked .. " questions for the whole directory")
+            end
+          end)
+        end
+        if with_mark then
+          check_like_getcompletion(crowded .. "/" .. cyrillic, "kir_")
+        end
+      end
+    end
+
     -- A base character with combining marks after it, in the scripts that write them. Every
     -- second name carries the marks, the rest do not, and each has its own number: no two
     -- share a key once the marks are skipped. By bytes all the plain names would come before
