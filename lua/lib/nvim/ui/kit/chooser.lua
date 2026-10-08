@@ -52,11 +52,27 @@ local map = require("lib.nvim.bindings.keymap")
 local notify = require("lib.nvim.notify").create("[lib.nvim.ui.kit.chooser]")
 local autocmd = require("lib.nvim.bindings.autocmd")
 -- Soft: `printable_title` arrived with lib.nvim 863952e. With an older lib.nvim the title is
--- drawn as given, rather than `require("lib.nvim.ui.kit")` failing outright.
-local ok_title, printable_title = pcall(require, "lib.nvim.window.printable_title")
-if not ok_title or type(printable_title) ~= "function" then
-  printable_title = function(title)
-    return title
+-- drawn as given, rather than `require("lib.nvim.ui.kit")` failing outright. Only a module that is simply
+-- missing falls back silently; any other load error (a syntax or runtime error inside it) warns
+-- once, so titles do not quietly go back to being drawn raw.
+local printable_title
+do
+  local TITLE_MODULE = "lib.nvim.window.printable_title"
+  local ok_title, loaded = pcall(require, TITLE_MODULE)
+  if ok_title and type(loaded) == "function" then
+    printable_title = loaded
+  else
+    if
+      not ok_title
+      and not tostring(loaded):find("module '" .. TITLE_MODULE .. "' not found", 1, true)
+    then
+      notify.warn(
+        "could not load " .. TITLE_MODULE .. ", titles are drawn as given: " .. tostring(loaded)
+      )
+    end
+    printable_title = function(title)
+      return title
+    end
   end
 end
 
