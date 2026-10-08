@@ -301,7 +301,7 @@ return function(path: string): string|nil content, string|nil err   -- binary mo
 
 ### `lib.nvim.fs.read_bounded` (see README)
 ```
-return function(path: string, max_bytes: integer): string|nil content, string|nil err
+return function(path: string, max_bytes: integer, opts?: { follow_symlinks?: boolean }): string|nil content, string|nil err
 -- regular files of at most max_bytes only (stat before open): no FIFO hang, no device, no huge file
 ```
 

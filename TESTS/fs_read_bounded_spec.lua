@@ -30,5 +30,22 @@ return function(H)
   eq(content, nil, "a missing path: nothing read")
   ok(err and err:find("not found", 1, true), "a missing path: says why")
 
+  -- a symlink: followed by default, refused with follow_symlinks = false
+  local link = dir .. "/link.txt"
+  local made = (vim.uv or vim.loop).fs_symlink(file, link)
+  if made then
+    eq(read_bounded(link, 100), "a\r\nb\0c", "a symlink is followed by default")
+    content, err = read_bounded(link, 100, { follow_symlinks = false })
+    eq(content, nil, "follow_symlinks = false: a symlink is refused")
+    ok(err and err:find("not a regular file", 1, true), "follow_symlinks = false: says why")
+  else
+    ok(true, "symlinks cannot be created here")
+  end
+  eq(
+    read_bounded(file, 100, { follow_symlinks = false }),
+    "a\r\nb\0c",
+    "a plain file passes either way"
+  )
+
   vim.fn.delete(dir, "rf")
 end
