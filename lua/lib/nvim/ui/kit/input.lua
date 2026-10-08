@@ -68,6 +68,9 @@ local surface = require("lib.nvim.ui.kit.surface")
 local buttons = require("lib.nvim.ui.kit.buttons")
 local expand_path = require("lib.nvim.cross.fs.expand_path")
 local is_windows = require("lib.nvim.cross.platform.is_windows")
+-- A NUL in caller text raises E976 out of `vim.fn.strdisplaywidth()` and `split()`: text that is
+-- only measured or split goes through this first (see `lib.lua.strings.core.nul_safe`).
+local nul_safe = require("lib.lua.strings.core").nul_safe
 
 local api = vim.api
 local autocmd = require("lib.nvim.bindings.autocmd")
@@ -190,21 +193,6 @@ local function resolve_buttons(opts)
     end
   end
   return ids, labels
-end
-
----@internal
----`s` with every NUL byte replaced by an SOH, for a `vim.fn` call that only measures or
----splits it: a NUL in a Lua string reaches `vim.fn` as a Blob (E976). An SOH is one byte
----and one character as well, and drawn as wide (`^A` and `^@` are two cells), so offsets
----and widths come out as they would for the NUL. The pattern is `%z`: `"\0"` matches
----nothing in LuaJIT. Anything that is not a string is returned as it is.
----@param s any
----@return any
-local function nul_safe(s)
-  if type(s) == "string" and s:find("\0", 1, true) then
-    return (s:gsub("%z", "\1"))
-  end
-  return s
 end
 
 ---@internal

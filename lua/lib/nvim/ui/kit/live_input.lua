@@ -13,6 +13,8 @@ local input = require("lib.nvim.ui.kit.input")
 
 local api = vim.api
 local autocmd = require("lib.nvim.bindings.autocmd")
+-- A NUL byte in the title would raise E976 out of the width measured below.
+local nul_safe = require("lib.lua.strings.core").nul_safe
 
 local M = {}
 
@@ -26,7 +28,7 @@ function M.open(opts)
   -- A float's title is drawn within its content width; a title longer than
   -- the default 40 cols gets silently truncated by Neovim (with a leading
   -- ellipsis) instead of wrapping, so widen the box to fit it.
-  local title_width = title and vim.fn.strdisplaywidth(title) or 0
+  local title_width = title and vim.fn.strdisplaywidth(nul_safe(title)) or 0
 
   local surf = surface.open({
     lines = { opts.default or "" },

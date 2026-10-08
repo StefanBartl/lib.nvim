@@ -123,14 +123,15 @@ function M.inner_width()
 end
 
 --- Hard-wrap `lines` to `width` display columns (no word logic: a toast is a
---- short message, and a stable cut beats a clever one).
+--- short message, and a stable cut beats a clever one). A NUL byte is shown as the SOH that
+--- measures alike: `strdisplaywidth()`, `strchars()` and `strcharpart()` all raise E976 on one.
 ---@param lines string[]
 ---@param width integer
 ---@return string[]
 local function wrap_lines(lines, width, max_rows)
   local out = {}
   for _, line in ipairs(lines) do
-    local rest = line
+    local rest = strings.nul_safe(line)
     while #out <= max_rows and vim.fn.strdisplaywidth(rest) > width do
       local lo, hi = 1, vim.fn.strchars(rest)
       while lo < hi do

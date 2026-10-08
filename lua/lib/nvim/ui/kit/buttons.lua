@@ -13,6 +13,7 @@
 --- in. Nothing here owns a window, a buffer or a keymap.
 
 local api = vim.api
+local nul_safe = require("lib.lua.strings.core").nul_safe
 
 local M = {}
 
@@ -24,8 +25,10 @@ local GAP = "  "
 ---@param label string
 ---@return string
 function M.box(label)
-  -- A label is one line of text: a newline in one is an error in `nvim_buf_set_lines`.
-  return "[ " .. (tostring(label):gsub("[\r\n]+", " ")) .. " ]"
+  -- A label is one line of text: a newline in one is an error in `nvim_buf_set_lines`, and a NUL
+  -- byte one in `strdisplaywidth()` (E976), which `row_width` and `layout` measure the row with.
+  -- The box is only drawn and measured; what a caller gets back is its own label.
+  return "[ " .. nul_safe((tostring(label):gsub("[\r\n]+", " "))) .. " ]"
 end
 
 --- Display width of the whole row, before any centering. What a caller sizes

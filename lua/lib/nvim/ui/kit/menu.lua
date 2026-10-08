@@ -115,12 +115,14 @@ local BACK_ICON = "◂"
 --- so this falls back to a shape rather than to nothing.
 local FALLBACK_GLYPHS = { tl = "╭", tr = "╮", bl = "╰", br = "╯", h = "─", v = "│" }
 
---- Display width -- the only measurement that matters for column alignment.
+--- Display width -- the only measurement that matters for column alignment. A NUL byte in a
+--- label or a title is the two cells it is drawn as; `strdisplaywidth()` would raise E976 on it
+--- and the whole menu would not open.
 ---@internal
 ---@param s string
 ---@return integer
 local function dw(s)
-  return vim.fn.strdisplaywidth(s)
+  return vim.fn.strdisplaywidth(strings.nul_safe(s))
 end
 
 --- Resolve an item's display label across both accepted shapes.

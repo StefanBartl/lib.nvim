@@ -19,6 +19,7 @@
 local surface = require("lib.nvim.ui.kit.surface")
 local buttons = require("lib.nvim.ui.kit.buttons")
 local map = require("lib.nvim.bindings.keymap")
+local nul_safe = require("lib.lua.strings.core").nul_safe
 
 local api = vim.api
 
@@ -154,7 +155,9 @@ function M.open(opts)
 
   local qlines = {}
   for _, ql in ipairs(vim.split(tostring(opts.question or ""), "\n", { plain = true })) do
-    qlines[#qlines + 1] = ql
+    -- A NUL byte in the question (a case title, say) would raise E976 out of the
+    -- `strdisplaywidth()` that sizes and centers it: it is shown as the SOH that measures alike.
+    qlines[#qlines + 1] = nul_safe(ql)
   end
 
   -- Width: fit the wider of the question and the button row, plus margin.
