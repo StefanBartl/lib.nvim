@@ -305,5 +305,23 @@ function S.count_lines(s)
   return count
 end
 
+---`s` with every NUL byte replaced by an SOH (`"\1"`), for text that is about to go through a
+---`vim.fn` function that only measures or splits it. A NUL in a Lua string reaches `vim.fn` as
+---a Blob, and `strdisplaywidth()`, `strchars()`, `strcharpart()` and `split()` raise E976 on
+---it. An SOH is one byte and one character as well, and drawn as wide (`^A` and `^@` are two
+---cells), so offsets and widths come out as they would for the NUL: use it for the measuring,
+---and keep the original for what is stored or handed back. The pattern is `%z`: `"\0"` matches
+---nothing in LuaJIT. Anything that is not a string is returned as it is, and a string without
+---a NUL costs one plain `find`.
+---@nodiscard
+---@param s any
+---@return any
+function S.nul_safe(s)
+  if type(s) == "string" and s:find("\0", 1, true) then
+    return (s:gsub("%z", "\1"))
+  end
+  return s
+end
+
 ---@type Lib.Strings.Core
 return S

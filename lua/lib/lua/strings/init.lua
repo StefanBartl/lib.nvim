@@ -27,6 +27,7 @@ M.indent = require("lib.lua.strings.core").indent
 M.dedent = require("lib.lua.strings.core").dedent
 M.is_empty_or_space = require("lib.lua.strings.core").is_empty_or_space
 M.count_lines = require("lib.lua.strings.core").count_lines
+M.nul_safe = require("lib.lua.strings.core").nul_safe
 
 -- patterns module
 M.escape_lua_magic = require("lib.lua.strings.patterns").escape_lua_magic
