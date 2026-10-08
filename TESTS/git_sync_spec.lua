@@ -5,10 +5,12 @@
 -- "did this call move a ref", parsed out of git's own stdout/stderr, and
 -- that a real failure (non-fast-forward) surfaces git's real reason.
 
-return function(H)
+-- Module level on purpose: the cleanup at the bottom must see the directories of a run that raised.
+local created = {} ---@type string[]
+
+local function run(H)
   local git = require("lib.nvim.git")
 
-  local created = {} ---@type string[]
   local function tmpdir(suffix)
     local dir = vim.fn.tempname() .. suffix
     vim.fn.mkdir(dir, "p")
@@ -567,8 +569,17 @@ return function(H)
       )
     end)
   end
+end
 
+return function(H)
+  -- The first failing assertion aborts `run`; the fixtures are removed all the same, and the
+  -- error reaches the runner unchanged.
+  local ok, err = pcall(run, H)
   for _, dir in ipairs(created) do
     pcall(vim.fn.delete, dir, "rf")
+  end
+  created = {}
+  if not ok then
+    error(err, 0)
   end
 end

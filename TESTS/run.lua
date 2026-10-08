@@ -42,6 +42,7 @@ local dir = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
 local H = dofile(dir .. "harness.lua")
 
 local specs = {
+  "harness_spec.lua",
   "polymorphic_rootresolver_spec.lua",
   "logger_spec.lua",
   "notify_popup_spec.lua",
@@ -177,7 +178,10 @@ end
 
 if failed > 0 then
   say(("\n%d spec(s) failed"):format(failed))
-  os.exit(1)
+  -- `cquit`, not `os.exit`: only a regular exit lets Neovim delete its per-instance temp
+  -- directory, and every `tempname()` fixture of every spec lives in it -- `os.exit(1)` left
+  -- all of them behind. Same exit code.
+  vim.cmd("cquit 1")
 end
 
 say("\nLIB_TESTS_OK")
