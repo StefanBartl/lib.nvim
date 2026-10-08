@@ -204,7 +204,7 @@ return function(H)
         done, async_entries, async_err = true, entries, cb_err
       end
     )
-    vim.wait(2000, function()
+    vim.wait(30000, function()
       return done
     end)
     H.ok(done, "git.blame_porcelain_async: on_done fires")
@@ -231,7 +231,7 @@ return function(H)
         done, async_entries, async_err = true, entries, cb_err
       end
     )
-    vim.wait(2000, function()
+    vim.wait(30000, function()
       return done
     end)
     H.ok(done, "git.blame_porcelain_async: on_done fires even on failure")

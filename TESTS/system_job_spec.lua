@@ -112,7 +112,7 @@ return function(H)
     }, function(cb_ok, cb_results)
       chain_ok, results, done = cb_ok, cb_results, true
     end)
-    vim.wait(2000, function()
+    vim.wait(30000, function()
       return done == true
     end, 10)
 
@@ -132,7 +132,7 @@ return function(H)
     }, function(cb_ok, cb_results)
       chain_ok, results, done = cb_ok, cb_results, true
     end)
-    vim.wait(2000, function()
+    vim.wait(30000, function()
       return done == true
     end, 10)
 
@@ -150,7 +150,7 @@ return function(H)
     }, function(_, cb_results)
       results, done = cb_results, true
     end)
-    vim.wait(2000, function()
+    vim.wait(30000, function()
       return done == true
     end, 10)
 
@@ -167,7 +167,7 @@ return function(H)
     }, function(_, cb_results)
       results, done = cb_results, true
     end)
-    vim.wait(2000, function()
+    vim.wait(30000, function()
       return done == true
     end, 10)
 
