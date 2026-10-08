@@ -408,8 +408,8 @@ end
 --- `vim.system` raises when it cannot start the command at all, and raises
 --- with level 1, so the reason arrives as `vim/_core/system.lua:324: ENOENT: ...`:
 --- Neovim's own source position, noise to the person reading the message.
---- Removes exactly that leading stamp, once -- and only a stamp that points into
---- Neovim's runtime (`vim/...:N: `, with or without the `.lua` extension: a build
+--- Removes exactly that leading stamp, once -- and only a stamp at the very front
+--- (never preceded by a path) that points into Neovim's runtime (`vim/...:N: `, with or without the `.lua` extension: a build
 --- that embeds the runtime reports `vim/_core/system:324:`), so a message without one that merely
 --- quotes a `something.lua:12:` from the command is left alone. Only ever
 --- applied to a spawn failure (code `-1`); `docs/conventions.md` explains why
@@ -419,7 +419,7 @@ end
 ---@param msg string
 ---@return string
 local function unstamp(msg)
-  return (msg:gsub("^.-vim[/\\][%w_/\\.]*:%d+: ", "", 1))
+  return (msg:gsub("^vim[/\\][%w_/\\.]*:%d+: ", "", 1))
 end
 
 ---@internal

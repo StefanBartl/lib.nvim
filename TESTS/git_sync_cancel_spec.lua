@@ -284,6 +284,17 @@ local function run(H)
     )
   end)
 
+  -- The stamp is only ever the very front of the message: a path that merely contains
+  -- `vim/<name>:<N>: ` further in is not a stamp and stays untouched.
+  local quoted = "E:/work/vim/foo:12: x"
+  local quoted_fake = fake_runner({ fetch = { false, quoted, -1, "", 0 } })
+  H.with_patched(run_argv, "run_async_captured", quoted_fake.fn, function()
+    local res = reported(function(cb)
+      git.fetch_async({ dir = "unused" }, cb)
+    end)
+    H.eq(res.err, quoted, "fetch_async(spawn failure quoting a path .../vim/foo:12:): left as is")
+  end)
+
   -- ── the async readers: status / show / blame ────────────────────────────
   -- They used to call `run_async_captured` directly, so a git killed by a signal (exit code 0,
   -- `signal` set, POSIX) read as a successful empty answer.

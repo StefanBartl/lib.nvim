@@ -82,9 +82,10 @@ spawned, so the reason arrives as `vim/_core/system.lua:324: ENOENT: …` — a 
 this library did not create and cannot ask to be suppressed. `lib.nvim.git`
 removes exactly that one leading stamp, once, and only where the failure is a
 spawn failure (exit code `-1`), and only if it points into Neovim's runtime
-(`vim/….lua:N: `): a message that merely quotes some other `file.lua:12:` from
-the command is left alone. That is why the guard is anchored on `vim/` rather than
-on `:%d+:` alone.
+(`vim/….lua:N: `, or `vim/…:N: ` on a build that embeds the runtime): a message
+that merely quotes some other `file.lua:12:` from the command, or a path such as
+`E:/work/vim/foo:12: x`, is left alone. That is why the guard is anchored at the very
+front of the message on `vim/` rather than on `:%d+:` alone.
 
 Pin the behaviour in the spec: assert the actionable text is present *and*
 that `%.lua:%d+:` is absent (or, for a re-raise, occurs exactly once).
