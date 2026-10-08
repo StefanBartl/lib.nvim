@@ -59,6 +59,7 @@ count?: integer                        -- verb-level :N Verb default (first rout
 buffer?: true|integer                  -- buffer-local registration
 visual?: string[]                      -- verb-level default for routes declaring none
 notify_prefix?: string                 -- overrides the deferred-notifier's prefix (default "[" .. name .. "]")
+quotes?: boolean                       -- the handler cuts ctx.raw.args with a quote-aware tokenizer ('...' / "..." = one token): <Tab> and the help float count a quoted run as one token. Dispatch is unchanged
 ```
 
 **`ctx` (handler context):** `ctx.args` (coerced positionals by name),

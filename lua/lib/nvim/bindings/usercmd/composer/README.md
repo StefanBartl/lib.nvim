@@ -266,6 +266,38 @@ an unusual combination (a flat-grammar verb normally has no subcommand
 children at all). Dispatch is unaffected; only the `<Tab>` suggestion in that
 mixed case can be unhelpful.
 
+### Verbs that read quotes themselves (`quotes`)
+
+Neovim splits a `-nargs=*` command's arguments at blanks, so
+`:Replace "foo bar" baz` reaches composer as `"foo`, `bar"`, `baz`. A verb whose
+handler ignores `fargs` and cuts `ctx.raw.args` with a quote-aware tokenizer of
+its own (replacer.nvim's `:Replace` / `:Surround`) sees two tokens, `foo bar`
+and `baz` -- and `<Tab>` and the help float, which only know the blank split,
+would count one slot too many (`:Replace "foo bar" <M-h>` would offer `[{scope}]`
+instead of `{new}`). Such a verb says so:
+
+```lua
+composer.verb("Replace", { quotes = true, routes = { ... } })
+```
+
+With `quotes = true`, completion and the float cut the line the way that
+tokenizer does:
+
+- a token that **starts** with `'` or `"` runs to the matching quote, blanks
+  included, and ends there (`"a b"c` is two tokens); a quote in the middle of a
+  token is an ordinary character;
+- `\"`, `\'`, `\\` and `\<blank>` are escapes, inside and outside quotes; any
+  other backslash stays (`C:\Users\x` is read as typed);
+- an unterminated quote runs to the end of the line: it is the token being
+  typed, so nothing is offered for it.
+
+Only `<Tab>` and the help float read the flag. Dispatch is untouched --
+`ctx.args`, `ctx.pos` and `ctx.rest` are still built from `fargs` (a verb that
+sets `quotes` reads `ctx.raw.args` itself), and a verb without it keeps the
+blank split exactly as before. The splitter is `composer.tokens.split_quoted`;
+`composer.help.parse_line(line, quotes?)` takes the flag as an optional second
+argument and otherwise looks the verb up.
+
 ### Short-flag aliases (`-x`)
 
 A flag may declare a single-char `short` alias:

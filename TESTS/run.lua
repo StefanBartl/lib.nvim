@@ -118,6 +118,7 @@ local specs = {
   "watch_spec.lua",
   "composer_spec.lua",
   "composer_help_spec.lua",
+  "composer_quotes_spec.lua",
   "usrcmds_help_spec.lua",
   "telemetry_wrap_spec.lua",
   "git_spec.lua",

@@ -21,6 +21,7 @@
 --- on (and on every non-composer command line).
 
 local tree = require("lib.nvim.bindings.usercmd.composer.tree")
+local quoted_tokens = require("lib.nvim.bindings.usercmd.composer.tokens")
 local entries_mod = require("lib.nvim.bindings.usercmd.composer.help.entries")
 local registry = require("lib.nvim.bindings.usercmd.composer.registry")
 
@@ -100,10 +101,17 @@ local function escape(tok)
 end
 
 --- Split a command line into verb, finished tokens and the token being typed.
---- Understands a range/count prefix (`'<,'>`, `5,10`) and a bang. Pure.
+--- Understands a range/count prefix (`'<,'>`, `5,10`) and a bang. Pure, apart
+--- from reading the verb's `spec.quotes` when `quotes` is not given.
+---
+--- With `quotes`, `'...'` / `"..."` is one token (`"foo bar"` -> `foo bar`) and
+--- an unterminated quote is the token being typed: the cut a verb with its
+--- own tokenizer makes. Without it, tokens end at every blank that is not
+--- escaped, as Neovim's `-nargs=*` cuts them.
 ---@param line string  # without the leading colon, as `getcmdline()` gives it
+---@param quotes? boolean  # default: the registered verb's `spec.quotes`
 ---@return Lib.UserCmd.Composer.Help.State|nil
-function M.parse_line(line)
+function M.parse_line(line, quotes)
   local name, rest = line:match("^[%s:%d%.%$%%,;'<>%+%-/]*(%u[%w_]*)!?(.*)$")
   if not name then
     return nil
@@ -112,14 +120,28 @@ function M.parse_line(line)
   if rest ~= "" and not rest:match("^%s") then
     return nil
   end
-  -- Whether the last token is still open is the tokenizer's call, not
-  -- "does the text end in a blank": `my\ ` ends in one, yet nvim hands that
-  -- to a completion function as the lead `my\ `.
-  local raw, open = split_tokens(rest)
-  local lead = open and table.remove(raw) or ""
-  local tokens = {}
-  for i, tok in ipairs(raw) do
-    tokens[i] = unescape(tok)
+  if quotes == nil then
+    local handle = registry.get(name)
+    quotes = handle ~= nil and handle:spec().quotes == true
+  end
+  local tokens, lead = {}, ""
+  if quotes then
+    local parts, open = quoted_tokens.split_quoted(rest)
+    if open then
+      lead = table.remove(parts).raw
+    end
+    for i, part in ipairs(parts) do
+      tokens[i] = part.value
+    end
+  else
+    -- Whether the last token is still open is the tokenizer's call, not
+    -- "does the text end in a blank": `my\ ` ends in one, yet nvim hands that
+    -- to a completion function as the lead `my\ `.
+    local raw, open = split_tokens(rest)
+    lead = open and table.remove(raw) or ""
+    for i, tok in ipairs(raw) do
+      tokens[i] = unescape(tok)
+    end
   end
   local base = line:sub(1, #line - #lead)
   if not base:match("%s$") then

@@ -233,6 +233,10 @@ local function register(name, spec)
     buffer = spec.buffer,
     complete = complete.make(function()
       return root
+    end, function()
+      -- Asked per call: a verb that reads its quotes itself (`spec.quotes`)
+      -- has them counted as one token by `<Tab>`, like the help float does.
+      return spec.quotes == true
     end),
     desc = spec.desc or ("composer verb :" .. name),
     -- `spec.src` first: the composer walks past itself, but a consumer's own
