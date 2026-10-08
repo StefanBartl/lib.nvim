@@ -719,10 +719,36 @@ local function exec(argv, input, ropts)
 end
 
 ---@internal
---- Async counterpart of `exec`: `on_done` gets the normalised result. The
---- async runner reports `ok` from the exit code alone, so a process killed by
---- a signal (exit code 0, `signal` 9 on POSIX) is turned into a failure here --
---- exactly what `run_blocking_result` does for the blocking runner.
+--- The outcome of one `run_async_captured` run, as a normalised result. The async
+--- runner reports `ok` from the exit code alone, so a process killed by a signal
+--- (a `stop()`, the OOM killer: exit code 0 with `signal` 15 or 9 on POSIX) reads
+--- as a success; it is turned into a failure here (`code = 128 + signal`),
+--- exactly what `run_blocking_result` does for the blocking runner. A spawn
+--- failure (code `-1`) gets its reason into `stderr` (`normalize_result`).
+---@param ok boolean
+---@param stdout string
+---@param code integer
+---@param stderr string|nil `nil` only on the legacy (pre-`vim.system`) fallback.
+---@param signal integer|nil
+---@param ropts Lib.RunArgv.Opts|nil Only its `timeout_ms` matters: it is what makes exit code 124 a timeout.
+---@return Lib.RunArgv.Result
+local function async_result(ok, stdout, code, stderr, signal, ropts)
+  signal = signal or 0
+  if code == 0 and signal ~= 0 then
+    ok, code = false, 128 + signal
+  end
+  return normalize_result({
+    ok = ok,
+    code = code,
+    signal = signal,
+    stdout = stdout,
+    stderr = stderr,
+    timed_out = ropts ~= nil and ropts.timeout_ms ~= nil and code == 124,
+  })
+end
+
+---@internal
+--- Async counterpart of `exec`: `on_done` gets the normalised result.
 ---@param argv string[]
 ---@param input string|nil
 ---@param ropts Lib.RunArgv.Opts
@@ -732,18 +758,7 @@ local function exec_async(argv, input, ropts, on_done)
   return require("lib.nvim.cross.run_argv").run_async_captured(
     argv,
     function(ok, stdout, code, stderr, signal)
-      signal = signal or 0
-      if code == 0 and signal ~= 0 then
-        ok, code = false, 128 + signal
-      end
-      on_done(normalize_result({
-        ok = ok,
-        code = code,
-        signal = signal,
-        stdout = stdout,
-        stderr = stderr,
-        timed_out = ropts.timeout_ms ~= nil and code == 124,
-      }))
+      on_done(async_result(ok, stdout, code, stderr, signal, ropts))
     end,
     input,
     ropts
@@ -1527,6 +1542,31 @@ function M.blame_porcelain_async(path, opts, on_done, git_cmd)
   end)
 end
 
+---@internal
+--- `run_async_captured` for the sync verbs (`fetch`, `pull`, `push`,
+--- `rev-parse HEAD`), with the two outcomes `async_result` knows turned into
+--- the failures they are -- the very ones `exec_async` already reports for
+--- `run_async`:
+---  * a process killed by a signal arrives as exit code 0 with `signal` set on
+---    POSIX, so `ok` alone would report a `stop()`-killed or OOM-killed `git
+---    push` that never finished as a success; it is `ok = false`,
+---    `code = 128 + signal` here;
+---  * a spawn failure (code `-1`, e.g. `git` not on `$PATH`) delivers its reason
+---    in the stdout slot, where "git fetch failed (exit code -1)" would hide
+---    it; it is in `stderr` here, without Neovim's own `file:line` stamp.
+---@param argv string[]
+---@param on_done fun(ok: boolean, stdout: string, code: integer, stderr: string|nil)
+---@return { stop: fun() } handle
+local function run_sync_async(argv, on_done)
+  return require("lib.nvim.cross.run_argv").run_async_captured(
+    argv,
+    function(ok, stdout, code, stderr, signal)
+      local res = async_result(ok, stdout, code, stderr, signal)
+      on_done(res.ok, res.stdout, res.code, res.stderr)
+    end
+  )
+end
+
 --- Fetch every remote's tracking refs and prune deleted ones
 --- (`git fetch --all --prune`). Does not touch the working tree or `HEAD`.
 ---
@@ -1541,39 +1581,38 @@ end
 --- stays silent there when nothing was new. A failed fetch never reaches this
 --- branch (`on_done` returns early on `ok == false`), so a present `changed`
 --- always means the call actually succeeded.
+---
+--- A fetch killed by a signal (the handle's own `stop()`, the OOM killer) is a
+--- failure (`err` = "git fetch failed (exit code 143)" for SIGTERM), never a
+--- success; so is a git that cannot be started (`err` = the reason). `on_done`
+--- still fires once after `stop()` -- with that failure.
 ---@param opts? Lib.Git.Opts
 ---@param on_done fun(ok: boolean, err: string|nil, changed: boolean|nil)
 ---@param git_cmd? string
 ---@return { stop: fun() } handle
 function M.fetch_async(opts, on_done, git_cmd)
   local argv = git_argv(git_cmd or "git", opts, { "fetch", "--all", "--prune" })
-  return require("lib.nvim.cross.run_argv").run_async_captured(
-    argv,
-    function(ok, _stdout, code, stderr)
-      if not ok then
-        stderr = stderr or ""
-        on_done(
-          false,
-          (stderr ~= "" and stderr) or ("git fetch failed (exit code %d)"):format(code)
-        )
-        return
-      end
-      -- `stderr` is `nil` only on the legacy (pre-`vim.system`) fallback,
-      -- which cannot separate it from stdout at all (see run_argv's own
-      -- doc comment) -- reporting `changed = false` there would be a
-      -- confident-looking lie, so "unknown" stays `nil` instead of
-      -- guessing either way. Deliberately an `if`, not `... and ... or
-      -- nil`: the middle term is a real `false` on a successful, nothing-
-      -- changed fetch, and `false or nil` in Lua evaluates to `nil` --
-      -- that idiom would have silently turned every "nothing changed"
-      -- result into "unknown" too.
-      local changed
-      if stderr ~= nil then
-        changed = stderr:match("%S") ~= nil
-      end
-      on_done(true, nil, changed)
+  return run_sync_async(argv, function(ok, _stdout, code, stderr)
+    if not ok then
+      stderr = stderr or ""
+      on_done(false, (stderr ~= "" and stderr) or ("git fetch failed (exit code %d)"):format(code))
+      return
     end
-  )
+    -- `stderr` is `nil` only on the legacy (pre-`vim.system`) fallback,
+    -- which cannot separate it from stdout at all (see run_argv's own
+    -- doc comment) -- reporting `changed = false` there would be a
+    -- confident-looking lie, so "unknown" stays `nil` instead of
+    -- guessing either way. Deliberately an `if`, not `... and ... or
+    -- nil`: the middle term is a real `false` on a successful, nothing-
+    -- changed fetch, and `false or nil` in Lua evaluates to `nil` --
+    -- that idiom would have silently turned every "nothing changed"
+    -- result into "unknown" too.
+    local changed
+    if stderr ~= nil then
+      changed = stderr:match("%S") ~= nil
+    end
+    on_done(true, nil, changed)
+  end)
 end
 
 ---@internal
@@ -1599,7 +1638,7 @@ end
 ---@return { stop: fun() } handle
 local function head_hash_async(opts, on_done, git_cmd)
   local argv = git_argv(git_cmd or "git", opts, { "rev-parse", "HEAD" })
-  return require("lib.nvim.cross.run_argv").run_async_captured(argv, function(ok, stdout)
+  return run_sync_async(argv, function(ok, stdout)
     if not ok or type(stdout) ~= "string" then
       on_done(nil, false)
       return
@@ -1642,6 +1681,10 @@ end
 --- would still report a guessed `changed` for a pull the caller no longer
 --- wanted a result for.
 ---
+--- A pull killed by a signal that did NOT come from `stop()` (the OOM killer)
+--- is a failure (`err` = "git pull failed (exit code 137)" for SIGKILL), not a
+--- success followed by a guessed `changed`.
+---
 --- The *after* read's `ok` IS checked, unlike the *before* read's: a
 --- `git pull --ff-only` that exits 0 (the `ok` branch just above it)
 --- proves the target upstream ref already resolved to a real commit --
@@ -1663,32 +1706,26 @@ function M.pull_async(opts, on_done, git_cmd)
       return
     end
     local argv = git_argv(git_cmd or "git", opts, { "pull", "--ff-only" })
-    active.stop = require("lib.nvim.cross.run_argv").run_async_captured(
-      argv,
-      function(ok, _stdout, code, stderr)
+    active.stop = run_sync_async(argv, function(ok, _stdout, code, stderr)
+      if cancelled then
+        return
+      end
+      if not ok then
+        stderr = stderr or ""
+        on_done(false, (stderr ~= "" and stderr) or ("git pull failed (exit code %d)"):format(code))
+        return
+      end
+      active.stop = head_hash_async(opts, function(after, after_ok)
         if cancelled then
           return
         end
-        if not ok then
-          stderr = stderr or ""
-          on_done(
-            false,
-            (stderr ~= "" and stderr) or ("git pull failed (exit code %d)"):format(code)
-          )
+        if not after_ok then
+          on_done(true, nil, nil)
           return
         end
-        active.stop = head_hash_async(opts, function(after, after_ok)
-          if cancelled then
-            return
-          end
-          if not after_ok then
-            on_done(true, nil, nil)
-            return
-          end
-          on_done(true, nil, before ~= after)
-        end, git_cmd).stop
-      end
-    ).stop
+        on_done(true, nil, before ~= after)
+      end, git_cmd).stop
+    end).stop
   end, git_cmd).stop
   return {
     stop = function()
@@ -1699,23 +1736,25 @@ function M.pull_async(opts, on_done, git_cmd)
 end
 
 --- Push the current branch to its upstream (`git push`).
+---
+--- A push killed by a signal (the handle's own `stop()`, the OOM killer) is a
+--- failure (`err` = "git push failed (exit code 143)" for SIGTERM), never a
+--- success: the push did not finish. `on_done` still fires once after `stop()`
+--- -- with that failure.
 ---@param opts? Lib.Git.Opts
 ---@param on_done fun(ok: boolean, err: string|nil)
 ---@param git_cmd? string
 ---@return { stop: fun() } handle
 function M.push_async(opts, on_done, git_cmd)
   local argv = git_argv(git_cmd or "git", opts, { "push" })
-  return require("lib.nvim.cross.run_argv").run_async_captured(
-    argv,
-    function(ok, _stdout, code, stderr)
-      if not ok then
-        stderr = stderr or ""
-        on_done(false, (stderr ~= "" and stderr) or ("git push failed (exit code %d)"):format(code))
-        return
-      end
-      on_done(true, nil)
+  return run_sync_async(argv, function(ok, _stdout, code, stderr)
+    if not ok then
+      stderr = stderr or ""
+      on_done(false, (stderr ~= "" and stderr) or ("git push failed (exit code %d)"):format(code))
+      return
     end
-  )
+    on_done(true, nil)
+  end)
 end
 
 --- Fetch, then fast-forward pull -- the pair every "bring this repo level
@@ -1733,13 +1772,26 @@ end
 --- dashboard cancelling every in-flight update when its window closes)
 --- would otherwise kill an already-finished fetch and leave the real,
 --- still-running `git pull` completely untracked and uncancellable.
+---
+--- Like `pull_async`, `on_done` never fires once `stop()` has been called, at
+--- whichever stage it lands: the killed fetch's failure is swallowed, and the
+--- pull does not start when the `stop()` arrived while the completion of an
+--- already finished fetch was still queued -- the working tree must not move
+--- after the caller cancelled. An explicit `cancelled` flag, set before the job
+--- is killed, decides this, not the fetch's own `ok`: a killed process and a
+--- git that failed on its own are not told apart by that alone (a kill reads
+--- as exit code 1 on Windows, as exit code 0 with `signal` 15 on POSIX).
 ---@param opts? Lib.Git.Opts
 ---@param on_done fun(ok: boolean, err: string|nil, changed: boolean|nil)
 ---@param git_cmd? string
 ---@return { stop: fun() } handle
 function M.update_async(opts, on_done, git_cmd)
+  local cancelled = false
   local active = { stop = function() end }
   active.stop = M.fetch_async(opts, function(ok, err)
+    if cancelled then
+      return
+    end
     if not ok then
       on_done(false, err)
       return
@@ -1748,6 +1800,7 @@ function M.update_async(opts, on_done, git_cmd)
   end, git_cmd).stop
   return {
     stop = function()
+      cancelled = true
       active.stop()
     end,
   }
