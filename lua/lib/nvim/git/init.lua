@@ -549,7 +549,11 @@ end
 ---@return string
 local function net_err(verb, stderr, code, timed_out, ropts)
   if timed_out then
-    return ("git %s timed out after %ds"):format(verb, math.floor(ropts.timeout_ms / 1000))
+    local ms = ropts.timeout_ms
+    if ms < 1000 then
+      return ("git %s timed out after %d ms"):format(verb, ms)
+    end
+    return ("git %s timed out after %gs"):format(verb, ms / 1000)
   end
   if stderr and stderr ~= "" then
     return stderr
@@ -1773,6 +1777,8 @@ end
 ---@return { stop: fun() } handle
 local function head_hash_async(opts, on_done, git_cmd)
   local argv = git_argv(git_cmd or "git", opts, { "rev-parse", "HEAD" })
+  -- same environment and deadline as the pull it brackets: a `GIT_DIR` in `opts.env`
+  -- must not make the before/after comparison look at another repository
   return run_sync_async(argv, function(ok, stdout)
     if not ok or type(stdout) ~= "string" then
       on_done(nil, false)
@@ -1780,7 +1786,7 @@ local function head_hash_async(opts, on_done, git_cmd)
     end
     stdout = vim.trim(stdout)
     on_done(stdout ~= "" and stdout or nil, true)
-  end)
+  end, nil, net_ropts(opts))
 end
 
 --- Fast-forward-only pull of the current branch (`git pull --ff-only`).
