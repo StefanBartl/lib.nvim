@@ -353,8 +353,10 @@ end
 ---Whether an entry starts with the fragment is a byte comparison, folded to upper case
 ---where Neovim ignores case -- except where a non-ASCII byte is involved, when Neovim's own
 ---regex engine decides (`prefix_regex`), as it does for `getcompletion()`: always under case
----folding, and otherwise for a fragment that is not ASCII (it can end inside a character, which
----no byte comparison judges) and for a name whose next character is a combining mark. A name
+---folding, and otherwise, for a fragment that is not ASCII, for every name with a non-ASCII
+---byte (the fragment can end inside a character, and a lone Latin-1 byte is the same character
+---as its UTF-8 spelling to the regex: neither is a byte comparison), and for a fragment that is
+---ASCII, for a name whose next character is a combining mark. A name
 ---with a combining mark is ordered by its base characters, as `pathcmp()` does
 ---(`order_by_base_characters`); a mark right after the separator in front of the name belongs to
 ---that separator there, and is no part of the key.
@@ -410,16 +412,21 @@ local function many_path_matches(frag, dirs_only)
       local wide = entry:find("[\128-\255]") ~= nil -- a non-ASCII byte in the name
       local key = fold and fold_key(entry) or entry
       local hit
-      if fold and (wide or not ascii_want) then
-        hit = by_regex(entry) -- a non-ASCII byte on either side
+      if not ascii_want or (fold and wide) then
+        -- A non-ASCII byte on either side, and the bytes do not settle it: under case folding
+        -- the Kelvin sign is a "k"; and a fragment that is not ASCII may end inside a character,
+        -- or be written in another encoding than the name (a lone Latin-1 byte E4 is the same
+        -- character as the UTF-8 pair C3 A4 to Neovim's regex, and the other way round), which
+        -- no byte comparison sees in either direction. Without folding an ASCII name cannot
+        -- start with such a fragment, so only a name with a non-ASCII byte of its own is asked.
+        hit = (fold or wide) and by_regex(entry)
       else
         hit = key:sub(1, #want) == want
-        if hit and wide and not fold then
-          -- A fragment that is not ASCII may end inside a character (a lone lead byte of text
-          -- that is not valid UTF-8): the bytes cannot judge that, Neovim's regex can. For an
-          -- ASCII one only the next character matters, and a combining mark starts with CC or later.
+        if hit and wide then
+          -- An ASCII fragment, and no folding (that is the branch above): only the next
+          -- character matters, and a combining mark starts with CC or later.
           local after = entry:byte(#name + 1)
-          if not ascii_want or (after and after >= 0xCC) then
+          if after and after >= 0xCC then
             hit = by_regex(entry)
           end
         end

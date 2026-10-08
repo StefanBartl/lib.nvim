@@ -777,6 +777,63 @@ return function(H)
       end
     end
 
+    -- A lone byte E4 is read as U+00E4, so for Neovim "item_" and that byte is a prefix of
+    -- "item_" and the a-umlaut written C3 A4 as well, and the other way round. Where the bytes
+    -- decide -- no case folding, so not on Windows -- the big list kept only the names that
+    -- agree with the fragment byte by byte: 300 of 440 with none of the UTF-8 names in them, or,
+    -- for a fragment that is valid UTF-8, none of the Latin-1 ones (and, with too few of the
+    -- agreeing ones, a trip to getcompletion() for what the list could have done). The order of
+    -- the two spellings among themselves is the bytes' (getcompletion() orders by code point),
+    -- so the list is judged by what it holds, not by its order. Needs a file system that keeps a
+    -- name's bytes, whatever they are: not Windows (names are UTF-16 there, and case is folded
+    -- anyway) and not one that normalizes or refuses them.
+    for _, case in ipairs({
+      { "Latin-1 fragment, both spellings", 320, 120, "item_\228", 120 },
+      { "UTF-8 fragment, both spellings", 320, 40, "item_\195\164", 40 },
+      { "Latin-1 fragment, UTF-8 names only", 0, 320, "item_\228", 300 },
+    }) do
+      local label, count_latin1, count_utf8, frag, want_utf8 = unpack(case)
+      local coded = new_dir()
+      dirs_made[#dirs_made + 1] = coded
+      local coded_names = {}
+      for i = 0, count_latin1 - 1 do
+        coded_names[#coded_names + 1] = ("item_\228%03d"):format(i)
+      end
+      for i = 0, count_utf8 - 1 do
+        coded_names[#coded_names + 1] = ("item_\195\164%03d"):format(i)
+      end
+      local created = vim.fn.has("win32") == 0
+      for _, name in ipairs(coded_names) do
+        if not created then
+          break
+        end
+        created = pcall(touch, coded .. "/" .. name)
+      end
+      if created and listed_verbatim(coded, coded_names) then
+        local real = {}
+        with_case_options(false, false, function()
+          for _, name in ipairs(real_getcompletion(coded .. "/" .. frag, "file")) do
+            real[name] = true
+          end
+          ok(vim.tbl_count(real) > MAX, label .. ": getcompletion() has more than a menu")
+          press_tab(coded .. "/" .. frag)
+        end)
+        eq(getcompletion_calls, 0, label .. ": the big list answers")
+        eq(#shown, MAX, label)
+        local latin1, utf8_names = 0, 0
+        for _, name in ipairs(shown) do
+          ok(real[name], label .. ": getcompletion() lists " .. vim.inspect(name))
+          if name:find("item_\228", 1, true) then
+            latin1 = latin1 + 1
+          elseif name:find("item_\195\164", 1, true) then
+            utf8_names = utf8_names + 1
+          end
+        end
+        eq(utf8_names, want_utf8, label .. ": the UTF-8 names in the list")
+        eq(latin1, MAX - want_utf8, label .. ": the Latin-1 names in the list")
+      end
+    end
+
     -- More plain names than a menu holds that start with "U", and five that start with "U"
     -- and a combining mark (an umlaut written as two characters): "U" is a prefix of the plain
     -- ones only, and the marked ones would sort first ("Uy000" before "Uz000") were they let
