@@ -533,7 +533,8 @@ M.select(items: T[], opts?, on_choose: fun(item, idx))   -- kit.select if availa
 
 Composable Git query helpers; every function shells out via
 `lib.nvim.cross.run_argv` (argv, no shell). Every function except
-`checkout` is side-effect free and returns `nil`/`false` (not throw) on
+`checkout` and the sync verbs (`fetch_async`, `pull_async`, `push_async`,
+`update_async`, below) is side-effect free and returns `nil`/`false` (not throw) on
 failure/no-repo; `checkout` mutates HEAD/the working tree and returns
 `ok, err` instead (git's own stderr on failure). `opts.dir` runs a call as
 `git -C <dir>` instead of against the cwd.
@@ -571,10 +572,19 @@ M.is_ancestor(ancestor: string, rev: string, opts?: Lib.Git.RunOpts, git_cmd?: s
 M.tags(opts?: Lib.Git.TagsOpts, git_cmd?: string): Lib.Git.Tag[]|nil, err?   -- name, sha (peeled), object, annotated, time, subject; merged / no_merged / pattern / limit / sort
 M.rev_parse_async / merge_base_async / is_ancestor_async / tags_async         -- same arguments plus `on_done` before `git_cmd`; vim.schedule-dispatched; return { stop }
 M.LOG_FORMAT: string                                                           -- the --format= argument `log` passes (for a caller that runs `git log -z` itself)
+
+-- Syncing with the remote (all async, vim.schedule-dispatched, return { stop }; opts?: {dir?}, git_cmd? as above)
+M.fetch_async(opts: {dir?}|nil, on_done: fun(ok, err|nil, changed|nil), git_cmd?: string): { stop }   -- git fetch --all --prune; changed = a remote-tracking ref moved
+M.pull_async(opts: {dir?}|nil, on_done: fun(ok, err|nil, changed|nil), git_cmd?: string): { stop }    -- git pull --ff-only; changed = HEAD moved; silent once stop() was called
+M.push_async(opts: {dir?}|nil, on_done: fun(ok, err|nil), git_cmd?: string): { stop }                 -- git push
+M.update_async(opts: {dir?}|nil, on_done: fun(ok, err|nil, changed|nil), git_cmd?: string): { stop }  -- fetch, then pull (the pull's changed); silent once stop() was called
 ```
 
-A killed git (OOM, crash) is a **failure** everywhere here (`code = 128 + signal`, `signal` set), never an
-empty answer; `no_lazy_fetch` sets `GIT_NO_LAZY_FETCH=1` and `-c protocol.allow=never`, so it holds on git < 2.44.
+A killed git (OOM, `stop()`, crash) is a **failure** everywhere here (`code = 128 + signal`, `signal` set), never an
+empty answer — also for the sync verbs, whose `err` then reads "git push failed (exit code 143)"; a git that cannot be
+started reports why (`ENOENT: …`), not "exit code -1". After `stop()`, `pull_async`/`update_async` never call `on_done`
+(`update_async` does not start its pull either); `fetch_async`/`push_async` call it once, with the kill as the failure.
+`no_lazy_fetch` sets `GIT_NO_LAZY_FETCH=1` and `-c protocol.allow=never`, so it holds on git < 2.44.
 
 `lib.nvim.git.remote` (pure, no process): `parse_remote(url)`, `host_kind(host, hosts_cfg?)`
 (`hosts_cfg` is optional), `build(kind, remote, branch, rel_path?, first?, last?)` and the

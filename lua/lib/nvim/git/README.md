@@ -9,7 +9,9 @@ cwd-implicit ones as `git -C <dir>`.
 
 Every function here is side-effect free except `checkout` (see
 [below](#checking-out-a-branch)), which is a real filesystem/index mutation
-by design, and `run`/`run_async` (see [Running git](#running-git-and-reading-someone-elses-history)),
+by design, the sync verbs `fetch_async`/`pull_async`/`push_async`/`update_async`
+(see [Syncing with the remote](#syncing-with-the-remote-fetch_async-pull_async-push_async-update_async)),
+and `run`/`run_async` (see [Running git](#running-git-and-reading-someone-elses-history)),
 the generic escape hatch that runs whatever subcommand it is handed.
 
 ## Usage
@@ -332,6 +334,45 @@ the tagger date of an annotated tag and the commit date of a lightweight one;
 `sort` is `"newest"` (default), `"oldest"` or `"version"` (so `v1.10` is above
 `v1.2`). `limit = 0` is no tags (git's own `--count=0` would mean all). Reads
 only ref and tag objects, so it works in a blobless clone, offline.
+
+## Syncing with the remote: `fetch_async`, `pull_async`, `push_async`, `update_async`
+
+```lua
+git.fetch_async({ dir = repo }, function(ok, err, changed) end)   -- git fetch --all --prune
+git.pull_async({ dir = repo }, function(ok, err, changed) end)    -- git pull --ff-only
+git.push_async({ dir = repo }, function(ok, err) end)             -- git push
+local handle = git.update_async({ dir = repo }, function(ok, err, changed) end)  -- fetch, then pull
+handle.stop()
+```
+
+Network calls, so only async: `on_done` runs on the main loop (`vim.schedule`) and the
+returned `{ stop }` handle kills the job with SIGTERM. `opts` and `git_cmd` are as everywhere
+else in this module. Unlike the read functions, these change something: `fetch_async` moves
+remote-tracking refs, `pull_async`/`update_async` the working tree and `HEAD`, `push_async` the
+remote.
+
+- **`ok = false` carries a reason.** `err` is git's own stderr, or "git pull failed (exit code
+  N)" when git wrote nothing. A `pull_async` that cannot fast-forward (diverged history, local
+  changes the pull would overwrite) fails with git's reason instead of creating a merge commit.
+- **`changed`** is what the verb moved: for `fetch_async` a remote-tracking ref (read off git's
+  stderr; `nil` — unknown — on a Neovim without `vim.system`, which cannot separate the streams),
+  for `pull_async` whether `HEAD` is a different commit afterwards (compared by hash, never by
+  git's translatable message), for `update_async` the pull's. `nil` also when the answer could not
+  be read, never a guess.
+- **A killed git is a failure.** On POSIX the OS reports a process killed by a signal (`stop()`,
+  the OOM killer) as exit code 0 plus a signal, which would read as a success: a half-finished
+  push would be reported as pushed. All four verbs turn it into `ok = false` with
+  `code = 128 + signal` (`err` = "git push failed (exit code 143)" for SIGTERM), as `run`/
+  `run_async` already did.
+- **A git that cannot be started is a failure with its reason** — `git_cmd` not found or not on
+  `$PATH`: `err` is "ENOENT: no such file or directory (cmd): 'git'", without Neovim's
+  `file:line` stamp, not "exit code -1".
+- **After `stop()`.** `pull_async` and `update_async` are chains of processes (HEAD before, pull,
+  HEAD after; fetch, then pull) and stay silent once `stop()` has been called: `on_done` never
+  fires, at whichever stage the `stop()` lands, and `update_async` does not start its pull when
+  the `stop()` arrived just as the fetch finished — the working tree does not move after the
+  caller cancelled. `fetch_async` and `push_async` are a single process: their `on_done` still
+  fires once after `stop()`, with the kill reported as the failure above.
 
 ## Remote URLs: `lib.nvim.git.remote`
 

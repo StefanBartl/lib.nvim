@@ -131,7 +131,10 @@ first.
   `show_async`, `info`; for reading other repositories' history: `run`,
   `run_async`, `log`, `log_async`, `parse_log`, `rev_parse`, `merge_base`,
   `is_ancestor`, `tags`, plus the commit/compare/tag URLs of
-  `lib.nvim.git.remote`)
+  `lib.nvim.git.remote`; the async-only verbs that change something —
+  `fetch_async`, `pull_async`, `push_async`, `update_async` — report a
+  signal-killed or unspawnable git as a failure and, where they are a chain
+  (`pull_async`, `update_async`), stay silent after `stop()`)
 
 ## Async/blocking HTTP via curl
 
