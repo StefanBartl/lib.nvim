@@ -762,8 +762,16 @@ local function runner_opts(opts)
   opts = opts or {}
   local env = opts.env
   if opts.no_lazy_fetch then
-    env =
-      vim.tbl_extend("force", { GIT_NO_LAZY_FETCH = "1", GIT_ALLOW_PROTOCOL = "none" }, env or {})
+    -- (the pathspec switches too: an inherited GIT_LITERAL_PATHSPECS would turn
+    -- the `:(literal)` prefix of `log_argv` into part of the name)
+    env = vim.tbl_extend("force", {
+      GIT_NO_LAZY_FETCH = "1",
+      GIT_ALLOW_PROTOCOL = "none",
+      GIT_LITERAL_PATHSPECS = "0",
+      GIT_GLOB_PATHSPECS = "0",
+      GIT_NOGLOB_PATHSPECS = "0",
+      GIT_ICASE_PATHSPECS = "0",
+    }, env or {})
   end
   return {
     binary = opts.binary,
@@ -839,6 +847,10 @@ end
 local function failure_message(res, what, opts)
   if res.timed_out then
     return ("%s timed out after %d ms"):format(what, opts and opts.timeout_ms or 0)
+  end
+  if res.code == require("lib.nvim.cross.run_argv").OUTPUT_LIMIT_CODE then
+    local why = vim.trim(res.stderr or "")
+    return why ~= "" and why or ("%s printed more than max_output_bytes"):format(what)
   end
   if (res.signal or 0) ~= 0 then
     return ("%s was terminated by signal %d"):format(what, res.signal)

@@ -338,6 +338,33 @@ return function(H)
   ok(capped.stderr:find("exceeded", 1, true) ~= nil, "run_blocking_result: ... and stderr says why")
   eq(capped.timed_out, false, "run_blocking_result: ... which is not a timeout")
 
+  -- A cap that falls inside a multi-byte character must not leave half of it.
+  local wide = H.tmpfile(".lua")
+  vim.fn.writefile({
+    "io.stdout:write(string.rep('\226\130\172', 200))",
+    "io.stdout:flush()",
+  }, wide)
+  local wide_argv = { vim.v.progpath, "-n", "-i", "NONE", "--headless", "-u", "NONE", "-l", wide }
+  for _, cap in ipairs({ 100, 101, 102 }) do
+    local cut = run_argv.run_blocking_result(wide_argv, nil, { max_output_bytes = cap })
+    eq(cut.code, run_argv.OUTPUT_LIMIT_CODE, "utf8 cap " .. cap .. ": stopped at the cap")
+    eq(#cut.stdout % 3, 0, "utf8 cap " .. cap .. ": ... on a character boundary")
+  end
+
+  -- stderr handed back is bounded as well.
+  local noisy = H.tmpfile(".lua")
+  vim.fn.writefile({
+    "io.stderr:write(string.rep('e', 400000))",
+    "os.exit(3)",
+  }, noisy)
+  local noisy_result = run_argv.run_blocking_result(
+    { vim.v.progpath, "-n", "-i", "NONE", "--headless", "-u", "NONE", "-l", noisy },
+    nil,
+    {}
+  )
+  eq(noisy_result.code, 3, "stderr bound: the exit code is kept")
+  ok(#noisy_result.stderr <= 64 * 1024 + 8, "stderr bound: ... and the text is cut")
+
   local under = run_argv.run_blocking_result(big_argv, nil, { max_output_bytes = 10 * 1024 * 1024 })
   eq(under.ok, true, "run_blocking_result: output under the cap is untouched")
   eq(#under.stdout, 48 * 65536, "run_blocking_result: ... byte for byte")

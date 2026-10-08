@@ -593,6 +593,25 @@ return function(H)
     H.eq((huge or { {} })[1].author_time, nil, "log: ... also the author date")
   end
 
+  -- ── an inherited pathspec switch cannot change what `paths` means ──────────
+  do
+    local ps = F.init("-pathspec-env")
+    F.write(ps .. "/Ab.txt", "1\n")
+    F.commit(ps, "touches Ab", { when = 1700000100 })
+    F.write(ps .. "/aB.txt", "1\n")
+    F.commit(ps, "touches aB", { when = 1700000200 })
+    local saved_lit, saved_icase = vim.env.GIT_LITERAL_PATHSPECS, vim.env.GIT_ICASE_PATHSPECS
+    vim.env.GIT_LITERAL_PATHSPECS, vim.env.GIT_ICASE_PATHSPECS = "1", "1"
+    local only = git.log("HEAD", { dir = ps, paths = { "Ab.txt" }, no_lazy_fetch = true })
+    vim.env.GIT_LITERAL_PATHSPECS, vim.env.GIT_ICASE_PATHSPECS = saved_lit, saved_icase
+    H.eq(
+      #(only or {}),
+      1,
+      "log paths: GIT_ICASE_PATHSPECS/GIT_LITERAL_PATHSPECS in the env are overridden"
+    )
+    H.eq((only or { {} })[1].subject, "touches Ab", "log paths: ... exact case")
+  end
+
   -- ── max_output_bytes: one huge message cannot fill the editor's memory ─────
   local fat = F.init("-fat-message")
   F.write(fat .. "/f.txt", "1\n")
@@ -604,6 +623,17 @@ return function(H)
   H.ok(
     capped.stderr:find("exceeded", 1, true) ~= nil,
     "run max_output_bytes: ... and the reason is in stderr"
+  )
+  local capped_async_err
+  git.log_async("HEAD", { dir = fat, max_output_bytes = 1000 }, function(_, err)
+    capped_async_err = err
+  end)
+  vim.wait(20000, function()
+    return capped_async_err ~= nil
+  end, 10)
+  H.ok(
+    capped_async_err and capped_async_err:find("exceeded", 1, true) ~= nil,
+    "log_async max_output_bytes: the error names the output limit, not a signal"
   )
   local capped_log, capped_log_err = git.log("HEAD", { dir = fat, max_output_bytes = 1000 })
   H.eq(
