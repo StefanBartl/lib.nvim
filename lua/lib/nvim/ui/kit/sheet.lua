@@ -65,6 +65,8 @@ local input = require("lib.nvim.ui.kit.input")
 local select = require("lib.nvim.ui.kit.select")
 local autocmd = require("lib.nvim.bindings.autocmd")
 local expand_path = require("lib.nvim.cross.fs.expand_path")
+-- A NUL byte in a label, a title or a message would raise E976 out of the measuring below.
+local nul_safe = require("lib.lua.strings.core").nul_safe
 
 local api = vim.api
 local fn = vim.fn
@@ -107,10 +109,13 @@ function M.column()
 end
 
 ---@internal
+--- `s` cut to `width` cells, with an ellipsis when something was cut. A NUL byte is shown as
+--- the SOH that measures alike: the measuring and the splitting both raise E976 on a NUL.
 ---@param s string
 ---@param width integer
 ---@return string
 local function clip(s, width)
+  s = nul_safe(s)
   if fn.strdisplaywidth(s) <= width then
     return s
   end
@@ -156,7 +161,9 @@ local function normalize(raw, index)
   local is_select = raw.kind == "select" and #choices > 0
   local field = {
     name = name,
-    label = one_line(raw.label or raw.prompt or name),
+    -- Only ever drawn (and measured): the 'statuscolumn' it ends up in is a `v:lua` call, and a
+    -- NUL in what that returns is a Blob -- E976 on every redraw -- so it is cleaned here.
+    label = nul_safe(one_line(raw.label or raw.prompt or name)),
     kind = is_select and "select" or "text",
     required = raw.required == true,
     validate = type(raw.validate) == "function" and raw.validate or nil,
@@ -229,7 +236,7 @@ function M.open(opts)
     view.marks[i] = (f.required and "*" or " ") .. " "
   end
 
-  local title_w = opts.title and fn.strdisplaywidth(opts.title) or 0
+  local title_w = opts.title and fn.strdisplaywidth(nul_safe(opts.title)) or 0
   local btn_w = buttons.row_width(btn_labels)
   local width = opts.width or math.max(60, title_w + 2, col_w + btn_w + 2)
   if width >= 1 then
