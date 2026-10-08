@@ -243,4 +243,27 @@ return function(H)
     local _, all_shown = masked("abc", shown)
     ok(all_shown, ("%q is used as it is"):format(shown))
   end
+
+  -- The re-mask autocmds of a secret prompt lived in one shared group that each new prompt
+  -- cleared: a second secret prompt took them from the first, and what was typed there
+  -- afterwards showed in clear text.
+  local pair = {}
+  local pair_done, pair_err = pcall(function()
+    pair[1] = kit.input({ secret = true, relative = "editor" })
+    pair[2] = kit.input({ secret = true, relative = "editor" })
+    for i, surf in ipairs(pair) do
+      api.nvim_buf_set_lines(surf.bufnr, 0, -1, false, { "hunter22" })
+      api.nvim_exec_autocmds("TextChanged", { buffer = surf.bufnr })
+      local pair_ns = api.nvim_create_namespace("lib_kit_input_secret_" .. surf.bufnr)
+      eq(
+        #api.nvim_buf_get_extmarks(surf.bufnr, pair_ns, 0, -1, {}),
+        8,
+        ("prompt %d of two open at once is still masked"):format(i)
+      )
+    end
+  end)
+  for _, surf in ipairs(pair) do
+    pcall(surf.close, surf)
+  end
+  assert(pair_done, pair_err)
 end

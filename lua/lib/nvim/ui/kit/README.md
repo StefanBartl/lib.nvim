@@ -438,6 +438,7 @@ kit.live_input({
 `kit.input({ secret = true, ... })` masks the input as you type — a
 `vim.fn.inputsecret` replacement. Each typed character is concealed behind
 `opts.mask` (a string; default `"*"`, which is also what a value that is not a string
+and a string nvim cannot show -- a newline, NUL, tab, escape, an invisible character --
 becomes) via `conceal`, re-derived from the buffer's actual
 content on every edit (paste, backspace, mid-line insert all just work). The
 underlying buffer still holds the real text — `on_submit` reads it straight

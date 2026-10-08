@@ -207,10 +207,6 @@ end
 ---@param mask string
 local function conceal_line(bufnr, ns, row, mask)
   local line = nul_safe(api.nvim_buf_get_lines(bufnr, row, row + 1, false)[1] or "")
-  -- One string per character (a base plus its combining marks is one), walked once:
-  -- `byteidx(line, i)` rescans the line from its start for every `i`, which made this
-  -- quadratic in the length of a pasted token -- and `lib.nvim.ui.kit.sheet` runs it for every
-  -- secret row at every repaint.
   -- nvim refuses a mask that does not start with a printable character (a newline, NUL,
   -- escape, a lone continuation byte, U+200B ...) and asks only for that first one. Raised
   -- from the loop below, after the caller cleared the namespace, it would leave the secret
@@ -221,6 +217,10 @@ local function conceal_line(bufnr, ns, row, mask)
   else
     mask = "*"
   end
+  -- One string per character (a base plus its combining marks is one), walked once:
+  -- `byteidx(line, i)` rescans the line from its start for every `i`, which made this
+  -- quadratic in the length of a pasted token -- and `lib.nvim.ui.kit.sheet` runs it for every
+  -- secret row at every repaint.
   local col = 0
   for _, ch in ipairs(fn.split(line, "\\zs")) do
     local stop = col + #ch
@@ -641,7 +641,10 @@ function M.open(opts)
     autocmd.create({ "TextChangedI", "TextChanged" }, function()
       apply_mask(bufnr, ns, mask)
     end, {
-      group = autocmd.group("lib_kit_input", true),
+      -- One group per prompt: a shared one, cleared here, took the first prompt's re-mask
+      -- autocmds away when a second secret prompt opened, and what was typed after that
+      -- showed in clear text.
+      group = autocmd.group("lib_kit_input_" .. bufnr, true),
       buffer = bufnr,
       desc = "lib.nvim.ui.kit.input: re-mask secret input",
     })
