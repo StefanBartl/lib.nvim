@@ -282,6 +282,13 @@ function M.open(opts)
   -- sheet must leave Insert mode on (see `input.mark_opened`).
   input.mark_opened()
   local bufnr, winid = surf.bufnr, surf.winid
+  if any_secret then
+    -- Marked, and closed to buffer-word completion, as a whole: the buffer is one for
+    -- every row, so the keys of a row that is not secret are left out of a keystroke HUD
+    -- too (the conservative choice -- there is no telling which row a key was meant for),
+    -- and `<C-n>` in another row would offer the words of the secret one.
+    input.protect_secret_buffer(bufnr)
+  end
   local centered = relative == "editor"
   local max_height = math.max(3, vim.o.lines - 6)
   local win_w = api.nvim_win_get_width(winid)

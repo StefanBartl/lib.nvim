@@ -101,6 +101,15 @@ The window is `winfixbuf` unless `wo.winfixbuf = false`: a surface lives and die
 with its one buffer, so `<C-o>`, `:bnext` or `:e` in it fail with E1513 instead of
 swapping the user's file in and wiping the component's buffer from under it.
 
+`kit.surface.mark_secret(bufnr)` / `kit.surface.is_secret(bufnr?)` set and read
+the buffer variable `vim.b.ui_kit_secret` (its name is `kit.surface.SECRET_VAR`): a
+buffer a secret is typed into. `kit.input` with `secret = true` and a `kit.sheet`
+with a secret field mark theirs (see [Secret input](#secret-input-masked-entry));
+anything that records or shows keystrokes as they are typed reads the mark and
+leaves that buffer's keys out -- `ui.screenkey` of ui.nvim does, and the name is the
+same in ui.nvim's copy of the kit, so one HUD sees the prompts of both.
+
+
 ## Components
 
 `kit.popup(opts)` dispatches on `opts.type` (convenience aliases: `kit.note`,
@@ -451,6 +460,26 @@ would type the password there -- so when the prompt closes (submitted, cancelled
 closed from outside; the same goes for a `kit.sheet` with a `secret` field) they are
 overwritten with an empty run. A macro being recorded (`q`) still holds the keys it
 saw, as it does for `vim.fn.inputsecret`.
+
+The mask only hides the rendering; two things read the buffer without looking at it,
+and both are shut for a secret prompt (and for a `kit.sheet` with a `secret` field,
+as a whole: its rows are one buffer):
+
+- **Insert-mode completion works on the words of the buffer, which is the secret.**
+  `<C-n>`/`<C-p>` listed them in a popup in clear text and inserted the pick unmasked;
+  `<C-x><C-n>` and `<C-x><C-p>` did the same, and with `'autocomplete'`
+  (Neovim 0.12) the popup came up by itself as one types. In a secret prompt `<C-n>`,
+  `<C-p>` and `<C-x>` do nothing (except to move in the popup of the prompt's own
+  `completion = ...`, whose `<Tab>` opens it) and `'autocomplete'` is off for the
+  buffer. A candidate that is put in from that popup is masked at once (the re-mask
+  listens for `TextChangedP` too). A completion *plugin* with its own sources is out of
+  reach of this; exclude the prompt's buffer in that plugin's own configuration.
+- **A keystroke HUD shows what is typed.** The buffer carries `vim.b.ui_kit_secret =
+  true`, which `ui.screenkey` reads: no key typed into a marked buffer reaches its HUD,
+  the key that closes the prompt included. (A sheet is marked as soon as one of its
+  fields is secret: there is no telling which row a key was meant for, so none of its
+  keys are shown.) The rule is the buffer's, not the HUD's: a recorder of your own asks
+  `require("lib.nvim.ui.kit.surface").is_secret()` the same way.
 
 ```lua
 kit.input({

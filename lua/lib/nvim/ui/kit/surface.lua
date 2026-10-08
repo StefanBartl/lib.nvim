@@ -134,6 +134,34 @@ end
 
 local M = {}
 
+--- The buffer variable that marks a buffer as one a secret is typed into (`kit.input` with
+--- `secret = true`, a `kit.sheet` with a secret field). Anything that records or shows the
+--- keys as they are typed -- `ui.screenkey`, a keycast overlay, a macro logger -- reads it
+--- and leaves that buffer's keys out. The name is part of the kit's contract (`lib.nvim`'s
+--- frozen copy uses the same one, so a HUD from either side sees both).
+---@type string
+M.SECRET_VAR = "ui_kit_secret"
+
+--- Mark `bufnr` as one a secret is typed into (see `SECRET_VAR`). The buffer is wiped with
+--- its float, and the variable with it.
+---@param bufnr integer
+function M.mark_secret(bufnr)
+  pcall(function()
+    vim.b[bufnr][M.SECRET_VAR] = true
+  end)
+end
+
+--- Is `bufnr` (the current buffer when omitted) marked as holding a secret? Cheap and
+--- never raises: `ui.screenkey` asks it for every key.
+---@param bufnr? integer
+---@return boolean
+function M.is_secret(bufnr)
+  local ok, marked = pcall(function()
+    return vim.b[bufnr or 0][M.SECRET_VAR]
+  end)
+  return ok and marked == true
+end
+
 --- Open a themed float and return its handle (or nil on failure).
 ---@param opts? Lib.UI.Kit.SurfaceOpts
 ---@return Lib.UI.Kit.Surface|nil

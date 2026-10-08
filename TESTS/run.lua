@@ -93,6 +93,7 @@ local specs = {
   "ui_kit_oneline_spec.lua",
   "ui_kit_nul_spec.lua",
   "ui_kit_conceal_spec.lua",
+  "ui_kit_secret_buffer_spec.lua",
   "ui_kit_path_completion_spec.lua",
   "ui_kit_marks_order_spec.lua",
   "icons_spec.lua",
