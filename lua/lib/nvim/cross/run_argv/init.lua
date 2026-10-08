@@ -108,8 +108,10 @@ end
 --- The terminating signal to report. `vim.system` stops a process that outlived
 --- `timeout_ms` with SIGTERM and reports exit code 124 -- but a child that handles
 --- SIGTERM (Neovim itself does) exits normally and the signal reads 0. Exit code
---- 124 AFTER the deadline is therefore a timeout all the same: report SIGTERM so
---- that "killed for the timeout" stays `code == 124 and signal ~= 0`.
+--- 124 once the deadline has (nearly) passed is therefore a timeout all the same:
+--- report SIGTERM so that "killed for the timeout" stays `code == 124 and signal ~= 0`.
+--- (Half the budget, not all of it: libuv timers run on a cached loop time and
+--- fire early by whatever the spawn took.)
 ---@param code integer
 ---@param signal integer
 ---@param started integer  `uv.hrtime()` when the process was started.
@@ -121,7 +123,7 @@ local function effective_signal(code, signal, started, opts)
     and code == 124
     and opts
     and type(opts.timeout_ms) == "number"
-    and (uv.hrtime() - started) / 1e6 >= opts.timeout_ms
+    and (uv.hrtime() - started) / 1e6 >= opts.timeout_ms / 2
   then
     return 15
   end
