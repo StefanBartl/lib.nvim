@@ -51,7 +51,14 @@ local surface = require("lib.nvim.ui.kit.surface")
 local map = require("lib.nvim.bindings.keymap")
 local notify = require("lib.nvim.notify").create("[lib.nvim.ui.kit.chooser]")
 local autocmd = require("lib.nvim.bindings.autocmd")
-local printable_title = require("lib.nvim.window.printable_title")
+-- Soft: `printable_title` arrived with lib.nvim 863952e. With an older lib.nvim the title is
+-- drawn as given, rather than `require("lib.nvim.ui.kit")` failing outright.
+local ok_title, printable_title = pcall(require, "lib.nvim.window.printable_title")
+if not ok_title or type(printable_title) ~= "function" then
+  printable_title = function(title)
+    return title
+  end
+end
 
 local api = vim.api
 
