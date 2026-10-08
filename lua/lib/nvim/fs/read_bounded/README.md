@@ -25,4 +25,6 @@ end
 
 Errors: `not found: …`, `not a regular file: …`, `too large (N > M bytes): …`,
 or whatever `lib.nvim.fs.read` reports (`open failed: …`).
-A symlink to a regular file is followed (the stat is of the target).
+A symlink to a regular file is followed by default (the stat is of the target);
+pass `{ follow_symlinks = false }` as a third argument to refuse it
+(`not a regular file`).

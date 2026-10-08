@@ -9,16 +9,23 @@
 ---```lua
 --- local read_bounded = require("lib.nvim.fs.read_bounded")
 --- local content, err = read_bounded(dir .. "/.git/config", 256 * 1024)
+--- -- a symlink is refused instead of followed:
+--- local c2 = read_bounded(path, 4096, { follow_symlinks = false })
 ---```
 
 local uv = vim.uv or vim.loop
 
+---@class Lib.Fs.ReadBoundedOpts
+---@field follow_symlinks? boolean  default `true`; `false` refuses a symlink (lstat)
+
 ---@param path string
 ---@param max_bytes integer
+---@param opts? Lib.Fs.ReadBoundedOpts
 ---@return string|nil content
 ---@return string|nil err
-return function(path, max_bytes)
-  local stat = uv.fs_stat(path)
+return function(path, max_bytes, opts)
+  local follow = not (opts and opts.follow_symlinks == false)
+  local stat = follow and uv.fs_stat(path) or uv.fs_lstat(path)
   if not stat then
     return nil, "not found: " .. path
   end
