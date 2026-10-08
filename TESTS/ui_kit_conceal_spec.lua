@@ -154,4 +154,59 @@ return function(H)
     pcall(surf.close, surf)
   end
   assert(nul_done, nul_err)
+
+  -- `opts.mask` is text for `conceal`, and anything else is the default. A number, `true` or a
+  -- table (a value handed on from a config) went to `nvim_buf_set_extmark` as it was: it raised
+  -- "Invalid 'conceal': Expected Lua string" -- out of `open()` itself for a prompt with a
+  -- default, with the window already open and no key mapped, and out of the `TextChanged`
+  -- handler for one without, after `apply_mask` had cleared the marks. The password stood on
+  -- screen, with an error for every key. `kit.sheet` already took a string only.
+  local mask_surfaces = {}
+  --- The text each mark on the prompt's line conceals with.
+  local function conceals_of(surf)
+    local mask_ns = api.nvim_create_namespace("lib_kit_input_secret_" .. surf.bufnr)
+    local out = {}
+    for _, m in ipairs(api.nvim_buf_get_extmarks(surf.bufnr, mask_ns, 0, -1, { details = true })) do
+      out[#out + 1] = m[4].conceal
+    end
+    return out
+  end
+  --- What the marks of `surf` conceal with has to be `expected`.
+  local function conceals(surf, expected, label)
+    local got = conceals_of(surf)
+    ok(vim.deep_equal(got, expected), label .. ": got " .. vim.inspect(got))
+  end
+  local mask_done, mask_err = pcall(function()
+    for label, bad in pairs({ number = 5, boolean = true, table = {} }) do
+      local opened, surf = pcall(kit.input, {
+        secret = true,
+        mask = bad,
+        default = "hunter2",
+        relative = "editor",
+      })
+      ok(opened, "a " .. label .. " mask: the prompt opens instead of raising: " .. tostring(surf))
+      mask_surfaces[#mask_surfaces + 1] = surf
+      conceals(surf, vim.fn["repeat"]({ "*" }, 7), "a " .. label .. " mask: the default's")
+      api.nvim_buf_set_lines(surf.bufnr, 0, -1, false, { "hunter22" })
+      api.nvim_exec_autocmds("TextChanged", { buffer = surf.bufnr })
+      conceals(surf, vim.fn["repeat"]({ "*" }, 8), "a " .. label .. " mask: while typing")
+    end
+
+    local empty = kit.input({ secret = true, mask = 5, relative = "editor" })
+    mask_surfaces[#mask_surfaces + 1] = empty
+    api.nvim_buf_set_lines(empty.bufnr, 0, -1, false, { "hunter2" })
+    api.nvim_exec_autocmds("TextChanged", { buffer = empty.bufnr })
+    conceals(empty, vim.fn["repeat"]({ "*" }, 7), "typing into an empty prompt")
+
+    local chosen = kit.input({ secret = true, mask = "•", default = "abc", relative = "editor" })
+    mask_surfaces[#mask_surfaces + 1] = chosen
+    conceals(chosen, { "•", "•", "•" }, "a string the caller chose")
+    local blank = kit.input({ secret = true, mask = "", default = "abc", relative = "editor" })
+    mask_surfaces[#mask_surfaces + 1] = blank
+    conceals(blank, { "", "", "" }, "an empty string is a string: the characters are hidden")
+  end)
+  for _, surf in ipairs(mask_surfaces) do
+    pcall(surf.close, surf)
+  end
+  assert(mask_done, mask_err)
 end
