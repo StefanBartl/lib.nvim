@@ -291,10 +291,12 @@ tokenizer does:
 - an unterminated quote runs to the end of the line: it is the token being
   typed, so nothing is offered for it.
 
-Only `<Tab>` and the help float read the flag. Dispatch is untouched --
-`ctx.args`, `ctx.pos` and `ctx.rest` are still built from `fargs` (a verb that
-sets `quotes` reads `ctx.raw.args` itself), and a verb without it keeps the
-blank split exactly as before. The splitter is `composer.tokens.split_quoted`;
+`<Tab>`, the help float and dispatch read the flag. Dispatch builds its tokens
+-- `ctx.args`, `ctx.pos`, `ctx.rest`, and what the flag and argument checks
+see -- from the same quote-aware cut of `ctx.raw.args`, so `:Replace "x --dry" y`
+binds `x --dry` and `y` instead of failing on a flag `--dry"` (a verb that sets
+`quotes` usually reads `ctx.raw.args` itself anyway). A verb without the flag
+keeps the blank split exactly as before. The splitter is `composer.tokens.split_quoted`;
 `composer.help.parse_line(line, quotes?)` takes the flag as an optional second
 argument and otherwise looks the verb up.
 
