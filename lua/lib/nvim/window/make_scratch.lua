@@ -13,6 +13,7 @@ local api = vim.api
 local notify = require("lib.nvim.notify").create("[lib.nvim.window.make_scratch]")
 local nice_quit = require("lib.nvim.window.nice_quit")
 local max_float_width = require("lib.nvim.window.max_float_width")
+local nul_safe = require("lib.lua.strings.core").nul_safe
 
 ---Window-local options applied to every scratch float unless overridden via `opts.wo`.
 ---
@@ -35,13 +36,15 @@ local DEFAULT_WO = {
 }
 
 ---@internal
----Widest display column count across `lines` (multibyte-aware).
+---Widest display column count across `lines` (multibyte-aware). A NUL byte in a line is
+---measured as the `^@` it is drawn as (`nul_safe`): `strdisplaywidth()` raises E976 on one,
+---and a single such line in a list of case titles would keep the whole list from opening.
 ---@param lines string[]
 ---@return integer
 local function content_width(lines)
   local max = 0
   for _, line in ipairs(lines) do
-    local w = vim.fn.strdisplaywidth(line)
+    local w = vim.fn.strdisplaywidth(nul_safe(line))
     if w > max then
       max = w
     end
