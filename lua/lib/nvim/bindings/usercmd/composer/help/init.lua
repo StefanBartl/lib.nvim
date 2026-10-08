@@ -82,10 +82,13 @@ end
 
 ---@internal
 --- The value of a raw token (`my\ file` -> `my file`), as `fargs` carries it.
+--- Neovim's `-nargs=*` splitting unescapes `\\` and `\<blank>` only; any other
+--- backslash stays, so a Windows path (`C:\Users\x`) and a `\--dry` (a
+--- positional, not the flag) arrive as typed.
 ---@param tok string
 ---@return string
 local function unescape(tok)
-  return (tok:gsub("\\(.)", "%1"))
+  return (tok:gsub("\\([\\ \t])", "%1"))
 end
 
 ---@internal
@@ -208,7 +211,6 @@ function M.open(root, state, opts)
   -- pending insert (`i<C-o>:Verb`), <CR> would type a newline into it instead
   -- of picking.
   pcall(vim.cmd, "stopinsert")
-  local result = entries_mod.compute(root, state.committed, state.lead)
   local title = opts.title
   if not title then
     local path = table.concat(state.committed, " ")
@@ -221,16 +223,27 @@ function M.open(root, state, opts)
       feed_cmdline(opts.restore)
     end
   end
-  local ok, opened =
-    pcall(require("lib.nvim.bindings.usercmd.composer.help.ui").open, result.items, {
-      title = title,
-      on_pick = function(entry)
-        restored = true
-        feed_cmdline(M.insertion(state, entry))
-      end,
-      on_cancel = restore,
-    })
-  opened = ok and opened == true
+  -- Both steps run guarded: a spec that breaks its declared types (a non-string
+  -- in `enum`, a `desc` that is no string) must not cost the user the line the
+  -- key has already left, nor the caller its fallback.
+  local opened = false
+  local ok, result = pcall(entries_mod.compute, root, state.committed, state.lead)
+  if ok then
+    local ok_ui, shown =
+      pcall(require("lib.nvim.bindings.usercmd.composer.help.ui").open, result.items, {
+        title = title,
+        on_pick = function(entry)
+          restored = true
+          feed_cmdline(M.insertion(state, entry))
+        end,
+        on_cancel = restore,
+      })
+    opened = ok_ui and shown == true
+  else
+    require("lib.nvim.notify")
+      .create("[lib.nvim.composer.help]")
+      .warn(("option list of :%s could not be built: %s"):format(state.name, tostring(result)))
+  end
   -- The key already left the command line: when no float came up, give the
   -- line back instead of leaving the user with nothing (once -- the float's
   -- own cancel path may have done it already).

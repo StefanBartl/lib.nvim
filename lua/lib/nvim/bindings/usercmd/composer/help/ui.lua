@@ -114,13 +114,15 @@ function M.build_items(entries)
   return items, first
 end
 
---- Open the float.
+--- Open the float. A level with nothing to pick still opens when it has rows: a
+--- free-text argument is exactly one inert `{name}  what it is for` row, and
+--- that row is the answer (`<Esc>` closes it, `on_cancel` hears about that).
 ---@param entries Lib.UserCmd.Composer.Help.Entry[]
 ---@param opts { title?: string, on_pick: fun(entry: Lib.UserCmd.Composer.Help.Entry), on_cancel?: fun() }
----@return boolean opened
+---@return boolean opened  # false when there is nothing to draw or the float could not open
 function M.open(entries, opts)
   local items, first = M.build_items(entries)
-  if not first then
+  if #items == 0 then
     return false
   end
   local surf = require("lib.nvim.ui.kit.select").open({
@@ -135,6 +137,13 @@ function M.open(entries, opts)
     end,
     on_cancel = opts.on_cancel,
   })
+  -- Nothing to pick: no row may look picked either (the chooser lights the
+  -- cursor row, and <CR> on an inert one does nothing).
+  if surf and not first then
+    pcall(function()
+      vim.wo[surf.winid].cursorline = false
+    end)
+  end
   return surf ~= nil
 end
 
