@@ -636,6 +636,84 @@ return function(H)
       end
     end
 
+    -- More plain names than a menu holds that start with "U", and five that start with "U"
+    -- and a combining mark (an umlaut written as two characters): "U" is a prefix of the plain
+    -- ones only, and the marked ones would sort first ("Uy000" before "Uz000") were they let
+    -- in. The byte comparison takes "U" for a prefix of "U" + U+0308 + "y000"; Neovim's regex
+    -- does not, and the bytes ask it whenever the next byte could begin a mark (CC or later).
+    -- Only a file system whose matching is case-sensitive reaches that (Linux, macOS; not
+    -- Windows, where the regex decides everything): there it is all that keeps them out.
+    local crowd = new_dir()
+    dirs_made[#dirs_made + 1] = crowd
+    local crowd_names = {}
+    for i = 0, MAX + 9 do
+      crowd_names[#crowd_names + 1] = ("Uz%03d"):format(i)
+    end
+    for i = 0, 4 do
+      crowd_names[#crowd_names + 1] = ("U%sy%03d"):format(vim.fn.nr2char(0x308), i)
+    end
+    for _, name in ipairs(crowd_names) do
+      touch(crowd .. "/" .. name)
+    end
+    if listed_verbatim(crowd, crowd_names) then
+      with_case_options(true, false, function()
+        ok(#real_getcompletion(crowd .. "/U", "file") > MAX, "U among marked names: a long list")
+      end)
+      check_like_getcompletion(crowd .. "/U", "U among marked names")
+      check_like_getcompletion(crowd .. "/u", "u among marked names")
+      press_tab(crowd .. "/U")
+      eq(shown[1], crowd .. "/Uz000", "the plain names, from the start")
+
+      -- `vim.regex` compiles every pattern this list can ask it for, so nothing real reaches
+      -- that fallback; it is a safety net for a list that would be built without the judge
+      -- of the marked names, and it is pinned with a matcher that refuses.
+      local real_regex = vim.regex
+      vim.regex = function()
+        error("E0: no matcher")
+      end
+      local stub_ok, stub_err = pcall(function()
+        with_case_options(true, false, function()
+          press_tab(crowd .. "/U")
+          eq(getcompletion_calls, 1, "no matcher: getcompletion() answers")
+          eq(shown[1], "from-getcompletion", "no matcher: its answer")
+        end)
+      end)
+      vim.regex = real_regex
+      assert(stub_ok, stub_err)
+    end
+
+    -- A file cannot be an answer for "dir", so it is neither kept nor asked about its name:
+    -- three hundred files with a combining mark would otherwise cost the question for marks
+    -- (and the sort) on names that are dropped at the end. Nothing but the two directories is
+    -- left, and no `strchars()` has been asked about a name with the mark (the prompt itself
+    -- asks others).
+    local filed = new_dir()
+    dirs_made[#dirs_made + 1] = filed
+    local filed_names = {}
+    for i = 0, MAX + 9 do
+      filed_names[#filed_names + 1] = ("f%s%03d"):format(vim.fn.nr2char(0x308), i)
+    end
+    for _, name in ipairs(filed_names) do
+      touch(filed .. "/" .. name)
+    end
+    vim.fn.mkdir(filed .. "/sub_a", "p")
+    vim.fn.mkdir(filed .. "/sub_b", "p")
+    if listed_verbatim(filed, filed_names) then
+      local real_strchars, strchars_calls = vim.fn.strchars, 0
+      vim.fn.strchars = function(s, ...)
+        if type(s) == "string" and s:find("\204\136", 1, true) then
+          strchars_calls = strchars_calls + 1
+        end
+        return real_strchars(s, ...)
+      end
+      local filed_ok, filed_err = pcall(press_tab, filed .. "/", "dir")
+      vim.fn.strchars = real_strchars
+      assert(filed_ok, filed_err)
+      eq(getcompletion_calls, 0, "files with marks, completion = dir: the listing has the answer")
+      ok(vim.deep_equal({ filed .. "/sub_a/", filed .. "/sub_b/" }, shown), "the two directories")
+      eq(strchars_calls, 0, "and no file was asked about a mark")
+    end
+
     -- A fragment with a NUL byte (no file name holds one) is getcompletion()'s and must
     -- not raise E976 out of the mapping: the fold of a non-ASCII name goes through
     -- `toupper()`, and a NUL in a Lua string reaches `vim.fn` as a Blob.
