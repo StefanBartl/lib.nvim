@@ -297,7 +297,11 @@ end
 ---first mark of all, starts with CC 80, so no other name can hold one. Whether any of them
 ---does is asked once, of all the names together: asked per name, a big directory of Cyrillic
 ---or CJK names (every one has such a byte) paid two `vim.fn` calls each for an answer that
----is nearly always no.
+---is nearly always no. That answer only says that a mark exists SOMEWHERE, so once it is yes
+---each name is asked on its own (a pair of `strchars()`, about 1.5 us) and only those that
+---hold a mark are taken apart (`split()`, about 20 us): a directory of five thousand Cyrillic
+---names and one written the macOS way would otherwise split every one of them for keys that
+---come out as they went in.
 ---@param found {key: string, name: string, kind: string?}[]
 ---@param wides integer[]
 local function order_by_base_characters(found, wides)
@@ -311,12 +315,14 @@ local function order_by_base_characters(found, wides)
   end
   for i = 1, #wides do
     local it = found[wides[i]]
-    local bases = {}
-    for _, cluster in ipairs(fn.split(it.key, "\\zs")) do
-      -- the first code point of the cluster; bytes that are no UTF-8 are their own character
-      bases[#bases + 1] = cluster:match("^[\1-\127\194-\244][\128-\191]*") or cluster
+    if fn.strchars(it.key) ~= fn.strchars(it.key, 1) then
+      local bases = {}
+      for _, cluster in ipairs(fn.split(it.key, "\\zs")) do
+        -- the first code point of the cluster; bytes that are no UTF-8 are their own character
+        bases[#bases + 1] = cluster:match("^[\1-\127\194-\244][\128-\191]*") or cluster
+      end
+      it.key = table.concat(bases)
     end
-    it.key = table.concat(bases)
   end
 end
 
