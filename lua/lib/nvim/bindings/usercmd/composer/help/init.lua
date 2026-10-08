@@ -400,11 +400,17 @@ end
 
 --- Flags and key=value pairs (`kind = "flag"|"kv"`) that show no text in the
 --- float, for one verb or -- without a name -- every verb registered in this
---- process. A `--no-x` negation counts as described when `--x` is. Meant for
---- a plugin's own spec ("every option I ship is explained") and for audits.
+--- process. A `--no-x` negation counts as described when `--x` is. With
+--- `opts.args`, positional arguments (`kind = "arg"`) too: one counts when it
+--- has a `desc`, its type has one (`register_type(name, { desc = ... })`), it
+--- is a built-in typed value (`INT`, `PATH` ...), or -- for an enum -- it has
+--- a `desc` or per-value `enum_desc`. Meant for a plugin's own spec ("every
+--- option I ship is explained") and for audits.
 ---@param verb? string
----@return { verb: string, route: string, kind: "flag"|"kv", name: string }[]
-function M.undocumented(verb)
+---@param opts? { args?: boolean }
+---@return { verb: string, route: string, kind: "flag"|"kv"|"arg", name: string }[]
+function M.undocumented(verb, opts)
+  opts = opts or {}
   local out = {}
   for _, handle in ipairs(registry.all()) do
     local name = handle:name()
@@ -419,6 +425,11 @@ function M.undocumented(verb)
         for _, k in ipairs(route.kv or {}) do
           if not k.desc or k.desc == "" then
             out[#out + 1] = { verb = name, route = path, kind = "kv", name = k.key }
+          end
+        end
+        for _, a in ipairs(opts.args and route.args or {}) do
+          if not entries_mod.arg_documented(a) then
+            out[#out + 1] = { verb = name, route = path, kind = "arg", name = a.name }
           end
         end
       end

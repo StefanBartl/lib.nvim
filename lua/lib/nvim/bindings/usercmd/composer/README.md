@@ -377,6 +377,13 @@ plugin that wants "every option I ship is explained":
 assert(#require("lib.nvim.bindings.usercmd.composer").help.undocumented("MyVerb") == 0)
 ```
 
+Positional arguments get their line from the argument's own `desc`, else from
+its type: `composer.register_type("TICKET", { desc = "Ticket number such as 1234", ... })`
+is written once and shown for every argument of that type. An enum with a
+`desc` shows it as an inert row above its values (and `enum_desc` per value);
+built-in types (`INT`, `PATH` ...) show their name. `help.undocumented(verb,
+{ args = true })` lists arguments that still say nothing.
+
 `composer.help` exposes the pieces (`parse_line`, `insertion`, `open`,
 `from_cmdline`, `set_keymap`); the option list itself is the pure
 `require("lib.nvim.bindings.usercmd.composer.help.entries").compute(root, committed_tokens, lead)`.

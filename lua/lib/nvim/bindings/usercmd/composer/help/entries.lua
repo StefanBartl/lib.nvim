@@ -12,6 +12,7 @@ local flags = require("lib.nvim.bindings.usercmd.composer.flags")
 local kv = require("lib.nvim.bindings.usercmd.composer.kv")
 local format = require("lib.nvim.bindings.usercmd.composer.format")
 local complete = require("lib.nvim.bindings.usercmd.composer.complete")
+local argtypes = require("lib.nvim.bindings.usercmd.composer.argtypes")
 
 local M = {}
 
@@ -191,23 +192,67 @@ local function next_arg(route, filled)
   return spec
 end
 
+--- The built-in argument types whose name already says what is expected.
+---@type table<string, true>
+local SELF_EXPLAINING = {
+  INT = true,
+  FLOAT = true,
+  BOOL = true,
+  PATH = true,
+  DIR = true,
+  FILE = true,
+  BUFFER = true,
+  WINDOW = true,
+}
+
+--- The one-line text of a positional argument: its own `desc`, else the text
+--- of its (custom) type -- written once per type, not once per use -- else
+--- the name of a built-in type. nil for a plain string with nothing to say.
+---@param spec Lib.UserCmd.Composer.ArgSpec
+---@return string|nil
+function M.arg_desc(spec)
+  if spec.desc and spec.desc ~= "" then
+    return spec.desc
+  end
+  local def = spec.type and argtypes.get(spec.type)
+  if def and def.desc and def.desc ~= "" then
+    return def.desc
+  end
+  if spec.type and SELF_EXPLAINING[spec.type] then
+    return spec.type
+  end
+  return nil
+end
+
+--- Whether an argument says enough about itself in the float: a text of its
+--- own or of its type; an enum needs a `desc` or per-value texts; a built-in
+--- typed value (`INT`, `PATH` ...) explains itself.
+---@param spec Lib.UserCmd.Composer.ArgSpec
+---@return boolean
+function M.arg_documented(spec)
+  if spec.enum or spec.values then
+    return (spec.desc ~= nil and spec.desc ~= "")
+      or (spec.enum_desc ~= nil and next(spec.enum_desc) ~= nil)
+  end
+  return M.arg_desc(spec) ~= nil
+end
+
 ---@internal
---- Rows for the next positional argument: its closed values when it has any,
---- otherwise one inert hint row ("{name} -- what it is for").
+--- Rows for the next positional argument: its closed values when it has any
+--- (behind an inert "{name}  what it is for" row when it has a text), otherwise
+--- that one inert row alone.
 ---@param spec Lib.UserCmd.Composer.ArgSpec
 ---@return Lib.UserCmd.Composer.Help.Entry[]
 local function arg_entries(spec)
   local values = spec.enum or spec.values
   if values and #values > 0 then
-    return value_entries(values, spec.enum_desc, nil)
+    local out = value_entries(values, spec.enum_desc, nil)
+    if spec.desc and spec.desc ~= "" then
+      table.insert(out, 1, { kind = "hint", label = format.arg_token(spec), desc = spec.desc })
+    end
+    return out
   end
-  return {
-    {
-      kind = "hint",
-      label = format.arg_token(spec),
-      desc = spec.desc or (spec.type and spec.type ~= "STRING" and spec.type or nil),
-    },
-  }
+  return { { kind = "hint", label = format.arg_token(spec), desc = M.arg_desc(spec) } }
 end
 
 ---@internal
