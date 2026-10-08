@@ -44,6 +44,7 @@ S.indent(s: string, n: integer): string
 S.dedent(s: string): string
 S.is_empty_or_space(s: any): boolean
 S.count_lines(s: string): integer
+S.nul_safe(s: any): any  -- each NUL byte an SOH, so strdisplaywidth()/strchars()/split() can measure it
 ```
 
 ### `lib.lua.strings.case` (see README)

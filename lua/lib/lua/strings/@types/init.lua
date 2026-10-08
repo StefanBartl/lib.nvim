@@ -40,6 +40,7 @@
 ---@field dedent fun(s: string): string
 ---@field is_empty_or_space fun(s: any): boolean
 ---@field count_lines fun(s: string): integer # Count lines in a string
+---@field nul_safe fun(s: any): any # `s` with each NUL byte an SOH, so `vim.fn` can measure it (E976 otherwise)
 -- =========================================================
 -- lib.lua.strings.links
 -- =========================================================

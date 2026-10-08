@@ -32,10 +32,20 @@ strings.pad_center("7", 3)              --> " 7 "
 strings.indent("a\nb", 2)               --> "  a\n  b"
 strings.is_empty_or_space("  ")         --> true
 strings.count_lines("a\nb\nc")          --> 3
+strings.nul_safe("a\0b")                --> "a\1b"
 ```
 
 `trim`/`is_empty_or_space` tolerate non-string input (`trim(nil) == ""`,
-`is_empty_or_space(nil) == true`); the rest assume a real string.
+`is_empty_or_space(nil) == true`); the rest assume a real string, but for
+`nul_safe`, which hands anything that is not a string back unchanged.
+
+`nul_safe` is for text that is about to be *measured or split* by a `vim.fn`
+function (`strdisplaywidth`, `strchars`, `strcharpart`, `split`): a NUL byte in a
+Lua string reaches `vim.fn` as a Blob and raises E976. It swaps each NUL for an SOH
+(`\1`) — one byte, one character and two display cells, like the `^@` a NUL is drawn
+as — so offsets and widths come out as they would for the NUL. Measure the result;
+keep the original for what is stored or handed back. `lib.nvim.ui.kit` and
+`lib.nvim.window.make_scratch` use it for every width they take of caller text.
 
 **Gotcha:** `kebab_case`/`snake_case` only insert a separator at an existing
 word boundary (start of string, or right after whitespace/`_`/`-`) that is

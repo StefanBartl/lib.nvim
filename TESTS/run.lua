@@ -67,6 +67,7 @@ local specs = {
   "dev_reload_spec.lua",
   "markdown_table_spec.lua",
   "strings_trim_spec.lua",
+  "strings_nul_safe_spec.lua",
   "frontmatter_spec.lua",
   "markdown_link_cursor_spec.lua",
   "window_previous_spec.lua",
