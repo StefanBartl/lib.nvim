@@ -302,24 +302,36 @@ end
 ---hold a mark are taken apart (`split()`, about 20 us): a directory of five thousand Cyrillic
 ---names and one written the macOS way would otherwise split every one of them for keys that
 ---come out as they went in.
+---
+---`after_sep`: a separator stands right before the name in what `pathcmp()` compares -- the
+---path has a directory part -- and a mark at the very start of a name belongs to that
+---separator (`utfc_ptr2len` takes the two as one character, of which the code point of the
+---separator is the first), so it does not count. Without a directory part the same mark is
+---a character of its own, and it does. The separator is put in front of every name for the
+---questions and the split, and the character it makes is left out of the key.
 ---@param found {key: string, name: string, kind: string?}[]
 ---@param wides integer[]
-local function order_by_base_characters(found, wides)
+---@param after_sep boolean
+local function order_by_base_characters(found, wides, after_sep)
+  local lead = after_sep and "/" or ""
   local names = {}
   for i = 1, #wides do
-    names[i] = found[wides[i]].name
+    names[i] = lead .. found[wides[i]].name
   end
   local joined = table.concat(names, "\n")
   if fn.strchars(joined) == fn.strchars(joined, 1) then
     return -- no mark among them (strchars() counts a mark of its own, unless told to skip it)
   end
+  local first = after_sep and 2 or 1 -- the first cluster is the separator and its marks
   for i = 1, #wides do
     local it = found[wides[i]]
-    if fn.strchars(it.key) ~= fn.strchars(it.key, 1) then
+    local text = lead .. it.key
+    if fn.strchars(text) ~= fn.strchars(text, 1) then
+      local clusters = fn.split(text, "\\zs")
       local bases = {}
-      for _, cluster in ipairs(fn.split(it.key, "\\zs")) do
+      for c = first, #clusters do
         -- the first code point of the cluster; bytes that are no UTF-8 are their own character
-        bases[#bases + 1] = cluster:match("^[\1-\127\194-\244][\128-\191]*") or cluster
+        bases[#bases + 1] = clusters[c]:match("^[\1-\127\194-\244][\128-\191]*") or clusters[c]
       end
       it.key = table.concat(bases)
     end
@@ -344,7 +356,8 @@ end
 ---folding, and otherwise for a fragment that is not ASCII (it can end inside a character, which
 ---no byte comparison judges) and for a name whose next character is a combining mark. A name
 ---with a combining mark is ordered by its base characters, as `pathcmp()` does
----(`order_by_base_characters`).
+---(`order_by_base_characters`); a mark right after the separator in front of the name belongs to
+---that separator there, and is no part of the key.
 ---
 ---nil for anything else -- a pattern, a fragment with a NUL byte, a directory that cannot
 ---be listed, a fragment with few candidates -- which is `getcompletion()`'s as before.
@@ -431,7 +444,7 @@ local function many_path_matches(frag, dirs_only)
   if seen <= MAX_PATH_MATCHES then
     return nil
   end
-  order_by_base_characters(found, wides)
+  order_by_base_characters(found, wides, head ~= "")
   table.sort(found, function(a, b)
     if a.key ~= b.key then
       return a.key < b.key

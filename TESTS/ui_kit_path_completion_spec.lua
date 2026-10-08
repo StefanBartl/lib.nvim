@@ -620,6 +620,73 @@ return function(H)
       end
     end
 
+    -- In what pathcmp() compares, "<dir>/" is followed by U+0301 and "a_first", and the mark
+    -- joins the "/" before it: the name sorts as "a_first" and comes first. Ordered by its own
+    -- bytes (CC 81 is above every ASCII letter) it went behind everything else, and the cut to
+    -- a menu dropped it: three names of the first 300 were missing.
+    local lead_mark = "\204\129" -- U+0301
+    local lead = new_dir()
+    dirs_made[#dirs_made + 1] = lead
+    local lead_names = { lead_mark .. "a_first", lead_mark .. "item_100x", lead_mark .. "m_first" }
+    for i = 0, MAX + 19 do
+      lead_names[#lead_names + 1] = ("item_%03d"):format(i)
+    end
+    for _, name in ipairs(lead_names) do
+      touch(lead .. "/" .. name)
+    end
+    if listed_verbatim(lead, lead_names) then
+      with_case_options(true, false, function()
+        local expected = real_list(lead .. "/")
+        eq(#expected, MAX, "a mark behind the separator: more than a menu holds")
+        eq(expected[1], lead .. "/" .. lead_mark .. "a_first", "getcompletion() starts with it")
+        ok(vim.tbl_contains(expected, lead .. "/" .. lead_mark .. "item_100x"), "and has this one")
+        ok(
+          not vim.tbl_contains(expected, lead .. "/" .. lead_mark .. "m_first"),
+          "but not the last"
+        )
+      end)
+      check_like_getcompletion(lead .. "/", "a mark behind the separator")
+      press_tab(lead .. "/")
+      eq(getcompletion_calls, 0, "a mark behind the separator: the big list answers")
+      eq(shown[1], lead .. "/" .. lead_mark .. "a_first")
+    end
+
+    -- Without a directory part nothing stands before the name: the mark is the first code point
+    -- of the string pathcmp() compares and sorts as U+0301 -- behind every other name here, all
+    -- of which begin with U+0200 (bytes C8 80, below CC, so none of them is a candidate for a
+    -- mark). The separator is put in front of a name only where the path has a directory part:
+    -- with it the mark would be dropped and the name would come first.
+    local own = new_dir()
+    dirs_made[#dirs_made + 1] = own
+    local own_names = { lead_mark .. "a_first" }
+    for i = 0, MAX + 9 do
+      own_names[#own_names + 1] = ("\200\128%03d"):format(i) -- U+0200
+    end
+    for _, name in ipairs(own_names) do
+      touch(own .. "/" .. name)
+    end
+    if listed_verbatim(own, own_names) then
+      local saved_cwd = vim.fn.getcwd()
+      vim.cmd("cd " .. vim.fn.fnameescape(own))
+      local own_ok, own_err = pcall(function()
+        with_case_options(true, false, function()
+          local expected = real_list("")
+          eq(#expected, MAX, "working directory: more than a menu holds")
+          ok(not vim.tbl_contains(expected, lead_mark .. "a_first"), "getcompletion() puts it last")
+        end)
+        for _, case in ipairs({ { true, false }, { false, false }, { false, true }, { true, true } }) do
+          with_case_options(case[1], case[2], function()
+            local expected = real_list("")
+            press_tab("")
+            eq(getcompletion_calls, 0, "working directory: the big list answers")
+            same(shown, expected, "working directory")
+          end)
+        end
+      end)
+      vim.cmd("cd " .. vim.fn.fnameescape(saved_cwd))
+      assert(own_ok, own_err)
+    end
+
     -- A base character with combining marks after it, in the scripts that write them. Every
     -- second name carries the marks, the rest do not, and each has its own number: no two
     -- share a key once the marks are skipped. By bytes all the plain names would come before
