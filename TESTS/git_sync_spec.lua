@@ -17,7 +17,8 @@ return function(H)
   end
 
   local function wait_for(pred)
-    vim.wait(10000, pred, 10)
+    -- Long on purpose: a git call takes seconds on a busy machine, and a pass costs nothing.
+    vim.wait(60000, pred, 10)
     return pred()
   end
 
@@ -291,7 +292,9 @@ return function(H)
 
     local original_pull_async = git.pull_async
     local pull_stop_called = false
+    local pull_started = false
     git.pull_async = function()
+      pull_started = true
       return {
         stop = function()
           pull_stop_called = true
@@ -309,13 +312,16 @@ return function(H)
       "update_async: returns a handle immediately"
     )
 
-    -- The repo has no remotes, so `git fetch --all --prune` resolves
-    -- almost immediately with nothing to do, and update_async's own fetch
-    -- callback calls the (faked) pull_async right after -- a short fixed
-    -- wait (no network involved on either side) is enough for that
-    -- fetch->pull handoff to have already happened by the time this checks
-    -- which stop() the handle now reaches.
-    vim.wait(300)
+    -- The repo has no remotes, so `git fetch --all --prune` resolves with nothing to do and
+    -- update_async's own fetch callback calls the (faked) pull_async right after. Waiting
+    -- for that call rather than a fixed 300 ms: on a loaded machine the fetch takes longer,
+    -- and stop() would still reach the fetch job.
+    H.ok(
+      wait_for(function()
+        return pull_started
+      end),
+      "update_async: the fetch hands off to the pull"
+    )
 
     handle.stop()
     H.ok(
