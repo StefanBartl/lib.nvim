@@ -370,6 +370,14 @@ remote.
 - **A git that cannot be started is a failure with its reason** — `git_cmd` not found or not on
   `$PATH`: `err` is "ENOENT: no such file or directory (cmd): 'git'", without Neovim's
   `file:line` stamp, not "exit code -1".
+- **No prompt, a deadline.** Neovim has no terminal to type into, so a prompt git raises itself
+  (https credentials, `Username for ...`) would hang the job forever. The verbs run with
+  `GIT_TERMINAL_PROMPT=0` (git fails instead; credential helpers are unaffected) and kill git
+  after 120 s: `err` is "git fetch timed out after 120s". `opts.env` wins over the prompt
+  default (`{ GIT_TERMINAL_PROMPT = "1" }` allows prompts), `opts.timeout_ms` replaces the
+  deadline per process (`pull_async`/`update_async`: for the pull, and for the fetch of
+  `update_async`), `false` waits forever. An ssh host-key or passphrase prompt is not covered by
+  `GIT_TERMINAL_PROMPT`; the deadline catches it.
 - **After `stop()`.** `pull_async` and `update_async` are chains of processes (HEAD before, pull,
   HEAD after; fetch, then pull) and stay silent once `stop()` has been called: `on_done` never
   fires, at whichever stage the `stop()` lands, and `update_async` does not start its pull when

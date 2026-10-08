@@ -574,9 +574,9 @@ M.rev_parse_async / merge_base_async / is_ancestor_async / tags_async         --
 M.LOG_FORMAT: string                                                           -- the --format= argument `log` passes (for a caller that runs `git log -z` itself)
 
 -- Syncing with the remote (all async, vim.schedule-dispatched, return { stop }; opts?: {dir?}, git_cmd? as above)
-M.fetch_async(opts: {dir?}|nil, on_done: fun(ok, err|nil, changed|nil), git_cmd?: string): { stop }   -- git fetch --all --prune; changed = a remote-tracking ref moved
-M.pull_async(opts: {dir?}|nil, on_done: fun(ok, err|nil, changed|nil), git_cmd?: string): { stop }    -- git pull --ff-only; changed = HEAD moved; silent once stop() was called
-M.push_async(opts: {dir?}|nil, on_done: fun(ok, err|nil), git_cmd?: string): { stop }                 -- git push
+M.fetch_async(opts: {dir?, env?, timeout_ms?: integer|false}|nil, on_done: fun(ok, err|nil, changed|nil), git_cmd?: string): { stop }   -- git fetch --all --prune; changed = a remote-tracking ref moved
+M.pull_async(opts: {dir?, env?, timeout_ms?: integer|false}|nil, on_done: fun(ok, err|nil, changed|nil), git_cmd?: string): { stop }    -- git pull --ff-only; changed = HEAD moved; silent once stop() was called
+M.push_async(opts: {dir?, env?, timeout_ms?: integer|false}|nil, on_done: fun(ok, err|nil), git_cmd?: string): { stop }                 -- git push
 M.update_async(opts: {dir?}|nil, on_done: fun(ok, err|nil, changed|nil), git_cmd?: string): { stop }  -- fetch, then pull (the pull's changed); silent once stop() was called
 ```
 
