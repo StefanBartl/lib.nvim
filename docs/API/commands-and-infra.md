@@ -581,9 +581,12 @@ M.update_async(opts: {dir?}|nil, on_done: fun(ok, err|nil, changed|nil), git_cmd
 ```
 
 A killed git (OOM, `stop()`, crash) is a **failure** everywhere here (`code = 128 + signal`, `signal` set), never an
-empty answer — also for the sync verbs, whose `err` then reads "git push failed (exit code 143)"; a git that cannot be
+empty answer — also for the sync verbs, whose `err` then reads "git push failed (exit code 143)" (the POSIX shape; on
+Windows libuv delivers a kill as exit code 1 with signal 15, so it reads "exit code 1" there), and for the async readers
+`status_porcelain_async`/`show_async`/`blame_porcelain_async`; a git that cannot be
 started reports why (`ENOENT: …`), not "exit code -1". After `stop()`, `pull_async`/`update_async` never call `on_done`
-(`update_async` does not start its pull either); `fetch_async`/`push_async` call it once, with the kill as the failure.
+(`update_async` does not start its pull either); `fetch_async`/`push_async` call it once, with the kill as the failure
+(on Windows possibly late: the exit is reported after helper processes such as `git-remote-http` have ended).
 `no_lazy_fetch` sets `GIT_NO_LAZY_FETCH=1` and `-c protocol.allow=never`, so it holds on git < 2.44.
 
 `lib.nvim.git.remote` (pure, no process): `parse_remote(url)`, `host_kind(host, hosts_cfg?)`

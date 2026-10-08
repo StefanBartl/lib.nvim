@@ -402,6 +402,133 @@ function M.parse_status(raw)
 end
 
 ---@internal
+--- `vim.system` raises when it cannot start the command at all, and raises
+--- with level 1, so the reason arrives as `vim/_core/system.lua:324: ENOENT: ...`:
+--- Neovim's own source position, noise to the person reading the message.
+--- Removes exactly that leading stamp, once -- and only a stamp that points into
+--- Neovim's runtime (`vim/...:N: `, with or without the `.lua` extension: a build
+--- that embeds the runtime reports `vim/_core/system:324:`), so a message without one that merely
+--- quotes a `something.lua:12:` from the command is left alone. Only ever
+--- applied to a spawn failure (code `-1`); `docs/conventions.md` explains why
+--- this is the one place the "no pattern stripping" rule gives way: the stamp
+--- is created by Neovim's code, which this library cannot ask to raise with
+--- level 0.
+---@param msg string
+---@return string
+local function unstamp(msg)
+  return (msg:gsub("^.-vim[/\\][%w_/\\.]*:%d+: ", "", 1))
+end
+
+---@internal
+--- Make a spawn failure look the same from the blocking and the async runner:
+--- code `-1`, empty stdout, the reason in stderr without Neovim's position.
+--- (`run_async_captured` reports that reason in the stdout slot.)
+---@param res Lib.RunArgv.Result
+---@return Lib.RunArgv.Result
+local function normalize_result(res)
+  if res.code == -1 then
+    local reason = res.stderr
+    if reason == nil or reason == "" then
+      reason = res.stdout
+    end
+    res.stdout = ""
+    res.stderr = unstamp(reason or "")
+    res.timed_out = false
+  end
+  return res
+end
+
+---@internal
+--- Run an argv through `run_argv` and normalise the result.
+---@param argv string[]
+---@param input string|nil
+---@param ropts Lib.RunArgv.Opts
+---@return Lib.RunArgv.Result
+local function exec(argv, input, ropts)
+  return normalize_result(
+    require("lib.nvim.cross.run_argv").run_blocking_result(argv, input, ropts)
+  )
+end
+
+---@internal
+--- The outcome of one `run_async_captured` run, as a normalised result. The async
+--- runner reports `ok` from the exit code alone, so a process killed by a signal
+--- (a `stop()`, the OOM killer: exit code 0 with `signal` 15 or 9 on POSIX) reads
+--- as a success; it is turned into a failure here (`code = 128 + signal`),
+--- exactly what `run_blocking_result` does for the blocking runner. A spawn
+--- failure (code `-1`) gets its reason into `stderr` (`normalize_result`).
+---@param ok boolean
+---@param stdout string
+---@param code integer
+---@param stderr string|nil `nil` only on the legacy (pre-`vim.system`) fallback.
+---@param signal integer|nil
+---@param ropts Lib.RunArgv.Opts|nil Only its `timeout_ms` matters: it is what makes exit code 124 a timeout.
+---@return Lib.RunArgv.Result
+local function async_result(ok, stdout, code, stderr, signal, ropts)
+  signal = signal or 0
+  if code == 0 and signal ~= 0 then
+    ok, code = false, 128 + signal
+  end
+  return normalize_result({
+    ok = ok,
+    code = code,
+    signal = signal,
+    stdout = stdout,
+    stderr = stderr,
+    timed_out = ropts ~= nil and ropts.timeout_ms ~= nil and code == 124,
+  })
+end
+
+---@internal
+--- `run_async_captured` for the sync verbs (`fetch`, `pull`, `push`,
+--- `rev-parse HEAD`), with the two outcomes `async_result` knows turned into
+--- the failures they are -- the very ones `exec_async` already reports for
+--- `run_async`:
+---  * a process killed by a signal arrives as exit code 0 with `signal` set on
+---    POSIX, so `ok` alone would report a `stop()`-killed or OOM-killed `git
+---    push` that never finished as a success; it is `ok = false`,
+---    `code = 128 + signal` here;
+---  * a spawn failure (code `-1`, e.g. `git` not on `$PATH`) delivers its reason
+---    in the stdout slot, where "git fetch failed (exit code -1)" would hide
+---    it; it is in `stderr` here, without Neovim's own `file:line` stamp.
+---@param argv string[]
+---@param on_done fun(ok: boolean, stdout: string, code: integer, stderr: string|nil)
+---@param input string|nil
+---@param ropts Lib.RunArgv.Opts|nil e.g. `{ binary = true }`
+---@return { stop: fun() } handle
+local function run_sync_async(argv, on_done, input, ropts)
+  return require("lib.nvim.cross.run_argv").run_async_captured(
+    argv,
+    function(ok, stdout, code, stderr, signal)
+      local res = async_result(ok, stdout, code, stderr, signal, ropts)
+      on_done(res.ok, res.stdout, res.code, res.stderr)
+    end,
+    input,
+    ropts
+  )
+end
+
+---@internal
+--- `run_sync_async` for the readers that only look at stdout (`status`, `show`,
+--- `blame`): `on_done(ok, out)` where `out` is stdout on success and, on failure,
+--- the reason a spawn failure carries (`""` otherwise, so the caller's generic
+--- message is used). A signal-killed run is a failure, never an empty success.
+---@param argv string[]
+---@param on_done fun(ok: boolean, out: string)
+---@param input string|nil
+---@param ropts Lib.RunArgv.Opts|nil
+---@return { stop: fun() } handle
+local function run_out_async(argv, on_done, input, ropts)
+  return run_sync_async(argv, function(ok, stdout, code, stderr)
+    if ok then
+      on_done(true, stdout)
+    else
+      on_done(false, code == -1 and stderr or "")
+    end
+  end, input, ropts)
+end
+
+---@internal
 ---@param opts Lib.Git.Opts|nil
 ---@param bin string
 ---@return string[]
@@ -450,7 +577,7 @@ end
 ---@return { stop: fun() } handle Kills the underlying job; harmless to call after it has finished.
 function M.status_porcelain_async(opts, on_done, git_cmd)
   local argv = status_argv(opts, git_cmd or "git")
-  return require("lib.nvim.cross.run_argv").run_async_captured(argv, function(ok, out)
+  return run_out_async(argv, function(ok, out)
     on_done(status_result(ok, out))
   end)
 end
@@ -603,7 +730,7 @@ function M.show_async(rev, path, opts, on_done, git_cmd)
     end)
     return { stop = function() end }
   end
-  return require("lib.nvim.cross.run_argv").run_async_captured(argv, function(ok, out)
+  return run_out_async(argv, function(ok, out)
     on_done(show_result(ok, out, what))
   end, nil, { binary = true })
 end
@@ -668,83 +795,6 @@ local function bad_rev(rev, what)
     return ("git %s: invalid revision %s"):format(what, vim.inspect(rev))
   end
   return nil
-end
-
----@internal
---- `vim.system` raises when it cannot start the command at all, and raises
---- with level 1, so the reason arrives as `vim/_core/system.lua:324: ENOENT: ...`:
---- Neovim's own source position, noise to the person reading the message.
---- Removes exactly that leading stamp, once -- and only a stamp that points into
---- Neovim's runtime (`vim/...lua:N: `), so a message without one that merely
---- quotes a `something.lua:12:` from the command is left alone. Only ever
---- applied to a spawn failure (code `-1`); `docs/conventions.md` explains why
---- this is the one place the "no pattern stripping" rule gives way: the stamp
---- is created by Neovim's code, which this library cannot ask to raise with
---- level 0.
----@param msg string
----@return string
-local function unstamp(msg)
-  return (msg:gsub("^.-vim[/\\][%w_/\\]*%.lua:%d+: ", "", 1))
-end
-
----@internal
---- Make a spawn failure look the same from the blocking and the async runner:
---- code `-1`, empty stdout, the reason in stderr without Neovim's position.
---- (`run_async_captured` reports that reason in the stdout slot.)
----@param res Lib.RunArgv.Result
----@return Lib.RunArgv.Result
-local function normalize_result(res)
-  if res.code == -1 then
-    local reason = res.stderr
-    if reason == nil or reason == "" then
-      reason = res.stdout
-    end
-    res.stdout = ""
-    res.stderr = unstamp(reason or "")
-    res.timed_out = false
-  end
-  return res
-end
-
----@internal
---- Run an argv through `run_argv` and normalise the result.
----@param argv string[]
----@param input string|nil
----@param ropts Lib.RunArgv.Opts
----@return Lib.RunArgv.Result
-local function exec(argv, input, ropts)
-  return normalize_result(
-    require("lib.nvim.cross.run_argv").run_blocking_result(argv, input, ropts)
-  )
-end
-
----@internal
---- The outcome of one `run_async_captured` run, as a normalised result. The async
---- runner reports `ok` from the exit code alone, so a process killed by a signal
---- (a `stop()`, the OOM killer: exit code 0 with `signal` 15 or 9 on POSIX) reads
---- as a success; it is turned into a failure here (`code = 128 + signal`),
---- exactly what `run_blocking_result` does for the blocking runner. A spawn
---- failure (code `-1`) gets its reason into `stderr` (`normalize_result`).
----@param ok boolean
----@param stdout string
----@param code integer
----@param stderr string|nil `nil` only on the legacy (pre-`vim.system`) fallback.
----@param signal integer|nil
----@param ropts Lib.RunArgv.Opts|nil Only its `timeout_ms` matters: it is what makes exit code 124 a timeout.
----@return Lib.RunArgv.Result
-local function async_result(ok, stdout, code, stderr, signal, ropts)
-  signal = signal or 0
-  if code == 0 and signal ~= 0 then
-    ok, code = false, 128 + signal
-  end
-  return normalize_result({
-    ok = ok,
-    code = code,
-    signal = signal,
-    stdout = stdout,
-    stderr = stderr,
-    timed_out = ropts ~= nil and ropts.timeout_ms ~= nil and code == 124,
-  })
 end
 
 ---@internal
@@ -1537,34 +1587,9 @@ end
 function M.blame_porcelain_async(path, opts, on_done, git_cmd)
   opts = opts or {}
   local argv = blame_argv(path, opts, git_cmd or "git")
-  return require("lib.nvim.cross.run_argv").run_async_captured(argv, function(ok, out)
+  return run_out_async(argv, function(ok, out)
     on_done(blame_result(ok, out))
   end)
-end
-
----@internal
---- `run_async_captured` for the sync verbs (`fetch`, `pull`, `push`,
---- `rev-parse HEAD`), with the two outcomes `async_result` knows turned into
---- the failures they are -- the very ones `exec_async` already reports for
---- `run_async`:
----  * a process killed by a signal arrives as exit code 0 with `signal` set on
----    POSIX, so `ok` alone would report a `stop()`-killed or OOM-killed `git
----    push` that never finished as a success; it is `ok = false`,
----    `code = 128 + signal` here;
----  * a spawn failure (code `-1`, e.g. `git` not on `$PATH`) delivers its reason
----    in the stdout slot, where "git fetch failed (exit code -1)" would hide
----    it; it is in `stderr` here, without Neovim's own `file:line` stamp.
----@param argv string[]
----@param on_done fun(ok: boolean, stdout: string, code: integer, stderr: string|nil)
----@return { stop: fun() } handle
-local function run_sync_async(argv, on_done)
-  return require("lib.nvim.cross.run_argv").run_async_captured(
-    argv,
-    function(ok, stdout, code, stderr, signal)
-      local res = async_result(ok, stdout, code, stderr, signal)
-      on_done(res.ok, res.stdout, res.code, res.stderr)
-    end
-  )
 end
 
 --- Fetch every remote's tracking refs and prune deleted ones

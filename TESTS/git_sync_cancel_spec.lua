@@ -7,8 +7,11 @@
 --
 -- The process runner (`run_argv.run_async_captured`) is faked wherever the outcome has to be
 -- exact. A kill reaches the callback in two shapes, neither of which is `(false, "", 143, "")`:
---   Windows: exit code 1, no signal                     -> (false, "", 1, "", 0)
+--   Windows: exit code 1 (nvim 0.12.2: with signal 15)  -> (false, "", 1, "", 0 | 15)
 --   POSIX:   exit code 0 with the signal that killed it -> (true,  "", 0, "", 15)  (`ok` is true!)
+-- "Exit code 143" (128 + signal) is what this library reports for the POSIX shape only. On
+-- Windows libuv can deliver the exit late, after helper processes such as git-remote-http
+-- have ended, so a real stop() is not guaranteed to be followed by on_done promptly there.
 
 -- Module level on purpose: the cleanup at the bottom must see the directories of a run that raised.
 local created = {} ---@type string[]
@@ -33,7 +36,7 @@ local function run(H)
 
   --- The git subcommand an argv runs.
   local function verb_of(argv)
-    for _, v in ipairs({ "fetch", "pull", "push", "rev-parse" }) do
+    for _, v in ipairs({ "fetch", "pull", "push", "rev-parse", "status", "show", "blame" }) do
       if vim.tbl_contains(argv, v) then
         return v
       end
@@ -265,6 +268,80 @@ local function run(H)
       )
     end
   end)
+
+  -- A runtime that embeds its Lua sources reports the stamp without the extension
+  -- (`vim/_core/system:324:`, Arch nvim 0.12.5): it is stripped all the same.
+  local embedded = "vim/_core/system:324: ENOENT: no such file or directory (cmd): 'git'"
+  local embedded_fake = fake_runner({ fetch = { false, embedded, -1, "", 0 } })
+  H.with_patched(run_argv, "run_async_captured", embedded_fake.fn, function()
+    local res = reported(function(cb)
+      git.fetch_async({ dir = "unused" }, cb)
+    end)
+    H.eq(
+      res.err,
+      "ENOENT: no such file or directory (cmd): 'git'",
+      "fetch_async(git cannot be spawned, stamp without .lua): the reason, without the position"
+    )
+  end)
+
+  -- ── the async readers: status / show / blame ────────────────────────────
+  -- They used to call `run_async_captured` directly, so a git killed by a signal (exit code 0,
+  -- `signal` set, POSIX) read as a successful empty answer.
+  local readers = {
+    status = function(cb)
+      git.status_porcelain_async({ dir = "unused" }, function(map, err)
+        cb(map == nil, err, map)
+      end)
+    end,
+    show = function(cb)
+      git.show_async("HEAD", "a.txt", { dir = "unused" }, function(content, err)
+        cb(content == nil, err, content)
+      end)
+    end,
+    blame = function(cb)
+      git.blame_porcelain_async("a.txt", { dir = "unused" }, function(entries, err)
+        cb(entries == nil, err, entries)
+      end)
+    end,
+  }
+  for _, name in ipairs({ "status", "show", "blame" }) do
+    local killed = fake_runner({ [name] = { true, "", 0, "", 15 } })
+    H.with_patched(run_argv, "run_async_captured", killed.fn, function()
+      local res
+      readers[name](function(failed, err, value)
+        res = { failed = failed, err = err, value = value }
+      end)
+      wait_for(function()
+        return res ~= nil
+      end)
+      res = res or {}
+      H.eq(
+        res.failed,
+        true,
+        name .. "(killed by SIGTERM, exit code 0): a failure, not an empty result"
+      )
+      H.eq(res.value, nil, name .. "(killed by SIGTERM): no value")
+      H.ok(type(res.err) == "string" and res.err ~= "", name .. "(killed by SIGTERM): an error")
+    end)
+
+    local nospawn = fake_runner({ [name] = { false, spawn_failure, -1, "", 0 } })
+    H.with_patched(run_argv, "run_async_captured", nospawn.fn, function()
+      local res
+      readers[name](function(failed, err)
+        res = { failed = failed, err = err }
+      end)
+      wait_for(function()
+        return res ~= nil
+      end)
+      res = res or {}
+      H.eq(res.failed, true, name .. "(git cannot be spawned): fails")
+      H.eq(
+        res.err,
+        "ENOENT: no such file or directory (cmd): 'git'",
+        name .. "(git cannot be spawned): the reason, without Neovim's source position"
+      )
+    end)
+  end
 
   -- The same with the real runner: a `git_cmd` that does not exist.
   do

@@ -19,6 +19,11 @@ return function(H)
   local function no_position(err, what)
     H.ok(type(err) == "string" and err ~= "", what .. ": a message is returned")
     H.ok(not err:find("%.lua:%d+:"), what .. ": ... without a Lua file:line stamp: " .. err)
+    -- (a runtime that embeds its sources stamps `vim/_core/system:324:`, no extension)
+    H.ok(
+      not err:find("vim[/\\][%w_/\\.]*:%d+:"),
+      what .. ": ... without a vim/...:N stamp: " .. err
+    )
   end
 
   -- ── run / run_async: the generic runner ─────────────────────────────────
