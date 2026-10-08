@@ -44,8 +44,37 @@ return function(H)
   eq(safe.one_line("first\r\nsecond"), "first", "one_line: CRLF too")
   eq(safe.one_line(nil), "", "one_line: nil is empty")
   eq(safe.one_line(42), "42", "one_line: a number is stringified")
-  local lines = safe.lines("a\27b\nc")
+  local lines, total, exact = safe.lines("a\27b\nc")
   eq(#lines, 2, "lines: two lines")
   eq(lines[1], "a?b", "lines: each line is cleaned")
   ok(lines[2] == "c", "lines: second line")
+  eq(total, 2, "lines: total")
+  eq(exact, true, "lines: the count is exact")
+  lines, total = safe.lines("1\n2\n3\n4\n5", 2)
+  eq(#lines, 2, "lines: max limits what is returned")
+  eq(total, 5, "lines: ... but not what is counted")
+  lines = safe.lines("x", nil, 4)
+  eq(lines[1], "x", "lines: max_chars is passed through")
+  eq(safe.lines(("y"):rep(50), nil, 5)[1], "yyyyy…", "lines: per-line cap")
+
+  -- further invisible / re-ordering characters
+  for label, ch in pairs({
+    ["word joiner U+2060"] = "\226\129\160",
+    ["Arabic letter mark U+061C"] = "\216\156",
+    ["tag character U+E0041"] = "\243\160\129\129",
+    ["Hangul filler U+3164"] = "\227\133\164",
+    ["soft hyphen U+00AD"] = "\194\173",
+    ["braille blank U+2800"] = "\226\160\128",
+    ["annotation anchor U+FFF9"] = "\239\191\185",
+  }) do
+    eq(safe.clean("a" .. ch .. "b"), "a?b", "clean: " .. label)
+  end
+  eq(safe.clean("a\239\184\143b"), "a\239\184\143b", "clean: a variation selector stays")
+
+  -- bounded by what is shown
+  eq(
+    safe.clean(("x"):rep(5 * 1024 * 1024)),
+    ("x"):rep(safe.MAX_LINE) .. "…",
+    "clean: a 5 MB line is cut"
+  )
 end
