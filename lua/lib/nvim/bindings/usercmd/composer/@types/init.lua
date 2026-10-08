@@ -102,6 +102,7 @@
 ---@field buffer?  boolean|integer                           # register buffer-locally: true = current buffer, or an explicit bufnr. Default: nil (global)
 ---@field visual?  Lib.UserCmd.Composer.VisualMode[]         # default `visual` allowlist for routes that declare none of their own
 ---@field notify_prefix? string                              # notify() bracket prefix for this verb's dispatch errors/usage. Default: "[Name]" (the verb name) — override when it doesn't already identify your plugin, e.g. two verbs from one plugin that should share one prefix
+---@field quotes?  boolean                                   # the verb's own handler cuts `ctx.raw.args` with a quote-aware tokenizer (`:Replace "foo bar" baz`): `<Tab>` and the help float then count a '...' / "..." run as ONE token instead of cutting at its blanks, so the slot they offer is the slot the handler fills. Dispatch (`fargs`, `ctx.args`) is untouched. Default false -- see README "Verbs that read quotes themselves"
 ---@field help?    boolean                                   # help float (cheatsheet + replaces the usage notification) for this verb: true = on, false = off, nil = follows `setup({ help = { enable } })` (default off -- opt-in)
 ---@field src?     string                                    # override the `file:line` recorded in `usercmd.registered()`. The composer already walks past itself to the declaring file, so this is only for a wrapper of your own that declares verbs on someone else's behalf
 
@@ -189,7 +190,7 @@
 ---@class Lib.UserCmd.Composer.Help
 ---@field cfg          { enable: boolean, keymap: string|false|nil }
 ---@field enabled      fun(spec: Lib.UserCmd.Composer.Spec|nil): boolean
----@field parse_line   fun(line: string): Lib.UserCmd.Composer.Help.State|nil
+---@field parse_line   fun(line: string, quotes?: boolean): Lib.UserCmd.Composer.Help.State|nil
 ---@field sanitize     fun(line: string): string
 ---@field undocumented fun(verb?: string, opts?: { args?: boolean }): { verb: string, route: string, kind: "flag"|"kv"|"arg", name: string }[]
 ---@field insertion    fun(state: Lib.UserCmd.Composer.Help.State, entry: Lib.UserCmd.Composer.Help.Entry): string

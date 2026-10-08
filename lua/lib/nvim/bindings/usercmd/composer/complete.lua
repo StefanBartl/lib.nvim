@@ -16,6 +16,7 @@
 --- soft `available` failure to start looking like a health-check error.
 
 local tree = require("lib.nvim.bindings.usercmd.composer.tree")
+local tokens = require("lib.nvim.bindings.usercmd.composer.tokens")
 local argtypes = require("lib.nvim.bindings.usercmd.composer.argtypes")
 local flags = require("lib.nvim.bindings.usercmd.composer.flags")
 local kv = require("lib.nvim.bindings.usercmd.composer.kv")
@@ -63,17 +64,31 @@ function M.child_visible(node)
   return true
 end
 
---- Split a command line into the committed tokens the user has already entered
---- (excluding the command word itself and the in-progress `arg_lead`).
+---@internal
+--- The committed tokens of a command line, and whether the line ends inside a
+--- quote that is still open (only ever true with `quotes`).
 ---@param cmd_line string
 ---@param arg_lead string
----@return string[]
-function M.committed(cmd_line, arg_lead)
+---@param quotes? boolean
+---@return string[] committed
+---@return boolean inside_quote
+local function split_committed(cmd_line, arg_lead, quotes)
   -- Drop everything up to and including the first whitespace run: that first
   -- token is the command word (with any range/bang prefix, which contain no
   -- spaces), leaving only the argument portion.
   local rest = cmd_line:gsub("^%s*%S+%s*", "", 1)
   local toks = {}
+  if quotes then
+    -- The verb reads quotes itself (`spec.quotes`), so `"foo bar"` is ONE
+    -- token here too. The token touching the end of the line is the one being
+    -- typed, whatever Neovim calls its lead (inside a quote that is only its
+    -- last word).
+    local parts, open, unclosed = tokens.split_quoted(rest)
+    for i = 1, #parts - (open and 1 or 0) do
+      toks[i] = parts[i].value
+    end
+    return toks, unclosed
+  end
   for tok in rest:gmatch("%S+") do
     toks[#toks + 1] = tok
   end
@@ -82,16 +97,35 @@ function M.committed(cmd_line, arg_lead)
   if arg_lead ~= "" and #toks > 0 and toks[#toks] == arg_lead then
     toks[#toks] = nil
   end
-  return toks
+  return toks, false
+end
+
+--- Split a command line into the committed tokens the user has already entered
+--- (excluding the command word itself and the in-progress `arg_lead`).
+---
+--- `quotes` (a verb's `spec.quotes`) reads `'...'` / `"..."` as one token, the
+--- way the verb's own tokenizer does; without it the line is split on blanks.
+---@param cmd_line string
+---@param arg_lead string
+---@param quotes? boolean
+---@return string[]
+function M.committed(cmd_line, arg_lead, quotes)
+  return (split_committed(cmd_line, arg_lead, quotes))
 end
 
 --- Compute completion candidates.
 ---@param root Lib.UserCmd.Composer.Node
 ---@param arg_lead string
 ---@param cmd_line string
+---@param quotes? boolean  # the verb's `spec.quotes`
 ---@return string[]
-function M.candidates(root, arg_lead, cmd_line)
-  local committed = M.committed(cmd_line, arg_lead)
+function M.candidates(root, arg_lead, cmd_line, quotes)
+  local committed, inside_quote = split_committed(cmd_line, arg_lead, quotes)
+  -- Inside an unterminated quote the words are text, not options: a `--flag`
+  -- or a literal there would be offered for a slot that is not being typed.
+  if inside_quote then
+    return {}
+  end
   local node, consumed = tree.walk(root, committed)
   local route = node.route
 
@@ -190,10 +224,17 @@ end
 
 --- Build the `complete` callback nvim expects: (arg_lead, cmd_line, cursor_pos).
 ---@param root_provider fun(): Lib.UserCmd.Composer.Node
+---@param quotes? boolean|fun(): boolean  # the verb's `spec.quotes`; a function is asked on every call (the spec may change after registration)
 ---@return fun(arg_lead: string, cmd_line: string, cursor_pos: integer): string[]
-function M.make(root_provider)
+function M.make(root_provider, quotes)
   return function(arg_lead, cmd_line, _)
-    local ok, out = pcall(M.candidates, root_provider(), arg_lead, cmd_line)
+    local ok, out = pcall(function()
+      local quoted = quotes
+      if type(quoted) == "function" then
+        quoted = quoted()
+      end
+      return M.candidates(root_provider(), arg_lead, cmd_line, quoted == true)
+    end)
     if not ok then
       return {}
     end
