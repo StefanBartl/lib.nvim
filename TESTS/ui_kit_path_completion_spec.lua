@@ -688,6 +688,35 @@ return function(H)
       end
     end
 
+    -- A format character does not take a combining mark behind it into its own character, as far
+    -- as Neovim's character counting goes, and getcompletion() orders by that mark: "Q", the
+    -- format character, U+0301 and "X" are four characters. split() folds the mark into the
+    -- format character instead. The list used to take every name apart with split() as soon as
+    -- ANY name of the directory had a mark, and so lost this one's (here the mark of "QE" +
+    -- U+0301 + "Z" is what asks); a name is rewritten only when the count says it holds a mark,
+    -- and this one does not. The bulk sorts behind the Q names (U+3042 is above U+200F), so all of
+    -- them are among the first 300.
+    for _, format in ipairs({ { "a right-to-left mark", 0x200F }, { "a zero-width space", 0x200B } }) do
+      local invisible, format_mark = vim.fn.nr2char(format[2]), vim.fn.nr2char(0x301)
+      local formatted = new_dir()
+      dirs_made[#dirs_made + 1] = formatted
+      local formatted_names = {
+        "Q" .. invisible .. format_mark .. "X",
+        "Q" .. invisible .. "Y",
+        "Q" .. invisible .. "W",
+        "QE" .. format_mark .. "Z",
+      }
+      for i = 0, MAX + 19 do
+        formatted_names[#formatted_names + 1] = ("Q%s%03d"):format(vim.fn.nr2char(0x3042), i)
+      end
+      for _, name in ipairs(formatted_names) do
+        touch(formatted .. "/" .. name)
+      end
+      if listed_verbatim(formatted, formatted_names) then
+        check_like_getcompletion(formatted .. "/Q", "a mark behind " .. format[1])
+      end
+    end
+
     -- In what pathcmp() compares, "<dir>/" is followed by U+0301 and "a_first", and the mark
     -- joins the "/" before it: the name sorts as "a_first" and comes first. Ordered by its own
     -- bytes (CC 81 is above every ASCII letter) it went behind everything else, and the cut to
