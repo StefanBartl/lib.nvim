@@ -459,6 +459,10 @@ return function(H)
     ok(body:find(":Demo surround {kind} {target}", 1, true), "docgen: renders full invocation")
     ok(body:find("`{kind}` ∈ `quote | paren | brace`", 1, true), "docgen: enum note")
     ok(body:find(":Demo cwd %[{root}%]"), "docgen: optional arg wrapped in [ ]")
+    ok(
+      body:find("\n> Demo verb\n", 1, true),
+      "docgen: the verb description is a quote above the table"
+    )
 
     -- write round-trip
     local path = H.tmpfile(".md")

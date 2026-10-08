@@ -35,7 +35,8 @@ end
 function M.section(name, spec, root)
   local lines = { ("## :%s"):format(name), "" }
   if spec.desc and spec.desc ~= "" then
-    lines[#lines + 1] = spec.desc
+    -- a quote, so it reads as the verb's tagline and not as a stray paragraph
+    lines[#lines + 1] = "> " .. spec.desc
     lines[#lines + 1] = ""
   end
 
