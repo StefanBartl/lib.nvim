@@ -314,12 +314,9 @@ function M.run_blocking_result(cmd, input, opts)
     signal = signal,
     stdout = stdout,
     stderr = stderr,
-    -- Killed for the timeout; a process that exits 124 by itself is not one. A child that
-    -- catches SIGTERM and exits normally reports no signal, so a 124 that arrives only once
-    -- the deadline has passed counts as well.
-    timed_out = has_timeout
-      and code == 124
-      and (signal ~= 0 or (uv.hrtime() - started) / 1e6 >= opts.timeout_ms),
+    -- killed for the timeout (`signal` already says so after the deadline, see
+    -- `effective_signal`); a process that exits 124 by itself is not one
+    timed_out = has_timeout and code == 124 and signal ~= 0,
   }
 end
 
