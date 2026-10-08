@@ -156,7 +156,33 @@ function M.new(opts)
 
   -- Crash capture is armed by the first record (set further down).
   local want_capture = false
+  local capture_scheduled = false
   local arm_capture
+
+  -- Arm crash capture once, from whatever context the first record arrives in.
+  -- Creating an augroup/autocmd is forbidden in a fast event (a libuv timer,
+  -- a `vim.system` exit callback -- E5560) and the logger promises to be safe
+  -- there, so such a record defers the arming to the main loop. `want_capture`
+  -- only drops once the arming went through: a failure is retried by the next
+  -- record instead of silently leaving the session without a VimLeavePre flush.
+  ---@internal
+  local function ensure_capture()
+    if vim.in_fast_event() then
+      if not capture_scheduled then
+        capture_scheduled = true
+        vim.schedule(function()
+          capture_scheduled = false
+          if want_capture then
+            ensure_capture()
+          end
+        end)
+      end
+      return
+    end
+    if pcall(arm_capture) then
+      want_capture = false
+    end
+  end
 
   -- Core dispatch. `src_level = 4`: getinfo(4) from here lands on the user's
   -- call site (do_log -> level closure -> user).
@@ -180,8 +206,7 @@ function M.new(opts)
     inst.ring:push(record)
 
     if want_capture then
-      want_capture = false
-      arm_capture()
+      ensure_capture()
     end
 
     -- notify sink

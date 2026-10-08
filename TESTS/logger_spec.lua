@@ -212,4 +212,70 @@ return function(H)
       package.loaded[k] = v
     end
   end
+
+  -- ------------------------------------------- first record in a fast event
+  -- A plugin creates its logger at `require` time and may well log for the
+  -- first time from a libuv timer or a `vim.system` exit callback. Creating
+  -- the crash-capture augroup there raises E5560, so the first record must not
+  -- throw, must still reach every sink, and must still end up with the group,
+  -- armed from the main loop.
+  do
+    pcall(vim.api.nvim_del_augroup_by_name, "lib_logger_fastarm")
+    local ffile = H.tmpfile("-fast.jsonl")
+    local fastlog = L.new({ name = "fastarm", notify_level = "off", file = ffile })
+    local sunk = {}
+    fastlog.add_sink(function(record)
+      sunk[#sunk + 1] = record.msg
+    end)
+
+    local result
+    local timer = assert(vim.uv.new_timer())
+    timer:start(0, 0, function()
+      timer:stop()
+      timer:close()
+      local in_fast = vim.in_fast_event()
+      local ok_first, err_first = pcall(fastlog.info, "first from a timer")
+      local ok_second, err_second = pcall(fastlog.info, "second from a timer")
+      result = {
+        in_fast = in_fast,
+        ok_first = ok_first,
+        err_first = err_first,
+        ok_second = ok_second,
+        err_second = err_second,
+      }
+    end)
+    ok(
+      vim.wait(2000, function()
+        return result ~= nil
+      end, 5),
+      "the timer callback ran"
+    )
+
+    eq(result.in_fast, true, "the records were logged from a fast event")
+    eq(
+      result.ok_first,
+      true,
+      "the first record from a fast event does not throw: " .. tostring(result.err_first)
+    )
+    eq(
+      result.ok_second,
+      true,
+      "the second record from a fast event does not throw: " .. tostring(result.err_second)
+    )
+    eq(sunk[1], "first from a timer", "the first record still reaches the extra sinks")
+    eq(sunk[2], "second from a timer", "the second record reaches the extra sinks")
+    eq(#fastlog.snapshot(), 2, "both records are in the ring")
+
+    ok(
+      vim.wait(2000, function()
+        return pcall(vim.api.nvim_get_autocmds, { group = "lib_logger_fastarm" })
+      end, 5),
+      "crash capture is armed from the main loop afterwards"
+    )
+    eq(#vim.api.nvim_get_autocmds({ group = "lib_logger_fastarm" }), 1, "armed exactly once")
+
+    fastlog.info("later, from the main loop")
+    eq(#vim.api.nvim_get_autocmds({ group = "lib_logger_fastarm" }), 1, "no second arming")
+    pcall(vim.api.nvim_del_augroup_by_name, "lib_logger_fastarm")
+  end
 end

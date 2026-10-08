@@ -105,7 +105,10 @@ There is no global "uncaught error" hook in Neovim, so capture combines:
         vim.keymap.set("n", "<leader>x", log.guard(function() risky() end))
         M.run = log.wrap(M.run, "run")
 <
-  3. VimLeavePre flush — the ring is written to the file sink on exit.
+  3. VimLeavePre flush — the ring is written to the file sink on exit. The
+     hook is registered by the first record, not by `new()`; when that record
+     comes from a fast event (a timer, a `vim.system` exit callback) it is
+     registered from the main loop right after instead of raising E5560.
 
 `log.flush()` writes the whole ring to the file now; `log.snapshot()` returns
 a copy; `log.clear()` empties it.
