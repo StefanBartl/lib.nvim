@@ -13,6 +13,19 @@ local IS_WIN = (uv.os_uname().sysname or ""):find("Windows", 1, true) ~= nil
 --- `opts.max_output_bytes`.
 M.OUTPUT_LIMIT_CODE = 125
 
+--- Most stderr text handed back (bytes). A hostile process can print megabytes to
+--- stderr; the text ends up in failure messages.
+local MAX_STDERR = 64 * 1024
+
+---@param text string
+---@return string
+local function bound_stderr(text)
+  if #text > MAX_STDERR then
+    return text:sub(1, MAX_STDERR) .. "..."
+  end
+  return text
+end
+
 --- Milliseconds the async runner waits after `timeout_ms` for the process to be
 --- reaped before it reports the timeout itself.
 local GRACE_MS = 1500
@@ -38,6 +51,34 @@ local GRACE_MS = 1500
 --- Best effort: kill a process AND its children. `vim.system`'s own timeout and
 --- `stop()` signal only the direct child; on Windows the `git.exe` of `cmd\` is a
 --- thin wrapper whose real git keeps running (and keeps the pipes open).
+--- `taskkill /T` finds the descendants through the PARENT, so the parent must still
+--- be alive when it runs: the signal to the direct child is sent only after
+--- `taskkill` has finished (and straight away when it cannot be started, or off
+--- Windows).
+---@param job table|nil  The `vim.system` object.
+---@param signal string
+local function kill_job(job, signal)
+  if not job then
+    return
+  end
+  if IS_WIN and job.pid then
+    local started = pcall(
+      vim.system,
+      { "taskkill", "/PID", tostring(job.pid), "/T", "/F" },
+      { text = true },
+      function()
+        pcall(job.kill, job, signal)
+      end
+    )
+    if started then
+      return
+    end
+  end
+  pcall(job.kill, job, signal)
+end
+
+---@internal
+--- Best effort, no signal afterwards: for a run that already gave up waiting.
 ---@param pid integer|nil
 local function kill_tree(pid)
   if not pid or not IS_WIN then
@@ -93,6 +134,18 @@ local function sink_stdout(sink, opts)
     -- `vim.system` does this for the output it collects itself; with a stream
     -- handler it is ours to do.
     out = out:gsub("\r\n", "\n")
+    if sink.over then
+      -- the cap may cut a multi-byte character in two
+      local n, i = #out, #out
+      while i > 0 and n - i < 3 and out:byte(i) >= 0x80 and out:byte(i) < 0xC0 do
+        i = i - 1
+      end
+      local lead = i > 0 and out:byte(i) or 0
+      local need = lead >= 0xF0 and 4 or lead >= 0xE0 and 3 or lead >= 0xC0 and 2 or 1
+      if need > 1 and n - i + 1 < need then
+        out = out:sub(1, i - 1)
+      end
+    end
   end
   return out
 end
@@ -133,8 +186,7 @@ local function start_deadline(get_job, opts, on_fired)
       return
     end
     d.fired = true
-    kill_tree(job.pid)
-    pcall(job.kill, job, "sigterm")
+    kill_job(job, "sigterm")
     if on_fired then
       on_fired()
     end
@@ -219,8 +271,7 @@ function M.run_blocking_captured(cmd, input, opts)
     local job, deadline
     local sink = new_sink(opts, function()
       if job then
-        kill_tree(job.pid)
-        pcall(job.kill, job, "sigkill")
+        kill_job(job, "sigkill")
       end
     end)
     local ok, res = pcall(function()
@@ -279,8 +330,7 @@ function M.run_blocking_result(cmd, input, opts)
   local job, deadline
   local sink = new_sink(opts, function()
     if job then
-      kill_tree(job.pid)
-      pcall(job.kill, job, "sigkill")
+      kill_job(job, "sigkill")
     end
   end)
   -- vim.system raises synchronously when cmd[1] cannot be spawned at all
@@ -335,7 +385,7 @@ function M.run_blocking_result(cmd, input, opts)
   if code == 0 and signal ~= 0 then
     code = 128 + signal
   end
-  local stdout, stderr = res.stdout or "", res.stderr or ""
+  local stdout, stderr = res.stdout or "", bound_stderr(res.stderr or "")
   if sink then
     stdout = sink_stdout(sink, opts)
     if sink.over then
@@ -419,8 +469,7 @@ function M.run_async_captured(cmd, on_done, input, opts)
   local finished = false
   local sink = new_sink(opts, function()
     if job then
-      kill_tree(job.pid)
-      pcall(job.kill, job, "sigkill")
+      kill_job(job, "sigkill")
     end
   end)
 
@@ -442,7 +491,7 @@ function M.run_async_captured(cmd, on_done, input, opts)
   -- so that case reaches on_done like every other failure, instead of an
   -- uncaught error escaping into the caller's stack.
   local ok_spawn, spawned = pcall(vim.system, cmd, system_opts(input, opts, sink), function(res)
-    local stdout, stderr, code = res.stdout or "", res.stderr or "", res.code
+    local stdout, stderr, code = res.stdout or "", bound_stderr(res.stderr or ""), res.code
     if sink then
       stdout = sink_stdout(sink, opts)
       if sink.over then
@@ -481,8 +530,7 @@ function M.run_async_captured(cmd, on_done, input, opts)
         if finished then
           return
         end
-        kill_tree(job.pid)
-        pcall(job.kill, job, "sigkill")
+        kill_job(job, "sigkill")
         settle(
           false,
           sink and sink_stdout(sink, opts) or "",
@@ -496,10 +544,11 @@ function M.run_async_captured(cmd, on_done, input, opts)
 
   return {
     stop = function()
-      kill_tree(job.pid)
-      pcall(function()
-        job:kill("sigterm")
-      end)
+      -- (a finished run's pid may belong to somebody else by now)
+      if finished then
+        return
+      end
+      kill_job(job, "sigterm")
     end,
   }
 end
