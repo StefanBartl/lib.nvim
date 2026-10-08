@@ -51,6 +51,7 @@ local surface = require("lib.nvim.ui.kit.surface")
 local map = require("lib.nvim.bindings.keymap")
 local notify = require("lib.nvim.notify").create("[lib.nvim.ui.kit.chooser]")
 local autocmd = require("lib.nvim.bindings.autocmd")
+local printable_title = require("lib.nvim.window.printable_title")
 
 local api = vim.api
 
@@ -543,7 +544,7 @@ function M.set_items(opts)
   -- Empty string, not nil: an omitted `title` leaves the existing one in
   -- place, so walking from a titled submenu back to an untitled top level
   -- would keep the child's title on the frame.
-  cfg.title = opts.title or ""
+  cfg.title = printable_title(opts.title or "")
   pcall(api.nvim_win_set_config, surf.winid, cfg)
 
   render_content_highlights()

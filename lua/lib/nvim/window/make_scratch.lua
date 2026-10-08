@@ -14,6 +14,7 @@ local notify = require("lib.nvim.notify").create("[lib.nvim.window.make_scratch]
 local nice_quit = require("lib.nvim.window.nice_quit")
 local max_float_width = require("lib.nvim.window.max_float_width")
 local nul_safe = require("lib.lua.strings.core").nul_safe
+local printable_title = require("lib.nvim.window.printable_title")
 
 ---Window-local options applied to every scratch float unless overridden via `opts.wo`.
 ---
@@ -261,7 +262,7 @@ local function build_win_config(width, height, opts)
     cfg.win = opts.win
   end
   if opts.title ~= nil then
-    cfg.title = opts.title
+    cfg.title = printable_title(opts.title)
     if opts.title_pos ~= nil then
       cfg.title_pos = opts.title_pos
     end

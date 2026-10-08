@@ -2,12 +2,14 @@
 ---Set (or clear) the title of a floating window.
 ---
 ---Only floating windows carry a title (`config.relative ~= ""`); for any other
----window this is a safe no-op. Pass `nil` as the title to clear it.
+---window this is a safe no-op. Pass `nil` as the title to clear it. Control characters
+---in the text are spelled out (`^[`, see `printable_title`), never drawn raw.
 
 require("lib.nvim.window.@types")
 
 local api = vim.api
 local notify = require("lib.nvim.notify").create("[lib.nvim.window.set_title]")
+local printable_title = require("lib.nvim.window.printable_title")
 
 ---@param winid integer
 ---@param title string|nil nil clears the title
@@ -48,9 +50,9 @@ local function set_title(winid, title, opts)
   if title == nil then
     patch = { title = "" }
   elseif opts.pos ~= nil then
-    patch = { title = title, title_pos = opts.pos }
+    patch = { title = printable_title(title), title_pos = opts.pos }
   else
-    patch = { title = title }
+    patch = { title = printable_title(title) }
   end
 
   return pcall(api.nvim_win_set_config, winid, patch) == true
