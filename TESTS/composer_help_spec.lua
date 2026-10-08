@@ -638,6 +638,77 @@ return function(H)
   )
   ok(#help.undocumented() >= 2, "undocumented: without a name it covers every verb")
 
+  -- ------------------------------------------------------------ argument texts
+  composer.register_type("HELP_SPEC_TICKET", {
+    desc = "Ticket number such as 1234",
+    validate = function(raw)
+      return true, raw
+    end,
+  })
+  local arg_root = tree.build({
+    {
+      path = { "go" },
+      args = {
+        { name = "ticket", type = "HELP_SPEC_TICKET" },
+        { name = "kind", enum = { "a", "b" }, desc = "What to wrap with" },
+        { name = "count", type = "INT" },
+        { name = "note" },
+      },
+      run = noop,
+    },
+  })
+  local function hint_of(committed)
+    for _, e in ipairs(entries.compute(arg_root, committed, "").items) do
+      if e.kind == "hint" then
+        return e
+      end
+    end
+  end
+  eq(
+    hint_of({ "go" }).desc,
+    "Ticket number such as 1234",
+    "arg: the text of a custom type is shown"
+  )
+  local kind_items = entries.compute(arg_root, { "go", "T-1" }, "").items
+  eq(
+    kind_items[2].kind,
+    "hint",
+    "arg: an enum with a desc gets an inert row in front of its values"
+  )
+  eq(kind_items[2].desc, "What to wrap with", "arg: ... carrying that text")
+  eq(hint_of({ "go", "T-1", "a" }).desc, "INT", "arg: a built-in type shows its name")
+  eq(hint_of({ "go", "T-1", "a", "3" }).desc, nil, "arg: a bare string has nothing to say")
+
+  composer.verb("ComposerHelpSpecArgs", {
+    routes = {
+      {
+        path = { "x" },
+        args = {
+          { name = "ticket", type = "HELP_SPEC_TICKET" },
+          { name = "n", type = "INT" },
+          { name = "kind", enum = { "a", "b" } },
+          { name = "mode", enum = { "a", "b" }, desc = "How" },
+          { name = "free" },
+        },
+        run = noop,
+      },
+    },
+  })
+  local arg_missing = {}
+  for _, m in ipairs(help.undocumented("ComposerHelpSpecArgs", { args = true })) do
+    arg_missing[#arg_missing + 1] = m.kind .. ":" .. m.name
+  end
+  eq(
+    table.concat(arg_missing, ","),
+    "arg:free,arg:kind",
+    "undocumented{args}: bare strings and bare enums"
+  )
+  eq(
+    #help.undocumented("ComposerHelpSpecArgs"),
+    0,
+    "undocumented: positional arguments only count on request"
+  )
+
   -- ------------------------------------------------------------ keymap
   local lhs = "<F19>"
   composer.setup({ help = { keymap = lhs } })

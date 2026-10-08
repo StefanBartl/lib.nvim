@@ -151,6 +151,7 @@
 ---@alias Lib.UserCmd.Composer.TypedSpec Lib.UserCmd.Composer.ArgSpec|Lib.UserCmd.Composer.FlagSpec|Lib.UserCmd.Composer.KvSpec
 
 ---@class Lib.UserCmd.Composer.TypeDef
+---@field desc? string  # one short line for the help float: what a value of this type is (shown for an argument of this type that has no `desc` of its own)
 ---@field validate fun(raw: string, spec: Lib.UserCmd.Composer.TypedSpec): boolean, any, string|nil  # ok, value, err
 ---@field complete? fun(arg_lead: string, spec: Lib.UserCmd.Composer.TypedSpec, cmd_line: string|nil): string[]  # cmd_line is the full command line (nil outside a real one) — for types whose candidates depend on tokens typed before this slot
 
@@ -190,7 +191,7 @@
 ---@field enabled      fun(spec: Lib.UserCmd.Composer.Spec|nil): boolean
 ---@field parse_line   fun(line: string): Lib.UserCmd.Composer.Help.State|nil
 ---@field sanitize     fun(line: string): string
----@field undocumented fun(verb?: string): { verb: string, route: string, kind: "flag"|"kv", name: string }[]
+---@field undocumented fun(verb?: string, opts?: { args?: boolean }): { verb: string, route: string, kind: "flag"|"kv"|"arg", name: string }[]
 ---@field insertion    fun(state: Lib.UserCmd.Composer.Help.State, entry: Lib.UserCmd.Composer.Help.Entry): string
 ---@field open         fun(root: Lib.UserCmd.Composer.Node, state: Lib.UserCmd.Composer.Help.State, opts?: { title?: string, restore?: string }): boolean
 ---@field from_cmdline fun(line: string, restore_if_refused?: boolean): boolean
