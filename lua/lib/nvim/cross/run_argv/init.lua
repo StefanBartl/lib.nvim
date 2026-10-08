@@ -105,6 +105,30 @@ local function over_message(sink)
 end
 
 ---@internal
+--- The terminating signal to report. `vim.system` stops a process that outlived
+--- `timeout_ms` with SIGTERM and reports exit code 124 -- but a child that handles
+--- SIGTERM (Neovim itself does) exits normally and the signal reads 0. Exit code
+--- 124 AFTER the deadline is therefore a timeout all the same: report SIGTERM so
+--- that "killed for the timeout" stays `code == 124 and signal ~= 0`.
+---@param code integer
+---@param signal integer
+---@param started integer  `uv.hrtime()` when the process was started.
+---@param opts Lib.RunArgv.Opts|nil
+---@return integer
+local function effective_signal(code, signal, started, opts)
+  if
+    signal == 0
+    and code == 124
+    and opts
+    and type(opts.timeout_ms) == "number"
+    and (uv.hrtime() - started) / 1e6 >= opts.timeout_ms
+  then
+    return 15
+  end
+  return signal
+end
+
+---@internal
 --- Translate our options into `vim.system` options. One place, so the
 --- blocking and the async runner cannot drift apart.
 ---@param input string|nil
@@ -272,6 +296,7 @@ function M.run_blocking_result(cmd, input, opts)
   -- empty or cut-short output as a valid answer. 128 + signal is the shell's
   -- convention for it. A timeout already has a non-zero code (124).
   local code, signal = res.code, res.signal or 0
+  signal = effective_signal(code, signal, started, opts)
   if code == 0 and signal ~= 0 then
     code = 128 + signal
   end
@@ -361,6 +386,7 @@ function M.run_async_captured(cmd, on_done, input, opts)
 
   local job, timer
   local finished = false
+  local started = uv.hrtime()
   local sink = new_sink(opts, function()
     if job then
       kill_tree(job.pid)
@@ -397,7 +423,7 @@ function M.run_async_captured(cmd, on_done, input, opts)
         code, stderr = M.OUTPUT_LIMIT_CODE, over_message(sink)
       end
     end
-    settle(code == 0, stdout, code, stderr, res.signal or 0)
+    settle(code == 0, stdout, code, stderr, effective_signal(code, res.signal or 0, started, opts))
   end)
 
   if not ok_spawn then
