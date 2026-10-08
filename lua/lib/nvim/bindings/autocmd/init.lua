@@ -76,7 +76,15 @@ local function prune_dead_groups()
       cache[name] = nil
     end
   end
-  PRUNE_ABOVE = math.max(PRUNE_ABOVE, size)
+  -- Twice what survived (never below 64): a growing set of live groups prunes
+  -- every time it has doubled, not on every new group.
+  local live = 0
+  for id in pairs(alive) do
+    if alive[id] then
+      live = live + 1
+    end
+  end
+  PRUNE_ABOVE = math.max(64, 2 * live)
 end
 
 --- Every autocmd this module created, in creation order.

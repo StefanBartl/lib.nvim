@@ -577,7 +577,7 @@ M.LOG_FORMAT: string                                                           -
 M.fetch_async(opts: {dir?, env?, timeout_ms?: integer|false}|nil, on_done: fun(ok, err|nil, changed|nil), git_cmd?: string): { stop }   -- git fetch --all --prune; changed = a remote-tracking ref moved
 M.pull_async(opts: {dir?, env?, timeout_ms?: integer|false}|nil, on_done: fun(ok, err|nil, changed|nil), git_cmd?: string): { stop }    -- git pull --ff-only; changed = HEAD moved; silent once stop() was called
 M.push_async(opts: {dir?, env?, timeout_ms?: integer|false}|nil, on_done: fun(ok, err|nil), git_cmd?: string): { stop }                 -- git push
-M.update_async(opts: {dir?}|nil, on_done: fun(ok, err|nil, changed|nil), git_cmd?: string): { stop }  -- fetch, then pull (the pull's changed); silent once stop() was called
+M.update_async(opts: {dir?, env?, timeout_ms?: integer|false}|nil, on_done: fun(ok, err|nil, changed|nil), git_cmd?: string): { stop }  -- fetch, then pull (the pull's changed); silent once stop() was called
 ```
 
 A killed git (OOM, `stop()`, crash) is a **failure** everywhere here (`code = 128 + signal`, `signal` set), never an
