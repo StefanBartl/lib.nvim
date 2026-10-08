@@ -317,8 +317,10 @@ end
 ---
 ---Whether an entry starts with the fragment is a byte comparison, folded to upper case
 ---where Neovim ignores case -- except where a non-ASCII byte is involved, when Neovim's own
----regex engine decides (`prefix_regex`), as it does for `getcompletion()`. A name with a
----combining mark is ordered by its base characters, as `pathcmp()` does
+---regex engine decides (`prefix_regex`), as it does for `getcompletion()`: always under case
+---folding, and otherwise for a fragment that is not ASCII (it can end inside a character, which
+---no byte comparison judges) and for a name whose next character is a combining mark. A name
+---with a combining mark is ordered by its base characters, as `pathcmp()` does
 ---(`order_by_base_characters`).
 ---
 ---nil for anything else -- a pattern, a fragment with a NUL byte, a directory that cannot
@@ -377,9 +379,11 @@ local function many_path_matches(frag, dirs_only)
       else
         hit = key:sub(1, #want) == want
         if hit and wide and not fold then
-          -- the next character may be a combining mark (U+0300 and up start with CC or later)
+          -- A fragment that is not ASCII may end inside a character (a lone lead byte of text
+          -- that is not valid UTF-8): the bytes cannot judge that, Neovim's regex can. For an
+          -- ASCII one only the next character matters, and a combining mark starts with CC or later.
           local after = entry:byte(#name + 1)
-          if after and after >= 0xCC then
+          if not ascii_want or (after and after >= 0xCC) then
             hit = by_regex(entry)
           end
         end

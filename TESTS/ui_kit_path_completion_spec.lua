@@ -610,6 +610,32 @@ return function(H)
       check_like_getcompletion(grouped .. "/g_", "g_")
     end
 
+    -- A line that is not valid UTF-8 (a path pasted from a Latin-1 file) can end in the
+    -- middle of a character: "item_" and a lone lead byte C3 is, byte by byte, the start of
+    -- every "item_" and an a-umlaut, where getcompletion() lists none. Where the bytes
+    -- decide -- no case folding, so not on Windows -- the big list used to answer with 300
+    -- names that do not match. The same characters whole are still the big list's.
+    local characters = { "\195\164", "\226\132\170", "\240\159\152\128" } -- U+E4, U+212A, U+1F600
+    local halves = new_dir()
+    dirs_made[#dirs_made + 1] = halves
+    local halves_names = {}
+    for i = 0, MAX do
+      for _, character in ipairs(characters) do
+        halves_names[#halves_names + 1] = ("item_%s%03d"):format(character, i)
+      end
+    end
+    for _, name in ipairs(halves_names) do
+      touch(halves .. "/" .. name)
+    end
+    if listed_verbatim(halves, halves_names) then
+      for _, frag in ipairs({ "item_\195", "item_\226\132", "item_\240\159", "item_\240\159\152" }) do
+        check_like_getcompletion(halves .. "/" .. frag, vim.inspect(frag))
+      end
+      for _, character in ipairs(characters) do
+        check_like_getcompletion(halves .. "/item_" .. character, vim.inspect(character))
+      end
+    end
+
     -- A fragment with a NUL byte (no file name holds one) is getcompletion()'s and must
     -- not raise E976 out of the mapping: the fold of a non-ASCII name goes through
     -- `toupper()`, and a NUL in a Lua string reaches `vim.fn` as a Blob.
