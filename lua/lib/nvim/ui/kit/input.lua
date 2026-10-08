@@ -19,7 +19,12 @@
 --- Insert run that typed it is also what the `.` register and the redo buffer
 --- keep, so once the prompt is gone those are overwritten by an empty run
 --- (`M.scrub_insert_traces`); a macro that is being recorded keeps the keys it
---- saw, as it does for `inputsecret()`.
+--- saw, as it does for `inputsecret()`. Two more doors are shut: insert-mode
+--- completion would offer the words of the buffer -- the secret -- in a popup in clear
+--- text, so `<C-n>`, `<C-p>` and `<C-x>` do nothing in a secret prompt (but move in
+--- the popup of its own `completion`) and 'autocomplete' is off there; and the buffer
+--- carries `vim.b.ui_kit_secret = true` (`lib.nvim.ui.kit.surface.SECRET_VAR`), which a keystroke
+--- HUD such as `ui.screenkey` reads to leave the keys typed into it out.
 ---
 --- `opts.completion = "file"` (or any other `getcompletion()` type: "dir",
 --- "shellcmd", "buffer", ...) is a `completion = "file"` cmdline-input
@@ -120,6 +125,9 @@ local SCRUB_GROUP = "lib_kit_input_scrub"
 --- buffer nobody sees.
 local function scrub_now()
   local buf = api.nvim_create_buf(false, true)
+  -- The keys of this run are not the user's: a keystroke HUD that reads the mark leaves the
+  -- `i<Esc>` out instead of showing it right after the prompt closed.
+  surface.mark_secret(buf)
   pcall(api.nvim_buf_call, buf, function()
     vim.cmd("silent! noautocmd normal! i\27")
   end)
@@ -240,6 +248,41 @@ local function apply_mask(bufnr, ns, mask)
   end
   api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
   conceal_line(bufnr, ns, 0, mask)
+end
+
+---@internal
+---Close the ways out of a secret buffer that the mask does not cover. Shared with
+---`lib.nvim.ui.kit.sheet`, whose fields are rows of one buffer.
+---
+--- * The buffer is marked (`surface.SECRET_VAR`), so a keystroke HUD or recorder leaves
+---   the keys typed into it out.
+--- * Insert-mode completion works on the words of the buffer, and the buffer is the
+---   secret: `<C-n>`/`<C-p>` offered them in a popup in clear text and inserted the pick
+---   unmasked, and so did `<C-x><C-n>`/`<C-x><C-p>` (whatever 'complete' says). All of
+---   them do nothing now, except to move in the popup that `opts.completion`'s own `<Tab>`
+---   opened. (An empty buffer-local 'complete' is not the way: `<C-n>` then types a
+---   literal ^N into the secret, and `<C-x><C-n>` still completes.)
+--- * The same goes for 'autocomplete' (Neovim 0.12), which opens that popup by itself as
+---   one types: off for this buffer. Older Neovim has no such option, hence the pcall.
+---@param bufnr integer
+local function protect_secret_buffer(bufnr)
+  surface.mark_secret(bufnr)
+  pcall(function()
+    vim.bo[bufnr].autocomplete = false
+  end)
+  ---@param key string
+  ---@return fun()
+  local function popup_only(key)
+    return function()
+      if fn.pumvisible() == 1 then
+        pass_through(key)
+      end
+    end
+  end
+  local key_opts = { buffer = bufnr, nowait = true }
+  vim.keymap.set("i", "<C-n>", popup_only("<C-n>"), key_opts)
+  vim.keymap.set("i", "<C-p>", popup_only("<C-p>"), key_opts)
+  vim.keymap.set("i", "<C-x>", "<Nop>", key_opts)
 end
 
 --- More path candidates than this are not a menu to read -- typing the next letter
@@ -638,14 +681,20 @@ function M.open(opts)
     -- marks, and leave the secret on screen. `lib.nvim.ui.kit.sheet` makes the same choice.
     local mask = type(opts.mask) == "string" and opts.mask or "*"
     apply_mask(bufnr, ns, mask)
-    autocmd.create({ "TextChangedI", "TextChanged" }, function()
+    protect_secret_buffer(bufnr)
+    -- `TextChangedP` too: a candidate picked in a completion popup is a change that fires
+    -- it, not `TextChangedI`, and was inserted unmasked.
+    autocmd.create({ "TextChangedI", "TextChangedP", "TextChanged" }, function()
       apply_mask(bufnr, ns, mask)
     end, {
-      -- One group per prompt: a shared one, cleared here, took the first prompt's re-mask
-      -- autocmds away when a second secret prompt opened, and what was typed after that
-      -- showed in clear text.
-      group = autocmd.group("lib_kit_input_" .. bufnr, true),
+      -- Buffer-local and in no group: a group shared by every prompt, cleared at each open,
+      -- took the first prompt's re-mask away when a second one opened (what was typed after
+      -- that showed in clear text), and one named after the buffer was a group and a record
+      -- per prompt that nothing ever removed. The autocmd goes with the buffer, which is
+      -- wiped when the float closes. `record = false`: a throwaway hook of one float (see
+      -- `lib.nvim.ui.kit.surface`).
       buffer = bufnr,
+      record = false,
       desc = "lib.nvim.ui.kit.input: re-mask secret input",
     })
   end
@@ -1082,6 +1131,7 @@ end
 --- The two helpers `lib.nvim.ui.kit.sheet` shares (its fields are rows of one buffer, so
 --- it cannot reuse the single-line prompt itself).
 M.conceal_line = conceal_line
+M.protect_secret_buffer = protect_secret_buffer
 M.complete = trigger_completion
 M.order_by_base_characters = order_by_base_characters
 

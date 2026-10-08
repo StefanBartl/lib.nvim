@@ -393,6 +393,9 @@
 
 ---@class Lib.UI.Kit.SurfaceModule
 ---@field open fun(opts?: Lib.UI.Kit.SurfaceOpts): Lib.UI.Kit.Surface|nil
+---@field SECRET_VAR string  # name of the buffer variable that marks a buffer a secret is typed into ("ui_kit_secret")
+---@field mark_secret fun(bufnr: integer)  # set it
+---@field is_secret fun(bufnr?: integer): boolean  # read it (the current buffer when omitted); never raises
 
 --- The chooser `kit.select` delegates to; see `kit.chooser`'s doc comment
 --- in lua/lib/nvim/ui/kit/init.lua for when to reach for this directly.

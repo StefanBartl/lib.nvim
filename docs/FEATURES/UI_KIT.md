@@ -81,6 +81,14 @@ buffer holds the real text for `on_submit` to read, but nothing is ever
 echoed, undo is disabled (`undolevels = -1`), and the buffer is never
 written to disk and is wiped the moment the float closes.
 
+Two doors the mask does not cover are shut as well: insert-mode completion
+works on the words of the buffer — the secret — so in a secret prompt `<C-n>`,
+`<C-p>` and `<C-x>` do nothing (except to move in the popup of the prompt's own
+`completion`) and `'autocomplete'` is off for the buffer; and the buffer carries
+`vim.b.ui_kit_secret = true` (`ui.kit.surface.SECRET_VAR`), which a keystroke HUD
+(ui.nvim's `ui.screenkey`) reads to leave the keys typed into it out. A `kit.sheet`
+with a secret field gets both, as a whole. See the kit README, "Secret input".
+
 `completion = "file"` (or any `getcompletion()` type name) wires `<Tab>` to
 Neovim's real completion popup via `vim.fn.complete()`, so `<C-n>`/`<C-p>`
 cycle it normally; while the popup is open `<Tab>`/`<S-Tab>` advance/retreat
