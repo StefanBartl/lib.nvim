@@ -23,7 +23,8 @@ colorscheme without per-plugin overrides.
   `presets`, `default`)
 - **Config:** `require("lib.nvim.ui.kit").setup({ default = "rounded",
   presets = { myproject = { border = "double" } } })`
-- **Usercmds:** `:KitPreview` (live theme playground)
+- **Usercmds:** `:KitPreview` (live theme playground; registered by
+  `kit.setup()`, not by requiring the kit -- `kit.preview()` works without it)
 
 Built-ins: `minimal` (no border), `rounded` (default), `solid`, `double`,
 `ascii` (glyph border for terminals without good Unicode). A theme argument

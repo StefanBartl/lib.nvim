@@ -37,7 +37,8 @@ coordinated, or override colors/borders per call. Built in layers on top of
 [`lib.nvim.ui.hl`](../hl) — nothing shells out, so it is cross-platform.
 
 > **New here?** Read the [User Guide](../../../../../docs/GUIDE-ui-kit.md)
-> (with layout sketches), run **`:KitPreview`** for a live theme playground,
+> (with layout sketches), run **`:KitPreview`** for a live theme playground
+> (registered by `kit.setup()`; `kit.preview()` works without it),
 > or see [docs/EXAMPLES](../../../../../docs/EXAMPLES) for one scenario per
 > component (`kit-note.lua`, `kit-viewer.lua`, `kit-toast.lua`,
 > `kit-input.lua`, `kit-live-input.lua`, `kit-form.lua`, `kit-select.lua`,

@@ -13,7 +13,8 @@ popup is visually coordinated; or override colors/borders per call. Everything
 is cross-platform (pure `nvim_open_win` + highlights).
 
 - Vimhelp: `:help lib.nvim-kit`
-- **Live playground:** `:KitPreview` (see [§6](#6-live-preview-playground))
+- **Live playground:** `:KitPreview` after `kit.setup()`, or `kit.preview()` at any
+  time (see [§6](#6-live-preview-playground))
 
 ## Contents
 1. [Getting the module](#1-getting-the-module)
@@ -202,13 +203,13 @@ to text: images.nvim's `:Image compare` draws a terminal-overlay image into
 
 ## 6. Live preview playground
 
-Not sure how a theme will look? Run:
+Not sure how a theme will look? Run (after `require("lib.nvim.ui.kit").setup()`):
 
 ```vim
 :KitPreview
 ```
 
-(or `require("lib.nvim.ui.kit").preview()`). It opens a new tab split in two:
+(or `require("lib.nvim.ui.kit").preview()`, which needs no setup). It opens a new tab split in two:
 
 ```
 ┌─────────────────────────┬──────────────────────────────┐

@@ -29,6 +29,10 @@ right that re-renders with your theme as you type. <Tab> cycles the built-in
 presets; <S-Tab> cycles installed nvim colorschemes (applied live, restored on
 close). Also `kit.preview()`.
 
+Requiring the kit registers no command: `:KitPreview` exists once
+`require("lib.nvim.ui.kit").setup()` has run (or `kit.preview()` was called
+once).
+
 ==============================================================================
 2. THEMES & PRESETS                                       *lib.nvim-kit-theme*
 

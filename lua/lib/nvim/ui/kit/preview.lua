@@ -5,6 +5,9 @@
 ---
 ---   :KitPreview            -- or require("lib.nvim.ui.kit").preview()
 ---
+--- The command is not registered by requiring this module (LUA-92): `kit.setup()`
+--- or the first `open()` installs it.
+---
 --- The gallery is a static, faithful rendering (borders + KitSelection /
 --- KitAccent / KitTitle / KitMuted highlights bounded to each box) rather than
 --- live interactive floats, so editing the config never fights the components
