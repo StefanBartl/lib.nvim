@@ -54,8 +54,8 @@ M.chip = chip
 ---@param opts? Lib.UI.Kit.SetupOpts
 function M.setup(opts)
   theme.setup(opts)
-  -- Requiring the kit registers nothing (LUA-92); the playground command
-  -- appears once the host sets the kit (or `ui.bindings.usrcmds`) up.
+  -- Requiring the kit registers nothing (LUA-92); `:KitPreview` appears once
+  -- the host calls `setup()` (here) or opens the playground via `preview()`.
   pcall(preview.ensure_command)
 end
 

@@ -311,7 +311,7 @@ intended to be consumed via `init.lua`'s dispatch functions or `kit.popup`.
 ```
 M.theme, M.surface, M.chooser, M.layout            -- re-exported submodules
 M.setup(opts?: { default?: string, presets?: table<string,table> })
-M.preview(): integer config_buf, integer preview_buf   -- also :KitPreview
+M.preview(): integer config_buf, integer preview_buf   -- also :KitPreview (registered by M.setup() or the first M.preview(), not by require)
 M.note(opts): Lib.UI.Kit.Surface|nil
 M.viewer(opts): Lib.UI.Kit.Surface|nil
 M.toast(opts): Lib.UI.Kit.Surface|nil
@@ -400,7 +400,7 @@ sync        -- blocking vim.wait() bridge for on_submit/on_cancel-shaped compone
   M.open(open_fn, opts, timeout_ms?): any result, boolean cancelled, boolean timed_out
   -- default timeout 10 min; must not be called from a fast-event context
 
-preview     -- live theme playground (:KitPreview)
+preview     -- live theme playground (:KitPreview, once setup() ran or M.open()/M.ensure_command() was called)
   M.render(config_buf, preview_buf), M.ensure_command(), M.open(): config_buf, preview_buf
 ```
 
