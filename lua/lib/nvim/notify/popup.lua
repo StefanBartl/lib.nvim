@@ -782,7 +782,14 @@ function M.routes()
     },
     {
       path = { "notify", "history" },
-      args = { { name = "source", type = "STRING", optional = true } },
+      args = {
+        {
+          name = "source",
+          type = "STRING",
+          optional = true,
+          desc = "Only show messages of this source; default: all",
+        },
+      },
       desc = "Open the notify history (optionally filtered by source)",
       run = function(ctx)
         M.show_history(ctx.args.source)
@@ -790,7 +797,14 @@ function M.routes()
     },
     {
       path = { "notify", "clear" },
-      args = { { name = "source", type = "STRING", optional = true } },
+      args = {
+        {
+          name = "source",
+          type = "STRING",
+          optional = true,
+          desc = "Only forget messages of this source; default: all",
+        },
+      },
       desc = "Clear the notify history (optionally by source)",
       run = function(ctx)
         M.clear(ctx.args.source)

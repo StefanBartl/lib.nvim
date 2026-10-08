@@ -120,6 +120,7 @@ end
 ---requiring it has none.
 local function register_argtype()
   require("lib.nvim.bindings.usercmd.composer").register_type("DEPS_PLUGIN", {
+    desc = "Plugin that ships a deps spec; omit for all of them",
     validate = function(raw)
       return true, raw, nil
     end,
@@ -140,7 +141,15 @@ function M.routes()
   return {
     {
       path = { "deps", "show" },
-      args = { { name = "plugin", type = "DEPS_PLUGIN", optional = true } },
+      args = {
+        {
+          name = "plugin",
+          type = "DEPS_PLUGIN",
+          optional = true,
+          -- Own text: without a plugin this lists the names, it does not show them all.
+          desc = "Plugin to inspect; omit to list the plugins with a spec",
+        },
+      },
       desc = "List a plugin's declared external tools, why each matters, and what's missing",
       run = function(ctx)
         if ctx.args.plugin then
