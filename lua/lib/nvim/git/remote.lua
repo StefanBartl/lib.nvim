@@ -25,35 +25,89 @@ local M = {}
 local function encode_path(path)
   local parts = {}
   for part in path:gmatch("[^/]+") do
-    parts[#parts + 1] = encoding.url_encode(part)
+    -- `.` and `..` are dot segments: a URL parser resolves them (also in their
+    -- percent-encoded form), so they would walk out of the path they sit in.
+    if part ~= "." and part ~= ".." then
+      parts[#parts + 1] = encoding.url_encode(part)
+    end
   end
   return table.concat(parts, "/")
 end
 
+---@internal
+--- One owner/namespace segment or repo name as every forge spells it: letters,
+--- digits, `.`, `_`, `-`; never `.` or `..` alone.
+---@param s string
+---@return boolean
+local function plain_segment(s)
+  return s ~= "" and s ~= "." and s ~= ".." and s:match("^[%w._-]+$") ~= nil
+end
+
 ---Parse a git remote URL into {host, owner, repo}. Supports
----`https://[user@]host/owner/repo(.git)?`, `git@host:owner/repo(.git)?`,
----and `ssh://[user@]host/owner/repo(.git)?`.
+---`https://[user@]host[:port]/owner/repo(.git)?`, `[user@]host:owner/repo(.git)?`
+---(scp-like, any user) and `ssh://[user@]host[:port]/owner/repo(.git)?`.
+---
+---The parts are **validated**, not just split, because a remote URL is text from
+---a repository's own config: the host is a plain DNS-style name (lower-cased; the
+---SSH port is dropped, a web port other than 80/443 is kept), `owner` is one or
+---more plain segments (`a/b/c` for GitLab subgroups) and `repo` one plain name.
+---Anything else -- `?`, `#`, spaces, control characters, `..`, brackets -- gives
+---`nil`, so the web-URL builders below only ever see parts that need no
+---escaping.
 ---@param url string
 ---@return { host: string, owner: string, repo: string }|nil
 function M.parse_remote(url)
-  local host, rest = url:match("^https?://[^/@]+@([^/]+)/(.+)$")
-  if not host then
-    host, rest = url:match("^https?://([^/]+)/(.+)$")
+  if type(url) ~= "string" or url:find("[%c ]") then
+    return nil
   end
-  if not host then
-    host, rest = url:match("^git@([^:]+):(.+)$")
+  local host, rest, scheme
+  host, rest = url:match("^https?://[^/@]+@([^/]+)/(.+)$")
+  if host then
+    scheme = url:match("^(https?)://")
+  else
+    host, rest = url:match("^https?://([^/]+)/(.+)$")
+    if host then
+      scheme = url:match("^(https?)://")
+    end
   end
   if not host then
     host, rest = url:match("^ssh://[^/@]+@([^/]+)/(.+)$")
+    if not host then
+      host, rest = url:match("^ssh://([^/@]+)/(.+)$")
+    end
+    if host then
+      scheme = "ssh"
+    end
+  end
+  if not host then
+    -- scp-like: user@host:owner/repo (the user is usually `git`, not always)
+    host, rest = url:match("^[^@/:]+@([^:/]+):(.+)$")
   end
   if not host or not rest then
     return nil
   end
 
-  rest = rest:gsub("%.git/?$", "")
-  local owner, repo = rest:match("^(.-)/([^/]+)$")
-  if not owner or not repo then
+  host = host:lower()
+  if scheme == "ssh" then
+    host = host:gsub(":%d+$", "") -- the ssh port is not the web port
+  elseif scheme == "https" then
+    host = host:gsub(":443$", "")
+  elseif scheme == "http" then
+    host = host:gsub(":80$", "")
+  end
+  if not host:match("^[%w.-]+$") and not host:match("^[%w.-]+:%d+$") then
     return nil
+  end
+
+  rest = rest:gsub("%.git/?$", ""):gsub("/+$", "")
+  local owner, repo = rest:match("^(.-)/([^/]+)$")
+  if not owner or not repo or not plain_segment(repo) then
+    return nil
+  end
+  for segment in (owner .. "/"):gmatch("(.-)/") do
+    if not plain_segment(segment) then
+      return nil
+    end
   end
   return { host = host, owner = owner, repo = repo }
 end
@@ -66,16 +120,44 @@ end
 ---@param hosts_cfg? table<string, "github"|"gitlab"|"codeberg">
 ---@return "github"|"gitlab"|"codeberg"|nil
 function M.host_kind(host, hosts_cfg)
-  if host == "github.com" then
+  if type(host) ~= "string" then
+    return nil
+  end
+  -- Host names are case-insensitive; the keys of a config are compared the same
+  -- way, exact spelling first.
+  local lower = host:lower()
+  if lower == "github.com" then
     return "github"
   end
-  if host == "gitlab.com" then
+  if lower == "gitlab.com" then
     return "gitlab"
   end
-  if host == "codeberg.org" then
+  if lower == "codeberg.org" then
     return "codeberg"
   end
-  return hosts_cfg and hosts_cfg[host] or nil
+  if not hosts_cfg then
+    return nil
+  end
+  if hosts_cfg[host] then
+    return hosts_cfg[host]
+  end
+  for key, kind in pairs(hosts_cfg) do
+    if type(key) == "string" and key:lower() == lower then
+      return kind
+    end
+  end
+  return nil
+end
+
+---@internal
+---@param remote { host: string, owner: string, repo: string }
+---@return string
+local function repo_base(remote)
+  return ("https://%s/%s/%s"):format(
+    remote.host,
+    encode_path(remote.owner),
+    encode_path(remote.repo)
+  )
 end
 
 ---Build a web URL for a file (optionally with a line anchor) or, with
@@ -93,7 +175,7 @@ end
 ---@param last integer|nil
 ---@return string
 function M.build(kind, remote, branch, rel_path, first, last)
-  local base = ("https://%s/%s/%s"):format(remote.host, remote.owner, remote.repo)
+  local base = repo_base(remote)
   if not rel_path then
     return base
   end
@@ -111,13 +193,6 @@ function M.build(kind, remote, branch, rel_path, first, last)
     return ("%s/src/branch/%s/%s%s"):format(base, enc_branch, enc_path, anchor)
   end
   return ("%s/blob/%s/%s%s"):format(base, enc_branch, enc_path, anchor)
-end
-
----@internal
----@param remote { host: string, owner: string, repo: string }
----@return string
-local function repo_base(remote)
-  return ("https://%s/%s/%s"):format(remote.host, remote.owner, remote.repo)
 end
 
 ---Web URL of one commit. GitLab keeps its `/-/` namespace; GitHub, Codeberg

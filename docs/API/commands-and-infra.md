@@ -560,7 +560,7 @@ M.show(rev: string, path: string, opts?: {dir?}, git_cmd?: string): string|nil, 
 M.show_async(rev: string, path: string, opts: {dir?}|nil, on_done: fun(content|nil, err|nil), git_cmd?: string): { stop }
 M.clear_line_diff(ns: integer): fun(buf: integer): nil
 
--- Running git / reading someone else's history (Lib.Git.RunOpts = opts.dir + timeout_ms, env, no_lazy_fetch, read_only, input, binary)
+-- Running git / reading someone else's history (Lib.Git.RunOpts = opts.dir + timeout_ms, max_output_bytes (exit 125), env, no_lazy_fetch (GIT_NO_LAZY_FETCH + GIT_ALLOW_PROTOCOL=none), read_only, input, binary)
 M.run(args: string[], opts?: Lib.Git.RunOpts, git_cmd?: string): { ok, code, stdout, stderr, timed_out }   -- generic runner; does NOT validate the subcommand
 M.run_async(args: string[], opts: Lib.Git.RunOpts|nil, on_done: fun(result), git_cmd?: string): { stop }
 M.log(range?: string, opts?: Lib.Git.LogOpts, git_cmd?: string): Lib.Git.LogEntry[]|nil, err?   -- commits + bodies (+ files with name_status) in ONE process; NUL-separated, a hostile message cannot forge a record
@@ -593,7 +593,7 @@ started reports why (`ENOENT: …`), not "exit code -1". After `stop()`, `pull_a
 (`hosts_cfg` is optional), `build(kind, remote, branch, rel_path?, first?, last?)` and the
 history URLs `commit_url(kind, remote, sha)`, `compare_url(kind, remote, base, head)` (three-dot)
 and `tag_url(kind, remote, tag)` — GitHub / GitLab (`/-/` namespace) / Codeberg shapes, every
-path part percent-encoded.
+ref/path part percent-encoded; parse_remote validates host/owner/repo (plain names only, else nil).
 
 ---
 

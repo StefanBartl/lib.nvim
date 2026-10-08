@@ -3,29 +3,115 @@
 
 local M = {}
 
+local uv = vim.uv or vim.loop
+
+-- Decided once: `kill_tree` runs in libuv callbacks (the deadline timer, the
+-- stdout handler), where `vim.fn.*` is not allowed.
+local IS_WIN = (uv.os_uname().sysname or ""):find("Windows", 1, true) ~= nil
+
+--- Exit code of a run that was stopped for printing more than
+--- `opts.max_output_bytes`.
+M.OUTPUT_LIMIT_CODE = 125
+
+--- Milliseconds the async runner waits after `timeout_ms` for the process to be
+--- reaped before it reports the timeout itself.
+local GRACE_MS = 1500
+
 --- Options of the `*_captured` and `*_result` runners.
 ---@class Lib.RunArgv.Opts
 ---@field binary? boolean Deliver stdout byte for byte (`vim.system` `text = false`): no `\r\n` -> `\n` rewriting, `NUL` and non-UTF-8 bytes intact. Needs Neovim 0.10+ (`vim.system`); the legacy fallback ignores it.
----@field timeout_ms? integer Kill the process (SIGTERM) after this many milliseconds; the run then ends with exit code `124`, the `timeout(1)` convention. Only the direct child is killed, not a process tree it spawned. Needs `vim.system`; the legacy fallback ignores it.
+---@field timeout_ms? integer Kill the process (SIGTERM) after this many milliseconds; the run then ends with exit code `124`, the `timeout(1)` convention. On Windows the whole process tree is killed (`taskkill /T`); elsewhere only the direct child is, so a grandchild that keeps the output pipes open can delay their closing -- the async runner settles at the deadline (plus a short grace) anyway, the blocking runner returns once `wait()` gives up. Needs `vim.system`; the legacy fallback ignores it.
+---@field max_output_bytes? integer Stop the process once its stdout exceeds this many bytes: the run then ends with exit code `125` (`M.OUTPUT_LIMIT_CODE`), `stdout` holds what fitted and `stderr` says why. A process whose output is the data (`git log` of a repository somebody else wrote) can print gigabytes from a tiny input; without a cap all of it is collected in memory. Needs `vim.system`; the legacy fallback ignores it.
 ---@field env? table<string, string> Extra environment variables, merged over the inherited environment (an unset name stays inherited). Needs `vim.system`; the legacy fallback ignores it.
 ---@field cwd? string Working directory of the child. Needs `vim.system`; the legacy fallback ignores it.
 
 --- The result of `run_blocking_result`.
 ---@class Lib.RunArgv.Result
 ---@field ok boolean `code == 0`. A process that was killed by a signal is **not** ok.
----@field code integer Exit code: `124` after `opts.timeout_ms`, `128 + signal` when a signal killed the process (the shell convention; the OS reports exit status 0 for it), `-1` when `cmd[1]` could not be spawned at all
+---@field code integer Exit code: `124` after `opts.timeout_ms`, `125` after `opts.max_output_bytes`, `128 + signal` when a signal killed the process (the shell convention; the OS reports exit status 0 for it), `-1` when `cmd[1]` could not be spawned at all
 ---@field signal integer The signal that terminated the process, `0` if none (always `0` on the legacy fallback)
 ---@field stdout string
 ---@field stderr string|nil Captured stderr (`""` when empty); `nil` only on the legacy fallback, which cannot separate the streams. For a spawn failure it holds the reason.
----@field timed_out boolean The run hit `opts.timeout_ms` (`code == 124` with a timeout set). A process that merely exits 124 by itself is not a timeout.
+---@field timed_out boolean The run hit `opts.timeout_ms`: the process was killed for it (`code == 124` with a signal set). A process that merely exits 124 by itself is not a timeout.
+
+---@internal
+--- Best effort: kill a process AND its children. `vim.system`'s own timeout and
+--- `stop()` signal only the direct child; on Windows the `git.exe` of `cmd\` is a
+--- thin wrapper whose real git keeps running (and keeps the pipes open).
+---@param pid integer|nil
+local function kill_tree(pid)
+  if not pid or not IS_WIN then
+    return
+  end
+  pcall(
+    vim.system,
+    { "taskkill", "/PID", tostring(pid), "/T", "/F" },
+    { text = true },
+    function() end
+  )
+end
+
+---@internal
+--- Collect stdout ourselves when a cap is set, so that a runaway process is
+--- stopped instead of being read to the end.
+---@param opts Lib.RunArgv.Opts|nil
+---@param kill fun()
+---@return table|nil sink
+local function new_sink(opts, kill)
+  local cap = opts and opts.max_output_bytes
+  if type(cap) ~= "number" or cap ~= cap or cap < 0 then
+    return nil
+  end
+  local sink = { chunks = {}, size = 0, over = false, cap = cap }
+  sink.handler = function(_, data)
+    if not data or sink.over then
+      return
+    end
+    local room = cap - sink.size
+    if #data > room then
+      sink.over = true
+      if room > 0 then
+        sink.chunks[#sink.chunks + 1] = data:sub(1, room)
+      end
+      sink.size = cap
+      kill()
+    else
+      sink.chunks[#sink.chunks + 1] = data
+      sink.size = sink.size + #data
+    end
+  end
+  return sink
+end
+
+---@internal
+---@param sink table
+---@param opts Lib.RunArgv.Opts|nil
+---@return string
+local function sink_stdout(sink, opts)
+  local out = table.concat(sink.chunks)
+  if not (opts and opts.binary) then
+    -- `vim.system` does this for the output it collects itself; with a stream
+    -- handler it is ours to do.
+    out = out:gsub("\r\n", "\n")
+  end
+  return out
+end
+
+---@internal
+---@param sink table
+---@return string
+local function over_message(sink)
+  return ("output exceeded %d bytes; the process was stopped"):format(sink.cap)
+end
 
 ---@internal
 --- Translate our options into `vim.system` options. One place, so the
 --- blocking and the async runner cannot drift apart.
 ---@param input string|nil
 ---@param opts Lib.RunArgv.Opts|nil
+---@param sink table|nil
 ---@return table
-local function system_opts(input, opts)
+local function system_opts(input, opts, sink)
   opts = opts or {}
   return {
     text = not opts.binary,
@@ -33,6 +119,7 @@ local function system_opts(input, opts)
     timeout = opts.timeout_ms,
     env = opts.env,
     cwd = opts.cwd,
+    stdout = sink and sink.handler or nil,
   }
 end
 
@@ -83,11 +170,28 @@ end
 ---@return string output Captured stdout, both on success and failure
 function M.run_blocking_captured(cmd, input, opts)
   if vim.system then
+    local job
+    local sink = new_sink(opts, function()
+      if job then
+        kill_tree(job.pid)
+        pcall(job.kill, job, "sigkill")
+      end
+    end)
     local ok, res = pcall(function()
-      return vim.system(cmd, system_opts(input, opts)):wait()
+      job = vim.system(cmd, system_opts(input, opts, sink))
+      return job:wait()
     end)
     if not ok then
       return false, tostring(res)
+    end
+    if res == nil then
+      -- `wait()` gives up with nil when the process (or a descendant) still
+      -- holds the pipes after the kill: report a failure, do not index it.
+      kill_tree(job and job.pid)
+      return false, sink and sink_stdout(sink, opts) or ""
+    end
+    if sink then
+      return res.code == 0 and not sink.over, sink_stdout(sink, opts)
     end
     return res.code == 0, res.stdout or ""
   end
@@ -121,11 +225,19 @@ function M.run_blocking_result(cmd, input, opts)
     return { ok = code == 0, code = code, signal = 0, stdout = out, stderr = nil, timed_out = false }
   end
 
+  local job
+  local sink = new_sink(opts, function()
+    if job then
+      kill_tree(job.pid)
+      pcall(job.kill, job, "sigkill")
+    end
+  end)
   -- vim.system raises synchronously when cmd[1] cannot be spawned at all
   -- (e.g. ENOENT): the same guard as in the other runners, reported as a
   -- failed result instead of an error escaping to the caller.
   local ok, res = pcall(function()
-    return vim.system(cmd, system_opts(input, opts)):wait()
+    job = vim.system(cmd, system_opts(input, opts, sink))
+    return job:wait()
   end)
   if not ok then
     return {
@@ -138,6 +250,22 @@ function M.run_blocking_result(cmd, input, opts)
     }
   end
 
+  local has_timeout = opts ~= nil and opts.timeout_ms ~= nil
+  if res == nil then
+    -- `wait()` returns nil when the process (or a descendant: the real git
+    -- behind the Windows `cmd\git.exe` wrapper) still holds the pipes after the
+    -- kill. There is no result to index; say what happened.
+    kill_tree(job and job.pid)
+    return {
+      ok = false,
+      code = 124,
+      signal = 9,
+      stdout = sink and sink_stdout(sink, opts) or "",
+      stderr = "timed out; the process tree still holds its output pipes",
+      timed_out = has_timeout,
+    }
+  end
+
   -- A process killed by a signal (the OOM killer, a crash) reports exit status
   -- 0 with `signal` set: counting that as success would hand the caller an
   -- empty or cut-short output as a valid answer. 128 + signal is the shell's
@@ -146,13 +274,22 @@ function M.run_blocking_result(cmd, input, opts)
   if code == 0 and signal ~= 0 then
     code = 128 + signal
   end
+  local stdout, stderr = res.stdout or "", res.stderr or ""
+  if sink then
+    stdout = sink_stdout(sink, opts)
+    if sink.over then
+      code = M.OUTPUT_LIMIT_CODE
+      stderr = over_message(sink)
+    end
+  end
   return {
     ok = code == 0,
     code = code,
     signal = signal,
-    stdout = res.stdout or "",
-    stderr = res.stderr or "",
-    timed_out = opts ~= nil and opts.timeout_ms ~= nil and code == 124,
+    stdout = stdout,
+    stderr = stderr,
+    -- killed for the timeout; a process that exits 124 by itself is not one
+    timed_out = has_timeout and code == 124 and signal ~= 0,
   }
 end
 
@@ -169,12 +306,17 @@ end
 --- tooling -- belongs here rather than there.
 ---
 --- `on_done` is always invoked on the main loop (`vim.schedule`), so it is safe
---- to touch buffers, windows and `vim.fn.*` from it. Both stdout and the exit
---- code are passed on; `code` lets a caller report a bare "exit code N" when
---- the process failed without writing anything.
+--- to touch buffers, windows and `vim.fn.*` from it, and it is invoked **once**.
+--- Both stdout and the exit code are passed on; `code` lets a caller report a
+--- bare "exit code N" when the process failed without writing anything.
 ---
---- The returned handle has a `stop()` method that sends SIGTERM. It is a no-op
---- on the legacy fallback path (Neovim < 0.10), where there is no job to kill.
+--- With `opts.timeout_ms` the answer comes at the deadline (plus a short grace)
+--- even when a descendant of the process keeps the pipes open: the process (on
+--- Windows its tree) is killed and `on_done` gets code `124`, signal `9`.
+---
+--- The returned handle has a `stop()` method that sends SIGTERM (on Windows it
+--- also kills the process tree). It is a no-op on the legacy fallback path
+--- (Neovim < 0.10), where there is no job to kill.
 ---
 --- Text vs. bytes: see `run_blocking_captured` -- `opts.binary` delivers stdout
 --- exactly as the process wrote it.
@@ -212,25 +354,78 @@ function M.run_async_captured(cmd, on_done, input, opts)
     return { stop = function() end }
   end
 
+  local job, timer
+  local finished = false
+  local sink = new_sink(opts, function()
+    if job then
+      kill_tree(job.pid)
+      pcall(job.kill, job, "sigkill")
+    end
+  end)
+
+  -- Deliver the outcome exactly once, whichever of the exit callback and the
+  -- deadline timer gets there first.
+  local function settle(ok, output, code, stderr, signal)
+    if finished then
+      return
+    end
+    finished = true
+    if timer then
+      pcall(timer.stop, timer)
+      pcall(timer.close, timer)
+      timer = nil
+    end
+    vim.schedule(function()
+      on_done(ok, output, code, stderr, signal)
+    end)
+  end
+
   -- vim.system raises synchronously when cmd[1] cannot be spawned at all
   -- (e.g. ENOENT) rather than delivering a failed SystemCompleted -- guard it
   -- so that case reaches on_done like every other failure, instead of an
   -- uncaught error escaping into the caller's stack.
-  local ok_spawn, job = pcall(vim.system, cmd, system_opts(input, opts), function(res)
-    vim.schedule(function()
-      on_done(res.code == 0, res.stdout or "", res.code, res.stderr or "", res.signal or 0)
-    end)
+  local ok_spawn, spawned = pcall(vim.system, cmd, system_opts(input, opts, sink), function(res)
+    local stdout, stderr, code = res.stdout or "", res.stderr or "", res.code
+    if sink then
+      stdout = sink_stdout(sink, opts)
+      if sink.over then
+        code, stderr = M.OUTPUT_LIMIT_CODE, over_message(sink)
+      end
+    end
+    settle(code == 0, stdout, code, stderr, res.signal or 0)
   end)
 
   if not ok_spawn then
-    vim.schedule(function()
-      on_done(false, tostring(job), -1, "", 0)
-    end)
+    settle(false, tostring(spawned), -1, "", 0)
     return { stop = function() end }
+  end
+  job = spawned
+
+  -- The process is told to stop at `timeout_ms`, but the exit callback only
+  -- fires once every pipe is closed: a descendant that keeps one open (the real
+  -- git behind the Windows `cmd\git.exe` wrapper) would delay the answer for as
+  -- long as it lives. Settle at the deadline (plus a short grace) instead.
+  if opts and type(opts.timeout_ms) == "number" and opts.timeout_ms >= 0 then
+    timer = uv.new_timer()
+    timer:start(opts.timeout_ms + GRACE_MS, 0, function()
+      if finished then
+        return
+      end
+      kill_tree(job.pid)
+      pcall(job.kill, job, "sigkill")
+      settle(
+        false,
+        sink and sink_stdout(sink, opts) or "",
+        124,
+        "timed out; the process did not exit",
+        9
+      )
+    end)
   end
 
   return {
     stop = function()
+      kill_tree(job.pid)
       pcall(function()
         job:kill("sigterm")
       end)

@@ -275,8 +275,9 @@ M.run_async_captured(cmd: string[], on_done: fun(ok, output, code, stderr, signa
   -- non-blocking counterpart; on_done is always vim.schedule-dispatched; stop() sends sigterm;
   -- ok/code are the bare exit status (a signal-killed process reads ok = true) - check `signal`
 
-Lib.RunArgv.Opts = { binary?: boolean, timeout_ms?: integer, env?: table<string,string>, cwd?: string }
-  -- timeout_ms: SIGTERM after that long -> exit code 124 (direct child only, not a process tree)
+Lib.RunArgv.Opts = { binary?: boolean, timeout_ms?: integer, max_output_bytes?: integer, env?: table<string,string>, cwd?: string }
+  -- timeout_ms: SIGTERM after that long -> exit code 124 (Windows: whole tree; async answers at the deadline + grace)
+  -- max_output_bytes: stop the process past that much stdout -> exit code 125 (OUTPUT_LIMIT_CODE)
   -- env: merged over the inherited environment; timeout_ms/env/cwd need vim.system (0.10+)
 ```
 

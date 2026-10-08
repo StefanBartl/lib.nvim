@@ -209,6 +209,121 @@ return function(H)
   eq(own_124.code, 124, "run_blocking_result: an exit code of 124 is reported")
   eq(own_124.timed_out, false, "run_blocking_result: ... but with no timeout_ms it is no timeout")
 
+  -- ... and not with a timeout_ms that was not reached either: only a kill for the
+  -- deadline is a timeout.
+  local own_124_budget = run_argv.run_blocking_result({
+    vim.v.progpath,
+    "-n",
+    "-i",
+    "NONE",
+    "--headless",
+    "-u",
+    "NONE",
+    "-c",
+    "cquit 124",
+  }, nil, { timeout_ms = 60000 })
+  eq(own_124_budget.code, 124, "run_blocking_result: the child's own 124 is reported")
+  eq(
+    own_124_budget.timed_out,
+    false,
+    "run_blocking_result: ... and is no timeout although timeout_ms is set"
+  )
+
+  -- A tiny budget must give a result, not an error from indexing a nil wait().
+  for _, ms in ipairs({ 0, 1 }) do
+    local r_ok, r = pcall(run_argv.run_blocking_result, sleeper_argv, nil, { timeout_ms = ms })
+    eq(r_ok, true, ("run_blocking_result: timeout_ms=%d does not throw"):format(ms))
+    eq(r.ok, false, ("run_blocking_result: timeout_ms=%d is a failure"):format(ms))
+    local c_ok, c_res =
+      pcall(run_argv.run_blocking_captured, sleeper_argv, nil, { timeout_ms = ms })
+    eq(c_ok, true, ("run_blocking_captured: timeout_ms=%d does not throw"):format(ms))
+    eq(c_res, false, ("run_blocking_captured: timeout_ms=%d is a failure"):format(ms))
+  end
+
+  -- ------------------------------------------------------- max_output_bytes
+
+  -- A child that prints ~3 MB. Under a cap it is stopped and the run says why.
+  local big = H.tmpfile(".lua")
+  vim.fn.writefile({
+    "local chunk = string.rep('x', 65536)",
+    "for _ = 1, 48 do io.stdout:write(chunk) end",
+    "io.stdout:flush()",
+  }, big)
+  local big_argv = { vim.v.progpath, "-n", "-i", "NONE", "--headless", "-u", "NONE", "-l", big }
+
+  local capped = run_argv.run_blocking_result(big_argv, nil, { max_output_bytes = 100000 })
+  eq(capped.ok, false, "run_blocking_result: output past max_output_bytes is a failure")
+  eq(capped.code, run_argv.OUTPUT_LIMIT_CODE, "run_blocking_result: ... with the output-limit code")
+  ok(#capped.stdout <= 100000, "run_blocking_result: ... and stdout holds at most the cap")
+  ok(#capped.stdout > 0, "run_blocking_result: ... and what fitted")
+  ok(capped.stderr:find("exceeded", 1, true) ~= nil, "run_blocking_result: ... and stderr says why")
+  eq(capped.timed_out, false, "run_blocking_result: ... which is not a timeout")
+
+  local under = run_argv.run_blocking_result(big_argv, nil, { max_output_bytes = 10 * 1024 * 1024 })
+  eq(under.ok, true, "run_blocking_result: output under the cap is untouched")
+  eq(#under.stdout, 48 * 65536, "run_blocking_result: ... byte for byte")
+
+  local cap_ok2, cap_out2 =
+    run_argv.run_blocking_captured(big_argv, nil, { max_output_bytes = 100000 })
+  eq(cap_ok2, false, "run_blocking_captured: output past the cap is a failure")
+  ok(#cap_out2 <= 100000, "run_blocking_captured: ... and cut at the cap")
+
+  local o_done, o_ok, o_out, o_code, o_err
+  run_argv.run_async_captured(big_argv, function(ok_, out_, code_, err_)
+    o_done, o_ok, o_out, o_code, o_err = true, ok_, out_, code_, err_
+  end, nil, { max_output_bytes = 100000 })
+  vim.wait(20000, function()
+    return o_done
+  end, 20)
+  ok(o_done, "run_async_captured: a runaway process still reports")
+  eq(o_ok, false, "run_async_captured: ... as a failure")
+  eq(o_code, run_argv.OUTPUT_LIMIT_CODE, "run_async_captured: ... with the output-limit code")
+  ok(#o_out <= 100000, "run_async_captured: ... stdout cut at the cap")
+  ok(o_err:find("exceeded", 1, true) ~= nil, "run_async_captured: ... and the reason in stderr")
+  vim.fn.delete(big)
+
+  -- CRLF handling is the same with and without a cap: text mode rewrites it.
+  local crlf_argv = {
+    vim.v.progpath,
+    "-n",
+    "-i",
+    "NONE",
+    "--headless",
+    "-u",
+    "NONE",
+    "-c",
+    -- written past the C runtime, which would turn "\n" into "\r\n" on Windows
+    "lua vim.uv.fs_write(1, 'a\\r\\nb')",
+    "-c",
+    "qa!",
+  }
+  local crlf = run_argv.run_blocking_result(crlf_argv, nil, { max_output_bytes = 1000 })
+  ok(
+    crlf.stdout:find("\r", 1, true) == nil,
+    "run_blocking_result: a capped run still rewrites CRLF in text mode"
+  )
+
+  -- ------------------------------------------------- async answer at the deadline
+
+  -- A grandchild that keeps the output pipes open must not delay the answer
+  -- past the deadline (POSIX: the sleeper outlives the killed shell).
+  if vim.fn.has("win32") == 0 then
+    local g_done, g_code
+    local started = vim.uv.hrtime()
+    run_argv.run_async_captured({ "sh", "-c", "sleep 30 & wait" }, function(_, _, code_)
+      g_done, g_code = true, code_
+    end, nil, { timeout_ms = 300 })
+    vim.wait(8000, function()
+      return g_done
+    end, 20)
+    ok(g_done, "run_async_captured: a timeout is answered although a descendant holds the pipes")
+    ok(
+      (vim.uv.hrtime() - started) / 1e6 < 6000,
+      "run_async_captured: ... at the deadline (plus grace), not when the sleeper ends"
+    )
+    eq(g_code, 124, "run_async_captured: ... with exit code 124")
+  end
+
   -- A process killed by a signal reports exit status 0 plus `signal`: success
   -- must not be read from the status alone. POSIX only.
   if vim.fn.has("win32") == 0 then

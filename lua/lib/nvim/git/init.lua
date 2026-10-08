@@ -51,10 +51,13 @@ end
 --- which makes a concurrent `git commit`/`git add` of the user fail with
 --- "index.lock exists" whenever an automatic refresh happens to overlap it.
 ---
---- `opts.no_lazy_fetch` (a `Lib.Git.RunOpts` field) adds `-c protocol.allow=never`:
---- the `GIT_NO_LAZY_FETCH` variable that goes with it only exists since git 2.44,
---- and without a transport a partial clone's lazy fetch cannot reach its remote
---- on any version -- the object it needs is reported missing instead.
+--- `opts.no_lazy_fetch` (a `Lib.Git.RunOpts` field) adds `-c protocol.allow=never`
+--- and, in `runner_opts`, the environment `GIT_NO_LAZY_FETCH=1` (git 2.44+, the
+--- primary lock) and `GIT_ALLOW_PROTOCOL=none` (every git since 2.10): a per-protocol
+--- policy in the repository's own config (`protocol.file.allow=always`, which
+--- many users set globally since git 2.38.1) beats `protocol.allow`, but not
+--- `GIT_ALLOW_PROTOCOL`. Without a usable transport a partial clone's lazy fetch
+--- cannot reach its remote -- the object it needs is reported missing instead.
 ---@param bin string
 ---@param opts Lib.Git.Opts|nil
 ---@param args string[]
@@ -475,7 +478,8 @@ local function async_result(ok, stdout, code, stderr, signal, ropts)
     signal = signal,
     stdout = stdout,
     stderr = stderr,
-    timed_out = ropts ~= nil and ropts.timeout_ms ~= nil and code == 124,
+    -- killed for the timeout (signal set); a process exiting 124 by itself is not one
+    timed_out = ropts ~= nil and ropts.timeout_ms ~= nil and code == 124 and signal ~= 0,
   })
 end
 
@@ -747,17 +751,26 @@ end
 
 ---@internal
 --- `Lib.Git.RunOpts` -> the `lib.nvim.cross.run_argv` options. `no_lazy_fetch`
---- is sugar for one environment variable (and a `-c` in `git_argv`); an
---- explicit `opts.env` entry of the same name wins over it.
+--- is sugar for two environment variables (and a `-c` in `git_argv`):
+--- `GIT_NO_LAZY_FETCH=1` (git 2.44+) and `GIT_ALLOW_PROTOCOL=none`, which on
+--- older git -- and against a `protocol.<name>.allow` in the repository's config
+--- -- is what actually keeps a lazy fetch from reaching a transport. An explicit
+--- `opts.env` entry of the same name wins over them.
 ---@param opts Lib.Git.RunOpts|nil
 ---@return Lib.RunArgv.Opts
 local function runner_opts(opts)
   opts = opts or {}
   local env = opts.env
   if opts.no_lazy_fetch then
-    env = vim.tbl_extend("force", { GIT_NO_LAZY_FETCH = "1" }, env or {})
+    env =
+      vim.tbl_extend("force", { GIT_NO_LAZY_FETCH = "1", GIT_ALLOW_PROTOCOL = "none" }, env or {})
   end
-  return { binary = opts.binary, timeout_ms = opts.timeout_ms, env = env }
+  return {
+    binary = opts.binary,
+    timeout_ms = opts.timeout_ms,
+    max_output_bytes = opts.max_output_bytes,
+    env = env,
+  }
 end
 
 ---@internal
@@ -915,6 +928,20 @@ end
 local LOG_FORMAT = "--format=%x1e%H%x00%P%x00%an%x00%ae%x00%at%x00%ct%x00%m%x00%D%x00%s%x00%b%x00"
 local LOG_RECORD_MARK = "\30"
 
+---@internal
+--- A Unix time from git's output, or nil. A hostile commit can carry a date with
+--- hundreds of digits, which `tonumber` turns into `inf`: a value no JSON
+--- encoder takes and no date formatter prints.
+---@param s any
+---@return number|nil
+local function finite_time(s)
+  local n = tonumber(s)
+  if n == nil or n ~= n or n < 0 or n > 253402300799 then
+    return nil
+  end
+  return n
+end
+
 --- The `--format=` argument `M.log` passes. Exported so a caller that runs
 --- `git log -z` itself and hands the output to `parse_log` cannot drift from it.
 M.LOG_FORMAT = LOG_FORMAT
@@ -959,8 +986,8 @@ function M.parse_log(raw, opts)
       parents = vim.split(tokens[i + 1], " ", { plain = true, trimempty = true }),
       author = tokens[i + 2],
       email = tokens[i + 3],
-      author_time = tonumber(tokens[i + 4]),
-      commit_time = tonumber(tokens[i + 5]),
+      author_time = finite_time(tokens[i + 4]),
+      commit_time = finite_time(tokens[i + 5]),
       refs = vim.split(tokens[i + 7], ", ", { plain = true, trimempty = true }),
       subject = clean_message(tokens[i + 8]),
       body = clean_message(tokens[i + 9]),
@@ -1043,8 +1070,11 @@ local function log_argv(range, opts, bin)
   if opts.name_status then
     -- `--no-renames` also keeps this working in a blobless clone: rename
     -- detection needs file contents, and a clone without them fails halfway
-    -- through the output.
-    vim.list_extend(args, { "--name-status", "--no-renames", "--root" })
+    -- through the output. `-O/dev/null` pins the order file: `diff.orderFile`
+    -- may name a file that does not exist from this repository (a relative path
+    -- valid in another one, a hostile config), and git then fails the whole log;
+    -- `-c diff.orderFile=` does not neutralise it.
+    vim.list_extend(args, { "--name-status", "--no-renames", "--root", "-O/dev/null" })
   end
   if opts.left_right then
     args[#args + 1] = "--left-right"
@@ -1078,7 +1108,10 @@ local function log_argv(range, opts, bin)
     if type(path) ~= "string" or path == "" or path:find("%z") then
       return nil, ("git log: invalid path %s"):format(vim.inspect(path))
     end
-    args[#args + 1] = path
+    -- Literal by default: git reads what follows `--` as a PATHSPEC, so
+    -- `a[1].txt` would also match `a1.txt`, `*` everything, `:(exclude)x` is
+    -- magic. `opts.pathspecs = true` asks for that on purpose.
+    args[#args + 1] = opts.pathspecs and path or (":(literal)" .. path)
   end
   return git_argv(bin, opts, args, true)
 end
@@ -1215,7 +1248,15 @@ local function rev_parse_job(rev, opts)
     args[#args + 1] = type(opts.short) == "number" and ("--short=%d"):format(opts.short)
       or "--short"
   end
-  args[#args + 1] = opts.commit and (rev .. "^{commit}") or rev
+  local spec = rev
+  if opts.commit then
+    spec = rev .. "^{commit}"
+  elseif rev:match("^%x+$") and (#rev == 40 or #rev == 64) then
+    -- `rev-parse --verify <full hash>` echoes any well-formed hash without
+    -- looking for the object; `^{object}` makes git check that it exists.
+    spec = rev .. "^{object}"
+  end
+  args[#args + 1] = spec
   return args,
     function(res)
       if not res.ok then
@@ -1264,8 +1305,15 @@ local function merge_base_job(a, b, opts)
   end
   return { "merge-base", a, b }, function(res)
     if not res.ok then
-      -- Exit 1 without a message is git's "no common ancestor", not a failure.
-      if res.code == 1 and vim.trim(res.stderr or "") == "" then
+      -- Exit 1 without a message is git's "no common ancestor", not a failure --
+      -- unless the process was killed (Windows reports a stop() as code 1 with a
+      -- signal) or timed out: then the answer is unknown, not "none".
+      if
+        res.code == 1
+        and (res.signal or 0) == 0
+        and not res.timed_out
+        and vim.trim(res.stderr or "") == ""
+      then
         return nil, "no common ancestor"
       end
       return nil, failure_message(res, "git merge-base", opts)
@@ -1353,7 +1401,7 @@ function M.is_ancestor_async(ancestor, rev, opts, on_done, git_cmd)
 end
 
 local TAG_FORMAT = "--format=%(refname:strip=2)%00%(objectname)%00%(*objectname)%00"
-  .. "%(objecttype)%00%(creatordate:unix)%00%(contents:subject)"
+  .. "%(objecttype)%00%(*objecttype)%00%(creatordate:unix)%00%(contents:subject)"
 local TAG_SORTS = { newest = "-creatordate", oldest = "creatordate", version = "-v:refname" }
 
 ---@internal
@@ -1410,13 +1458,18 @@ local function tags_job(opts)
       for line in res.stdout:gmatch("[^\n]+") do
         local f = split_nul((line:gsub("\r$", "")))
         local peeled = f[3] or ""
+        -- The thing the tag finally points at: a lightweight tag IS that object
+        -- (`%(objecttype)`), an annotated one names it as `%(*objecttype)`.
+        local final_type = (f[4] == "tag") and (f[5] or "") or (f[4] or "")
+        local time = tonumber(f[6])
         tags[#tags + 1] = {
           name = f[1] or "",
           sha = peeled ~= "" and peeled or (f[2] or ""),
           object = f[2] or "",
           annotated = f[4] == "tag",
-          time = tonumber(f[5]),
-          subject = f[6] or "",
+          commit = final_type == "commit",
+          time = time and time == time and time < 1e15 and time or nil,
+          subject = f[7] or "",
         }
       end
       return tags, nil

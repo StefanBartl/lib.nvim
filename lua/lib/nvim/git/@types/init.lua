@@ -50,9 +50,10 @@
 ---(`dir`) plus a timeout, an environment and the knobs a caller reading someone
 ---else's repository needs.
 ---@class Lib.Git.RunOpts : Lib.Git.Opts
----@field timeout_ms? integer Kill git after this many milliseconds; the result is then `timed_out` (exit code 124). Only the direct child is killed, not a process tree it spawned (e.g. `git-remote-https` of a fetch).
+---@field timeout_ms? integer Kill git after this many milliseconds; the result is then `timed_out` (exit code 124). On Windows the whole process tree is killed; elsewhere only the direct child (not e.g. `git-remote-https` of a fetch). The async runner answers at the deadline plus a short grace even if a descendant keeps the pipes open.
+---@field max_output_bytes? integer Stop git once its stdout exceeds this many bytes: the result is then `ok = false`, `code = 125` and `stderr` says why. Reading a repository somebody else wrote, one commit with a huge message makes `log` print gigabytes from a tiny object; without a cap all of it ends up in memory.
 ---@field env? table<string, string> Extra environment variables, merged over the inherited ones.
----@field no_lazy_fetch? boolean Never fetch missing objects of a partial (blobless) clone: sets `GIT_NO_LAZY_FETCH=1` (git 2.44+) **and** passes `-c protocol.allow=never`, so it holds on older git too. git then fails on a missing object instead of silently fetching it -- no network, no write into the clone. The same switch blocks every transport, so a command that really needs the network (`fetch`) fails under it.
+---@field no_lazy_fetch? boolean Never fetch missing objects of a partial (blobless) clone: sets `GIT_NO_LAZY_FETCH=1` (git 2.44+, the primary lock), `GIT_ALLOW_PROTOCOL=none` (every git since 2.10; it beats a `protocol.<name>.allow` in the repository's or the user's config, which a plain `protocol.allow=never` does not) **and** passes `-c protocol.allow=never`. git then fails on a missing object instead of silently fetching it -- no network, no write into the clone. The same switch blocks every transport, so a command that really needs the network (`fetch`) fails under it.
 ---@field read_only? boolean Add `--no-optional-locks`, so the call never takes the index lock. `run`/`run_async` only; the functions that only read (`log`, `rev_parse`, ...) always set it.
 ---@field input? string Standard input. `run`/`run_async` only.
 ---@field binary? boolean Deliver stdout byte for byte (no `\r\n` rewriting). `run`/`run_async` only; `log` and `tags` always do.
@@ -74,7 +75,8 @@
 ---@field first_parent? boolean Follow only the first parent of each merge.
 ---@field max_count? integer At most this many commits (`--max-count`).
 ---@field skip? integer Skip this many commits first (`--skip`).
----@field paths? string[] Only commits touching these paths (after `--`).
+---@field paths? string[] Only commits touching these paths (after `--`). Taken **literally** (each is passed as `:(literal)<path>`): `a[1].txt` is that file, not a glob.
+---@field pathspecs? boolean Read `paths` as git pathspecs instead (globs, `:(exclude)` and other magic).
 
 ---One commit, as `log` returns it.
 ---@class Lib.Git.LogEntry
@@ -84,7 +86,7 @@
 ---@field email string
 ---@field author_time integer|nil Unix time of the author date.
 ---@field commit_time integer|nil Unix time of the *committer* date -- the one that places the commit in the history.
----@field refs string[] Ref names pointing at the commit, as git prints them: `"HEAD -> main"`, `"tag: v1.0"`, `"origin/main"`.
+---@field refs string[] Git's decoration list (`%D`) for the commit: `"HEAD -> main"`, `"tag: v1.0"`, `"origin/main"`. It also holds the pseudo-decorations `"grafted"` (the boundary commit of a shallow clone) and `"replaced"`, which cannot be told from a branch of that name.
 ---@field subject string First line of the message, `\r\n` normalised.
 ---@field body string The rest of the message, trailing whitespace removed, `\r\n` normalised.
 ---@field side? "<"|">"|"-" With `left_right`: `>` only reachable from the right of `A...B`, `<` only from the left, `-` a boundary commit.
@@ -112,10 +114,11 @@
 ---One tag, as `tags` returns it.
 ---@class Lib.Git.Tag
 ---@field name string
----@field sha string The commit the tag points to (peeled for an annotated tag).
+---@field sha string The object the tag points to, peeled for an annotated tag -- a commit when `commit` is true.
 ---@field object string The tag's own object name -- equal to `sha` for a lightweight tag.
 ---@field annotated boolean A tag object (with a message and tagger) rather than a bare ref.
----@field time integer|nil Creator time: the tagger date of an annotated tag, the commit date of a lightweight one.
+---@field commit boolean `sha` is a commit. False for a tag on a tree or a blob (git/git has some), whose `sha` is no use in `log` or a compare URL.
+---@field time integer|nil Creator time: the tagger date of an annotated tag, the commit date of a lightweight one (`nil` for a lightweight tag on a tree or blob, and for a date that is not a plausible Unix time).
 ---@field subject string First line of the tag message (annotated) or of the commit (lightweight).
 
 return {}

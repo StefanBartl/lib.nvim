@@ -37,6 +37,32 @@ return function(H)
   }) do
     ok(require(mod) ~= nil, "loads: " .. mod)
   end
+  -- A backtick in a path lead is a command substitution to Vim's wildcard
+  -- expansion (a directory named "x`touch m`" would run it on the next <Tab>):
+  -- PATH/DIR/FILE completion must not hand such a lead to getcompletion().
+  do
+    local asked = {}
+    H.with_patched(vim.fn, "getcompletion", function(lead, kind)
+      asked[#asked + 1] = lead .. "|" .. kind
+      return { "from-getcompletion" }
+    end, function()
+      for _, type_name in ipairs({ "PATH", "DIR", "FILE" }) do
+        local def = argtypes.get(type_name)
+        eq(
+          vim.deep_equal(def.complete("./x`touch marker`/s"), {}),
+          true,
+          type_name .. " completion: a lead with a backtick completes to nothing"
+        )
+        eq(
+          vim.deep_equal(def.complete("./plain"), { "from-getcompletion" }),
+          true,
+          type_name .. " completion: a normal lead still completes"
+        )
+      end
+    end)
+    eq(#asked, 3, "path completion: getcompletion ran for the three normal leads only")
+  end
+
   eq(type(require("lib").composer.verb), "function", "aggregator: lib.composer.verb wired")
   eq(
     type(require("lib").usercmd.composer.verb),

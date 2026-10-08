@@ -346,7 +346,10 @@ function M.map_limit(items, limit, worker, on_done, opts)
 
     local ok, handle = pcall(worker, items[index], index, done)
     if not ok then
-      done(nil, handle) -- `handle` is the error here, whatever was thrown
+      -- `handle` is the error here, whatever was thrown. `error(nil)` and
+      -- `error(false)` throw a falsy value: it must still read as an error, or
+      -- the item would look like a success without a result.
+      done(nil, (handle ~= nil and handle ~= false) and handle or "worker raised an error")
     elseif type(handle) == "table" and not called then
       if finished then
         -- The worker stopped the run while it was starting: nobody will ever
