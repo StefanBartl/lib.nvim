@@ -361,9 +361,11 @@ remote.
   be read, never a guess.
 - **A killed git is a failure.** On POSIX the OS reports a process killed by a signal (`stop()`,
   the OOM killer) as exit code 0 plus a signal, which would read as a success: a half-finished
-  push would be reported as pushed. All four verbs turn it into `ok = false` with
+  push would be reported as pushed. All four verbs — and the async readers `status_porcelain_async`,
+  `show_async` and `blame_porcelain_async` — turn it into `ok = false` (an `err`, no value) with
   `code = 128 + signal` (`err` = "git push failed (exit code 143)" for SIGTERM), as `run`/
-  `run_async` already did.
+  `run_async` already did. "Exit code 143" is the POSIX shape: on Windows (Neovim 0.12.2) libuv
+  delivers a killed process as exit code 1 with signal 15, so the message names exit code 1 there.
 - **A git that cannot be started is a failure with its reason** — `git_cmd` not found or not on
   `$PATH`: `err` is "ENOENT: no such file or directory (cmd): 'git'", without Neovim's
   `file:line` stamp, not "exit code -1".
@@ -372,7 +374,9 @@ remote.
   fires, at whichever stage the `stop()` lands, and `update_async` does not start its pull when
   the `stop()` arrived just as the fetch finished — the working tree does not move after the
   caller cancelled. `fetch_async` and `push_async` are a single process: their `on_done` still
-  fires once after `stop()`, with the kill reported as the failure above.
+  fires once after `stop()`, with the kill reported as the failure above. (On Windows that call can
+  come late: libuv reports the exit only after helper processes such as `git-remote-http` have
+  ended too, so do not wait for it to confirm a cancel.)
 
 ## Remote URLs: `lib.nvim.git.remote`
 
