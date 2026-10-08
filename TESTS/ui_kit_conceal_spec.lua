@@ -209,4 +209,38 @@ return function(H)
     pcall(surf.close, surf)
   end
   assert(mask_done, mask_err)
+
+  -- A mask nvim cannot show is the default one, too. `nvim_buf_set_extmark{conceal=...}` raises
+  -- "conceal char has to be printable" for a string that starts with a control character (a
+  -- newline, NUL, tab, escape), a lone continuation byte or an invisible character. That came
+  -- out of `conceal_line` in the `TextChanged` handler after `apply_mask` had cleared the
+  -- namespace: the typed password stood in the buffer, with an error for every key.
+  -- (`kit.sheet` masks its rows with the same function.)
+  local unprintable = { "\n", "\0", "\1", "\t", "\27", "\127", "\128", "\226\128\139", "\1a" }
+  for _, bad in ipairs(unprintable) do
+    local raised, got, covered = pcall(masked, "abc", bad)
+    ok(raised, ("%q: conceal_line raised: %s"):format(bad, tostring(got)))
+    eq(got, "0-1,1-2,2-3", ("%q"):format(bad))
+    ok(not covered, "not with the mask given")
+  end
+  local unprintable_surfaces = {}
+  local unprintable_done, unprintable_err = pcall(function()
+    for _, bad in ipairs(unprintable) do
+      local surf =
+        kit.input({ secret = true, mask = bad, default = "hunter2", relative = "editor" })
+      unprintable_surfaces[#unprintable_surfaces + 1] = surf
+      conceals(surf, vim.fn["repeat"]({ "*" }, 7), ("%q: the default's"):format(bad))
+      api.nvim_buf_set_lines(surf.bufnr, 0, -1, false, { "hunter22" })
+      api.nvim_exec_autocmds("TextChanged", { buffer = surf.bufnr })
+      conceals(surf, vim.fn["repeat"]({ "*" }, 8), ("%q: while typing"):format(bad))
+    end
+  end)
+  for _, surf in ipairs(unprintable_surfaces) do
+    pcall(surf.close, surf)
+  end
+  assert(unprintable_done, unprintable_err)
+  for _, shown in ipairs({ "•", "", "é", "😀" }) do
+    local _, all_shown = masked("abc", shown)
+    ok(all_shown, ("%q is used as it is"):format(shown))
+  end
 end
