@@ -32,7 +32,7 @@ local GRACE_MS = 1500
 ---@field signal integer The signal that terminated the process, `0` if none (always `0` on the legacy fallback)
 ---@field stdout string
 ---@field stderr string|nil Captured stderr (`""` when empty); `nil` only on the legacy fallback, which cannot separate the streams. For a spawn failure it holds the reason.
----@field timed_out boolean The run hit `opts.timeout_ms`: the process was killed for it (`code == 124` with a signal set). A process that merely exits 124 by itself is not a timeout.
+---@field timed_out boolean The run hit `opts.timeout_ms`: the process was killed for it (`code == 124` with a signal set, or reached only after the deadline). A process that merely exits 124 by itself, early, is not a timeout.
 
 ---@internal
 --- Best effort: kill a process AND its children. `vim.system`'s own timeout and
@@ -226,6 +226,7 @@ function M.run_blocking_result(cmd, input, opts)
   end
 
   local job
+  local started = uv.hrtime()
   local sink = new_sink(opts, function()
     if job then
       kill_tree(job.pid)
@@ -288,8 +289,12 @@ function M.run_blocking_result(cmd, input, opts)
     signal = signal,
     stdout = stdout,
     stderr = stderr,
-    -- killed for the timeout; a process that exits 124 by itself is not one
-    timed_out = has_timeout and code == 124 and signal ~= 0,
+    -- Killed for the timeout; a process that exits 124 by itself is not one. A child that
+    -- catches SIGTERM and exits normally reports no signal, so a 124 that arrives only once
+    -- the deadline has passed counts as well.
+    timed_out = has_timeout
+      and code == 124
+      and (signal ~= 0 or (uv.hrtime() - started) / 1e6 >= opts.timeout_ms),
   }
 end
 
