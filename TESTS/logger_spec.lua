@@ -192,13 +192,16 @@ return function(H)
     )
 
     lazylog.info("first record")
-    eq(
-      #vim.api.nvim_get_autocmds({ group = "lib_logger_lazyreq" }),
-      1,
-      "the first record arms crash capture"
-    )
+    local lazy_armed = vim.api.nvim_get_autocmds({ group = "lib_logger_lazyreq" })
+    eq(#lazy_armed, 1, "the first record arms crash capture")
+    -- Counting the autocmds proves nothing about "once": arming re-creates the
+    -- group with `clear = true`, so one autocmd is what a re-arming leaves too.
+    -- A re-arming gives the autocmd a new id, so the id is what is compared.
+    local lazy_id = lazy_armed[1].id
     lazylog.info("second record")
-    eq(#vim.api.nvim_get_autocmds({ group = "lib_logger_lazyreq" }), 1, "capture is armed once")
+    local lazy_again = vim.api.nvim_get_autocmds({ group = "lib_logger_lazyreq" })
+    eq(#lazy_again, 1, "capture is still one autocmd")
+    eq(lazy_again[1].id, lazy_id, "capture is armed once: the second record did not re-arm")
 
     eq(F.install_command(), true, "install_command() is idempotent")
     pcall(vim.api.nvim_del_augroup_by_name, "lib_logger_lazyreq")
@@ -272,10 +275,56 @@ return function(H)
       end, 5),
       "crash capture is armed from the main loop afterwards"
     )
-    eq(#vim.api.nvim_get_autocmds({ group = "lib_logger_fastarm" }), 1, "armed exactly once")
+    -- Arming re-creates the group with `clear = true`, so the group holds one
+    -- autocmd however often it was armed; only the autocmd id (new on every
+    -- arming) tells a single arming from one per record.
+    local fast_armed = vim.api.nvim_get_autocmds({ group = "lib_logger_fastarm" })
+    eq(#fast_armed, 1, "armed exactly once")
+    local fast_id = fast_armed[1].id
 
     fastlog.info("later, from the main loop")
-    eq(#vim.api.nvim_get_autocmds({ group = "lib_logger_fastarm" }), 1, "no second arming")
+    fastlog.info("and once more")
+    local fast_again = vim.api.nvim_get_autocmds({ group = "lib_logger_fastarm" })
+    eq(#fast_again, 1, "still one autocmd")
+    eq(fast_again[1].id, fast_id, "no second arming: the records after it keep the same autocmd")
     pcall(vim.api.nvim_del_augroup_by_name, "lib_logger_fastarm")
+  end
+
+  -- ------------------------------------------------- a failed arming retries
+  -- Arming runs under pcall and the pending flag only drops once it went
+  -- through, so an arming that fails neither raises out of the record nor
+  -- leaves the session without its VimLeavePre flush: the next record tries
+  -- again. Creating the augroup is made to fail for the first record only.
+  do
+    local group = "lib_logger_armretry"
+    pcall(vim.api.nvim_del_augroup_by_name, group)
+    local rfile = H.tmpfile("-retry.jsonl")
+    local armlog = L.new({ name = "armretry", notify_level = "off", file = rfile })
+
+    local real_create_augroup = vim.api.nvim_create_augroup
+    local attempts = 0
+    vim.api.nvim_create_augroup = function()
+      attempts = attempts + 1
+      error("augroup refused")
+    end
+    local ok_first, err_first = pcall(armlog.info, "the arming fails on this one")
+    vim.api.nvim_create_augroup = real_create_augroup
+
+    eq(ok_first, true, "a failing arming does not raise out of the record: " .. tostring(err_first))
+    eq(attempts, 1, "the first record tried to arm")
+    eq(pcall(vim.api.nvim_get_autocmds, { group = group }), false, "nothing was armed")
+    eq(#armlog.snapshot(), 1, "the record is in the ring all the same")
+    eq(#H.read_lines(rfile), 1, "the record is in the file all the same")
+
+    armlog.info("the next record retries")
+    local has_group, retried = pcall(vim.api.nvim_get_autocmds, { group = group })
+    ok(has_group, "the next record retried the arming that failed")
+    eq(#retried, 1, "the next record armed crash capture")
+
+    armlog.info("and then it is armed for good")
+    local after = vim.api.nvim_get_autocmds({ group = group })
+    eq(#after, 1, "still one autocmd")
+    eq(after[1].id, retried[1].id, "no arming once the retry went through")
+    pcall(vim.api.nvim_del_augroup_by_name, group)
   end
 end
