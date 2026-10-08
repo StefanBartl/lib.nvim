@@ -36,7 +36,7 @@ anywhere one is accepted is a preset name, a partial override table
 One themed float plus a lifecycle handle — the building block every
 higher-level component (`note`, `toast`, `input`, `select`, …) is built on.
 
-- **Module:** `lib.nvim.ui.kit.surface` (`open`)
+- **Module:** `lib.nvim.ui.kit.surface` (`open`, `SECRET_VAR`, `mark_secret`, `is_secret`)
 
 ```lua
 local s = kit.surface.open({ lines = { "hi" }, theme = "double", title = "X" })
@@ -85,7 +85,7 @@ Two doors the mask does not cover are shut as well: insert-mode completion
 works on the words of the buffer — the secret — so in a secret prompt `<C-n>`,
 `<C-p>` and `<C-x>` do nothing (except to move in the popup of the prompt's own
 `completion`) and `'autocomplete'` is off for the buffer; and the buffer carries
-`vim.b.ui_kit_secret = true` (`ui.kit.surface.SECRET_VAR`), which a keystroke HUD
+`vim.b.ui_kit_secret = true` (`lib.nvim.ui.kit.surface.SECRET_VAR`), which a keystroke HUD
 (ui.nvim's `ui.screenkey`) reads to leave the keys typed into it out. A `kit.sheet`
 with a secret field gets both, as a whole. See the kit README, "Secret input".
 
