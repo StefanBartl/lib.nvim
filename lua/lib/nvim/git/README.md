@@ -381,8 +381,8 @@ remote.
   default (`{ GIT_TERMINAL_PROMPT = "1" }` allows prompts), `opts.timeout_ms` replaces the
   deadline per git process (`pull_async` runs three: HEAD before, the pull, HEAD after, and
   `update_async` a fourth, the fetch, so the worst case is three or four deadlines; the HEAD
-  reads share `opts.env` too), `false` waits forever. A HEAD-before read that hit the deadline
-  makes `changed` `nil` (the HEAD-after read is then not run). An ssh host-key or passphrase prompt is not covered by
+  reads share `opts.env` too), `false` waits forever. A HEAD-before read that hit the deadline or
+  was killed by a signal makes `changed` `nil` (the HEAD-after read is then not run). An ssh host-key or passphrase prompt is not covered by
   `GIT_TERMINAL_PROMPT`; the deadline catches it.
 - **After `stop()`.** `pull_async` and `update_async` are chains of processes (HEAD before, pull,
   HEAD after; fetch, then pull) and stay silent once `stop()` has been called: `on_done` never
