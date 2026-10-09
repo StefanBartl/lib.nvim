@@ -873,6 +873,17 @@ return function(H)
     end
   end
 
+  --- Remove a symlink / junction the spec made, and say whether it is really gone. A temp tree
+  --- that still holds a link must NOT be deleted recursively: a link to a drive root would take the
+  --- drive with it.
+  ---@param path string
+  ---@return boolean gone
+  local function remove_link(path)
+    pcall(uv.fs_unlink, path)
+    pcall(uv.fs_rmdir, path)
+    return uv.fs_lstat(path) == nil
+  end
+
   --- Register a root for the duration of `fn` (registrations survive `setup`, so a leaked one
   --- would show up in every later case).
   ---@param name string
@@ -1214,9 +1225,12 @@ return function(H)
           "symlink root: root_of goes through the same lookup"
         )
       end)
-      local _, _ = uv.fs_unlink(base .. "/link"), uv.fs_rmdir(base .. "/link")
+      if remove_link(base .. "/link") then
+        vim.fn.delete(base, "rf")
+      end
+    else
+      vim.fn.delete(base, "rf")
     end
-    vim.fn.delete(base, "rf")
   end
 
   -- ── $NVIM_CONFIG_DIR as an environment variable: stale vs. deliberate ────────────────────────
@@ -1911,6 +1925,299 @@ io.stdout:write(tostring(out[1]), ":", tostring(out[2]), "\n")
     end
     eq(text:find("error:", 1, true), nil, "health: a problem root is a warning, never an error")
   end
+
+  -- ══ adversarial review of round 2 ═════════════════════════════════════════════════════════
+  --
+  -- Each case reproduces a finding of the reviewer that attacked the second-round code.
+
+  -- ── remap: the order promised in the docs, across roots; and bounded work ───────────────────
+  --
+  -- The result was root-major: a root whose folder name matches a DEEPER segment came out ahead of
+  -- one that matches an outer one, so "outermost anchor first" held only inside one root. And a
+  -- recorded path of n segments that all equal the anchor word cost O(n²) per root (4000 anchors:
+  -- about a second), for data that comes from another machine.
+  do
+    local base = tmp()
+    vim.fn.mkdir(base .. "/m1/outer/inner/deep", "p")
+    vim.fn.mkdir(base .. "/m2/outer/inner/deep", "p")
+    with_roots({
+      windows = false,
+      nvim_config = false,
+      vars = {},
+      extra = { A_INNER = base .. "/m1/outer/inner", B_OUTER = base .. "/m2/outer" },
+    }, function()
+      eq(
+        table.concat(roots.remap("/other/machine/outer/inner/deep"), "|"),
+        base .. "/m2/outer/inner/deep|" .. base .. "/m1/outer/inner/deep",
+        "remap: outermost anchor first ACROSS roots (B_OUTER matches `outer`, A_INNER only `inner`)"
+      )
+    end)
+    vim.fn.delete(base, "rf")
+
+    vim.fn.mkdir(base .. "/repos", "p")
+    with_roots({
+      windows = false,
+      nvim_config = false,
+      vars = {},
+      extra = { R = base .. "/repos" },
+    }, function()
+      local stats = 0
+      local real_stat = uv.fs_stat
+      H.with_patched(uv, "fs_stat", function(...)
+        stats = stats + 1
+        return real_stat(...)
+      end, function()
+        roots.remap("/x/" .. ("repos/"):rep(600))
+        ok(stats <= 64, "remap: at most 64 candidates are looked up, not one per anchor: " .. stats)
+
+        stats = 0
+        eq(
+          #roots.remap("/x/" .. ("repos/"):rep(1000)),
+          0,
+          "remap: a path over 4096 bytes maps to nothing"
+        )
+        eq(stats, 0, "remap: ... without touching the filesystem")
+      end)
+      eq(#roots.remap("/x/repos"), 1, "remap: an ordinary path still maps")
+    end)
+    vim.fn.delete(base, "rf")
+  end
+
+  -- ── fold on a path no root matches: no stat chain per call ──────────────────────────────────
+  --
+  -- `fold` builds its roots on every call, and the symlink fallback stat'ed each of them for every
+  -- path that matched nothing (3 roots, 1000 folds: 3000 `realpath` calls; a dead network share
+  -- blocked a fold for over a second). It is cached for a few seconds, and Windows -- where buffer
+  -- names are not canonicalised -- does not look at all.
+  do
+    local calls = 0
+    local real_realpath = uv.fs_realpath
+    local function counting(fn)
+      calls = 0
+      H.with_patched(uv, "fs_realpath", function(...)
+        calls = calls + 1
+        return real_realpath(...)
+      end, fn)
+    end
+    local extra = { RPA = "/rp-unique/a", RPB = "/rp-unique/b", RPC = "/rp-unique/c" }
+    with_roots({ windows = false, nvim_config = false, vars = {}, extra = extra }, function()
+      counting(function()
+        for _ = 1, 200 do
+          roots.fold("/elsewhere/x.lua")
+        end
+      end)
+      ok(calls <= 3, "fold: realpath of a root is looked up once, not per call: " .. calls)
+    end)
+    -- other root paths than above: the answer for those is cached by now, which would hide a call
+    local win_extra = { RPA = "/rp-unique-win/a", RPB = "/rp-unique-win/b" }
+    with_roots({ windows = true, nvim_config = false, vars = {}, extra = win_extra }, function()
+      counting(function()
+        roots.fold("D:/elsewhere/x.lua")
+      end)
+      eq(calls, 0, "fold (win): no realpath at all")
+    end)
+  end
+
+  -- A root that is a link to the filesystem root / a whole drive would fold every path: the
+  -- `too_broad` rule has to hold for the resolved spelling as well.
+  do
+    local base = tmp()
+    vim.fn.mkdir(base, "p")
+    local fs_root = base:match("^%a:") and (base:sub(1, 2) .. "/") or "/"
+    if uv.fs_symlink(fs_root, base .. "/toroot", { dir = true, junction = true }) then
+      with_roots({
+        windows = false,
+        nvim_config = false,
+        vars = {},
+        extra = { LINKROOT = base .. "/toroot" },
+      }, function()
+        local elsewhere = fs_root .. "definitely-not-below-linkroot/x"
+        eq(roots.fold(elsewhere), elsewhere, "symlink root to the filesystem root folds nothing")
+        eq(
+          roots.fold(base .. "/toroot/y"),
+          "$LINKROOT/y",
+          "... the spelling as configured still does"
+        )
+      end)
+      if remove_link(base .. "/toroot") then
+        vim.fn.delete(base, "rf")
+      end
+    else
+      vim.fn.delete(base, "rf")
+    end
+  end
+
+  -- ── a root function that yields ──────────────────────────────────────────────────────────────
+  --
+  -- The "busy" mark of a definition was global: a function that yielded (an async task) and was
+  -- never resumed left its name busy for good -- no root of that name again, not even after
+  -- `setup` or `register`, and nothing in `status()` or health said why.
+  with_roots({
+    windows = false,
+    nvim_config = false,
+    vars = {},
+    extra = {
+      WORK = function()
+        coroutine.yield()
+        return "/work"
+      end,
+    },
+  }, function()
+    local co = coroutine.create(function()
+      return roots.expand("$WORK/x")
+    end)
+    coroutine.resume(co) -- parked inside WORK's function, never resumed
+    roots.setup({ windows = false, nvim_config = false, vars = {}, extra = { WORK = "/work" } })
+    eq(roots.expand("$WORK/x"), "/work/x", "yield: a parked evaluation does not block the name")
+    eq(flat(roots.roots()), "WORK=/work", "yield: ... nor the list of roots")
+  end)
+
+  -- ── NVIM_CONFIG_DIR through `vars` / `opts.names` ────────────────────────────────────────────
+  --
+  -- The root is stdpath("config") because the environment variable can be stale. A plugin with an
+  -- option listing "all my env roots" (or a user doing the same in `vars`) brought the stale one
+  -- back ahead of it.
+  do
+    local cfg = tmp()
+    with_env({ NVIM_CONFIG_DIR = "C:/stale/inherited" }, function()
+      H.with_stdpath_config(cfg, function()
+        with_roots({ windows = false, vars = { "NVIM_CONFIG_DIR" } }, function()
+          eq(flat(roots.roots()), "NVIM_CONFIG_DIR=" .. cfg, "vars: stdpath wins over the variable")
+          eq(
+            flat(roots.roots({ names = { "NVIM_CONFIG_DIR" } })),
+            "NVIM_CONFIG_DIR=" .. cfg,
+            "opts.names: ... also when a call lists it"
+          )
+        end)
+        with_roots(
+          { windows = false, nvim_config = false, vars = { "NVIM_CONFIG_DIR" } },
+          function()
+            eq(
+              flat(roots.roots()),
+              "NVIM_CONFIG_DIR=C:/stale/inherited",
+              "vars: without nvim_config the variable the user asked for is used"
+            )
+          end
+        )
+      end)
+    end)
+  end
+
+  -- ── register: identity, and names on Windows ────────────────────────────────────────────────
+  --
+  -- The function `register` returns compared by VALUE: two plugins registering the same string
+  -- removed each other's root. And on Windows `Notes` / `NOTES` are one name but two keys.
+  do
+    local off_a = roots.register("SHARED_ROOT", "/data/shared")
+    local off_b = roots.register("SHARED_ROOT", "/data/shared")
+    with_roots({ windows = false, nvim_config = false, vars = {} }, function()
+      off_a()
+      eq(
+        roots.expand("$SHARED_ROOT/x"),
+        "/data/shared/x",
+        "register: the first plugin's unregister does not remove the second's equal registration"
+      )
+      off_b()
+      eq(roots.expand("$SHARED_ROOT/x"), "$SHARED_ROOT/x", "register: the owner's does")
+    end)
+
+    with_roots({ windows = true, nvim_config = false, vars = {} }, function()
+      local first = roots.register("Notes", "C:/a")
+      local second = roots.register("NOTES", "C:/b")
+      eq(flat(roots.roots()), "NOTES=C:/b", "register (win): another spelling of a name replaces")
+      second()
+      eq(#roots.roots(), 0, "register (win): ... and nothing of the first is left behind")
+      first()
+      roots.register("Notes", "C:/a")
+      eq(roots.unregister("NOTES"), true, "unregister (win): finds it by the case-insensitive name")
+      eq(#roots.roots(), 0, "unregister (win): gone")
+    end)
+  end
+
+  -- ── json: a refused name is arbitrary bytes ──────────────────────────────────────────────────
+  with_roots(
+    { windows = false, nvim_config = false, vars = { "BAD\255NAME" }, source = {} },
+    function()
+      local text = roots.json()
+      eq(
+        require("lib.lua.strings.safe").utf8(text),
+        text,
+        "json: a name that is not valid UTF-8 does not spoil the document"
+      )
+      eq(
+        vim.json.decode(text).unresolved[1].problem,
+        "invalid_name",
+        "json: ... and is still reported"
+      )
+    end
+  )
+
+  -- ── verbatim and device prefixes ─────────────────────────────────────────────────────────────
+  --
+  -- `\\?\C:\...` is what `fs::canonicalize` and cargo print; it is the same path as `C:\...`.
+  with_roots({
+    windows = true,
+    nvim_config = false,
+    vars = {},
+    extra = { X = "C:/repos", SHARE = "\\\\?\\UNC\\srv\\share\\r" },
+  }, function()
+    eq(roots.fold("\\\\?\\C:\\repos\\sub\\f.txt"), "$X/sub/f.txt", "fold (win): \\\\?\\C:\\...")
+    eq(roots.fold("\\\\.\\c:\\repos\\f.txt"), "$X/f.txt", "fold (win): \\\\.\\c:\\... (device)")
+    eq(roots.fold("//?/C:/repos"), "$X", "fold (win): the slash spelling, the root itself")
+    eq(
+      flat(roots.roots()),
+      "SHARE=//srv/share/r;X=C:/repos",
+      "roots (win): a verbatim UNC root is the UNC root"
+    )
+    eq(roots.fold("\\\\?\\UNC\\srv\\share\\r\\a"), "$SHARE/a", "fold (win): \\\\?\\UNC\\...")
+    eq(
+      roots.fold("\\\\?\\GLOBALROOT\\x"),
+      "\\\\?\\GLOBALROOT\\x",
+      "fold (win): other prefixes stay"
+    )
+  end)
+
+  -- ── a backslash below the root, on POSIX ─────────────────────────────────────────────────────
+  --
+  -- `a\..\..\Windows` is one valid POSIX file name. Written as `$R/a\..\..\Windows` it climbs out
+  -- of the root on a Windows machine that reads the text. Such a path stays absolute.
+  with_roots({
+    windows = false,
+    nvim_config = false,
+    vars = {},
+    extra = { R = "/home/u/repos" },
+  }, function()
+    local trap = "/home/u/repos/a\\..\\..\\Windows\\win.ini"
+    eq(roots.fold(trap), trap, "fold (posix): a backslash below the root is not folded")
+    eq(roots.root_of(trap), nil, "root_of (posix): ... and names no root")
+    eq(roots.fold("/home/u/repos/a/b"), "$R/a/b", "fold (posix): an ordinary path is")
+  end)
+  with_roots({
+    windows = true,
+    nvim_config = false,
+    vars = {},
+    extra = { R = "D:/repos" },
+  }, function()
+    eq(roots.fold("D:\\repos\\a\\b"), "$R/a/b", "fold (win): backslashes are separators there")
+  end)
+
+  -- ── Windows: variable names of an injected source ────────────────────────────────────────────
+  with_roots(
+    { windows = true, nvim_config = false, vars = { "repos_dir" }, source = { REPOS_DIR = "D:/r" } },
+    function()
+      eq(
+        flat(roots.roots()),
+        "repos_dir=D:/r",
+        "source (win): names are case-insensitive, as in the real environment"
+      )
+    end
+  )
+  with_roots(
+    { windows = false, nvim_config = false, vars = { "repos_dir" }, source = { REPOS_DIR = "/r" } },
+    function()
+      eq(#roots.roots(), 0, "source (posix): names are case-sensitive")
+    end
+  )
 
   -- setup() with nothing resets: no leftover from the cases above.
   roots.setup()

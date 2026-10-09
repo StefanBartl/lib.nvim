@@ -68,14 +68,30 @@ local DEFAULTS = {
 local _cfg = DEFAULTS
 
 -- Roots added by plugins (`register`), kept apart from `_cfg` so that `setup` does not drop them.
----@type table<string, string|(fun(): string?)>
+-- A registration is a token table, so the function `register` hands back can tell its own
+-- registration from a later one that happens to carry an equal value.
+---@type table<string, { value: string|(fun(): string?) }>
 local _registered = {}
 
--- `name_key`s whose definition is being evaluated right now. A root function may ask the registry
--- about another root (`function() return roots.expand("$REPOS_DIR/notes") end`); the guard keeps a
--- definition that asks about itself -- directly or through a cycle -- from recursing.
----@type table<string, true>
-local _active = {}
+-- `name_key`s whose definition is being evaluated right now, per coroutine. A root function may ask
+-- the registry about another root (`function() return roots.expand("$REPOS_DIR/notes") end`); the
+-- guard keeps a definition that asks about itself -- directly or through a cycle -- from
+-- recursing. Per coroutine because a function may yield (an async task): its entry must not block
+-- the same name for everybody else, and it goes away with the coroutine if that never resumes.
+---@type table<thread|table, table<string, true>>
+local _active = setmetatable({}, { __mode = "k" })
+local MAIN_THREAD = {} -- `coroutine.running()` is nil on the main thread of LuaJIT
+
+---@return table<string, true>
+local function busy()
+  local thread = coroutine.running() or MAIN_THREAD
+  local set = _active[thread]
+  if not set then
+    set = {}
+    _active[thread] = set
+  end
+  return set
+end
 
 ---@param level integer  the caller's level as for `error` (1 = the function that calls `fail`)
 ---@param msg string
@@ -164,6 +180,19 @@ local function clean_abs(s)
   end
   local unc_spelled = s:sub(1, 2) == "\\\\"
   s = unify(s)
+
+  -- Verbatim and device prefixes (`\\?\C:\x`, `\\?\UNC\srv\share`, `\\.\C:\x` -- what cargo and
+  -- `fs::canonicalize` hand out) are the same paths spelled the long way.
+  if unc_spelled or win() then
+    local long = s:match("^//[?.]/(.*)$")
+    if long and long:match("^%a:/") then
+      s = long
+    elseif long and long:match("^%a:$") then
+      s = long .. "/"
+    elseif long and long:match("^[Uu][Nn][Cc]/[^/]") then
+      s = "//" .. long:sub(5)
+    end
+  end
 
   local prefix, tail
   if s:match("^%a:/") then
@@ -282,7 +311,17 @@ local function read_env(name)
     return ok and v or nil
   end
   if type(src) == "table" then
-    return src[name]
+    local v = src[name]
+    if v == nil and win() then
+      -- the real environment of Windows does not tell `Repos_Dir` from `REPOS_DIR`
+      local want = name:upper()
+      for key, value in pairs(src) do
+        if type(key) == "string" and key:upper() == want then
+          return value
+        end
+      end
+    end
+    return v
   end
   return nil
 end
@@ -372,13 +411,14 @@ end
 function collect(only, opts)
   opts = opts or {}
   local out, index = {}, {}
+  local running = busy()
 
   ---@param kind "extra"|"registered"|"var"|"nvim_config"
   ---@param name string
   ---@param fetch fun(): any  Called only when the definition is actually wanted.
   local function add(kind, name, fetch)
     local key = name_key(name)
-    if (only and key ~= only) or _active[key] then
+    if (only and key ~= only) or running[key] then
       return
     end
     local at = index[key]
@@ -387,9 +427,9 @@ function collect(only, opts)
     end
     local e
     if name:match(NAME_PAT) then
-      _active[key] = true
+      running[key] = true
       local ok, res = pcall(build, kind, name, fetch)
-      _active[key] = nil
+      running[key] = nil
       e = ok and res or { name = name, kind = kind, problem = "error", detail = tostring(res) }
     else
       e = { name = name, kind = kind, problem = "invalid_name" }
@@ -404,7 +444,8 @@ function collect(only, opts)
 
   ---@param kind "extra"|"registered"
   ---@param defs table<string, any>
-  local function add_table(kind, defs)
+  ---@param value fun(def: any): any  the configured value of one entry
+  local function add_table(kind, defs, value)
     local names = {}
     for name in pairs(defs) do
       if type(name) == "string" and name ~= "" and (not only or name_key(name) == only) then
@@ -414,18 +455,34 @@ function collect(only, opts)
     table.sort(names)
     for _, name in ipairs(names) do
       add(kind, name, function()
-        return defs[name]
+        return value(defs[name])
       end)
     end
   end
 
-  add_table("extra", _cfg.extra)
-  add_table("registered", _registered)
+  add_table("extra", _cfg.extra, function(def)
+    return def
+  end)
+  add_table("registered", _registered, function(def)
+    return def.value
+  end)
 
+  local want_nvim = opts.nvim_config
+  if want_nvim == nil then
+    want_nvim = _cfg.nvim_config
+  end
+
+  -- The root of `NVIM_CONFIG_DIR` is `stdpath("config")`, never the environment variable of that
+  -- name (which can be stale); listing the name in `vars` / `opts.names` must not bring it back.
+  -- Without `nvim_config` the user asked for the variable, and gets it.
   ---@param list any
   local function add_vars(list)
     for _, name in ipairs(list or {}) do
-      if type(name) == "string" and name ~= "" then
+      if
+        type(name) == "string"
+        and name ~= ""
+        and not (want_nvim and name_key(name) == name_key(NVIM_CONFIG_NAME))
+      then
         add("var", name, function()
           return read_env(name)
         end)
@@ -435,10 +492,6 @@ function collect(only, opts)
   add_vars(_cfg.vars)
   add_vars(opts.names)
 
-  local want_nvim = opts.nvim_config
-  if want_nvim == nil then
-    want_nvim = _cfg.nvim_config
-  end
   if want_nvim then
     add("nvim_config", NVIM_CONFIG_NAME, function()
       -- Injected source: the value comes from the source and nowhere else. Falling back to the
@@ -512,7 +565,8 @@ end
 ---Add a root from a plugin, without touching what the user configured with `setup` -- which
 ---replaces, so two plugins calling it would erase each other. Registered roots survive `setup`;
 ---on a name the user defined too (`extra`), the user wins. Registering a name again replaces the
----earlier registration.
+---earlier registration -- on Windows also one spelled in another case (`Notes` / `NOTES`), as
+---names are case-insensitive there.
 ---@param name string  letters, digits and underscores, not starting with a digit
 ---@param value string|(fun(): string?)  absolute path (`~` / `$VAR` allowed) or a function returning one
 ---@return fun() unregister  removes this registration again (a no-op once replaced)
@@ -526,9 +580,18 @@ function M.register(name, value)
   if type(value) ~= "string" and type(value) ~= "function" then
     fail(2, ("register: `value` must be a string or a function, got %s"):format(type(value)))
   end
-  _registered[name] = value
+  local key = name_key(name)
+  for existing in pairs(_registered) do
+    if name_key(existing) == key then
+      _registered[existing] = nil
+    end
+  end
+  local token = { value = value }
+  _registered[name] = token
   return function()
-    if _registered[name] == value then
+    -- by identity of THIS registration: two plugins registering an equal value must not remove
+    -- each other's root
+    if _registered[name] == token then
       _registered[name] = nil
     end
   end
@@ -538,8 +601,16 @@ end
 ---@param name string
 ---@return boolean
 function M.unregister(name)
-  local had = _registered[name] ~= nil
-  _registered[name] = nil
+  if type(name) ~= "string" then
+    return false
+  end
+  local key, had = name_key(name), false
+  for existing in pairs(_registered) do
+    if name_key(existing) == key then
+      _registered[existing] = nil
+      had = true
+    end
+  end
   return had
 end
 
@@ -672,24 +743,56 @@ local function byte_key(abs, windows)
   return abs:lower()
 end
 
+local REAL_TTL_MS = 5000
+
+-- root -> { path = the resolved spelling or false, at = hrtime in ms }
+---@type table<string, { path: string|false, at: number }>
+local _real = {}
+
+---The spelling of `root` with its symlinks resolved when that differs from `root`, else nil.
+---Cached for a few seconds: a `fold` builds its roots afresh on every call, and a stat chain on a
+---dead network mount blocks for as long as the system waits.
+---@param root string
+---@param windows boolean
+---@return string|nil
+local function real_of(root, windows)
+  local now = uv.hrtime() / 1e6
+  local hit = _real[root]
+  if not hit or now - hit.at > REAL_TTL_MS then
+    local rp = uv.fs_realpath(root)
+    rp = rp and clean_abs(rp)
+    -- A root that is a link to the filesystem root or to a whole drive would fold every path,
+    -- exactly what `too_broad` refuses for a root that says so itself.
+    if rp and (rp == "" or rp:match("^%a:$")) then
+      rp = nil
+    end
+    hit = { path = rp or false, at = now }
+    _real[root] = hit
+  end
+  local rp = hit.path
+  if rp and (windows and lower(rp) or rp) ~= (windows and lower(root) or root) then
+    return rp
+  end
+  return nil
+end
+
 ---@param list Lib.Fs.Roots.Root[]
 ---@param windows boolean
 ---@param real boolean  the symlink-resolved spelling of each root instead (only those that differ)
 ---@return Lib.Fs.Roots.Prepared[]
 local function prepare(list, windows, real)
   local out = {}
+  -- Windows does not canonicalise buffer names (they keep the junction they were opened through),
+  -- so there is nothing to find there -- and no reason to stat a possibly unreachable share.
+  if real and windows then
+    return out
+  end
   for i, r in ipairs(list) do
     local root = r.root ---@type string|nil
     if real then
       -- A buffer name is canonical on Unix (`~/.config/nvim` -> `~/dotfiles/nvim` opens as the
       -- latter), so a root reached through a symlink would never match what it contains.
-      local rp = uv.fs_realpath(r.root)
-      rp = rp and clean_abs((rp:gsub("^\\\\%?\\", "")))
-      if rp and (windows and lower(rp) or rp) ~= (windows and lower(r.root) or r.root) then
-        root = rp
-      else
-        root = nil
-      end
+      root = real_of(r.root, windows)
     end
     if root then
       local segs = vim.split(root, "/", { plain = true })
@@ -835,9 +938,13 @@ end
 ---folding many paths (a recursive file list). The function returns the folded path and the name of
 ---the root that matched (nil when none did). A path that is not absolute comes back unchanged.
 ---
----A path is compared with each root as configured first; only when none matches, with the
----symlink-resolved spelling of the roots (`uv.fs_realpath`, looked up once per folder). That is
----what a buffer name looks like on Unix when the root itself is a symlink.
+---A path is compared with each root as configured first; only when none matches, and not on
+---Windows, with the symlink-resolved spelling of the roots (`uv.fs_realpath`, cached for a few
+---seconds; never a link to a drive or the filesystem root). That is what a buffer name looks like
+---on Unix when the root itself is a symlink.
+---
+---A path with a backslash below the root (a valid POSIX file name) is not folded on POSIX: written
+---as `$NAME/a\b` it would mean two directories to a Windows machine that reads the text.
 ---@param opts? Lib.Fs.Roots.FoldOpts
 ---@return fun(p: string): string, string|nil
 function M.folder(opts)
@@ -870,7 +977,13 @@ function M.folder(opts)
     if not r then
       return p, nil
     end
-    return "$" .. r.name .. abs:sub(n + 1), r.name
+    local rest = abs:sub(n + 1)
+    -- On Windows (where the text may travel) a backslash is a separator: `$R/a\..\..\x` would
+    -- climb out of the root there. What cannot be written the same everywhere stays absolute.
+    if not windows and rest:find("\\", 1, true) then
+      return p, nil
+    end
+    return "$" .. r.name .. rest, r.name
   end
 end
 
@@ -896,17 +1009,23 @@ function M.root_of(p, opts)
   return name
 end
 
+local REMAP_MAX_BYTES = 4096 -- PATH_MAX on Linux; no real path of another machine is longer
+local REMAP_MAX_STATS = 64 -- candidates looked up per call
+
 ---Candidates for an absolute path that was recorded on ANOTHER machine, re-anchored under this
 ---machine's roots. The root's own folder name is the anchor: a root `D:/repos` is called `repos`
 ---on every machine, so the part of `E:/repos/casedesk.nvim/x.md` after `repos` is looked for
 ---under `D:/repos` (likewise `nvim` for `$NVIM_CONFIG_DIR`, whatever drive or home it sits on).
 ---The anchor may be the path's last segment (the recorded root itself). The anchor word compares
 ---case-insensitively when this machine is Windows or the recorded path is a Windows path. Only
----candidates that exist are returned, the OUTERMOST anchor first (the longest rest), each once.
----Empty when `enable = false`, `p` is not absolute, or nothing matches.
+---candidates that exist are returned, the OUTERMOST anchor first (the longest rest; for equal
+---anchors the earlier root), each once. Empty when `enable = false`, `p` is not absolute, or
+---nothing matches.
 ---
 ---`.` and `..` of the recorded path are resolved lexically first, so `E:/repos/../../etc/x` cannot
----climb out of the root it is re-anchored under.
+---climb out of the root it is re-anchored under. It is somebody else's data, so the work is
+---bounded: a path longer than `REMAP_MAX_BYTES` maps to nothing, and at most `REMAP_MAX_STATS`
+---candidates are looked up (a path of 20 000 times `repos/` would otherwise cost seconds).
 ---@param p string
 ---@return string[]
 function M.remap(p)
@@ -914,29 +1033,48 @@ function M.remap(p)
     return {}
   end
   local raw = clean_abs(p)
-  if not raw then
+  if not raw or #raw > REMAP_MAX_BYTES then
     return {}
   end
 
   local segs = vim.split(raw, "/", { plain = true, trimempty = true })
   local anchor_case = win() or raw:match("^%a:") ~= nil or raw:sub(1, 2) == "//"
   local folded_raw = fold_case(raw)
-  local hits, seen = {}, {}
-  for _, r in ipairs(M.roots()) do
+  local found, seen, stats = {}, {}, 0
+  for ri, r in ipairs(M.roots()) do
     local leaf = r.root:match("([^/]+)$")
-    if leaf then
+    if leaf and stats < REMAP_MAX_STATS then
       local want = anchor_case and lower(leaf) or leaf
       for i = 1, #segs do
+        if stats >= REMAP_MAX_STATS then
+          break
+        end
         if (anchor_case and lower(segs[i]) or segs[i]) == want then
           local cand = i == #segs and r.root or (r.root .. "/" .. table.concat(segs, "/", i + 1))
           local key = fold_case(cand)
-          if not seen[key] and key ~= folded_raw and uv.fs_stat(cand) then
+          if not seen[key] and key ~= folded_raw then
             seen[key] = true
-            hits[#hits + 1] = cand
+            stats = stats + 1
+            if uv.fs_stat(cand) then
+              found[#found + 1] = { path = cand, anchor = i, root = ri }
+            end
           end
         end
       end
     end
+  end
+
+  -- Outermost anchor first across ALL roots (a root-major order would put a root with a deeper
+  -- anchor ahead of one with an outer anchor); (anchor, root) is unique, so the order is total.
+  table.sort(found, function(a, b)
+    if a.anchor ~= b.anchor then
+      return a.anchor < b.anchor
+    end
+    return a.root < b.root
+  end)
+  local hits = {}
+  for _, f in ipairs(found) do
+    hits[#hits + 1] = f.path
   end
   return hits
 end
@@ -958,12 +1096,13 @@ function M.json()
   local roots, unresolved = {}, {}
   for _, e in ipairs(M.status()) do
     if e.root and safe.utf8(e.root) ~= e.root then
-      unresolved[#unresolved + 1] = { name = e.name, problem = "invalid_encoding" }
+      unresolved[#unresolved + 1] = { name = safe.utf8(e.name), problem = "invalid_encoding" }
     elseif e.root then
       roots[#roots + 1] = { name = e.name, root = e.root, exists = e.exists == true }
     else
       unresolved[#unresolved + 1] = {
-        name = e.name,
+        -- a refused NAME can be any bytes (`invalid_name`), a usable one is ASCII
+        name = safe.utf8(e.name),
         problem = e.problem,
         detail = e.detail and safe.utf8(e.detail) or nil,
       }
