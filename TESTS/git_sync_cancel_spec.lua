@@ -129,6 +129,31 @@ local function run(H)
     end)
   end
 
+  -- ── pull_async: stop() while the pull runs, HEAD-before having hit the deadline ──
+  -- That read's "unknown" ends the call right after a successful pull; a pull that finished
+  -- before the kill landed must still stay silent for a caller that cancelled.
+  do
+    local label = "pull_async(stopped during the pull, HEAD-before hit the deadline)"
+    local rec = fake_runner({ ["rev-parse"] = { false, "", 124, "", 15 } })
+    H.with_patched(run_argv, "run_async_captured", rec.fn, function()
+      local done = false
+      local handle = git.pull_async({ dir = "unused" }, function()
+        done = true
+      end)
+      H.ok(
+        wait_for(function()
+          return rec.parked.pull ~= nil
+        end),
+        label .. ": the pull starts"
+      )
+      handle.stop()
+      rec.parked.pull(true, "", 0, "", 0)
+      vim.wait(200)
+      H.ok(not done, label .. ": on_done never fires after an explicit stop()")
+      H.eq(#rec.dispatched, 2, label .. ": no HEAD-after read either")
+    end)
+  end
+
   -- ── update_async: stop() while the fetch runs, or just as it finishes ───
   -- Without a cancelled flag the POSIX shape (a killed fetch read as a success) and a fetch
   -- that finished before the kill landed both went on to start `git pull`, which moves the

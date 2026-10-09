@@ -330,12 +330,11 @@ return function(H)
     -- a live group is still known by name after the prune (the id alone proves nothing: Neovim
     -- hands out the same id for an existing name): a record made through its id names it
     autocmd.create("User", function() end, { group = live, pattern = "LibNvimSpecChurnLive" })
-    eq(
-      #autocmd.registered({ group = "LibNvimSpecChurnLive" }),
-      1,
-      "a live group keeps its name in the cache"
-    )
+    local named = #autocmd.registered({ group = "LibNvimSpecChurnLive" })
+    -- clean up before asserting (a failing run must not leave the group or its record behind)
+    autocmd.forget_group("LibNvimSpecChurnLive")
     vim.api.nvim_del_augroup_by_id(live)
+    eq(named, 1, "a live group keeps its name in the cache")
   end
 
   -- A growing set of LIVE groups must not be scanned in full for every new group: the
