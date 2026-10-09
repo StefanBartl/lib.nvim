@@ -315,6 +315,7 @@ return function(H)
     -- threshold is process state (other specs raise it), so look for the prune itself --
     -- the cache shrinking -- not for a fixed size; it must come within twice the current
     -- size.
+    local live = autocmd.group("LibNvimSpecChurnLive")
     local peak, pruned = autocmd._cache_size(), false
     for i = 1, 2 * peak + 100 do
       vim.api.nvim_del_augroup_by_id(autocmd.group("LibNvimSpecChurn" .. i))
@@ -326,9 +327,15 @@ return function(H)
       peak = size
     end
     ok(pruned, "dead groups are pruned from the caches once they have outgrown the threshold")
-    local survivor = autocmd.group("LibNvimSpecChurnSurvivor")
-    eq(autocmd.group("LibNvimSpecChurnSurvivor"), survivor, "a live group keeps its cached id")
-    vim.api.nvim_del_augroup_by_id(survivor)
+    -- a live group is still known by name after the prune (the id alone proves nothing: Neovim
+    -- hands out the same id for an existing name): a record made through its id names it
+    autocmd.create("User", function() end, { group = live, pattern = "LibNvimSpecChurnLive" })
+    eq(
+      #autocmd.registered({ group = "LibNvimSpecChurnLive" }),
+      1,
+      "a live group keeps its name in the cache"
+    )
+    vim.api.nvim_del_augroup_by_id(live)
   end
 
   -- A growing set of LIVE groups must not be scanned in full for every new group: the
@@ -346,9 +353,9 @@ return function(H)
         autocmd.group(names[i])
       end
     end)
-    ok(probes < 3000, ("300 live groups cost %d prune probes"):format(probes))
     for _, name in ipairs(names) do
       pcall(vim.api.nvim_del_augroup_by_name, name)
     end
+    ok(probes < 3000, ("300 live groups cost %d prune probes"):format(probes))
   end
 end
