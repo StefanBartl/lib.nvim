@@ -546,10 +546,10 @@ return function(H)
     ---@param opts? table
     ---@param during? fun(handle: table)  Called right after the start
     ---@return table r  `done, ok, code, signal, stderr, elapsed` (ms from start to on_done)
-    local function run_async(argv, opts, during)
+    local function run_async(cmd, opts, during)
       local r = { done = false }
       local t0 = vim.uv.hrtime()
-      local handle = run_argv.run_async_captured(argv, function(ok_, out_, code_, err_, sig_)
+      local handle = run_argv.run_async_captured(cmd, function(ok_, out_, code_, err_, sig_)
         r.done, r.ok, r.out, r.code, r.stderr, r.signal = true, ok_, out_, code_, err_, sig_
         r.elapsed = (vim.uv.hrtime() - t0) / 1e6
       end, nil, opts)
@@ -586,13 +586,13 @@ return function(H)
       vim.fn.delete(file)
 
       file = tmp_pidfile()
-      local res = run_argv.run_blocking_result(
+      local result = run_argv.run_blocking_result(
         sh_script(file, "sleep 60", "wait"),
         nil,
         { timeout_ms = TIMEOUT }
       )
-      eq(res.timed_out, true, "blocking_result timeout: timed out")
-      eq(res.code, 124, "blocking_result timeout: code 124")
+      eq(result.timed_out, true, "blocking_result timeout: timed out")
+      eq(result.code, 124, "blocking_result timeout: code 124")
       expect_dead(grandchild_pid(file), "blocking_result timeout: the grandchild is killed")
       vim.fn.delete(file)
 
@@ -631,13 +631,13 @@ return function(H)
       vim.fn.delete(file)
 
       file = tmp_pidfile()
-      local res = run_argv.run_blocking_result(
+      local result = run_argv.run_blocking_result(
         sh_script(file, "sleep 60", "wait", "trap '' TERM"),
         nil,
         { timeout_ms = TIMEOUT }
       )
-      eq(res.code, 124, "blocking_result, SIGTERM ignored: code 124")
-      eq(res.signal, 9, "blocking_result, SIGTERM ignored: killed with SIGKILL")
+      eq(result.code, 124, "blocking_result, SIGTERM ignored: code 124")
+      eq(result.signal, 9, "blocking_result, SIGTERM ignored: killed with SIGKILL")
       expect_dead(grandchild_pid(file), "blocking_result, SIGTERM ignored: grandchild killed")
       vim.fn.delete(file)
 
@@ -680,10 +680,10 @@ return function(H)
       vim.fn.delete(marker)
 
       file, marker = tmp_pidfile(), tmp_pidfile()
-      local res = run_argv.run_blocking_result(stubborn_grandchild(file, marker), nil, {
+      local result = run_argv.run_blocking_result(stubborn_grandchild(file, marker), nil, {
         timeout_ms = TIMEOUT,
       })
-      eq(res.code, 124, "blocking_result, leader gone: code 124")
+      eq(result.code, 124, "blocking_result, leader gone: code 124")
       ok(
         vim.fn.filereadable(marker) == 1,
         "blocking_result, leader gone: the deadline sent SIGTERM first"
@@ -706,13 +706,17 @@ return function(H)
 
       file = tmp_pidfile()
       local t0 = vim.uv.hrtime()
-      local res = run_argv.run_blocking_result(
+      local result = run_argv.run_blocking_result(
         sh_script(file, "sleep 60", flood),
         nil,
         { max_output_bytes = 2000 }
       )
       local took = (vim.uv.hrtime() - t0) / 1e6
-      eq(res.code, run_argv.OUTPUT_LIMIT_CODE, "blocking_result output cap: the output-limit code")
+      eq(
+        result.code,
+        run_argv.OUTPUT_LIMIT_CODE,
+        "blocking_result output cap: the output-limit code"
+      )
       ok(took < 20000, ("blocking_result output cap: returned at once (%d ms)"):format(took))
       expect_dead(grandchild_pid(file), "blocking_result output cap: the grandchild is killed")
       vim.fn.delete(file)
@@ -806,15 +810,15 @@ return function(H)
       vim.fn.delete(file)
 
       file = tmp_pidfile()
-      local res = run_argv.run_blocking_result({ "sh", "-c", escape }, nil, {
+      local result = run_argv.run_blocking_result({ "sh", "-c", escape }, nil, {
         timeout_ms = 300,
         env = { PIDFILE = file },
       })
-      eq(res.timed_out, true, "blocking_result, descendant left the group: timed out")
-      eq(res.code, 124, "blocking_result, descendant left the group: code 124")
-      eq(res.signal, 9, "blocking_result, descendant left the group: signal 9")
+      eq(result.timed_out, true, "blocking_result, descendant left the group: timed out")
+      eq(result.code, 124, "blocking_result, descendant left the group: code 124")
+      eq(result.signal, 9, "blocking_result, descendant left the group: signal 9")
       ok(
-        (res.stderr or ""):find("still holds", 1, true) ~= nil,
+        (result.stderr or ""):find("still holds", 1, true) ~= nil,
         "blocking_result, descendant left the group: wait() gave up"
       )
       expect_left_alone(
@@ -902,11 +906,8 @@ return function(H)
 
       -- a deadline or cap that is not armed (NaN, negative) kills nothing, so it detaches nothing
       for _, bad in ipairs({ -1, 0 / 0 }) do
-        local unarmed = run_argv.run_blocking_result(
-          pgid_argv,
-          nil,
-          { timeout_ms = bad, max_output_bytes = bad }
-        )
+        local unarmed =
+          run_argv.run_blocking_result(pgid_argv, nil, { timeout_ms = bad, max_output_bytes = bad })
         local u_pid, u_pgid = pid_and_pgid(unarmed.stdout)
         ok(
           u_pid ~= nil and u_pgid ~= u_pid,
