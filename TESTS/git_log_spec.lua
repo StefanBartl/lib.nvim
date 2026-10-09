@@ -602,14 +602,22 @@ return function(H)
     F.commit(ps, "touches aB", { when = 1700000200 })
     local saved_lit, saved_icase = vim.env.GIT_LITERAL_PATHSPECS, vim.env.GIT_ICASE_PATHSPECS
     vim.env.GIT_LITERAL_PATHSPECS, vim.env.GIT_ICASE_PATHSPECS = "1", "1"
-    local only = git.log("HEAD", { dir = ps, paths = { "Ab.txt" }, no_lazy_fetch = true })
+    -- (without `no_lazy_fetch`: the reset does not depend on it)
+    local only = git.log("HEAD", { dir = ps, paths = { "Ab.txt" } })
     vim.env.GIT_LITERAL_PATHSPECS, vim.env.GIT_ICASE_PATHSPECS = saved_lit, saved_icase
-    H.eq(
-      #(only or {}),
-      1,
-      "log paths: GIT_ICASE_PATHSPECS/GIT_LITERAL_PATHSPECS in the env are overridden"
-    )
+    H.ok(only ~= nil, "log paths: LITERAL+ICASE in the env is not a fatal 'incompatible settings'")
+    H.eq(#(only or {}), 1, "log paths: GIT_LITERAL/ICASE_PATHSPECS in the env are overridden")
     H.eq((only or { {} })[1].subject, "touches Ab", "log paths: ... exact case")
+
+    -- NOGLOB in the env must not break a caller's own pathspec magic
+    local saved_noglob = vim.env.GIT_NOGLOB_PATHSPECS
+    vim.env.GIT_NOGLOB_PATHSPECS = "1"
+    local globbed = git.log("HEAD", { dir = ps, paths = { "A*.txt" }, pathspecs = true })
+    vim.env.GIT_NOGLOB_PATHSPECS = saved_noglob
+    H.ok(
+      #(globbed or {}) >= 1,
+      "log paths: GIT_NOGLOB_PATHSPECS in the env does not disable a glob"
+    )
   end
 
   -- ── max_output_bytes: one huge message cannot fill the editor's memory ─────

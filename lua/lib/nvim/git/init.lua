@@ -799,6 +799,27 @@ end
 -- run whatever they are handed) none of them writes to the repository.
 
 ---@internal
+--- The pathspec switches, all off. An inherited `GIT_LITERAL_PATHSPECS` would
+--- turn the `:(literal)` prefix of `log_argv` into part of the name (and together
+--- with another one is a fatal "incompatible global pathspec settings"); an
+--- inherited `GIT_NOGLOB_PATHSPECS` would break `opts.pathspecs = true`. A
+--- caller's own `opts.env` entry of the same name wins.
+local PATHSPEC_ENV = {
+  GIT_LITERAL_PATHSPECS = "0",
+  GIT_GLOB_PATHSPECS = "0",
+  GIT_NOGLOB_PATHSPECS = "0",
+  GIT_ICASE_PATHSPECS = "0",
+}
+
+---@internal
+---@param ropts Lib.RunArgv.Opts
+---@return Lib.RunArgv.Opts
+local function with_pathspec_env(ropts)
+  ropts.env = vim.tbl_extend("keep", ropts.env or {}, PATHSPEC_ENV)
+  return ropts
+end
+
+---@internal
 --- `Lib.Git.RunOpts` -> the `lib.nvim.cross.run_argv` options. `no_lazy_fetch`
 --- is sugar for two environment variables (and a `-c` in `git_argv`):
 --- `GIT_NO_LAZY_FETCH=1` (git 2.44+) and `GIT_ALLOW_PROTOCOL=none`, which on
@@ -811,15 +832,9 @@ local function runner_opts(opts)
   opts = opts or {}
   local env = opts.env
   if opts.no_lazy_fetch then
-    -- (the pathspec switches too: an inherited GIT_LITERAL_PATHSPECS would turn
-    -- the `:(literal)` prefix of `log_argv` into part of the name)
     env = vim.tbl_extend("force", {
       GIT_NO_LAZY_FETCH = "1",
       GIT_ALLOW_PROTOCOL = "none",
-      GIT_LITERAL_PATHSPECS = "0",
-      GIT_GLOB_PATHSPECS = "0",
-      GIT_NOGLOB_PATHSPECS = "0",
-      GIT_ICASE_PATHSPECS = "0",
     }, env or {})
   end
   return {
@@ -897,7 +912,11 @@ local function failure_message(res, what, opts)
   if res.timed_out then
     return ("%s timed out after %d ms"):format(what, opts and opts.timeout_ms or 0)
   end
-  if res.code == require("lib.nvim.cross.run_argv").OUTPUT_LIMIT_CODE then
+  if
+    res.code == require("lib.nvim.cross.run_argv").OUTPUT_LIMIT_CODE
+    and opts
+    and opts.max_output_bytes
+  then
     local why = vim.trim(res.stderr or "")
     return why ~= "" and why or ("%s printed more than max_output_bytes"):format(what)
   end
@@ -1220,7 +1239,7 @@ function M.log(range, opts, git_cmd)
   if not argv then
     return nil, err
   end
-  local ropts = runner_opts(opts)
+  local ropts = with_pathspec_env(runner_opts(opts))
   ropts.binary = true
   return log_result(exec(argv, nil, ropts), opts)
 end
@@ -1250,7 +1269,7 @@ function M.log_async(range, opts, on_done, git_cmd)
   if not argv then
     return refused(on_done, err)
   end
-  local ropts = runner_opts(opts)
+  local ropts = with_pathspec_env(runner_opts(opts))
   ropts.binary = true
   return exec_async(argv, nil, ropts, function(res)
     on_done(log_result(res, opts))

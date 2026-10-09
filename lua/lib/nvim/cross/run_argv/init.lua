@@ -17,15 +17,6 @@ M.OUTPUT_LIMIT_CODE = 125
 --- stderr; the text ends up in failure messages.
 local MAX_STDERR = 64 * 1024
 
----@param text string
----@return string
-local function bound_stderr(text)
-  if #text > MAX_STDERR then
-    return text:sub(1, MAX_STDERR) .. "..."
-  end
-  return text
-end
-
 --- Milliseconds the async runner waits after `timeout_ms` for the process to be
 --- reaped before it reports the timeout itself.
 local GRACE_MS = 1500
@@ -58,7 +49,9 @@ local GRACE_MS = 1500
 ---@param job table|nil  The `vim.system` object.
 ---@param signal string
 local function kill_job(job, signal)
-  if not job then
+  -- An exited process: its pid may already belong to somebody else (`/F` would
+  -- kill that), and `/T` finds descendants only through a live parent anyway.
+  if not job or (job.is_closing and job:is_closing()) then
     return
   end
   if IS_WIN and job.pid then
@@ -79,14 +72,14 @@ end
 
 ---@internal
 --- Best effort, no signal afterwards: for a run that already gave up waiting.
----@param pid integer|nil
-local function kill_tree(pid)
-  if not pid or not IS_WIN then
+---@param job table|nil  The `vim.system` object.
+local function kill_tree(job)
+  if not job or not job.pid or not IS_WIN or (job.is_closing and job:is_closing()) then
     return
   end
   pcall(
     vim.system,
-    { "taskkill", "/PID", tostring(pid), "/T", "/F" },
+    { "taskkill", "/PID", tostring(job.pid), "/T", "/F" },
     { text = true },
     function() end
   )
@@ -125,6 +118,23 @@ local function new_sink(opts, kill)
 end
 
 ---@internal
+--- `text` without a multi-byte character a byte cap cut in two at its end.
+---@param text string
+---@return string
+local function drop_partial_utf8(text)
+  local n, i = #text, #text
+  while i > 0 and n - i < 3 and text:byte(i) >= 0x80 and text:byte(i) < 0xC0 do
+    i = i - 1
+  end
+  local lead = i > 0 and text:byte(i) or 0
+  local need = lead >= 0xF0 and 4 or lead >= 0xE0 and 3 or lead >= 0xC0 and 2 or 1
+  if need > 1 and n - i + 1 < need then
+    return text:sub(1, i - 1)
+  end
+  return text
+end
+
+---@internal
 ---@param sink table
 ---@param opts Lib.RunArgv.Opts|nil
 ---@return string
@@ -135,19 +145,52 @@ local function sink_stdout(sink, opts)
     -- handler it is ours to do.
     out = out:gsub("\r\n", "\n")
     if sink.over then
-      -- the cap may cut a multi-byte character in two
-      local n, i = #out, #out
-      while i > 0 and n - i < 3 and out:byte(i) >= 0x80 and out:byte(i) < 0xC0 do
-        i = i - 1
-      end
-      local lead = i > 0 and out:byte(i) or 0
-      local need = lead >= 0xF0 and 4 or lead >= 0xE0 and 3 or lead >= 0xC0 and 2 or 1
-      if need > 1 and n - i + 1 < need then
-        out = out:sub(1, i - 1)
-      end
+      out = drop_partial_utf8(out)
     end
   end
   return out
+end
+
+---@internal
+--- Collect stderr ourselves, up to `MAX_STDERR` bytes: `vim.system` would
+--- otherwise hold ALL of it in memory before `bound_stderr` could cut the text,
+--- and a hostile process can print gigabytes there. The rest is read and thrown
+--- away (no kill: stderr is not what the caller asked for).
+---@return table errs
+local function new_errsink()
+  local errs = { chunks = {}, size = 0, over = false }
+  errs.handler = function(_, data)
+    if not data or errs.over then
+      return
+    end
+    local room = MAX_STDERR - errs.size
+    if #data > room then
+      errs.over = true
+      if room > 0 then
+        errs.chunks[#errs.chunks + 1] = data:sub(1, room)
+      end
+      errs.size = MAX_STDERR
+    else
+      errs.chunks[#errs.chunks + 1] = data
+      errs.size = errs.size + #data
+    end
+  end
+  return errs
+end
+
+---@internal
+---@param errs table
+---@param opts Lib.RunArgv.Opts|nil
+---@return string
+local function err_text(errs, opts)
+  local text = table.concat(errs.chunks)
+  if not (opts and opts.binary) then
+    text = text:gsub("\r\n", "\n")
+  end
+  if errs.over then
+    return drop_partial_utf8(text) .. "..."
+  end
+  return text
 end
 
 ---@internal
@@ -209,8 +252,9 @@ end
 ---@param input string|nil
 ---@param opts Lib.RunArgv.Opts|nil
 ---@param sink table|nil
+---@param errs table|nil
 ---@return table
-local function system_opts(input, opts, sink)
+local function system_opts(input, opts, sink, errs)
   opts = opts or {}
   return {
     text = not opts.binary,
@@ -218,6 +262,7 @@ local function system_opts(input, opts, sink)
     env = opts.env,
     cwd = opts.cwd,
     stdout = sink and sink.handler or nil,
+    stderr = errs and errs.handler or nil,
   }
 end
 
@@ -240,7 +285,11 @@ function M.run_blocking(cmd, input)
     if res.code == 0 then
       return true, nil
     end
-    return false, (res.stderr ~= "" and res.stderr) or ("exit code " .. res.code)
+    local detail = res.stderr or ""
+    if #detail > MAX_STDERR then
+      detail = drop_partial_utf8(detail:sub(1, MAX_STDERR)) .. "..."
+    end
+    return false, (detail ~= "" and detail) or ("exit code " .. res.code)
   end
 
   -- Legacy fallback
@@ -274,8 +323,9 @@ function M.run_blocking_captured(cmd, input, opts)
         kill_job(job, "sigkill")
       end
     end)
+    local errs = new_errsink() -- stderr is not returned here, only kept out of memory
     local ok, res = pcall(function()
-      job = vim.system(cmd, system_opts(input, opts, sink))
+      job = vim.system(cmd, system_opts(input, opts, sink, errs))
       deadline = start_deadline(function()
         return job
       end, opts)
@@ -289,7 +339,7 @@ function M.run_blocking_captured(cmd, input, opts)
     if res == nil then
       -- `wait()` gives up with nil when the process (or a descendant) still
       -- holds the pipes after the kill: report a failure, do not index it.
-      kill_tree(job and job.pid)
+      kill_tree(job)
       return false, sink and sink_stdout(sink, opts) or ""
     end
     if sink then
@@ -336,8 +386,9 @@ function M.run_blocking_result(cmd, input, opts)
   -- vim.system raises synchronously when cmd[1] cannot be spawned at all
   -- (e.g. ENOENT): the same guard as in the other runners, reported as a
   -- failed result instead of an error escaping to the caller.
+  local errs = new_errsink()
   local ok, res = pcall(function()
-    job = vim.system(cmd, system_opts(input, opts, sink))
+    job = vim.system(cmd, system_opts(input, opts, sink, errs))
     deadline = start_deadline(function()
       return job
     end, opts)
@@ -361,7 +412,7 @@ function M.run_blocking_result(cmd, input, opts)
     -- `wait()` returns nil when the process (or a descendant: the real git
     -- behind the Windows `cmd\git.exe` wrapper) still holds the pipes after the
     -- kill. There is no result to index; say what happened.
-    kill_tree(job and job.pid)
+    kill_tree(job)
     return {
       ok = false,
       code = 124,
@@ -385,7 +436,7 @@ function M.run_blocking_result(cmd, input, opts)
   if code == 0 and signal ~= 0 then
     code = 128 + signal
   end
-  local stdout, stderr = res.stdout or "", bound_stderr(res.stderr or "")
+  local stdout, stderr = res.stdout or "", err_text(errs, opts)
   if sink then
     stdout = sink_stdout(sink, opts)
     if sink.over then
@@ -490,20 +541,26 @@ function M.run_async_captured(cmd, on_done, input, opts)
   -- (e.g. ENOENT) rather than delivering a failed SystemCompleted -- guard it
   -- so that case reaches on_done like every other failure, instead of an
   -- uncaught error escaping into the caller's stack.
-  local ok_spawn, spawned = pcall(vim.system, cmd, system_opts(input, opts, sink), function(res)
-    local stdout, stderr, code = res.stdout or "", bound_stderr(res.stderr or ""), res.code
-    if sink then
-      stdout = sink_stdout(sink, opts)
-      if sink.over then
-        code, stderr = M.OUTPUT_LIMIT_CODE, over_message(sink)
+  local errs = new_errsink()
+  local ok_spawn, spawned = pcall(
+    vim.system,
+    cmd,
+    system_opts(input, opts, sink, errs),
+    function(res)
+      local stdout, stderr, code = res.stdout or "", err_text(errs, opts), res.code
+      if sink then
+        stdout = sink_stdout(sink, opts)
+        if sink.over then
+          code, stderr = M.OUTPUT_LIMIT_CODE, over_message(sink)
+        end
       end
+      local signal = res.signal or 0
+      if deadline and deadline.fired and not (sink and sink.over) then
+        code, signal = 124, (signal ~= 0 and signal or 15)
+      end
+      settle(code == 0, stdout, code, stderr, signal)
     end
-    local signal = res.signal or 0
-    if deadline and deadline.fired and not (sink and sink.over) then
-      code, signal = 124, (signal ~= 0 and signal or 15)
-    end
-    settle(code == 0, stdout, code, stderr, signal)
-  end)
+  )
 
   if not ok_spawn then
     settle(false, tostring(spawned), -1, "", 0)
