@@ -365,6 +365,17 @@ return function(H)
   )
   eq(noisy_result.code, 3, "stderr bound: the exit code is kept")
   ok(#noisy_result.stderr <= 64 * 1024 + 8, "stderr bound: ... and the text is cut")
+  eq(noisy_result.stderr:sub(-3), "...", "stderr bound: ... and marked as cut")
+
+  -- the cut never leaves half a multi-byte character: 65536 is not a multiple of 3
+  local utf8_script = H.tmpfile(".lua")
+  vim.fn.writefile({ "io.stderr:write(string.rep('\\230\\188\\162', 30000))" }, utf8_script)
+  local wide_result = run_argv.run_blocking_result(
+    { vim.v.progpath, "-n", "-i", "NONE", "--headless", "-u", "NONE", "-l", utf8_script },
+    nil,
+    {}
+  )
+  eq(#wide_result.stderr, 65535 + 3, "stderr bound: a cut 3-byte character is dropped whole")
 
   local under = run_argv.run_blocking_result(big_argv, nil, { max_output_bytes = 10 * 1024 * 1024 })
   eq(under.ok, true, "run_blocking_result: output under the cap is untouched")

@@ -26,9 +26,16 @@ local uv = vim.uv or vim.loop
 ---@return string|nil content
 ---@return string|nil err
 return function(path, max_bytes, opts)
-  if type(path) ~= "string" or type(max_bytes) ~= "number" or max_bytes < 0 then
+  if
+    type(path) ~= "string"
+    or type(max_bytes) ~= "number"
+    or max_bytes ~= max_bytes -- NaN
+    or max_bytes < 0
+    or max_bytes == math.huge
+  then
     return nil, "invalid arguments"
   end
+  max_bytes = math.floor(max_bytes)
   local follow = not (opts and opts.follow_symlinks == false)
   local stat = follow and uv.fs_stat(path) or uv.fs_lstat(path)
   if not stat then
@@ -42,8 +49,12 @@ return function(path, max_bytes, opts)
   end
 
   -- libuv reads in binary mode: the bytes come back exactly as stored (no
-  -- "\r\n" collapsing on Windows), like `lib.nvim.fs.read`.
-  local fd, open_err = uv.fs_open(path, "r", 438)
+  -- "\r\n" collapsing on Windows). O_NONBLOCK: a FIFO swapped in after the stat
+  -- must not block the open; O_NOFOLLOW: neither may a symlink when the caller
+  -- refused those (both constants are absent on Windows).
+  local c = uv.constants
+  local flags = c.O_RDONLY + (c.O_NONBLOCK or 0) + ((not follow and c.O_NOFOLLOW) or 0)
+  local fd, open_err = uv.fs_open(path, flags, 438)
   if not fd then
     return nil, "open failed: " .. tostring(open_err or path)
   end
@@ -52,14 +63,30 @@ return function(path, max_bytes, opts)
     uv.fs_close(fd)
     return nil, "not a regular file within the limit: " .. path
   end
-  -- one byte more than allowed: seeing it means the file grew past the limit
-  local data, read_err = uv.fs_read(fd, max_bytes + 1, 0)
+
+  -- In blocks, so that only what is there is allocated (not the cap) and a short
+  -- read does not pass for the end of the file. One byte past the cap is asked
+  -- for: seeing it means the file grew past the limit.
+  local chunks, total = {}, 0
+  local ok, err = pcall(function()
+    while total <= max_bytes do
+      local chunk, read_err = uv.fs_read(fd, math.min(262144, max_bytes + 1 - total), total)
+      if not chunk then
+        error(read_err or "read failed", 0)
+      end
+      if chunk == "" then
+        break
+      end
+      chunks[#chunks + 1] = chunk
+      total = total + #chunk
+    end
+  end)
   uv.fs_close(fd)
-  if not data then
-    return nil, "read failed: " .. tostring(read_err or path)
+  if not ok then
+    return nil, "read failed: " .. tostring(err)
   end
-  if #data > max_bytes then
+  if total > max_bytes then
     return nil, ("too large (> %d bytes): %s"):format(max_bytes, path)
   end
-  return data, nil
+  return table.concat(chunks), nil
 end
