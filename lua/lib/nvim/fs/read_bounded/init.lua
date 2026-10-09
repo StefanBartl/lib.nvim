@@ -37,7 +37,12 @@ return function(path, max_bytes, opts)
   end
   max_bytes = math.floor(max_bytes)
   local follow = not (opts and opts.follow_symlinks == false)
-  local stat = follow and uv.fs_stat(path) or uv.fs_lstat(path)
+  local stat
+  if follow then
+    stat = uv.fs_stat(path)
+  else
+    stat = uv.fs_lstat(path)
+  end
   if not stat then
     return nil, "not found: " .. path
   end
@@ -50,16 +55,23 @@ return function(path, max_bytes, opts)
 
   -- libuv reads in binary mode: the bytes come back exactly as stored (no
   -- "\r\n" collapsing on Windows). O_NONBLOCK: a FIFO swapped in after the stat
-  -- must not block the open; O_NOFOLLOW: neither may a symlink when the caller
-  -- refused those (both constants are absent on Windows).
+  -- must not block the open (the constant is absent on Windows). luv has no
+  -- O_NOFOLLOW, so a link swapped in after the lstat is caught below, by the
+  -- identity of the opened file.
   local c = uv.constants
-  local flags = c.O_RDONLY + (c.O_NONBLOCK or 0) + ((not follow and c.O_NOFOLLOW) or 0)
+  local flags = (c.O_RDONLY or 0) + (c.O_NONBLOCK or 0)
   local fd, open_err = uv.fs_open(path, flags, 438)
   if not fd then
     return nil, "open failed: " .. tostring(open_err or path)
   end
   local fstat = uv.fs_fstat(fd)
-  if not fstat or fstat.type ~= "file" or fstat.size > max_bytes then
+  if
+    not fstat
+    or fstat.type ~= "file"
+    or fstat.size > max_bytes
+    -- (refused a link: the open must have reached the file the lstat saw)
+    or (not follow and (fstat.ino ~= stat.ino or fstat.dev ~= stat.dev))
+  then
     uv.fs_close(fd)
     return nil, "not a regular file within the limit: " .. path
   end

@@ -602,7 +602,15 @@ return function(H)
     -- would just overwrite `Ab.txt`, and the ICASE half of this would prove nothing)
     local blob = F.git(ps, { "hash-object", "-w", ps .. "/Ab.txt" })
     F.git(ps, { "update-index", "--add", "--cacheinfo", "100644," .. blob .. ",aB.txt" })
-    F.commit(ps, "touches aB", { when = 1700000200 })
+    -- (not F.commit: its `git add -A` would stage the deletion of aB.txt on a
+    -- case-sensitive file system, and the commit would be empty)
+    F.git(ps, { "commit", "-q", "-m", "touches aB" }, { env = F.when(1700000200) })
+    -- the fixture checks itself: both names are in the commit, whatever the file system
+    local names = F.git(ps, { "ls-tree", "--name-only", "HEAD" })
+    H.ok(
+      names:find("Ab.txt", 1, true) and names:find("aB.txt", 1, true),
+      "pathspec fixture: HEAD holds both Ab.txt and aB.txt"
+    )
     local saved_lit, saved_icase = vim.env.GIT_LITERAL_PATHSPECS, vim.env.GIT_ICASE_PATHSPECS
     vim.env.GIT_LITERAL_PATHSPECS, vim.env.GIT_ICASE_PATHSPECS = "1", "1"
     -- (without `no_lazy_fetch`: the reset does not depend on it)
