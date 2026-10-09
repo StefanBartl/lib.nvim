@@ -501,9 +501,13 @@ return function(H)
     git.tags_async({ dir = long_dir, pattern = name }, function(list, err)
       box = { list = list, err = err }
     end)
-    wait_for(function()
-      return box ~= nil
-    end)
+    H.ok(
+      wait_for(function()
+        return box ~= nil
+      end),
+      "tags_async: " .. name .. " reports back"
+    )
+    box = box or {}
     return sync_tags, sync_err, box.list, box.err
   end
   local st, se, at, ae = both_ways("c64") -- 64 hops: the last allowed
@@ -514,17 +518,23 @@ return function(H)
   H.ok(at == nil and type(ae) == "string", "tags_async: ... and so it is asynchronously")
   vim.fn.delete(long_dir, "rf")
 
-  -- stop() between rounds: once stopped, no further round starts and on_done says so
+  -- stop() after the process has exited but before its callback ran (the loop is blocked for
+  -- the sleep, so the exit is queued): the process can no longer be killed, and the call must
+  -- not go on to the next round or report the tags
   local stop_box, stop_handle
   stop_handle = git.tags_async({ dir = extra }, function(list, err)
     stop_box = { list = list, err = err }
   end)
+  vim.uv.sleep(400)
   stop_handle.stop()
-  wait_for(function()
-    return stop_box ~= nil
-  end)
+  H.ok(
+    wait_for(function()
+      return stop_box ~= nil
+    end),
+    "tags_async: a stopped call reports back"
+  )
   H.eq(stop_box.list, nil, "tags_async: a stopped call reports no tags")
-  H.ok(type(stop_box.err) == "string", "tags_async: ... but a reason")
+  H.eq(stop_box.err, "git tags: stopped", "tags_async: ... and says it was stopped")
   H.eq(by_name.treetag.time, nil, "tags: a tag on a tree has no commit date")
 
   -- ── merge_base: a killed process is 'unknown', not 'no common ancestor' ─
