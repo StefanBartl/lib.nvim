@@ -273,6 +273,34 @@ The cache file records `roots`/`kind`/`ignore_dirs`; a read with different ones 
 
 ---
 
+## Named roots
+
+### `lib.nvim.fs.roots` (see README)
+Named root directories (`$REPOS_DIR`, `$NVIM_CONFIG_DIR`, your own) in one
+registry: `expand` / `fold` / `remap` / list. `setup` is the user's (it
+replaces); plugins use `register` and the per-call options.
+
+```
+M.setup(cfg?: Lib.Fs.Roots.Config): nil              -- enable, vars, nvim_config, extra, source, windows; wrong type / unknown key raises
+M.register(name: string, value: string|fun(): string?): fun() unregister   -- survives setup(); the user's `extra` wins on the same name
+M.unregister(name: string): boolean
+M.roots(opts?: Lib.Fs.Roots.Opts): { name: string, root: string }[]        -- opts: names, nvim_config
+M.names(): string[]
+M.status(): Lib.Fs.Roots.Status[]                    -- + problem/detail/exists/env; for :checkhealth and json()
+M.expand(s: string): string                          -- leading $NAME, ${NAME}, %NAME%, ~ only; unknown stays
+M.match(s: string): string|nil, string|nil, string|nil   -- name, root, rest of a leading reference
+M.relative(p: string, name: string): string|nil      -- part of p below root `name`, spelling-blind
+M.fold(p: string, opts?: Lib.Fs.Roots.FoldOpts): string, string|nil   -- "$NAME/rest", name; deepest root wins; opts: names, nvim_config, force
+M.folder(opts?: Lib.Fs.Roots.FoldOpts): fun(p: string): string, string|nil   -- roots resolved once
+M.root_of(p: string, opts?: Lib.Fs.Roots.FoldOpts): string|nil
+M.remap(p: string): string[]                         -- a path from another machine under the local roots (existing only)
+M.json(): string / M.print_json(): nil               -- the resolved roots for a reader outside Neovim
+M.export_env(): boolean                              -- NVIM_CONFIG_DIR as a real env var (never overwrites the user's)
+```
+`cross.fs.expand_path` and the composer types `PATH` / `DIR` / `FILE` resolve a leading root reference through it.
+
+---
+
 ## Ignore lists
 
 ### `lib.nvim.fs.ignore.list` (see README)

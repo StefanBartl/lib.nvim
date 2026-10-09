@@ -125,7 +125,9 @@ return function(): string   -- libuv cwd, vim.fn.getcwd() fallback
 ### `lib.nvim.cross.fs.expand_path` (see README)
 Expands `~`, `$VAR`/`${VAR}` (POSIX), and `%VAR%` (Windows) in a raw path
 string. Pure string expansion — does **not** normalize separators or
-resolve `.`/`..`.
+resolve `.`/`..`. A **leading** `$NAME` / `${NAME}` / `%NAME%` that names a
+root of [`lib.nvim.fs.roots`](../../lua/lib/nvim/fs/roots/README.md) is resolved
+by that registry first (and comes back in its canonical spelling).
 
 ```
 return function(path: string): string

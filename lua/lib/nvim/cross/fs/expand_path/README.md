@@ -3,7 +3,8 @@
 Expands `~`, `$VAR`/`${VAR}` (POSIX-style) and `%VAR%` (Windows-style)
 references in a raw path string. Pure string expansion — it does **not**
 normalize separators or resolve `.`/`..` (see `lib.nvim.cross.fs.separators`
-for that).
+for that). The one exception is a **leading named root** (below): that part
+comes back in the registry's canonical spelling.
 
 Behavior:
 
@@ -16,7 +17,7 @@ Behavior:
 - `$VAR` and `${VAR}` references are substituted from `vim.env`; an unset
   variable is likewise left untouched.
 - A **leading** `$NAME` / `${NAME}` / `%NAME%` that names a root of
-  [`lib.nvim.fs.roots`](../../fs/roots/README.md) is resolved by the registry
+  [`lib.nvim.fs.roots`](../../../fs/roots/README.md) is resolved by the registry
   first. That is what makes `$NVIM_CONFIG_DIR` (which is `stdpath("config")`,
   not necessarily an environment variable) and user-defined `extra` roots work
   here, and what lets a test inject its own values. The root comes back in the
