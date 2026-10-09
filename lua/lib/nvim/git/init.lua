@@ -1488,61 +1488,84 @@ local TAG_FORMAT = "--format=%(refname:strip=2)%00%(objectname)%00%(*objectname)
 local TAG_SORTS = { newest = "-creatordate", oldest = "creatordate", version = "-v:refname" }
 
 --- Tags whose `%(*objecttype)` named another tag: an older git (2.43) peels one level only, so
---- what such a tag finally points at needs one more question (`peel_nested`). Keyed weakly by
---- the tag record, which is a plain data table the caller owns.
+--- what such a tag finally points at needs more questions (`peel_nested`). Keyed weakly by the
+--- tag record, which is a plain data table the caller owns.
 ---@type table<table, true>
 local NESTED_TAGS = setmetatable({}, { __mode = "k" })
 
---- `cat-file --batch-check` answers "<type> <sha>" per fully peeled name read from stdin.
-local PEEL_ARGS = { "cat-file", "--batch-check=%(objecttype) %(objectname)" }
+--- `cat-file --batch` answers "<sha> <type> <size>" and the object per sha read from stdin. Only
+--- the tag objects on the way are read (their `object`/`type` headers say where the next hop
+--- goes), never the thing finally pointed at: asking for `<tag>^{}` would read that object and
+--- fetch it from the remote in a partial clone.
+local PEEL_ARGS = { "cat-file", "--batch" }
+
+--- No tag chain is this long; a ring of tags cannot exist (an object names its target by hash).
+local PEEL_MAX_ROUNDS = 64
+
+---@class Lib.Git.PeelItem
+---@field tag Lib.Git.Tag
+---@field cur string The tag object to read next.
 
 ---@internal
 ---@param tags Lib.Git.Tag[]
----@return Lib.Git.Tag[] nested
+---@return Lib.Git.PeelItem[] pending
 local function nested_tags(tags)
   local list = {}
   for _, t in ipairs(tags) do
     if NESTED_TAGS[t] then
-      list[#list + 1] = t
+      list[#list + 1] = { tag = t, cur = t.sha }
     end
   end
   return list
 end
 
 ---@internal
----@param list Lib.Git.Tag[]
+---@param pending Lib.Git.PeelItem[]
 ---@param opts Lib.Git.TagsOpts
 ---@return Lib.Git.TagsOpts
-local function peel_opts(list, opts)
-  local names = {}
-  for i, t in ipairs(list) do
-    names[i] = "refs/tags/" .. t.name .. "^{}"
+local function peel_opts(pending, opts)
+  local shas = {}
+  for i, item in ipairs(pending) do
+    shas[i] = item.cur
   end
-  return vim.tbl_extend("force", opts, { input = table.concat(names, "\n") .. "\n" })
+  -- no_lazy_fetch: a missing tag object fails here instead of being fetched from a remote
+  return vim.tbl_extend("force", opts, {
+    input = table.concat(shas, "\n") .. "\n",
+    no_lazy_fetch = true,
+  })
 end
 
 ---@internal
---- Put the answer of `PEEL_ARGS` into the nested tags. A failed question keeps the one-level
---- answer `for-each-ref` gave.
----@param list Lib.Git.Tag[]
----@param res Lib.Git.RunResult
-local function apply_peel(list, res)
-  if not res.ok or type(res.stdout) ~= "string" then
-    return
-  end
-  local i = 0
-  for line in res.stdout:gmatch("[^\n]+") do
-    i = i + 1
-    local t = list[i]
-    if not t then
-      break
+--- Read one round of `PEEL_ARGS` output: for each tag object the next hop. Finished tags get
+--- their `commit` and `sha`; the ones whose next hop is a tag again stay pending.
+---@param pending Lib.Git.PeelItem[]
+---@param stdout string
+---@return Lib.Git.PeelItem[]|nil still_pending
+---@return string|nil err
+local function apply_peel(pending, stdout)
+  local still, pos = {}, 1
+  for _, item in ipairs(pending) do
+    local nl = stdout:find("\n", pos, true)
+    local _, kind, size = (nl and stdout:sub(pos, nl - 1) or ""):match("^(%x+) (%S+) (%d+)$")
+    if not kind then
+      return nil, ("git cat-file: could not read the tag object %s"):format(item.cur)
     end
-    local kind, sha = line:match("^(%S+) (%x+)$")
-    if kind then
-      t.commit = kind == "commit"
-      t.sha = sha
+    size = tonumber(size) --[[@as integer]]
+    local body = stdout:sub(nl + 1, nl + size)
+    pos = nl + size + 2 -- the object and the LF git writes after it
+    local object, target_kind = body:match("^object (%x+)\ntype (%S+)\n")
+    if kind ~= "tag" or not object then
+      return nil, ("git cat-file: %s is not a readable tag object"):format(item.cur)
+    end
+    if target_kind == "tag" then
+      item.cur = object
+      still[#still + 1] = item
+    else
+      item.tag.commit = target_kind == "commit"
+      item.tag.sha = object
     end
   end
+  return still, nil
 end
 
 ---@internal
@@ -1627,7 +1650,9 @@ end
 --- `merged`/`no_merged` answer "which tags does this range contain" --
 --- `{ merged = new, no_merged = old }` is the release list of an update.
 ---
---- Reads only ref and tag objects, so it works in a blobless clone, offline.
+--- Reads only ref and tag objects, so it works in a blobless clone, offline. One
+--- `git for-each-ref` process; a git that peels a tag on a tag one level only (2.43) gets
+--- `git cat-file --batch` rounds on the tag objects on top, one per hop.
 ---@param opts? Lib.Git.TagsOpts
 ---@param git_cmd? string
 ---@return Lib.Git.Tag[]|nil tags nil when git failed; no tags is `{}`
@@ -1636,13 +1661,24 @@ function M.tags(opts, git_cmd)
   opts = tags_opts(opts)
   local args, interpret = tags_job(opts)
   local tags, err = query(args, interpret, opts, git_cmd)
-  if tags then
-    local list = nested_tags(tags)
-    if #list > 0 then
-      apply_peel(list, M.run(PEEL_ARGS, read_opts(peel_opts(list, opts)), git_cmd))
+  if not tags then
+    return nil, err
+  end
+  local pending = nested_tags(tags)
+  for _ = 1, PEEL_MAX_ROUNDS do
+    if #pending == 0 then
+      return tags, nil
+    end
+    local res = M.run(PEEL_ARGS, read_opts(peel_opts(pending, opts)), git_cmd)
+    if not res.ok then
+      return nil, failure_message(res, "git cat-file", opts)
+    end
+    pending, err = apply_peel(pending, res.stdout)
+    if not pending then
+      return nil, err
     end
   end
-  return tags, err
+  return nil, "git tags: a tag chain longer than " .. PEEL_MAX_ROUNDS
 end
 
 --- Async counterpart to `tags`.
@@ -1653,24 +1689,44 @@ end
 function M.tags_async(opts, on_done, git_cmd)
   opts = tags_opts(opts)
   local args, interpret = tags_job(opts)
-  local stopped, second = false, nil
-  local first = query_async(args, interpret, opts, function(tags, err)
-    local list = tags and nested_tags(tags) or {}
-    if #list == 0 or stopped then
-      on_done(tags, err)
+  local current ---@type { stop: fun() }|nil
+  local rounds = 0
+  ---@param tags Lib.Git.Tag[]
+  ---@param pending Lib.Git.PeelItem[]
+  local function peel(tags, pending)
+    if #pending == 0 then
+      on_done(tags, nil)
       return
     end
-    second = M.run_async(PEEL_ARGS, read_opts(peel_opts(list, opts)), function(res)
-      apply_peel(list, res)
-      on_done(tags, err)
+    rounds = rounds + 1
+    if rounds > PEEL_MAX_ROUNDS then
+      on_done(nil, "git tags: a tag chain longer than " .. PEEL_MAX_ROUNDS)
+      return
+    end
+    current = M.run_async(PEEL_ARGS, read_opts(peel_opts(pending, opts)), function(res)
+      if not res.ok then
+        on_done(nil, failure_message(res, "git cat-file", opts))
+        return
+      end
+      local still, err = apply_peel(pending, res.stdout)
+      if not still then
+        on_done(nil, err)
+        return
+      end
+      peel(tags, still)
     end, git_cmd)
+  end
+  current = query_async(args, interpret, opts, function(tags, err)
+    if not tags then
+      on_done(nil, err)
+      return
+    end
+    peel(tags, nested_tags(tags))
   end, git_cmd)
   return {
     stop = function()
-      stopped = true
-      first.stop()
-      if second then
-        second.stop()
+      if current then
+        current.stop()
       end
     end,
   }

@@ -436,6 +436,38 @@ return function(H)
   H.eq(async_by_name.nested.commit, true, "tags_async: a tag on a tag points at a commit")
   H.eq(async_by_name.nested.sha, e1, "tags_async: ... and carries that commit as sha")
   H.eq(async_by_name.anntree.commit, false, "tags_async: an annotated tag on a tree is none")
+
+  -- a failing peel is an error, never the one-level answer as if it were the final one
+  -- (POSIX: the wrapper is a shell script that lets everything through but `cat-file`)
+  if vim.fn.has("win32") == 0 then
+    local wrapper = vim.fn.tempname() .. "-git-no-cat-file"
+    local fh = assert(io.open(wrapper, "w"))
+    fh:write('#!/bin/sh\nfor a in "$@"; do [ "$a" = cat-file ] && exit 3; done\nexec git "$@"\n')
+    fh:close()
+    vim.uv.fs_chmod(wrapper, 493) -- 0755
+    local fail_tags, fail_err = git.tags({ dir = extra }, wrapper)
+    H.eq(fail_tags, nil, "tags: a failing cat-file is an error")
+    H.ok(type(fail_err) == "string" and fail_err ~= "", "tags: ... with a reason")
+    local fail_box
+    git.tags_async({ dir = extra }, function(list, err)
+      fail_box = { list = list, err = err }
+    end, wrapper)
+    wait_for(function()
+      return fail_box ~= nil
+    end)
+    H.eq(fail_box.list, nil, "tags_async: ... and so is it asynchronously")
+    H.ok(type(fail_box.err) == "string", "tags_async: ... with a reason")
+    os.remove(wrapper)
+  end
+
+  -- a tag on a tag on a tag: one hop per round
+  F.git(extra, { "tag", "-a", "-m", "third", "third", "nested" })
+  local deep = {}
+  for _, t in ipairs(git.tags({ dir = extra }) or {}) do
+    deep[t.name] = t
+  end
+  H.eq(deep.third and deep.third.commit, true, "tags: a chain of three tags reaches the commit")
+  H.eq(deep.third and deep.third.sha, e1, "tags: ... and its sha")
   H.eq(by_name.treetag.time, nil, "tags: a tag on a tree has no commit date")
 
   -- ── merge_base: a killed process is 'unknown', not 'no common ancestor' ─
