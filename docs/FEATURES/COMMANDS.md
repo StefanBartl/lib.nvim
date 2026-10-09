@@ -80,6 +80,12 @@ additionally declare `flags` (`--flag`/`-x`/`--flag=value`, parsed anywhere in
 the tail, `--` sentinel stops parsing) and `kv` (bare `key=value`, no dashes)
 — both optional and composable on the same route.
 
+`PATH`/`DIR`/`FILE` expand `~`, `$VAR`, `${VAR}` and `%VAR%`, and a leading **named root**
+(`$REPOS_DIR`, `${NVIM_CONFIG_DIR}`, a registered or `extra` root — see
+[`lib.nvim.fs.roots`](../../lua/lib/nvim/fs/roots/README.md)) is resolved by the registry, also where no real
+environment variable exists. Completion hands candidates back in the spelling the user typed (`$NAME/…`), and a
+bare `$REP<Tab>` completes the root names.
+
 ```lua
 { path = {}, args = { { name = "old", type = "STRING" }, { name = "new", type = "STRING" } },
   flags = { { name = "dry", bool = true }, { name = "engine", type = "STRING", enum = { "fzf", "telescope" } } },
