@@ -464,6 +464,15 @@ return function(H)
       "docgen: the verb description is a quote above the table"
     )
 
+    -- a multi-line description stays one quote
+    local multi = vim.deepcopy(spec)
+    multi.desc = "first line\nsecond line"
+    local mbody = docgen.render({ { name = "Demo", spec = multi, root = root } })
+    ok(
+      mbody:find("\n> first line\n> second line\n", 1, true),
+      "docgen: every line of a multi-line description is quoted"
+    )
+
     -- write round-trip
     local path = H.tmpfile(".md")
     local wok = docgen.write({ { name = "Demo", spec = spec, root = root } }, path, "replace")

@@ -22,6 +22,19 @@ return function(H)
   eq(content, nil, "one byte over: nothing read")
   ok(err and err:find("too large", 1, true), "one byte over: says why")
 
+  local empty = dir .. "/empty.txt"
+  local eh = assert(io.open(empty, "wb"))
+  eh:close()
+  eq(read_bounded(empty, 10), "", "an empty file reads as an empty string")
+  eq(read_bounded(empty, 0), "", "an empty file passes a limit of 0")
+
+  content, err = read_bounded(file, -1)
+  eq(content, nil, "a negative limit is refused")
+  ok(err and err:find("invalid", 1, true), "a negative limit: says why")
+  ---@diagnostic disable-next-line: param-type-mismatch
+  content = read_bounded(nil, 10)
+  eq(content, nil, "a non-string path is refused")
+
   content, err = read_bounded(dir, 100)
   eq(content, nil, "a directory: nothing read")
   ok(err and err:find("not a regular file", 1, true), "a directory: says why")

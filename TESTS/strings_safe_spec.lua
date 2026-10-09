@@ -38,6 +38,11 @@ return function(H)
   eq(safe.utf8("a\192\128b"), "a??b", "utf8: an overlong form")
   eq(safe.utf8("\237\160\128"), "???", "utf8: a surrogate")
   eq(safe.utf8("\244\144\128\128"), "????", "utf8: above U+10FFFF")
+  eq(safe.utf8("é\255é\255"), "é?é?", "utf8: valid runs between invalid bytes survive")
+  eq(safe.utf8("\255\255"), "??", "utf8: nothing but invalid bytes")
+  eq(safe.utf8("\255é漢"), "?é漢", "utf8: invalid byte first")
+  eq(safe.utf8("é漢\255"), "é漢?", "utf8: invalid byte last")
+  eq(safe.utf8("é\128\128漢"), "é??漢", "utf8: adjacent invalid bytes")
 
   -- one_line / lines
   eq(safe.one_line("first\nsecond"), "first", "one_line: first line only")
