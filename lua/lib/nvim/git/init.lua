@@ -522,7 +522,7 @@ local NET_TIMEOUT_MS = 120000
 --- the job forever: `GIT_TERMINAL_PROMPT=0` makes git fail instead. Credential
 --- helpers are untouched. `opts.env` wins over the default, `opts.timeout_ms`
 --- replaces the deadline (`false` = none).
----@param opts Lib.Git.RunOpts|nil `timeout_ms` may also be `false` (no deadline).
+---@param opts Lib.Git.NetOpts|nil
 ---@return Lib.RunArgv.Opts
 local function net_ropts(opts)
   opts = opts or {}
@@ -1744,7 +1744,7 @@ end
 --- failure (`err` = "git fetch failed (exit code 143)" for SIGTERM), never a
 --- success; so is a git that cannot be started (`err` = the reason). `on_done`
 --- still fires once after `stop()` -- with that failure.
----@param opts? Lib.Git.RunOpts
+---@param opts? Lib.Git.NetOpts
 ---@param on_done fun(ok: boolean, err: string|nil, changed: boolean|nil)
 ---@param git_cmd? string
 ---@return { stop: fun() } handle
@@ -1790,7 +1790,7 @@ end
 --- that reason (its own doc comment explains why); its *after* read does
 --- not, because by the time it runs a *different* invariant applies (see
 --- there).
----@param opts? Lib.Git.RunOpts
+---@param opts? Lib.Git.NetOpts
 ---@param on_done fun(hash: string|nil, ok: boolean, timed_out: boolean|nil)
 ---@param git_cmd? string
 ---@return { stop: fun() } handle
@@ -1854,7 +1854,7 @@ end
 --- emptiness the *before* read can hit. Reports `changed = nil` (honestly
 --- unknown) rather than comparing a real `before` hash against a `nil`
 --- that would otherwise silently guess `true`.
----@param opts? Lib.Git.RunOpts
+---@param opts? Lib.Git.NetOpts
 ---@param on_done fun(ok: boolean, err: string|nil, changed: boolean|nil)
 ---@param git_cmd? string
 ---@return { stop: fun() } handle
@@ -1903,7 +1903,7 @@ end
 --- failure (`err` = "git push failed (exit code 143)" for SIGTERM), never a
 --- success: the push did not finish. `on_done` still fires once after `stop()`
 --- -- with that failure.
----@param opts? Lib.Git.RunOpts
+---@param opts? Lib.Git.NetOpts
 ---@param on_done fun(ok: boolean, err: string|nil)
 ---@param git_cmd? string
 ---@return { stop: fun() } handle
@@ -1943,7 +1943,7 @@ end
 --- is killed, decides this, not the fetch's own `ok`: a killed process and a
 --- git that failed on its own are not told apart by that alone (a kill reads
 --- as exit code 1 on Windows, as exit code 0 with `signal` 15 on POSIX).
----@param opts? Lib.Git.RunOpts
+---@param opts? Lib.Git.NetOpts
 ---@param on_done fun(ok: boolean, err: string|nil, changed: boolean|nil)
 ---@param git_cmd? string
 ---@return { stop: fun() } handle
