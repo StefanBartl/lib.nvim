@@ -157,7 +157,9 @@ function M.clean(s, max_chars)
       :gsub("\227\133\164", "?") -- U+3164 Hangul filler
       :gsub("\239\190\160", "?") -- U+FFA0 halfwidth Hangul filler
       :gsub("\225\133[\159\160]", "?") -- U+115F, U+1160
-      :gsub("\225\160\142", "?") -- U+180E Mongolian vowel separator
+      :gsub("\225\160[\139-\142]", "?") -- U+180B-180E Mongolian selectors, vowel separator
+      :gsub("\225\158[\180\181]", "?") -- U+17B4, U+17B5 Khmer inherent vowels
+      :gsub("\240\155\178[\160-\163]", "?") -- U+1BCA0-1BCA3 shorthand format controls
       :gsub("\226\160\128", "?") -- U+2800 braille blank
       :gsub("\194\173", "?") -- U+00AD soft hyphen
       :gsub("\205\143", "?") -- U+034F combining grapheme joiner
