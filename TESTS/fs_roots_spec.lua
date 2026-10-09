@@ -18,6 +18,21 @@ local argtypes = require("lib.nvim.bindings.usercmd.composer.argtypes")
 
 local norm = vim.fs.normalize
 
+--- The registry writes a drive letter uppercase; a Windows `tempname()` need not.
+---@param p string
+---@return string
+local function up(p)
+  return (p:gsub("^(%a):", function(d)
+    return d:upper() .. ":"
+  end))
+end
+
+--- A temp path in the registry's own spelling.
+---@return string
+local function tmp()
+  return up(norm(vim.fn.tempname()))
+end
+
 ---@param H table
 return function(H)
   local eq, ok = H.eq, H.ok
@@ -128,11 +143,11 @@ return function(H)
     extra = { NOTES = "~/notes", VIAVAR = "$BASE/sub" },
     source = { BASE = "/base" },
   }, function()
-    local home = (vim.uv or vim.loop).os_homedir()
+    local home = ((vim.uv or vim.loop).os_homedir():gsub("\\", "/"):gsub("/$", ""))
     local list = roots.roots()
     eq(#list, 2, "roots: ~ and $VAR in a root value are expanded")
     eq(list[1].name, "NOTES", "roots: NOTES")
-    ok(list[1].root:sub(1, #home) == home:gsub("\\", "/"):gsub("/$", ""), "roots: ~ is the home")
+    ok(list[1].root:sub(1, #home) == up(home), "roots: ~ is the home")
     eq(list[2].root, "/base/sub", "roots: $BASE from the injected source")
   end)
 
@@ -151,7 +166,7 @@ return function(H)
   end)
 
   do
-    local cfg = norm(vim.fn.tempname())
+    local cfg = tmp()
     local saved = vim.env.NVIM_CONFIG_DIR
     vim.env.NVIM_CONFIG_DIR = "/stale/from/parent"
     H.with_stdpath_config(cfg, function()
@@ -210,7 +225,8 @@ return function(H)
     eq(roots.expand(42), 42, "expand: a non-string passes through")
 
     -- `~`
-    local home = (vim.uv or vim.loop).os_homedir()
+    -- A Windows home comes back with backslashes; a drive-letter spelling is unified everywhere.
+    local home = ((vim.uv or vim.loop).os_homedir():gsub("\\", "/"))
     eq(roots.expand("~/x"), home .. "/x", "expand: ~/rest")
     eq(roots.expand("~"), home, "expand: bare ~")
     eq(roots.expand("~other/x"), "~other/x", "expand: ~user is not ours")
@@ -336,7 +352,7 @@ return function(H)
 
   -- ── remap(): a path recorded on another machine ───────────────────────────────────────────
   do
-    local base = norm(vim.fn.tempname())
+    local base = tmp()
     vim.fn.mkdir(base .. "/repos/casedesk.nvim/docs", "p")
     vim.fn.mkdir(base .. "/nvim/lua", "p")
     vim.fn.mkdir(base .. "/data/repos/nested", "p")
@@ -409,7 +425,7 @@ return function(H)
 
   -- ── status() / json(): readable from outside, health ──────────────────────────────────────
   do
-    local base = norm(vim.fn.tempname())
+    local base = tmp()
     vim.fn.mkdir(base .. "/repos", "p")
     with_roots({
       windows = false,
@@ -455,7 +471,7 @@ return function(H)
   -- ── export_env(): $NVIM_CONFIG_DIR becomes a real variable, never overwritten ─────────────
   do
     local saved = vim.env.NVIM_CONFIG_DIR
-    local cfg = norm(vim.fn.tempname())
+    local cfg = tmp()
     H.with_stdpath_config(cfg, function()
       roots.setup()
       vim.env.NVIM_CONFIG_DIR = nil
@@ -530,19 +546,20 @@ return function(H)
     eq(expand_path(nil), nil, "expand_path: nil")
 
     -- An injected source wins over the real environment: the sandbox case.
+    local saved_repos = vim.env.REPOS_DIR
     vim.env.REPOS_DIR = "/the/real/one"
     eq(
       expand_path("$REPOS_DIR/a"),
       "/work/repos/a",
       "expand_path: the registry (here: the injected source) beats the process environment"
     )
-    vim.env.REPOS_DIR = nil
+    vim.env.REPOS_DIR = saved_repos
   end)
   vim.env.LIBNVIM_ROOTS_SPEC_VAR = nil
 
   -- ── composer PATH / DIR / FILE: validation and completion ────────────────────────────────
   do
-    local base = norm(vim.fn.tempname())
+    local base = tmp()
     vim.fn.mkdir(base .. "/repos/proj/sub", "p")
     local fh = assert(io.open(base .. "/repos/proj/file.txt", "w"))
     fh:write("x")
@@ -599,6 +616,219 @@ return function(H)
     end)
     vim.fn.delete(base, "rf")
   end
+
+  -- ── review fixes: each case below pins one defect found in the first version ──────────────
+
+  -- A root has to survive fold -> expand. `MY-ROOT` folded to "$MY-ROOT/x", which `expand` reads
+  -- as `$MY` followed by "-ROOT/x" and leaves alone: a path that could be written but never read.
+  with_roots({
+    windows = false,
+    nvim_config = false,
+    vars = { "GOOD_1", "bad-name", "1ST" },
+    extra = { ["my root"] = "/a", ["a.b"] = "/b", [7] = "/c" },
+    source = { GOOD_1 = "/g", ["bad-name"] = "/x", ["1ST"] = "/y" },
+  }, function()
+    eq(flat(roots.roots()), "GOOD_1=/g", "names: only a name `expand` can read back is a root")
+    local problems = {}
+    for _, st in ipairs(roots.status()) do
+      problems[#problems + 1] = st.name .. ":" .. tostring(st.problem)
+    end
+    table.sort(problems)
+    eq(
+      table.concat(problems, ","),
+      "1ST:invalid_name,GOOD_1:missing_dir,a.b:invalid_name,bad-name:invalid_name,my root:invalid_name",
+      "names: refused names are reported (health), a non-string key is ignored"
+    )
+    local folded = roots.fold("/x/file")
+    eq(folded, "/x/file", "names: nothing folds into a refused name")
+  end)
+
+  -- The first USABLE definition wins. An `extra` function that returns nothing used to shadow the
+  -- environment variable of the same name and report the root as unset.
+  with_roots({
+    windows = false,
+    nvim_config = false,
+    vars = { "WORK" },
+    extra = {
+      WORK = function()
+        return nil
+      end,
+    },
+    source = { WORK = "/from/env" },
+  }, function()
+    eq(
+      flat(roots.roots()),
+      "WORK=/from/env",
+      "precedence: an unusable extra falls through to the var"
+    )
+    eq(roots.expand("$WORK/x"), "/from/env/x", "precedence: expand sees it too")
+    eq(#roots.status(), 1, "precedence: one entry per name")
+  end)
+
+  -- Two names for one directory: the earlier one in roots() order wins, not whichever one
+  -- table.sort happened to put first among equals. A dozen names, because a sort of two equal
+  -- elements happens to be stable and would pass either way.
+  do
+    local extra = {}
+    for i = 1, 12 do
+      extra[("N%02d"):format(i)] = "/same/dir"
+      -- Roots of other lengths around them, so the sort has to move the equal ones.
+      extra[("D%02d"):format(i)] = "/d/" .. ("x"):rep(i)
+      extra[("S%02d"):format(i)] = "/s" .. ("y"):rep(13 - i) .. "/dir"
+    end
+    with_roots({
+      windows = false,
+      nvim_config = false,
+      vars = { "LAST" },
+      extra = extra,
+      source = { LAST = "/same/dir" },
+    }, function()
+      eq(roots.fold("/same/dir/f"), "$N01/f", "fold: equal roots -> the earliest name")
+      eq(roots.fold("/same/dir"), "$N01", "fold: the root itself, same rule")
+    end)
+  end
+
+  -- `match` (and so expand_path on every `$VAR`) must not resolve roots it was not asked for: no
+  -- user function is run, and the config dir is not asked, for a reference to some other name.
+  do
+    local calls = 0
+    with_roots({
+      windows = false,
+      vars = { "WANTED" },
+      extra = {
+        OTHER = function()
+          calls = calls + 1
+          return "/other"
+        end,
+        NAMED = function()
+          calls = calls + 1
+          return "/named"
+        end,
+      },
+      source = { WANTED = "/wanted" },
+    }, function()
+      eq(roots.expand("$WANTED/x"), "/wanted/x", "lazy: the wanted root resolves")
+      eq(roots.expand("$HOME/x"), "$HOME/x", "lazy: an unknown name is left alone")
+      eq(calls, 0, "lazy: extra functions of other names are not run")
+      eq(roots.expand("$NAMED/x"), "/named/x", "lazy: the wanted extra root resolves")
+      eq(calls, 1, "lazy: and only that one ran")
+    end)
+  end
+
+  -- libuv instead of Vimscript for the environment: a fast event (a uv callback) can resolve a
+  -- root. `vim.env` raises E5560 there.
+  do
+    local saved = vim.env.LIBNVIM_FAST_ROOT
+    vim.env.LIBNVIM_FAST_ROOT = "/fast/root"
+    roots.setup({ windows = false, vars = { "LIBNVIM_FAST_ROOT" }, nvim_config = false })
+    local result
+    local timer = (vim.uv or vim.loop).new_timer()
+    timer:start(0, 0, function()
+      timer:close()
+      result = { pcall(roots.expand, "$LIBNVIM_FAST_ROOT/x") }
+      result[3] = select(2, pcall(expand_path, "$LIBNVIM_FAST_ROOT/y"))
+    end)
+    vim.wait(2000, function()
+      return result ~= nil
+    end)
+    roots.setup()
+    vim.env.LIBNVIM_FAST_ROOT = saved
+    ok(result ~= nil, "fast event: the callback ran")
+    eq(result[1], true, "fast event: expand does not raise")
+    eq(result[2], "/fast/root/x", "fast event: expand resolves a root")
+    eq(result[3], "/fast/root/y", "fast event: expand_path resolves a root")
+  end
+
+  -- remap: a recorded path is somebody else's data. `..` must not let a candidate climb out of
+  -- the root it is anchored under.
+  do
+    local base = tmp()
+    vim.fn.mkdir(base .. "/repos/proj", "p")
+    vim.fn.mkdir(base .. "/secret", "p")
+    with_roots({
+      windows = false,
+      nvim_config = false,
+      vars = { "REPOS_DIR" },
+      source = { REPOS_DIR = base .. "/repos" },
+    }, function()
+      eq(#roots.remap("E:/repos/proj"), 1, "remap: the plain path maps")
+      eq(#roots.remap("E:/repos/../secret"), 0, "remap: a '..' segment maps to nothing")
+      eq(#roots.remap("E:/x/repos/proj/../../../secret"), 0, "remap: nor does a deeper climb")
+    end)
+    vim.fn.delete(base, "rf")
+  end
+
+  -- relative(): the spelling-blind "what is below this root", used to put a completion candidate
+  -- back into the spelling the user typed.
+  with_roots({
+    windows = true,
+    nvim_config = false,
+    vars = { "REPOS_DIR" },
+    source = { REPOS_DIR = "D:/Repos" },
+  }, function()
+    eq(
+      roots.relative("d:\\repos\\proj\\", "REPOS_DIR"),
+      "/proj/",
+      "relative (win): other separator, case, trailing"
+    )
+    eq(roots.relative("D:/Repos", "REPOS_DIR"), "", "relative: the root itself")
+    eq(
+      roots.relative("D:/Repos/", "REPOS_DIR"),
+      "/",
+      "relative: the root with a trailing separator"
+    )
+    eq(
+      roots.relative("D:/Repos2/x", "REPOS_DIR"),
+      nil,
+      "relative: a name-prefix sibling is not below"
+    )
+    eq(roots.relative("E:/Repos/x", "REPOS_DIR"), nil, "relative: another drive")
+    eq(roots.relative("D:/Repos/x", "NOPE"), nil, "relative: an unknown root")
+    eq(roots.relative("rel/x", "REPOS_DIR"), nil, "relative: a relative path")
+    eq(roots.relative(nil, "REPOS_DIR"), nil, "relative: nil")
+  end)
+
+  -- Completion on Windows: `getcompletion` answers in its own spelling (backslashes, the case it
+  -- found on disk). A plain prefix test against the root dropped every such candidate.
+  with_roots({
+    windows = true,
+    nvim_config = false,
+    vars = { "REPOS_DIR" },
+    source = { REPOS_DIR = "D:/Repos" },
+  }, function()
+    local dir_t = argtypes.get("DIR")
+    H.with_patched(vim.fn, "getcompletion", function()
+      return { "d:\\repos\\proj\\", "D:/Repos/other/" }
+    end, function()
+      eq(
+        table.concat(dir_t.complete("${REPOS_DIR}/p"), "|"),
+        "${REPOS_DIR}/proj/|${REPOS_DIR}/other/",
+        "DIR completion (win): candidates in another separator/case come back in the typed spelling"
+      )
+    end)
+  end)
+
+  -- A backtick in the ROOT's path is as dangerous as one in the lead: it is what getcompletion
+  -- is handed after expansion.
+  with_roots({
+    windows = false,
+    nvim_config = false,
+    vars = {},
+    extra = { EVIL = "/tmp/x`touch marker`" },
+  }, function()
+    local asked = 0
+    H.with_patched(vim.fn, "getcompletion", function()
+      asked = asked + 1
+      return {}
+    end, function()
+      eq(
+        #argtypes.get("DIR").complete("$EVIL/a"),
+        0,
+        "completion: a backtick in the root completes to nothing"
+      )
+    end)
+    eq(asked, 0, "completion: getcompletion never saw the expanded backtick path")
+  end)
 
   -- setup() with nothing resets: no leftover from the cases above.
   roots.setup()

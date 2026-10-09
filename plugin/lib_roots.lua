@@ -6,4 +6,5 @@ if vim.g.loaded_lib_nvim_roots == 1 then
 end
 vim.g.loaded_lib_nvim_roots = 1
 
-require("lib.nvim.fs.roots")
+-- A broken or half-installed lib.nvim must not turn into a startup error of its own.
+pcall(require, "lib.nvim.fs.roots")

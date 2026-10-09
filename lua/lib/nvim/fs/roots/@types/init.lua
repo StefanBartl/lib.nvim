@@ -17,9 +17,9 @@
 ---@field name string
 ---@field kind "extra"|"var"|"nvim_config"
 ---@field raw? string  The value before normalization.
----@field root? string  The normalized root; nil when `problem` is `"unset"` or `"not_absolute"`.
+---@field root? string  The normalized root; nil when `problem` is `"unset"`, `"not_absolute"` or `"invalid_name"`.
 ---@field exists? boolean  Whether `root` is an existing directory (set by `status()` / `json()` only).
----@field problem? "unset"|"not_absolute"|"missing_dir"
+---@field problem? "unset"|"not_absolute"|"invalid_name"|"missing_dir"
 
 ---@class Lib.Fs.Roots
 ---@field setup fun(cfg?: Lib.Fs.Roots.Config)
@@ -28,6 +28,7 @@
 ---@field names fun(): string[]
 ---@field status fun(): Lib.Fs.Roots.Status[]
 ---@field match fun(s: string): string|nil, string|nil, string|nil
+---@field relative fun(p: string, name: string): string|nil
 ---@field expand fun(s: string): string
 ---@field folder fun(opts?: Lib.Fs.Roots.FoldOpts): fun(p: string): string, string|nil
 ---@field fold fun(p: string, opts?: Lib.Fs.Roots.FoldOpts): string, string|nil
