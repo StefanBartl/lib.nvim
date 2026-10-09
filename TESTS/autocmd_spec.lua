@@ -311,17 +311,44 @@ return function(H)
   -- Groups deleted behind the module's back (a popup's per-window group) must
   -- not stay in the id caches for good.
   do
-    local before = autocmd._cache_size()
-    -- one popup after the other: its group is created, then deleted when it closes
-    for i = 1, 150 do
+    -- one popup after the other: its group is created, then deleted when it closes. The
+    -- threshold is process state (other specs raise it), so look for the prune itself --
+    -- the cache shrinking -- not for a fixed size; it must come within twice the current
+    -- size.
+    local peak, pruned = autocmd._cache_size(), false
+    for i = 1, 2 * peak + 100 do
       vim.api.nvim_del_augroup_by_id(autocmd.group("LibNvimSpecChurn" .. i))
+      local size = autocmd._cache_size()
+      if size < peak then
+        pruned = true
+        break
+      end
+      peak = size
     end
+    ok(pruned, "dead groups are pruned from the caches once they have outgrown the threshold")
     local survivor = autocmd.group("LibNvimSpecChurnSurvivor")
-    ok(
-      autocmd._cache_size() < before + 100,
-      "dead groups are pruned from the caches once they have outgrown the threshold"
-    )
     eq(autocmd.group("LibNvimSpecChurnSurvivor"), survivor, "a live group keeps its cached id")
     vim.api.nvim_del_augroup_by_id(survivor)
+  end
+
+  -- A growing set of LIVE groups must not be scanned in full for every new group: the
+  -- threshold follows the live count, so the probes grow linearly (about 2 per group;
+  -- 300 groups cost ~460 probes, a threshold that only ever grew cost ~43000).
+  do
+    local probes, real = 0, vim.api.nvim_get_autocmds
+    local names = {}
+    H.with_patched(vim.api, "nvim_get_autocmds", function(...)
+      probes = probes + 1
+      return real(...)
+    end, function()
+      for i = 1, 300 do
+        names[i] = "LibNvimSpecLive" .. i
+        autocmd.group(names[i])
+      end
+    end)
+    ok(probes < 3000, ("300 live groups cost %d prune probes"):format(probes))
+    for _, name in ipairs(names) do
+      pcall(vim.api.nvim_del_augroup_by_name, name)
+    end
   end
 end

@@ -375,8 +375,10 @@ remote.
   `GIT_TERMINAL_PROMPT=0` (git fails instead; credential helpers are unaffected) and kill git
   after 120 s: `err` is "git fetch timed out after 120s". `opts.env` wins over the prompt
   default (`{ GIT_TERMINAL_PROMPT = "1" }` allows prompts), `opts.timeout_ms` replaces the
-  deadline per process (`pull_async`/`update_async`: for the pull, and for the fetch of
-  `update_async`), `false` waits forever. An ssh host-key or passphrase prompt is not covered by
+  deadline per git process (`pull_async` runs three: HEAD before, the pull, HEAD after, and
+  `update_async` a fourth, the fetch, so the worst case is three or four deadlines; the HEAD
+  reads share `opts.env` too), `false` waits forever. A HEAD-before read that hit the deadline
+  makes `changed` `nil`. An ssh host-key or passphrase prompt is not covered by
   `GIT_TERMINAL_PROMPT`; the deadline catches it.
 - **After `stop()`.** `pull_async` and `update_async` are chains of processes (HEAD before, pull,
   HEAD after; fetch, then pull) and stay silent once `stop()` has been called: `on_done` never

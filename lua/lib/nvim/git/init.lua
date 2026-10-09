@@ -1790,17 +1790,17 @@ end
 --- that reason (its own doc comment explains why); its *after* read does
 --- not, because by the time it runs a *different* invariant applies (see
 --- there).
----@param opts? Lib.Git.Opts
----@param on_done fun(hash: string|nil, ok: boolean)
+---@param opts? Lib.Git.RunOpts
+---@param on_done fun(hash: string|nil, ok: boolean, timed_out: boolean|nil)
 ---@param git_cmd? string
 ---@return { stop: fun() } handle
 local function head_hash_async(opts, on_done, git_cmd)
   local argv = git_argv(git_cmd or "git", opts, { "rev-parse", "HEAD" })
   -- same environment and deadline as the pull it brackets: a `GIT_DIR` in `opts.env`
   -- must not make the before/after comparison look at another repository
-  return run_sync_async(argv, function(ok, stdout)
+  return run_sync_async(argv, function(ok, stdout, _code, _stderr, timed_out)
     if not ok or type(stdout) ~= "string" then
-      on_done(nil, false)
+      on_done(nil, false, timed_out)
       return
     end
     stdout = vim.trim(stdout)
@@ -1861,7 +1861,7 @@ end
 function M.pull_async(opts, on_done, git_cmd)
   local cancelled = false
   local active = { stop = function() end }
-  active.stop = head_hash_async(opts, function(before)
+  active.stop = head_hash_async(opts, function(before, _, before_timed_out)
     if cancelled then
       return
     end
@@ -1879,7 +1879,9 @@ function M.pull_async(opts, on_done, git_cmd)
         if cancelled then
           return
         end
-        if not after_ok then
+        -- a before read that hit the deadline is "unknown", not "no hash": comparing
+        -- its nil against the real after hash would report a move that never happened
+        if not after_ok or before_timed_out then
           on_done(true, nil, nil)
           return
         end
