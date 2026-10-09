@@ -40,8 +40,10 @@ question, so the rule for callers is:
 ## API
 
 All pure functions over the configuration; the roots themselves are re-read on
-every call, so a changed environment is seen. Call from the main loop (they use
-`vim.fn` / `vim.env`).
+every call, so a changed environment is seen. Environment variables are read
+through libuv, so `expand`, `match`, `fold` and `roots` also work in a fast
+event (a `vim.uv` callback). `export_env` does not (it sets a variable
+through Vimscript) and does nothing there.
 
 ### `setup(cfg?)`
 
@@ -62,9 +64,15 @@ drive (`C:/`) are refused too — they would fold every path.
 ### `roots()` → `{ { name, root }, ... }`
 
 `root` is absolute, forward-slash, without a trailing slash. Order: `extra`
-(alphabetical), `vars`, `NVIM_CONFIG_DIR`; **the first definition of a name
-wins**, so an `extra` entry overrides an environment variable of the same name.
+(alphabetical), `vars`, `NVIM_CONFIG_DIR`; **the first usable definition of a
+name wins**, so an `extra` entry overrides an environment variable of the same
+name — while an `extra` function that returns nothing falls through to it.
 Names are case-insensitive on Windows (like the variables themselves).
+
+A name must be letters, digits and underscores and not start with a digit
+(`MY-ROOT`, `a.b`, `1ST` are refused, reported as `invalid_name`): `fold`
+writes `$NAME/…`, and a name `expand` cannot read back would make a path that
+can be written but never resolved.
 
 `names()` is the same list, names only.
 
@@ -84,7 +92,15 @@ On Windows the rest's backslashes become slashes; elsewhere the rest is kept
 verbatim (a POSIX filename may contain a backslash).
 
 `match(s)` returns `name, root, rest` for the same leading reference
-(`nil` when there is none) — for callers that need the split.
+(`nil` when there is none) — for callers that need the split. It resolves
+only the name it is asked about (no other `extra` function runs), so it is
+cheap to call for every `$VAR` a string contains.
+
+`relative(p, name)` is the part of the absolute path `p` below the root
+`name` (`""` for the root itself, `"/rest"` below it, a trailing separator
+kept), ignoring separator, drive-letter case and — on Windows — case.
+`nil` when `p` is not under that root. It puts a path that came back from the
+filesystem (a completion candidate) into the spelling the user typed.
 
 ### `fold(abs, opts?)` → `folded, name`
 
@@ -94,7 +110,8 @@ the one around it); on Windows the comparison ignores case (via
 backslashes and drive-letter case are accepted. A sibling that merely shares a
 name prefix (`/repos2` vs `/repos`) is not inside. A relative path, or one
 under no root, comes back unchanged with `name = nil`. With `enable = false`
-always unchanged, unless `opts.force`.
+always unchanged, unless `opts.force`. Two names for the same directory: the
+one earlier in `roots()` order wins.
 
 `folder(opts?)` returns the same function with the roots resolved **once** —
 for a recursive file list.
@@ -106,14 +123,16 @@ name is the anchor. A root `D:/repos` is called `repos` on every machine, so
 the part of `E:/repos/casedesk.nvim/x.md` after `repos` is looked up under
 `D:/repos`. Only candidates that **exist** are returned, nearest anchor first,
 each once. Empty when `enable = false`, the path is not absolute or nothing
-matches.
+matches — and for a path with a `..` segment: the recorded path is someone
+else's data, and re-anchoring `E:/repos/../../etc/x` would climb out of the
+root.
 
 ### `status()`
 
 Every configured name with what became of it: `{ name, kind, raw, root,
-exists, problem }`, `problem` being `"unset"`, `"not_absolute"` or
-`"missing_dir"`. `:checkhealth lib` reports it (a missing `$REPOS_DIR` is the
-usual finding).
+exists, problem }`, `problem` being `"unset"`, `"not_absolute"`,
+`"invalid_name"` or `"missing_dir"`. `:checkhealth lib` reports it (a missing
+`$REPOS_DIR` is the usual finding).
 
 ## Readable from outside Neovim
 
@@ -131,7 +150,7 @@ prints one JSON line (`json()` returns the same string):
 ```
 
 `unresolved` lists configured names without a usable value
-(`{ "name": "...", "problem": "unset" | "not_absolute" }`). Run it with the
+(`{ "name": "...", "problem": "unset" | "not_absolute" | "invalid_name" }`). Run it with the
 user's own config — not `-u NONE` — so `setup()` and its `extra` roots have
 run. The desktop hub queries it this way.
 

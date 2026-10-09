@@ -39,6 +39,10 @@ local M = {}
 
 local NVIM_CONFIG_NAME = "NVIM_CONFIG_DIR"
 
+-- What `parse_ref` can read back. A root named otherwise (`MY-ROOT`, `a.b`, `1ST`) could be folded
+-- to `$MY-ROOT/x` but never expanded again, so it is refused up front.
+local NAME_PAT = "^[%a_][%w_]*$"
+
 ---@type string[]
 local DEFAULT_VARS = { "REPOS_DIR" }
 
@@ -61,6 +65,18 @@ local function win()
     return _cfg.windows == true
   end
   return is_windows()
+end
+
+---Lowercase for a case-insensitive comparison. `string.lower` only folds ASCII, which leaves a
+---non-ASCII profile path (`C:/Users/Müller`) case-sensitive on Windows, so anything with a high
+---byte goes through `vim.fn.tolower`; the common all-ASCII path stays in Lua.
+---@param s string
+---@return string
+local function lower(s)
+  if not s:find("[\128-\255]") then
+    return s:lower()
+  end
+  return vim.fn.tolower(s)
 end
 
 ---Apply the configuration. Replaces the previous one entirely; `setup()` resets to the defaults.
@@ -105,7 +121,9 @@ end
 local function read_env(name)
   local src = _cfg.source
   if src == nil then
-    return resolve_value(vim.env[name])
+    -- libuv, not `vim.env`: the latter is a Vimscript round trip per read and raises E5560 in a
+    -- fast event; both see the same process environment.
+    return resolve_value(uv.os_getenv(name))
   end
   if type(src) == "function" then
     local ok, v = pcall(src, name)
@@ -126,6 +144,12 @@ local function unify(p)
     return unify_slashes(p)
   end
   return p
+end
+
+---@param s string
+---@return string
+local function fold_case(s)
+  return win() and lower(s) or s
 end
 
 ---Canonical spelling of an absolute path: forward slashes, one separator between segments, no
@@ -235,53 +259,81 @@ local function entry(kind, name, raw)
   return { name = name, kind = kind, raw = raw, root = root }
 end
 
+---@param name string
+---@return string
+local function name_key(name)
+  return win() and name:upper() or name
+end
+
 ---Every configured name in precedence order -- user-defined `extra` roots (sorted by name, so a
 ---result never depends on table iteration order), then `vars`, then `$NVIM_CONFIG_DIR` -- with
----its outcome. The first definition of a name wins; later ones are not listed.
+---its outcome. The first USABLE definition of a name wins (an `extra` function that returns
+---nothing does not shadow the environment variable of that name); when none is usable the first
+---one is reported.
+---
+---`only` (a `name_key`) restricts this to the definitions of one name and resolves nothing else --
+---what `match` needs, and `expand_path` calls it for every `$VAR` it meets.
+---@param only? string
 ---@return Lib.Fs.Roots.Status[]
-local function collect()
-  local out, seen = {}, {}
+local function collect(only)
+  local out, index = {}, {}
 
   ---@param kind "extra"|"var"|"nvim_config"
-  ---@param name any
-  ---@param raw any
-  local function add(kind, name, raw)
-    if type(name) ~= "string" or name == "" then
+  ---@param name string
+  ---@param fetch fun(): any  Called only when the definition is actually wanted.
+  local function add(kind, name, fetch)
+    local key = name_key(name)
+    if only and key ~= only then
       return
     end
-    local key = win() and name:upper() or name
-    if seen[key] then
+    local at = index[key]
+    if at and out[at].root then
       return
     end
-    seen[key] = true
-    out[#out + 1] = entry(kind, name, resolve_value(raw))
+    local e
+    if name:match(NAME_PAT) then
+      e = entry(kind, name, resolve_value(fetch()))
+    else
+      e = { name = name, kind = kind, problem = "invalid_name" }
+    end
+    if not at then
+      out[#out + 1] = e
+      index[key] = #out
+    elseif e.root then
+      out[at] = e
+    end
   end
 
   local extra_names = {}
   for name in pairs(_cfg.extra) do
-    extra_names[#extra_names + 1] = tostring(name)
+    if type(name) == "string" and name ~= "" and (not only or name_key(name) == only) then
+      extra_names[#extra_names + 1] = name
+    end
   end
   table.sort(extra_names)
   for _, name in ipairs(extra_names) do
-    add("extra", name, _cfg.extra[name])
+    add("extra", name, function()
+      return _cfg.extra[name]
+    end)
   end
 
   for _, name in ipairs(_cfg.vars) do
-    if type(name) == "string" then
-      add("var", name, read_env(name))
+    if type(name) == "string" and name ~= "" then
+      add("var", name, function()
+        return read_env(name)
+      end)
     end
   end
 
   if _cfg.nvim_config then
-    -- Injected source: the value comes from the source and nowhere else. Falling back to the
-    -- `stdpath` of the process would hand a test the root of its sandbox.
-    local raw
-    if _cfg.source == nil then
-      raw = vim.fn.stdpath("config")
-    else
-      raw = read_env(NVIM_CONFIG_NAME)
-    end
-    add("nvim_config", NVIM_CONFIG_NAME, raw)
+    add("nvim_config", NVIM_CONFIG_NAME, function()
+      -- Injected source: the value comes from the source and nowhere else. Falling back to the
+      -- `stdpath` of the process would hand a test the root of its sandbox.
+      if _cfg.source == nil then
+        return vim.fn.stdpath("config")
+      end
+      return read_env(NVIM_CONFIG_NAME)
+    end)
   end
 
   return out
@@ -312,8 +364,9 @@ function M.names()
   return out
 end
 
----Every configured name, including the ones without a usable value (`problem = "unset"` or
----`"not_absolute"`), plus `exists` for the ones that have one. For `:checkhealth` and `json()`.
+---Every configured name, including the ones without a usable value (`problem = "unset"`,
+---`"not_absolute"` or `"invalid_name"`), plus `exists` for the ones that have one. For
+---`:checkhealth` and `json()`.
 ---@return Lib.Fs.Roots.Status[]
 function M.status()
   local out = collect()
@@ -342,13 +395,46 @@ function M.match(s)
   if not ref then
     return nil, nil, nil
   end
-  local key = win() and ref:upper() or ref
-  for _, r in ipairs(M.roots()) do
-    if (win() and r.name:upper() or r.name) == key then
-      return r.name, r.root, rest
+  for _, e in ipairs(collect(name_key(ref))) do
+    if e.root then
+      return e.name, e.root, rest
     end
   end
   return nil, nil, nil
+end
+
+---The part of the absolute path `p` below the root `name`: `""` for the root itself, `"/rest"`
+---below it; a trailing separator of `p` is kept (as `"/"`), so a completion candidate for a
+---directory stays one. nil when `p` is not under that root. Separators and, on Windows, case and
+---drive-letter case do not matter -- which is the point: a path that came back from the
+---filesystem (a completion candidate) need not be spelled the way the root is.
+---@param p string
+---@param name string
+---@return string|nil
+function M.relative(p, name)
+  if type(p) ~= "string" or type(name) ~= "string" then
+    return nil
+  end
+  local root
+  for _, e in ipairs(collect(name_key(name))) do
+    if e.root then
+      root = e.root
+      break
+    end
+  end
+  local abs = root and clean_abs(p)
+  if not abs then
+    return nil
+  end
+  local trail = p:match("[/\\]$") and "/" or ""
+  local key, rkey = fold_case(abs), fold_case(root)
+  if key == rkey then
+    return trail
+  end
+  if key:sub(1, #rkey + 1) == rkey .. "/" then
+    return abs:sub(#root + 1) .. trail
+  end
+  return nil
 end
 
 ---`$NAME/rest`, `${NAME}/rest`, `%NAME%/rest` (for the known roots) and `~/rest` -> absolute path.
@@ -392,18 +478,21 @@ function M.folder(opts)
 
   local windows = win()
   local prepared = {}
-  for _, r in ipairs(M.roots()) do
+  for i, r in ipairs(M.roots()) do
     prepared[#prepared + 1] = {
       name = r.name,
-      -- `vim.fn.tolower`, not `string.lower`: the latter only folds ASCII, which leaves a
-      -- non-ASCII profile path on Windows case-sensitive.
-      key = windows and vim.fn.tolower(r.root) or r.root,
+      key = windows and lower(r.root) or r.root,
       len = #r.root,
+      idx = i,
     }
   end
-  -- Longest root first, so a nested root beats the one around it.
+  -- Longest root first, so a nested root beats the one around it. Two names for one directory
+  -- have the same length: the earlier one in `roots()` order wins, not whichever `sort` put first.
   table.sort(prepared, function(a, b)
-    return a.len > b.len
+    if a.len ~= b.len then
+      return a.len > b.len
+    end
+    return a.idx < b.idx
   end)
 
   return function(p)
@@ -414,7 +503,7 @@ function M.folder(opts)
     if not abs then
       return p, nil
     end
-    local key = windows and vim.fn.tolower(abs) or abs
+    local key = windows and lower(abs) or abs
     for _, r in ipairs(prepared) do
       if key == r.key then
         return "$" .. r.name, r.name
@@ -438,12 +527,6 @@ function M.fold(p, opts)
   return M.folder(opts)(p)
 end
 
----@param s string
----@return string
-local function fold_case(s)
-  return win() and vim.fn.tolower(s) or s
-end
-
 ---Candidates for an absolute path that was recorded on ANOTHER machine, re-anchored under this
 ---machine's roots. The root's own folder name is the anchor: a root `D:/repos` is called `repos`
 ---on every machine, so the part of `E:/repos/casedesk.nvim/x.md` after `repos` is looked for
@@ -462,6 +545,13 @@ function M.remap(p)
   end
 
   local segs = vim.split(raw, "/", { plain = true, trimempty = true })
+  -- A recorded path is somebody else's data. `E:/repos/../../etc/x` re-anchored under a root
+  -- would climb out of it, so a path that is not already canonical maps to nothing.
+  for _, seg in ipairs(segs) do
+    if seg == ".." then
+      return {}
+    end
+  end
   local folded_raw = fold_case(raw)
   local hits, seen = {}, {}
   for _, r in ipairs(M.roots()) do
@@ -491,7 +581,7 @@ end
 ---     "unresolved":[{"name":"X","problem":"unset"}]}
 ---
 ---`roots` holds the usable ones in `roots()` order; `unresolved` the configured names that have no
----usable value (`unset`, `not_absolute`) -- a root whose directory is missing stays in `roots`
+---usable value (`unset`, `not_absolute`, `invalid_name`) -- a root whose directory is missing stays in `roots`
 ---with `"exists": false`.
 ---@return string
 function M.json()
@@ -532,7 +622,12 @@ function M.export_env()
   if _cfg.source ~= nil or vim.g.lib_nvim_roots_no_export == true then
     return false
   end
-  local cur = vim.env[NVIM_CONFIG_NAME]
+  -- Setting the variable is a Vimscript call: not possible in a fast event, and nothing to retry
+  -- there -- `plugin/lib_roots.lua` has already done it at startup.
+  if vim.in_fast_event() then
+    return false
+  end
+  local cur = uv.os_getenv(NVIM_CONFIG_NAME)
   if cur ~= nil and cur ~= "" then
     return false
   end
@@ -546,7 +641,7 @@ end
 
 -- Loading the module is the earliest moment every consumer passes through (`plugin/lib_roots.lua`
 -- covers a startup that never requires it).
-M.export_env()
+pcall(M.export_env)
 
 ---@type Lib.Fs.Roots
 return M

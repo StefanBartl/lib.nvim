@@ -113,6 +113,8 @@ function M.check()
       if st.problem == "unset" then
         if st.kind == "nvim_config" then
           h_warn(("$%s is not available"):format(st.name))
+        elseif st.kind == "extra" then
+          h_warn(("$%s (extra root) resolved to nothing"):format(st.name))
         else
           h_warn(("$%s is not set"):format(st.name), {
             ("Set the environment variable %s, or define it with"):format(st.name)
@@ -122,6 +124,11 @@ function M.check()
             "Inside a testing.nvim child the variable also has to be listed in `env_allow`.",
           })
         end
+      elseif st.problem == "invalid_name" then
+        h_warn(
+          ("root name %q is ignored"):format(st.name),
+          { "A root name must be letters, digits and underscores, not starting with a digit." }
+        )
       elseif st.problem == "not_absolute" then
         h_warn(("$%s is not an absolute path: %s"):format(st.name, tostring(st.raw)))
       elseif st.problem == "missing_dir" then
