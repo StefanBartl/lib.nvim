@@ -7,7 +7,7 @@
     "lua/?.lua",
     "lua/?/init.lua"
   ],
-  "diagnostics.globals": ["vim"],
+  "diagnostics.globals": [],
   "workspace.checkThirdParty": false,
   "workspace.useGitIgnore": true,
   "workspace.ignoreDir": [".claude", ".deps"]
