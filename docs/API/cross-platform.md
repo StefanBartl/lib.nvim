@@ -272,11 +272,12 @@ M.run_blocking_result(cmd: string[], input?: string, opts?: Lib.RunArgv.Opts): {
   -- everything the process did in one table; code 124 = timed out, 128+signal = killed by a signal
   -- (ok = false then), -1 = could not be started
 M.run_async_captured(cmd: string[], on_done: fun(ok, output, code, stderr, signal), input?: string, opts?: Lib.RunArgv.Opts): { stop: fun() }
-  -- non-blocking counterpart; on_done is always vim.schedule-dispatched; stop() sends sigterm;
+  -- non-blocking counterpart; on_done is always vim.schedule-dispatched; stop() sends sigterm (POSIX: to the child's process group; Windows: kills the tree);
   -- ok/code are the bare exit status (a signal-killed process reads ok = true) - check `signal`
 
 Lib.RunArgv.Opts = { binary?: boolean, timeout_ms?: integer, max_output_bytes?: integer, env?: table<string,string>, cwd?: string }
-  -- timeout_ms: SIGTERM after that long -> exit code 124 (Windows: whole tree; async answers at the deadline + grace)
+  -- timeout_ms: SIGTERM after that long -> exit code 124; the whole process tree is killed (POSIX: the child's own process group, while the
+  --   child still runs; Windows: taskkill /T) and the async runner answers at the deadline, at the deadline + grace only when a descendant escaped
   --   the deadline is a timer of the runner itself (started once the process is spawned), not vim.system's `timeout`:
   --   a fired deadline always reports code 124, timed_out = true and a non-zero signal (15; 9 when SIGTERM was
   --   ignored and the process was killed 1.5 s later), even if the child handles SIGTERM and exits 0 (Neovim does)

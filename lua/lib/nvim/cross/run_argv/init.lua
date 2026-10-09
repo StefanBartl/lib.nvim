@@ -1,5 +1,17 @@
 ---@module 'lib.nvim.cross.run_argv'
 --- Low-level argv-based process runner with stdin support.
+---
+--- Process lifetime (timeout, output cap, `stop()`): on POSIX a child that one of
+--- these can kill is started in a session and process group of its own
+--- (`vim.system` `detach = true`, libuv `setsid()`; the group id is the child's
+--- pid), and the kill signals the WHOLE group, so the grandchildren of the child
+--- (the `git-remote-http` behind `git fetch`, a build tool's workers, whatever a
+--- wrapper script starts) die with it instead of living on with PPID 1 and the
+--- output pipes open. That holds while the child itself still runs when the kill
+--- comes: the group of a child that has exited is left alone, because its id may
+--- have been reused (`signal_group`). On Windows the whole tree is killed with
+--- `taskkill /T` instead and nothing is detached. What detaching changes for the
+--- child is documented at `DETACH` below.
 
 local M = {}
 
@@ -8,6 +20,55 @@ local uv = vim.uv or vim.loop
 -- Decided once: `kill_tree` runs in libuv callbacks (the deadline timer, the
 -- stdout handler), where `vim.fn.*` is not allowed.
 local IS_WIN = (uv.os_uname().sysname or ""):find("Windows", 1, true) ~= nil
+
+--- Whether a child that can be killed is started in a process group of its own
+--- (POSIX only; Windows has `taskkill /T` for the tree and a detached Windows
+--- process would get its own console).
+---
+--- What `detach = true` means for such a child (measured by hand on Linux with a
+--- pty as the controlling terminal, Neovim 0.11; the specs do not cover these
+--- terminal effects, the headless spec runner has no controlling terminal to tell
+--- a detached child from an attached one -- they only check that the child leads a
+--- process group of its own):
+---   * It has no controlling terminal (`setsid()`): opening `/dev/tty` fails with
+---     `ENXIO` at once. A program that wants to prompt there (`ssh` for a
+---     passphrase or host-key question, `gpg` for a pinentry, `git` for a
+---     username without `GIT_TERMINAL_PROMPT=0`) now fails fast instead of
+---     writing the prompt into the TUI and waiting for a key nobody can type.
+---     Prompts that go through stdin/stdout are not affected (stdin is a pipe).
+---   * It gets no terminal-generated signals (SIGINT of Ctrl-C, SIGHUP when the
+---     terminal goes away): it is stopped only by us -- the deadline, the output
+---     cap, `stop()` -- or by its own end. A `:qa!` or a closed terminal does not
+---     kill it, which is no change for `:qa!` (Neovim does not kill `vim.system`
+---     children on exit, detached or not) and means that a closed terminal no
+---     longer takes a still running child with it.
+---   * It does not keep Neovim from exiting: libuv documents that a detached
+---     child keeps the loop of a plain libuv program alive unless the handle is
+---     unref'd, but Neovim leaves with `exit()`, not by draining its loop. Measured:
+---     `:qa!` with a running detached child took the same time (about 0.21 s
+---     headless, about 1.3 s in a pty) as with an attached one, so the handle is
+---     deliberately not unref'd (that would also need `vim.system` internals).
+local DETACH = not IS_WIN
+
+--- Jobs this module started with `detach = true`, i.e. whose pid is the id of a
+--- process group that only this module's child (and its descendants) belong to.
+--- Only such a group is ever signalled: `kill(-pid)` for a child that shares the
+--- process group of Neovim would signal Neovim itself and its siblings. Weak keys:
+--- an entry does not outlive its job.
+---@type table<table, boolean>
+local OWN_GROUP = setmetatable({}, { __mode = "k" })
+
+--- Jobs for which a follow-up SIGKILL to the process group is still owed: the
+--- deadline sent its SIGTERM to the group while the leader was alive, and the
+--- grace timer will send the SIGKILL, which must also reach the group when the
+--- leader has exited on the SIGTERM by then (a descendant that ignores the SIGTERM
+--- and holds the pipes). Set by the deadline's SIGTERM only -- never by `stop()` or
+--- the output cap -- and cleared by the next SIGKILL, so the exception to the
+--- "leader reaped: leave the group alone" rule lasts for the grace period
+--- (`GRACE_MS`) of one run; see `signal_group`. Weak keys: an entry does not
+--- outlive its job.
+---@type table<table, boolean>
+local FOLLOW_UP = setmetatable({}, { __mode = "k" })
 
 --- Exit code of a run that was stopped for printing more than
 --- `opts.max_output_bytes`.
@@ -24,8 +85,8 @@ local GRACE_MS = 1500
 --- Options of the `*_captured` and `*_result` runners.
 ---@class Lib.RunArgv.Opts
 ---@field binary? boolean Deliver stdout byte for byte (`vim.system` `text = false`): no `\r\n` -> `\n` rewriting, `NUL` and non-UTF-8 bytes intact. Needs Neovim 0.10+ (`vim.system`); the legacy fallback ignores it.
----@field timeout_ms? integer Kill the process (SIGTERM) after this many milliseconds; the run then ends with exit code `124`, the `timeout(1)` convention, whatever the child made of the signal (a child that handles SIGTERM and exits 0, as Neovim does, is a timeout all the same). The deadline is a timer of our own, started once the process is spawned; a child that ignores SIGTERM is killed (SIGKILL) `1500` ms later. On Windows the whole process tree is killed (`taskkill /T`); elsewhere only the direct child is, so a grandchild that keeps the output pipes open can delay their closing -- the async runner settles at the deadline (plus a short grace) anyway, the blocking runner returns once `wait()` gives up. Needs `vim.system`; the legacy fallback ignores it.
----@field max_output_bytes? integer Stop the process once its stdout exceeds this many bytes: the run then ends with exit code `125` (`M.OUTPUT_LIMIT_CODE`), `stdout` holds what fitted and `stderr` says why. A process whose output is the data (`git log` of a repository somebody else wrote) can print gigabytes from a tiny input; without a cap all of it is collected in memory. Needs `vim.system`; the legacy fallback ignores it.
+---@field timeout_ms? integer Kill the process (SIGTERM) after this many milliseconds; the run then ends with exit code `124`, the `timeout(1)` convention, whatever the child made of the signal (a child that handles SIGTERM and exits 0, as Neovim does, is a timeout all the same). The deadline is a timer of our own, started once the process is spawned; whatever is still running `1500` ms after the SIGTERM (a child that ignores it) is killed with SIGKILL. The process tree is killed: on POSIX the child runs in a process group of its own (`detach`, see `DETACH`) and both signals go to that group, so grandchildren die with it, the output pipes close at once and the async runner answers at the deadline; on Windows `taskkill /T` kills the tree. On POSIX that holds while the child itself is still running at the deadline: the descendants of a child that has exited already (or that left its group with `setsid()`) are not signalled, because the group id of an empty group may have been reused (see `signal_group`); the async runner then answers at the deadline plus the grace period (code `124`, signal `9`). A run with a timeout is detached on POSIX, i.e. the child has no controlling terminal (`/dev/tty` prompts fail fast) and gets no terminal-generated SIGINT/SIGHUP. The async runner settles at the deadline plus the `1500` ms grace period at the latest, the blocking runner returns once `wait()` gives up. Needs `vim.system`; the legacy fallback ignores it.
+---@field max_output_bytes? integer Stop the process once its stdout exceeds this many bytes: the run then ends with exit code `125` (`M.OUTPUT_LIMIT_CODE`), `stdout` holds what fitted and `stderr` says why. A process whose output is the data (`git log` of a repository somebody else wrote) can print gigabytes from a tiny input; without a cap all of it is collected in memory. The kill (SIGKILL) goes to the whole process group on POSIX while the child is still running, like the timeout's (and the run is detached then). Needs `vim.system`; the legacy fallback ignores it.
 ---@field env? table<string, string> Extra environment variables, merged over the inherited environment (an unset name stays inherited). Needs `vim.system`; the legacy fallback ignores it.
 ---@field cwd? string Working directory of the child. Needs `vim.system`; the legacy fallback ignores it.
 
@@ -39,19 +100,83 @@ local GRACE_MS = 1500
 ---@field timed_out boolean The run hit `opts.timeout_ms`: the process was killed for it (`code == 124` and a non-zero `signal`: 15, or 9 when SIGTERM was ignored). A process that merely exits 124 by itself is not a timeout.
 
 ---@internal
+--- POSIX: send `signal` to the process GROUP of a job this module started
+--- detached. Returns `true` when the signal went out.
+---
+--- Why this is safe, and when it is not attempted. A process group id stays
+--- valid for as long as any member lives, and POSIX forbids reusing a pid number
+--- while a group of that number exists, so while the leader (the direct child) is
+--- alive -- or while a member that outlived it is -- `-pid` can only name OUR
+--- group. Once the group is empty the number is free again and may belong to a
+--- stranger that happened to become a group leader, exactly the pid-reuse hazard
+--- the `is_closing()` guard of `kill_job` exists for. Nothing here can tell
+--- whether a member is left once the leader has been reaped, so:
+---   * Leader alive (its `vim.system` handle is not closing): always signalled.
+---   * Leader reaped: signalled only for the follow-up SIGKILL the deadline owes
+---     (`FOLLOW_UP`) -- a leader that exited on the SIGTERM while a descendant
+---     ignores it and holds the pipes. That exception lasts from the deadline's
+---     SIGTERM to the SIGKILL one grace period (1.5 s) later, and is used up by the
+---     first SIGKILL; a stranger would have to get this very pid and become a
+---     group leader within it.
+---   * Leader reaped, no follow-up owed: left alone, as before this module used
+---     groups. That is a child that had exited on its own when the deadline, the
+---     output cap or `stop()` came, or one that exited on a `stop()` before the
+---     deadline (the deadline's SIGTERM then finds a reaped leader, and nothing
+---     is owed after a refused signal). Its descendants are not signalled; the run
+---     is still answered (the async runner at the deadline plus the grace period).
+---   * A pid of 0 or 1 is never used as a group id: `kill(0)` is the process group
+---     of Neovim itself and `kill(-1)` is every process we may signal.
+---@param job table  The `vim.system` object.
+---@param signal string
+---@param owe_follow_up? boolean  The caller will send a SIGKILL after the grace period (the deadline's SIGTERM): remember it, see `FOLLOW_UP`.
+---@return boolean sent
+local function signal_group(job, signal, owe_follow_up)
+  local pid = job.pid
+  if IS_WIN or not pid or pid <= 1 or not OWN_GROUP[job] then
+    return false
+  end
+  local leader_alive = not (job.is_closing and job:is_closing())
+  if not leader_alive and not FOLLOW_UP[job] then
+    return false
+  end
+  if signal == "sigkill" then
+    -- the last signal there is: nothing is owed after it, sent or not
+    FOLLOW_UP[job] = nil
+  end
+  -- (a negative pid addresses the group; `uv.kill` returns 0, or nil + reason)
+  local sent = uv.kill(-pid, signal) == 0
+  if sent and owe_follow_up and leader_alive then
+    FOLLOW_UP[job] = true
+  end
+  return sent
+end
+
+---@internal
 --- Best effort: kill a process AND its children. `vim.system`'s own timeout and
---- `stop()` signal only the direct child; on Windows the `git.exe` of `cmd\` is a
---- thin wrapper whose real git keeps running (and keeps the pipes open).
---- `taskkill /T` finds the descendants through the PARENT, so the parent must still
---- be alive when it runs: the signal to the direct child is sent only after
---- `taskkill` has finished (and straight away when it cannot be started, or off
---- Windows).
+--- `stop()` signal only the direct child.
+---   * POSIX: the signal goes to the child's process group (`signal_group`), so the
+---     descendants get it too; when the group cannot be signalled (it is gone, or
+---     the job is not one of ours) the direct child is signalled as before.
+---   * Windows: the `git.exe` of `cmd\` is a thin wrapper whose real git keeps
+---     running (and keeps the pipes open). `taskkill /T` finds the descendants
+---     through the PARENT, so the parent must still be alive when it runs: the
+---     signal to the direct child is sent only after `taskkill` has finished (and
+---     straight away when it cannot be started).
+--- An exited process is never signalled by pid: its pid may already belong to
+--- somebody else (`/F` would kill that), and `/T` finds descendants only through a
+--- live parent anyway. The one exception is the follow-up group signal of
+--- `signal_group`.
 ---@param job table|nil  The `vim.system` object.
 ---@param signal string
-local function kill_job(job, signal)
-  -- An exited process: its pid may already belong to somebody else (`/F` would
-  -- kill that), and `/T` finds descendants only through a live parent anyway.
-  if not job or (job.is_closing and job:is_closing()) then
+---@param owe_follow_up? boolean  See `signal_group`: the deadline's SIGTERM.
+local function kill_job(job, signal, owe_follow_up)
+  if not job then
+    return
+  end
+  if signal_group(job, signal, owe_follow_up) then
+    return
+  end
+  if job.is_closing and job:is_closing() then
     return
   end
   if IS_WIN and job.pid then
@@ -71,10 +196,22 @@ local function kill_job(job, signal)
 end
 
 ---@internal
---- Best effort, no signal afterwards: for a run that already gave up waiting.
+--- Best effort, no signal to the direct child afterwards: for a run that already
+--- gave up waiting. Windows: `taskkill /T`; POSIX: SIGKILL to the process group
+--- (under the rules of `signal_group`). On POSIX this is normally redundant -- the
+--- grace timer of the deadline has sent that SIGKILL long before `wait()` gives up
+--- (it does so after `timeout_ms + GRACE_MS`, then waits as long again) -- and is
+--- a safety net for a timer that did not run.
 ---@param job table|nil  The `vim.system` object.
 local function kill_tree(job)
-  if not job or not job.pid or not IS_WIN or (job.is_closing and job:is_closing()) then
+  if not job or not job.pid then
+    return
+  end
+  if not IS_WIN then
+    signal_group(job, "sigkill")
+    return
+  end
+  if job.is_closing and job:is_closing() then
     return
   end
   pcall(
@@ -86,6 +223,17 @@ local function kill_tree(job)
 end
 
 ---@internal
+--- Whether `value` is a usable `timeout_ms` / `max_output_bytes`: a number that is
+--- neither NaN nor negative. One predicate for the deadline, the output cap and
+--- `has_kill_path`, so that a run is only detached (given a process group of its
+--- own) when one of them is really armed.
+---@param value any
+---@return boolean
+local function is_limit(value)
+  return type(value) == "number" and value == value and value >= 0
+end
+
+---@internal
 --- Collect stdout ourselves when a cap is set, so that a runaway process is
 --- stopped instead of being read to the end.
 ---@param opts Lib.RunArgv.Opts|nil
@@ -93,7 +241,7 @@ end
 ---@return table|nil sink
 local function new_sink(opts, kill)
   local cap = opts and opts.max_output_bytes
-  if type(cap) ~= "number" or cap ~= cap or cap < 0 then
+  if not is_limit(cap) then
     return nil
   end
   local sink = { chunks = {}, size = 0, over = false, cap = cap }
@@ -208,17 +356,23 @@ end
 --- no better: libuv timers run on a cached loop time and fire early by however
 --- long the loop was not iterated (`uv.update_time()` first narrows that, it does
 --- not close it).
+---
+--- After the SIGTERM the same timer is armed once more for `GRACE_MS`: a child (or
+--- a descendant) that did not give up by then gets SIGKILL -- in every runner, so
+--- that a blocking run does not depend on `job:wait()` (whose own SIGKILL at
+--- `timeout_ms + GRACE_MS` reaches the direct child only). On POSIX both signals go
+--- to the whole process group (`kill_job`).
 ---@class Lib.RunArgv.Deadline
 ---@field fired boolean SIGTERM was sent because the deadline passed.
 ---@field timer uv.uv_timer_t|nil
 
 ---@param get_job fun(): table|nil
 ---@param opts Lib.RunArgv.Opts|nil
----@param on_fired fun()|nil Runs (in the libuv callback) after the SIGTERM.
+---@param on_grace fun()|nil Runs (in the libuv callback) after the SIGKILL that ends the grace period.
 ---@return Lib.RunArgv.Deadline|nil
-local function start_deadline(get_job, opts, on_fired)
+local function start_deadline(get_job, opts, on_grace)
   local ms = opts and opts.timeout_ms
-  if type(ms) ~= "number" or ms ~= ms or ms < 0 then
+  if not is_limit(ms) then
     return nil
   end
   local d = { fired = false, timer = uv.new_timer() }
@@ -229,10 +383,19 @@ local function start_deadline(get_job, opts, on_fired)
       return
     end
     d.fired = true
-    kill_job(job, "sigterm")
-    if on_fired then
-      on_fired()
+    -- (the SIGKILL below follows this SIGTERM: it may reach the group of a leader that
+    -- exited on it, see `FOLLOW_UP`)
+    kill_job(job, "sigterm", true)
+    -- (`stop_deadline` may have run meanwhile: the timer is gone then)
+    if not d.timer then
+      return
     end
+    d.timer:start(GRACE_MS, 0, function()
+      kill_job(job, "sigkill")
+      if on_grace then
+        on_grace()
+      end
+    end)
   end)
   return d
 end
@@ -253,10 +416,13 @@ end
 ---@param opts Lib.RunArgv.Opts|nil
 ---@param sink table|nil
 ---@param errs table|nil
+---@param managed boolean The run has a kill path (deadline, output cap, `stop()`): on POSIX the child gets a process group of its own.
 ---@return table
-local function system_opts(input, opts, sink, errs)
+local function system_opts(input, opts, sink, errs, managed)
   opts = opts or {}
   return {
+    -- see `DETACH`; a run nothing can kill keeps the terminal and its signals
+    detach = managed and DETACH or nil,
     text = not opts.binary,
     stdin = input,
     env = opts.env,
@@ -264,6 +430,31 @@ local function system_opts(input, opts, sink, errs)
     stdout = sink and sink.handler or nil,
     stderr = errs and errs.handler or nil,
   }
+end
+
+---@internal
+--- `vim.system` plus the bookkeeping `signal_group` relies on: a job started
+--- detached owns the process group of its pid.
+---@param cmd string[]
+---@param sys_opts table  From `system_opts`.
+---@param on_exit? fun(res: table)
+---@return table job  The `vim.system` object.
+local function spawn(cmd, sys_opts, on_exit)
+  local job = vim.system(cmd, sys_opts, on_exit)
+  if sys_opts.detach then
+    OWN_GROUP[job] = true
+  end
+  return job
+end
+
+---@internal
+--- Whether a run of `opts` can be killed by its own deadline or output cap (the
+--- async runner always can: `stop()`). A `timeout_ms` or `max_output_bytes` that
+--- `start_deadline` / `new_sink` ignore (NaN, negative) arms nothing.
+---@param opts Lib.RunArgv.Opts|nil
+---@return boolean
+local function has_kill_path(opts)
+  return opts ~= nil and (is_limit(opts.timeout_ms) or is_limit(opts.max_output_bytes))
 end
 
 ---@param cmd string[]
@@ -325,7 +516,7 @@ function M.run_blocking_captured(cmd, input, opts)
     end)
     local errs = new_errsink() -- stderr is not returned here, only kept out of memory
     local ok, res = pcall(function()
-      job = vim.system(cmd, system_opts(input, opts, sink, errs))
+      job = spawn(cmd, system_opts(input, opts, sink, errs, has_kill_path(opts)))
       deadline = start_deadline(function()
         return job
       end, opts)
@@ -388,11 +579,12 @@ function M.run_blocking_result(cmd, input, opts)
   -- failed result instead of an error escaping to the caller.
   local errs = new_errsink()
   local ok, res = pcall(function()
-    job = vim.system(cmd, system_opts(input, opts, sink, errs))
+    job = spawn(cmd, system_opts(input, opts, sink, errs, has_kill_path(opts)))
     deadline = start_deadline(function()
       return job
     end, opts)
-    -- `wait(ms)` that runs out sends SIGKILL: the escalation for a child that ignores SIGTERM.
+    -- `wait(ms)` that runs out sends SIGKILL to the direct child; the SIGKILL of the
+    -- whole group is the deadline timer's (`start_deadline`), a moment earlier or later.
     return job:wait(deadline and (opts.timeout_ms + GRACE_MS) or nil)
   end)
   stop_deadline(deadline)
@@ -472,13 +664,22 @@ end
 --- Both stdout and the exit code are passed on; `code` lets a caller report a
 --- bare "exit code N" when the process failed without writing anything.
 ---
---- With `opts.timeout_ms` the answer comes at the deadline (plus a short grace)
---- even when a descendant of the process keeps the pipes open: the process (on
---- Windows its tree) is killed and `on_done` gets code `124`, signal `9`.
+--- With `opts.timeout_ms` the process is sent SIGTERM at the deadline -- on POSIX
+--- the whole process group of the child, so its grandchildren die with it, the
+--- pipes close and `on_done` is called right away; on Windows the tree is killed
+--- with `taskkill /T`. Whatever ignores the SIGTERM is killed (SIGKILL, again the
+--- whole group) after a short grace period, and when even that does not close the
+--- pipes (a Windows descendant, or on POSIX a descendant that left the group with
+--- `setsid()` or that outlived a child that had exited before the deadline: those
+--- are not signalled, see `signal_group`) `on_done` gets code `124`, signal `9` at
+--- that point. The exit code is `124` in every case.
 ---
---- The returned handle has a `stop()` method that sends SIGTERM (on Windows it
---- also kills the process tree). It is a no-op on the legacy fallback path
---- (Neovim < 0.10), where there is no job to kill.
+--- The child of this runner is always started detached on POSIX (see `DETACH`):
+--- in a process group of its own, without a controlling terminal.
+---
+--- The returned handle has a `stop()` method that sends SIGTERM to the process
+--- group of the child (on Windows it kills the process tree). It is a no-op on the
+--- legacy fallback path (Neovim < 0.10), where there is no job to kill.
 ---
 --- Text vs. bytes: see `run_blocking_captured` -- `opts.binary` delivers stdout
 --- exactly as the process wrote it.
@@ -543,9 +744,9 @@ function M.run_async_captured(cmd, on_done, input, opts)
   -- uncaught error escaping into the caller's stack.
   local errs = new_errsink()
   local ok_spawn, spawned = pcall(
-    vim.system,
+    spawn,
     cmd,
-    system_opts(input, opts, sink, errs),
+    system_opts(input, opts, sink, errs, true),
     function(res)
       local stdout, stderr, code = res.stdout or "", err_text(errs, opts), res.code
       if sink then
@@ -569,35 +770,28 @@ function M.run_async_captured(cmd, on_done, input, opts)
   job = spawned
 
   -- The process is told to stop at `timeout_ms`, but the exit callback only
-  -- fires once every pipe is closed: a descendant that keeps one open (the real
-  -- git behind the Windows `cmd\git.exe` wrapper) would delay the answer for as
-  -- long as it lives. Settle at the deadline (plus a short grace) instead.
-  deadline = start_deadline(
-    function()
-      return job
-    end,
-    opts,
-    function()
-      -- SIGTERM went out; a child that ignores it, or a descendant that keeps the
-      -- pipes open, gets the answer settled after the grace period.
-      if not (deadline and deadline.timer) then
-        return
-      end
-      deadline.timer:start(GRACE_MS, 0, function()
-        if finished then
-          return
-        end
-        kill_job(job, "sigkill")
-        settle(
-          false,
-          sink and sink_stdout(sink, opts) or "",
-          124,
-          "timed out; the process did not exit",
-          9
-        )
-      end)
+  -- fires once every pipe is closed. On POSIX the signal reaches the whole process
+  -- group, so the pipes close with it and the exit callback answers right away;
+  -- the settle below is for what a signal does not reach: a child that ignores
+  -- SIGTERM (it gets SIGKILL after the grace period, and is settled right after
+  -- it), a descendant that left the group or outlived an already exited child
+  -- (POSIX, see `signal_group`), or, on Windows, a descendant that keeps a pipe
+  -- open (the real git behind the `cmd\git.exe` wrapper). Settle at the deadline
+  -- plus the grace period instead of waiting for it.
+  deadline = start_deadline(function()
+    return job
+  end, opts, function()
+    if finished then
+      return
     end
-  )
+    settle(
+      false,
+      sink and sink_stdout(sink, opts) or "",
+      124,
+      "timed out; the process did not exit",
+      9
+    )
+  end)
 
   return {
     stop = function()
