@@ -86,8 +86,10 @@ Add a root from a plugin. `value` is a path (may start with `~` / `$VAR`) or a
 function returning one. A registered root survives `setup()`; on a name the
 user also defined in `extra`, **the user wins** (and a user function that
 returns nothing falls through to the registered one). Registering a name again
-replaces the earlier one. The returned function removes *this* registration
-again — it does nothing once a newer one replaced it. `unregister(name)`
+replaces the earlier one — on Windows also one spelled in another case
+(`Notes` / `NOTES`). The returned function removes *this* registration again
+(by identity, not by value: two plugins registering the same path do not remove
+each other's root) — it does nothing once a newer one replaced it. `unregister(name)`
 removes whatever is registered under the name and returns whether there was
 something.
 
@@ -163,9 +165,18 @@ earlier in `roots()` order wins.
 The comparison is **lexical**: `.` and `..` are resolved first, so
 `/repos/../etc/passwd` is *not* inside `/repos`; symlinks are not resolved —
 except for a root that is itself a symlink. A buffer name is canonical on Unix
-(`~/.config/nvim` → `~/dotfiles/nvim` opens as the latter), so a path is
+(`~/.config/nvim` → `~/dotfiles/nvim` opens as the latter), so on Unix a path is
 compared with each root as configured first, and only when none matches with
-the roots' `uv.fs_realpath` (looked up once per `folder()`).
+the roots' `uv.fs_realpath` (cached for a few seconds, so a `fold` on a path
+under no root does not stat on every call; a link to a drive or the filesystem
+root is ignored — it would fold every path). Windows does not canonicalise
+buffer names, so it never looks.
+
+On Windows, the verbatim and device prefixes (`\\?\C:\x`, `\\.\C:\x`,
+`\\?\UNC\srv\share\x`) are read as `C:/x` and `//srv/share/x`. On POSIX a path
+with a **backslash below the root** (a valid file name such as `a\..\..\x`) is
+*not* folded: `$NAME/a\..\..\x` would climb out of the root on a Windows machine
+that reads the text.
 
 `opts` — those of `roots` plus `force` (fold even when `enable` is false, for
 an action the user asked for by name). An unknown key raises.
@@ -180,14 +191,17 @@ name is the anchor. A root `D:/repos` is called `repos` on every machine, so
 the part of `E:/repos/casedesk.nvim/x.md` after `repos` is looked up under
 `D:/repos`. The anchor can also be the last segment (the recorded root itself).
 Only candidates that **exist** are returned, the **outermost** anchor first
-(the longest rest), each once. The anchor word compares case-insensitively when
+(the longest rest; for equal anchors the earlier root — across all roots), each
+once. The anchor word compares case-insensitively when
 this machine is Windows *or the recorded path is a Windows path* (a drive
 letter or UNC). Empty when `enable = false`, the path is not absolute or
 nothing matches.
 
 The recorded path is someone else's data: `.` and `..` are resolved first, so
 `E:/repos/../../etc/x` cannot climb out of the root it is re-anchored under.
-A path with a NUL byte maps to nothing.
+A path with a NUL byte maps to nothing. The work is bounded because the path is
+somebody else's data: one longer than 4096 bytes maps to nothing, and at most 64
+candidates are looked up per call.
 
 ### `status()`
 
@@ -261,6 +275,20 @@ processes and `vim.fn.expand("$NVIM_CONFIG_DIR")` understand it:
   instance's `stdpath("config")`.
 
 Opt out with `vim.g.lib_nvim_roots_no_export = true` (or `1`) before it runs.
+
+## Known limits
+
+- Case folding on Windows is `vim.fn.tolower`, not NTFS's own table: `i` / `İ`
+  and `ß` / `ẞ` are different directories on NTFS but compare equal here. Only
+  the filesystem can tell; these cases are far outside real profile paths.
+- Under `windows = false` a drive-letter path counts as absolute, and under
+  `windows = true` so does `/repos` (drive-relative there): the flag runs the
+  other platform's rules on one machine, so it does not judge the host.
+- `expand` leaves `..` in the rest alone (`$R/../x` → `C:/repos/../x`): expand
+  first, then normalize.
+- `NVIM_CONFIG_DIR` listed in `vars` / `opts.names` is ignored while
+  `nvim_config` is on (the root is `stdpath("config")`); with `nvim_config =
+  false` the variable is used.
 
 ## Tests
 
