@@ -1783,8 +1783,10 @@ end
 ---
 --- Reports `hash` as a bare `string|nil` first, matching the blocking
 --- `M.head_hash`, plus a second `ok` value a caller MAY ignore and a third,
---- `timed_out`: the read hit the deadline, so the missing hash is "unknown"
---- (`M.pull_async` reports `changed = nil`), not an empty repository. `git
+--- `unknown`: the read hit the deadline or was killed by a signal (exit code
+--- 128 + signal), so the missing hash says nothing about the repository
+--- (`M.pull_async` reports `changed = nil`), unlike an empty one, where `git
+--- rev-parse HEAD` exits 128 itself. `git
 --- rev-parse HEAD` exits non-zero for a *genuinely* empty repository (no
 --- commits yet -- an entirely normal state to run this against, e.g. before
 --- pulling into a freshly `git init`'d checkout) exactly the same way it
@@ -1796,16 +1798,19 @@ end
 --- not, because by the time it runs a *different* invariant applies (see
 --- there).
 ---@param opts? Lib.Git.NetOpts
----@param on_done fun(hash: string|nil, ok: boolean, timed_out: boolean|nil)
+---@param on_done fun(hash: string|nil, ok: boolean, unknown: boolean|nil)
 ---@param git_cmd? string
 ---@return { stop: fun() } handle
 local function head_hash_async(opts, on_done, git_cmd)
   local argv = git_argv(git_cmd or "git", opts, { "rev-parse", "HEAD" })
   -- same environment and deadline as the pull it brackets: a `GIT_DIR` in `opts.env`
   -- must not make the before/after comparison look at another repository
-  return run_sync_async(argv, function(ok, stdout, _code, _stderr, timed_out)
+  return run_sync_async(argv, function(ok, stdout, code, _stderr, timed_out)
     if not ok or type(stdout) ~= "string" then
-      on_done(nil, false, timed_out)
+      -- 128 is what git itself answers for an empty repository (and for no repository at
+      -- all, which the pull reports); a deadline or a signal kill (128 + signal, e.g. the
+      -- OOM killer) is no statement about HEAD
+      on_done(nil, false, timed_out or code ~= 128)
       return
     end
     stdout = vim.trim(stdout)
@@ -1866,7 +1871,7 @@ end
 function M.pull_async(opts, on_done, git_cmd)
   local cancelled = false
   local active = { stop = function() end }
-  active.stop = head_hash_async(opts, function(before, _, before_timed_out)
+  active.stop = head_hash_async(opts, function(before, _, before_unknown)
     if cancelled then
       return
     end
@@ -1880,10 +1885,10 @@ function M.pull_async(opts, on_done, git_cmd)
         on_done(false, net_err("pull", stderr, code, timed_out, ropts))
         return
       end
-      -- A before read that hit the deadline is "unknown", not "no hash": comparing its nil
-      -- against the real after hash would report a move that never happened. Nothing the
-      -- after read could say changes that, so it is not even started.
-      if before_timed_out then
+      -- A before read that hit the deadline or was killed is "unknown", not "no hash":
+      -- comparing its nil against the real after hash would report a move that never
+      -- happened. Nothing the after read could say changes that, so it is not even started.
+      if before_unknown then
         on_done(true, nil, nil)
         return
       end

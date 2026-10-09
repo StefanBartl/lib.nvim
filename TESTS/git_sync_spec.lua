@@ -936,6 +936,10 @@ local function run(H)
             local hash = hashes[reads]
             if hash == false then
               on_done(false, "", 124, "", 15)
+            elseif hash == "killed" then
+              on_done(false, "", 0, "", 9) -- killed from outside (OOM): no deadline involved
+            elseif hash == "empty" then
+              on_done(false, "", 128, "fatal: ambiguous argument 'HEAD'", 0) -- git's own answer
             else
               on_done(true, hash .. "\n", 0, "", 0)
             end
@@ -986,6 +990,17 @@ local function run(H)
       "pull_async: a HEAD-before read that hit the deadline leaves changed unknown"
     )
     H.eq(#seen, 2, "pull_async: ... and the HEAD-after read, which cannot change that, is not run")
+
+    seen, changed = pull_with({ "killed", "aaa" }, {})
+    H.eq(changed, nil, "pull_async: a HEAD-before read killed by a signal leaves changed unknown")
+    H.eq(#seen, 2, "pull_async: ... and the HEAD-after read is not run either")
+
+    _, changed = pull_with({ "empty", "aaa" }, {})
+    H.eq(
+      changed,
+      true,
+      "pull_async: an empty repository (git exit 128) gaining a commit is a change"
+    )
 
     -- sub-second and fractional deadlines read naturally in the error
     for _, case in ipairs({ { 500, "500 ms" }, { 1500, "1.5s" } }) do
