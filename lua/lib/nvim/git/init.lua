@@ -1650,9 +1650,9 @@ end
 --- `merged`/`no_merged` answer "which tags does this range contain" --
 --- `{ merged = new, no_merged = old }` is the release list of an update.
 ---
---- Reads ref and tag objects; `for-each-ref` needs the type of what a tag points at, so a tag on
---- a blob that a blobless clone does not hold fetches that blob (a tag on a commit or a tree
---- does not). One
+--- Reads ref and tag objects; `for-each-ref` needs the type of what a ref points at, so a tag
+--- (annotated or not) on a blob that a blobless clone does not hold fetches that blob (a tag on
+--- a commit or a tree does not). One
 --- `git for-each-ref` process; a git that peels a tag on a tag one level only (2.43) gets
 --- `git cat-file --batch` rounds on the tag objects on top, one per hop.
 ---@param opts? Lib.Git.TagsOpts
