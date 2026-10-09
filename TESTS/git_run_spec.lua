@@ -507,32 +507,48 @@ return function(H)
       end),
       "tags_async: " .. name .. " reports back"
     )
-    box = box or {}
     return sync_tags, sync_err, box.list, box.err
   end
+  -- (on a git that peels every level in `%(*objecttype)` no record is nested and there is no limit
+  -- to hit: only the one-level git is asked for the error)
+  local one_level = vim
+    .system({ "git", "-C", long_dir, "for-each-ref", "--format=%(*objecttype)", "refs/tags/c2" })
+    :wait().stdout
+    :match("^%s*(%S+)") == "tag"
   local st, se, at, ae = both_ways("c64") -- 64 hops: the last allowed
   H.ok(st ~= nil and se == nil and st[1].commit == true, "tags: a chain of 64 hops peels")
   H.ok(at ~= nil and ae == nil and at[1].commit == true, "tags_async: ... and so does it")
-  st, se, at, ae = both_ways("c65") -- 65 hops: one too many
-  H.ok(st == nil and type(se) == "string", "tags: a chain of 65 hops is an error")
-  H.ok(at == nil and type(ae) == "string", "tags_async: ... and so it is asynchronously")
+  if one_level then
+    st, se, at, ae = both_ways("c65") -- 65 hops: one too many
+    H.ok(st == nil and type(se) == "string", "tags: a chain of 65 hops is an error")
+    H.ok(at == nil and type(ae) == "string", "tags_async: ... and so it is asynchronously")
+  end
   vim.fn.delete(long_dir, "rf")
 
-  -- stop() after the process has exited but before its callback ran (the loop is blocked for
-  -- the sleep, so the exit is queued): the process can no longer be killed, and the call must
-  -- not go on to the next round or report the tags
+  -- stop() after the process has exited but before its callback ran: the process can no longer
+  -- be killed, and the call must not go on to the next round or report the tags. Made
+  -- deterministic by calling stop() from inside the runner's own callback, i.e. exactly in that
+  -- window, instead of racing a sleep against the process.
   local stop_box, stop_handle
-  stop_handle = git.tags_async({ dir = extra }, function(list, err)
-    stop_box = { list = list, err = err }
+  local real_run_async = git.run_async
+  H.with_patched(git, "run_async", function(args, ropts, on_done, cmd)
+    return real_run_async(args, ropts, function(res)
+      if stop_handle then
+        stop_handle.stop()
+      end
+      on_done(res)
+    end, cmd)
+  end, function()
+    stop_handle = git.tags_async({ dir = extra }, function(list, err)
+      stop_box = { list = list, err = err }
+    end)
+    H.ok(
+      wait_for(function()
+        return stop_box ~= nil
+      end),
+      "tags_async: a stopped call reports back"
+    )
   end)
-  vim.uv.sleep(400)
-  stop_handle.stop()
-  H.ok(
-    wait_for(function()
-      return stop_box ~= nil
-    end),
-    "tags_async: a stopped call reports back"
-  )
   H.eq(stop_box.list, nil, "tags_async: a stopped call reports no tags")
   H.eq(stop_box.err, "git tags: stopped", "tags_async: ... and says it was stopped")
   H.eq(by_name.treetag.time, nil, "tags: a tag on a tree has no commit date")

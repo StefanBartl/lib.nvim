@@ -339,8 +339,9 @@ ref and tag objects and works in a blobless clone, offline, except for a tag (an
 `no_lazy_fetch` the whole call fails instead). A git that peels a tag on a
 tag one level only (2.43) gets `git cat-file --batch` on the tag objects on top, one process per
 hop and only when such a tag exists; if that fails, so does `tags` (`nil, err`), it never answers
-with the one-level data. A chain longer than 64 hops is an error, and `stop()` on `tags_async`
-makes `on_done` report `nil, err` once (`"git tags: stopped"` when the processes had already exited).
+with the one-level data. On that path a chain longer than 64 hops is an error. `stop()` on
+`tags_async` makes `on_done` report `nil, err` once (`"git tags: stopped"` when the process had
+already exited, else the process error).
 
 ## Syncing with the remote: `fetch_async`, `pull_async`, `push_async`, `update_async`
 
