@@ -101,8 +101,8 @@ autocmd.get_augroup("save", { prefix = "my-plugin", clear = true })
 ```
 
 Groups you delete yourself (`nvim_del_augroup_by_id`, e.g. a popup's per-window group) need no
-extra call: once the id caches hold more than 64 entries, the next new group drops the entries
-of groups Neovim no longer knows.
+extra call: once the id caches hold more than 64 entries (twice the live count after a prune), the next
+new group drops the entries of groups Neovim no longer knows.
 
 `group(name, clear)` and `get_augroup(name, opts)` are two independent
 caches (`groups` vs. an internal `cache` table, keyed differently — plain

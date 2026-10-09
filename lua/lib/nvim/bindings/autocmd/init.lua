@@ -35,8 +35,9 @@ end
 ---@type table<string, integer>
 local cache = {}
 
---- Prune once the three caches together hold more than this many entries;
---- doubles with the live count, so a long-lived plugin never prunes per call.
+--- Prune once `group_names` (it holds every id of `groups` and `cache`) has more than
+--- this many entries; after a prune it is twice the live count (never below 64), so a
+--- long-lived plugin never prunes per call.
 local PRUNE_ABOVE = 64
 
 ---@internal
@@ -288,7 +289,7 @@ function M.get_augroup(name, opts)
 end
 
 ---@internal
---- Entries held by the group caches (`group_names`); for specs.
+--- Entries of `group_names`, which holds every id of `groups` and `cache`; for specs.
 ---@return integer
 function M._cache_size()
   local n = 0

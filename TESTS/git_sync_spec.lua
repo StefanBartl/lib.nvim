@@ -636,6 +636,102 @@ local function run(H)
       )
     end
   end
+
+  -- ── pull_async: the HEAD reads around the pull share env and deadline ─────
+  -- A GIT_DIR in opts.env must reach the two `rev-parse HEAD` reads too, or `changed`
+  -- compares another repository than the pull moves; a before read that hit the
+  -- deadline is "unknown", not "no hash".
+  do
+    local run_argv = require("lib.nvim.cross.run_argv")
+    local repo = tmpdir("-git-sync-head-reads")
+    git_run(repo, { "init", "-q", "-b", "main" })
+
+    --- Every git call answers at once: rev-parse HEAD with `hashes[n]` (or a deadline kill
+    --- when it is `false`), anything else with success. Returns the runner options seen.
+    ---@param hashes (string|false)[]
+    ---@param opts table
+    ---@return table[] seen, boolean|nil changed
+    local function pull_with(hashes, opts)
+      local seen, changed, done, reads = {}, nil, false, 0
+      local fake = function(argv, on_done, _, ropts)
+        seen[#seen + 1] =
+          { verb = vim.tbl_contains(argv, "rev-parse") and "rev-parse" or "pull", ropts = ropts }
+        vim.schedule(function()
+          if seen[#seen].verb == "rev-parse" then
+            reads = reads + 1
+            local hash = hashes[reads]
+            if hash == false then
+              on_done(false, "", 124, "", 15)
+            else
+              on_done(true, hash .. "\n", 0, "", 0)
+            end
+          else
+            on_done(true, "", 0, "", 0)
+          end
+        end)
+        return { stop = function() end }
+      end
+      H.with_patched(run_argv, "run_async_captured", fake, function()
+        opts.dir = repo
+        git.pull_async(opts, function(_, _, c)
+          changed, done = c, true
+        end)
+        wait_for(function()
+          return done
+        end)
+      end)
+      return seen, changed
+    end
+
+    local seen, changed = pull_with(
+      { "aaa", "aaa" },
+      { env = { GIT_DIR = "x" }, timeout_ms = 5000 }
+    )
+    H.eq(#seen, 3, "pull_async: HEAD before, pull, HEAD after")
+    for n, call in ipairs(seen) do
+      H.eq(call.ropts.env.GIT_DIR, "x", "pull_async: process " .. n .. " gets opts.env")
+      H.eq(
+        call.ropts.env.GIT_TERMINAL_PROMPT,
+        "0",
+        "pull_async: process " .. n .. " gets the prompt guard"
+      )
+      H.eq(call.ropts.timeout_ms, 5000, "pull_async: process " .. n .. " gets the deadline")
+    end
+    H.eq(changed, false, "pull_async: the same HEAD before and after is no change")
+
+    _, changed = pull_with({ "aaa", "bbb" }, {})
+    H.eq(changed, true, "pull_async: a different HEAD after is a change")
+
+    _, changed = pull_with({ false, "aaa" }, {})
+    H.eq(
+      changed,
+      nil,
+      "pull_async: a HEAD-before read that hit the deadline leaves changed unknown"
+    )
+
+    -- sub-second and fractional deadlines read naturally in the error
+    for _, case in ipairs({ { 500, "500 ms" }, { 1500, "1.5s" } }) do
+      local result
+      H.with_patched(run_argv, "run_async_captured", function(_, on_done)
+        vim.schedule(function()
+          on_done(false, "", 124, "", 15)
+        end)
+        return { stop = function() end }
+      end, function()
+        git.push_async({ dir = repo, timeout_ms = case[1] }, function(_, err)
+          result = err
+        end)
+        wait_for(function()
+          return result ~= nil
+        end)
+      end)
+      H.eq(
+        result,
+        "git push timed out after " .. case[2],
+        "push_async: a " .. case[1] .. " ms deadline reads as " .. case[2]
+      )
+    end
+  end
 end
 
 return function(H)
