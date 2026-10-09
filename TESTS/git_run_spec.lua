@@ -468,6 +468,63 @@ return function(H)
   end
   H.eq(deep.third and deep.third.commit, true, "tags: a chain of three tags reaches the commit")
   H.eq(deep.third and deep.third.sha, e1, "tags: ... and its sha")
+
+  -- sync and async agree at the round limit: a chain of exactly 64 hops still works, 65 is too long
+  local long_dir = vim.fn.tempname() .. "-long-chain"
+  vim.fn.mkdir(long_dir, "p")
+  F.git(long_dir, { "init", "-q" })
+  F.git(
+    long_dir,
+    { "-c", "user.email=a@b", "-c", "user.name=n", "commit", "-q", "--allow-empty", "-m", "c" }
+  )
+  F.git(long_dir, { "-c", "user.email=a@b", "-c", "user.name=n", "tag", "-a", "-m", "x", "c0" })
+  for i = 1, 65 do
+    F.git(long_dir, {
+      "-c",
+      "advice.nestedTag=false",
+      "-c",
+      "user.email=a@b",
+      "-c",
+      "user.name=n",
+      "tag",
+      "-a",
+      "-m",
+      "x",
+      "c" .. i,
+      "c" .. (i - 1),
+    })
+  end
+  --- Runs `tags` both ways on one tag of the chain.
+  local function both_ways(name)
+    local sync_tags, sync_err = git.tags({ dir = long_dir, pattern = name })
+    local box
+    git.tags_async({ dir = long_dir, pattern = name }, function(list, err)
+      box = { list = list, err = err }
+    end)
+    wait_for(function()
+      return box ~= nil
+    end)
+    return sync_tags, sync_err, box.list, box.err
+  end
+  local st, se, at, ae = both_ways("c64") -- 64 hops: the last allowed
+  H.ok(st ~= nil and se == nil and st[1].commit == true, "tags: a chain of 64 hops peels")
+  H.ok(at ~= nil and ae == nil and at[1].commit == true, "tags_async: ... and so does it")
+  st, se, at, ae = both_ways("c65") -- 65 hops: one too many
+  H.ok(st == nil and type(se) == "string", "tags: a chain of 65 hops is an error")
+  H.ok(at == nil and type(ae) == "string", "tags_async: ... and so it is asynchronously")
+  vim.fn.delete(long_dir, "rf")
+
+  -- stop() between rounds: once stopped, no further round starts and on_done says so
+  local stop_box, stop_handle
+  stop_handle = git.tags_async({ dir = extra }, function(list, err)
+    stop_box = { list = list, err = err }
+  end)
+  stop_handle.stop()
+  wait_for(function()
+    return stop_box ~= nil
+  end)
+  H.eq(stop_box.list, nil, "tags_async: a stopped call reports no tags")
+  H.ok(type(stop_box.err) == "string", "tags_async: ... but a reason")
   H.eq(by_name.treetag.time, nil, "tags: a tag on a tree has no commit date")
 
   -- ── merge_base: a killed process is 'unknown', not 'no common ancestor' ─

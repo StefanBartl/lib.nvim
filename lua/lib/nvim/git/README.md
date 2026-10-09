@@ -334,7 +334,9 @@ the tagger date of an annotated tag and the commit date of a lightweight one;
 `subject` the first line of the tag message (annotated) or of the commit.
 `sort` is `"newest"` (default), `"oldest"` or `"version"` (so `v1.10` is above
 `v1.2`). `limit = 0` is no tags (git's own `--count=0` would mean all). Reads
-only ref and tag objects, so it works in a blobless clone, offline. A git that peels a tag on a
+ref and tag objects and works in a blobless clone, offline, except for an annotated tag on a *blob*
+that the clone does not hold: `for-each-ref` needs that object's type and fetches it (with
+`no_lazy_fetch` the whole call fails instead). A git that peels a tag on a
 tag one level only (2.43) gets `git cat-file --batch` on the tag objects on top, one process per
 hop and only when such a tag exists; if that fails, so does `tags` (`nil, err`), it never answers
 with the one-level data.

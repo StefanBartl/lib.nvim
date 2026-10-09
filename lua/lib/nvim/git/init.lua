@@ -1650,7 +1650,9 @@ end
 --- `merged`/`no_merged` answer "which tags does this range contain" --
 --- `{ merged = new, no_merged = old }` is the release list of an update.
 ---
---- Reads only ref and tag objects, so it works in a blobless clone, offline. One
+--- Reads ref and tag objects; `for-each-ref` needs the type of what a tag points at, so a tag on
+--- a blob that a blobless clone does not hold fetches that blob (a tag on a commit or a tree
+--- does not). One
 --- `git for-each-ref` process; a git that peels a tag on a tag one level only (2.43) gets
 --- `git cat-file --batch` rounds on the tag objects on top, one per hop.
 ---@param opts? Lib.Git.TagsOpts
@@ -1678,6 +1680,9 @@ function M.tags(opts, git_cmd)
       return nil, err
     end
   end
+  if #pending == 0 then
+    return tags, nil
+  end
   return nil, "git tags: a tag chain longer than " .. PEEL_MAX_ROUNDS
 end
 
@@ -1690,10 +1695,16 @@ function M.tags_async(opts, on_done, git_cmd)
   opts = tags_opts(opts)
   local args, interpret = tags_job(opts)
   local current ---@type { stop: fun() }|nil
-  local rounds = 0
+  local stopped, rounds = false, 0
   ---@param tags Lib.Git.Tag[]
   ---@param pending Lib.Git.PeelItem[]
   local function peel(tags, pending)
+    -- a stop() that arrived while this callback was already queued cannot reach the process
+    -- that has finished: it must keep the next round from starting
+    if stopped then
+      on_done(nil, "git tags: stopped")
+      return
+    end
     if #pending == 0 then
       on_done(tags, nil)
       return
@@ -1725,6 +1736,7 @@ function M.tags_async(opts, on_done, git_cmd)
   end, git_cmd)
   return {
     stop = function()
+      stopped = true
       if current then
         current.stop()
       end
