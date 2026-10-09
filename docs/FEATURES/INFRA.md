@@ -134,7 +134,9 @@ first.
   `lib.nvim.git.remote`; the async-only verbs that change something —
   `fetch_async`, `pull_async`, `push_async`, `update_async` — report a
   signal-killed or unspawnable git as a failure and, where they are a chain
-  (`pull_async`, `update_async`), stay silent after `stop()`)
+  (`pull_async`, `update_async`), stay silent after `stop()`; they run with
+  `GIT_TERMINAL_PROMPT=0` and a 120 s deadline per process (`opts.env`,
+  `opts.timeout_ms`, `false` = none), and a timeout kills the whole process group)
 
 ## Async/blocking HTTP via curl
 

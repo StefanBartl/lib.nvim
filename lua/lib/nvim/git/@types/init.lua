@@ -40,6 +40,10 @@
 ---@field is_ancestor_async fun(ancestor: string, rev: string, opts: Lib.Git.RunOpts|nil, on_done: fun(answer: boolean|nil, err: string|nil), git_cmd?: string): { stop: fun() } # Async counterpart to is_ancestor.
 ---@field tags fun(opts?: Lib.Git.TagsOpts, git_cmd?: string): Lib.Git.Tag[]|nil, string|nil # Tags with annotation flag, peeled commit, creator time and subject, in one process; `merged`/`no_merged` select the tags of a range.
 ---@field tags_async fun(opts: Lib.Git.TagsOpts|nil, on_done: fun(tags: Lib.Git.Tag[]|nil, err: string|nil), git_cmd?: string): { stop: fun() } # Async counterpart to tags.
+---@field fetch_async fun(opts: Lib.Git.NetOpts|nil, on_done: fun(ok: boolean, err: string|nil, changed: boolean|nil), git_cmd?: string): { stop: fun() } # `git fetch --all --prune`; `changed`: a remote-tracking ref moved. Runs with `GIT_TERMINAL_PROMPT=0` and kills git after 120 s unless `opts` says otherwise.
+---@field pull_async fun(opts: Lib.Git.NetOpts|nil, on_done: fun(ok: boolean, err: string|nil, changed: boolean|nil), git_cmd?: string): { stop: fun() } # `git pull --ff-only`; `changed`: `HEAD` moved. Same `GIT_TERMINAL_PROMPT=0` and 120 s defaults for the pull and for the two `HEAD` reads around it. Silent once `stop()` was called.
+---@field push_async fun(opts: Lib.Git.NetOpts|nil, on_done: fun(ok: boolean, err: string|nil), git_cmd?: string): { stop: fun() } # `git push`. Runs with `GIT_TERMINAL_PROMPT=0` and kills git after 120 s unless `opts` says otherwise.
+---@field update_async fun(opts: Lib.Git.NetOpts|nil, on_done: fun(ok: boolean, err: string|nil, changed: boolean|nil), git_cmd?: string): { stop: fun() } # `fetch_async`, then `pull_async` (the pull's `changed`), both with the same `opts`. Silent once `stop()` was called.
 ---@field LOG_FORMAT string # The `--format=` argument `log` passes, for a caller that runs `git log -z` itself and feeds `parse_log`.
 
 -- Lib.Git.Opts, Lib.Git.StatusEntry/StatusMap and Lib.Git.BlameEntry are
@@ -56,13 +60,24 @@
 ---(`dir`) plus a timeout, an environment and the knobs a caller reading someone
 ---else's repository needs.
 ---@class Lib.Git.RunOpts : Lib.Git.Opts
----@field timeout_ms? integer Kill git after this many milliseconds; the result is then `timed_out` (exit code 124). On Windows the whole process tree is killed; elsewhere only the direct child (not e.g. `git-remote-https` of a fetch). The async runner answers at the deadline plus a short grace even if a descendant keeps the pipes open.
+---@field timeout_ms? integer Kill git after this many milliseconds; the result is then `timed_out` (exit code 124). On POSIX the whole process group is killed, on Windows the whole process tree, so a transport helper such as `git-remote-https` does not outlive the deadline. The async runner answers at the deadline plus a short grace even if a descendant keeps the pipes open.
 ---@field max_output_bytes? integer Stop git once its stdout exceeds this many bytes: the result is then `ok = false`, `code = 125` and `stderr` says why. Reading a repository somebody else wrote, one commit with a huge message makes `log` print gigabytes from a tiny object; without a cap all of it ends up in memory.
 ---@field env? table<string, string> Extra environment variables, merged over the inherited ones.
 ---@field no_lazy_fetch? boolean Never fetch missing objects of a partial (blobless) clone: sets `GIT_NO_LAZY_FETCH=1` (git 2.44+, the primary lock), `GIT_ALLOW_PROTOCOL=none` (every git since 2.10; it beats a `protocol.<name>.allow` in the repository's or the user's config, which a plain `protocol.allow=never` does not) **and** passes `-c protocol.allow=never`. git then fails on a missing object instead of silently fetching it -- no network, no write into the clone. The same switch blocks every transport, so a command that really needs the network (`fetch`) fails under it.
 ---@field read_only? boolean Add `--no-optional-locks`, so the call never takes the index lock. `run`/`run_async` only; the functions that only read (`log`, `rev_parse`, ...) always set it.
 ---@field input? string Standard input. `run`/`run_async` only.
 ---@field binary? boolean Deliver stdout byte for byte (no `\r\n` rewriting). `run`/`run_async` only; `log` and `tags` always do.
+
+---Options of the network verbs `fetch_async`, `pull_async`, `push_async` and `update_async`:
+---`Lib.Git.RunOpts` with one difference, `timeout_ms` (below). These verbs use `dir`, `env` and
+---`timeout_ms`; `no_lazy_fetch` is honoured too, as `-c protocol.allow=never`, which blocks every
+---transport, so a verb that needs the network fails under it; `max_output_bytes`, `read_only`,
+---`input` and `binary` have no effect on them. Unless `env` says otherwise they run with
+---`GIT_TERMINAL_PROMPT=0` (git fails instead of asking on a terminal Neovim cannot type into), and
+---every git process of a call gets the same `env` and `timeout_ms`: the fetch of `update_async`, the
+---pull, and the two `rev-parse HEAD` reads around the pull of `pull_async`/`update_async`.
+---@class Lib.Git.NetOpts : Lib.Git.RunOpts
+---@field timeout_ms? integer|false Kill each git process of the call after this many milliseconds; the default is `120000`, `false` waits forever. A deadline that was hit is a failure whose `err` names it ("git fetch timed out after 120s", "... after 1.5s", "... after 500 ms"). The kill reaches the whole process group on POSIX and the whole process tree on Windows.
 
 ---What `run` and `run_async` report -- `lib.nvim.cross.run_argv`'s result: `ok` (exit code 0
 ---and not killed by a signal), `code` (`124` after `opts.timeout_ms`, `128 + signal` when a

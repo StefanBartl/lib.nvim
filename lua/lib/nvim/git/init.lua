@@ -539,8 +539,11 @@ local function net_ropts(opts)
 end
 
 ---@internal
---- The failure text of a network verb: git's own stderr, the deadline when it
---- was the cause (git's stderr is empty after the kill), else the exit code.
+--- The failure text of a network verb: the deadline when it was the cause (git's
+--- stderr is empty after the kill, and whatever progress text it left must not
+--- hide the reason), else git's own stderr, else the exit code. The deadline reads
+--- "git fetch timed out after 120s" (whole seconds), "... after 1.5s" (fractional)
+--- and "... after 500 ms" (below one second, where whole seconds would print 0).
 ---@param verb string
 ---@param stderr string|nil
 ---@param code integer
