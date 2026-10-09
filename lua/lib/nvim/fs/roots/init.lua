@@ -377,6 +377,12 @@ local function to_root(value)
   if abs == "" or abs:match("^%a:$") then
     return nil, "too_broad"
   end
+  -- On a Windows host `/repos` means "on the current drive": it moves with `:cd` to another drive,
+  -- which is what makes a relative root no root. (Forced `windows = true` elsewhere keeps accepting
+  -- it, so that the Windows rules can be pinned from a POSIX runner.)
+  if win() and is_windows() and abs:sub(1, 1) == "/" and abs:sub(1, 2) ~= "//" then
+    return nil, "not_absolute"
+  end
   return abs
 end
 
@@ -398,13 +404,14 @@ local function build(kind, name, fetch)
 end
 
 ---Every configured name in precedence order -- user-defined `extra` roots (sorted by name, so a
----result never depends on table iteration order), then roots `register`ed by plugins (sorted
----too), then `vars`, then `opts.names`, then `$NVIM_CONFIG_DIR` -- with its outcome. The first
+---result never depends on table iteration order), then `opts.extra` (the roots one call brings
+---along), then roots `register`ed by plugins (sorted too), then `vars` (or `opts.vars`, which
+---replaces them), then `opts.names`, then `$NVIM_CONFIG_DIR` -- with its outcome. The first
 ---USABLE definition of a name wins (an `extra` function that returns nothing does not shadow the
 ---environment variable of that name); when none is usable the first one is reported.
 ---
 ---`only` (a `name_key`) restricts this to the definitions of one name and resolves nothing else --
----what `match` needs, and `expand_path` calls it for every `$VAR` it meets.
+---what `match` needs, and the first step of `expand_path` for a string that starts with a `$VAR`.
 ---@param only? string
 ---@param opts? Lib.Fs.Roots.Opts
 ---@return Lib.Fs.Roots.Status[]
@@ -463,6 +470,9 @@ function collect(only, opts)
   add_table("extra", _cfg.extra, function(def)
     return def
   end)
+  add_table("extra", opts.extra or {}, function(def)
+    return def
+  end)
   add_table("registered", _registered, function(def)
     return def.value
   end)
@@ -489,7 +499,7 @@ function collect(only, opts)
       end
     end
   end
-  add_vars(_cfg.vars)
+  add_vars(opts.vars or _cfg.vars)
   add_vars(opts.names)
 
   if want_nvim then
@@ -631,22 +641,46 @@ local function check_opts(fn, opts, allowed)
   if type(opts) ~= "table" then
     fail(3, ("%s: opts must be a table, got %s"):format(fn, type(opts)))
   end
-  for key in pairs(opts) do
-    if not allowed[key] then
+  for key, value in pairs(opts) do
+    local want = allowed[key]
+    if not want then
       fail(3, ("%s: unknown option `%s`"):format(fn, tostring(key)))
+    end
+    if type(value) ~= want then
+      fail(3, ("%s: option `%s` must be %s, got %s"):format(fn, key, want, type(value)))
     end
   end
   return opts
 end
 
-local ROOTS_OPTS = { names = true, nvim_config = true }
-local FOLD_OPTS = { names = true, nvim_config = true, force = true }
+-- option -> type; `force` is for the callers that fold or remap, `roots` has no use for it
+local ROOTS_OPTS = { names = "table", vars = "table", extra = "table", nvim_config = "boolean" }
+local FOLD_OPTS = {
+  names = "table",
+  vars = "table",
+  extra = "table",
+  nvim_config = "boolean",
+  force = "boolean",
+}
+
+---The options that decide WHICH roots there are, out of those of `fold` / `folder` / `remap`.
+---@param opts Lib.Fs.Roots.FoldOpts
+---@return Lib.Fs.Roots.Opts
+local function roots_opts(opts)
+  return {
+    names = opts.names,
+    vars = opts.vars,
+    extra = opts.extra,
+    nvim_config = opts.nvim_config,
+  }
+end
 
 ---Every root that currently has a value, as `{ name, root }` with `root` absolute, forward-slash
 ---and without a trailing slash (and an uppercase drive letter). Independent of `enable`: that
 ---switch decides whether callers FOLD, not which roots exist. Order: `extra` (alphabetical),
----`register`ed (alphabetical), `vars`, `opts.names`, `NVIM_CONFIG_DIR`; the first usable
----definition of a name wins, so an `extra` entry overrides an environment variable of that name.
+---`opts.extra`, `register`ed (alphabetical), `vars` (`opts.vars` instead), `opts.names`,
+---`NVIM_CONFIG_DIR`; the first usable definition of a name wins, so an `extra` entry overrides an
+---environment variable of that name.
 ---@param opts? Lib.Fs.Roots.Opts
 ---@return Lib.Fs.Roots.Root[]
 function M.roots(opts)
@@ -672,7 +706,8 @@ end
 
 ---Every configured name, including the ones without a usable value (`problem`: `"unset"`,
 ---`"unresolved_var"`, `"error"`, `"bad_type"`, `"not_absolute"`, `"too_broad"`, `"invalid_path"`
----or `"invalid_name"`), plus `exists` for the ones that have one. For `:checkhealth` and `json()`.
+---or `"invalid_name"`), plus `exists` for the ones that have one (`"missing_dir"` when the
+---directory is not there). For `:checkhealth` and `json()`.
 ---@return Lib.Fs.Roots.Status[]
 function M.status()
   local out = collect()
@@ -947,8 +982,8 @@ end
 ---as `$NAME/a\b` it would mean two directories to a Windows machine that reads the text.
 ---@param opts? Lib.Fs.Roots.FoldOpts
 ---@return fun(p: string): string, string|nil
-function M.folder(opts)
-  opts = check_opts("folder", opts, FOLD_OPTS)
+local function make_folder(opts)
+  opts = opts or {}
   if not (_cfg.enable or opts.force) then
     return function(p)
       return p, nil
@@ -956,7 +991,7 @@ function M.folder(opts)
   end
 
   local windows = win()
-  local list = M.roots({ names = opts.names, nvim_config = opts.nvim_config })
+  local list = M.roots(roots_opts(opts))
   local primary = prepare(list, windows, false)
   local resolved ---@type Lib.Fs.Roots.Prepared[]|nil
 
@@ -987,6 +1022,13 @@ function M.folder(opts)
   end
 end
 
+---The same as `fold`, but returns a function that folds many paths against roots resolved ONCE.
+---@param opts? Lib.Fs.Roots.FoldOpts
+---@return fun(p: string): string, string|nil
+function M.folder(opts)
+  return make_folder(check_opts("folder", opts, FOLD_OPTS))
+end
+
 ---Absolute `p` as `$NAME/rest` when it lives under one of the roots (the longest match wins, so a
 ---nested root beats the one around it); `p` unchanged otherwise. With `enable = false` (and no
 ---`opts.force`) always `p` unchanged. A relative `p` is returned as is. The comparison is
@@ -997,7 +1039,7 @@ end
 ---@return string result
 ---@return string|nil name  The root that matched, when one did.
 function M.fold(p, opts)
-  return M.folder(opts)(p)
+  return make_folder(check_opts("fold", opts, FOLD_OPTS))(p)
 end
 
 ---The name of the root `p` lives under (see `fold`), or nil.
@@ -1005,7 +1047,7 @@ end
 ---@param opts? Lib.Fs.Roots.FoldOpts
 ---@return string|nil
 function M.root_of(p, opts)
-  local _, name = M.fold(p, opts)
+  local _, name = make_folder(check_opts("root_of", opts, FOLD_OPTS))(p)
   return name
 end
 
@@ -1019,17 +1061,19 @@ local REMAP_MAX_STATS = 64 -- candidates looked up per call
 ---The anchor may be the path's last segment (the recorded root itself). The anchor word compares
 ---case-insensitively when this machine is Windows or the recorded path is a Windows path. Only
 ---candidates that exist are returned, the OUTERMOST anchor first (the longest rest; for equal
----anchors the earlier root), each once. Empty when `enable = false`, `p` is not absolute, or
----nothing matches.
+---anchors the earlier root), each once. Empty when `enable = false` (unless `opts.force`), `p` is
+---not absolute, or nothing matches.
 ---
 ---`.` and `..` of the recorded path are resolved lexically first, so `E:/repos/../../etc/x` cannot
 ---climb out of the root it is re-anchored under. It is somebody else's data, so the work is
 ---bounded: a path longer than `REMAP_MAX_BYTES` maps to nothing, and at most `REMAP_MAX_STATS`
 ---candidates are looked up (a path of 20 000 times `repos/` would otherwise cost seconds).
 ---@param p string
+---@param opts? Lib.Fs.Roots.FoldOpts  which roots (`names`, `vars`, `extra`, `nvim_config`); `force` maps even when `enable` is false
 ---@return string[]
-function M.remap(p)
-  if not _cfg.enable or type(p) ~= "string" then
+function M.remap(p, opts)
+  opts = check_opts("remap", opts, FOLD_OPTS)
+  if not (_cfg.enable or opts.force) or type(p) ~= "string" then
     return {}
   end
   local raw = clean_abs(p)
@@ -1041,7 +1085,7 @@ function M.remap(p)
   local anchor_case = win() or raw:match("^%a:") ~= nil or raw:sub(1, 2) == "//"
   local folded_raw = fold_case(raw)
   local found, seen, stats = {}, {}, 0
-  for ri, r in ipairs(M.roots()) do
+  for ri, r in ipairs(M.roots(roots_opts(opts))) do
     local leaf = r.root:match("([^/]+)$")
     if leaf and stats < REMAP_MAX_STATS then
       local want = anchor_case and lower(leaf) or leaf

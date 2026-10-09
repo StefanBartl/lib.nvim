@@ -12,6 +12,10 @@
 -- case folding sets `windows` explicitly instead of following the platform, and the roots come
 -- from an injected `source` -- never from the machine's environment or its stdpath.
 
+-- Many cases pass a value of the wrong type ON PURPOSE (nil, a number, a string for a table): that
+-- is the thing under test, so the type diagnostics would only ever be noise here.
+---@diagnostic disable: assign-type-mismatch, param-type-mismatch, missing-parameter, redundant-parameter
+
 local roots = require("lib.nvim.fs.roots")
 local expand_path = require("lib.nvim.cross.fs.expand_path")
 local argtypes = require("lib.nvim.bindings.usercmd.composer.argtypes")
@@ -397,7 +401,7 @@ return function(H)
       eq(#roots.remap(nil), 0, "remap: nil -> nothing")
     end)
 
-    -- Two anchors in one path (".../repos/data/repos/nested"): nearest anchor first, each once.
+    -- Two anchors in one path (".../repos/data/repos/nested"): outermost anchor first, each once.
     with_roots({
       windows = false,
       nvim_config = false,
@@ -1268,8 +1272,10 @@ return function(H)
         eq(roots.export_env(), false, "export_env: the Vimscript spelling of the opt-out (1)")
         vim.g.lib_nvim_roots_no_export = nil
 
-        -- health: the registry and the environment disagree
-        vim.env.NVIM_CONFIG_DIR = "/set/on/purpose"
+        -- health: the registry and the environment disagree (an absolute path on this host too: a
+        -- drive-less one is no root on Windows)
+        local env_says = cfg .. "-env-says-otherwise"
+        vim.env.NVIM_CONFIG_DIR = env_says
         vim.env.LIB_NVIM_ROOTS_EXPORTED = nil
         local entry
         for _, st in ipairs(roots.status()) do
@@ -1278,7 +1284,7 @@ return function(H)
           end
         end
         eq(entry.root, cfg, "status: the root is stdpath('config') whatever the environment says")
-        eq(entry.env, "/set/on/purpose", "status: ... and says what the environment holds instead")
+        eq(entry.env, env_says, "status: ... and says what the environment holds instead")
         vim.env.NVIM_CONFIG_DIR = cfg
         for _, st in ipairs(roots.status()) do
           if st.kind == "nvim_config" then
@@ -1313,7 +1319,8 @@ return function(H)
   end
 
   do
-    local res = child([==[
+    local res = child(
+      [==[
 local repo = arg[1]
 vim.opt.rtp:append(repo)
 local uv = vim.uv
@@ -1334,7 +1341,10 @@ vim.wait(5000, function()
   return out ~= nil
 end)
 io.stdout:write(tostring(out[1]), ":", tostring(out[2]), "\n")
-]==])
+]==],
+      nil,
+      { OS = "Plan9" }
+    ) -- on a Windows host `OS` would still say so
     eq(res.code, 0, "cold fast event: the child ran (" .. tostring(res.stderr) .. ")")
     eq(
       vim.trim(res.stdout),
@@ -1747,7 +1757,7 @@ io.stdout:write(tostring(out[1]), ":", tostring(out[2]), "\n")
     vars = {},
     extra = {
       FINE = "D:/fine",
-      LATIN = "/bad/\255\254dir",
+      LATIN = "D:/bad/\255\254dir",
       BOOM = function()
         error("bad \255 byte", 0)
       end,
@@ -2009,11 +2019,16 @@ io.stdout:write(tostring(out[1]), ":", tostring(out[2]), "\n")
       ok(calls <= 3, "fold: realpath of a root is looked up once, not per call: " .. calls)
     end)
     -- other root paths than above: the answer for those is cached by now, which would hide a call
-    local win_extra = { RPA = "/rp-unique-win/a", RPB = "/rp-unique-win/b" }
+    local win_extra = { RPA = "D:/rp-unique-win/a", RPB = "D:/rp-unique-win/b" }
     with_roots({ windows = true, nvim_config = false, vars = {}, extra = win_extra }, function()
       counting(function()
         roots.fold("D:/elsewhere/x.lua")
       end)
+      eq(
+        #roots.roots(),
+        2,
+        "fold (win): the roots exist (a drive-less one would make this vacuous)"
+      )
       eq(calls, 0, "fold (win): no realpath at all")
     end)
   end
@@ -2218,6 +2233,202 @@ io.stdout:write(tostring(out[1]), ":", tostring(out[2]), "\n")
       eq(#roots.roots(), 0, "source (posix): names are case-sensitive")
     end
   )
+
+  -- ══ review round 3: what the filetree migration needs, and error locations ═══════════════
+  --
+  -- filetree's `env_roots.vars` REPLACES the default list ("so $REPOS_DIR is no longer a root"),
+  -- its `extra` is the plugin's own, and its `enable` is the plugin's own: `names` (additive) could
+  -- not express the first, `register` would have published the second to every other plugin, and
+  -- `remap` had no `force`. Each gets a per-call option.
+  with_roots({
+    windows = false,
+    nvim_config = false,
+    vars = { "REPOS_DIR" },
+    source = { REPOS_DIR = "/repos", FT_X = "/ft" },
+  }, function()
+    eq(
+      roots.fold("/repos/proj/a.md", { names = { "FT_X" } }),
+      "$REPOS_DIR/proj/a.md",
+      "baseline: names ADDS to the configured vars"
+    )
+    eq(
+      roots.fold("/repos/proj/a.md", { vars = { "FT_X" } }),
+      "/repos/proj/a.md",
+      "opts.vars REPLACES them: $REPOS_DIR is no longer a root for this call"
+    )
+    eq(
+      roots.fold("/ft/n.md", { vars = { "FT_X" } }),
+      "$FT_X/n.md",
+      "opts.vars: the replacement list is used"
+    )
+    eq(flat(roots.roots({ vars = {} })), "", "opts.vars = {}: no variable root at all")
+    eq(
+      flat(roots.roots({ vars = { "FT_X" }, names = { "REPOS_DIR" } })),
+      "FT_X=/ft;REPOS_DIR=/repos",
+      "opts.vars then opts.names, in that order"
+    )
+    eq(roots.fold("/repos/proj/a.md"), "$REPOS_DIR/proj/a.md", "... and only for the call")
+
+    eq(roots.fold("/n/x.md"), "/n/x.md", "baseline: nobody knows /n")
+    eq(
+      roots.fold("/n/x.md", { extra = { FT_NOTES = "/n" } }),
+      "$FT_NOTES/x.md",
+      "opts.extra: a root this call brings along"
+    )
+    eq(roots.fold("/n/x.md"), "/n/x.md", "opts.extra: ... that no other caller sees")
+    eq(
+      roots.root_of("/n/x.md", { extra = { FT_NOTES = "/n" } }),
+      "FT_NOTES",
+      "root_of takes it too"
+    )
+    eq(
+      flat(roots.roots({
+        extra = {
+          LATE = function()
+            return "/late"
+          end,
+        },
+      })),
+      "LATE=/late;REPOS_DIR=/repos",
+      "opts.extra takes a function as well, and comes before vars"
+    )
+  end)
+
+  -- precedence of a per-call root: the user's `extra` first, then the call, then `register`ed
+  with_registered("SAMENAME", "/from/registry", function()
+    with_roots({
+      windows = false,
+      nvim_config = false,
+      vars = {},
+      extra = { USERS = "/from/user" },
+    }, function()
+      eq(
+        flat(roots.roots({ extra = { SAMENAME = "/from/call" } })),
+        "USERS=/from/user;SAMENAME=/from/call",
+        "opts.extra beats a registered root of that name"
+      )
+      eq(
+        flat(roots.roots({ extra = { USERS = "/from/call" } })),
+        "USERS=/from/user;SAMENAME=/from/registry",
+        "... and the user's own extra beats opts.extra"
+      )
+    end)
+  end)
+
+  -- remap takes the same options; `force` maps although the user switched folding off
+  do
+    local base = tmp()
+    vim.fn.mkdir(base .. "/repos/proj", "p")
+    vim.fn.mkdir(base .. "/mine/proj", "p")
+    with_roots({
+      windows = false,
+      enable = false,
+      nvim_config = false,
+      vars = { "REPOS_DIR" },
+      source = { REPOS_DIR = base .. "/repos", FT_X = base .. "/mine" },
+    }, function()
+      eq(#roots.remap("E:/repos/proj"), 0, "remap: off while disabled")
+      eq(
+        table.concat(roots.remap("E:/repos/proj", { force = true }), "|"),
+        base .. "/repos/proj",
+        "remap: opts.force maps anyway (the plugin's own switch is on)"
+      )
+      eq(
+        table.concat(roots.remap("E:/mine/proj", { force = true, names = { "FT_X" } }), "|"),
+        base .. "/mine/proj",
+        "remap: opts.names"
+      )
+      eq(
+        table.concat(
+          roots.remap("E:/mine/proj", { force = true, extra = { MINE = base .. "/mine" } }),
+          "|"
+        ),
+        base .. "/mine/proj",
+        "remap: opts.extra"
+      )
+      eq(
+        #roots.remap("E:/repos/proj", { force = true, vars = {} }),
+        0,
+        "remap: opts.vars replaces the roots here as well"
+      )
+    end)
+    vim.fn.delete(base, "rf")
+  end
+
+  -- the error names the function the caller used, and a wrong type is refused
+  with_roots({ windows = false, nvim_config = false, vars = {}, source = {} }, function()
+    for fn, call in pairs({
+      fold = function()
+        roots.fold("/x", { typo = 1 })
+      end,
+      root_of = function()
+        roots.root_of("/x", { typo = 1 })
+      end,
+      folder = function()
+        roots.folder({ typo = 1 })
+      end,
+      remap = function()
+        roots.remap("/x", { typo = 1 })
+      end,
+      roots = function()
+        roots.roots({ typo = 1 })
+      end,
+    }) do
+      raises(call, fn .. ": unknown option `typo`", fn .. ": the message names the function")
+    end
+    raises(function()
+      roots.fold("/x", true)
+    end, "fold: opts must be a table", "fold: opts of the wrong type")
+    raises(function()
+      roots.roots({ vars = "REPOS_DIR" })
+    end, "roots: option `vars` must be table, got string", "roots: vars as a string")
+    raises(function()
+      roots.fold("/x", { nvim_config = 1 })
+    end, "fold: option `nvim_config` must be boolean, got number", "fold: nvim_config as a number")
+    raises(function()
+      roots.remap("/x", { force = "yes" })
+    end, "remap: option `force` must be boolean, got string", "remap: force as a string")
+  end)
+
+  -- A drive-less root (`/repos`) is "on the current drive" on a Windows host: it moves with
+  -- `:cd` to another drive, which is what makes a relative root no root. Forced `windows = true`
+  -- on another host keeps accepting it, so the Windows rules can be pinned from a POSIX runner.
+  do
+    local on_windows_host = require("lib.nvim.cross.platform.is_windows")()
+    with_roots({
+      windows = true,
+      nvim_config = false,
+      vars = {},
+      extra = { DRIVELESS = "/some/root", WITHDRIVE = "D:/some/root" },
+    }, function()
+      local by_name = {}
+      for _, st in ipairs(roots.status()) do
+        by_name[st.name] = st
+      end
+      eq(by_name.WITHDRIVE.root, "D:/some/root", "driveless: a root with a drive is fine")
+      if on_windows_host then
+        eq(by_name.DRIVELESS.problem, "not_absolute", "driveless: refused on a Windows host")
+      else
+        eq(by_name.DRIVELESS.root, "/some/root", "driveless: accepted where windows=true is forced")
+      end
+    end)
+    with_roots({
+      windows = false,
+      nvim_config = false,
+      vars = {},
+      extra = { POSIXROOT = "/some/root" },
+    }, function()
+      eq(flat(roots.roots()), "POSIXROOT=/some/root", "driveless: ordinary on POSIX rules")
+    end)
+    with_roots({
+      windows = true,
+      nvim_config = false,
+      vars = {},
+      extra = { UNCROOT = "//srv/share/r" },
+    }, function()
+      eq(flat(roots.roots()), "UNCROOT=//srv/share/r", "driveless: a UNC root is not driveless")
+    end)
+  end
 
   -- setup() with nothing resets: no leftover from the cases above.
   roots.setup()

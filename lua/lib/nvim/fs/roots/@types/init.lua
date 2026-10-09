@@ -9,12 +9,14 @@
 ---@field source? (table<string, string|(fun(): string?)>)|(fun(name: string): string?)  Injected origin of the `vars` values AND of `NVIM_CONFIG_DIR`, replacing `vim.env` and `stdpath("config")` -- for tests. No fallback to the real ones. `~` still reads the real home directory.
 ---@field windows? boolean  Force the Windows (`true`) or POSIX (`false`) spelling and comparison rules; `nil` follows the platform.
 
----Per-call options of `roots`. An unknown key raises.
+---Per-call options of `roots`. An unknown key, or a value of the wrong type, raises.
 ---@class Lib.Fs.Roots.Opts
 ---@field names? string[]  Extra environment variable names to treat as roots for this call, after the configured `vars`.
+---@field vars? string[]  Environment variable names that are roots for this call INSTEAD of the configured `vars` (a plugin option that replaces the default list, as `Config.vars` does).
+---@field extra? table<string, string|(fun(): string?)>  Roots this call brings along (a plugin's own config); the user's `extra` wins on a name, they win over `register`ed roots and `vars`.
 ---@field nvim_config? boolean  Override `Config.nvim_config` for this call.
 
----Per-call options of `fold`, `folder` and `root_of`. An unknown key raises.
+---Per-call options of `fold`, `folder`, `root_of` and `remap`. An unknown key, or a value of the wrong type, raises.
 ---@class Lib.Fs.Roots.FoldOpts : Lib.Fs.Roots.Opts
 ---@field force? boolean  Fold even when `enable` is false -- for an action the user asked for by name.
 
@@ -57,7 +59,7 @@
 ---@field folder fun(opts?: Lib.Fs.Roots.FoldOpts): fun(p: string): string, string|nil
 ---@field fold fun(p: string, opts?: Lib.Fs.Roots.FoldOpts): string, string|nil
 ---@field root_of fun(p: string, opts?: Lib.Fs.Roots.FoldOpts): string|nil
----@field remap fun(p: string): string[]
+---@field remap fun(p: string, opts?: Lib.Fs.Roots.FoldOpts): string[]
 ---@field json fun(): string
 ---@field print_json fun()
 ---@field export_env fun(): boolean
