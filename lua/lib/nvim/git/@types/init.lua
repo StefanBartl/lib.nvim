@@ -46,6 +46,12 @@
 -- declared in git/init.lua, right above the functions that use them -- not
 -- duplicated here. The types of the run/log/tags section live below.
 
+---Options of the network verbs (`fetch_async`, `pull_async`, `push_async`, `update_async`):
+---`Lib.Git.Opts` (`dir`) plus the environment and the deadline of each git process.
+---@class Lib.Git.NetOpts : Lib.Git.Opts
+---@field env? table<string, string> Extra environment variables; wins over the default `GIT_TERMINAL_PROMPT=0`.
+---@field timeout_ms? integer|false Deadline of each git process in milliseconds (default 120000); `false` waits forever.
+
 ---Options of every function that runs `git` and reports a result: `Lib.Git.Opts`
 ---(`dir`) plus a timeout, an environment and the knobs a caller reading someone
 ---else's repository needs.
