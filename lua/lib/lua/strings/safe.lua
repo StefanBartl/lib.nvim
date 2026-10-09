@@ -69,16 +69,26 @@ function M.utf8(s)
   if not s:find("[\128-\255]") then
     return s
   end
-  local out, i, n = {}, 1, #s
+  -- copy valid runs whole; only an invalid byte costs an extra piece
+  local out, i, n, run_start = {}, 1, #s, 1
   while i <= n do
     local len = valid_len(s, i)
     if len then
-      out[#out + 1] = s:sub(i, i + len - 1)
       i = i + len
     else
+      if i > run_start then
+        out[#out + 1] = s:sub(run_start, i - 1)
+      end
       out[#out + 1] = "?"
       i = i + 1
+      run_start = i
     end
+  end
+  if run_start == 1 then
+    return s -- nothing was invalid
+  end
+  if run_start <= n then
+    out[#out + 1] = s:sub(run_start, n)
   end
   return table.concat(out)
 end
