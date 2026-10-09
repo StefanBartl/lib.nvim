@@ -438,8 +438,14 @@ return function(H)
   H.eq(async_by_name.anntree.commit, false, "tags_async: an annotated tag on a tree is none")
 
   -- a failing peel is an error, never the one-level answer as if it were the final one
-  -- (POSIX: the wrapper is a shell script that lets everything through but `cat-file`)
-  if vim.fn.has("win32") == 0 then
+  -- (POSIX: the wrapper is a shell script that lets everything through but `cat-file`; on a git that
+  -- peels every level in `%(*objecttype)` the nested tag needs no `cat-file` at all, so there is
+  -- no peel to fail and the wrapper is never asked)
+  local nested_one_level = vim
+    .system({ "git", "-C", extra, "for-each-ref", "--format=%(*objecttype)", "refs/tags/nested" })
+    :wait().stdout
+    :match("^%s*(%S+)") == "tag"
+  if vim.fn.has("win32") == 0 and nested_one_level then
     local wrapper = vim.fn.tempname() .. "-git-no-cat-file"
     local fh = assert(io.open(wrapper, "w"))
     fh:write('#!/bin/sh\nfor a in "$@"; do [ "$a" = cat-file ] && exit 3; done\nexec git "$@"\n')
