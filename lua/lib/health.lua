@@ -101,6 +101,40 @@ function M.check()
     h_error('require("lib") failed: ' .. tostring(lib))
   end
 
+  -- Named roots -----------------------------------------------------------
+  -- `$REPOS_DIR` & co. (`lib.nvim.fs.roots`): a root that is unset or points at nothing makes every
+  -- `$NAME/...` path of every plugin that uses the registry fail the same quiet way.
+  h_start("lib.nvim: named roots")
+  local ok_roots, roots = pcall(require, "lib.nvim.fs.roots")
+  if not ok_roots then
+    h_error("lib.nvim.fs.roots failed to load: " .. tostring(roots))
+  else
+    for _, st in ipairs(roots.status()) do
+      if st.problem == "unset" then
+        if st.kind == "nvim_config" then
+          h_warn(("$%s is not available"):format(st.name))
+        else
+          h_warn(("$%s is not set"):format(st.name), {
+            ("Set the environment variable %s, or define it with"):format(st.name)
+              .. ' require("lib.nvim.fs.roots").setup({ extra = { '
+              .. st.name
+              .. ' = "..." } })',
+            "Inside a testing.nvim child the variable also has to be listed in `env_allow`.",
+          })
+        end
+      elseif st.problem == "not_absolute" then
+        h_warn(("$%s is not an absolute path: %s"):format(st.name, tostring(st.raw)))
+      elseif st.problem == "missing_dir" then
+        h_warn(("$%s points at a directory that does not exist: %s"):format(st.name, st.root))
+      else
+        h_ok(("$%s = %s"):format(st.name, st.root))
+      end
+    end
+    if not roots.enabled() then
+      h_info("fold/remap are disabled (roots.setup({ enable = false }))")
+    end
+  end
+
   -- Active loggers --------------------------------------------------------
   -- Reports what each plugin registered via lib.nvim.logger.new(), so a bug
   -- report can name the log file to attach without the user having to know

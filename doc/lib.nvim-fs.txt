@@ -31,6 +31,7 @@ CONTENTS                                              *lib.nvim-fs-contents*
        find_upward_dir ....................... |lib.nvim-fs-find_upward_dir|
        stdpath_config_root ............. |lib.nvim-fs-stdpath_config_root|
        polymorphic_rootresolver .. |lib.nvim-fs-polymorphic_rootresolver|
+       roots (named roots) ................. |lib.nvim-fs-named_roots|
   6. Scanning ........................................ |lib.nvim-fs-scanning|
        collect_recursive .................... |lib.nvim-fs-collect_recursive|
        collect_async ............................ |lib.nvim-fs-collect_async|
@@ -268,6 +269,36 @@ running is not seen until restart. >lua
     stdpath_config_root("/home/me/work/proj/src")     -- nil
 <
 Used by |lib.nvim-fs-polymorphic_rootresolver| for `cfg.include_stdpath_config`.
+
+------------------------------------------------------------------------------
+roots                                                *lib.nvim-fs-named_roots*
+
+Module `lib.nvim.fs.roots`. Named root directories (`$REPOS_DIR`,
+`$NVIM_CONFIG_DIR`, your own) in one place. `vim.fn.expand` is no substitute:
+it does not understand `${VAR}`, `filereadable`/`io.open`/`vim.uv.fs_*` expand
+nothing, `fnamemodify(":p")` prepends the cwd to `$VAR/x`, and
+`vim.fs.normalize` expands `$X` in the middle of a path. Rule for callers:
+expand first, then normalize. >lua
+
+    local roots = require("lib.nvim.fs.roots")
+    roots.setup({ vars = { "REPOS_DIR" }, extra = { NOTES = "~/notes" } })
+
+    roots.expand("${REPOS_DIR}/x.lua")      -- "D:/repos/x.lua"
+    roots.fold("d:\\repos\\x.lua")          -- "$REPOS_DIR/x.lua"
+    roots.remap("E:/repos/proj/a.md")       -- { "D:/repos/proj/a.md" }
+    roots.names()                           -- { "NOTES", "REPOS_DIR", ... }
+<
+`roots()` lists `{ name, root }` (extra alphabetical, vars, then
+`NVIM_CONFIG_DIR`; the first definition of a name wins). `expand` acts only
+on a LEADING reference and leaves everything unknown unchanged. `fold` lets
+the longest root win and ignores case on Windows. `remap` anchors on the
+root's folder name and returns only existing candidates. `json()` /
+`print_json()` give the resolved roots to a reader outside Neovim
+(`nvim --headless -c "lua require('lib.nvim.fs.roots').print_json()" -c qa`).
+`setup({ source = {...} })` injects every value for tests (no fallback to the
+sandbox's `stdpath`). `lib.nvim.cross.fs.expand_path` and the composer types
+PATH/DIR/FILE resolve a leading root reference through it. See the module's
+README for the full contract.
 
 ------------------------------------------------------------------------------
 polymorphic_rootresolver({cfg})    *lib.nvim-fs-polymorphic_rootresolver*
