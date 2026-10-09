@@ -33,6 +33,91 @@ local PROBE = {
   "lib.nvim.bindings.autocmd.dispatcher",
 }
 
+---Named roots (`lib.nvim.fs.roots`): a root that is unset or points at nothing makes every
+---`$NAME/...` path of every plugin that uses the registry fail the same quiet way.
+function M.check_roots()
+  h_start("lib.nvim: named roots")
+  local ok_roots, roots = pcall(require, "lib.nvim.fs.roots")
+  if not ok_roots then
+    h_error("lib.nvim.fs.roots failed to load: " .. tostring(roots))
+    return
+  end
+
+  for _, st in ipairs(roots.status()) do
+    local p = st.problem
+    if p == "unset" then
+      if st.kind == "nvim_config" then
+        h_warn(("$%s is not available"):format(st.name))
+      elseif st.kind == "extra" or st.kind == "registered" then
+        h_warn(("$%s (%s root) resolved to nothing"):format(st.name, st.kind))
+      else
+        h_warn(("$%s is not set"):format(st.name), {
+          ("Set the environment variable %s, or define it with"):format(st.name)
+            .. ' require("lib.nvim.fs.roots").setup({ extra = { '
+            .. st.name
+            .. ' = "..." } })',
+          "Inside a testing.nvim child the variable also has to be listed in `env_allow`.",
+        })
+      end
+    elseif p == "unresolved_var" then
+      h_warn(
+        ("$%s: %s starts with `%s`, which has no value"):format(
+          st.name,
+          tostring(st.raw),
+          tostring(st.detail)
+        )
+      )
+    elseif p == "error" then
+      h_warn(("$%s: its function raised: %s"):format(st.name, tostring(st.detail)))
+    elseif p == "bad_type" then
+      h_warn(
+        ("$%s: the value is a %s, expected a path or a function returning one"):format(
+          st.name,
+          tostring(st.detail)
+        )
+      )
+    elseif p == "invalid_name" then
+      h_warn(
+        ("root name %q is ignored"):format(st.name),
+        { "A root name must be letters, digits and underscores, not starting with a digit." }
+      )
+    elseif p == "not_absolute" then
+      h_warn(("$%s is not an absolute path: %s"):format(st.name, tostring(st.raw)))
+    elseif p == "too_broad" then
+      h_warn(
+        ("$%s is the filesystem root or a whole drive (%s): refused as a root"):format(
+          st.name,
+          tostring(st.raw)
+        )
+      )
+    elseif p == "invalid_path" then
+      h_warn(("$%s contains a NUL byte and is ignored"):format(st.name))
+    elseif p == "missing_dir" then
+      h_warn(("$%s points at a directory that does not exist: %s"):format(st.name, st.root))
+    else
+      h_ok(("$%s = %s"):format(st.name, st.root))
+    end
+    if st.env then
+      h_warn(
+        ("$%s in the environment is %s, but stdpath('config') is %s"):format(
+          st.name,
+          st.env,
+          tostring(st.root)
+        ),
+        {
+          "lib.nvim uses stdpath('config'); `vim.fn.expand('$"
+            .. st.name
+            .. "')` uses the environment.",
+          "Usually a value inherited from a parent Neovim with another NVIM_APPNAME.",
+        }
+      )
+    end
+  end
+  if not roots.enabled() then
+    h_info("fold/remap are disabled (roots.setup({ enable = false }))")
+  end
+end
+
 ---Runs all lib.nvim health checks and reports via vim.health.
 function M.check()
   -- Neovim version --------------------------------------------------------
@@ -101,46 +186,7 @@ function M.check()
     h_error('require("lib") failed: ' .. tostring(lib))
   end
 
-  -- Named roots -----------------------------------------------------------
-  -- `$REPOS_DIR` & co. (`lib.nvim.fs.roots`): a root that is unset or points at nothing makes every
-  -- `$NAME/...` path of every plugin that uses the registry fail the same quiet way.
-  h_start("lib.nvim: named roots")
-  local ok_roots, roots = pcall(require, "lib.nvim.fs.roots")
-  if not ok_roots then
-    h_error("lib.nvim.fs.roots failed to load: " .. tostring(roots))
-  else
-    for _, st in ipairs(roots.status()) do
-      if st.problem == "unset" then
-        if st.kind == "nvim_config" then
-          h_warn(("$%s is not available"):format(st.name))
-        elseif st.kind == "extra" then
-          h_warn(("$%s (extra root) resolved to nothing"):format(st.name))
-        else
-          h_warn(("$%s is not set"):format(st.name), {
-            ("Set the environment variable %s, or define it with"):format(st.name)
-              .. ' require("lib.nvim.fs.roots").setup({ extra = { '
-              .. st.name
-              .. ' = "..." } })',
-            "Inside a testing.nvim child the variable also has to be listed in `env_allow`.",
-          })
-        end
-      elseif st.problem == "invalid_name" then
-        h_warn(
-          ("root name %q is ignored"):format(st.name),
-          { "A root name must be letters, digits and underscores, not starting with a digit." }
-        )
-      elseif st.problem == "not_absolute" then
-        h_warn(("$%s is not an absolute path: %s"):format(st.name, tostring(st.raw)))
-      elseif st.problem == "missing_dir" then
-        h_warn(("$%s points at a directory that does not exist: %s"):format(st.name, st.root))
-      else
-        h_ok(("$%s = %s"):format(st.name, st.root))
-      end
-    end
-    if not roots.enabled() then
-      h_info("fold/remap are disabled (roots.setup({ enable = false }))")
-    end
-  end
+  M.check_roots()
 
   -- Active loggers --------------------------------------------------------
   -- Reports what each plugin registered via lib.nvim.logger.new(), so a bug

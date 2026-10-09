@@ -31,9 +31,12 @@ return function()
     end
   end
 
-  -- Environment variable fallback (present on Windows, absent on Linux/macOS)
-  if not is and vim and vim.env then
-    if type(vim.env.OS) == "string" and vim.env.OS:lower():find("windows", 1, true) then
+  -- Environment variable fallback (present on Windows, absent on Linux/macOS). Read through libuv,
+  -- not `vim.env`: that is a Vimscript round trip and raises E5560 in a fast event, which made the
+  -- very first call of a cold Linux/macOS process fail from a `vim.uv` callback.
+  if not is and uv and uv.os_getenv then
+    local ok, os_env = pcall(uv.os_getenv, "OS")
+    if ok and type(os_env) == "string" and os_env:lower():find("windows", 1, true) then
       is = true
     end
   end
