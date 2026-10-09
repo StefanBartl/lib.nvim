@@ -796,10 +796,18 @@ local function run(H)
       for i, proc in ipairs(trace) do
         local plabel = ("%s: process %d (%s)"):format(label, i, proc.step)
         H.ok(
-          vim.deep_equal(vim.list_slice(proc.argv, 1, 5), { "git", "-c", "protocol.allow=never", "-C", repo }),
-          plabel .. ": argv starts with the protocol switch, then -C <dir>, got " .. vim.inspect(proc.argv)
+          vim.deep_equal(
+            vim.list_slice(proc.argv, 1, 5),
+            { "git", "-c", "protocol.allow=never", "-C", repo }
+          ),
+          plabel
+            .. ": argv starts with the protocol switch, then -C <dir>, got "
+            .. vim.inspect(proc.argv)
         )
-        H.ok(not vim.tbl_contains(proc.argv, "--no-optional-locks"), plabel .. ": read_only is ignored")
+        H.ok(
+          not vim.tbl_contains(proc.argv, "--no-optional-locks"),
+          plabel .. ": read_only is ignored"
+        )
         H.eq(proc.input, nil, plabel .. ": input is ignored")
         -- the runner gets the environment and the deadline and nothing else: no output cap, no input
         local keys = vim.tbl_keys(proc.ropts)
@@ -918,12 +926,12 @@ local function run(H)
     ---@param opts table
     ---@return table[] seen, boolean|nil changed
     local function pull_with(hashes, opts)
-      local seen, changed, done, reads = {}, nil, false, 0
+      local seen, changed, done, reads, pull_ok, pull_err = {}, nil, false, 0, nil, nil
       local fake = function(argv, on_done, _, ropts)
-        seen[#seen + 1] =
-          { verb = vim.tbl_contains(argv, "rev-parse") and "rev-parse" or "pull", ropts = ropts }
+        local verb = vim.tbl_contains(argv, "rev-parse") and "rev-parse" or "pull"
+        seen[#seen + 1] = { verb = verb, ropts = ropts }
         vim.schedule(function()
-          if seen[#seen].verb == "rev-parse" then
+          if verb == "rev-parse" then
             reads = reads + 1
             local hash = hashes[reads]
             if hash == false then
@@ -939,13 +947,16 @@ local function run(H)
       end
       H.with_patched(run_argv, "run_async_captured", fake, function()
         opts.dir = repo
-        git.pull_async(opts, function(_, _, c)
-          changed, done = c, true
+        git.pull_async(opts, function(ok_, err_, c)
+          pull_ok, pull_err, changed, done = ok_, err_, c, true
         end)
         wait_for(function()
           return done
         end)
       end)
+      H.ok(done, "pull_async: on_done fires")
+      H.eq(pull_ok, true, "pull_async: the pull succeeded")
+      H.eq(pull_err, nil, "pull_async: no error on success")
       return seen, changed
     end
 

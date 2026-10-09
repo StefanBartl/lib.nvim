@@ -1782,7 +1782,9 @@ end
 --- `M.head_hash` (built on `run_blocking_captured`) does.
 ---
 --- Reports `hash` as a bare `string|nil` first, matching the blocking
---- `M.head_hash`, plus a second `ok` value a caller MAY ignore. `git
+--- `M.head_hash`, plus a second `ok` value a caller MAY ignore and a third,
+--- `timed_out`: the read hit the deadline, so the missing hash is "unknown"
+--- (`M.pull_async` reports `changed = nil`), not an empty repository. `git
 --- rev-parse HEAD` exits non-zero for a *genuinely* empty repository (no
 --- commits yet -- an entirely normal state to run this against, e.g. before
 --- pulling into a freshly `git init`'d checkout) exactly the same way it
@@ -1878,13 +1880,18 @@ function M.pull_async(opts, on_done, git_cmd)
         on_done(false, net_err("pull", stderr, code, timed_out, ropts))
         return
       end
+      -- A before read that hit the deadline is "unknown", not "no hash": comparing its nil
+      -- against the real after hash would report a move that never happened. Nothing the
+      -- after read could say changes that, so it is not even started.
+      if before_timed_out then
+        on_done(true, nil, nil)
+        return
+      end
       active.stop = head_hash_async(opts, function(after, after_ok)
         if cancelled then
           return
         end
-        -- a before read that hit the deadline is "unknown", not "no hash": comparing
-        -- its nil against the real after hash would report a move that never happened
-        if not after_ok or before_timed_out then
+        if not after_ok then
           on_done(true, nil, nil)
           return
         end
