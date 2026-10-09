@@ -573,11 +573,15 @@ M.tags(opts?: Lib.Git.TagsOpts, git_cmd?: string): Lib.Git.Tag[]|nil, err?   -- 
 M.rev_parse_async / merge_base_async / is_ancestor_async / tags_async         -- same arguments plus `on_done` before `git_cmd`; vim.schedule-dispatched; return { stop }
 M.LOG_FORMAT: string                                                           -- the --format= argument `log` passes (for a caller that runs `git log -z` itself)
 
--- Syncing with the remote (all async, vim.schedule-dispatched, return { stop }; opts?: {dir?}, git_cmd? as above)
-M.fetch_async(opts: {dir?, env?, timeout_ms?: integer|false}|nil, on_done: fun(ok, err|nil, changed|nil), git_cmd?: string): { stop }   -- git fetch --all --prune; changed = a remote-tracking ref moved
-M.pull_async(opts: {dir?, env?, timeout_ms?: integer|false}|nil, on_done: fun(ok, err|nil, changed|nil), git_cmd?: string): { stop }    -- git pull --ff-only; changed = HEAD moved; silent once stop() was called
-M.push_async(opts: {dir?, env?, timeout_ms?: integer|false}|nil, on_done: fun(ok, err|nil), git_cmd?: string): { stop }                 -- git push
-M.update_async(opts: {dir?, env?, timeout_ms?: integer|false}|nil, on_done: fun(ok, err|nil, changed|nil), git_cmd?: string): { stop }  -- fetch, then pull (the pull's changed); silent once stop() was called
+-- Syncing with the remote (all async, vim.schedule-dispatched, return { stop }; git_cmd? as above)
+-- opts: Lib.Git.NetOpts = Lib.Git.RunOpts (the verbs use dir, env, timeout_ms; no_lazy_fetch adds -c protocol.allow=never, so the verb
+--       fails; max_output_bytes, read_only, input, binary have no effect) with timeout_ms?: integer|false -- false = no deadline, nil = 120000;
+--       env is merged over { GIT_TERMINAL_PROMPT = "0" } and wins. Every git process of a call gets the same env and deadline:
+--       the fetch, the pull, and the two rev-parse HEAD reads around the pull of pull_async / update_async
+M.fetch_async(opts: Lib.Git.NetOpts|nil, on_done: fun(ok, err|nil, changed|nil), git_cmd?: string): { stop }   -- git fetch --all --prune; changed = a remote-tracking ref moved
+M.pull_async(opts: Lib.Git.NetOpts|nil, on_done: fun(ok, err|nil, changed|nil), git_cmd?: string): { stop }    -- git pull --ff-only; changed = HEAD moved; silent once stop() was called
+M.push_async(opts: Lib.Git.NetOpts|nil, on_done: fun(ok, err|nil), git_cmd?: string): { stop }                 -- git push
+M.update_async(opts: Lib.Git.NetOpts|nil, on_done: fun(ok, err|nil, changed|nil), git_cmd?: string): { stop }  -- fetch, then pull (the pull's changed); silent once stop() was called
 ```
 
 A killed git (OOM, `stop()`, crash) is a **failure** everywhere here (`code = 128 + signal`, `signal` set), never an
@@ -587,6 +591,12 @@ Windows libuv delivers a kill as exit code 1 with signal 15, so it reads "exit c
 started reports why (`ENOENT: …`), not "exit code -1". After `stop()`, `pull_async`/`update_async` never call `on_done`
 (`update_async` does not start its pull either); `fetch_async`/`push_async` call it once, with the kill as the failure
 (on Windows possibly late: the exit is reported after helper processes such as `git-remote-http` have ended).
+The sync verbs run with `GIT_TERMINAL_PROMPT=0` (`opts.env` wins) and kill each git process after 120 s unless
+`opts.timeout_ms` says otherwise (`false` = no deadline); a deadline that was hit is the failure "git fetch timed out
+after 120s" (`1.5s` for a fractional one, `500 ms` below a second), never an exit code. The same environment and deadline
+reach the two `rev-parse HEAD` reads that `pull_async`/`update_async` make around the pull. On a timeout the whole
+process group is killed (POSIX; Windows: the whole process tree), so a transport helper such as `git-remote-https` does
+not outlive the deadline. Details: the module README, "Syncing with the remote".
 `no_lazy_fetch` sets `GIT_NO_LAZY_FETCH=1` and `-c protocol.allow=never`, so it holds on git < 2.44.
 
 `lib.nvim.git.remote` (pure, no process): `parse_remote(url)`, `host_kind(host, hosts_cfg?)`

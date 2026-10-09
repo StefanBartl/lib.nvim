@@ -211,7 +211,7 @@ what the helpers above do not expose: a **timeout**, an **environment**, the
 
 | Option | Meaning |
 | --- | --- |
-| `timeout_ms` | Kill git after this long; the result is `timed_out` (exit code `124`). On Windows the whole process tree is killed; elsewhere only the direct child. The async runner answers at the deadline plus a short grace even when a descendant keeps the pipes open. |
+| `timeout_ms` | Kill git after this long; the result is `timed_out` (exit code `124`). On POSIX the whole process group is killed, on Windows the whole process tree, so a transport helper such as `git-remote-https` does not outlive the deadline. The async runner answers at the deadline plus a short grace even when a descendant keeps the pipes open. The network verbs below take `false` here too (no deadline) and apply a default. |
 | `max_output_bytes` | Stop git once its stdout exceeds this many bytes: the result is `ok = false`, `code = 125`, `stderr` says why. One commit with a huge message makes `log` print gigabytes from a tiny object; without a cap all of it is held in memory. |
 | `env` | Extra environment variables, merged over the inherited ones. |
 | `no_lazy_fetch` | Never fetch missing objects of a partial (**blobless**) clone: git then *fails* on a missing object instead of quietly fetching it from the remote — no network, no write into the clone. Sets `GIT_NO_LAZY_FETCH=1` (git 2.44+, the primary lock) and `GIT_ALLOW_PROTOCOL=none` (every git since 2.10; an explicit `env` entry of the same name wins) **and** passes `-c protocol.allow=never`. `GIT_ALLOW_PROTOCOL` is what holds on older git and against a `protocol.<name>.allow` in the repository's or the user's config, which beats `-c protocol.allow=never`. The same switch blocks every transport, so a command that really needs the network (`fetch`) fails under it. |
@@ -348,7 +348,11 @@ handle.stop()
 
 Network calls, so only async: `on_done` runs on the main loop (`vim.schedule`) and the
 returned `{ stop }` handle kills the job with SIGTERM. `opts` and `git_cmd` are as everywhere
-else in this module. Unlike the read functions, these change something: `fetch_async` moves
+else in this module; `opts` is a `Lib.Git.NetOpts`: a `Lib.Git.RunOpts` whose `timeout_ms` may also
+be `false` (no deadline). Of its fields these verbs use `dir`, `env` and `timeout_ms`;
+`no_lazy_fetch` is honoured too, as `-c protocol.allow=never`, which blocks every transport, so a
+verb that needs the network fails under it; `max_output_bytes`, `read_only`, `input` and `binary`
+have no effect on them. Unlike the read functions, these change something: `fetch_async` moves
 remote-tracking refs, `pull_async`/`update_async` the working tree and `HEAD`, `push_async` the
 remote.
 

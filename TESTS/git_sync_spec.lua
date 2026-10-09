@@ -573,42 +573,131 @@ local function run(H)
   -- ── network verbs: no interactive prompt, a deadline ─────────────────────
   -- Neovim cannot answer a prompt git raises itself, so fetch/pull/push run with
   -- GIT_TERMINAL_PROMPT=0 and a 120 s deadline unless the caller says otherwise.
+  -- pull_async and update_async start two more git processes around the pull -- the
+  -- `rev-parse HEAD` reads that decide `changed` -- and those get the very same
+  -- environment and deadline as the pull (6943abd): otherwise a `GIT_DIR` in
+  -- `opts.env` would send the before/after comparison to another repository, and a
+  -- hung read would outlast the deadline of the pull it brackets. The HEAD reads
+  -- run for real here; their runner options are recorded and compared.
   do
     local run_argv = require("lib.nvim.cross.run_argv")
     local original = run_argv.run_async_captured
     local repo = tmpdir("-git-sync-net-opts")
     git_run(repo, { "init", "-q", "-b", "main" })
+    -- One commit, so the HEAD reads of pull_async/update_async succeed; the faked
+    -- pull moves nothing, so `changed` must come out false.
+    vim.fn.writefile({ "x" }, repo .. "/f.txt")
+    git_run(repo, { "add", "-A" })
+    git_run(repo, { "commit", "-q", "-m", "first" })
 
-    --- Run `verb` with a fake runner; returns the runner options it received and the result.
-    ---@param verb string
+    --- One git process the verb under test started, in the order it was started.
+    ---@class Spec.GitSync.Process
+    ---@field step string "fetch", "pull", "push", or "head" (a `rev-parse HEAD` read around a pull)
+    ---@field argv string[] The complete argv.
+    ---@field ropts table|nil The runner options it was started with; nil when none were passed.
+    ---@field input string|nil The standard input it was started with; nil when none was passed.
+
+    --- Which step of a verb an argv is.
+    ---@param argv string[]
+    ---@return string step "head" for the `rev-parse HEAD` reads, else the git verb ("other" if unknown).
+    local function step_of(argv)
+      if vim.tbl_contains(argv, "rev-parse") then
+        return "head"
+      end
+      for _, verb in ipairs({ "fetch", "pull", "push" }) do
+        if vim.tbl_contains(argv, verb) then
+          return verb
+        end
+      end
+      return "other"
+    end
+
+    --- Run `verb` with a fake runner: the network steps are answered by `reply`, the
+    --- `rev-parse HEAD` reads run for real, and every process started is recorded.
+    ---@param verb string "fetch", "pull", "push" or "update"
     ---@param opts table
-    ---@param reply fun(ropts: table): boolean, string, integer, string, integer
+    ---@param reply fun(ropts: table|nil, step: string): boolean, string, integer, string, integer What the process reports: the arguments of its `on_done`.
+    ---@return table|nil seen The runner options of the last network step (not a HEAD read).
+    ---@return { ok: boolean, err: string|nil, changed: boolean|nil } result What the verb reported.
+    ---@return Spec.GitSync.Process[] trace Every process the verb started, in order.
     local function drive(verb, opts, reply)
       local seen, result
+      local trace = {} ---@type Spec.GitSync.Process[]
       local fake = function(argv, on_done, input, ropts)
-        if vim.tbl_contains(argv, "rev-parse") then
+        local step = step_of(argv)
+        trace[#trace + 1] = { step = step, argv = argv, ropts = ropts, input = input }
+        if step == "head" then
           return original(argv, on_done, input, ropts)
         end
         seen = ropts
         vim.schedule(function()
-          on_done(reply(ropts))
+          on_done(reply(ropts, step))
         end)
         return { stop = function() end }
       end
       H.with_patched(run_argv, "run_async_captured", fake, function()
         opts.dir = repo
-        git[verb .. "_async"](opts, function(ok, err)
-          result = { ok = ok, err = err }
+        git[verb .. "_async"](opts, function(ok, err, changed)
+          result = { ok = ok, err = err, changed = changed }
         end)
         wait_for(function()
           return result ~= nil
         end)
+        H.ok(result ~= nil, verb .. "_async: on_done fires")
       end)
-      return seen, result
+      return seen, result, trace
     end
 
     local function fine()
       return true, "", 0, "", 0
+    end
+
+    --- The process reports that git was killed for its deadline (exit code 124 plus the signal).
+    local function timed_out()
+      return false, "", 124, "", 15
+    end
+
+    --- The steps of a trace as one string, e.g. "head pull head".
+    ---@param trace Spec.GitSync.Process[]
+    ---@return string
+    local function steps_of(trace)
+      local names = {} ---@type string[]
+      for i, proc in ipairs(trace) do
+        names[i] = proc.step
+      end
+      return table.concat(names, " ")
+    end
+
+    --- The directory a recorded git process ran against (`git -C <dir>`).
+    ---@param argv string[]
+    ---@return string|nil
+    local function dir_of(argv)
+      for i, arg in ipairs(argv) do
+        if arg == "-C" then
+          return argv[i + 1]
+        end
+      end
+      return nil
+    end
+
+    --- Assert that one recorded process was started for the caller's options: in `repo`,
+    --- with exactly the environment `env` and the deadline `ms` (nil: none).
+    ---@param label string
+    ---@param proc Spec.GitSync.Process
+    ---@param env table<string, string>
+    ---@param ms integer|nil
+    local function check_process(label, proc, env, ms)
+      H.eq(dir_of(proc.argv), repo, label .. ": runs against opts.dir")
+      H.ok(proc.ropts ~= nil, label .. ": is started with the network runner options")
+      H.ok(
+        vim.deep_equal(proc.ropts.env, env),
+        ("%s: environment is %s, expected %s"):format(
+          label,
+          vim.inspect(proc.ropts.env),
+          vim.inspect(env)
+        )
+      )
+      H.eq(proc.ropts.timeout_ms, ms, label .. ": deadline")
     end
 
     for _, verb in ipairs({ "fetch", "pull", "push" }) do
@@ -634,6 +723,183 @@ local function run(H)
         ("git %s timed out after 3s"):format(verb),
         verb .. "_async: the error names the deadline"
       )
+    end
+
+    -- ── every process of pull_async/update_async: one environment, one deadline ──
+    -- What the caller passes, and the environment and deadline every process of the
+    -- call must then have. `ms = nil` is "no deadline" (a nil field is simply absent).
+    local SCENARIOS = {
+      {
+        name = "defaults",
+        opts = {},
+        env = { GIT_TERMINAL_PROMPT = "0" },
+        ms = 120000,
+      },
+      {
+        name = "caller env merged over the default",
+        opts = { env = { GIT_X = "y" } },
+        env = { GIT_TERMINAL_PROMPT = "0", GIT_X = "y" },
+        ms = 120000,
+      },
+      {
+        name = "caller env and deadline win",
+        opts = { env = { GIT_TERMINAL_PROMPT = "1", GIT_X = "y" }, timeout_ms = 5000 },
+        env = { GIT_TERMINAL_PROMPT = "1", GIT_X = "y" },
+        ms = 5000,
+      },
+      {
+        name = "timeout_ms = false",
+        opts = { timeout_ms = false },
+        env = { GIT_TERMINAL_PROMPT = "0" },
+        ms = nil,
+      },
+    }
+
+    -- The processes each verb starts, in order: pull_async reads HEAD, pulls, reads HEAD
+    -- again; update_async fetches first and then does all of that with the same opts.
+    local CHAINS = { pull = "head pull head", update = "fetch head pull head" }
+
+    for _, verb in ipairs({ "pull", "update" }) do
+      for _, scenario in ipairs(SCENARIOS) do
+        local label = ("%s_async(%s)"):format(verb, scenario.name)
+        local _, res, trace = drive(verb, vim.deepcopy(scenario.opts), fine)
+        H.eq(res.ok, true, label .. ": succeeds")
+        H.eq(res.changed, false, label .. ": nothing moved, and both HEAD reads came back")
+        H.eq(steps_of(trace), CHAINS[verb], label .. ": the processes it starts, in order")
+        for i, proc in ipairs(trace) do
+          check_process(
+            ("%s: process %d (%s)"):format(label, i, proc.step),
+            proc,
+            scenario.env,
+            scenario.ms
+          )
+        end
+      end
+    end
+
+    -- ── the other Lib.Git.RunOpts fields: only no_lazy_fetch reaches the verbs ──
+    -- The docs (Lib.Git.NetOpts, README, docs/API) say the verbs use dir, env and timeout_ms,
+    -- honour no_lazy_fetch as `-c protocol.allow=never` (which blocks every transport, so a
+    -- verb that needs the network fails under it) and ignore max_output_bytes, read_only, input
+    -- and binary. Every process of every verb is checked, the HEAD reads included.
+    for _, verb in ipairs({ "fetch", "pull", "push", "update" }) do
+      local label = verb .. "_async(no_lazy_fetch, read_only, max_output_bytes, input, binary)"
+      local _, res, trace = drive(verb, {
+        no_lazy_fetch = true,
+        read_only = true,
+        max_output_bytes = 5,
+        input = "ignored",
+        binary = true,
+      }, fine)
+      H.eq(res.ok, true, label .. ": succeeds")
+      H.ok(#trace > 0, label .. ": starts at least one process")
+      for i, proc in ipairs(trace) do
+        local plabel = ("%s: process %d (%s)"):format(label, i, proc.step)
+        H.ok(
+          vim.deep_equal(vim.list_slice(proc.argv, 1, 5), { "git", "-c", "protocol.allow=never", "-C", repo }),
+          plabel .. ": argv starts with the protocol switch, then -C <dir>, got " .. vim.inspect(proc.argv)
+        )
+        H.ok(not vim.tbl_contains(proc.argv, "--no-optional-locks"), plabel .. ": read_only is ignored")
+        H.eq(proc.input, nil, plabel .. ": input is ignored")
+        -- the runner gets the environment and the deadline and nothing else: no output cap, no input
+        local keys = vim.tbl_keys(proc.ropts)
+        table.sort(keys)
+        H.ok(
+          vim.deep_equal(keys, { "env", "timeout_ms" }),
+          plabel .. ": runner options are env and timeout_ms only, got " .. vim.inspect(keys)
+        )
+      end
+    end
+
+    -- ── the error text of a deadline: whole seconds, fractions, milliseconds ────
+    -- Below one second whole seconds would print "0s", so those are milliseconds;
+    -- from one second on the seconds are printed as the number they are.
+    local DEADLINES = {
+      { ms = 500, text = "500 ms" },
+      { ms = 999, text = "999 ms" },
+      { ms = 1000, text = "1s" },
+      { ms = 1500, text = "1.5s" },
+      { ms = 3000, text = "3s" },
+    }
+
+    for _, verb in ipairs({ "fetch", "pull", "push" }) do
+      for _, case in ipairs(DEADLINES) do
+        local label = ("%s_async(timeout_ms = %d)"):format(verb, case.ms)
+        local _, res = drive(verb, { timeout_ms = case.ms }, timed_out)
+        H.eq(res.ok, false, label .. ": a timeout is a failure")
+        H.eq(
+          res.err,
+          ("git %s timed out after %s"):format(verb, case.text),
+          label .. ": the error names the deadline"
+        )
+      end
+
+      local _, res = drive(verb, {}, timed_out)
+      H.eq(
+        res.err,
+        ("git %s timed out after 120s"):format(verb),
+        verb .. "_async: the default deadline is the one named"
+      )
+
+      -- Progress text a killed git left on stderr does not hide the deadline ...
+      _, res = drive(verb, { timeout_ms = 1500 }, function()
+        return false, "", 124, "remote: Counting objects", 15
+      end)
+      H.eq(
+        res.err,
+        ("git %s timed out after 1.5s"):format(verb),
+        verb .. "_async: the deadline wins over the stderr of the killed git"
+      )
+
+      -- ... and a timeout is only what the runner flagged as one: a git that exits 124 by
+      -- itself (no signal), and any 124 when no deadline was set, are plain exit codes.
+      _, res = drive(verb, { timeout_ms = 1500 }, function()
+        return false, "", 124, "", 0
+      end)
+      H.eq(
+        res.err,
+        ("git %s failed (exit code 124)"):format(verb),
+        verb .. "_async: exit code 124 without a kill is not a timeout"
+      )
+      _, res = drive(verb, { timeout_ms = false }, timed_out)
+      H.eq(
+        res.err,
+        ("git %s failed (exit code 124)"):format(verb),
+        verb .. "_async: without a deadline nothing is a timeout"
+      )
+    end
+
+    -- pull_async: a pull that timed out ends the call without a second HEAD read
+    local _, pull_res, pull_trace = drive("pull", { timeout_ms = 500 }, timed_out)
+    H.eq(pull_res.err, "git pull timed out after 500 ms", "pull_async(timeout): names the deadline")
+    H.eq(steps_of(pull_trace), "head pull", "pull_async(timeout): no HEAD read after the pull")
+
+    -- update_async: the fetch and the pull each carry the caller's deadline, and the
+    -- one that hits it is named; a fetch that timed out ends the call before the pull
+    for _, case in ipairs(DEADLINES) do
+      local label = ("update_async(timeout_ms = %d)"):format(case.ms)
+      local _, res, trace = drive("update", { timeout_ms = case.ms }, timed_out)
+      H.eq(res.ok, false, label .. ": a fetch timeout is a failure")
+      H.eq(
+        res.err,
+        ("git fetch timed out after %s"):format(case.text),
+        label .. ": the fetch names the deadline"
+      )
+      H.eq(steps_of(trace), "fetch", label .. ": the pull does not start after a fetch timeout")
+
+      _, res, trace = drive("update", { timeout_ms = case.ms }, function(_, step)
+        if step == "pull" then
+          return timed_out()
+        end
+        return fine()
+      end)
+      H.eq(res.ok, false, label .. ": a pull timeout is a failure")
+      H.eq(
+        res.err,
+        ("git pull timed out after %s"):format(case.text),
+        label .. ": the pull names the deadline"
+      )
+      H.eq(steps_of(trace), "fetch head pull", label .. ": no HEAD read after the pull timed out")
     end
   end
 
