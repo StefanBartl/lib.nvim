@@ -60,8 +60,8 @@ The `*_captured` and `*_result` runners take one options table:
 | Option | Meaning |
 | --- | --- |
 | `binary` | stdout byte for byte (see above). |
-| `timeout_ms` | A timer of our own, started at spawn, sends SIGTERM after this long (SIGKILL 1500 ms later for a child that ignores it). The run then ends with **exit code `124`** and `timed_out = true`, the `timeout(1)` convention — also for a child that handles SIGTERM and exits normally. On Windows the whole process tree is killed (`taskkill /T`); elsewhere only the direct child, so a grandchild keeping the output pipes open can delay their closing — the **async** runner answers at the deadline plus a short grace anyway, the blocking one returns when `wait()` gives up, which can take up to about twice the timeout plus grace when a descendant holds the pipes (never an error from an empty result). `max_output_bytes` also stops at a UTF-8 character boundary in text mode, and stderr is collected up to 64 KiB (the rest is read and dropped, so a process printing gigabytes there cannot fill the editor's memory). |
-| `max_output_bytes` | Stop the process once its stdout exceeds this many bytes: **exit code `125`** (`run_argv.OUTPUT_LIMIT_CODE`), `stdout` holds what fitted, `stderr` says why. For commands whose output is somebody else's data. |
+| `timeout_ms` | A timer of our own, started at spawn, sends SIGTERM after this long; whatever is still running 1500 ms later gets SIGKILL. The run then ends with **exit code `124`** and `timed_out = true`, the `timeout(1)` convention — also for a child that handles SIGTERM and exits normally. The **process tree** is killed: on POSIX both signals go to the child's process group (see [Process groups](#process-groups-posix)), so grandchildren such as the `git-remote-http` behind a stalled `git fetch` die with it, the output pipes close at once and the **async** runner answers right at the deadline; on Windows `taskkill /T` kills the tree. On POSIX that needs the child itself to be still running at the deadline: the descendants of a child that has **exited already**, and daemons that left the group with `setsid()`, are not signalled (a group id that no member holds may have been reused). The async runner settles at the deadline plus the 1500 ms grace period at the latest (a descendant that still holds the pipes: always on Windows, on POSIX only the two cases above) with code `124` and signal `9`, the blocking one returns when `wait()` gives up (never an error from an empty result). `max_output_bytes` also stops at a UTF-8 character boundary in text mode, and stderr is collected up to 64 KiB (the rest is read and dropped, so a process printing gigabytes there cannot fill the editor's memory). |
+| `max_output_bytes` | Stop the process once its stdout exceeds this many bytes: **exit code `125`** (`run_argv.OUTPUT_LIMIT_CODE`), `stdout` holds what fitted, `stderr` says why. The SIGKILL goes to the whole process group on POSIX while the child is still running, like the timeout's. For commands whose output is somebody else's data. |
 | `env` | Extra environment variables, **merged over** the inherited environment — a name you do not set stays inherited. |
 | `cwd` | Working directory of the child. |
 
@@ -72,6 +72,48 @@ local ok, out = run_argv.run_blocking_captured(
   { "git", "fetch" }, nil, { timeout_ms = 60000, env = { GIT_TERMINAL_PROMPT = "0" } }
 )
 ```
+
+### Process groups (POSIX)
+
+A child that can be killed — every `run_async_captured` child, and every
+`run_blocking_captured` / `run_blocking_result` child run with `timeout_ms` or
+`max_output_bytes` — is started with `vim.system`'s `detach = true`: libuv calls
+`setsid()`, the child becomes the leader of a session and process group of its
+own (group id = its pid), and the kill (deadline, SIGKILL after the grace period,
+output cap, `stop()`) signals that **group** (`kill(-pid)`), not just the child.
+A blocking run without an armed deadline or cap (none given, or a `NaN` or negative
+value, which arms nothing) cannot be killed and is not detached.
+Windows detaches nothing and uses `taskkill /T`.
+
+What detaching changes for the child (measured by hand on Linux, Neovim 0.11; the specs only check that the child leads a process group of its own, the headless runner has no controlling terminal):
+
+- **No controlling terminal.** Opening `/dev/tty` fails at once (`ENXIO`), so a
+  program that prompts there (`ssh` for a passphrase or host key, `gpg`'s
+  pinentry, `git` asking for a username without `GIT_TERMINAL_PROMPT=0`) fails
+  fast instead of drawing the prompt into the TUI and waiting for a key nobody
+  can type. Prompts over stdin/stdout are unaffected (stdin is a pipe).
+- **No terminal-generated signals** (Ctrl-C's SIGINT, the SIGHUP of a vanishing
+  terminal): the child ends by its own end or by one of our kills. `:qa!` leaves a
+  running child alive either way (Neovim never killed `vim.system` children), and
+  does **not** wait for it: exiting Neovim took the same time with a running
+  detached child as with an attached one. Closing the terminal no longer takes a
+  still running child with it.
+- **Group signals only for groups this module created**, and only while the group
+  is provably ours: while the child is alive, or — for the SIGKILL that follows the
+  deadline's SIGTERM after the grace period — when that SIGTERM went to the group
+  while the child was alive (a child that exits on the SIGTERM while a descendant
+  ignores it and holds the pipes). That follow-up lasts for the grace period (1.5 s)
+  of the one run and ends with the SIGKILL; `stop()` and the output cap do not open
+  it. For a child that has exited otherwise — on its own before the deadline, the
+  cap or `stop()` came, or on an early `stop()` before a later deadline — the group
+  is left alone: nobody can tell whether a member is left, and with none the group
+  id may have been reused by a stranger. Its descendants then survive the timeout
+  (the async runner still answers at the deadline plus the grace period, with code
+  `124` and signal `9`), exactly as they did before groups were used. A pid of 0 or
+  1 is never signalled as a group.
+- The group kill covers descendants that stay in the group. A daemon that calls
+  `setsid()` itself (or `setpgid()`) leaves it and is not reached; neither was it by
+  the direct-child kill.
 
 ### `run_blocking_result(cmd, input?, opts?) -> result`
 
@@ -125,6 +167,7 @@ local handle = run_argv.run_async_captured({ "git", "fetch" }, function(ok, outp
   end
 end)
 
--- handle.stop() sends SIGTERM; no-op on the legacy (Neovim < 0.10) fallback,
--- where there is no job to kill.
+-- handle.stop() sends SIGTERM to the child's whole process group (on Windows it
+-- kills the process tree); no-op on the legacy (Neovim < 0.10) fallback, where
+-- there is no job to kill.
 ```

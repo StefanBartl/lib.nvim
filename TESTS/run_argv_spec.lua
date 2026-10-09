@@ -171,6 +171,7 @@ return function(H)
     )
     eq(trapped.code, 124, "run_blocking_result: a child that traps SIGTERM: the timeout code")
     eq(trapped.timed_out, true, "run_blocking_result: ... is still timed out")
+    eq(trapped.signal, 15, "run_blocking_result: ... and reports the SIGTERM it was sent")
     local early = run_argv.run_blocking_result(
       { "sh", "-c", "exit 124" },
       nil,
@@ -451,6 +452,477 @@ return function(H)
     -- `ok`/`code` keep reading the exit status alone, as they always did.
     eq(k_ok, true, "run_async_captured: ok is still the bare exit status (compatible)")
     eq(k_code, 0, "run_async_captured: ... and so is code")
+  end
+
+  -- ------------------------------------------- the whole process group is killed
+
+  -- A timeout, `stop()` or an output cap must not leave the GRANDCHILDREN of the
+  -- child alive (POSIX: the child runs in a process group of its own and the
+  -- signal goes to the group; Windows has `taskkill /T`, a different code path
+  -- that needs a Windows host to be exercised, so these specs are POSIX only).
+  -- The grandchildren are `sleep 60` processes started by a shell: they hold the
+  -- output pipes of the shell, as the `git-remote-http` behind a stalled
+  -- `git fetch` does.
+  if vim.fn.has("win32") == 0 and vim.fn.executable("sh") == 1 then
+    local TIMEOUT = 1000 -- ms; the shell has written its pid file long before
+
+    --- The pid a script wrote to `file`, or nil while it has not (completely).
+    ---@param file string
+    ---@return integer|nil
+    local function read_pid(file)
+      local f = io.open(file, "r")
+      if not f then
+        return nil
+      end
+      local text = f:read("*a")
+      f:close()
+      return tonumber(text:match("^(%d+)\n"))
+    end
+
+    --- Whether `pid` is a live process. A zombie (killed, but not yet reaped by
+    --- whatever adopted it; PID 1 of a container often never does) is dead.
+    ---@param pid integer
+    ---@return boolean
+    local function is_alive(pid)
+      if vim.uv.kill(pid, 0) ~= 0 then
+        return false -- ESRCH
+      end
+      local f = io.open(("/proc/%d/stat"):format(pid), "r")
+      if f then
+        local stat = f:read("*a")
+        f:close()
+        if stat:match("%) (%a)") == "Z" then
+          return false
+        end
+      end
+      return true
+    end
+
+    --- `sh -c` argv of a script that starts `grandchild` in the background, writes
+    --- its pid to `file`, then runs `tail`.
+    ---@param file string
+    ---@param grandchild string  The background command, e.g. `sleep 60`
+    ---@param tail string  What the shell does after the pid file exists
+    ---@param head? string  Run before the grandchild is started (`trap ...`)
+    ---@return string[]
+    local function sh_script(file, grandchild, tail, head)
+      local text = ("%s%s & echo $! > %s; %s"):format(
+        head and (head .. "; ") or "",
+        grandchild,
+        vim.fn.shellescape(file),
+        tail
+      )
+      return { "sh", "-c", text }
+    end
+
+    --- Poll until the pid file exists; the grandchild pid.
+    ---@param file string
+    ---@return integer
+    local function grandchild_pid(file)
+      vim.wait(10000, function()
+        return read_pid(file) ~= nil
+      end, 20)
+      local pid = read_pid(file)
+      ok(pid ~= nil, "the script started its background grandchild (pid file: " .. file .. ")")
+      return pid
+    end
+
+    --- Assert that the grandchild is gone shortly after the run was reported; kill
+    --- it in any case, so that a failing spec leaves no `sleep 60` behind.
+    ---@param pid integer
+    ---@param msg string
+    local function expect_dead(pid, msg)
+      local dead = vim.wait(8000, function()
+        return not is_alive(pid)
+      end, 20)
+      if not dead then
+        vim.uv.kill(pid, "sigkill")
+      end
+      ok(dead, msg .. " (pid " .. pid .. " is still alive)")
+    end
+
+    --- Run `argv` through `run_async_captured` and wait for `on_done`.
+    ---@param argv string[]
+    ---@param opts? table
+    ---@param during? fun(handle: table)  Called right after the start
+    ---@return table r  `done, ok, code, signal, stderr, elapsed` (ms from start to on_done)
+    local function run_async(argv, opts, during)
+      local r = { done = false }
+      local t0 = vim.uv.hrtime()
+      local handle = run_argv.run_async_captured(argv, function(ok_, out_, code_, err_, sig_)
+        r.done, r.ok, r.out, r.code, r.stderr, r.signal = true, ok_, out_, code_, err_, sig_
+        r.elapsed = (vim.uv.hrtime() - t0) / 1e6
+      end, nil, opts)
+      if during then
+        during(handle)
+      end
+      vim.wait(20000, function()
+        return r.done
+      end, 20)
+      ok(r.done, "run_async_captured: on_done fires")
+      return r
+    end
+
+    --- A fresh path for a script to write a pid (or a marker) to.
+    ---@return string
+    local function tmp_pidfile()
+      return H.tmpfile(".pid")
+    end
+
+    -- (a) timeout: the shell dies of the SIGTERM, the grandchild must too.
+    do
+      local file = tmp_pidfile()
+      local r = run_async(sh_script(file, "sleep 60", "wait"), { timeout_ms = TIMEOUT })
+      eq(r.code, 124, "async timeout: code 124")
+      eq(r.signal, 15, "async timeout: ... the shell died of the SIGTERM")
+      -- Not delayed by the grace period (1500 ms): the pipes close with the group.
+      ok(
+        r.elapsed < TIMEOUT + 1000,
+        ("async timeout: answered at the deadline, not after the grace period (%d ms)"):format(
+          r.elapsed
+        )
+      )
+      expect_dead(grandchild_pid(file), "async timeout: the grandchild is killed")
+      vim.fn.delete(file)
+
+      file = tmp_pidfile()
+      local res = run_argv.run_blocking_result(
+        sh_script(file, "sleep 60", "wait"),
+        nil,
+        { timeout_ms = TIMEOUT }
+      )
+      eq(res.timed_out, true, "blocking_result timeout: timed out")
+      eq(res.code, 124, "blocking_result timeout: code 124")
+      expect_dead(grandchild_pid(file), "blocking_result timeout: the grandchild is killed")
+      vim.fn.delete(file)
+
+      file = tmp_pidfile()
+      local c_ok = run_argv.run_blocking_captured(
+        sh_script(file, "sleep 60", "wait"),
+        nil,
+        { timeout_ms = TIMEOUT }
+      )
+      eq(c_ok, false, "blocking_captured timeout: a failure")
+      expect_dead(grandchild_pid(file), "blocking_captured timeout: the grandchild is killed")
+      vim.fn.delete(file)
+    end
+
+    -- (b) stop() reaches the grandchild too.
+    do
+      local file = tmp_pidfile()
+      local r = run_async(sh_script(file, "sleep 60", "wait"), nil, function(handle)
+        grandchild_pid(file) -- the group exists
+        handle.stop()
+      end)
+      eq(r.signal, 15, "async stop(): the shell died of the SIGTERM")
+      expect_dead(grandchild_pid(file), "async stop(): the grandchild is killed")
+      vim.fn.delete(file)
+    end
+
+    -- (c) the shell and the grandchild ignore SIGTERM: SIGKILL for the group after
+    -- the grace period (the trap is inherited by the background command).
+    do
+      local file = tmp_pidfile()
+      local term_argv = sh_script(file, "sleep 60", "wait", "trap '' TERM")
+      local r = run_async(term_argv, { timeout_ms = TIMEOUT })
+      eq(r.code, 124, "async, SIGTERM ignored: code 124")
+      eq(r.signal, 9, "async, SIGTERM ignored: killed with SIGKILL")
+      expect_dead(grandchild_pid(file), "async, SIGTERM ignored: the grandchild is killed")
+      vim.fn.delete(file)
+
+      file = tmp_pidfile()
+      local res = run_argv.run_blocking_result(
+        sh_script(file, "sleep 60", "wait", "trap '' TERM"),
+        nil,
+        { timeout_ms = TIMEOUT }
+      )
+      eq(res.code, 124, "blocking_result, SIGTERM ignored: code 124")
+      eq(res.signal, 9, "blocking_result, SIGTERM ignored: killed with SIGKILL")
+      expect_dead(grandchild_pid(file), "blocking_result, SIGTERM ignored: grandchild killed")
+      vim.fn.delete(file)
+
+      file = tmp_pidfile()
+      local c_ok = run_argv.run_blocking_captured(
+        sh_script(file, "sleep 60", "wait", "trap '' TERM"),
+        nil,
+        { timeout_ms = TIMEOUT }
+      )
+      eq(c_ok, false, "blocking_captured, SIGTERM ignored: a failure")
+      expect_dead(grandchild_pid(file), "blocking_captured, SIGTERM ignored: grandchild killed")
+      vim.fn.delete(file)
+    end
+
+    --- argv of a leader that exits on the SIGTERM (its trap leaves `marker` behind)
+    --- while its grandchild ignores the SIGTERM and keeps running and holding the pipes.
+    ---@param file string  The pid file of the grandchild
+    ---@param marker string  Written by the leader's TERM trap
+    ---@return string[]
+    local function stubborn_grandchild(file, marker)
+      return sh_script(
+        file,
+        "(trap '' TERM; exec sleep 60)",
+        "wait",
+        ('trap "echo t > %s; exit 0" TERM'):format(vim.fn.shellescape(marker))
+      )
+    end
+
+    -- (c2) the shell exits on the SIGTERM (and is reaped) while its grandchild
+    -- ignores it and keeps the pipes: the SIGKILL of the grace period must still
+    -- reach the group of the dead leader. The marker of the shell's TERM trap proves
+    -- the deadline sends SIGTERM first (SIGKILL cannot be trapped).
+    do
+      local file, marker = tmp_pidfile(), tmp_pidfile()
+      local r = run_async(stubborn_grandchild(file, marker), { timeout_ms = TIMEOUT })
+      eq(r.code, 124, "async, leader gone: code 124")
+      ok(vim.fn.filereadable(marker) == 1, "async, leader gone: the deadline sent SIGTERM first")
+      expect_dead(grandchild_pid(file), "async, leader gone: the grandchild is killed")
+      vim.fn.delete(file)
+      vim.fn.delete(marker)
+
+      file, marker = tmp_pidfile(), tmp_pidfile()
+      local res = run_argv.run_blocking_result(stubborn_grandchild(file, marker), nil, {
+        timeout_ms = TIMEOUT,
+      })
+      eq(res.code, 124, "blocking_result, leader gone: code 124")
+      ok(
+        vim.fn.filereadable(marker) == 1,
+        "blocking_result, leader gone: the deadline sent SIGTERM first"
+      )
+      expect_dead(grandchild_pid(file), "blocking_result, leader gone: the grandchild is killed")
+      vim.fn.delete(file)
+      vim.fn.delete(marker)
+    end
+
+    -- (d) output cap: the SIGKILL goes to the group. A blocking call that missed the
+    -- group would sit in `wait()` until the grandchild ended by itself (60 s) and only
+    -- then find it dead, so for these the time the call took is what is asserted.
+    do
+      local flood = "while :; do echo xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; done"
+      local file = tmp_pidfile()
+      local r = run_async(sh_script(file, "sleep 60", flood), { max_output_bytes = 2000 })
+      eq(r.code, run_argv.OUTPUT_LIMIT_CODE, "async output cap: the output-limit code")
+      expect_dead(grandchild_pid(file), "async output cap: the grandchild is killed")
+      vim.fn.delete(file)
+
+      file = tmp_pidfile()
+      local t0 = vim.uv.hrtime()
+      local res = run_argv.run_blocking_result(
+        sh_script(file, "sleep 60", flood),
+        nil,
+        { max_output_bytes = 2000 }
+      )
+      local took = (vim.uv.hrtime() - t0) / 1e6
+      eq(res.code, run_argv.OUTPUT_LIMIT_CODE, "blocking_result output cap: the output-limit code")
+      ok(took < 20000, ("blocking_result output cap: returned at once (%d ms)"):format(took))
+      expect_dead(grandchild_pid(file), "blocking_result output cap: the grandchild is killed")
+      vim.fn.delete(file)
+
+      file = tmp_pidfile()
+      t0 = vim.uv.hrtime()
+      local c_ok = run_argv.run_blocking_captured(
+        sh_script(file, "sleep 60", flood),
+        nil,
+        { max_output_bytes = 2000 }
+      )
+      took = (vim.uv.hrtime() - t0) / 1e6
+      eq(c_ok, false, "blocking_captured output cap: a failure")
+      ok(took < 20000, ("blocking_captured output cap: returned at once (%d ms)"):format(took))
+      expect_dead(grandchild_pid(file), "blocking_captured output cap: the grandchild is killed")
+      vim.fn.delete(file)
+    end
+
+    --- Assert that `pid` is still running (no signal reached it) and kill it. A signal
+    --- that did go out needs a moment to take effect, so the process is watched for
+    --- 500 ms instead of looked at once.
+    ---@param pid integer
+    ---@param msg string
+    local function expect_left_alone(pid, msg)
+      local died = vim.wait(500, function()
+        return not is_alive(pid)
+      end, 20)
+      vim.uv.kill(pid, "sigkill")
+      ok(not died, msg .. " (pid " .. pid .. " was killed)")
+      vim.wait(2000, function()
+        return not is_alive(pid)
+      end, 20)
+    end
+
+    -- (e) the pid-reuse guard: once the leader has been reaped, its group id may belong
+    -- to a stranger, so the group is left alone -- except for the SIGKILL that follows
+    -- the deadline's own SIGTERM while the leader was alive (c2). The descendants of
+    -- such a leader survive on purpose; the run is still answered, by the async
+    -- runner at the deadline plus the grace period (code 124, signal 9).
+    do
+      -- (e1) the leader exits on its own before the deadline
+      local file = tmp_pidfile()
+      local r = run_async(sh_script(file, "sleep 60", "exit 0"), { timeout_ms = 500 })
+      eq(r.code, 124, "async, leader exited on its own: code 124")
+      eq(r.signal, 9, "async, leader exited on its own: signal 9")
+      ok(
+        (r.stderr or ""):find("did not exit", 1, true) ~= nil,
+        "async, leader exited on its own: answered by the grace timer"
+      )
+      expect_left_alone(
+        grandchild_pid(file),
+        "async, leader exited on its own: the group of a reaped leader is left alone"
+      )
+      vim.fn.delete(file)
+
+      -- (e2) the leader exits on a stop() long before the deadline: stop() owes no
+      -- follow-up, so the deadline finds a reaped leader and signals nothing
+      file = tmp_pidfile()
+      local marker = tmp_pidfile()
+      r = run_async(stubborn_grandchild(file, marker), { timeout_ms = TIMEOUT }, function(handle)
+        grandchild_pid(file)
+        handle.stop()
+      end)
+      eq(r.code, 124, "async, stop() then deadline: code 124")
+      ok(vim.fn.filereadable(marker) == 1, "async, stop() then deadline: stop() sent SIGTERM")
+      expect_left_alone(
+        grandchild_pid(file),
+        "async, stop() then deadline: the group of a reaped leader is left alone"
+      )
+      vim.fn.delete(file)
+      vim.fn.delete(marker)
+    end
+
+    -- (f) a descendant that leaves the group (`setsid`) is out of reach of the group
+    -- kill. It keeps the pipes, so the run is answered by the grace timer (async) or when
+    -- `wait()` gives up (blocking), and the escaped process is not signalled.
+    if vim.fn.executable("setsid") == 1 then
+      local escape = [[setsid sh -c 'echo $$ > "$PIDFILE"; exec sleep 60' & wait]]
+      local file = tmp_pidfile()
+      local r = run_async({ "sh", "-c", escape }, { timeout_ms = 300, env = { PIDFILE = file } })
+      eq(r.code, 124, "async, descendant left the group: code 124")
+      eq(r.signal, 9, "async, descendant left the group: signal 9")
+      ok(
+        (r.stderr or ""):find("did not exit", 1, true) ~= nil,
+        "async, descendant left the group: answered by the grace timer"
+      )
+      expect_left_alone(
+        grandchild_pid(file),
+        "async, descendant left the group: the escaped process is not reached"
+      )
+      vim.fn.delete(file)
+
+      file = tmp_pidfile()
+      local res = run_argv.run_blocking_result({ "sh", "-c", escape }, nil, {
+        timeout_ms = 300,
+        env = { PIDFILE = file },
+      })
+      eq(res.timed_out, true, "blocking_result, descendant left the group: timed out")
+      eq(res.code, 124, "blocking_result, descendant left the group: code 124")
+      eq(res.signal, 9, "blocking_result, descendant left the group: signal 9")
+      ok(
+        (res.stderr or ""):find("still holds", 1, true) ~= nil,
+        "blocking_result, descendant left the group: wait() gave up"
+      )
+      expect_left_alone(
+        grandchild_pid(file),
+        "blocking_result, descendant left the group: the escaped process is not reached"
+      )
+      vim.fn.delete(file)
+    else
+      io.stdout:write("run_argv_spec: SKIPPED — the setsid specs need a setsid(1) executable\n")
+    end
+
+    -- (g) a job that reports pid 0 or 1 is never signalled as a group: kill(0) is the
+    -- process group of the editor itself, kill(-1) every process it may signal. Stand-ins
+    -- for vim.system and uv.kill record what would be sent (uv.kill is replaced as well,
+    -- so that a broken guard cannot harm anybody).
+    do
+      local real_system, real_kill = vim.system, vim.uv.kill
+      for _, fake_pid in ipairs({ 0, 1 }) do
+        ---@type string[]
+        local group_signals, direct_signals = {}, {}
+        vim.uv.kill = function(pid, signal)
+          group_signals[#group_signals + 1] = ("%s:%s"):format(pid, signal)
+          return 0
+        end
+        vim.system = function()
+          return {
+            pid = fake_pid,
+            is_closing = function()
+              return false
+            end,
+            kill = function(_, signal)
+              direct_signals[#direct_signals + 1] = signal
+            end,
+          }
+        end
+        local stopped, err = pcall(function()
+          run_argv.run_async_captured({ "never-started" }, function() end).stop()
+        end)
+        vim.system, vim.uv.kill = real_system, real_kill
+        ok(stopped, ("pid %d guard: stop() does not raise (%s)"):format(fake_pid, tostring(err)))
+        eq(
+          table.concat(group_signals, ","),
+          "",
+          ("pid %d guard: no group signal is sent"):format(fake_pid)
+        )
+        eq(
+          table.concat(direct_signals, ","),
+          "sigterm",
+          ("pid %d guard: the job itself is signalled"):format(fake_pid)
+        )
+      end
+    end
+
+    -- A run that nothing can kill keeps the terminal and its signals: no new
+    -- process group for a plain blocking run, one for every run that can be killed.
+    -- (needs a `ps` that can print the process group id)
+    local function ps_has_pgid()
+      if vim.fn.executable("ps") ~= 1 then
+        return false
+      end
+      local probe_res = vim
+        .system({ "ps", "-o", "pgid=", "-p", tostring(vim.uv.os_getpid()) }, { text = true })
+        :wait()
+      return probe_res.code == 0 and tonumber(vim.trim(probe_res.stdout or "")) ~= nil
+    end
+    if ps_has_pgid() then
+      local pgid_argv = { "sh", "-c", "echo $$; ps -o pgid= -p $$" }
+
+      --- The pid and the process group id a `pgid_argv` run printed.
+      ---@param text string
+      ---@return integer|nil pid
+      ---@return integer|nil pgid
+      local function pid_and_pgid(text)
+        local pid_, pgid_ = text:match("^(%d+)%s+(%d+)")
+        return tonumber(pid_), tonumber(pgid_)
+      end
+
+      local plain_pid, plain_pgid = pid_and_pgid(run_argv.run_blocking_result(pgid_argv).stdout)
+      ok(plain_pid ~= nil, "pgid probe: the shell reported its pid")
+      ok(plain_pgid ~= plain_pid, "a plain blocking run shares the process group of the editor")
+
+      local timed = run_argv.run_blocking_result(pgid_argv, nil, { timeout_ms = 20000 })
+      local t_pid, t_pgid = pid_and_pgid(timed.stdout)
+      ok(t_pid ~= nil and t_pgid == t_pid, "a blocking run with a deadline leads its own group")
+
+      -- a deadline or cap that is not armed (NaN, negative) kills nothing, so it detaches nothing
+      for _, bad in ipairs({ -1, 0 / 0 }) do
+        local unarmed = run_argv.run_blocking_result(
+          pgid_argv,
+          nil,
+          { timeout_ms = bad, max_output_bytes = bad }
+        )
+        local u_pid, u_pgid = pid_and_pgid(unarmed.stdout)
+        ok(
+          u_pid ~= nil and u_pgid ~= u_pid,
+          ("an unusable limit (%s) detaches nothing"):format(tostring(bad))
+        )
+      end
+
+      local a = run_async(pgid_argv)
+      local a_pid, a_pgid = pid_and_pgid(a.out)
+      ok(a_pid ~= nil and a_pgid == a_pid, "an async run leads its own process group")
+    end
+  else
+    io.stdout:write(
+      "run_argv_spec: SKIPPED — the process-group specs need a POSIX host with sh "
+        .. "(Windows kills the tree with taskkill /T)\n"
+    )
   end
 
   vim.fn.delete(probe)
