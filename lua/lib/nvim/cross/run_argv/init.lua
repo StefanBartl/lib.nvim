@@ -778,20 +778,24 @@ function M.run_async_captured(cmd, on_done, input, opts)
   -- (POSIX, see `signal_group`), or, on Windows, a descendant that keeps a pipe
   -- open (the real git behind the `cmd\git.exe` wrapper). Settle at the deadline
   -- plus the grace period instead of waiting for it.
-  deadline = start_deadline(function()
-    return job
-  end, opts, function()
-    if finished then
-      return
+  deadline = start_deadline(
+    function()
+      return job
+    end,
+    opts,
+    function()
+      if finished then
+        return
+      end
+      settle(
+        false,
+        sink and sink_stdout(sink, opts) or "",
+        124,
+        "timed out; the process did not exit",
+        9
+      )
     end
-    settle(
-      false,
-      sink and sink_stdout(sink, opts) or "",
-      124,
-      "timed out; the process did not exit",
-      9
-    )
-  end)
+  )
 
   return {
     stop = function()
