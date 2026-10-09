@@ -45,6 +45,16 @@ return function(H)
     return port, server
   end
 
+  --- Waits until the capturing server has read `marker` (not a fixed time: the request can
+  --- arrive in several segments, and a slow machine splits it differently).
+  ---@param captured { data: string|nil }
+  ---@param marker string plain text
+  local function wait_captured(captured, marker)
+    vim.wait(5000, function()
+      return captured.data ~= nil and captured.data:find(marker, 1, true) ~= nil
+    end, 10)
+  end
+
   local function stop_server(server)
     if not server:is_closing() then
       server:close()
@@ -200,9 +210,7 @@ return function(H)
     local success = curl.fetch_raw_blocking(("http://127.0.0.1:%d/"):format(port), {
       auth = { user = "alice", pass = "hunter2" },
     })
-    vim.wait(200, function()
-      return false
-    end, 10)
+    wait_captured(captured, "Authorization: Basic")
 
     ok(success, "opts.auth: request succeeds")
     ok(captured.data ~= nil, "opts.auth: server received the request")
@@ -229,9 +237,7 @@ return function(H)
       bearer_token = secret,
       headers = { ["X-Plain"] = "visible", Cookie = "session=abc" },
     })
-    vim.wait(200, function()
-      return false
-    end, 10)
+    wait_captured(captured, "X-Plain: visible")
 
     ok(success, "bearer_token: request succeeds")
     ok(captured.data ~= nil, "bearer_token: server received the request")
@@ -263,9 +269,7 @@ return function(H)
       method = "POST",
       form = { name = "report" },
     })
-    vim.wait(200, function()
-      return false
-    end, 10)
+    wait_captured(captured, "report")
 
     ok(success, "opts.form: request succeeds")
     ok(
@@ -289,9 +293,7 @@ return function(H)
     curl.fetch_raw_blocking(("http://127.0.0.1:%d/"):format(port), {
       http_version = "1.0",
     })
-    vim.wait(200, function()
-      return false
-    end, 10)
+    wait_captured(captured, "GET / HTTP/1.0")
 
     ok(
       captured.data:match("^GET / HTTP/1%.0") ~= nil,
@@ -312,9 +314,7 @@ return function(H)
     curl.fetch_raw_blocking(("http://127.0.0.1:%d/"):format(port), {
       raw_args = { "-A", "lib.nvim-test-agent" },
     })
-    vim.wait(200, function()
-      return false
-    end, 10)
+    wait_captured(captured, "lib.nvim-test-agent")
 
     ok(
       captured.data:match("User%-Agent: lib%.nvim%-test%-agent") ~= nil,
@@ -343,6 +343,9 @@ return function(H)
 
     local success = curl.fetch_raw_blocking(("http://127.0.0.1:%d/"):format(port), {
       proxy = ("http://127.0.0.1:%d"):format(closed_port),
+      -- a NO_PROXY naming 127.0.0.1 (a corporate shell, a sandbox) would make curl skip the
+      -- proxy it was just given
+      raw_args = { "--noproxy", "" },
       timeout_ms = 2000,
     })
     ok(

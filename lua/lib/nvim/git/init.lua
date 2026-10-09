@@ -1487,6 +1487,64 @@ local TAG_FORMAT = "--format=%(refname:strip=2)%00%(objectname)%00%(*objectname)
   .. "%(objecttype)%00%(*objecttype)%00%(creatordate:unix)%00%(contents:subject)"
 local TAG_SORTS = { newest = "-creatordate", oldest = "creatordate", version = "-v:refname" }
 
+--- Tags whose `%(*objecttype)` named another tag: an older git (2.43) peels one level only, so
+--- what such a tag finally points at needs one more question (`peel_nested`). Keyed weakly by
+--- the tag record, which is a plain data table the caller owns.
+---@type table<table, true>
+local NESTED_TAGS = setmetatable({}, { __mode = "k" })
+
+--- `cat-file --batch-check` answers "<type> <sha>" per fully peeled name read from stdin.
+local PEEL_ARGS = { "cat-file", "--batch-check=%(objecttype) %(objectname)" }
+
+---@internal
+---@param tags Lib.Git.Tag[]
+---@return Lib.Git.Tag[] nested
+local function nested_tags(tags)
+  local list = {}
+  for _, t in ipairs(tags) do
+    if NESTED_TAGS[t] then
+      list[#list + 1] = t
+    end
+  end
+  return list
+end
+
+---@internal
+---@param list Lib.Git.Tag[]
+---@param opts Lib.Git.TagsOpts
+---@return Lib.Git.TagsOpts
+local function peel_opts(list, opts)
+  local names = {}
+  for i, t in ipairs(list) do
+    names[i] = "refs/tags/" .. t.name .. "^{}"
+  end
+  return vim.tbl_extend("force", opts, { input = table.concat(names, "\n") .. "\n" })
+end
+
+---@internal
+--- Put the answer of `PEEL_ARGS` into the nested tags. A failed question keeps the one-level
+--- answer `for-each-ref` gave.
+---@param list Lib.Git.Tag[]
+---@param res Lib.Git.RunResult
+local function apply_peel(list, res)
+  if not res.ok or type(res.stdout) ~= "string" then
+    return
+  end
+  local i = 0
+  for line in res.stdout:gmatch("[^\n]+") do
+    i = i + 1
+    local t = list[i]
+    if not t then
+      break
+    end
+    local kind, sha = line:match("^(%S+) (%x+)$")
+    if kind then
+      t.commit = kind == "commit"
+      t.sha = sha
+    end
+  end
+end
+
 ---@internal
 ---@param opts Lib.Git.TagsOpts|nil
 ---@return Lib.Git.TagsOpts
@@ -1545,7 +1603,7 @@ local function tags_job(opts)
         -- (`%(objecttype)`), an annotated one names it as `%(*objecttype)`.
         local final_type = (f[4] == "tag") and (f[5] or "") or (f[4] or "")
         local time = tonumber(f[6])
-        tags[#tags + 1] = {
+        local record = {
           name = f[1] or "",
           sha = peeled ~= "" and peeled or (f[2] or ""),
           object = f[2] or "",
@@ -1554,6 +1612,10 @@ local function tags_job(opts)
           time = time and time == time and time < 1e15 and time or nil,
           subject = f[7] or "",
         }
+        if final_type == "tag" then
+          NESTED_TAGS[record] = true
+        end
+        tags[#tags + 1] = record
       end
       return tags, nil
     end
@@ -1573,7 +1635,14 @@ end
 function M.tags(opts, git_cmd)
   opts = tags_opts(opts)
   local args, interpret = tags_job(opts)
-  return query(args, interpret, opts, git_cmd)
+  local tags, err = query(args, interpret, opts, git_cmd)
+  if tags then
+    local list = nested_tags(tags)
+    if #list > 0 then
+      apply_peel(list, M.run(PEEL_ARGS, read_opts(peel_opts(list, opts)), git_cmd))
+    end
+  end
+  return tags, err
 end
 
 --- Async counterpart to `tags`.
@@ -1584,7 +1653,27 @@ end
 function M.tags_async(opts, on_done, git_cmd)
   opts = tags_opts(opts)
   local args, interpret = tags_job(opts)
-  return query_async(args, interpret, opts, on_done, git_cmd)
+  local stopped, second = false, nil
+  local first = query_async(args, interpret, opts, function(tags, err)
+    local list = tags and nested_tags(tags) or {}
+    if #list == 0 or stopped then
+      on_done(tags, err)
+      return
+    end
+    second = M.run_async(PEEL_ARGS, read_opts(peel_opts(list, opts)), function(res)
+      apply_peel(list, res)
+      on_done(tags, err)
+    end, git_cmd)
+  end, git_cmd)
+  return {
+    stop = function()
+      stopped = true
+      first.stop()
+      if second then
+        second.stop()
+      end
+    end,
+  }
 end
 
 --- One blamed line, as `blame_porcelain` returns it.
