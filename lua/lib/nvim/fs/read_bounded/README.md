@@ -1,9 +1,14 @@
 # `lib.nvim.fs.read_bounded`
 
-`lib.nvim.fs.read` with a guard: the file is read only when it is a **regular
-file** of at most `max_bytes` bytes, judged on the stat before it is opened.
-Meant for files inside a repository somebody else controls — a FIFO would block
-the read forever, a device never ends, a huge file exhausts memory.
+Read a file only when it is a **regular file** of at most `max_bytes` bytes.
+The type and size are judged on the stat before the file is opened and again on
+the open descriptor, and the read itself never takes more than `max_bytes + 1`
+bytes (in blocks, so only what is there is allocated): a file that grows or is
+swapped in between cannot exhaust memory. Meant for files inside a repository
+somebody else controls -- a FIFO would block the read forever (the open is
+non-blocking), a device never ends, a huge file exhausts memory. The bytes come
+back exactly as stored (no `
+` rewriting).
 
 ## Usage
 
@@ -23,8 +28,11 @@ end
 | 1 | `string?` | File content on success, `nil` on failure            |
 | 2 | `string?` | `nil` on success, error message on failure           |
 
-Errors: `not found: …`, `not a regular file: …`, `too large (N > M bytes): …`,
-or whatever `lib.nvim.fs.read` reports (`open failed: …`).
+Errors: `invalid arguments` (not a string path, or a limit that is not a finite
+number >= 0), `not found: ...`, `not a regular file: ...`,
+`not a regular file within the limit: ...` (it changed after the stat),
+`too large (N > M bytes): ...` / `too large (> M bytes): ...`, `open failed: ...`,
+`read failed: ...`. It never raises.
 A symlink to a regular file is followed by default (the stat is of the target);
 pass `{ follow_symlinks = false }` as a third argument to refuse it
-(`not a regular file`).
+(`not a regular file`; on POSIX the open itself refuses a link too).

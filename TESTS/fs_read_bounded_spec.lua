@@ -31,6 +31,16 @@ return function(H)
   content, err = read_bounded(file, -1)
   eq(content, nil, "a negative limit is refused")
   ok(err and err:find("invalid", 1, true), "a negative limit: says why")
+  -- limits that are not usable are refused, never raised, and leak no descriptor
+  for label, bad in pairs({ huge = math.huge, nan = 0 / 0, negative = -5 }) do
+    local ok_call, bad_content, bad_err = pcall(read_bounded, file, bad)
+    ok(ok_call, "limit " .. label .. ": does not raise")
+    eq(bad_content, nil, "limit " .. label .. ": nothing read")
+    ok(bad_err and bad_err:find("invalid", 1, true), "limit " .. label .. ": says why")
+  end
+  -- a huge but finite limit is fine: only what is there is allocated
+  eq(read_bounded(file, 2 ^ 40), "a\r\nb\0c", "a 2^40 limit reads a small file")
+  eq((read_bounded(file, 5.9)), nil, "a fractional limit is floored (5 < 6 bytes)")
   ---@diagnostic disable-next-line: param-type-mismatch
   content = read_bounded(nil, 10)
   eq(content, nil, "a non-string path is refused")

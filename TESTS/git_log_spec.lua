@@ -598,7 +598,10 @@ return function(H)
     local ps = F.init("-pathspec-env")
     F.write(ps .. "/Ab.txt", "1\n")
     F.commit(ps, "touches Ab", { when = 1700000100 })
-    F.write(ps .. "/aB.txt", "1\n")
+    -- (through the index: on a case-insensitive file system a second file `aB.txt`
+    -- would just overwrite `Ab.txt`, and the ICASE half of this would prove nothing)
+    local blob = F.git(ps, { "hash-object", "-w", ps .. "/Ab.txt" })
+    F.git(ps, { "update-index", "--add", "--cacheinfo", "100644," .. blob .. ",aB.txt" })
     F.commit(ps, "touches aB", { when = 1700000200 })
     local saved_lit, saved_icase = vim.env.GIT_LITERAL_PATHSPECS, vim.env.GIT_ICASE_PATHSPECS
     vim.env.GIT_LITERAL_PATHSPECS, vim.env.GIT_ICASE_PATHSPECS = "1", "1"

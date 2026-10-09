@@ -124,10 +124,11 @@ end
 ---marks (U+200B-200F, U+202A-202E, U+2060-206F), the line/paragraph separators
 ---U+2028/2029, the Arabic letter mark U+061C, the byte-order mark U+FEFF, the
 ---interlinear annotation marks U+FFF9-FFFB, the Unicode tag block
----(U+E0000-E0FFF, which can spell a sentence nobody sees) and the blank
----fillers (Hangul fillers, Mongolian vowel separator, braille blank, soft
----hyphen, combining grapheme joiner, musical formatting). Variation selectors
----(emoji presentation) stay.
+---(U+E0000-E3FFF, which can spell a sentence nobody sees) and the blank
+---fillers (Hangul fillers, Mongolian selectors and vowel separator
+---U+180B-180F, Khmer inherent vowels U+17B4/17B5, braille blank, soft hyphen,
+---combining grapheme joiner, musical formatting, shorthand format controls
+---U+1BCA0-1BCA3). Variation selectors (emoji presentation) stay.
 ---
 ---Only the first four bytes per allowed character are looked at, so a
 ---multi-megabyte line costs the same as a short one.
@@ -153,11 +154,11 @@ function M.clean(s, max_chars)
       :gsub("\216\156", "?") -- U+061C
       :gsub("\239\187\191", "?") -- U+FEFF
       :gsub("\239\191[\185-\187]", "?") -- U+FFF9-FFFB
-      :gsub("\243[\160-\163][\128-\191][\128-\191]", "?") -- U+E0000-E0FFF
+      :gsub("\243[\160-\163][\128-\191][\128-\191]", "?") -- U+E0000-E3FFF
       :gsub("\227\133\164", "?") -- U+3164 Hangul filler
       :gsub("\239\190\160", "?") -- U+FFA0 halfwidth Hangul filler
       :gsub("\225\133[\159\160]", "?") -- U+115F, U+1160
-      :gsub("\225\160[\139-\142]", "?") -- U+180B-180E Mongolian selectors, vowel separator
+      :gsub("\225\160[\139-\143]", "?") -- U+180B-180F Mongolian selectors, vowel separator
       :gsub("\225\158[\180\181]", "?") -- U+17B4, U+17B5 Khmer inherent vowels
       :gsub("\240\155\178[\160-\163]", "?") -- U+1BCA0-1BCA3 shorthand format controls
       :gsub("\226\160\128", "?") -- U+2800 braille blank
