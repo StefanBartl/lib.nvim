@@ -15,6 +15,14 @@ Behavior:
   left untouched (`%VAR%` stays literal).
 - `$VAR` and `${VAR}` references are substituted from `vim.env`; an unset
   variable is likewise left untouched.
+- A **leading** `$NAME` / `${NAME}` / `%NAME%` that names a root of
+  [`lib.nvim.fs.roots`](../../fs/roots/README.md) is resolved by the registry
+  first. That is what makes `$NVIM_CONFIG_DIR` (which is `stdpath("config")`,
+  not necessarily an environment variable) and user-defined `extra` roots work
+  here, and what lets a test inject its own values. The root comes back in the
+  registry's spelling — absolute, forward slashes, no trailing slash — and
+  the rest of the string goes through the expansions below. Names the
+  registry does not know behave exactly as before.
 - All three expansions run unconditionally and in that order (`~`, then
   `%VAR%`, then `$VAR`/`${VAR}`) — a path can mix styles, e.g. `~/foo/$HOME`.
 
