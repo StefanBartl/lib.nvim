@@ -103,14 +103,17 @@ return function(H)
       "A=D:/repos;B=D:/data/sub",
       "roots: backslashes/trailing/doubled separators normalized, drive letter uppercased"
     )
+    -- `D:/repos` and `D:/data/sub` may or may not exist on the machine running this: whether a
+    -- usable root has a directory behind it is not the point here, so that problem is dropped.
     local names = {}
     for _, st in ipairs(roots.status()) do
-      names[#names + 1] = st.name .. ":" .. tostring(st.problem)
+      local problem = st.problem ~= "missing_dir" and st.problem or nil
+      names[#names + 1] = st.name .. ":" .. tostring(problem)
     end
     eq(
       table.concat(names, ","),
-      "A:missing_dir,B:missing_dir,C:not_absolute,D:not_absolute,E:not_absolute",
-      "status: a relative value and a whole drive / filesystem root are refused"
+      "A:nil,B:nil,C:not_absolute,D:too_broad,E:too_broad",
+      "status: a relative value is refused; so are a whole drive / the filesystem root (too broad)"
     )
   end)
 
@@ -471,10 +474,12 @@ return function(H)
   -- ── export_env(): $NVIM_CONFIG_DIR becomes a real variable, never overwritten ─────────────
   do
     local saved = vim.env.NVIM_CONFIG_DIR
+    local saved_marker = vim.env.LIB_NVIM_ROOTS_EXPORTED
     local cfg = tmp()
     H.with_stdpath_config(cfg, function()
       roots.setup()
       vim.env.NVIM_CONFIG_DIR = nil
+      vim.env.LIB_NVIM_ROOTS_EXPORTED = nil
       eq(roots.export_env(), true, "export_env: sets it when absent")
       eq(vim.env.NVIM_CONFIG_DIR, cfg, "export_env: to stdpath('config')")
       vim.env.NVIM_CONFIG_DIR = "/already/there"
@@ -496,6 +501,7 @@ return function(H)
       vim.g.lib_nvim_roots_no_export = nil
     end)
     vim.env.NVIM_CONFIG_DIR = saved
+    vim.env.LIB_NVIM_ROOTS_EXPORTED = saved_marker
   end
 
   -- ── expand_path: the first consumer ───────────────────────────────────────────────────────
@@ -829,6 +835,1082 @@ return function(H)
     end)
     eq(asked, 0, "completion: getcompletion never saw the expanded backtick path")
   end)
+
+  -- ══ second review round ═══════════════════════════════════════════════════════════════════
+  --
+  -- Every case below pins one defect of the first two versions (see the task
+  -- `roots-review-findings`), or one API the plugins that move onto the registry depend on.
+
+  local uv = vim.uv or vim.loop
+
+  ---@param fn fun()
+  ---@param needle string  a part of the message
+  ---@param msg string
+  local function raises(fn, needle, msg)
+    local done, err = pcall(fn)
+    eq(done, false, msg .. " (raises)")
+    ok(
+      tostring(err):find(needle, 1, true) ~= nil,
+      msg .. " (message names `" .. needle .. "`, got: " .. tostring(err) .. ")"
+    )
+  end
+
+  --- Set environment variables for `fn` and put them back afterwards, whatever happens.
+  ---@param vars table<string, string|false>  false removes the variable
+  ---@param fn fun()
+  local function with_env(vars, fn)
+    local saved = {}
+    for name, value in pairs(vars) do
+      saved[name] = vim.env[name]
+      vim.env[name] = value or nil
+    end
+    local done, err = pcall(fn)
+    for name in pairs(vars) do
+      vim.env[name] = saved[name]
+    end
+    if not done then
+      error(err, 0)
+    end
+  end
+
+  --- Register a root for the duration of `fn` (registrations survive `setup`, so a leaked one
+  --- would show up in every later case).
+  ---@param name string
+  ---@param value string|fun(): string?
+  ---@param fn fun()
+  local function with_registered(name, value, fn)
+    local off = roots.register(name, value)
+    local done, err = pcall(fn)
+    off()
+    if not done then
+      error(err, 0)
+    end
+  end
+
+  -- ── per-call options: what filetree's markdown_links / path_copy / link_create rely on ───────
+  --
+  -- `names` and `nvim_config` used to be accepted and silently ignored, which would have turned
+  -- three filetree options into no-ops after the migration. `root_of` is the fourth thing filetree
+  -- calls. An unknown key raises instead of being ignored.
+  with_roots({
+    windows = false,
+    vars = { "REPOS_DIR" },
+    source = { REPOS_DIR = "/r", FT_ROOT = "/ft", NVIM_CONFIG_DIR = "/cfg" },
+  }, function()
+    eq(flat(roots.roots()), "REPOS_DIR=/r;NVIM_CONFIG_DIR=/cfg", "opts: the baseline")
+    eq(
+      flat(roots.roots({ names = { "FT_ROOT", "REPOS_DIR", 5 } })),
+      "REPOS_DIR=/r;FT_ROOT=/ft;NVIM_CONFIG_DIR=/cfg",
+      "opts.names: after vars; a repeated name stays one root; a non-string is skipped"
+    )
+    eq(
+      flat(roots.roots({ nvim_config = false })),
+      "REPOS_DIR=/r",
+      "opts.nvim_config = false: drops $NVIM_CONFIG_DIR for this call"
+    )
+
+    eq(roots.fold("/ft/x.md"), "/ft/x.md", "opts: an env var that is not configured is no root")
+    eq(
+      roots.fold("/ft/x.md", { names = { "FT_ROOT" } }),
+      "$FT_ROOT/x.md",
+      "fold: opts.names adds a root for the call"
+    )
+    eq(roots.fold("/ft/x.md"), "/ft/x.md", "fold: ... and only for the call")
+    eq(
+      roots.fold("/cfg/init.lua", { nvim_config = false }),
+      "/cfg/init.lua",
+      "fold: opts.nvim_config = false"
+    )
+    eq(roots.fold("/cfg/init.lua"), "$NVIM_CONFIG_DIR/init.lua", "fold: ... and only for the call")
+
+    local fold_many = roots.folder({ names = { "FT_ROOT" } })
+    eq(fold_many("/ft/a"), "$FT_ROOT/a", "folder: opts.names")
+    eq(fold_many("/r/a"), "$REPOS_DIR/a", "folder: the configured roots stay")
+
+    eq(roots.root_of("/r/lib/x.lua"), "REPOS_DIR", "root_of: the name of the root a path is under")
+    eq(roots.root_of("/elsewhere/x.lua"), nil, "root_of: nil outside every root")
+    eq(roots.root_of("rel/x.lua"), nil, "root_of: nil for a relative path")
+    eq(roots.root_of("/ft/x.md", { names = { "FT_ROOT" } }), "FT_ROOT", "root_of: takes the opts")
+
+    raises(function()
+      roots.fold("/r/a", { nmes = { "X" } })
+    end, "unknown option `nmes`", "fold: a typo in opts")
+    raises(function()
+      roots.roots({ force = true })
+    end, "unknown option `force`", "roots: force belongs to fold only")
+    raises(function()
+      roots.folder("names")
+    end, "opts must be a table", "folder: opts of the wrong type")
+  end)
+
+  with_roots({
+    windows = false,
+    nvim_config = false,
+    vars = {},
+    source = { NVIM_CONFIG_DIR = "/cfg" },
+  }, function()
+    eq(
+      flat(roots.roots({ nvim_config = true })),
+      "NVIM_CONFIG_DIR=/cfg",
+      "opts.nvim_config = true: adds it where the config left it out"
+    )
+  end)
+
+  with_roots({
+    windows = false,
+    enable = false,
+    nvim_config = false,
+    vars = {},
+    source = { FT_ROOT = "/ft" },
+  }, function()
+    eq(roots.fold("/ft/x", { names = { "FT_ROOT" } }), "/ft/x", "fold: disabled stays disabled")
+    eq(
+      roots.fold("/ft/x", { names = { "FT_ROOT" }, force = true }),
+      "$FT_ROOT/x",
+      "fold: force + names, the way `:Filetree copy env_rooted` asks"
+    )
+  end)
+
+  -- ── register(): a plugin adds a root without erasing the user's setup ────────────────────────
+  --
+  -- `setup` replaces the configuration, so a second caller wiped the first one's `extra` and
+  -- `vars`. `register` is the additive door; it survives `setup`.
+  with_registered("PLUG_ROOT", "/plug/root", function()
+    with_roots({
+      windows = false,
+      nvim_config = false,
+      vars = {},
+      extra = { USER_ONE = "/u" },
+    }, function()
+      eq(
+        flat(roots.roots()),
+        "USER_ONE=/u;PLUG_ROOT=/plug/root",
+        "register: listed after the user's extra roots"
+      )
+      eq(roots.expand("$PLUG_ROOT/a"), "/plug/root/a", "register: expand")
+      eq(roots.fold("/plug/root/a"), "$PLUG_ROOT/a", "register: fold")
+      eq(roots.status()[2].kind, "registered", "register: status says where it came from")
+
+      roots.setup({ windows = false, nvim_config = false, vars = {} })
+      eq(
+        roots.expand("$PLUG_ROOT/a"),
+        "/plug/root/a",
+        "register: survives a later setup() that replaces the configuration"
+      )
+    end)
+  end)
+  with_roots({ windows = false, nvim_config = false, vars = {} }, function()
+    eq(#roots.roots(), 0, "register: gone after the unregister function ran")
+  end)
+
+  with_registered("DUP", "/from/plugin", function()
+    with_roots({
+      windows = false,
+      nvim_config = false,
+      vars = {},
+      extra = { DUP = "/from/user" },
+    }, function()
+      eq(flat(roots.roots()), "DUP=/from/user", "register: the user's extra root wins")
+    end)
+    with_roots({
+      windows = false,
+      nvim_config = false,
+      vars = {},
+      extra = {
+        DUP = function()
+          return nil
+        end,
+      },
+    }, function()
+      eq(
+        flat(roots.roots()),
+        "DUP=/from/plugin",
+        "register: ... but an extra root that yields nothing falls through to it"
+      )
+    end)
+  end)
+
+  do
+    local first = roots.register("TWICE", "/one")
+    local second = roots.register("TWICE", "/two")
+    with_roots({ windows = false, nvim_config = false, vars = {} }, function()
+      eq(flat(roots.roots()), "TWICE=/two", "register: the same name again replaces")
+      first()
+      eq(
+        flat(roots.roots()),
+        "TWICE=/two",
+        "register: the stale unregister function of the first one leaves the newer registration"
+      )
+      second()
+      eq(#roots.roots(), 0, "register: the current unregister function removes it")
+      eq(roots.unregister("TWICE"), false, "unregister: nothing there -> false")
+      roots.register("TWICE", "/three")
+      eq(roots.unregister("TWICE"), true, "unregister: removes -> true")
+      eq(#roots.roots(), 0, "unregister: gone")
+    end)
+  end
+
+  raises(function()
+    roots.register("bad-name", "/x")
+  end, "register", "register: a name `expand` could not read back")
+  raises(function()
+    roots.register("GOOD_NAME", 5)
+  end, "register", "register: a value that is neither path nor function")
+
+  -- ── setup(): validated, copied ───────────────────────────────────────────────────────────────
+  --
+  -- A wrong type used to fall back to the default without a word (`vars = "REPOS_DIR"` -> the
+  -- default list, `windows = "yes"` -> the platform), and a typo in a key (`extras`) was ignored.
+  raises(function()
+    roots.setup({ vars = "REPOS_DIR" })
+  end, "`vars` must be table", "setup: vars as a string")
+  raises(function()
+    roots.setup({ extra = "x" })
+  end, "`extra` must be table", "setup: extra as a string")
+  raises(function()
+    roots.setup({ windows = "yes" })
+  end, "`windows` must be boolean", "setup: windows as a string")
+  raises(function()
+    roots.setup({ enable = "no" })
+  end, "`enable` must be boolean", "setup: enable as a string")
+  raises(function()
+    roots.setup({ source = 5 })
+  end, "`source` must be table or function", "setup: source as a number")
+  raises(function()
+    roots.setup({ extras = {} })
+  end, "unknown option `extras`", "setup: a misspelled key")
+  raises(function()
+    roots.setup(5)
+  end, "cfg must be a table", "setup: cfg as a number")
+
+  with_roots({
+    windows = false,
+    nvim_config = false,
+    vars = { "KEEP" },
+    source = { KEEP = "/k" },
+  }, function()
+    pcall(roots.setup, { vars = "oops" })
+    eq(flat(roots.roots()), "KEEP=/k", "setup: a refused call leaves the configuration as it was")
+  end)
+
+  do
+    local vars = { "A" }
+    local extra = { X = "/x" }
+    roots.setup({
+      windows = false,
+      nvim_config = false,
+      vars = vars,
+      extra = extra,
+      source = { A = "/a", B = "/b" },
+    })
+    vars[#vars + 1] = "B"
+    extra.Y = "/y"
+    eq(flat(roots.roots()), "X=/x;A=/a", "setup: vars and extra are copied, not aliased")
+    roots.setup()
+  end
+
+  -- ── case folding that changes the byte length (Windows) ──────────────────────────────────────
+  --
+  -- `vim.fn.tolower` is not length-preserving: `İ` is 2 bytes and lowers to `i` (1), `ẞ` 3 -> `ß` 2,
+  -- `Ⱥ` 2 -> `ⱥ` 3. `fold` and `relative` compared the lowered strings and then took the rest
+  -- from the original at an offset of the root's length: a root with such a letter never matched
+  -- (a Turkish Windows profile), and a path with one under an ASCII root came back as `$R//x`.
+  with_roots({
+    windows = true,
+    nvim_config = false,
+    vars = {},
+    extra = {
+      TURKISH = "C:/Users/İlker/nvim",
+      SHARP = "D:/Straẞe",
+      BAR = "D:/Ⱥbc",
+      PLAIN = "D:/plainroot",
+    },
+  }, function()
+    eq(
+      roots.fold("C:/Users/İlker/nvim/init.lua"),
+      "$TURKISH/init.lua",
+      "fold (win): a root whose lowercase is SHORTER than itself (İ)"
+    )
+    eq(
+      roots.fold("c:/USERS/İLKER/NVIM/init.lua"),
+      "$TURKISH/init.lua",
+      "fold (win): ... spelled in another case"
+    )
+    eq(roots.fold("C:/Users/İlker/nvim"), "$TURKISH", "fold (win): the root itself")
+    eq(roots.fold("D:/Straẞe/a"), "$SHARP/a", "fold (win): ẞ, 3 -> 2 bytes")
+    eq(roots.fold("D:/Ⱥbc/a"), "$BAR/a", "fold (win): a root whose lowercase is LONGER (Ⱥ)")
+    eq(roots.fold("D:/ⱥBC/a/b"), "$BAR/a/b", "fold (win): ... and its lowercase spelling")
+    eq(
+      roots.fold("D:/PLAİNROOT/x.lua"),
+      "$PLAIN/x.lua",
+      "fold (win): İ in the PATH under an ASCII root (the rest was cut at the wrong byte: $PLAIN//x.lua)"
+    )
+    eq(roots.fold("D:/PLAİNROOT"), "$PLAIN", "fold (win): ... and the root itself")
+    eq(roots.fold("D:/plainrootX/x"), "D:/plainrootX/x", "fold (win): still a segment boundary")
+    eq(
+      roots.fold("D:/İ/PLAİNROOT/x"),
+      "D:/İ/PLAİNROOT/x",
+      "fold (win): a longer prefix before the root is not the root"
+    )
+
+    eq(
+      roots.relative("c:/users/İLKER/NVIM/sub/x", "TURKISH"),
+      "/sub/x",
+      "relative (win): the same, for the root that is shorter when lowered"
+    )
+    eq(
+      roots.relative("C:/Users/İlker/nvim/", "TURKISH"),
+      "/",
+      "relative (win): the root with a trailing separator"
+    )
+    eq(
+      roots.relative("D:/PLAİNROOT/x", "PLAIN"),
+      "/x",
+      "relative (win): İ in the path under an ASCII root"
+    )
+    eq(
+      roots.relative("D:/Ⱥbc/x", "BAR"),
+      "/x",
+      "relative (win): a root that is longer when lowered"
+    )
+  end)
+
+  -- ── a root that is a symlink ─────────────────────────────────────────────────────────────────
+  --
+  -- On Unix a buffer name is canonical: `~/.config/nvim` -> `~/dotfiles/nvim` opens as the latter.
+  -- The root as configured never matched what lies in it. (A junction stands in for the symlink
+  -- where creating one needs a privilege.)
+  do
+    local base = tmp()
+    vim.fn.mkdir(base .. "/real/sub", "p")
+    local linked = uv.fs_symlink(base .. "/real", base .. "/link", { dir = true, junction = true })
+    if linked then
+      local real = up(norm(assert(uv.fs_realpath(base .. "/real"))))
+      with_roots({
+        windows = false,
+        nvim_config = false,
+        vars = {},
+        extra = { LINKED = base .. "/link" },
+      }, function()
+        eq(
+          roots.fold(base .. "/link/sub/f.txt"),
+          "$LINKED/sub/f.txt",
+          "symlink root: the spelling as configured folds"
+        )
+        eq(
+          roots.fold(real .. "/sub/f.txt"),
+          "$LINKED/sub/f.txt",
+          "symlink root: so does the canonical path a buffer carries"
+        )
+        eq(roots.fold(real), "$LINKED", "symlink root: the canonical root itself")
+        eq(
+          roots.fold(real .. "-other/x"),
+          real .. "-other/x",
+          "symlink root: a sibling that shares the name prefix is not inside"
+        )
+        eq(
+          roots.root_of(real .. "/sub"),
+          "LINKED",
+          "symlink root: root_of goes through the same lookup"
+        )
+      end)
+      local _, _ = uv.fs_unlink(base .. "/link"), uv.fs_rmdir(base .. "/link")
+    end
+    vim.fn.delete(base, "rf")
+  end
+
+  -- ── $NVIM_CONFIG_DIR as an environment variable: stale vs. deliberate ────────────────────────
+  --
+  -- A Neovim started from inside another one (a terminal, a job) inherits the parent's exported
+  -- `NVIM_CONFIG_DIR`; with another `NVIM_APPNAME` that is wrong, and `vim.fn.expand` then
+  -- disagreed with the registry. What lib.nvim exported itself is recognised by the marker that
+  -- carries the same value; anything else was set by somebody on purpose.
+  do
+    local cfg = tmp()
+    with_env({ NVIM_CONFIG_DIR = false, LIB_NVIM_ROOTS_EXPORTED = false }, function()
+      H.with_stdpath_config(cfg, function()
+        roots.setup()
+        vim.env.NVIM_CONFIG_DIR = "/stale/from/parent"
+        vim.env.LIB_NVIM_ROOTS_EXPORTED = "/stale/from/parent"
+        eq(roots.export_env(), true, "export_env: refreshes a value lib.nvim itself exported")
+        eq(vim.env.NVIM_CONFIG_DIR, cfg, "export_env: ... to the stdpath of THIS instance")
+        eq(vim.env.LIB_NVIM_ROOTS_EXPORTED, cfg, "export_env: ... and updates the marker")
+        eq(roots.export_env(), false, "export_env: nothing to do once it is right")
+
+        vim.env.NVIM_CONFIG_DIR = "/set/on/purpose"
+        vim.env.LIB_NVIM_ROOTS_EXPORTED = "/something/else"
+        eq(roots.export_env(), false, "export_env: a value the marker does not vouch for stays")
+        eq(vim.env.NVIM_CONFIG_DIR, "/set/on/purpose", "export_env: ... untouched")
+
+        vim.env.NVIM_CONFIG_DIR = "/set/on/purpose"
+        vim.env.LIB_NVIM_ROOTS_EXPORTED = nil
+        eq(roots.export_env(), false, "export_env: no marker at all: the user's value stays")
+
+        vim.env.NVIM_CONFIG_DIR = ""
+        eq(roots.export_env(), true, "export_env: an empty value counts as unset")
+
+        vim.env.NVIM_CONFIG_DIR = nil
+        vim.g.lib_nvim_roots_no_export = 1
+        eq(roots.export_env(), false, "export_env: the Vimscript spelling of the opt-out (1)")
+        vim.g.lib_nvim_roots_no_export = nil
+
+        -- health: the registry and the environment disagree
+        vim.env.NVIM_CONFIG_DIR = "/set/on/purpose"
+        vim.env.LIB_NVIM_ROOTS_EXPORTED = nil
+        local entry
+        for _, st in ipairs(roots.status()) do
+          if st.kind == "nvim_config" then
+            entry = st
+          end
+        end
+        eq(entry.root, cfg, "status: the root is stdpath('config') whatever the environment says")
+        eq(entry.env, "/set/on/purpose", "status: ... and says what the environment holds instead")
+        vim.env.NVIM_CONFIG_DIR = cfg
+        for _, st in ipairs(roots.status()) do
+          if st.kind == "nvim_config" then
+            eq(st.env, nil, "status: no `env` when both agree")
+          end
+        end
+      end)
+    end)
+  end
+
+  -- ── a cold process, from a fast event ────────────────────────────────────────────────────────
+  --
+  -- The README promises that `expand`/`fold`/... work in a `vim.uv` callback. The platform check
+  -- read `vim.env.OS` on Linux/macOS (E5560 on the very first call). This spec's own process has
+  -- long since cached the platform, so it takes a fresh Neovim; the child poses as Linux so the
+  -- environment-variable fallback is reached on any host.
+  local repo = norm(vim.fn.getcwd())
+
+  --- Run a Neovim child on a script; returns the result of `vim.system`.
+  ---@param source string  the script
+  ---@param extra_args? string[]
+  ---@param env? table<string, string>
+  local function child(source, extra_args, env)
+    local script = vim.fn.tempname() .. ".lua"
+    vim.fn.writefile(vim.split(source, "\n", { plain = true }), script)
+    local argv = { vim.v.progpath, "-n", "-i", "NONE", "--headless", "-u", "NONE" }
+    vim.list_extend(argv, extra_args or {})
+    vim.list_extend(argv, { "-l", script, repo })
+    local res = vim.system(argv, { text = true, env = env }):wait(30000)
+    vim.fn.delete(script)
+    return res
+  end
+
+  do
+    local res = child([==[
+local repo = arg[1]
+vim.opt.rtp:append(repo)
+local uv = vim.uv
+uv.os_uname = function()
+  return { sysname = "Linux" }
+end
+local roots = require("lib.nvim.fs.roots")
+roots.setup({ nvim_config = false, vars = { "COLD_ROOT" }, source = { COLD_ROOT = "/cold/root" } })
+local out
+local timer = uv.new_timer()
+timer:start(0, 0, function()
+  timer:close()
+  out = { pcall(function()
+    return roots.expand("$COLD_ROOT/x") .. "|" .. roots.fold("/cold/root/y") .. "|" .. tostring(roots.export_env())
+  end) }
+end)
+vim.wait(5000, function()
+  return out ~= nil
+end)
+io.stdout:write(tostring(out[1]), ":", tostring(out[2]), "\n")
+]==])
+    eq(res.code, 0, "cold fast event: the child ran (" .. tostring(res.stderr) .. ")")
+    eq(
+      vim.trim(res.stdout),
+      "true:/cold/root/x|$COLD_ROOT/y|false",
+      "cold fast event: expand, fold and export_env answer instead of raising E5560"
+    )
+  end
+
+  -- Non-ASCII case folding calls `vim.fn.tolower`, which a fast event may (unlike `vim.env`);
+  -- an export is a Vimscript call it may not, and has nothing to do there.
+  do
+    local saved = vim.env.NVIM_CONFIG_DIR
+    vim.env.NVIM_CONFIG_DIR = nil
+    roots.setup({ windows = true, nvim_config = false, vars = {}, extra = { UML = "D:/Ü" } })
+    local result
+    local timer = uv.new_timer()
+    timer:start(0, 0, function()
+      timer:close()
+      local fold_ok, fold_res = pcall(roots.fold, "d:/ü/x")
+      local rel_ok, rel_res = pcall(roots.relative, "d:/ü/x", "UML")
+      local export_ok, export_res = pcall(roots.export_env)
+      result = {
+        fold = { fold_ok, fold_res },
+        relative = { rel_ok, rel_res },
+        export = { export_ok, export_res },
+      }
+    end)
+    vim.wait(2000, function()
+      return result ~= nil
+    end)
+    roots.setup()
+    ok(result ~= nil, "fast event (win): the callback ran")
+    eq(result.fold[1], true, "fast event (win): fold does not raise on a non-ASCII path")
+    eq(result.fold[2], "$UML/x", "fast event (win): ... and folds case-insensitively, Ü and all")
+    eq(result.relative[1], true, "fast event (win): relative does not raise on a non-ASCII path")
+    eq(result.relative[2], "/x", "fast event (win): ... and still answers")
+    eq(result.export[1], true, "fast event: export_env does not raise")
+    eq(result.export[2], false, "fast event: export_env exports nothing there")
+    eq(vim.env.NVIM_CONFIG_DIR, nil, "fast event: export_env set nothing")
+    vim.env.NVIM_CONFIG_DIR = saved
+  end
+
+  -- ── `~` ──────────────────────────────────────────────────────────────────────────────────────
+  --
+  -- The home directory went in unchecked: `HOME=/home/u/` gave `/home/u//x`, and `HOME=/` turned
+  -- `~/repos` into `//repos`, which is a UNC root.
+  do
+    local base = tmp()
+    with_env({ HOME = base .. "/", USERPROFILE = base .. "/" }, function()
+      with_roots({
+        windows = false,
+        nvim_config = false,
+        vars = {},
+        extra = { VIAHOME = "~/notes" },
+      }, function()
+        eq(roots.expand("~/x"), base .. "/x", "~: a trailing slash of the home is not doubled")
+        eq(roots.expand("~"), base, "~: the bare tilde, no trailing slash")
+        eq(flat(roots.roots()), "VIAHOME=" .. base .. "/notes", "~: the same in a root value")
+      end)
+    end)
+    -- A home of "/" is something libuv only answers on POSIX (a container running as root with
+    -- HOME=/); on Windows it reports no home at all, and there is nothing to pin.
+    with_env({ HOME = "/", USERPROFILE = "/" }, function()
+      if uv.os_homedir() ~= "/" then
+        return
+      end
+      with_roots({
+        windows = false,
+        nvim_config = false,
+        vars = {},
+        extra = { VIAHOME = "~/repos" },
+      }, function()
+        eq(roots.expand("~/repos"), "/repos", "~ (home is /): not //repos")
+        eq(roots.expand("~"), "/", "~ (home is /): the bare tilde is the root")
+        eq(flat(roots.roots()), "VIAHOME=/repos", "~ (home is /): a root value is not a UNC path")
+      end)
+    end)
+  end
+
+  -- ── separators: a backslash is one only where it is one ──────────────────────────────────────
+  with_roots({
+    windows = false,
+    nvim_config = false,
+    vars = { "REPOS_DIR" },
+    source = { REPOS_DIR = "/work/repos" },
+  }, function()
+    eq(
+      roots.expand("$REPOS_DIR\\a"),
+      "$REPOS_DIR\\a",
+      "expand (posix): `\\` does not end the name -- that is a file called `$REPOS_DIR\\a`"
+    )
+    eq(roots.expand("%REPOS_DIR%\\a"), "%REPOS_DIR%\\a", "expand (posix): nor after %NAME%")
+    eq(roots.expand("~\\a"), "~\\a", "expand (posix): nor after ~")
+    eq(roots.match("$REPOS_DIR\\a"), nil, "match (posix): not a reference")
+    eq(roots.expand("$REPOS_DIR/a\\b"), "/work/repos/a\\b", "expand (posix): the rest keeps it")
+    eq(
+      roots.relative("/work/repos/x\\", "REPOS_DIR"),
+      "/x\\",
+      'relative (posix): a trailing backslash is part of the name (was "/x\\\\/")'
+    )
+    eq(
+      roots.relative("/work/repos/x/", "REPOS_DIR"),
+      "/x/",
+      "relative (posix): a trailing slash still counts"
+    )
+  end)
+
+  -- ── lexical clean-up of paths and root values ────────────────────────────────────────────────
+  --
+  -- `fold`/`relative` were purely textual: `/repos/../etc/passwd` counted as inside `/repos`. And
+  -- a root value with `.`/`..` stayed as written, so `fold` of the path it names never matched.
+  with_roots({
+    windows = false,
+    nvim_config = false,
+    vars = { "REPOS_DIR" },
+    extra = { DOTS = "/a/b/../c", UP = "/x/../../y", ABOVE = "/a/./d/" },
+    source = { REPOS_DIR = "/repos" },
+  }, function()
+    eq(
+      flat(roots.roots()),
+      "ABOVE=/a/d;DOTS=/a/c;UP=/y;REPOS_DIR=/repos",
+      "roots: . and .. in a root value are resolved; .. cannot climb above the filesystem root"
+    )
+    eq(roots.fold("/a/c/x"), "$DOTS/x", "fold: a path under the root a `..` value names")
+    eq(
+      roots.fold("/repos/../etc/passwd"),
+      "/repos/../etc/passwd",
+      "fold: .. leaves the root -> not inside, the path comes back as it was given"
+    )
+    eq(roots.fold("/repos/a/../b"), "$REPOS_DIR/b", "fold: .. that stays inside")
+    eq(roots.fold("/repos/./x"), "$REPOS_DIR/x", "fold: a . segment")
+    eq(roots.fold("/repos/.."), "/repos/..", "fold: the parent of a root is no root")
+    eq(roots.relative("/repos/../etc", "REPOS_DIR"), nil, "relative: .. leaves the root")
+    eq(roots.relative("/repos/a/../b", "REPOS_DIR"), "/b", "relative: .. that stays inside")
+    eq(roots.expand("$REPOS_DIR/a/../b"), "/repos/a/../b", "expand: the rest is kept verbatim")
+  end)
+
+  -- `//a/b` is `/a/b` on POSIX; a UNC path only where the platform has them, or when it was
+  -- spelled with backslashes (which only Windows does).
+  with_roots({
+    windows = false,
+    nvim_config = false,
+    vars = {},
+    extra = { A = "/a", DOUBLE = "//d/e", BSL = "\\\\srv\\share\\r" },
+  }, function()
+    eq(roots.fold("//a/b"), "$A/b", "fold (posix): a leading // is not a UNC prefix")
+    eq(
+      flat(roots.roots()),
+      "A=/a;BSL=//srv/share/r;DOUBLE=/d/e",
+      "roots (posix): // collapses; a backslash UNC spelling is kept as UNC"
+    )
+    eq(roots.fold("\\\\srv\\share\\r\\x"), "$BSL/x", "fold (posix): the backslash UNC spelling")
+  end)
+  with_roots({
+    windows = true,
+    nvim_config = false,
+    vars = {},
+    extra = { UNC = "//srv/share/r", SHARE = "//srv/share" },
+  }, function()
+    eq(roots.fold("//srv/share/r/x"), "$UNC/x", "fold (win): a // UNC path")
+    eq(
+      roots.fold("//srv/share/r/../../x"),
+      "$SHARE/x",
+      "fold (win): .. stops at the share, it does not reach `//srv`"
+    )
+    eq(roots.fold("//srv/share/../../..//y"), "$SHARE/y", "fold (win): nor climb above it")
+  end)
+
+  -- ── a NUL byte ───────────────────────────────────────────────────────────────────────────────
+  --
+  -- `fs_stat` stops at a NUL, so a candidate was checked at one path and returned as another;
+  -- on Windows `vim.fn.tolower` raised E976 for a non-ASCII path that held one.
+  do
+    local base = tmp()
+    vim.fn.mkdir(base .. "/repos/proj", "p")
+    with_roots({
+      windows = true,
+      nvim_config = false,
+      vars = { "REPOS_DIR" },
+      extra = { BADROOT = "D:/a\0b" },
+      source = { REPOS_DIR = base .. "/repos" },
+    }, function()
+      eq(roots.fold("D:/Ü\0x"), "D:/Ü\0x", "fold (win): a NUL + non-ASCII path does not raise")
+      eq(roots.relative("D:/Ü\0x", "REPOS_DIR"), nil, "relative (win): nor does it")
+      eq(#roots.remap("E:/repos/proj\0junk"), 0, "remap: a NUL path maps to nothing")
+      eq(#roots.remap("E:/repos/proj"), 1, "remap: the same path without it maps")
+      local by_name = {}
+      for _, st in ipairs(roots.status()) do
+        by_name[st.name] = st
+      end
+      eq(by_name.BADROOT.problem, "invalid_path", "status: a root with a NUL byte")
+    end)
+    vim.fn.delete(base, "rf")
+  end
+
+  -- ── remap ────────────────────────────────────────────────────────────────────────────────────
+  do
+    local base = tmp()
+    vim.fn.mkdir(base .. "/repos/casedesk.nvim/docs", "p")
+    vim.fn.mkdir(base .. "/repos/proj", "p")
+    vim.fn.mkdir(base .. "/data/repos/x/repos/y", "p")
+    vim.fn.mkdir(base .. "/data/repos/y", "p")
+    vim.fn.mkdir(base .. "/other/place", "p")
+    local fh = assert(io.open(base .. "/repos/casedesk.nvim/docs/a.md", "w"))
+    fh:write("x")
+    fh:close()
+    fh = assert(io.open(base .. "/afile", "w"))
+    fh:write("x")
+    fh:close()
+
+    with_roots({
+      windows = false,
+      nvim_config = false,
+      vars = { "REPOS_DIR" },
+      source = { REPOS_DIR = base .. "/repos" },
+    }, function()
+      eq(
+        table.concat(roots.remap("E:/repos"), "|"),
+        base .. "/repos",
+        "remap: the recorded root itself maps to the local root"
+      )
+      eq(
+        table.concat(roots.remap("E:/repos/./casedesk.nvim/./docs/a.md"), "|"),
+        base .. "/repos/casedesk.nvim/docs/a.md",
+        "remap: . segments are dropped, not carried into the candidate"
+      )
+      eq(
+        table.concat(roots.remap("E:/repos/proj/../casedesk.nvim/docs/a.md"), "|"),
+        base .. "/repos/casedesk.nvim/docs/a.md",
+        "remap: a .. that stays below the anchor is resolved (it used to map to nothing)"
+      )
+      eq(#roots.remap("E:/repos/../etc/x"), 0, "remap: a .. that leaves the anchor maps to nothing")
+      eq(
+        table.concat(roots.remap("E:/Repos/casedesk.nvim/docs/a.md"), "|"),
+        base .. "/repos/casedesk.nvim/docs/a.md",
+        "remap: a Windows path's anchor word compares case-insensitively on a POSIX machine"
+      )
+      eq(
+        #roots.remap("/h/Repos/casedesk.nvim/docs/a.md"),
+        0,
+        "remap: ... a POSIX path's anchor stays case-sensitive"
+      )
+    end)
+
+    -- Two anchors in one path: the outermost one first (the longest rest), each candidate once.
+    with_roots({
+      windows = false,
+      nvim_config = false,
+      vars = { "REPOS_DIR" },
+      source = { REPOS_DIR = base .. "/data/repos" },
+    }, function()
+      eq(
+        table.concat(roots.remap("E:/repos/x/repos/y"), "|"),
+        base .. "/data/repos/x/repos/y|" .. base .. "/data/repos/y",
+        "remap: outermost anchor first (the order the docs promise), both existing candidates"
+      )
+    end)
+
+    -- Two names for one directory must not give the same candidate twice.
+    with_roots({
+      windows = false,
+      nvim_config = false,
+      vars = { "REPOS_DIR" },
+      extra = { ALIAS = base .. "/repos" },
+      source = { REPOS_DIR = base .. "/repos" },
+    }, function()
+      eq(
+        table.concat(roots.remap("E:/repos/proj"), "|"),
+        base .. "/repos/proj",
+        "remap: one candidate per directory, however many names point at it"
+      )
+    end)
+
+    -- `enable = false` with a path that WOULD map: the earlier case used a path that matched
+    -- nothing either way, so it passed with the switch ignored.
+    with_roots({
+      windows = false,
+      enable = false,
+      nvim_config = false,
+      vars = { "REPOS_DIR" },
+      source = { REPOS_DIR = base .. "/repos" },
+    }, function()
+      eq(#roots.remap("E:/repos/proj"), 0, "remap: nothing while disabled, though it would map")
+    end)
+
+    -- A root that points at a file is not a usable directory.
+    with_roots({
+      windows = false,
+      nvim_config = false,
+      vars = {},
+      extra = { FILEROOT = base .. "/afile", DIRROOT = base .. "/other" },
+    }, function()
+      local by_name = {}
+      for _, st in ipairs(roots.status()) do
+        by_name[st.name] = st
+      end
+      eq(by_name.FILEROOT.exists, false, "status: a root that is a file does not exist as a dir")
+      eq(by_name.FILEROOT.problem, "missing_dir", "status: ... and is reported as such")
+      eq(by_name.DIRROOT.exists, true, "status: a directory does")
+    end)
+    vim.fn.delete(base, "rf")
+  end
+
+  -- ── a root function that asks the registry ───────────────────────────────────────────────────
+  --
+  -- A function calling back into the registry recursed until the stack gave out (about 1800
+  -- frames, each one re-evaluating everything). A definition now counts as busy while it runs;
+  -- asking about ANOTHER root works, asking about itself finds nothing.
+  do
+    local self_calls = 0
+    with_roots({
+      windows = false,
+      nvim_config = false,
+      vars = { "BASE", "SHARED" },
+      extra = {
+        GOOD = function()
+          return roots.expand("$BASE/sub")
+        end,
+        SELF = function()
+          self_calls = self_calls + 1
+          return roots.expand("$SELF/x")
+        end,
+        CYC1 = function()
+          return roots.expand("$CYC2/x")
+        end,
+        CYC2 = function()
+          return roots.expand("$CYC1/y")
+        end,
+        NOTES = "$BASE/notes",
+        SHARED = "$SHARED/more",
+        PARENT = "/par",
+        KID = "$PARENT/kid",
+        KIDFN = function()
+          return roots.expand("${PARENT}/fn")
+        end,
+      },
+      source = { BASE = "/base", SHARED = "/shared" },
+    }, function()
+      eq(
+        flat(roots.roots()),
+        "GOOD=/base/sub;KID=/par/kid;KIDFN=/par/fn;NOTES=/base/notes;PARENT=/par;SHARED=/shared/more;BASE=/base",
+        "recursion: a root built on another works, however the other is defined (PARENT is no env var)"
+      )
+      eq(self_calls, 1, "recursion: a function that asks about itself runs once")
+      local problems = {}
+      for _, st in ipairs(roots.status()) do
+        if st.problem then
+          problems[st.name] = st.problem .. ":" .. tostring(st.detail)
+        end
+      end
+      eq(problems.SELF, "unresolved_var:SELF", "recursion: the self-reference is reported")
+      eq(problems.CYC1, "unresolved_var:CYC2", "recursion: a cycle ends, first half")
+      eq(problems.CYC2, "unresolved_var:CYC1", "recursion: a cycle ends, second half")
+    end)
+  end
+
+  -- ── why a root has no value ──────────────────────────────────────────────────────────────────
+  --
+  -- A function that raised, a value of the wrong type and `$UNSET/notes` were all reported as
+  -- "unset" or "not_absolute", which sends the reader looking in the wrong place.
+  with_roots({
+    windows = false,
+    nvim_config = false,
+    vars = {},
+    extra = {
+      BOOM = function()
+        error("kaboom", 0)
+      end,
+      NUM = 5,
+      UNSETVAR = "$NO_SUCH_VARIABLE_ANYWHERE/notes",
+      REL = "some/dir",
+      NOTHING = function()
+        return nil
+      end,
+      BROAD = "/",
+    },
+  }, function()
+    local by_name = {}
+    for _, st in ipairs(roots.status()) do
+      by_name[st.name] = st
+    end
+    eq(by_name.BOOM.problem, "error", "problem: a function that raised")
+    eq(by_name.BOOM.detail, "kaboom", "problem: ... says what it raised")
+    eq(by_name.NUM.problem, "bad_type", "problem: a number")
+    eq(by_name.NUM.detail, "number", "problem: ... says its type")
+    eq(by_name.UNSETVAR.problem, "unresolved_var", "problem: a value starting with an unset $VAR")
+    eq(by_name.UNSETVAR.detail, "NO_SUCH_VARIABLE_ANYWHERE", "problem: ... names the variable")
+    eq(by_name.REL.problem, "not_absolute", "problem: a relative value")
+    eq(by_name.NOTHING.problem, "unset", "problem: a function that returns nothing")
+    eq(by_name.BROAD.problem, "too_broad", "problem: the filesystem root")
+  end)
+
+  -- A source that raises is the same as no value.
+  with_roots({
+    windows = false,
+    nvim_config = false,
+    vars = { "A" },
+    source = function()
+      error("no source today")
+    end,
+  }, function()
+    eq(#roots.roots(), 0, "source: a function that raises gives no roots, and does not raise")
+    eq(roots.status()[1].problem, "unset", "source: ... the name is reported as unset")
+  end)
+
+  -- ── json ─────────────────────────────────────────────────────────────────────────────────────
+  with_roots({
+    windows = true,
+    nvim_config = false,
+    vars = {},
+    extra = {
+      FINE = "D:/fine",
+      LATIN = "/bad/\255\254dir",
+      BOOM = function()
+        error("bad \255 byte", 0)
+      end,
+    },
+  }, function()
+    local text = roots.json()
+    local doc = vim.json.decode(text)
+    eq(doc.windows, true, "json: the windows flag follows the configuration")
+    local names = {}
+    for _, r in ipairs(doc.roots) do
+      names[#names + 1] = r.name
+    end
+    eq(table.concat(names, ","), "FINE", "json: a root that is not valid UTF-8 is not listed")
+    local problems = {}
+    for _, u in ipairs(doc.unresolved) do
+      problems[u.name] = u.problem
+    end
+    eq(problems.LATIN, "invalid_encoding", "json: ... it is reported as unresolved instead")
+    eq(problems.BOOM, "error", "json: an error is reported with its problem")
+    eq(
+      require("lib.lua.strings.safe").utf8(text),
+      text,
+      "json: the whole document is valid UTF-8 (a strict reader refuses the lot otherwise)"
+    )
+  end)
+
+  -- ── the outside world: a child Neovim reading the roots, and the startup hook ───────────────
+  do
+    local base = tmp()
+    vim.fn.mkdir(base .. "/repos", "p")
+    local res = vim
+      .system({
+        vim.v.progpath,
+        "-n",
+        "-i",
+        "NONE",
+        "--headless",
+        "-u",
+        "NONE",
+        "--cmd",
+        "lua vim.opt.rtp:append(vim.env.LIBNVIM_ROOTS_REPO)",
+        "-c",
+        "lua require('lib.nvim.fs.roots').print_json()",
+        "-c",
+        "qa",
+      }, {
+        text = true,
+        env = { LIBNVIM_ROOTS_REPO = repo, REPOS_DIR = base .. "/repos" },
+      })
+      :wait(30000)
+    eq(res.code, 0, "print_json: the child exited cleanly (" .. tostring(res.stderr) .. ")")
+    local lines = vim.split(vim.trim(res.stdout), "\n", { plain = true })
+    eq(#lines, 1, "print_json: exactly one line on stdout, got: " .. res.stdout)
+    local doc = vim.json.decode(lines[1])
+    eq(doc.version, 1, "print_json: the document is JSON")
+    local repos
+    for _, r in ipairs(doc.roots) do
+      if r.name == "REPOS_DIR" then
+        repos = r
+      end
+    end
+    ok(repos ~= nil, "print_json: REPOS_DIR is listed")
+    eq(repos.root, up(norm(base .. "/repos")), "print_json: ... with the root from the environment")
+    eq(repos.exists, true, "print_json: ... which exists")
+    vim.fn.delete(base, "rf")
+  end
+
+  -- plugin/lib_roots.lua: `-u NORC` loads plugins (from the runtimepath the `--cmd` extended).
+  do
+    local function startup(extra_args)
+      local args = {
+        vim.v.progpath,
+        "-n",
+        "-i",
+        "NONE",
+        "--headless",
+        "-u",
+        "NORC",
+        "--cmd",
+        "lua vim.opt.rtp:append(vim.env.LIBNVIM_ROOTS_REPO)",
+      }
+      vim.list_extend(args, extra_args)
+      vim.list_extend(args, {
+        "-c",
+        "lua io.stdout:write(vim.env.NVIM_CONFIG_DIR or '<unset>', '|', vim.fn.stdpath('config'), '\\n')",
+        "-c",
+        "qa",
+      })
+      local res = vim
+        .system(args, {
+          text = true,
+          env = { LIBNVIM_ROOTS_REPO = repo, NVIM_CONFIG_DIR = "" },
+        })
+        :wait(30000)
+      return res.code, vim.trim(res.stdout or ""), res.stderr
+    end
+
+    local code, out, err = startup({})
+    eq(code, 0, "startup: the child exited cleanly (" .. tostring(err) .. ")")
+    local exported, config = out:match("^(.-)|(.*)$")
+    ok(config ~= nil and config ~= "", "startup: the child printed its stdpath: " .. out)
+    eq(exported, config, "startup hook: $NVIM_CONFIG_DIR is exported at startup")
+
+    code, out = startup({ "--cmd", "let g:lib_nvim_roots_no_export = 1" })
+    eq(code, 0, "startup (opt-out): the child exited cleanly")
+    local kept = out:match("^(.-)|")
+    ok(kept == "" or kept == "<unset>", "startup hook: the opt-out is honoured (" .. out .. ")")
+  end
+
+  -- ── :checkhealth lib ─────────────────────────────────────────────────────────────────────────
+  do
+    local lines = {}
+    local function recorder(kind)
+      return function(msg)
+        lines[#lines + 1] = kind .. ": " .. tostring(msg)
+      end
+    end
+    local saved = {}
+    local kinds = { "start", "ok", "warn", "error", "info" }
+    for _, kind in ipairs(kinds) do
+      saved[kind] = vim.health[kind]
+      vim.health[kind] = recorder(kind)
+    end
+    package.loaded["lib.health"] = nil
+    local cfg = tmp()
+    local base = tmp()
+    vim.fn.mkdir(base .. "/there", "p")
+    local done, err = pcall(function()
+      with_env({ NVIM_CONFIG_DIR = "/environment/says/otherwise" }, function()
+        H.with_stdpath_config(cfg, function()
+          roots.setup({
+            windows = false,
+            vars = { "HEALTH_UNSET" },
+            extra = {
+              THERE = base .. "/there",
+              GONE = base .. "/gone",
+              BOOM = function()
+                error("kaboom", 0)
+              end,
+              NUM = 5,
+              UNSETVAR = "$NO_SUCH_VARIABLE_ANYWHERE/x",
+              BROAD = "/",
+              REL = "rel/dir",
+            },
+          })
+          require("lib.health").check_roots()
+        end)
+      end)
+    end)
+    roots.setup()
+    for _, kind in ipairs(kinds) do
+      vim.health[kind] = saved[kind]
+    end
+    package.loaded["lib.health"] = nil
+    vim.fn.delete(base, "rf")
+    if not done then
+      error(err, 0)
+    end
+
+    local text = table.concat(lines, "\n")
+    for _, needle in ipairs({
+      "start: lib.nvim: named roots",
+      "warn: $HEALTH_UNSET is not set",
+      "ok: $THERE = " .. base .. "/there",
+      "warn: $GONE points at a directory that does not exist",
+      "warn: $BOOM: its function raised: kaboom",
+      "warn: $NUM: the value is a number",
+      "warn: $UNSETVAR: $NO_SUCH_VARIABLE_ANYWHERE/x starts with `NO_SUCH_VARIABLE_ANYWHERE`",
+      "warn: $BROAD is the filesystem root or a whole drive",
+      "warn: $REL is not an absolute path: rel/dir",
+      "warn: $NVIM_CONFIG_DIR in the environment is /environment/says/otherwise, but stdpath('config') is "
+        .. cfg,
+    }) do
+      ok(text:find(needle, 1, true) ~= nil, "health: reports `" .. needle .. "`\n" .. text)
+    end
+    eq(text:find("error:", 1, true), nil, "health: a problem root is a warning, never an error")
+  end
 
   -- setup() with nothing resets: no leftover from the cases above.
   roots.setup()
