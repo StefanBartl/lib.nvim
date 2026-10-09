@@ -69,6 +69,9 @@ return function(H)
     ["tag character U+E0041"] = "\243\160\129\129",
     ["Hangul filler U+3164"] = "\227\133\164",
     ["soft hyphen U+00AD"] = "\194\173",
+    ["Mongolian selector U+180B"] = "\225\160\139",
+    ["Khmer inherent vowel U+17B4"] = "\225\158\180",
+    ["shorthand format control U+1BCA0"] = "\240\155\178\160",
     ["braille blank U+2800"] = "\226\160\128",
     ["annotation anchor U+FFF9"] = "\239\191\185",
   }) do
