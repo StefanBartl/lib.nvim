@@ -979,12 +979,13 @@ local function run(H)
     _, changed = pull_with({ "aaa", "bbb" }, {})
     H.eq(changed, true, "pull_async: a different HEAD after is a change")
 
-    _, changed = pull_with({ false, "aaa" }, {})
+    seen, changed = pull_with({ false, "aaa" }, {})
     H.eq(
       changed,
       nil,
       "pull_async: a HEAD-before read that hit the deadline leaves changed unknown"
     )
+    H.eq(#seen, 2, "pull_async: ... and the HEAD-after read, which cannot change that, is not run")
 
     -- sub-second and fractional deadlines read naturally in the error
     for _, case in ipairs({ { 500, "500 ms" }, { 1500, "1.5s" } }) do
