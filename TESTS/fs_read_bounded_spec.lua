@@ -70,5 +70,47 @@ return function(H)
     "a plain file passes either way"
   )
 
+  -- a path swapped for a link right after the lstat: the opened file is not the
+  -- one that was checked
+  local uv = vim.uv or vim.loop
+  local probe = dir .. "/probe"
+  if uv.fs_symlink(file, probe) then
+    uv.fs_unlink(probe)
+    local swap = dir .. "/swap.txt"
+    local sh = assert(io.open(swap, "wb"))
+    sh:write("plain")
+    sh:close()
+    local real_lstat = uv.fs_lstat
+    H.with_patched(uv, "fs_lstat", function(p, ...)
+      local st = real_lstat(p, ...)
+      if p == swap then
+        uv.fs_unlink(swap)
+        uv.fs_symlink(file, swap)
+      end
+      return st
+    end, function()
+      content, err = read_bounded(swap, 100, { follow_symlinks = false })
+    end)
+    eq(content, nil, "a path swapped for a link after the lstat is refused")
+    ok(err and err:find("not a regular file", 1, true), "... and says why")
+  else
+    ok(true, "symlinks cannot be created here")
+  end
+
+  -- more than one block (256 KiB), exactly at and one under the limit
+  local big = dir .. "/big.bin"
+  local bh = assert(io.open(big, "wb"))
+  bh:write(("0123456789abcdef"):rep(40000)) -- 640000 bytes
+  bh:close()
+  eq(#(read_bounded(big, 640000) or ""), 640000, "multi-block: exactly the limit")
+  eq((read_bounded(big, 639999)), nil, "multi-block: one byte over")
+
+  -- a file that reads longer than it stats (a /proc file stats as size 0)
+  if uv.fs_stat("/proc/self/status") then
+    local grown, grown_err = read_bounded("/proc/self/status", 10)
+    eq(grown, nil, "a file that reads longer than it stats is refused")
+    ok(grown_err and grown_err:find("too large (> 10 bytes)", 1, true), "... by the read")
+  end
+
   vim.fn.delete(dir, "rf")
 end

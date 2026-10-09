@@ -7,8 +7,7 @@ bytes (in blocks, so only what is there is allocated): a file that grows or is
 swapped in between cannot exhaust memory. Meant for files inside a repository
 somebody else controls -- a FIFO would block the read forever (the open is
 non-blocking), a device never ends, a huge file exhausts memory. The bytes come
-back exactly as stored (no `
-` rewriting).
+back exactly as stored (no `\r\n` rewriting).
 
 ## Usage
 
@@ -35,4 +34,6 @@ number >= 0), `not found: ...`, `not a regular file: ...`,
 `read failed: ...`. It never raises.
 A symlink to a regular file is followed by default (the stat is of the target);
 pass `{ follow_symlinks = false }` as a third argument to refuse it
-(`not a regular file`; on POSIX the open itself refuses a link too).
+(`not a regular file`). A path swapped for a link between the check and the
+open is refused as well: the opened file must be the one the `lstat` saw (same
+inode and device).

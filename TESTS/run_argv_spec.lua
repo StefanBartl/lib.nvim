@@ -500,7 +500,8 @@ return function(H)
       end
       local f = io.open(("/proc/%d/stat"):format(pid), "r")
       if f then
-        local stat = f:read("*a")
+        -- (nil when the process is reaped between the open and the read)
+        local stat = f:read("*a") or ""
         f:close()
         if stat:match("%) (%a)") == "Z" then
           return false
