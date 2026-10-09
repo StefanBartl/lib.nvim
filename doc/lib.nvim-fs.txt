@@ -293,11 +293,11 @@ expand first, then normalize. >lua
 `setup` belongs to the user's config and REPLACES it; a plugin uses `register`
 and the per-call options (`names`, `nvim_config`, `force`). `roots()` lists
 `{ name, root }` (extra alphabetical, registered, vars, then
-`NVIM_CONFIG_DIR`; the first definition of a name wins). `expand` acts only
+`NVIM_CONFIG_DIR`; the first usable definition of a name wins). `expand` acts only
 on a LEADING reference and leaves everything unknown unchanged. `fold` lets
 the deepest root win, resolves `.`/`..`, ignores case on Windows (segment by
-segment: a lowercase letter can have another byte length) and also matches
-the symlink-resolved spelling of a root. `remap` anchors on the root's folder
+segment: a lowercase letter can have another byte length) and, on Unix, also
+matches the symlink-resolved spelling of a root. `remap` anchors on the root's folder
 name (outermost anchor first) and returns only existing candidates. `json()` /
 `print_json()` give the resolved roots to a reader outside Neovim
 (`nvim --headless -c "lua require('lib.nvim.fs.roots').print_json()" -c qa`).

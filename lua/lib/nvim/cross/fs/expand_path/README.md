@@ -21,7 +21,9 @@ Behavior:
   first. That is what makes `$NVIM_CONFIG_DIR` (which is `stdpath("config")`,
   not necessarily an environment variable) and user-defined `extra` roots work
   here, and what lets a test inject its own values. The root comes back in the
-  registry's spelling — absolute, forward slashes, no trailing slash — and
+  registry's spelling — absolute, forward slashes, no trailing slash (the
+  rest keeps its own separators: on Windows `$REPOS_DIR\proj\x` becomes
+  `D:/repos\proj\x`, while `roots.expand` would unify them) — and
   the rest of the string goes through the expansions below. Names the
   registry does not know behave exactly as before.
 - All three expansions run unconditionally and in that order (`~`, then

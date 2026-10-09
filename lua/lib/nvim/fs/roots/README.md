@@ -44,9 +44,12 @@ question, so the rule for callers is:
   roots (and another plugin's).
 - **`register`** is for **plugins**: it adds a root without touching what the
   user configured, and survives a later `setup`.
-- **Per-call options** (`names`, `nvim_config`, `force`) tune a single
-  `roots` / `fold` / `folder` / `root_of` call — for a plugin that has its own
-  option for "which env vars count as roots here".
+- **Per-call options** (`names`, `vars`, `extra`, `nvim_config`, and `force`
+  for the callers that fold or remap) tune a single `roots` / `fold` /
+  `folder` / `root_of` / `remap` call — for a plugin that has its own options
+  for "which env vars count as roots here" and "which roots do I bring": they
+  stay the plugin's, nobody else sees them, and the user's `setup` is not
+  touched.
 
 ## API
 
@@ -80,6 +83,10 @@ root and a bare drive (`C:/`) are refused too — they would fold every path.
 `.` and `..` in a root value are resolved (`/a/b/../c` is `/a/c`); `..` cannot
 climb above the root of the drive, the filesystem or a UNC share.
 
+`enabled()` returns the user's `enable` — whether actions should write the
+env-var form of a path at all. A plugin that has its own switch for that checks
+its own and passes `force = true` to `fold` / `remap` when it is on.
+
 ### `register(name, value)` → `unregister`
 
 Add a root from a plugin. `value` is a path (may start with `~` / `$VAR`) or a
@@ -97,18 +104,25 @@ something.
 
 `root` is absolute, forward-slash, without a trailing slash, with an
 **uppercase drive letter** (`d:\repos` comes back as `D:/repos`). Order: `extra`
-(alphabetical), registered (alphabetical), `vars`, `opts.names`,
-`NVIM_CONFIG_DIR`; **the first usable definition of a name wins**, so an
-`extra` entry overrides an environment variable of the same name — while an
-`extra` function that returns nothing falls through to it. Names are
-case-insensitive on Windows (like the variables themselves).
+(alphabetical), `opts.extra`, registered (alphabetical), `vars` (or `opts.vars`),
+`opts.names`, `NVIM_CONFIG_DIR`; **the first usable definition of a name
+wins**, so an `extra` entry overrides an environment variable of the same
+name — while an `extra` function that returns nothing falls through to it.
+Names are case-insensitive on Windows (like the variables themselves).
 
-`opts` (an unknown key raises):
+`opts` (an unknown key, or a value of the wrong type, raises — naming the
+function you called):
 
 | | |
 | --- | --- |
 | `names` | `string[]` — environment variable names that are roots **for this call**, after `vars`. |
+| `vars` | `string[]` — environment variable names that are roots for this call **instead of** `setup`'s `vars` (a plugin option that replaces the default list, as `setup`'s `vars` does). |
+| `extra` | `table<string, path \| fun()>` — roots this call brings along (the plugin's own config). The user's `extra` wins on a name; they win over registered roots and `vars`. |
 | `nvim_config` | `boolean` — overrides `setup`'s `nvim_config` for this call. |
+
+The roots of the user and of other plugins stay visible to such a call (that is
+the point of one registry): a path under `$NOTES` of another plugin folds to
+`$NOTES/…` if that root is the deepest match.
 
 A name must be letters, digits and underscores and not start with a digit
 (`MY-ROOT`, `a.b`, `1ST` are refused, reported as `invalid_name`): `fold`
@@ -138,8 +152,9 @@ reference and the rest's backslashes become slashes; elsewhere it is a file
 called `$REPOS_DIR\x`, and only `/` ends the name (`~` likewise). The home
 directory is normalized (`HOME=/home/u/` does not give `/home/u//x`).
 
-`match(s)` returns `name, root, rest` for the same leading reference
-(`nil` when there is none) — for callers that need the split. It resolves
+`match(s)` returns `name, root, rest` for a leading `$NAME` / `${NAME}` /
+`%NAME%` reference (`nil` when there is none, and for `~`, which is no root) —
+for callers that need the split. It resolves
 only the name it is asked about (no other `extra` function runs), so it is
 cheap to call for every `$VAR` a string contains.
 
@@ -179,12 +194,17 @@ with a **backslash below the root** (a valid file name such as `a\..\..\x`) is
 that reads the text.
 
 `opts` — those of `roots` plus `force` (fold even when `enable` is false, for
-an action the user asked for by name). An unknown key raises.
+an action the user asked for by name — or a plugin whose own switch is on). An
+unknown key raises.
 
 `folder(opts?)` returns the same function with the roots resolved **once** —
 for a recursive file list. `root_of(abs, opts?)` returns just the name.
 
-### `remap(abs)` → `{ candidate, ... }`
+### `remap(abs, opts?)` → `{ candidate, ... }`
+
+`opts` are those of `fold` (which roots; `force` maps although `enable` is
+false).
+
 
 For an absolute path recorded on **another machine**: the root's own folder
 name is the anchor. A root `D:/repos` is called `repos` on every machine, so
@@ -257,7 +277,7 @@ nvim --headless "+autocmd VimEnter * ++once lua require('lib.nvim.fs.roots').pri
                 "+autocmd VimEnter * ++once qa"
 ```
 
-The desktop hub queries it this way.
+The desktop hub is the intended reader (it asks through `nvim --headless`).
 
 ## `NVIM_CONFIG_DIR` as an environment variable
 
@@ -281,9 +301,11 @@ Opt out with `vim.g.lib_nvim_roots_no_export = true` (or `1`) before it runs.
 - Case folding on Windows is `vim.fn.tolower`, not NTFS's own table: `i` / `İ`
   and `ß` / `ẞ` are different directories on NTFS but compare equal here. Only
   the filesystem can tell; these cases are far outside real profile paths.
-- Under `windows = false` a drive-letter path counts as absolute, and under
-  `windows = true` so does `/repos` (drive-relative there): the flag runs the
-  other platform's rules on one machine, so it does not judge the host.
+- Under `windows = false` a drive-letter path counts as absolute: the flag runs
+  the other platform's rules on one machine, so it does not judge the host.
+  Likewise `/repos` under a forced `windows = true` on a POSIX host. On a real
+  Windows host it is refused as a root (`not_absolute`): it means "on the
+  current drive" and moves with `:cd`.
 - `expand` leaves `..` in the rest alone (`$R/../x` → `C:/repos/../x`): expand
   first, then normalize.
 - `NVIM_CONFIG_DIR` listed in `vars` / `opts.names` is ignored while
@@ -324,7 +346,10 @@ listed in the child's `env_allow`. So inside a child:
 
 - [`cross.fs.expand_path`](../../cross/fs/expand_path/README.md) resolves a
   leading root reference through this registry; the composer argument types
-  `PATH` / `DIR` / `FILE` go through it, and complete `$NAME/...` leads in the
-  spelling the user typed.
+  `PATH` / `DIR` / `FILE` go through it, and complete `$NAME/...` leads: the
+  root reference keeps the spelling the user typed (`${NAME}` or `$NAME`), the
+  rest comes back the way the filesystem names it with `.` / `..` resolved (so
+  `$NAME/./al` completes to `$NAME/alpha/`, and a step out of the root with
+  `$NAME/..` is not completed).
 - Not a normalizer: `normkey` / `to_absolute` / `vim.fs.normalize` still do
   that, *after* `expand`.
