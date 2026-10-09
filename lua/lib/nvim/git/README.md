@@ -319,7 +319,7 @@ All four have an `_async` twin with the same arguments plus `on_done`
 to `lib.nvim.async.map_limit` when many repositories are asked at once. A
 refused call (a bad revision) reports through `on_done` asynchronously too.
 
-### `tags` — one process, with the metadata a changelog needs
+### `tags` — one process (two or more for a tag on a tag), with the metadata a changelog needs
 
 ```lua
 git.tags({ dir = repo })                                 --> newest creator date first
@@ -334,7 +334,10 @@ the tagger date of an annotated tag and the commit date of a lightweight one;
 `subject` the first line of the tag message (annotated) or of the commit.
 `sort` is `"newest"` (default), `"oldest"` or `"version"` (so `v1.10` is above
 `v1.2`). `limit = 0` is no tags (git's own `--count=0` would mean all). Reads
-only ref and tag objects, so it works in a blobless clone, offline.
+only ref and tag objects, so it works in a blobless clone, offline. A git that peels a tag on a
+tag one level only (2.43) gets `git cat-file --batch` on the tag objects on top, one process per
+hop and only when such a tag exists; if that fails, so does `tags` (`nil, err`), it never answers
+with the one-level data.
 
 ## Syncing with the remote: `fetch_async`, `pull_async`, `push_async`, `update_async`
 
