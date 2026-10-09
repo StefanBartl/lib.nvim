@@ -419,6 +419,23 @@ return function(H)
   end
   H.eq(by_name.light.sha, e1, "tags: a lightweight tag on a commit has that commit as sha")
   H.eq(by_name.ann.sha, e1, "tags: an annotated one is peeled")
+  H.eq(by_name.nested.sha, e1, "tags: a tag on a tag is peeled down to the commit")
+  H.eq(by_name.nested.annotated, true, "tags: ... and is annotated")
+  -- the async counterpart gives the same answer (one more question for a nested tag)
+  local async_tags
+  git.tags_async({ dir = extra }, function(list)
+    async_tags = list
+  end)
+  wait_for(function()
+    return async_tags ~= nil
+  end)
+  local async_by_name = {}
+  for _, t in ipairs(async_tags) do
+    async_by_name[t.name] = t
+  end
+  H.eq(async_by_name.nested.commit, true, "tags_async: a tag on a tag points at a commit")
+  H.eq(async_by_name.nested.sha, e1, "tags_async: ... and carries that commit as sha")
+  H.eq(async_by_name.anntree.commit, false, "tags_async: an annotated tag on a tree is none")
   H.eq(by_name.treetag.time, nil, "tags: a tag on a tree has no commit date")
 
   -- ── merge_base: a killed process is 'unknown', not 'no common ancestor' ─
