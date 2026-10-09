@@ -924,9 +924,11 @@ local function run(H)
     --- when it is `false`), anything else with success. Returns the runner options seen.
     ---@param hashes (string|false)[]
     ---@param opts table
-    ---@return table[] seen, boolean|nil changed
-    local function pull_with(hashes, opts)
+    ---@param pull_reply? table What the pull answers (the arguments of its `on_done`); success by default.
+    ---@return table[] seen, boolean|nil changed, boolean|nil pull_ok, string|nil pull_err
+    local function pull_with(hashes, opts, pull_reply)
       local seen, changed, done, reads, pull_ok, pull_err = {}, nil, false, 0, nil, nil
+      local calls = 0
       local fake = function(argv, on_done, _, ropts)
         local verb = vim.tbl_contains(argv, "rev-parse") and "rev-parse" or "pull"
         seen[#seen + 1] = { verb = verb, ropts = ropts }
@@ -944,7 +946,7 @@ local function run(H)
               on_done(true, hash .. "\n", 0, "", 0)
             end
           else
-            on_done(true, "", 0, "", 0)
+            on_done(unpack(pull_reply or { true, "", 0, "", 0 }))
           end
         end)
         return { stop = function() end }
@@ -952,16 +954,22 @@ local function run(H)
       H.with_patched(run_argv, "run_async_captured", fake, function()
         opts.dir = repo
         git.pull_async(opts, function(ok_, err_, c)
+          calls = calls + 1
           pull_ok, pull_err, changed, done = ok_, err_, c, true
         end)
         wait_for(function()
           return done
         end)
+        -- whatever the first callback left scheduled behind it (a second on_done, a further process)
+        vim.wait(30)
       end)
       H.ok(done, "pull_async: on_done fires")
-      H.eq(pull_ok, true, "pull_async: the pull succeeded")
-      H.eq(pull_err, nil, "pull_async: no error on success")
-      return seen, changed
+      H.eq(calls, 1, "pull_async: on_done fires exactly once")
+      if pull_reply == nil then
+        H.eq(pull_ok, true, "pull_async: the pull succeeded")
+        H.eq(pull_err, nil, "pull_async: no error on success")
+      end
+      return seen, changed, pull_ok, pull_err
     end
 
     local seen, changed = pull_with(
@@ -1001,6 +1009,26 @@ local function run(H)
       true,
       "pull_async: an empty repository (git exit 128) gaining a commit is a change"
     )
+
+    -- the failure of the pull wins over the unknown HEAD-before: it is not turned into a success
+    local failed_ok, failed_err
+    seen, changed, failed_ok, failed_err = pull_with(
+      { false, "aaa" },
+      {},
+      { false, "", 1, "fatal: Not possible to fast-forward, aborting.", 0 }
+    )
+    H.eq(
+      failed_ok,
+      false,
+      "pull_async: a failed pull is a failure whatever the HEAD-before read did"
+    )
+    H.eq(
+      failed_err,
+      "fatal: Not possible to fast-forward, aborting.",
+      "pull_async: ... with git's reason"
+    )
+    H.eq(changed, nil, "pull_async: ... and no changed flag")
+    H.eq(#seen, 2, "pull_async: ... and no HEAD-after read after a failed pull")
 
     -- sub-second and fractional deadlines read naturally in the error
     for _, case in ipairs({ { 500, "500 ms" }, { 1500, "1.5s" } }) do
