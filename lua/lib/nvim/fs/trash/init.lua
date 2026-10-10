@@ -27,6 +27,8 @@ local is_macos = require("lib.nvim.cross.platform.is_macos")
 local is_linux = require("lib.nvim.cross.platform.is_linux")
 local is_wsl = require("lib.nvim.cross.platform.is_wsl")
 
+local ps_escape = require("lib.nvim.cross.powershell").escape_single
+
 local uv = vim.uv or vim.loop
 
 local M = {}
@@ -37,17 +39,6 @@ local M = {}
 ---@return string
 local function sh_quote(str)
   return "'" .. str:gsub("'", "'\\''") .. "'"
-end
-
----@internal
----Escape `str` for embedding in a single-quoted PowerShell string literal.
----@param str string
----@return string
-local function ps_quote(str)
-  -- PowerShell also treats U+2018..U+201B (UTF-8 E2 80 98..9B) as quotes, so
-  -- those are doubled like the ASCII one; the local keeps `gsub`'s count out.
-  local escaped = str:gsub("'", "''"):gsub("\226\128[\152-\155]", "%0%0")
-  return escaped
 end
 
 ---@internal
@@ -68,7 +59,7 @@ local function windows_cmd(path)
     .. "[Microsoft.VisualBasic.FileIO.FileSystem]::"
     .. method
     .. "('"
-    .. ps_quote(path)
+    .. ps_escape(path)
     .. "','OnlyErrorDialogs','SendToRecycleBin')"
 end
 

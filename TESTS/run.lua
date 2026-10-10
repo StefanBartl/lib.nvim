@@ -144,6 +144,7 @@ local specs = {
   "normkey_spec.lua",
   "stdpath_config_root_spec.lua",
   "fs_roots_spec.lua",
+  "cross_powershell_spec.lua",
   "globbable_spec.lua",
   "vregex_spec.lua",
   "range_spec.lua",
