@@ -44,8 +44,10 @@ end
 ---@param str string
 ---@return string
 local function ps_quote(str)
-  -- The outer parentheses drop `gsub`'s match count.
-  return (str:gsub("'", "''"))
+  -- PowerShell also treats U+2018..U+201B (UTF-8 E2 80 98..9B) as quotes, so
+  -- those are doubled like the ASCII one; the local keeps `gsub`'s count out.
+  local escaped = str:gsub("'", "''"):gsub("\226\128[\152-\155]", "%0%0")
+  return escaped
 end
 
 ---@internal
