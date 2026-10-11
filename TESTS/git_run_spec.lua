@@ -7,6 +7,26 @@
 -- Everything else runs against real throwaway repositories.
 
 return function(H)
+  ---How deep `%(*objecttype)` peels a tag on THIS git: `one_level` (it names the tag of a tag: `tag`, a failing
+  ---`cat-file` is needed for the rest) or `all_levels` (it names the commit at once). Anything else is `nil` and
+  ---the second result says what it printed: a gate that cannot read its own answer must fail, not skip.
+  ---@param dir string
+  ---@param ref string
+  ---@return "one_level"|"all_levels"|nil kind
+  ---@return string seen
+  local function peel_kind(dir, ref)
+    local out = vim
+      .system({ "git", "-C", dir, "for-each-ref", "--format=%(*objecttype)", ref })
+      :wait().stdout or ""
+    local word = out:match("^%s*(%S+)")
+    if word == "tag" then
+      return "one_level", word
+    elseif word == "commit" then
+      return "all_levels", word
+    end
+    return nil, vim.inspect(out)
+  end
+
   local git = require("lib.nvim.git")
   local dir = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
   local F = dofile(dir .. "git_fixture.lua")(H)
@@ -441,11 +461,16 @@ return function(H)
   -- (POSIX: the wrapper is a shell script that lets everything through but `cat-file`; on a git that
   -- peels every level in `%(*objecttype)` the nested tag needs no `cat-file` at all, so there is
   -- no peel to fail and the wrapper is never asked)
-  local nested_one_level = vim
-    .system({ "git", "-C", extra, "for-each-ref", "--format=%(*objecttype)", "refs/tags/nested" })
-    :wait().stdout
-    :match("^%s*(%S+)") == "tag"
-  if vim.fn.has("win32") == 0 and nested_one_level then
+  local nested_kind, nested_seen = peel_kind(extra, "refs/tags/nested")
+  H.ok(
+    nested_kind ~= nil,
+    "this git answers %(*objecttype) for the nested tag (got " .. nested_seen .. ")"
+  )
+  if vim.fn.has("win32") == 1 then
+    H.skipped("tags: a failing cat-file is an error", "the wrapper is a POSIX shell script")
+  elseif nested_kind == "all_levels" then
+    H.skipped("tags: a failing cat-file is an error", "git peels every level in %(*objecttype)")
+  elseif nested_kind == "one_level" then
     local wrapper = vim.fn.tempname() .. "-git-no-cat-file"
     local fh = assert(io.open(wrapper, "w"))
     fh:write('#!/bin/sh\nfor a in "$@"; do [ "$a" = cat-file ] && exit 3; done\nexec git "$@"\n')
@@ -517,17 +542,17 @@ return function(H)
   end
   -- (on a git that peels every level in `%(*objecttype)` no record is nested and there is no limit
   -- to hit: only the one-level git is asked for the error)
-  local one_level = vim
-    .system({ "git", "-C", long_dir, "for-each-ref", "--format=%(*objecttype)", "refs/tags/c2" })
-    :wait().stdout
-    :match("^%s*(%S+)") == "tag"
+  local long_kind, long_seen = peel_kind(long_dir, "refs/tags/c2")
+  H.ok(long_kind ~= nil, "this git answers %(*objecttype) for the chain (got " .. long_seen .. ")")
   local st, se, at, ae = both_ways("c64") -- 64 hops: the last allowed
   H.ok(st ~= nil and se == nil and st[1].commit == true, "tags: a chain of 64 hops peels")
   H.ok(at ~= nil and ae == nil and at[1].commit == true, "tags_async: ... and so does it")
-  if one_level then
+  if long_kind == "one_level" then
     st, se, at, ae = both_ways("c65") -- 65 hops: one too many
     H.ok(st == nil and type(se) == "string", "tags: a chain of 65 hops is an error")
     H.ok(at == nil and type(ae) == "string", "tags_async: ... and so it is asynchronously")
+  else
+    H.skipped("tags: a chain of 65 hops is an error", "git peels every level in %(*objecttype)")
   end
   vim.fn.delete(long_dir, "rf")
 

@@ -22,6 +22,14 @@ function H.ok(v, msg)
   end
 end
 
+---A case that cannot run on this host (a git that peels every tag level, no POSIX shell) says so: one line in the
+---run's output, not a silently missing block. Not an assertion: a skipped case proves nothing.
+---@param what string The case that was left out.
+---@param reason string Why.
+function H.skipped(what, reason)
+  print(("[SKIPPED] %s: %s"):format(what, reason))
+end
+
 --- Create a fresh temp file path (not created on disk).
 ---@param suffix string|nil
 ---@return string
