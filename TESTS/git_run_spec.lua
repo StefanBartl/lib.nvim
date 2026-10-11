@@ -15,16 +15,23 @@ return function(H)
   ---@return "one_level"|"all_levels"|nil kind
   ---@return string seen
   local function peel_kind(dir, ref)
-    local out = vim
-      .system({ "git", "-C", dir, "for-each-ref", "--format=%(*objecttype)", ref })
-      :wait().stdout or ""
+    local res = vim
+      .system({ "git", "-C", dir, "for-each-ref", "--format=%(*objecttype)", ref }, { text = true })
+      :wait()
+    local out = res.stdout or ""
     local word = out:match("^%s*(%S+)")
     if word == "tag" then
       return "one_level", word
     elseif word == "commit" then
       return "all_levels", word
     end
-    return nil, vim.inspect(out)
+    -- (a git that cannot answer says why on stderr: dubious ownership, a GIT_DIR from a hook, a broken config)
+    return nil,
+      ("%s (exit %s, stderr %s)"):format(
+        vim.inspect(out),
+        tostring(res.code),
+        vim.inspect(res.stderr or "")
+      )
   end
 
   local git = require("lib.nvim.git")
