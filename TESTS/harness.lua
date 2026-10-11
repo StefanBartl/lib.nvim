@@ -27,7 +27,9 @@ end
 ---@param what string The case that was left out.
 ---@param reason string Why.
 function H.skipped(what, reason)
-  print(("[SKIPPED] %s: %s"):format(what, reason))
+  -- stderr with an explicit newline: `print` leaves the newline pending, so the line would glue onto the next one in
+  -- a merged stream; stdout would corrupt `--events -`
+  io.stderr:write(("[SKIPPED] %s: %s\n"):format(what, reason))
 end
 
 --- Create a fresh temp file path (not created on disk).
