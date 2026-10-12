@@ -202,17 +202,12 @@ function Handle:_redraw(anchor)
       })
       visible_rows = visible_rows + 1
     end
-    -- Below the last line: the "newer" hint (when due), then the legend that
-    -- announces the cheatsheet and the most-used keys.
-    local below = {}
     if self.has_more_newer then
-      below[#below + 1] = { { "󰁅 more below -- <C-k> or -", "Comment" } }
+      pcall(vim.api.nvim_buf_set_extmark, self.surf.bufnr, self._arrow_ns, #lines - 1, 0, {
+        virt_lines = { { { "󰁅 more below -- <C-k> or -", "Comment" } } },
+      })
+      visible_rows = visible_rows + 1
     end
-    below[#below + 1] = { { "? cheatsheet   <CR> fold/unfold   q close", "Comment" } }
-    pcall(vim.api.nvim_buf_set_extmark, self.surf.bufnr, self._arrow_ns, #lines - 1, 0, {
-      virt_lines = below,
-    })
-    visible_rows = visible_rows + #below
   end
 
   self:_resize_to_content(visible_rows)
@@ -408,8 +403,18 @@ end
 ---@param value? boolean
 ---@param entry? table
 function Handle:set_entry_collapsed(value, entry)
+  local by_key = entry == nil
   entry = entry or self:_entry_at_cursor()
   if not entry then
+    return
+  end
+  if by_key and not tostring(entry.content or ""):find("[\r\n]") then
+    -- Nothing would change on screen: say so instead of looking like a dead key.
+    vim.api.nvim_echo(
+      { { "message log: single-line entry, nothing to fold", "Comment" } },
+      false,
+      {}
+    )
     return
   end
   if value == nil then
@@ -654,8 +659,8 @@ function M.open(opts)
     end
   end
 
-  -- Say where the keys are, on the frame (a no-op for a theme without a border).
-  pcall(vim.api.nvim_win_set_config, surf.winid, { footer = " ? keys ", footer_pos = "right" })
+  -- Say where the keys are, in the title (a row of its own would cost content space).
+  surf:set_title(((opts.title or "message log") .. "  ? keys | <CR> fold | q close"))
 
   self:_redraw()
   return self
