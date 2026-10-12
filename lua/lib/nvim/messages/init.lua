@@ -15,7 +15,10 @@
 ---   2. `vim.ui_attach(ns, {ext_messages=true}, cb)` -- every other message
 ---      Neovim shows (`:messages`, `:write`, search counts, Lua errors, raw
 ---      `nvim_echo`, ...). Only `history=true` `msg_show` events are kept by
----      default (`config.kinds` opts a `history=false` kind in explicitly);
+---      default, plus the shell output of `:!cmd` (`shell_out`/`shell_err`/
+---      `shell_ret`: `history=false`, but exactly what one looks for after running
+---      a command); `config.kinds` opts further `history=false` kinds in
+---      (`kinds = { shell_out = false }` opts a default one back out);
 ---      `replace_last=true` events overwrite the previous entry instead of
 ---      appending (Neovim's own signal for "this updates the prior line",
 ---      e.g. a search count after the pattern echo, the second half of a
@@ -53,7 +56,7 @@ local DEFAULTS = {
   ring_size = 1000,
   -- `history=false` kinds kept anyway: what `:!cmd` prints is not in `:messages`, but
   -- it is exactly what one looks for in a "recent messages" popup after running it.
-  kinds = { shell_out = true, shell_err = true },
+  kinds = { shell_out = true, shell_err = true, shell_ret = true },
   renderer_override = nil,
 }
 
@@ -84,13 +87,11 @@ local KIND_LEVEL = {
   rpc_error = vim.log.levels.ERROR,
   wmsg = vim.log.levels.WARN,
   shell_err = vim.log.levels.WARN,
+  shell_ret = vim.log.levels.WARN, -- 'shell returned N', only fires on a non-zero exit
 }
 
--- `kind`s Neovim itself marks `history=true` for -- kept by default without
--- needing `config.kinds` to list them. Anything NOT in this table is only
--- kept when `history=true` is seen on the actual event (most kinds already
--- are) or when `config.kinds` opts it in explicitly (a `history=false` kind
--- like `list_cmd`/`echo`/`search_cmd`).
+-- history=true events are always kept; history=false ones only when listed in
+-- `config.kinds` (default: the shell kinds, see DEFAULTS).
 local ns = nil ---@type integer|nil
 local attached = false
 
@@ -156,26 +157,87 @@ local function should_keep(kind, history)
   return config.kinds[kind] == true
 end
 
+-- Was the previous msg_show event stored? `replace_last` refers to the previous event, so
+-- it may only overwrite our newest slot when that event is the one sitting there: `:w` sends
+-- a dropped `bufwrite` (history=false) and then a replace_last one, which would otherwise
+-- erase an unrelated older entry (the output of a `:!cmd`, say).
+local last_stored = false
+
+-- The open shell stream: the entry the previous chunk of the same `:!cmd` went into.
+-- Neovim delivers shell output in arbitrary pipe-read chunks, all `append=true` (even the
+-- first of a command), so `append` cannot mark a run boundary; any other msg_show event
+-- closes the stream (a new `:!cmd` opens with a `shell_cmd` event, which is not kept).
+---@type { kind: string, entry: Lib.Messages.Entry }|nil
+local stream = nil
+
+-- A stream entry stops growing here: bounds the quadratic `..` cost and the entry size.
+local MERGE_MAX_BYTES = 65536
+
 ---@internal
-local function on_ui_event(event, kind, content, replace_last, history)
+---The newest entry in the ring, nil when it is empty.
+---@return Lib.Messages.Entry|nil
+local function newest_entry()
+  if count == 0 then
+    return nil
+  end
+  return entries[(head + count - 2) % config.ring_size + 1]
+end
+
+---@internal
+---Forget the stream/replace bookkeeping (ring reset, detach).
+local function reset_feed_state()
+  last_stored = false
+  stream = nil
+end
+
+---@internal
+local function on_ui_event(event, kind, content, replace_last, history, append)
   if event ~= "msg_show" then
     return
   end
-  if not should_keep(kind, history == true) then
+  local open = stream
+  stream = nil
+  local previous_stored = last_stored
+  local keep = should_keep(kind, history == true)
+  last_stored = keep
+  if not keep then
     return
   end
   local text = {}
   for _, chunk in ipairs(content or {}) do
     text[#text + 1] = chunk[2]
   end
-  store({
+  local joined = table.concat(text)
+
+  local is_shell = (kind == "shell_out" or kind == "shell_err") and append == true
+  if
+    is_shell
+    and open
+    and open.kind == kind
+    and newest_entry() == open.entry
+    and #open.entry.content + #joined <= MERGE_MAX_BYTES
+  then
+    -- In place, no store(): listeners already hold this table, and re-notifying would make
+    -- a popup add one cumulative copy per chunk. The time moves on so a long-running
+    -- command stays inside a since_ms window.
+    open.entry.content = open.entry.content .. joined
+    open.entry.time_ms = vim.uv.hrtime() / 1e6
+    stream = open
+    return
+  end
+
+  local entry = {
     time_ms = vim.uv.hrtime() / 1e6,
     level = KIND_LEVEL[kind] or vim.log.levels.INFO,
     kind = kind,
-    content = table.concat(text),
+    content = joined,
     source = nil,
-    replace_last = replace_last == true,
-  })
+    replace_last = replace_last == true and previous_stored,
+  }
+  store(entry)
+  if is_shell then
+    stream = { kind = kind, entry = entry }
+  end
 end
 
 ---@internal
@@ -225,6 +287,7 @@ local function maybe_detach()
   end
   pcall(vim.ui_detach, ns)
   attached = false
+  reset_feed_state()
 end
 
 ---Change module-wide defaults. Safe to call more than once (e.g. a config
@@ -244,6 +307,7 @@ function M.setup(opts)
     entries = {}
     head = 1
     count = 0
+    reset_feed_state()
   end
   config = new_config
   M.notify_renderer_changed()

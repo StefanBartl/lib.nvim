@@ -25,7 +25,7 @@
 
 ---@class Lib.Messages.Config
 ---@field ring_size? integer Max entries kept. Default 1000 (~0.3MB, measured negligible -- see the TUI spike report)
----@field kinds? table<string, boolean> `history=false` `msg_show` kinds to keep anyway (e.g. `{ list_cmd = true }`). Default `{ shell_out = true, shell_err = true }` (what `:!cmd` prints); a caller's table is merged over it. All other `history=false` kinds (`echo`, `shell_cmd`, ...) stay out unless listed
+---@field kinds? table<string, boolean> `history=false` `msg_show` kinds to keep anyway (e.g. `{ list_cmd = true }`). Default `{ shell_out = true, shell_err = true, shell_ret = true }` (what `:!cmd` prints, and a non-zero exit code; consecutive output chunks of one command are one entry; `false` opts a default out); a caller's table is merged over it. All other `history=false` kinds (`echo`, `shell_cmd`, ...) stay out unless listed
 ---@field renderer_override? boolean Force `has_renderer()`'s answer instead of checking `package.loaded["noice"]`. Default `nil` (auto-detect)
 
 --- `lib.nvim.messages` module surface.

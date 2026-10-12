@@ -257,8 +257,10 @@ return function(H)
     package.loaded["noice.config"] = nil
   end
 
-  -- The ext_messages feed: kind -> level mapping and the history=false kinds kept by
-  -- default. The callback is captured from a patched vim.ui_attach and fed by hand.
+  -- The ext_messages feed: kind -> level mapping, the history=false kinds kept by default,
+  -- shell-chunk merging and the replace_last guard. The callback is captured from a patched
+  -- vim.ui_attach and fed by hand, with the argument shape Neovim really sends
+  -- (kind, content, replace_last, history, append, id).
   do
     local messages = fresh_messages()
     package.loaded["noice"] = {}
@@ -280,14 +282,20 @@ return function(H)
     ---@param kind string
     ---@param text string
     ---@param history boolean
-    local function show(kind, text, history)
-      cb("msg_show", kind, { { 0, text } }, false, history)
+    ---@param append? boolean
+    ---@param replace_last? boolean
+    local function show(kind, text, history, append, replace_last)
+      cb("msg_show", kind, { { 0, text } }, replace_last == true, history, append == true, 0)
     end
+
     show("emsg", "E518: Unknown option: x", true)
-    show("wmsg", "search hit BOTTOM", true)
+    show("rpc_error", "Invalid method: nosuchmethod", true)
+    show("wmsg", "W10: Warning: Changing a readonly file", true)
+    show("wmsg", "search hit BOTTOM, continuing at TOP", false)
     show("echomsg", "plain", true)
-    show("shell_out", "file1\r\nfile2\r\n", false)
-    show("shell_err", "oops", false)
+    show("shell_out", "file1\nfile2\n", false, true)
+    show("shell_err", "oops", false, true)
+    show("shell_ret", "shell returned 3", false)
     show("echo", "ephemeral", false)
     show("shell_cmd", ":!ls", false)
 
@@ -296,19 +304,103 @@ return function(H)
       by_kind[e.kind] = e
     end
     eq(by_kind.emsg.level, vim.log.levels.ERROR, "emsg is an error, not INFO")
+    eq(by_kind.rpc_error.level, vim.log.levels.ERROR, "rpc_error is an error")
     eq(by_kind.wmsg.level, vim.log.levels.WARN, "wmsg is a warning")
     eq(by_kind.echomsg.level, vim.log.levels.INFO, "an ordinary message stays INFO")
-    ok(by_kind.shell_out ~= nil, "shell output is kept although it is history=false")
+    eq(by_kind.shell_out.level, vim.log.levels.INFO, "shell output is kept (history=false) as INFO")
     eq(by_kind.shell_err.level, vim.log.levels.WARN, "shell stderr is a warning")
+    eq(by_kind.shell_ret.level, vim.log.levels.WARN, "a failing exit code is kept as a warning")
     ok(by_kind.echo == nil, "plain :echo stays out (history=false, not opted in)")
     ok(by_kind.shell_cmd == nil, "the echoed shell command line stays out")
+    local wmsgs = 0
+    for _, e in ipairs(messages.snapshot()) do
+      wmsgs = wmsgs + (e.kind == "wmsg" and 1 or 0)
+    end
+    eq(wmsgs, 1, "the history=false wmsg (search wrap) is not stored")
 
-    -- A caller's own kinds add to the defaults instead of replacing them.
+    -- A caller's own kinds add to the defaults; `false` opts a default one back out.
     messages.setup({ kinds = { echo = true } })
     local n = #messages.snapshot()
     show("echo", "now kept", false)
-    show("shell_out", "still kept", false)
+    show("shell_err", "still kept", false, true)
     eq(#messages.snapshot(), n + 2, "setup({kinds}) extends the default kinds")
+    messages.setup({ kinds = { shell_out = false } })
+    n = #messages.snapshot()
+    show("shell_out", "dropped", false, true)
+    show("shell_err", "kept", false, true)
+    eq(#messages.snapshot(), n + 1, "kinds = { shell_out = false } opts a default kind out")
+
+    -- Shell output arrives in pipe-read chunks (all append=true, the first one too): one
+    -- command is one entry, the next command a new one, anything in between closes the stream.
+    messages = fresh_messages()
+    cb = nil
+    H.with_patched(vim, "ui_attach", function(_, _, fn)
+      cb = fn
+      return 1
+    end, function()
+      messages.notify_renderer_changed()
+      vim.wait(50)
+    end)
+    show("shell_out", "name_cut_ac", false, true)
+    show("shell_out", "ross.lua\r\nsecond\r\n", false, true)
+    local snap = messages.snapshot()
+    eq(#snap, 1, "chunks of one run merge into one entry")
+    eq(
+      snap[1].content,
+      "name_cut_across.lua\r\nsecond\r\n",
+      "a name split across chunks is whole again"
+    )
+    show("shell_cmd", ":!echo B", false)
+    show("shell_out", "B\r\n", false, true)
+    eq(#messages.snapshot(), 2, "the next command (shell_cmd in between) is a new entry")
+    show("shell_out", "tail of B", false, true)
+    eq(#messages.snapshot(), 2, "its further chunks still merge")
+    messages.push({ content = "interleaved" })
+    show("shell_out", "after push", false, true)
+    eq(#messages.snapshot(), 4, "an entry from another source closes the stream")
+    local big = string.rep("x", 40000)
+    show("shell_out", big, false, true)
+    show("shell_out", big, false, true)
+    show("shell_out", big, false, true)
+    local biggest = 0
+    for _, e in ipairs(messages.snapshot()) do
+      biggest = math.max(biggest, #e.content)
+    end
+    ok(biggest <= 65536 + 40000, "a stream entry stops growing at the cap")
+
+    -- replace_last may only overwrite what the previous event put in the ring: `:w` sends a
+    -- dropped bufwrite (history=false) and then a replace_last one.
+    messages = fresh_messages()
+    cb = nil
+    H.with_patched(vim, "ui_attach", function(_, _, fn)
+      cb = fn
+      return 1
+    end, function()
+      messages.notify_renderer_changed()
+      vim.wait(50)
+    end)
+    show("echomsg", "AAA", true)
+    show("shell_out", "SHELL", false, true)
+    show("bufwrite", "f.txt [New] written", false)
+    show("bufwrite", "f.txt 1L, 3B written", true, false, true)
+    local contents = {}
+    for _, e in ipairs(messages.snapshot()) do
+      contents[#contents + 1] = e.content
+    end
+    eq(
+      table.concat(contents, "|"),
+      "AAA|SHELL|f.txt 1L, 3B written",
+      "the :w message is appended, nothing erased"
+    )
+    show("echomsg", "first", true)
+    show("echomsg", "second", true, false, true)
+    local last = messages.snapshot()
+    eq(
+      last[#last].content,
+      "second",
+      "replace_last still replaces when the previous event was stored"
+    )
+    eq(last[#last - 1].content, "f.txt 1L, 3B written", "and only that one")
 
     package.loaded["noice"] = nil
     package.loaded["noice.config"] = nil

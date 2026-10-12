@@ -31,11 +31,11 @@ messages.off_message(unsubscribe)
 2. **`vim.ui_attach(ns, {ext_messages=true}, cb)`** — every other message
    Neovim shows (`:messages`, `:write`, search counts, Lua errors, raw
    `nvim_echo`, …). Only `history=true` `msg_show` events are kept by
-   default, plus the shell output of `:!cmd` (`shell_out`/`shell_err`, which
+   default, plus the shell output of `:!cmd` (`shell_out`/`shell_err`, one entry per command, and `shell_ret` for a non-zero exit; these
    `:messages` does not keep either, but which one looks for right after
    running a command); `config.kinds` opts further `history=false` kinds in
    (e.g. `list_cmd`, `echo`, `search_cmd`). Levels: `lua_error`/`echoerr`/
-   `emsg`/`rpc_error` are ERROR, `wmsg`/`shell_err` WARN, the rest INFO.
+   `emsg`/`rpc_error` are ERROR, `wmsg`/`shell_err`/`shell_ret` WARN, the rest INFO.
    Not seen at all: plain `vim.notify` while noice owns it (use
    `lib.nvim.notify`, which pushes straight into the ring). `replace_last=true` events overwrite
    the previous entry instead of appending — Neovim's own signal that this
