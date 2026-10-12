@@ -173,7 +173,7 @@ function M.split_cells(line)
       end
     else
       cells[#cells + 1] = trim(inner:sub(start))
-      ranges[#ranges + 1] = { base + start, base + n }
+      ranges[#ranges + 1] = { base + start, base + #trimmed - 2 } -- up to the closing pipe, padding included
       break
     end
   end

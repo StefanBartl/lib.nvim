@@ -76,7 +76,7 @@ return function(H)
     eq(cells[1], "`a " .. bs .. "| b`", "the cell keeps the raw backslash-pipe")
     eq(
       row:sub(ranges[2][1], ranges[2][2]),
-      " c",
+      " c ",
       "ranges are byte ranges of the raw cell in the line"
     )
     eq(
