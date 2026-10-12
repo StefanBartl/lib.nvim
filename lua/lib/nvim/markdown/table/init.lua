@@ -612,13 +612,21 @@ function M.format_file(path, opts)
   local wrote, write_err = wh:write(bom and "\239\187\191" or "", body)
   local closed, close_err = wh:close()
   if not wrote or not closed then
+    local restored = false
     local rh = io.open(path, "wb")
     if rh then
-      rh:write(original)
-      rh:close()
+      local rw = rh:write(original)
+      local rc = rh:close()
+      restored = rw ~= nil and rc ~= nil
     end
     return false,
-      string.format("Cannot write %q: %s", path, tostring(write_err or close_err or "?")),
+      string.format(
+        "Cannot write %q: %s%s",
+        path,
+        tostring(write_err or close_err or "?"),
+        restored and ""
+          or " -- AND the original could not be restored, the file may be truncated or damaged"
+      ),
       0,
       warnings
   end
