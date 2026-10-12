@@ -67,6 +67,33 @@ return function(H)
     local compact = T.parse({ "| a | b |", "|---|---|", "| 1 | 2 |" })[1]
     eq(T.render(compact)[2], "|---|---|", "a compact table stays compact")
   end
+  -- ------------------------------------------------- escaped pipe (GFM)
+  do
+    local bs = string.char(92)
+    local row = "| `a " .. bs .. "| b` | c |"
+    local cells, ranges = T.split_cells(row)
+    eq(#cells, 2, "an escaped pipe does not end a cell")
+    eq(cells[1], "`a " .. bs .. "| b`", "the cell keeps the raw backslash-pipe")
+    eq(
+      row:sub(ranges[2][1], ranges[2][2]),
+      " c",
+      "ranges are byte ranges of the raw cell in the line"
+    )
+    eq(
+      #T.parse_row("| " .. bs .. "|" .. bs .. "| | x |"),
+      2,
+      "two escaped pipes in a row stay one cell"
+    )
+    local even = T.parse_row("| a" .. bs .. bs .. "| b |")
+    eq(#even, 2, "an escaped backslash does not escape the pipe after it")
+    eq(T.parse_row("| a || c |")[2], "", "an empty cell is still kept")
+    eq(T.split_cells("  | a | b |  ")[2], "b", "leading whitespace is allowed")
+    local lines = { "| S | M |", "|---|---|", "| `a " .. bs .. "| b` | x |" }
+    local out = T.format_lines(lines)
+    eq(#T.parse_row(out[3]), 2, "a formatted table keeps two columns")
+    eq(out[3]:find(bs .. "|", 1, true) ~= nil, true, "and the escape survives the re-render")
+    eq(table.concat(T.format_lines(out), "\n"), table.concat(out, "\n"), "formatting is idempotent")
+  end
 
   do
     local parsed = T.parse(SRC)[1]

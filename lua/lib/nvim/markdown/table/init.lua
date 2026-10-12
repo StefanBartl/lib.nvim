@@ -129,26 +129,62 @@ function M.is_separator_line(line)
   return true, spaced and "spaced" or "compact"
 end
 
----Split one table row into trimmed cells.
+---Split one table row into trimmed cells, honouring the escaped pipe.
 ---
----`gmatch`, not a char-by-char `..` accumulator: the latter is O(n²) in the
----row length, because each concatenation reallocates and rescans the growing
----string. A trailing `|` is appended so the segment after the last real
----separator is captured by the same pattern as every other one.
+---A pipe preceded by an odd number of backslashes does not end a cell (GFM:
+---`\|` stays in the cell, also inside a code span), so the cell keeps the raw
+---`\|` text and a re-render writes the same bytes back. `find` with a plain
+---pattern instead of a char-by-char `..` accumulator: the latter is O(n²) in
+---the row length, because each concatenation reallocates and rescans the
+---growing string. A trailing `|` is appended so the segment after the last
+---real separator is captured by the same step as every other one.
 ---@param line string
----@return string[]
-function M.parse_row(line)
-  local cells = {}
+---@return string[] cells
+---@return { [1]: integer, [2]: integer }[] ranges  # 1-based inclusive byte range of each raw cell (between its pipes) in `line`
+function M.split_cells(line)
+  local cells, ranges = {}, {}
+  if type(line) ~= "string" then
+    return cells, ranges
+  end
   local trimmed = trim(line)
   -- Not `^|(.-)%s*|$`: that retries a whitespace run from every byte inside it (SEC-32).
   if #trimmed < 2 or trimmed:sub(1, 1) ~= "|" or trimmed:sub(-1) ~= "|" then
-    return cells
+    return cells, ranges
   end
+  -- Offset of `trimmed` inside `line`, so ranges are in `line` coordinates.
+  local base = #(line:match("^%s*") or "") + 1
   local inner = strings.rtrim(trimmed:sub(2, -2))
-  for cell in (inner .. "|"):gmatch("(.-)|") do
-    cells[#cells + 1] = trim(cell)
+  local n = #inner
+  local start, pos = 1, 1
+  while true do
+    local p = inner:find("|", pos, true)
+    if p then
+      -- Odd run of backslashes right before the pipe: escaped, keep scanning.
+      local bs = 0
+      while p - bs - 1 >= start and inner:byte(p - bs - 1) == 92 do
+        bs = bs + 1
+      end
+      if bs % 2 == 1 then
+        pos = p + 1
+      else
+        cells[#cells + 1] = trim(inner:sub(start, p - 1))
+        ranges[#ranges + 1] = { base + start, base + p - 1 }
+        start, pos = p + 1, p + 1
+      end
+    else
+      cells[#cells + 1] = trim(inner:sub(start))
+      ranges[#ranges + 1] = { base + start, base + n }
+      break
+    end
   end
-  return cells
+  return cells, ranges
+end
+
+---Split one table row into trimmed cells (see `split_cells`).
+---@param line string
+---@return string[]
+function M.parse_row(line)
+  return (M.split_cells(line))
 end
 
 ---Every GFM table in `lines`.
