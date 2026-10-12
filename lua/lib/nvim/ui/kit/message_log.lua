@@ -196,12 +196,17 @@ function Handle:_redraw(anchor)
       })
       visible_rows = visible_rows + 1
     end
+    -- Below the last line: the "newer" hint (when due), then the legend that
+    -- announces the cheatsheet and the most-used keys.
+    local below = {}
     if self.has_more_newer then
-      pcall(vim.api.nvim_buf_set_extmark, self.surf.bufnr, self._arrow_ns, #lines - 1, 0, {
-        virt_lines = { { { "󰁅 more below -- <C-k> or -", "Comment" } } },
-      })
-      visible_rows = visible_rows + 1
+      below[#below + 1] = { { "󰁅 more below -- <C-k> or -", "Comment" } }
     end
+    below[#below + 1] = { { "? cheatsheet   <CR> fold/unfold   q close", "Comment" } }
+    pcall(vim.api.nvim_buf_set_extmark, self.surf.bufnr, self._arrow_ns, #lines - 1, 0, {
+      virt_lines = below,
+    })
+    visible_rows = visible_rows + #below
   end
 
   self:_resize_to_content(visible_rows)
