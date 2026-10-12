@@ -257,6 +257,63 @@ return function(H)
     package.loaded["noice.config"] = nil
   end
 
+  -- The ext_messages feed: kind -> level mapping and the history=false kinds kept by
+  -- default. The callback is captured from a patched vim.ui_attach and fed by hand.
+  do
+    local messages = fresh_messages()
+    package.loaded["noice"] = {}
+    package.loaded["noice.config"] = {
+      is_running = function()
+        return true
+      end,
+    }
+    local cb
+    H.with_patched(vim, "ui_attach", function(_, _, fn)
+      cb = fn
+      return 1
+    end, function()
+      messages.notify_renderer_changed()
+      vim.wait(50)
+    end)
+    ok(cb ~= nil, "feed: the ui_attach callback was captured")
+
+    ---@param kind string
+    ---@param text string
+    ---@param history boolean
+    local function show(kind, text, history)
+      cb("msg_show", kind, { { 0, text } }, false, history)
+    end
+    show("emsg", "E518: Unknown option: x", true)
+    show("wmsg", "search hit BOTTOM", true)
+    show("echomsg", "plain", true)
+    show("shell_out", "file1\r\nfile2\r\n", false)
+    show("shell_err", "oops", false)
+    show("echo", "ephemeral", false)
+    show("shell_cmd", ":!ls", false)
+
+    local by_kind = {}
+    for _, e in ipairs(messages.snapshot()) do
+      by_kind[e.kind] = e
+    end
+    eq(by_kind.emsg.level, vim.log.levels.ERROR, "emsg is an error, not INFO")
+    eq(by_kind.wmsg.level, vim.log.levels.WARN, "wmsg is a warning")
+    eq(by_kind.echomsg.level, vim.log.levels.INFO, "an ordinary message stays INFO")
+    ok(by_kind.shell_out ~= nil, "shell output is kept although it is history=false")
+    eq(by_kind.shell_err.level, vim.log.levels.WARN, "shell stderr is a warning")
+    ok(by_kind.echo == nil, "plain :echo stays out (history=false, not opted in)")
+    ok(by_kind.shell_cmd == nil, "the echoed shell command line stays out")
+
+    -- A caller's own kinds add to the defaults instead of replacing them.
+    messages.setup({ kinds = { echo = true } })
+    local n = #messages.snapshot()
+    show("echo", "now kept", false)
+    show("shell_out", "still kept", false)
+    eq(#messages.snapshot(), n + 2, "setup({kinds}) extends the default kinds")
+
+    package.loaded["noice"] = nil
+    package.loaded["noice.config"] = nil
+  end
+
   -- maybe_attach(): attaches once a renderer exists, even with floating
   -- windows already open. A prior version additionally refused to attach
   -- while ANY float was open (a documented, but here unreproduced, hang

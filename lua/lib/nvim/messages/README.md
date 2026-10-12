@@ -31,8 +31,13 @@ messages.off_message(unsubscribe)
 2. **`vim.ui_attach(ns, {ext_messages=true}, cb)`** — every other message
    Neovim shows (`:messages`, `:write`, search counts, Lua errors, raw
    `nvim_echo`, …). Only `history=true` `msg_show` events are kept by
-   default; `config.kinds` opts a `history=false` kind in explicitly (e.g.
-   `list_cmd`, `echo`, `search_cmd`). `replace_last=true` events overwrite
+   default, plus the shell output of `:!cmd` (`shell_out`/`shell_err`, which
+   `:messages` does not keep either, but which one looks for right after
+   running a command); `config.kinds` opts further `history=false` kinds in
+   (e.g. `list_cmd`, `echo`, `search_cmd`). Levels: `lua_error`/`echoerr`/
+   `emsg`/`rpc_error` are ERROR, `wmsg`/`shell_err` WARN, the rest INFO.
+   Not seen at all: plain `vim.notify` while noice owns it (use
+   `lib.nvim.notify`, which pushes straight into the ring). `replace_last=true` events overwrite
    the previous entry instead of appending — Neovim's own signal that this
    one updates the prior line (a search count after the pattern echo, the
    second half of a `:write` message); skipping that would double every
@@ -71,7 +76,7 @@ see `maybe_attach`'s own doc comment in `init.lua` for the full writeup.
 ## API
 
 - `setup(opts)` — `ring_size` (default 1000, ~0.3MB — measured negligible),
-  `kinds` (`history=false` kinds to keep anyway), `renderer_override`
+  `kinds` (`history=false` kinds to keep anyway, merged over the default `shell_out`/`shell_err`), `renderer_override`
   (force `has_renderer()`'s answer instead of auto-detecting noice).
 - `notify_renderer_changed()` — re-evaluate attach/detach now.
 - `wrap_noice()` — opt-in, pcall-guarded, no-op without noice installed.
