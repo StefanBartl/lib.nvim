@@ -410,11 +410,7 @@ function Handle:set_entry_collapsed(value, entry)
   end
   if by_key and not tostring(entry.content or ""):find("[\r\n]") then
     -- Nothing would change on screen: say so instead of looking like a dead key.
-    vim.api.nvim_echo(
-      { { "message log: single-line entry, nothing to fold", "Comment" } },
-      false,
-      {}
-    )
+    vim.notify("message log: single-line entry, nothing to fold", vim.log.levels.INFO)
     return
   end
   if value == nil then
