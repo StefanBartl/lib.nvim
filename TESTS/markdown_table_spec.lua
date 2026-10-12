@@ -364,5 +364,34 @@ return function(H)
     eq(wfok, false, "a failed write is reported")
     ok(wferr and wferr:find("No space left", 1, true) ~= nil, "with the reason")
     eq(after, orig, "and the original bytes are restored")
+
+    -- when the restore fails too, the user is told the file may be damaged
+    local dpath = vim.fn.tempname() .. ".md"
+    local df = assert(io.open(dpath, "wb"))
+    df:write(orig)
+    df:close()
+    local open_real = io.open -- luacheck: ignore 122
+    io.open = function(p, mode) -- luacheck: ignore 122
+      if p == dpath and mode == "wb" then
+        open_real(p, "wb"):close()
+        return {
+          write = function()
+            return nil, "No space left on device"
+          end,
+          close = function()
+            return true
+          end,
+        }
+      end
+      return open_real(p, mode)
+    end
+    local dok, derr = T.format_file(dpath, { header_align = "left", entry_align = "left" })
+    io.open = open_real -- luacheck: ignore 122
+    vim.fn.delete(dpath)
+    eq(dok, false, "a failed write with a failed restore is reported")
+    ok(
+      derr and derr:find("could not be restored", 1, true) ~= nil,
+      "and says the file may be damaged"
+    )
   end
 end
