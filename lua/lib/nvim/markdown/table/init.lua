@@ -154,7 +154,6 @@ function M.split_cells(line)
   -- Offset of `trimmed` inside `line`, so ranges are in `line` coordinates.
   local base = #(line:match("^%s*") or "") + 1
   local inner = strings.rtrim(trimmed:sub(2, -2))
-  local n = #inner
   local start, pos = 1, 1
   while true do
     local p = inner:find("|", pos, true)
@@ -536,26 +535,54 @@ end
 ---@return integer count
 ---@return string[] warnings
 function M.format_file(path, opts)
-  local fh, err = io.open(path, "r")
+  -- Binary on both ends: text mode would translate CRLF on Windows, and a
+  -- BOM would stay glued to line 1 (which then no longer starts with a pipe).
+  local fh, err = io.open(path, "rb")
   if not fh then
     return false, string.format("Cannot open %q: %s", path, err or "?"), 0, {}
   end
-  local lines = {}
-  for line in fh:lines() do
-    lines[#lines + 1] = line
-  end
+  local content = fh:read("a") or ""
   fh:close()
 
-  local out, count, warnings = M.format_lines(lines, opts)
-  if count == 0 then
-    return true, nil, 0, warnings
+  local bom = content:sub(1, 3) == "\239\187\191"
+  if bom then
+    content = content:sub(4)
+  end
+  local final_newline = content:sub(-1) == "\n"
+  local lines = {}
+  if content ~= "" then
+    for line in (final_newline and content or content .. "\n"):gmatch("(.-)\n") do
+      lines[#lines + 1] = line
+    end
+  end
+  -- CRLF only when every terminated line ends in CR LF; a mixed file keeps its
+  -- CRs inside the lines (they are not touched) instead of being normalised.
+  local terminated = final_newline and #lines or (#lines - 1)
+  local crlf = terminated > 0
+  for i = 1, terminated do
+    if lines[i]:sub(-1) ~= "\r" then
+      crlf = false
+      break
+    end
+  end
+  if crlf then
+    for i = 1, terminated do
+      lines[i] = lines[i]:sub(1, -2)
+    end
   end
 
-  local wh, werr = io.open(path, "w")
+  local out, count, warnings = M.format_lines(lines, opts)
+  if count == 0 or table.concat(out, "\n") == table.concat(lines, "\n") then
+    return true, nil, count, warnings
+  end
+
+  local eol = crlf and "\r\n" or "\n"
+  local body = table.concat(out, eol) .. (final_newline and eol or "")
+  local wh, werr = io.open(path, "wb")
   if not wh then
     return false, string.format("Cannot write %q: %s", path, werr or "?"), 0, warnings
   end
-  wh:write(table.concat(out, "\n"), "\n")
+  wh:write(bom and "\239\187\191" or "", body)
   wh:close()
 
   return true, nil, count, warnings
