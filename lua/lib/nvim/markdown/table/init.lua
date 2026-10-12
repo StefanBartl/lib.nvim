@@ -427,8 +427,19 @@ function M.format_lines(lines, opts)
         override_map = map,
         width_fn = opts.width_fn,
       })
+      -- A table whose every line ends in a CR (a CRLF block inside a file with
+      -- mixed endings, where `format_file` could not strip the CRs globally)
+      -- gets its CR back on every rendered line; `trim` drops it while parsing,
+      -- so without this an already formatted block would still count as changed.
+      local cr = true
+      for ln = parsed.start_line, parsed.end_line do
+        if lines[ln]:sub(-1) ~= "\r" then
+          cr = false
+          break
+        end
+      end
       for _, l in ipairs(rendered) do
-        out[#out + 1] = l
+        out[#out + 1] = cr and (l .. "\r") or l
       end
       i = parsed.end_line + 1
     else
@@ -461,6 +472,12 @@ function M.format_buffer(bufnr, opts)
   local out, count, warnings = M.format_lines(lines, opts)
   if count == 0 then
     return true, nil, 0, warnings
+  end
+  -- Nothing changed: no write, so no `changedtick` bump. A caller that
+  -- re-formats from TextChanged (table mode) would otherwise re-trigger itself
+  -- on its own no-op write, forever.
+  if vim.deep_equal(out, lines) then
+    return true, nil, count, warnings
   end
 
   local ok_write = pcall(vim.api.nvim_buf_set_lines, bufnr, 0, -1, false, out)
@@ -510,6 +527,11 @@ function M.format_at_cursor(bufnr, opts)
     width_fn = opts.width_fn,
   })
 
+  -- Unchanged table: no write (see `format_buffer`).
+  if vim.deep_equal(rendered, vim.list_slice(lines, parsed.start_line, parsed.end_line)) then
+    return true, nil, warnings
+  end
+
   local ok_write = pcall(
     vim.api.nvim_buf_set_lines,
     bufnr,
@@ -543,6 +565,7 @@ function M.format_file(path, opts)
   end
   local content = fh:read("a") or ""
   fh:close()
+  local original = content
 
   local bom = content:sub(1, 3) == "\239\187\191"
   if bom then
@@ -582,8 +605,23 @@ function M.format_file(path, opts)
   if not wh then
     return false, string.format("Cannot write %q: %s", path, werr or "?"), 0, warnings
   end
-  wh:write(bom and "\239\187\191" or "", body)
-  wh:close()
+  -- In place (not temp + rename): keeps symlinks, hard links and permissions,
+  -- and a rename over a file another program holds open fails on Windows.
+  -- `open("wb")` has already truncated the file, so a failed write must put the
+  -- original bytes back instead of reporting success over a short file.
+  local wrote, write_err = wh:write(bom and "\239\187\191" or "", body)
+  local closed, close_err = wh:close()
+  if not wrote or not closed then
+    local rh = io.open(path, "wb")
+    if rh then
+      rh:write(original)
+      rh:close()
+    end
+    return false,
+      string.format("Cannot write %q: %s", path, tostring(write_err or close_err or "?")),
+      0,
+      warnings
+  end
 
   return true, nil, count, warnings
 end

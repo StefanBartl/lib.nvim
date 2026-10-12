@@ -88,6 +88,23 @@ return function(H)
     eq(#even, 2, "an escaped backslash does not escape the pipe after it")
     eq(T.parse_row("| a || c |")[2], "", "an empty cell is still kept")
     eq(T.split_cells("  | a | b |  ")[2], "b", "leading whitespace is allowed")
+
+    -- ranges: every cell, indented line, empty cell, padded last cell. Built from
+    -- known segments, so the expected byte range of each cell is known exactly.
+    for _, indent in ipairs({ "", "  ", "    " }) do
+      local segs = { " a ", "  ", " `x" .. bs .. "|y` ", "", " z  " }
+      local line = indent .. "|" .. table.concat(segs, "|") .. "|"
+      local cs, rs = T.split_cells(line)
+      eq(#rs, #segs, "one range per cell (indent " .. #indent .. ")")
+      for i, seg in ipairs(segs) do
+        eq(
+          line:sub(rs[i][1], rs[i][2]),
+          seg,
+          "range of cell " .. i .. " (indent " .. #indent .. ")"
+        )
+        eq(cs[i], vim.trim(seg), "text of cell " .. i)
+      end
+    end
     local lines = { "| S | M |", "|---|---|", "| `a " .. bs .. "| b` | x |" }
     local out = T.format_lines(lines)
     eq(#T.parse_row(out[3]), 2, "a formatted table keeps two columns")
@@ -286,19 +303,66 @@ return function(H)
     got = roundtrip(lf)
     eq(got, "| A    | B |\n|------|---|\n| xxxx | y |", "a missing final newline stays missing")
 
-    local mixed = "| A | B |\r\n|---|---|\n| xxxx | y |\n"
-    local _, _, _, mcount = roundtrip(mixed)
-    ok(mcount >= 0, "a file with mixed endings does not crash")
+    -- mixed endings: an LF line next to a CRLF table. A formatted table is left
+    -- byte for byte; a misaligned one is rewritten with the block's own CRLF and
+    -- the LF line is untouched.
+    local mixed_ok = "intro\n| A    | B |\r\n|------|---|\r\n| xxxx | y |\r\n"
+    eq(roundtrip(mixed_ok), mixed_ok, "a formatted CRLF table in an LF file is kept byte for byte")
+    local mixed_bad = "intro\n| A | B |\r\n|---|---|\r\n| xxxx | y |\r\n"
+    eq(
+      roundtrip(mixed_bad),
+      mixed_ok,
+      "a misaligned CRLF block is rewritten with CRLF, the LF line stays"
+    )
 
+    -- an already formatted file is not rewritten: compare the bytes after a call
+    -- that would change them if it wrote, with a stat that cannot pass vacuously
+    -- (the file is made read-only; a write attempt would report an error)
     local same = "| A    | B |\n|------|---|\n| xxxx | y |\n"
     local path = vim.fn.tempname() .. ".md"
     local fh = assert(io.open(path, "wb"))
     fh:write(same)
     fh:close()
-    local before = vim.uv.fs_stat(path).mtime
-    T.format_file(path, { header_align = "left", entry_align = "left" })
-    local after = vim.uv.fs_stat(path).mtime
+    vim.uv.fs_chmod(path, tonumber("444", 8))
+    local sok, serr = T.format_file(path, { header_align = "left", entry_align = "left" })
+    vim.uv.fs_chmod(path, tonumber("644", 8))
     vim.fn.delete(path)
-    eq(after.nsec, before.nsec, "an already formatted file is not rewritten")
+    eq(sok, true, "an already formatted read-only file is not even opened for writing")
+    eq(serr, nil, "and reports no error")
+
+    -- a failed write puts the original bytes back and reports the failure
+    local orig = "| A | B |\n|---|---|\n| xxxx | y |\n"
+    local fpath = vim.fn.tempname() .. ".md"
+    local wf = assert(io.open(fpath, "wb"))
+    wf:write(orig)
+    wf:close()
+    local real_open = io.open -- luacheck: ignore 122
+    local calls = 0
+    io.open = function(p, mode) -- luacheck: ignore 122
+      if p == fpath and mode == "wb" then
+        calls = calls + 1
+        if calls == 1 then
+          real_open(p, "wb"):close() -- the truncation a real open does
+          return {
+            write = function()
+              return nil, "No space left on device"
+            end,
+            close = function()
+              return true
+            end,
+          }
+        end
+      end
+      return real_open(p, mode)
+    end
+    local wfok, wferr = T.format_file(fpath, { header_align = "left", entry_align = "left" })
+    io.open = real_open -- luacheck: ignore 122
+    local back = assert(io.open(fpath, "rb"))
+    local after = back:read("a")
+    back:close()
+    vim.fn.delete(fpath)
+    eq(wfok, false, "a failed write is reported")
+    ok(wferr and wferr:find("No space left", 1, true) ~= nil, "with the reason")
+    eq(after, orig, "and the original bytes are restored")
   end
 end
