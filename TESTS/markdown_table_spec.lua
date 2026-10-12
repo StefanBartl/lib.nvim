@@ -255,4 +255,50 @@ return function(H)
     local overridden = T.format_row({ "a", "bb" }, { 3, 3 }, "left", { [2] = "right" })
     eq(overridden, "| a   |  bb |", "format_row honours the override map")
   end
+
+  -- ------------------------------------------- format_file keeps the file's bytes
+  do
+    local function roundtrip(raw)
+      local path = vim.fn.tempname() .. ".md"
+      local fh = assert(io.open(path, "wb"))
+      fh:write(raw)
+      fh:close()
+      local fok, ferr, count = T.format_file(path, { header_align = "left", entry_align = "left" })
+      local rh = assert(io.open(path, "rb"))
+      local got = rh:read("a")
+      rh:close()
+      vim.fn.delete(path)
+      return got, fok, ferr, count
+    end
+
+    local BOM = "\239\187\191"
+    local crlf = BOM .. "intro\r\n| A | B |\r\n|---|---|\r\n| xxxx | y |\r\n"
+    local got, fok, _, count = roundtrip(crlf)
+    eq(fok, true, "format_file succeeds on a BOM + CRLF file")
+    eq(count, 1, "the table in it is found despite the BOM and the CRs")
+    eq(
+      got,
+      BOM .. "intro\r\n| A    | B |\r\n|------|---|\r\n| xxxx | y |\r\n",
+      "BOM and CRLF endings survive"
+    )
+
+    local lf = "| A | B |\n|---|---|\n| xxxx | y |"
+    got = roundtrip(lf)
+    eq(got, "| A    | B |\n|------|---|\n| xxxx | y |", "a missing final newline stays missing")
+
+    local mixed = "| A | B |\r\n|---|---|\n| xxxx | y |\n"
+    local _, _, _, mcount = roundtrip(mixed)
+    ok(mcount >= 0, "a file with mixed endings does not crash")
+
+    local same = "| A    | B |\n|------|---|\n| xxxx | y |\n"
+    local path = vim.fn.tempname() .. ".md"
+    local fh = assert(io.open(path, "wb"))
+    fh:write(same)
+    fh:close()
+    local before = vim.uv.fs_stat(path).mtime
+    T.format_file(path, { header_align = "left", entry_align = "left" })
+    local after = vim.uv.fs_stat(path).mtime
+    vim.fn.delete(path)
+    eq(after.nsec, before.nsec, "an already formatted file is not rewritten")
+  end
 end
