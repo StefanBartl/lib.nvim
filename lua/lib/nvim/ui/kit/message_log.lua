@@ -54,7 +54,13 @@ end
 local function render_entry(entry, opts, collapsed, now_ms)
   local format_time = opts.format_entry_time or default_format_time
   local time_label = format_time(entry, now_ms)
-  local content_lines = vim.split(tostring(entry.content or ""), "\n", { plain = true })
+  -- CRLF output would show a stray ^M, a trailing newline an empty extra line (and
+  -- inflate the "+N more lines" count); a NUL byte is shown as the replacement char.
+  local text = tostring(entry.content or ""):gsub("%z", "\u{FFFD}")
+  local content_lines = vim.split(text, "\r?\n")
+  while #content_lines > 1 and content_lines[#content_lines] == "" do
+    content_lines[#content_lines] = nil
+  end
   local hl = entry.level and LEVEL_HL[entry.level] or nil
 
   local lines = { ("[%s] %s"):format(time_label, content_lines[1] or "") }
