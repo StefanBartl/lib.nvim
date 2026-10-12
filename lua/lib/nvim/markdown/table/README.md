@@ -57,6 +57,13 @@ local ok, err, warnings = T.format_at_cursor(bufnr, opts)
 local ok, err, count, warnings = T.format_file(path, opts)
 ```
 
+Rows are split **escape-aware**: a pipe preceded by an odd number of
+backslashes (`\|`) does not end a cell, also inside a code span, and the cell
+keeps the raw `\|` so a re-render writes the same bytes back.
+`T.split_cells(line)` returns `cells, ranges` (1-based inclusive byte range of
+each raw cell in the line, for cell-at-cursor); `parse_row` is its cells half.
+The importers must write a literal pipe in cell text as `\|`.
+
 Lower-level primitives (`display_width`, `pad_cell`, `is_table_line`,
 `is_separator_line`, `parse_row`, `calc_widths`, `resolve_overrides`,
 `trim`, `gen_separator`, `format_row`) are public too: `trim`/`gen_separator`/
