@@ -51,7 +51,9 @@ local M = {}
 ---@type Lib.Messages.Config
 local DEFAULTS = {
   ring_size = 1000,
-  kinds = {},
+  -- `history=false` kinds kept anyway: what `:!cmd` prints is not in `:messages`, but
+  -- it is exactly what one looks for in a "recent messages" popup after running it.
+  kinds = { shell_out = true, shell_err = true },
   renderer_override = nil,
 }
 
@@ -76,6 +78,12 @@ local listeners = {}
 local KIND_LEVEL = {
   lua_error = vim.log.levels.ERROR,
   echoerr = vim.log.levels.ERROR,
+  -- `E518: Unknown option`, `E492: Not an editor command`, ... arrive as `emsg`; without
+  -- this they were INFO and showed up under "messages" instead of "errors".
+  emsg = vim.log.levels.ERROR,
+  rpc_error = vim.log.levels.ERROR,
+  wmsg = vim.log.levels.WARN,
+  shell_err = vim.log.levels.WARN,
 }
 
 -- `kind`s Neovim itself marks `history=true` for -- kept by default without
