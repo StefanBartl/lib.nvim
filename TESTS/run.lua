@@ -161,6 +161,7 @@ local specs = {
   "fs_create_exclusive_spec.lua",
   "fs_etag_spec.lua",
   "fs_with_lock_spec.lua",
+  "contract_doc_spec.lua",
 }
 
 --- Straight to stdout rather than through `print`.
