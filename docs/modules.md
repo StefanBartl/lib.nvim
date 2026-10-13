@@ -77,7 +77,7 @@ aggregator exists for convenience, not as the entry point.
 | [`lib.nvim.cross`](../lua/lib/nvim/cross/README.md) | cross-platform: OS detection, run/argv, [spawn env](../lua/lib/nvim/cross/run/env/README.md) (completed `PATH` + session/keyring vars), clipboard, uv (`spawn_capture` buffered, [`spawn_stream`](../lua/lib/nvim/cross/uv/spawn_stream/README.md) line-by-line), [path separators](../lua/lib/nvim/cross/fs/separators/README.md) (`unify_slashes`, `normalize`, `collapse_dots`, `has_win_sep`, `drive_upper`), [file mutation](../lua/lib/nvim/cross/fs/mutate/README.md) (retry on transient Windows sharing errors), [lock diagnosis](../lua/lib/nvim/cross/fs/lock/README.md) (which process holds a file open) |
 | `lib.nvim.normalize`   | path / value normalization                          |
 | `lib.nvim.git`         | git helpers                                         |
-| `lib.nvim.terminal`    | terminal-buffer helpers                             |
+| `lib.nvim.terminal`    | terminal-buffer helpers; `terminal.host` (which terminal, tmux, OSC 1337) and `terminal.osc` (safe sequence builders, tmux passthrough, one-call writer) |
 | `lib.nvim.require`     | safe / dir / lazy require                           |
 | `lib.nvim.lua_ls`      | LuaLS: module path, `@module` annotation            |
 | `lib.nvim.core`        | misc Neovim helpers (`has_exec`, `simple_echo`)     |
