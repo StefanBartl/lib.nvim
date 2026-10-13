@@ -41,3 +41,36 @@ terminal.is_kitty()   --> boolean
 
 True if `$KITTY_LISTEN_ON` is set and non-empty, or if `$TERM` contains
 `"kitty"`.
+
+---
+
+## `terminal.host` — which terminal is this
+
+```lua
+local host = require("lib.nvim.terminal.host")
+local h = host.detect()      -- reads vim.env; pass a table to test
+--> { name = "WezTerm", osc1337 = true, in_tmux = false, hint = nil }
+```
+
+`name` is `WezTerm`, `iTerm2`, `Konsole` (these draw OSC 1337, `osc1337 = true`), `Kitty` or
+`Windows Terminal` (named, `osc1337 = false`), or `nil`. OSC 1337 has no capability query, so
+`osc1337 = false` means "not known to", not "cannot". `in_tmux` is `$TMUX`; then `hint` names
+the `allow-passthrough` option without which nothing reaches the outer terminal. `host.in_tmux(env)`
+is the same check alone. An empty variable counts as unset.
+
+## `terminal.osc` — build and send escape sequences safely
+
+```lua
+local osc = require("lib.nvim.terminal.osc")
+
+osc.sanitize(text, max)               -- control characters -> "?", cut on a character boundary
+local seq = osc.user_var("MY_VAR", v) -- OSC 1337 SetUserVar; name validated, value base64
+osc.send(osc.wrap(seq))               -- wrap = tmux passthrough envelope when $TMUX is set
+```
+
+- `user_var` returns `nil, err` for a name outside `[A-Za-z0-9_]`: the name is spliced in as is.
+- `wrap_tmux(seq)` is `ESC P tmux ; <seq with every ESC doubled> ESC \`; `wrap(seq, in_tmux)` applies it
+  only in tmux (default: `$TMUX`).
+- `send(payload)` writes through `nvim_ui_send` (Neovim 0.12+) in **one** call and returns `ok, err`
+  instead of raising. Everything that belongs together must be one `payload`, or Neovim's own
+  redraw can land in between. `available()` tells whether the API exists.
