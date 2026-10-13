@@ -8,6 +8,7 @@
 ---drive letter and collapses duplicate separators.
 ---@class Lib.Fs.IsSubpathOpts
 ---@field realpath? boolean Resolve symlinks and Windows 8.3 short names via `uv.fs_realpath`. Default true.
+---@field ignore_case? boolean Compare case-insensitively (a file system that ignores case: Windows, default macOS). Default false. Like any opts table it switches to `normkey`; add `realpath = false` to stay off the disk.
 
 --- CDX: fictional grouping — there is no `lib.nvim.fs.query` module. Only the
 --- CDX: stale `Lib.Fs` aggregate references it. `Lib.Fs.IsSubpathOpts` above
