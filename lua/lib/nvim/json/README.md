@@ -7,7 +7,9 @@ a general JSON-string parser; this module lives in the `lib.nvim`
 it in the same `value, err` contract used across `lib.nvim`.
 
 For JSON *files* see [`lib.nvim.fs.json`](../fs/json/README.md), which is
-built on this module.
+built on this module. For text that is **hashed or compared** (sorted keys,
+deterministic numbers, `{}` vs `[]`) see
+[`lib.nvim.json.canonical`](canonical/README.md).
 
 ## Usage
 

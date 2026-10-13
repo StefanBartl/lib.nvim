@@ -156,6 +156,8 @@ local specs = {
   "config_spec.lua",
   "cross_executable_spec.lua",
   "which_key_spec.lua",
+  "json_canonical_spec.lua",
+  "contract_errors_spec.lua",
 }
 
 --- Straight to stdout rather than through `print`.
