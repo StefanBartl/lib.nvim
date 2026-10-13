@@ -106,7 +106,7 @@
 ---@field now_ms? fun(): number                            # default: vim.uv.hrtime()/1e6
 ---@field extra_cheatsheet_lines? string[]                 # appended to the built-in `?` cheatsheet
 ---@field theme? Lib.UI.Kit.ThemeArg
----@field width? integer
+---@field width? integer                                   # default: fitted to the content (min the default, max editor width - 4), never shrinking
 ---@field height? integer
 ---@field relative? "editor"|"cursor"|"win"
 ---@field filetype? string
