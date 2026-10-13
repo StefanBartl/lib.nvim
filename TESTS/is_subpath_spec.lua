@@ -56,6 +56,28 @@ return function(H)
     "is_subpath: realpath=false keeps the prefix semantics"
   )
 
+  -- `ignore_case`: a file system that ignores case (Windows) names one folder in many spellings.
+  local fold = { realpath = false, ignore_case = true }
+  ok(is_subpath("c:/a/b/x.lua", "C:/A/B", fold), "is_subpath: ignore_case, child")
+  ok(is_subpath("C:/A/B", "c:/a/b", fold), "is_subpath: ignore_case, equality")
+  eq(is_subpath("C:/A/BC/x", "c:/a/b", fold), false, "is_subpath: ignore_case keeps whole segments")
+  eq(
+    is_subpath("C:/A", "c:/a/b", fold),
+    false,
+    "is_subpath: ignore_case, parent is not inside child"
+  )
+  ok(
+    is_subpath("/", "/", fold) and is_subpath("/x", "/", fold),
+    "is_subpath: ignore_case, POSIX root"
+  )
+  ok(is_subpath("C:/x", "C:/", fold), "is_subpath: ignore_case, drive root")
+  ok(is_subpath("C:/a/b/c/d.lua", "C:/a/b/", fold), "is_subpath: ignore_case, trailing slash")
+  eq(
+    is_subpath("/Foo/x", "/foo", { realpath = false }),
+    false,
+    "is_subpath: case counts by default"
+  )
+
   -- The case opts exist for: the OS hands back a spelling of a directory that
   -- is not its canonical one -- an 8.3 short name on Windows (`STEFAN~1`),
   -- `/var` -> `/private/var` on macOS. `vim.fs.normalize` cannot know; only a

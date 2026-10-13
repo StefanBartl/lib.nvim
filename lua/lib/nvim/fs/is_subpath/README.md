@@ -42,6 +42,14 @@ is_subpath(path, base, { realpath = true })  -- same, explicit
 is_subpath(path, base, { realpath = false }) -- normkey without the fs_realpath syscall
 ```
 
+`ignore_case = true` compares the two sides case-insensitively, for a file system
+that ignores case (Windows, macOS by default); it works with either `realpath`
+setting:
+
+```lua
+is_subpath("c:/a/b/x.lua", "C:/A/B", { realpath = false, ignore_case = true }) --> true, no syscall
+```
+
 `{ realpath = false }` still buys the drive-letter uppercasing and separator
 collapsing without touching the filesystem — useful when the paths may not
 exist yet. The default `true` adds one `uv.fs_realpath` stat per side, which

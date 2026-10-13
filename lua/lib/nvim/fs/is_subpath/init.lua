@@ -29,6 +29,9 @@ return function(path, base, opts)
   else
     path, base = norm(path), norm(base)
   end
+  if opts and opts.ignore_case then
+    path, base = path:lower(), base:lower()
+  end
   if path == base then
     return true
   end
