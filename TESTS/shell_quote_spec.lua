@@ -9,6 +9,8 @@ return function(H)
 
   -- A minimal luassert look-alike over the harness: the ported cases keep their text.
   -- It is also callable like the global `assert(value, message)`, which the ported file still uses.
+  -- (The real-shell cases below pass `env = { PATH = ... }` WITHOUT `clear_env`: on Neovim 0.10 and
+  -- 0.11.0 `clear_env` hands the table to libuv unconverted and the child gets an empty environment.)
   local plain_assert = _G.assert
   local assert = setmetatable({
     equals = function(expected, actual, msg)
@@ -256,10 +258,7 @@ return function(H)
           vim.uv.fs_chmod(program, 493) -- 0755
           local line = assert(quote.argv_to_line({ "time", "-v", "make" }, "posix"))
           local res = vim
-            .system(
-              { vim.fn.exepath("bash"), "-c", line },
-              { clear_env = true, env = { PATH = dir .. ":/usr/bin:/bin" } }
-            )
+            .system({ vim.fn.exepath("bash"), "-c", line }, { env = { PATH = dir .. ":/usr/bin:/bin" } })
             :wait(10000)
           vim.fn.delete(dir, "rf")
           assert.equals(0, res.code, (res.stderr or "") .. "\n" .. line)
@@ -280,10 +279,7 @@ return function(H)
           -- PATH holds only the directory with the program and the system's own: an unquoted
           -- `A=b echo INJECTED` would set a variable and print INJECTED instead
           local res = vim
-            .system(
-              { "/bin/sh", "-c", line },
-              { clear_env = true, env = { PATH = dir .. ":/usr/bin:/bin" } }
-            )
+            .system({ "/bin/sh", "-c", line }, { env = { PATH = dir .. ":/usr/bin:/bin" } })
             :wait(10000)
           vim.fn.delete(dir, "rf")
           assert.equals(0, res.code, (res.stderr or "") .. "\n" .. line)
@@ -303,8 +299,7 @@ return function(H)
           -- (the old behaviour) makes zsh search the PATH for `ls` and for `nosuchcmd`: a short PATH
           -- keeps that fast where the machine's PATH is long or slow (WSL lists the Windows one).
           local zsh = { vim.fn.exepath("zsh"), "-f", "-c", line }
-          local res =
-            vim.system(zsh, { clear_env = true, env = { PATH = "/usr/bin:/bin" } }):wait(10000)
+          local res = vim.system(zsh, { env = { PATH = "/usr/bin:/bin" } }):wait(10000)
           assert.equals(0, res.code, (res.stderr or "") .. "\n" .. line)
           -- printf ends every word with a line break, and no word contains one
           local got = vim.split(res.stdout or "", "\n", { plain = true })

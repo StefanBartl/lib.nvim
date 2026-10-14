@@ -75,12 +75,18 @@ return function(H)
     "\27Ptmux;\27\27]1;x\7\27\\",
     "osc.wrap_tmux: ESC doubled inside the envelope"
   )
+  -- $TMUX is process-global: put it back even when an assertion raises in between
   local saved_tmux = vim.env.TMUX
-  vim.env.TMUX = "/tmp/tmux-1/default,1,0"
-  eq(osc.wrap("S"), "\27Ptmux;S\27\\", "osc.wrap: without the flag, $TMUX decides (in tmux)")
-  vim.env.TMUX = ""
-  eq(osc.wrap("S"), "S", "osc.wrap: without the flag, an empty $TMUX is not tmux")
+  local passed, failure = pcall(function()
+    vim.env.TMUX = "/tmp/tmux-1/default,1,0"
+    eq(osc.wrap("S"), "\27Ptmux;S\27\\", "osc.wrap: without the flag, $TMUX decides (in tmux)")
+    vim.env.TMUX = nil
+    eq(osc.wrap("S"), "S", "osc.wrap: without the flag and without $TMUX, unchanged")
+  end)
   vim.env.TMUX = saved_tmux
+  if not passed then
+    error(failure, 0)
+  end
   eq(osc.wrap("S", false), "S", "osc.wrap: not in tmux, unchanged")
   eq(osc.wrap("S", true), "\27Ptmux;S\27\\", "osc.wrap: in tmux, wrapped")
 
