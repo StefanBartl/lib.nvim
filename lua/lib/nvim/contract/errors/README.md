@@ -36,14 +36,20 @@ classify("file changed", { code = "conflict", id = "LUA-12" })
 | Function | Meaning |
 |---|---|
 | `fail(code, message, retryable?)` | An error table; `retryable` only when it is the boolean `true`. |
-| `scrub(text)` | A Lua error text without where the plugin is installed (`<path>/lua/x/a.lua:3: boom` becomes `x/a.lua:3: boom`). Only the part after the last whitespace or quote is cut. |
+| `scrub(text)` | A Lua error text without where the plugin is installed (`<path>/lua/x/a.lua:3: boom` becomes `x/a.lua:3: boom`). Linear in the length of the text, a long token included. **Limit:** a token (what lies between whitespace or quotes) is cut at its last `/lua/`, so a path with a space keeps its head (`/Users/Jane Roe/.../lua/x/a.lua` becomes `/Users/Jane x/a.lua`) and a path with no `lua` directory is not touched. LuaJIT already shortens a chunk name of more than 59 characters to `...` plus its tail, which hides most of that head. |
+| `text(value)` | Whatever came back as an error, as a text: a string as it is, a number or boolean as it prints, a table by its own `__tostring` or its string `message`, anything else (a function, a userdata, a table with neither) `error value of type <type>`. Never an address (`table: 0x...` differs on every call) and never a throw. |
+| `check_patterns(patterns)` | `nil` when `patterns` is a list of `{ code = string, find = string[], retryable? }`, else a message that names the first fault (`patterns[2].find must be a list of strings`; no position, it is a value). `contract.api.make` calls it and raises at construction; a plugin that hands `opts.patterns` to `classify` itself can call it once. |
 | `classify(err, info?, opts?)` | Turn whatever came back into the error a document carries (below). |
 | `DETAIL_KEYS` | Keys of `info` a document may show: `id`, `key`, `expected`, `actual`, `written`, `writes`. Never a path. |
 
 `classify`:
 
 1. an `err` that already is an error table (has a `code`) is returned as it is;
-2. with `info.code` (the third value some functions give) the code comes from the
+   any other value that is not a string is made a text by `text` (this differs
+   from `tasks_nvim.errors`, which used `tostring` and so printed
+   `table: 0x...`);
+2. with `info.code` (the third value some functions give; a value that is no
+   table, such as `true`, is ignored) the code comes from the
    source; `locked` is always retryable; `details` carries only `DETAIL_KEYS`
    (or `opts.detail_keys`);
 3. otherwise the **text** is matched: first `opts.patterns` (the plugin's own),
@@ -54,6 +60,8 @@ classify("file changed", { code = "conflict", id = "LUA-12" })
 4. no match: `internal`, with the message scrubbed.
 
 A pattern is `{ code, find, retryable? }`; it matches when the message contains
-one of the plain strings in `find`. The order of the built-in patterns is part
+one of the plain strings in `find`. The shape is not checked by `classify`
+(a malformed rule would throw from the error path, only when a message reaches
+it): `check_patterns` checks it once. The order of the built-in patterns is part
 of the contract (a message that is both `no such` and `already exists` is
 `not_found`).

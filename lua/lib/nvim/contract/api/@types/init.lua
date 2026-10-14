@@ -7,7 +7,7 @@
 ---@field flat? boolean                  The parameters are the request's own fields (a write door), not under `params`.
 ---@field keep_null? boolean             A JSON `null` stays `vim.NIL` (it means "remove" in a patch) instead of being absent.
 ---@field required? string[]             Parameters that must be given: otherwise `invalid_argument` ("<method> needs the parameter <name>").
----@field run fun(params: table, opts: table): table|nil, Lib.Contract.Error|string|nil
+---@field run fun(params: table, opts: table): table|nil, Lib.Contract.Error|string|nil, table|nil   A document, or `nil`, an error and optionally `info` (`{ code, retryable?, id, ... }`, the third value of `fs.with_lock`; anything but a table is ignored).
 
 ---@class Lib.Contract.ApiConfig
 ---@field doc Lib.Contract.Doc                                      The document builder (`lib.nvim.contract.doc`).

@@ -22,6 +22,8 @@
 ---@field DETAIL_KEYS string[]
 ---@field fail fun(code: string, message: string, retryable?: boolean): Lib.Contract.Error
 ---@field scrub fun(text: string): string
+---@field text fun(value: any): string
+---@field check_patterns fun(patterns: any): string|nil
 ---@field classify fun(err: any, info?: table, opts?: Lib.Contract.ClassifyOpts): Lib.Contract.Error
 
 return {}

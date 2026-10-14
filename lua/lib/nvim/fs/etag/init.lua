@@ -6,6 +6,8 @@
 --- replaced by two other bytes: still a function of the bytes, which is all a version tag and a content digest have
 --- to be. (Two texts that differ only by a NUL versus `\255\254` hash equal; a version tag tolerates that.)
 ---
+--- Not for a fast-event context: `vim.fn.sha256` raises E5560 there (`vim.schedule` first).
+---
 --- Moved here from `tasks_nvim.fsio.etag` / `fsio.sha256` (tasks.nvim@921a0c4).
 ---
 ---```lua
@@ -21,7 +23,9 @@ local M = {}
 ---@param text string
 ---@return string  # 64 hex digits
 function M.sha256(text)
-  if text:find("%z") then
+  -- the guard is a plain byte search (memchr speed): the `%z` pattern class would run the pattern matcher once per
+  -- byte and cost more than the hash itself on a text that has no NUL, which is nearly every text
+  if text:find("\0", 1, true) then
     text = text:gsub("%z", "\255\254")
   end
   return vim.fn.sha256(text)

@@ -9,8 +9,11 @@
 --- order of object keys is whatever `pairs` gives, a float is cut to 16 digits, and `NaN` is an error only some of the
 --- time. A document that is hashed (`digest`, `etag`, golden files) needs a writer with rules:
 ---
----  - object keys sorted by byte value; an object that may be empty is made with `M.object({})`, an array that may be
----    empty is just `{}` (the default for an empty table) or `M.array({})`; `vim.NIL` is `null`
+---  - object keys sorted by byte value (on plain Lua 5.1 too, where the language's own `<` follows the locale); an
+---    object that may be empty is made with `M.object({})`, an array that may be empty is just `{}` (the default for
+---    an empty table) or `M.array({})`; `vim.NIL` is `null`; Neovim's own empty-object marker (`vim.empty_dict()`, and
+---    every `{}` that `vim.json.decode` returns) counts as an object, so decode followed by encode keeps `{}` and `[]`
+---    apart (a deliberate addition to `tasks_nvim.json`, which did not know the marker)
 ---  - numbers: a whole number below 2^53 is written without a fraction, any other number with the fewest digits that
 ---    read back as the same number; `NaN`, `inf` and a whole number of 2^53 or more are an ERROR (a silent loss of
 ---    digits is the worst answer a contract can give); `-0` is `0`
@@ -29,6 +32,33 @@ local M = {}
 ---Marks a table as a JSON object even when it is empty or has no string keys yet.
 local OBJECT = { "lib.nvim.json.canonical.object" }
 local ARRAY = { "lib.nvim.json.canonical.array" }
+
+---Neovim's own empty-object marker: the metatable of `vim.empty_dict()` and of every `{}` that `vim.json.decode`
+---returns. `M.array` still wins over it (it replaces the metatable).
+local EMPTY_DICT = getmetatable(vim.empty_dict())
+
+local byte = string.byte
+
+---Bytewise `a < b`. Plain Lua 5.1 compares strings with `strcoll` (the collation of the locale: `a` before `B`),
+---LuaJIT compares bytes. A canonical text is hashed, so the order must be the same on every machine: never sort the
+---keys with the language's own `<`.
+---@param a string
+---@param b string
+---@return boolean
+local function bytes_less(a, b)
+  local la, lb = #a, #b
+  for i = 1, la < lb and la or lb do
+    local x, y = byte(a, i), byte(b, i)
+    if x ~= y then
+      return x < y
+    end
+  end
+  return la < lb
+end
+
+---Order for `table.sort` that is the same on every machine (see `bytes_less` above): byte by byte, a shorter string
+---before a longer one it is a prefix of. For every list of strings whose order ends up in a hash.
+M.bytes_less = bytes_less
 
 ---A table that is an OBJECT, empty or not.
 ---@generic T: table
@@ -52,7 +82,9 @@ local memo = setmetatable({}, { __mode = "k" })
 
 ---Mark a table whose compact text may be reused: the big part of a document (the list of tasks) is written once for
 ---its digest and once for the answer, and the second time costs nothing. The table must not change afterwards, and
----`indent` ignores the mark (a readable document is rare and small).
+---`indent` ignores the mark (a readable document is rare and small). A memoised table counts its levels like any
+---other (a cycle through it fails, and so does nesting deeper than 64) but only while its text is being computed:
+---reusing the remembered text does not look at the depth again.
 ---@generic T: table
 ---@param t T
 ---@return T
@@ -200,7 +232,7 @@ local function shape(t, path)
       error(("json: %s has a key of type %s"):format(path, type(k)), 0)
     end
   end
-  if mt == OBJECT or (mt ~= ARRAY and strings > 0) then
+  if mt == OBJECT or mt == EMPTY_DICT or (mt ~= ARRAY and strings > 0) then
     if count ~= strings then
       error(("json: %s mixes list and object keys"):format(path), 0)
     end
@@ -208,7 +240,7 @@ local function shape(t, path)
     for k in pairs(t) do
       keys[#keys + 1] = k
     end
-    table.sort(keys)
+    table.sort(keys, bytes_less)
     return "object", keys
   end
   if strings > 0 or max ~= count then
@@ -230,8 +262,10 @@ end
 ---@param indent? integer
 ---@param path0 string
 ---@param bypass? boolean  # The root itself is not looked up in the memo (it is being computed).
+---@param depth0? integer  # The level of the root: a memoised table is rendered from its own level, not from 0.
 ---@return string
-local function render(value, indent, path0, bypass)
+local function render(value, indent, path0, bypass, depth0)
+  depth0 = depth0 or 0
   local out = {}
   local function put(v, depth, path)
     local ty = type(v)
@@ -247,8 +281,8 @@ local function render(value, indent, path0, bypass)
       if depth > MAX_DEPTH then
         error(("json: %s is nested deeper than %d levels (a cycle?)"):format(path, MAX_DEPTH), 0)
       end
-      if not indent and memo[v] ~= nil and not (bypass and depth == 0) then
-        local text = memo[v] or render(v, nil, path, true)
+      if not indent and memo[v] ~= nil and not (bypass and depth == depth0) then
+        local text = memo[v] or render(v, nil, path, true, depth)
         memo[v] = text
         out[#out + 1] = text
         return
@@ -281,7 +315,7 @@ local function render(value, indent, path0, bypass)
       error(("json: %s is a %s, which JSON cannot hold"):format(path, ty), 0)
     end
   end
-  put(value, 0, path0)
+  put(value, depth0, path0)
   return table.concat(out)
 end
 

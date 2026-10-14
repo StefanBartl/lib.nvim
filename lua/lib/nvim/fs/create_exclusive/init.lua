@@ -1,10 +1,15 @@
 ---@module 'lib.nvim.fs.create_exclusive'
 --- Create a file with some content, failing with `"exists"` when it is already there.
 ---
---- The existence test and the creation are ONE syscall (`O_CREAT|O_EXCL`), so two writers can never both believe
---- they created the same file. The parent directory is created first (`lib.nvim.fs.mkdirp`). Bytes are written as
---- given. A failed or short write removes the file again, so no half-written file is left that the next caller
---- would read as "exists".
+--- The exclusive open (`O_CREAT|O_EXCL`) is the atomic part, so two writers can never both believe they created the
+--- same file. A name that is taken by anything counts as present, a symlink included (a dangling one too): it is
+--- looked up with an `lstat` first, because on Windows `O_EXCL` follows a dangling link and would create the file
+--- (or a folder) at the link TARGET, outside the folder. The parent directory is created first
+--- (`lib.nvim.fs.mkdirp`). Bytes are written as given. A failed or short write removes the file again, so no
+--- half-written file is left that the next caller would read as "exists".
+---
+--- It never raises: a `path` or `content` that is not a string, and a `path` that names a folder (ends in a
+--- slash), are answered as an error before anything is created.
 ---
 --- Moved here from `tasks_nvim.fsio.create_exclusive` (tasks.nvim@921a0c4), where it is the claim of a new task
 --- file and the lock file of `lib.nvim.fs.with_lock`.
@@ -38,12 +43,27 @@ end
 ---@return boolean ok
 ---@return string|nil err  `"exists"` when the file was already present
 local function create_exclusive(path, content)
-  local parent = unify_slashes(path):match("^(.*)/[^/]*$")
+  -- checked before anything is created: a non-string content would raise after the file exists, skipping the
+  -- close and the cleanup, and leave a permanent "exists" claim behind
+  if type(path) ~= "string" or type(content) ~= "string" then
+    return false, "invalid arguments: path and content must be strings"
+  end
+  local slashed = unify_slashes(path)
+  if slashed:sub(-1) == "/" then
+    -- no file name: the parent would be the folder with the file's name, made by mkdirp and then answered "exists"
+    return false, "open failed: the path names a folder, not a file: " .. path
+  end
+  local parent = slashed:match("^(.*)/[^/]*$")
   if parent and parent ~= "" then
     local made, merr = mkdirp(parent)
     if not made then
       return false, tostring(merr)
     end
+  end
+  -- POSIX O_EXCL refuses a name that is a symlink, even a dangling one; Windows follows it and creates (or fails
+  -- on) the link TARGET, outside the folder. Any existing name, link included, counts as present on every platform.
+  if uv.fs_lstat(path) then
+    return false, EXISTS
   end
   local fd, open_err = uv.fs_open(path, "wx", 420) -- 0644, less the umask
   if not fd then

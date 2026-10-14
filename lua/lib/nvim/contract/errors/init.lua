@@ -8,7 +8,11 @@
 --- `classify` turns whatever came back into the error a document carries. An error string with no code is matched
 --- against a short list of text patterns: the one fragile spot, until the code is given at every source. The patterns
 --- of the shared parts (I/O, locks, "already exists") are built in; the patterns of a plugin's own messages are handed
---- in as `opts.patterns` and are tried first.
+--- in as `opts.patterns` and are tried first (`check_patterns` tells a malformed rule where it is handed in).
+---
+--- Whatever is not a string is made a text by `text`: a table by its own `__tostring` or its string `message`, any
+--- other value by its type, never by its address. (`tasks_nvim.errors` used `tostring`, which printed `table: 0x...`,
+--- a different text on every call.)
 ---
 --- Codes (`M.CODES`): `invalid_argument` (the request or a value is wrong), `not_found` (id, method, source),
 --- `conflict` (the file is not the version the caller saw), `exists` (the name is taken), `forbidden` (a link where a
@@ -47,13 +51,65 @@ function M.fail(code, message, retryable)
   return { code = code, message = message, retryable = retryable == true }
 end
 
+---A token without everything up to its last `/lua/`. One search per token, on purpose: the single pattern
+---`[^%s'"]*[/\]lua[/\]` backtracked over the whole token from every start, quadratic in a long one (an id of the
+---request echoed in a message, up to 256 KiB: minutes of a blocked editor).
+---@param token string
+---@return string|nil cut    # `nil` keeps the token as it is
+local function cut_token(token)
+  local last, from = nil, 1
+  while true do
+    local s, e = token:find("[/\\]lua[/\\]", from)
+    if not s then
+      break
+    end
+    last, from = e, s + 1 -- `s + 1`: marks may overlap (`/lua/lua/`), the cut is after the last one
+  end
+  return last and token:sub(last + 1) or nil
+end
+
 ---A Lua error message without where the plugin is installed: `<path>/lua/some_plugin/x.lua:12: boom` becomes
----`some_plugin/x.lua:12: boom`. The message of a bug of the engine says where it happened, which is useful, but a path
----of this machine does not belong in a document.
+---`some_plugin/x.lua:12: boom`. The message of a bug of the engine says where it happened, which is useful, but the
+---install path of this machine does not belong in a document.
+---
+---Limit: a token (what lies between whitespace or quotes) is cut at its last `/lua/`, so a path with a space keeps
+---its head (`C:\Users\John Doe\...\lua\x\a.lua` becomes `C:\Users\John x\a.lua`), and a path with no `lua` directory
+---is not touched at all. LuaJIT already shortens a chunk name of more than 59 characters to `...` plus its tail,
+---which hides most of the head. Linear in the length of the text, a long token included.
 ---@param text string
 ---@return string
 function M.scrub(text)
-  return (text:gsub("[^%s'\"]*[/\\]lua[/\\]", ""))
+  return (text:gsub("[^%s'\"]+", cut_token))
+end
+
+---The text of whatever came back as an error: a string as it is, a number or boolean as it prints, a table by its
+---own `__tostring` or its text `message`, anything else (a function, a userdata, a table with neither) a fixed text
+---that names its type. Never an address (`table: 0x...` is different on every call and tells a client nothing) and
+---never a throw (an error object whose `__tostring` or `message` raises is a value of unknown shape).
+---@param value any
+---@return string
+function M.text(value)
+  local kind = type(value)
+  if kind == "string" then
+    return value
+  elseif kind == "number" or kind == "boolean" or kind == "nil" then
+    return tostring(value)
+  elseif kind == "table" then
+    local meta = getmetatable(value)
+    if type(meta) == "table" and rawget(meta, "__tostring") ~= nil then
+      local printed, text = pcall(tostring, value)
+      if printed and type(text) == "string" then
+        return text
+      end
+    end
+    local read, message = pcall(function()
+      return value.message
+    end)
+    if read and type(message) == "string" then
+      return message
+    end
+  end
+  return "error value of type " .. kind
 end
 
 ---What a reader may learn from `info` besides the code: ids, keys and values, never a path.
@@ -97,17 +153,48 @@ local function match(text, rules)
   return nil
 end
 
+---Check the shape of a plugin's own patterns once, where they are handed in (`contract.api.make` does): a rule that
+---is not `{ code = string, find = string[], retryable? }` would otherwise throw from the error path, only when a
+---message falls through to it, and a rule without a code would answer an error document that has none.
+---@param patterns any
+---@return string|nil problem    # a message that names the first fault (no position: it is a value); `nil` if all is well
+function M.check_patterns(patterns)
+  if type(patterns) ~= "table" or not vim.islist(patterns) then
+    return "patterns must be a list"
+  end
+  for i, rule in ipairs(patterns) do
+    if type(rule) ~= "table" then
+      return ("patterns[%d] must be a table"):format(i)
+    end
+    if type(rule.code) ~= "string" then
+      return ("patterns[%d].code must be a string"):format(i)
+    end
+    local find = rule.find
+    local texts = type(find) == "table" and vim.islist(find)
+    for _, needle in ipairs(texts and find or {}) do
+      if type(needle) ~= "string" then
+        texts = false
+        break
+      end
+    end
+    if not texts then
+      return ("patterns[%d].find must be a list of strings"):format(i)
+    end
+  end
+  return nil
+end
+
 ---An error from below the contract, as the error a document carries.
----@param err any                    # the message (or already an error table)
----@param info? table                # the third value some functions give: `{ code, retryable?, ... }`
+---@param err any                    # the message, an error table (has a `code`), or any other value (made a text by `M.text`)
+---@param info? table                # the third value some functions give: `{ code, retryable?, ... }`; anything but a table is ignored
 ---@param opts? Lib.Contract.ClassifyOpts
 ---@return Lib.Contract.Error
 function M.classify(err, info, opts)
   if type(err) == "table" and err.code then
     return err
   end
-  local text = tostring(err)
-  if info and info.code then
+  local text = M.text(err)
+  if type(info) == "table" and info.code then
     local details = {}
     for _, key in ipairs((opts and opts.detail_keys) or M.DETAIL_KEYS) do
       if info[key] ~= nil then

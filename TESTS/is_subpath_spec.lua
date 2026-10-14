@@ -77,6 +77,66 @@ return function(H)
     false,
     "is_subpath: case counts by default"
   )
+  -- the fold does not depend on the `realpath` setting: it works with the default (true) and with an explicit one
+  ok(
+    is_subpath("/Nope-Zz/A/x.lua", "/nope-zz/a", { ignore_case = true }),
+    "is_subpath: ignore_case, default realpath"
+  )
+  ok(
+    is_subpath("/Nope-Zz/A/x.lua", "/nope-zz/a", { realpath = true, ignore_case = true }),
+    "is_subpath: ignore_case, explicit realpath"
+  )
+  ok(
+    not is_subpath("/Nope-Zz/A/x.lua", "/nope-zz/a", { realpath = true }),
+    "is_subpath: case counts without ignore_case, with realpath"
+  )
+
+  -- `string.lower` folds ASCII only; `Ärger` / `ärger` are one folder on NTFS/APFS, and a deny-list
+  -- ("is this path inside the forbidden folder") must not be bypassed by spelling it with another
+  -- non-ASCII case.
+  ok(is_subpath("C:/t/ärger/x.md", "C:/t/Ärger", fold), "is_subpath: ignore_case folds non-ASCII")
+  ok(is_subpath("C:/t/ÄRGER", "C:/t/ärger", fold), "is_subpath: ignore_case, non-ASCII equality")
+  eq(
+    is_subpath("C:/t/Ärgerx/y", "C:/t/ärger", fold),
+    false,
+    "is_subpath: ignore_case non-ASCII keeps whole segments"
+  )
+  eq(
+    is_subpath("/t/Ärger/x", "/t/ärger", { realpath = false }),
+    false,
+    "is_subpath: non-ASCII case still counts by default"
+  )
+
+  -- A trailing separator is no different spelling of the same directory: the no-`opts` branch gets
+  -- that from `vim.fs.normalize`, and the `normkey` branch must agree (the drop-in for the old
+  -- `fsio.is_inside`, which normalized both sides first).
+  ok(is_subpath("/v", "/v/", fold), "is_subpath: ignore_case, equality with a trailing-slash base")
+  ok(is_subpath("C:/x", "C:/x/", fold), "is_subpath: ignore_case, drive path with trailing slash")
+  ok(is_subpath("/v", "/v//", fold), "is_subpath: ignore_case, several trailing slashes")
+  ok(is_subpath("/v/", "/v", fold), "is_subpath: ignore_case, trailing slash on path")
+  ok(is_subpath("C:/", "C:/", fold), "is_subpath: ignore_case, a drive root keeps its slash")
+  ok(is_subpath("/", "/", fold), "is_subpath: ignore_case, the POSIX root keeps its slash")
+  -- "C:" is "the cwd on drive C", not the drive root: stripping the slash off `C:/` must not make
+  -- the two compare equal.
+  eq(
+    is_subpath("C:", "C:/", fold),
+    false,
+    "is_subpath: ignore_case, a bare drive is not the drive root"
+  )
+  eq(
+    is_subpath("/vv", "/v/", fold),
+    false,
+    "is_subpath: ignore_case, trailing-slash base keeps whole segments"
+  )
+  eq(
+    is_subpath("/v/", "/v/a", fold),
+    false,
+    "is_subpath: ignore_case, a parent is not inside a trailing-slash child"
+  )
+  ok(
+    is_subpath("/v", "/v/", { realpath = false }),
+    "is_subpath: realpath=false, equality with a trailing-slash base"
+  )
 
   -- The case opts exist for: the OS hands back a spelling of a directory that
   -- is not its canonical one -- an 8.3 short name on Windows (`STEFAN~1`),
