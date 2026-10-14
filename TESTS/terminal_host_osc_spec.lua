@@ -82,6 +82,8 @@ return function(H)
     eq(osc.wrap("S"), "\27Ptmux;S\27\\", "osc.wrap: without the flag, $TMUX decides (in tmux)")
     vim.env.TMUX = nil
     eq(osc.wrap("S"), "S", "osc.wrap: without the flag and without $TMUX, unchanged")
+    vim.env.TMUX = ""
+    eq(osc.wrap("S"), "S", "osc.wrap: without the flag, an empty $TMUX is not tmux")
   end)
   vim.env.TMUX = saved_tmux
   if not passed then
