@@ -164,6 +164,7 @@ local specs = {
   "contract_doc_spec.lua",
   "contract_api_spec.lua",
   "terminal_host_osc_spec.lua",
+  "shell_quote_spec.lua",
 }
 
 --- Straight to stdout rather than through `print`.

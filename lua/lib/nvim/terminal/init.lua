@@ -6,7 +6,9 @@ require("lib.nvim.terminal.@types")
 
 local M = {}
 
--- Cross-platform path escaping for terminal commands
+-- Cross-platform path escaping for terminal commands. Narrow: for a whole command line typed into
+-- a terminal use `lib.nvim.cross.shell_quote`, which knows the shell families and refuses what it
+-- cannot quote.
 -- Escape spaces and special characters for shell
 ---@param path string
 ---@return string
