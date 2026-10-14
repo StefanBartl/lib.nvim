@@ -208,11 +208,10 @@ function M.parse(lines)
         local rows, sep_style, sep_line_idx, col_count = {}, nil, nil, 0
         for ln = start, stop do
           local is_sep, style = M.is_separator_line(lines[ln])
-          if is_sep then
-            if not sep_line_idx then
-              sep_line_idx = ln
-              sep_style = style
-            end
+          -- only the first such line is the delimiter row; a later `| - | - |` is a data row
+          if is_sep and not sep_line_idx then
+            sep_line_idx = ln
+            sep_style = style
           else
             local cells = M.parse_row(lines[ln])
             rows[#rows + 1] = cells
