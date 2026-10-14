@@ -131,3 +131,18 @@ Both require the same three things per tool: `bin`, a non-empty `why`
 (validation fails without one — see the roadmap doc's "Describing tools"
 section for why that's enforced, not just documented), and at least one
 `pkg` entry.
+
+## `contract_host.lua` — the persistent engine script of a machine contract
+
+The script behind `nvim --headless -u NONE -i NONE -n -l scripts/<plugin>-host.lua`:
+it puts the plugin and `lib.nvim` on the runtimepath (`$LIB_NVIM_DIR`,
+`$LIB_NVIM_PATH`, `$REPOS_DIR/lib.nvim`, the plugin's `.deps/lib.nvim`, a sibling
+checkout, lazy.nvim's data folder, in that order), then calls
+`require(MODULE).serve(io.stdin, io.stdout)`. Copy it to `scripts/<plugin>-host.lua`
+and replace the two names at its top (`MODULE`, `PLUGIN`); `MODULE` is the Lua
+module that returns [`contract.host`](../lua/lib/nvim/contract/host/README.md)'s
+`make({ api = api })`. Exit code `0` when the input ended, `2` when `lib.nvim` is
+not found (stderr names what to set, stdout stays empty). It is a copy and not a
+module for the same reason as `resolve_lib_nvim.lua`: it runs before `lib.nvim`
+can be reached. `TESTS/contract_host_spec.lua` runs this very file in a child
+Neovim.
