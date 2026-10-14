@@ -36,6 +36,9 @@ shape and keeps everything else verbatim.
   style of the last one, and surplus items are removed. Emptying the list
   writes `key: []`, setting a scalar replaces all item lines, `REMOVE` drops
   them with the key. A list that has no block yet is still written inline.
+  Removing a key is refused when the `-` line below it would then become an
+  item of the list above it (a stray bullet after a blank line); a patch of
+  many keys is applied in one pass over the lines, so it stays linear.
   An item that is not a scalar (`- a: 1`, `- - x`, `- [x]`, `- |`, an empty
   `-`) makes the whole key opaque, see below.
 * **Not supported:** nesting (maps, lists of lists, lists of maps), multi-line
