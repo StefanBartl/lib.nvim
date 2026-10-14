@@ -163,6 +163,7 @@ local specs = {
   "fs_with_lock_spec.lua",
   "contract_doc_spec.lua",
   "contract_api_spec.lua",
+  "contract_ops_spec.lua",
   "terminal_host_osc_spec.lua",
   "shell_quote_spec.lua",
 }
