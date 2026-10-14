@@ -176,4 +176,112 @@ return function(H)
     return false
   end, 20)
   eq(count_of(stop_seen, "after-stop.txt"), 0, "watch: stop() prevents any further callback")
+
+  -- ------------------------------------------------- errors are reported
+
+  -- A backend error cannot be provoked portably, so a fake `fs_event` stands in
+  -- and the module's own callback is driven by hand.
+  ---@param start_impl fun(self: table, path: string, flags: table, cb: function): any, any
+  ---@return table fake
+  local function fake_event(start_impl)
+    local fake = { closed = false }
+    function fake.start(self, path, flags, cb)
+      fake.cb = cb
+      return start_impl(self, path, flags, cb)
+    end
+    function fake.stop() end
+    function fake.close()
+      fake.closed = true
+    end
+    function fake.is_closing()
+      return fake.closed
+    end
+    return fake
+  end
+
+  do
+    local fake = fake_event(function()
+      return 0
+    end)
+    local errors, changes = {}, 0
+    H.with_patched(uv, "new_fs_event", function()
+      return fake
+    end, function()
+      local wh = watch.start(tmp, function()
+        changes = changes + 1
+      end, {
+        on_error = function(err, path)
+          errors[#errors + 1] = { err, path }
+        end,
+      })
+      ok(wh, "watch: a fake backend starts")
+      eq(wh.last_error(), nil, "watch: no error before one happens")
+
+      fake.cb("EPERM")
+      vim.wait(1000, function()
+        return #errors > 0
+      end, 10)
+      eq(#errors, 1, "watch: a backend error reaches on_error")
+      eq(errors[1][1], "EPERM", "watch: on_error gets the libuv error")
+      eq(errors[1][2], tmp, "watch: on_error gets the watched path")
+      eq(wh.last_error(), "EPERM", "watch: last_error returns it")
+      eq(changes, 0, "watch: an error is not a change")
+
+      fake.cb("ENOSPC")
+      vim.wait(1000, function()
+        return #errors > 1
+      end, 10)
+      eq(wh.last_error(), "ENOSPC", "watch: last_error is the latest")
+
+      -- No callback after stop().
+      wh.stop()
+      fake.cb("EIO")
+      vim.wait(100, function()
+        return false
+      end, 10)
+      eq(#errors, 2, "watch: on_error is silent after stop()")
+    end)
+  end
+
+  do
+    -- Without on_error nothing throws and the error is still kept.
+    local fake = fake_event(function()
+      return 0
+    end)
+    H.with_patched(uv, "new_fs_event", function()
+      return fake
+    end, function()
+      local wh = watch.start(tmp, function() end)
+      ok(wh, "watch: starts without on_error")
+      fake.cb("EPERM")
+      eq(wh.last_error(), "EPERM", "watch: last_error works without on_error")
+      wh.stop()
+    end)
+  end
+
+  do
+    -- A start that raises names the cause (it used to be lost).
+    local fake = fake_event(function()
+      error("boom from backend", 0)
+    end)
+    H.with_patched(uv, "new_fs_event", function()
+      return fake
+    end, function()
+      local wh, err = watch.start(tmp, function() end)
+      eq(wh, nil, "watch: a raising start returns no wh")
+      ok(err and err:find("boom from backend", 1, true), "watch: the start error names the cause")
+      ok(fake.closed, "watch: the failed wh is closed")
+    end)
+    -- libuv's own refusal (`nil, err`) keeps its message too.
+    local fake2 = fake_event(function()
+      return nil, "ENOENT"
+    end)
+    H.with_patched(uv, "new_fs_event", function()
+      return fake2
+    end, function()
+      local wh, err = watch.start(tmp .. "/missing", function() end)
+      eq(wh, nil, "watch: a refused start returns no wh")
+      ok(err and err:find("ENOENT", 1, true), "watch: the refusal reason is kept")
+    end)
+  end
 end

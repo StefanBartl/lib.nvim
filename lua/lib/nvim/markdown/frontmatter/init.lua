@@ -277,6 +277,48 @@ local function parse_value(rest, numbers)
   return v, comment
 end
 
+---Parse one block-list line (`  - item`) into its scalar and the style it was
+---written in. Only scalars: a nested map, a nested list, a flow collection or
+---a block scalar as item is not understood.
+---@param line string
+---@return table|nil item  `{ indent, value, quote, comment }`
+---@return string|nil err  set when the line starts with `-` but its item is not a plain scalar
+local function parse_list_item(line)
+  local indent, rest = line:match("^([ \t]*)%-(.*)$")
+  if not indent or (rest ~= "" and not rest:match("^[ \t]")) then
+    return nil
+  end
+  local v = rest:match("^%s*(.*)$")
+  if v == "" or v:sub(1, 1) == "#" then
+    return nil, "empty list item"
+  end
+  local first = v:sub(1, 1)
+  if first == '"' or first == "'" then
+    local content, j = scan_quoted(v, 1)
+    if not content then
+      return nil, "unterminated quoted list item"
+    end
+    local comment, ok = scan_tail(v:sub(j))
+    if not ok then
+      return nil, "unexpected text after the quoted list item"
+    end
+    return { indent = indent, value = content, quote = first, comment = comment }
+  elseif first:find("[%[{|>&*!]") or v:find("^%-[ \t]") or v == "-" then
+    return nil, "list item is not a plain scalar"
+  end
+  local comment
+  local s = find_comment_start(v)
+  if s then
+    comment = rtrim(v:sub(s))
+    v = v:sub(1, s - 1)
+  end
+  v = rtrim(v)
+  if v:find(": ", 1, true) or v:sub(-1) == ":" then
+    return nil, "list item is not a plain scalar"
+  end
+  return { indent = indent, value = v, quote = "", comment = comment }
+end
+
 ---@param parsed Lib.Markdown.Frontmatter.Parsed
 local function refresh_raw_lines(parsed)
   local raw = {}
@@ -332,6 +374,8 @@ function M.parse(text, opts)
   local entries = {}
   local warnings = {}
   local last_kv ---@type Lib.Markdown.Frontmatter.Entry|nil
+  local list_kv ---@type Lib.Markdown.Frontmatter.Entry|nil  # key whose block list may continue on the next line
+  local gap = {} ---@type Lib.Markdown.Frontmatter.Entry[]  # blank/comment lines since the list's last item
   local keyed, stray = 0, 0
   local closed = false
   local lineno = 1
@@ -349,7 +393,38 @@ function M.parse(text, opts)
     ---@type Lib.Markdown.Frontmatter.Entry
     local entry = { raw = line, eol = eol, line = lineno }
     local key, rest = line:match("^([%w_][%w_%.%-]*)[ \t]*:(.*)$")
-    if key and (rest == "" or rest:match("^[ \t]")) then
+    local item, item_err
+    if list_kv then
+      item, item_err = parse_list_item(line)
+    end
+    if item or item_err then
+      -- A line of the block list under `list_kv` (comments and blank lines
+      -- seen since the last item belong to it too).
+      local owner = list_kv --[[@as Lib.Markdown.Frontmatter.Entry]]
+      if item then
+        local block = owner.block
+        if not block then
+          block = { items = {}, entries = {} }
+          owner.block, owner.value = block, block.items
+        end
+        for _, g in ipairs(gap) do
+          g.owner = owner
+        end
+        entry.owner, entry.item, entry.style = owner, item.value, item
+        block.items[#block.items + 1] = item.value
+        block.entries[#block.entries + 1] = entry
+        last_kv = owner
+      else
+        owner.opaque, owner.value, owner.block = item_err, nil, nil
+        warnings[#warnings + 1] = ("line %d: key '%s': %s, kept verbatim"):format(
+          lineno,
+          owner.key,
+          item_err
+        )
+        last_kv, list_kv = owner, nil
+      end
+      gap = {}
+    elseif key and (rest == "" or rest:match("^[ \t]")) then
       local value, comment, err = parse_value(rest, numbers)
       entry.key = key
       if err then
@@ -359,21 +434,31 @@ function M.parse(text, opts)
         entry.value, entry.comment = value, comment
       end
       last_kv = entry
+      -- `key:` with nothing after it may open a block list.
+      local bare = rest:match("^%s*(.*)$")
+      list_kv = (not err and (bare == "" or bare:sub(1, 1) == "#")) and entry or nil
+      gap = {}
       keyed = keyed + 1
     elseif line:match("^%s*$") or line:match("^%s*#") then
       last_kv = nil
+      if list_kv then
+        gap[#gap + 1] = entry
+      end
     elseif last_kv and (line:match("^[ \t]") or line:match("^%-[ \t]") or line == "-") then
-      -- Continuation of the previous key: a nested map, a block list or a
-      -- multi-line scalar. None of that is read, and none of it is rewritten.
+      -- Continuation of the previous key: a nested map or a multi-line
+      -- scalar (a block list of scalars is read above). None of that is
+      -- read, and none of it is rewritten.
       if not last_kv.opaque then
         last_kv.opaque = "nested or multi-line value"
+        last_kv.value, last_kv.block = nil, nil
         warnings[#warnings + 1] = ("line %d: key '%s' has a nested or multi-line value, kept verbatim"):format(
           last_kv.line,
           last_kv.key
         )
       end
+      list_kv, gap = nil, {}
     else
-      last_kv = nil
+      last_kv, list_kv, gap = nil, nil, {}
       stray = stray + 1
       warnings[#warnings + 1] = ("line %d: not a `key: value` line, kept verbatim"):format(lineno)
     end
@@ -655,7 +740,8 @@ local function remove_key(parsed, key)
   end
   local kept = {}
   for _, e in ipairs(parsed.entries) do
-    if e.key ~= key then
+    -- The lines of a block list (items, comments between them) go with their key.
+    if e.key ~= key and not (e.owner and e.owner.key == key) then
       kept[#kept + 1] = e
     end
   end
@@ -668,6 +754,98 @@ local function remove_key(parsed, key)
       break
     end
   end
+end
+
+---One block-list item line in the style of `style`.
+---@param style Lib.Markdown.Frontmatter.ItemStyle
+---@param s string
+---@return string
+local function render_item_line(style, s)
+  local scalar
+  if style.quote == "'" and not s:find("%c") then
+    scalar = "'" .. s:gsub("'", "''") .. "'"
+  elseif style.quote == '"' then
+    scalar = quote_double(s)
+  end
+  scalar = scalar or render_string(s, false) or quote_double(s)
+  return style.indent .. "- " .. scalar .. (style.comment or "")
+end
+
+---Write `items` (or, for a non-list value, `rendered`) over the block list of
+---`entry`. Items that did not change keep their line byte for byte; a changed
+---item keeps its indent, quote style and comment; new items copy the style of
+---the last old item; surplus items go away. Anything that is not a non-empty
+---list (a scalar, `[]`) replaces the whole block by one `key: value` line.
+---One pass over `parsed.entries`, however long the list is.
+---@param parsed Lib.Markdown.Frontmatter.Parsed
+---@param entry Lib.Markdown.Frontmatter.Entry
+---@param value any  the normalized value
+---@param rendered string  the inline form of `value`
+local function rewrite_block(parsed, entry, value, rendered)
+  local kept = {}
+  if type(value) ~= "table" or #value == 0 then
+    entry.raw = entry.key .. ": " .. rendered .. (entry.comment or "")
+    entry.block, entry.value = nil, value
+    for _, e in ipairs(parsed.entries) do
+      if e.owner ~= entry then
+        kept[#kept + 1] = e
+      end
+    end
+    parsed.entries = kept
+    return
+  end
+
+  local old = entry.block.entries
+  local n_old, n_new = #old, #value
+  local last = old[n_old]
+  local added = {}
+  local dropped = {}
+  for i = 1, n_new do
+    local e = old[i]
+    if e then
+      if e.item ~= value[i] then
+        local st = e.style
+        local style =
+          { indent = st.indent, value = value[i], quote = st.quote, comment = st.comment }
+        e.raw, e.item, e.style = render_item_line(style, value[i]), value[i], style
+      end
+    else
+      local st = last.style
+      local style = { indent = st.indent, value = value[i], quote = st.quote }
+      added[#added + 1] = {
+        raw = render_item_line(style, value[i]),
+        eol = last.eol,
+        line = last.line,
+        owner = entry,
+        item = value[i],
+        style = style,
+      }
+    end
+  end
+  for i = n_new + 1, n_old do
+    dropped[old[i]] = true
+  end
+
+  local items = {}
+  local item_entries = {}
+  for i = 1, n_new do
+    items[i] = value[i]
+    item_entries[i] = old[i] or added[i - n_old]
+  end
+  entry.block = { items = items, entries = item_entries }
+  entry.value = items
+
+  for _, e in ipairs(parsed.entries) do
+    if not dropped[e] then
+      kept[#kept + 1] = e
+    end
+    if e == last then
+      for _, a in ipairs(added) do
+        kept[#kept + 1] = a
+      end
+    end
+  end
+  parsed.entries = kept
 end
 
 ---@param parsed Lib.Markdown.Frontmatter.Parsed
@@ -742,7 +920,12 @@ function M.patch(parsed, patch, opts)
     else
       local entry = parsed.by_key[key]
       if entry then
-        if not same_value(entry.value, op.normalized) then
+        if same_value(entry.value, op.normalized) then
+          -- nothing to do
+        elseif entry.block then
+          rewrite_block(parsed, entry, op.normalized, op.rendered)
+          parsed.meta[key] = op.normalized
+        else
           entry.raw = key .. ": " .. op.rendered .. (entry.comment or "")
           entry.value = op.normalized
           parsed.meta[key] = op.normalized

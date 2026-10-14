@@ -15,6 +15,20 @@
 ---@field value? Lib.Markdown.Frontmatter.Value
 ---@field comment? string                 # A trailing `# ...` comment, kept when the line is rewritten.
 ---@field opaque? string                  # Why the value is not understood; such a line is never rewritten.
+---@field block? Lib.Markdown.Frontmatter.Block  # Set on a key whose value is a block list (`key:` + `  - item` lines).
+---@field owner? Lib.Markdown.Frontmatter.Entry  # On an item, blank or comment line inside a block list: the key line it belongs to.
+---@field item? string                    # On a block-list item line: the item's value.
+---@field style? Lib.Markdown.Frontmatter.ItemStyle  # On a block-list item line: how it was written.
+
+---@class Lib.Markdown.Frontmatter.Block
+---@field items string[]                  # The items in file order (same table as the key's `value`).
+---@field entries Lib.Markdown.Frontmatter.Entry[]  # The item lines, parallel to `items`.
+
+---@class Lib.Markdown.Frontmatter.ItemStyle
+---@field indent string                   # Whitespace before the `-`.
+---@field value string
+---@field quote string                    # `"`, `'` or `""` (plain).
+---@field comment? string                 # Trailing `# ...` comment with its leading whitespace.
 
 --- The result of `parse`. Treat it as read-only except through `patch`/`set`.
 ---@class Lib.Markdown.Frontmatter.Parsed

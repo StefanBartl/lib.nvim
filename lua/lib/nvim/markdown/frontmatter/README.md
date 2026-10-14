@@ -27,8 +27,19 @@ shape and keeps everything else verbatim.
   `string[]`). Number-looking and date-looking values stay **strings**
   (`prio: 2` reads as `"2"`); `{ numbers = true }` turns number-looking plain
   values into numbers, dates are always strings. An empty value reads as `""`.
-* **Not supported:** nesting, multi-line values, block scalars (`|`, `>`),
-  flow maps (`{...}`), anchors/aliases/tags. A key with such a value is listed
+* **Block lists:** `key:` followed by `- item` lines (as Obsidian's Properties
+  editor writes them, indented or at the key's own indent) read exactly like
+  the inline `[a, b]` form: a `string[]`. Items are plain or quoted scalars; a
+  trailing `# comment`, and blank or comment lines between items, are fine.
+  Writing keeps the style: an unchanged item keeps its line byte for byte, a
+  changed item keeps its indent, quote style and comment, new items copy the
+  style of the last one, and surplus items are removed. Emptying the list
+  writes `key: []`, setting a scalar replaces all item lines, `REMOVE` drops
+  them with the key. A list that has no block yet is still written inline.
+  An item that is not a scalar (`- a: 1`, `- - x`, `- [x]`, `- |`, an empty
+  `-`) makes the whole key opaque, see below.
+* **Not supported:** nesting (maps, lists of lists, lists of maps), multi-line
+  values, block scalars (`|`, `>`), flow maps (`{...}`), anchors/aliases/tags. A key with such a value is listed
   in `parsed.opaque` (key -> reason), is **not** in `meta`, and a patch that
   touches it is refused. Its lines are never altered.
 * **Comments:** a `# comment` line is kept as-is. A trailing comment needs
