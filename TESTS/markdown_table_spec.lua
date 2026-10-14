@@ -135,6 +135,27 @@ return function(H)
     eq(#T.parse_row(out[3]), 2, "a formatted table keeps two columns")
     eq(out[3]:find(bs .. "|", 1, true) ~= nil, true, "and the escape survives the re-render")
     eq(table.concat(T.format_lines(out), "\n"), table.concat(out, "\n"), "formatting is idempotent")
+
+    -- An escaped final pipe is not the row's closer.
+    eq(
+      T.is_table_line("| c | d " .. bs .. "|"),
+      false,
+      "odd backslash run before the last pipe: no closer"
+    )
+    eq(
+      #T.split_cells("| c | d " .. bs .. "|"),
+      0,
+      "such a row is not split, so a re-render cannot rewrite it"
+    )
+    eq(
+      T.is_table_line("| c | d " .. bs .. bs .. "|"),
+      true,
+      "an even run leaves the pipe a real closer"
+    )
+    eq(#T.split_cells("| c | d " .. bs .. bs .. "|"), 2, "and the row splits as before")
+    eq(T.is_table_line("|" .. bs .. "|"), false, "pipe, backslash, pipe is not a closed row")
+    eq(T.is_table_line("|"), false, "a lone pipe is no row")
+    eq(T.is_table_line("||"), true, "an empty one-cell row still is")
   end
 
   do

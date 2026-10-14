@@ -90,6 +90,25 @@ end
 -- Recognising and parsing
 -- ─────────────────────────────────────────────────────────────────────────────
 
+---Does the trimmed row start with a pipe and end with a real (unescaped) one?
+---
+---An odd run of backslashes before the final pipe escapes it (`d \|` keeps
+---the pipe inside the cell), so the row has no closing pipe. A plain
+---byte walk, no pattern: nothing to backtrack on a long run of backslashes.
+---@param t string  # already trimmed
+---@return boolean
+local function has_closing_pipe(t)
+  if #t < 2 or t:byte(1) ~= 124 or t:byte(-1) ~= 124 then
+    return false
+  end
+  local bs, i = 0, #t - 1
+  while i >= 2 and t:byte(i) == 92 do
+    bs = bs + 1
+    i = i - 1
+  end
+  return bs % 2 == 0
+end
+
 ---Is `line` a pipe-table row?
 ---@param line any
 ---@return boolean
@@ -97,7 +116,7 @@ function M.is_table_line(line)
   if type(line) ~= "string" then
     return false
   end
-  return trim(line):match("^|.*|$") ~= nil
+  return has_closing_pipe(trim(line))
 end
 
 ---Is `line` a table's separator row, and in which style?
@@ -148,7 +167,7 @@ function M.split_cells(line)
   end
   local trimmed = trim(line)
   -- Not `^|(.-)%s*|$`: that retries a whitespace run from every byte inside it (SEC-32).
-  if #trimmed < 2 or trimmed:sub(1, 1) ~= "|" or trimmed:sub(-1) ~= "|" then
+  if not has_closing_pipe(trimmed) then
     return cells, ranges
   end
   -- Offset of `trimmed` inside `line`, so ranges are in `line` coordinates.
