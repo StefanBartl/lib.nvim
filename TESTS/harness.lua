@@ -1,5 +1,14 @@
 -- TESTS/harness.lua — tiny assertion helper shared by the spec files.
 -- Returned to each spec by TESTS/run.lua.
+--
+-- This runner and this helper are lib.nvim's own and stay that way (decision of
+-- 2026-10-06, testing.nvim "Bootstrap circle", option A). testing.nvim depends on
+-- lib.nvim, so if lib.nvim's tests ran on testing.nvim only, a bug in `error`,
+-- `async`, `fs` or `system` -- modules testing.nvim itself uses -- could hide behind
+-- the very runner that is broken by it. Nothing in TESTS/ imports testing.nvim.
+-- testing.nvim's CI additionally runs this whole suite through its own runner on
+-- three systems (job `lib-suite`), as a cross-check, not as a replacement.
+-- The legacy sentinel `LIB_TESTS_OK` (last line of a green TESTS/run.lua run) stays.
 
 local H = {}
 

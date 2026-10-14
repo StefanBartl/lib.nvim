@@ -24,6 +24,25 @@ replaces a global (`uv.fs_open`, `vim.system`, `os.date`, ...) must put it back
 whatever happens inside — `H.with_patched` does — or its failure cascades into
 the specs after it.
 
+## Why lib.nvim keeps its own runner
+
+lib.nvim does **not** run its suite on testing.nvim; `TESTS/run.lua` and
+`TESTS/harness.lua` are its own, and this is on purpose (decision of 2026-10-06,
+testing.nvim "Bootstrap circle", option A). testing.nvim depends on lib.nvim, so
+a suite that ran on testing.nvim only could hide a bug in `error`, `async`, `fs`
+or `system` -- the modules testing.nvim itself is built on -- behind the very
+runner that bug breaks. Rules that follow:
+
+- No spec and no file in `TESTS/` imports testing.nvim, and lib.nvim's CI runs
+  `nvim -l TESTS/run.lua` without testing.nvim installed.
+- The sentinel `LIB_TESTS_OK` (last output line of a fully green run) and the
+  non-zero exit on any failure stay as they are; callers grep for them.
+- testing.nvim's CI runs this whole suite through its own runner as well, on
+  Linux, Windows and macOS (job `lib-suite`, `--first-run`, against lib.nvim's
+  `ci-verified` branch). That is a cross-check that the two runners agree, not a
+  replacement: a red `lib-suite` job is testing.nvim's to look at first, a red
+  `TESTS/run.lua` here is lib.nvim's.
+
 ## Layout
 
 The table below follows `run.lua`'s load order loosely. Entries carried over
