@@ -1,7 +1,7 @@
 # Zentrale Prinzipien — applied to lib.nvim
 
 Audit of lib.nvim against
-[`Zentrale-Prinzipien.md`]($REPOS_DIR/WKDBooks/Development/wkdbook-Lua/Checklists/archiv/Zentrale-Prinzipien.md).
+[`Zentrale-Prinzipien.md`]($RULES_VAULT/rulesets/lua/archiv/Zentrale-Prinzipien.md).
 Status: good · partial / improvable · gap · N/A.
 
 ## lib.nvim usage (the "WICHTIG" preamble)

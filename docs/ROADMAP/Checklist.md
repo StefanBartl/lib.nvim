@@ -1,7 +1,7 @@
 # Lua/Neovim Checklist — applied to lib.nvim
 
 Audit against
-[`Checklist.md`]($REPOS_DIR/WKDBooks/Development/wkdbook-Lua/Checklists/archiv/Checklist.md).
+[`Checklist.md`]($RULES_VAULT/rulesets/lua/archiv/Checklist.md).
 good · partial · gap · N/A for this repo.
 
 ## Schnell-Check (10 Punkte, vor jedem Merge) — mostly
