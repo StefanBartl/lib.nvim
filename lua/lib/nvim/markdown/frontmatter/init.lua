@@ -732,28 +732,174 @@ local function normalize_patch(patch)
   return ops
 end
 
+---Deferred edits of one `patch` call. Dropping or inserting lines in `parsed.entries` one op at a
+---time rebuilds the whole array per op, which is quadratic for a patch over many keys; the ops
+---record what to drop and where to insert, and `flush` applies it in one pass.
+---@class Lib.Markdown.Frontmatter.PatchPlan
+---@field parsed Lib.Markdown.Frontmatter.Parsed
+---@field drop table<table, boolean>
+---@field after table<table, table[]>       # entry -> lines inserted right behind it
+---@field order_drop table<string, boolean> # keys whose (first) place in `order` goes away
+---@field touched table<string, boolean>    # keys with pending edits to their lines
+---@field pending boolean
+---@field pos? table<table, integer>        # entry -> index (valid while nothing is pending)
+---@field keyed? table<string, table[]>     # key -> its `key:` lines in file order
+
 ---@param parsed Lib.Markdown.Frontmatter.Parsed
----@param key string
-local function remove_key(parsed, key)
-  if not parsed.by_key[key] then
+---@return Lib.Markdown.Frontmatter.PatchPlan
+local function new_plan(parsed)
+  return {
+    parsed = parsed,
+    drop = {},
+    after = {},
+    order_drop = {},
+    touched = {},
+    pending = false,
+  }
+end
+
+---Index the entries once (position of every entry, the `key:` lines per key).
+---@param plan Lib.Markdown.Frontmatter.PatchPlan
+local function plan_index(plan)
+  if plan.pos then
     return
   end
+  local pos, keyed = {}, {}
+  for i, e in ipairs(plan.parsed.entries) do
+    pos[e] = i
+    if e.key then
+      local list = keyed[e.key]
+      if not list then
+        list = {}
+        keyed[e.key] = list
+      end
+      list[#list + 1] = e
+    end
+  end
+  plan.pos, plan.keyed = pos, keyed
+end
+
+---Apply the recorded drops and insertions in one pass.
+---@param plan Lib.Markdown.Frontmatter.PatchPlan
+local function plan_flush(plan)
+  if not plan.pending then
+    return
+  end
+  local parsed = plan.parsed
   local kept = {}
   for _, e in ipairs(parsed.entries) do
-    -- The lines of a block list (items, comments between them) go with their key.
-    if e.key ~= key and not (e.owner and e.owner.key == key) then
+    if not plan.drop[e] then
       kept[#kept + 1] = e
+    end
+    local extra = plan.after[e]
+    if extra then
+      for _, a in ipairs(extra) do
+        kept[#kept + 1] = a
+      end
     end
   end
   parsed.entries = kept
-  parsed.by_key[key] = nil
-  parsed.meta[key] = nil
-  for i, k in ipairs(parsed.order) do
-    if k == key then
-      table.remove(parsed.order, i)
-      break
+  if next(plan.order_drop) then
+    local order = {}
+    for _, k in ipairs(parsed.order) do
+      if plan.order_drop[k] then
+        plan.order_drop[k] = nil
+      else
+        order[#order + 1] = k
+      end
+    end
+    parsed.order = order
+  end
+  plan.drop, plan.after, plan.touched = {}, {}, {}
+  plan.pos, plan.keyed = nil, nil
+  plan.pending = false
+end
+
+---The `key:` line `entry` and the lines that belong to it (block-list items and the comments
+---between them), as the index of the first and the last.
+---@param plan Lib.Markdown.Frontmatter.PatchPlan
+---@param entry Lib.Markdown.Frontmatter.Entry
+---@return integer first
+---@return integer last
+local function plan_span(plan, entry)
+  local entries = plan.parsed.entries
+  local first = plan.pos[entry]
+  local last = first
+  while entries[last + 1] and entries[last + 1].owner == entry do
+    last = last + 1
+  end
+  return first, last
+end
+
+---@param line string
+---@return boolean
+local function is_neutral(line)
+  return line:match("^%s*$") ~= nil or line:match("^%s*#") ~= nil
+end
+
+---Would deleting `key` make a line below it join the block list above it? A stray `- x` line (it
+---follows a key with a value, or a blank line) reads as an item of the list as soon as the
+---lines between that list and the stray line are gone.
+---@param plan Lib.Markdown.Frontmatter.PatchPlan
+---@param key string
+---@return boolean
+local function removal_joins_list(plan, key)
+  plan_index(plan)
+  local entries = plan.parsed.entries
+  for _, e in ipairs(plan.keyed[key] or {}) do
+    local first, last = plan_span(plan, e)
+    local p = first - 1
+    while p >= 1 and not entries[p].key and not entries[p].owner and is_neutral(entries[p].raw) do
+      p = p - 1
+    end
+    local above = entries[p]
+    local owner = above and (above.owner or above)
+    if owner and owner.key and (owner.block or owner.value == "") and not owner.opaque then
+      local n = last + 1
+      while
+        entries[n]
+        and not entries[n].key
+        and not entries[n].owner
+        and is_neutral(entries[n].raw)
+      do
+        n = n + 1
+      end
+      local below = entries[n]
+      if below and not below.key and not below.owner and below.raw:match("^[ \t]*%-[ \t]") then
+        return true
+      end
+      if below and not below.key and not below.owner and below.raw:match("^[ \t]*%-$") then
+        return true
+      end
     end
   end
+  return false
+end
+
+---Delete every line of `key` (the `key:` lines and their block-list lines).
+---@param plan Lib.Markdown.Frontmatter.PatchPlan
+---@param key string
+local function remove_key(plan, key)
+  local parsed = plan.parsed
+  if not parsed.by_key[key] then
+    return
+  end
+  if plan.touched[key] then
+    plan_flush(plan)
+  end
+  plan_index(plan)
+  local entries = parsed.entries
+  for _, e in ipairs(plan.keyed[key] or {}) do
+    local first, last = plan_span(plan, e)
+    for i = first, last do
+      plan.drop[entries[i]] = true
+    end
+  end
+  plan.pending = true
+  plan.touched[key] = true
+  plan.order_drop[key] = true
+  parsed.by_key[key] = nil
+  parsed.meta[key] = nil
 end
 
 ---One block-list item line in the style of `style`.
@@ -776,22 +922,27 @@ end
 ---item keeps its indent, quote style and comment; new items copy the style of
 ---the last old item; surplus items go away. Anything that is not a non-empty
 ---list (a scalar, `[]`) replaces the whole block by one `key: value` line.
----One pass over `parsed.entries`, however long the list is.
----@param parsed Lib.Markdown.Frontmatter.Parsed
+---The line changes are recorded in `plan` and applied by `plan_flush`.
+---@param plan Lib.Markdown.Frontmatter.PatchPlan
 ---@param entry Lib.Markdown.Frontmatter.Entry
 ---@param value any  the normalized value
 ---@param rendered string  the inline form of `value`
-local function rewrite_block(parsed, entry, value, rendered)
-  local kept = {}
+local function rewrite_block(plan, entry, value, rendered)
+  if plan.touched[entry.key] then
+    plan_flush(plan)
+  end
+  plan_index(plan)
+  plan.touched[entry.key] = true
+  plan.pending = true
+
   if type(value) ~= "table" or #value == 0 then
+    local first, last = plan_span(plan, entry)
+    local entries = plan.parsed.entries
+    for i = first + 1, last do
+      plan.drop[entries[i]] = true
+    end
     entry.raw = entry.key .. ": " .. rendered .. (entry.comment or "")
     entry.block, entry.value = nil, value
-    for _, e in ipairs(parsed.entries) do
-      if e.owner ~= entry then
-        kept[#kept + 1] = e
-      end
-    end
-    parsed.entries = kept
     return
   end
 
@@ -799,7 +950,6 @@ local function rewrite_block(parsed, entry, value, rendered)
   local n_old, n_new = #old, #value
   local last = old[n_old]
   local added = {}
-  local dropped = {}
   for i = 1, n_new do
     local e = old[i]
     if e then
@@ -823,7 +973,10 @@ local function rewrite_block(parsed, entry, value, rendered)
     end
   end
   for i = n_new + 1, n_old do
-    dropped[old[i]] = true
+    plan.drop[old[i]] = true
+  end
+  if #added > 0 then
+    plan.after[last] = added
   end
 
   local items = {}
@@ -834,18 +987,6 @@ local function rewrite_block(parsed, entry, value, rendered)
   end
   entry.block = { items = items, entries = item_entries }
   entry.value = items
-
-  for _, e in ipairs(parsed.entries) do
-    if not dropped[e] then
-      kept[#kept + 1] = e
-    end
-    if e == last then
-      for _, a in ipairs(added) do
-        kept[#kept + 1] = a
-      end
-    end
-  end
-  parsed.entries = kept
 end
 
 ---@param parsed Lib.Markdown.Frontmatter.Parsed
@@ -880,7 +1021,7 @@ function M.patch(parsed, patch, opts)
     return false, "the `---` block holds prose, not `key: value` lines, refusing to patch it"
   end
 
-  local any_set = false
+  local any_set, any_remove = false, false
   for _, op in ipairs(ops) do
     if not valid_key(op.key) then
       return false, ("invalid key '%s'"):format(tostring(op.key))
@@ -890,7 +1031,9 @@ function M.patch(parsed, patch, opts)
       return false,
         ("key '%s' has a value this module does not rewrite (%s)"):format(op.key, reason)
     end
-    if op.value ~= REMOVE then
+    if op.value == REMOVE then
+      any_remove = true
+    else
       any_set = true
       local normalized, rendered, err = prepare_value(op.value, parsed.numbers)
       if not rendered then
@@ -913,17 +1056,29 @@ function M.patch(parsed, patch, opts)
     open_block(parsed)
   end
 
+  local plan = new_plan(parsed)
+  if any_remove then
+    for _, op in ipairs(ops) do
+      if op.value == REMOVE and parsed.by_key[op.key] and removal_joins_list(plan, op.key) then
+        return false,
+          ("removing key '%s' would make the `-` line below it an item of the list above"):format(
+            op.key
+          )
+      end
+    end
+  end
+
   for _, op in ipairs(ops) do
     local key = op.key
     if op.value == REMOVE then
-      remove_key(parsed, key)
+      remove_key(plan, key)
     else
       local entry = parsed.by_key[key]
       if entry then
         if same_value(entry.value, op.normalized) then
           -- nothing to do
         elseif entry.block then
-          rewrite_block(parsed, entry, op.normalized, op.rendered)
+          rewrite_block(plan, entry, op.normalized, op.rendered)
           parsed.meta[key] = op.normalized
         else
           entry.raw = key .. ": " .. op.rendered .. (entry.comment or "")
@@ -945,6 +1100,7 @@ function M.patch(parsed, patch, opts)
       end
     end
   end
+  plan_flush(plan)
   refresh_raw_lines(parsed)
   return true
 end

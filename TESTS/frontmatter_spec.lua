@@ -944,6 +944,67 @@ return function(H)
     local dup = parse("---\nt:\n  - a\nt:\n  - b\n---\n")
     eqv(dup.meta.t, { "b" }, "last duplicate wins")
 
+    -- Removing a key must not let a stray `- x` line below it join the list above.
+    local joined = "---\nm:\n- a\nj: 1\n\n- x\n---\n"
+    local jo, jerr = fm.update_text(joined, { j = fm.REMOVE })
+    eqv(jo, nil, "removal that would merge a stray item into the list is refused")
+    ok(jerr and jerr:find("'j'", 1, true), "and names the key")
+    eqv(
+      upd(joined, { m = { "a", "b" } }),
+      "---\nm:\n- a\n- b\nj: 1\n\n- x\n---\n",
+      "other patches on such a text still work"
+    )
+    eqv(
+      upd("---\nm:\n- a\nj: 1\nk: 2\n---\n", { j = fm.REMOVE }),
+      "---\nm:\n- a\nk: 2\n---\n",
+      "an ordinary removal beside a list is fine"
+    )
+    -- Removing the list itself or a key below a scalar is not a merge.
+    eqv(upd(joined, { m = fm.REMOVE }), "---\nj: 1\n\n- x\n---\n", "removing the list is fine")
+    eqv(
+      upd("---\na: 1\nj: 1\n\n- x\n---\n", { j = fm.REMOVE }),
+      "---\na: 1\n\n- x\n---\n",
+      "a stray item below a scalar key stays stray"
+    )
+
+    -- Several ops in one patch: lines, order and values stay consistent.
+    local multi = "---\na:\n  - 1\n  - 2\nb: x\nc:\n  - 3\nd: y\n---\n"
+    local mo = upd(
+      multi,
+      { { "a", fm.REMOVE }, { "c", { "3", "4" } }, { "b", fm.REMOVE }, { "a", { "z" } } }
+    )
+    eqv(
+      mo,
+      "---\nc:\n  - 3\n  - 4\nd: y\na: [z]\n---\n",
+      "remove, grow, remove and re-add in one patch"
+    )
+    local mp = parse(mo)
+    eqv(mp.order, { "c", "d", "a" }, "order follows the file")
+    local mq = parse(multi)
+    ok(fm.patch(mq, { { "c", { "3", "4" } }, { "a", fm.REMOVE }, { "c", {} }, { "c", { "q" } } }))
+    eqv(parse(fm.serialize(mq)).meta, mq.meta, "meta equals a re-read after chained ops on one key")
+    eqv(mq.order, parse(fm.serialize(mq)).order, "order equals a re-read")
+
+    -- Many ops stay linear: 20000 keys with a list each, 2000 patched.
+    do
+      local parts = { "---" }
+      for i = 1, 20000 do
+        parts[#parts + 1] = "k" .. i .. ":"
+        parts[#parts + 1] = "  - a" .. i
+      end
+      parts[#parts + 1] = "---"
+      local text2 = table.concat(parts, "\n") .. "\n"
+      local pm = parse(text2)
+      local t1 = vim.uv.hrtime()
+      local patch = {}
+      for i = 1, 2000 do
+        patch[#patch + 1] = { "k" .. (i * 5), i % 2 == 0 and fm.REMOVE or { "b" .. i, "c" .. i } }
+      end
+      ok(fm.patch(pm, patch))
+      ok((vim.uv.hrtime() - t1) / 1e9 < 2, "2000 ops over 20000 block lists stay linear")
+      eqv(parse(fm.serialize(pm)).meta, pm.meta, "big batch: meta equals a re-read")
+    end
+
     -- 100000 items, linear (SEC-32 class).
     local lines = { "---", "tags:" }
     for i = 1, 100000 do
