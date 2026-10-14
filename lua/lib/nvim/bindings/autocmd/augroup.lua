@@ -11,12 +11,14 @@ local M = {
 }
 
 --- Create/clear a namespaced augroup. The records of the autocmds the clear
---- drops are forgotten too (see `autocmd.forget_group`).
+--- drops are forgotten too (see `autocmd.forget_group`), and the id is known to
+--- the autocmd module by its name: an autocmd created with this id is recorded
+--- under the group, so the next clear can forget it (a record without a group
+--- name is never forgotten, and the registry grew with every `setup()`).
 ---@param name string
 ---@return integer
 function M.create.clear(name)
-  require("lib.nvim.bindings.autocmd").forget_group(name)
-  return vim.api.nvim_create_augroup(name, { clear = true })
+  return require("lib.nvim.bindings.autocmd").get_augroup(name, { clear = true })
 end
 
 ---@type Lib.AutoCmd.AuGroup

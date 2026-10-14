@@ -294,6 +294,22 @@ return function(H)
     )
     vim.api.nvim_del_augroup_by_name(name)
 
+    -- Regression: an autocmd made with the id of augroup.create.clear was recorded without a group name, so a
+    -- second clear could not forget it and the registry grew on every setup() (K2 in cascade, color_my_ascii ...).
+    local cname = "lib_nvim_spec_create_clear_" .. tostring(vim.uv.hrtime())
+    for _ = 1, 3 do
+      local cid = autocmd.augroup.create.clear(cname)
+      autocmd.create("User", function() end, { group = cid, pattern = "LibNvimSpecCreateClear" })
+    end
+    eq(
+      #autocmd.registered({ group = cname }),
+      1,
+      "augroup.create.clear: one record after three setups, attributed to the group"
+    )
+    eq(#vim.api.nvim_get_autocmds({ group = cname }), 1, "augroup.create.clear: one live autocmd")
+    autocmd.forget_group(cname)
+    vim.api.nvim_del_augroup_by_name(cname)
+
     -- A prefixed group is cleared and forgotten under its full name.
     local pname = "lib_nvim_spec_forget_p_" .. tostring(vim.uv.hrtime())
     for _ = 1, 2 do
