@@ -29,6 +29,7 @@ handle.stop() -- safe to call more than once
 | Field          | Default | Meaning                                                        |
 |-----------------|---------|------------------------------------------------------------------|
 | `debounce_ms`   | `200`   | Quiet period before `on_change` fires                            |
+| `on_error`      | `nil`   | `fun(err, path)`, called (scheduled) when the running watcher reports an error -- the watched directory was removed, `EPERM`, inotify limit. The watcher usually delivers nothing afterwards, so fall back to a full scan there |
 | `recursive`     | `false` | Watch subdirectories too — Linux's `inotify` backend ignores this flag entirely (libuv limitation, not this module's), so a recursive watch on Linux needs one `M.start` per subdirectory |
 
 ## Returns
@@ -36,6 +37,9 @@ handle.stop() -- safe to call more than once
 | Function                          | Returns                    | Meaning                                                    |
 |-------------------------------------|------------------------------|---------------------------------------------------------------|
 | `M.start(path, on_change, opts)`    | `Lib.Fs.Watch.Handle\|nil, string\|nil` | A handle with `stop()`, or `nil` + error if `fs_event` setup failed or libuv refused to start it (e.g. the path does not exist) |
+
+The handle also has `last_error()`: the latest error the running watcher
+reported (`nil` when none), for callers that poll instead of passing `on_error`.
 
 `on_change(path, filename, events)` receives the `path` passed to `start`
 (not necessarily the exact changed file — `filename` is that, when the

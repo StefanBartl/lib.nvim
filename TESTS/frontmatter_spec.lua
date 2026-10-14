@@ -217,8 +217,8 @@ return function(H)
       "  multi",
       "  line",
       "tags:",
-      "  - one",
-      "  - two",
+      "  k: nested",
+      "  j: map",
       "after: fine",
       "---",
       "body",
@@ -232,7 +232,7 @@ return function(H)
     eq(p.meta.list, nil, "unterminated list is not read")
     eq(p.meta.map, nil, "flow map is not read")
     eq(p.meta.block, nil, "block scalar is not read")
-    eq(p.meta.tags, nil, "nested block list is not read")
+    eq(p.meta.tags, nil, "nested map is not read")
     ok(p.opaque.broken ~= nil, "unterminated quote is opaque")
     ok(p.opaque.block ~= nil, "block scalar is opaque")
     ok(p.opaque.tags ~= nil, "nested value is opaque")
@@ -781,5 +781,187 @@ return function(H)
     end
     -- A value that starts with `#` is a comment on an empty value.
     eq(parse("---\nk: #lead\n---\n").meta.k, "", "a value starting with # is empty")
+  end
+
+  -- ------------------------------------- block lists (Obsidian's properties editor)
+  do
+    --- `eq` that compares tables by content.
+    local function eqv(a, b, msg)
+      if type(a) == "table" or type(b) == "table" then
+        a, b = vim.inspect(a), vim.inspect(b)
+      end
+      eq(a, b, msg)
+    end
+    local function join(lines)
+      return table.concat(lines, "\n") .. "\n"
+    end
+    local OBS = join({
+      "---",
+      "title: T",
+      "tags:",
+      "  - a",
+      "  # a note between items",
+      '  - "b c"',
+      "",
+      "  - 'it''s'",
+      '  - "[[x]]"   # link',
+      "refs:",
+      "- r1",
+      "- r2",
+      "after: ok",
+      "---",
+      "body",
+    })
+
+    local p = parse(OBS)
+    eqv(p.meta.tags, { "a", "b c", "it's", "[[x]]" }, "quoted, commented, gapped items are read")
+    eqv(p.meta.refs, { "r1", "r2" }, "dashes at the key's own indent are items too")
+    eqv(p.meta.after, "ok", "the key after a list is read")
+    eqv(p.opaque.tags, nil, "a block list is not opaque")
+    eqv(#p.warnings, 0, "a block list is no warning")
+    eqv(fm.serialize(p), OBS, "untouched roundtrip")
+    eqv(p.order, { "title", "tags", "refs", "after" }, "order has each key once")
+
+    -- Same list as the inline form.
+    local inline = parse('---\ntags: [a, "b c"]\n---\n')
+    local block = parse('---\ntags:\n  - a\n  - "b c"\n---\n')
+    eqv(block.meta.tags, inline.meta.tags, "block list equals inline list")
+    eqv(fm.get(block, "tags"), { "a", "b c" }, "get returns the list")
+
+    -- CRLF
+    local c = crlf(OBS)
+    local pc = parse(c)
+    eqv(pc.meta.tags, p.meta.tags, "CRLF list is read")
+    eqv(fm.serialize(pc), c, "CRLF roundtrip")
+    local upc = upd(c, { tags = { "a", "z" } })
+    ok(not upc:find("[^\r]\n"), "CRLF kept on every touched line")
+
+    -- Not scalar lists stay opaque.
+    for _, bad in ipairs({
+      "tags:\n  - a: 1\n",
+      "tags:\n  - - nested\n",
+      "tags:\n  - [x]\n",
+      "tags:\n  - |\n",
+      "tags:\n  - a\n    cont\n",
+      "tags:\n  -\n",
+    }) do
+      local q = parse("---\n" .. bad .. "k: v\n---\n")
+      ok(q.opaque.tags ~= nil, "opaque: " .. vim.inspect(bad))
+      eqv(q.meta.tags, nil, "not read: " .. vim.inspect(bad))
+      eqv(q.meta.k, "v", "later key still read")
+      eqv(fm.serialize(q), "---\n" .. bad .. "k: v\n---\n", "opaque roundtrip")
+      eqv(
+        select(1, fm.update_text("---\n" .. bad .. "k: v\n---\n", { tags = { "x" } })),
+        nil,
+        "not rewritten"
+      )
+    end
+
+    -- Writing: changing one item touches one line.
+    local u1 = upd(OBS, { tags = { "a", "b c", "it's", "[[y]]" } })
+    eqv(
+      u1,
+      (OBS:gsub('  %- "%[%[x%]%]"   # link', '  - "[[y]]"   # link', 1)),
+      "only the changed item line differs, quote and comment kept"
+    )
+    eqv(upd(OBS, { tags = { "a", "b c", "it's", "[[x]]" } }), OBS, "equal value touches nothing")
+
+    -- Single-quoted style survives a change, with the quote doubled.
+    eqv(
+      upd("---\nt:\n  - 'a'\n---\n", { t = { "it's" } }),
+      "---\nt:\n  - 'it''s'\n---\n",
+      "single-quote style kept"
+    )
+    -- Plain style: a value that needs quotes gets them.
+    eqv(
+      upd("---\nt:\n  - a\n---\n", { t = { "x: y" } }),
+      '---\nt:\n  - "x: y"\n---\n',
+      "plain item quoted when needed"
+    )
+
+    -- Growing copies the last item's style; shrinking drops the tail.
+    eqv(
+      upd('---\nt:\n    - "a"\n---\n', { t = { "a", "b", "c" } }),
+      '---\nt:\n    - "a"\n    - "b"\n    - "c"\n---\n',
+      "new items copy indent and quotes"
+    )
+    eqv(
+      upd("---\nt:\n  - a\n  - b\n  - c\nz: 1\n---\n", { t = { "a" } }),
+      "---\nt:\n  - a\nz: 1\n---\n",
+      "surplus items removed"
+    )
+    eqv(
+      upd(crlf("---\nt:\n  - a\n---\nbody\n"), { t = { "a", "b" } }),
+      crlf("---\nt:\n  - a\n  - b\n---\nbody\n"),
+      "new item line uses CRLF"
+    )
+
+    -- Emptying and scalar overwrite replace the block with one line.
+    eqv(
+      upd(OBS, { tags = {} }),
+      (OBS:gsub("tags:\n.-refs:", "tags: []\nrefs:", 1)),
+      "empty list becomes [] and drops comment lines inside"
+    )
+    eqv(
+      upd("---\nt: # why\n  - a\n---\n", { t = "x" }),
+      "---\nt: x # why\n---\n",
+      "scalar over a list keeps the comment"
+    )
+    -- REMOVE deletes every line of the list.
+    eqv(
+      upd(OBS, { tags = fm.REMOVE }),
+      (OBS:gsub("tags:\n.-refs:", "refs:", 1)),
+      "REMOVE drops the key and its items"
+    )
+    -- A list next to an opaque value.
+    local mixed = "---\ntags:\n  - a\nmap:\n  x: 1\n---\n"
+    eqv(
+      upd(mixed, { tags = { "a", "b" } }),
+      "---\ntags:\n  - a\n  - b\nmap:\n  x: 1\n---\n",
+      "list patched beside an opaque key"
+    )
+
+    -- Blank key stays a plain empty value; a new list is written inline.
+    eqv(parse("---\nt:\nk: v\n---\n").meta.t, "", "bare key without items is an empty string")
+    eqv(
+      upd("---\nt:\n---\n", { t = { "a", "b" } }),
+      "---\nt: [a, b]\n---\n",
+      "a list over an empty value is inline"
+    )
+    eqv(
+      upd("---\n---\n", { t = { "a" } }, { create = true }),
+      "---\nt: [a]\n---\n",
+      "a new list is inline"
+    )
+
+    -- Patching then re-reading is consistent.
+    local pp = parse(OBS)
+    ok(fm.set(pp, "tags", { "n1", "n2" }))
+    eqv(pp.meta.tags, { "n1", "n2" }, "meta follows the patch")
+    eqv(parse(fm.serialize(pp)).meta.tags, { "n1", "n2" }, "re-read equals meta")
+
+    -- A key written as a list and again later: last wins and nothing leaks.
+    local dup = parse("---\nt:\n  - a\nt:\n  - b\n---\n")
+    eqv(dup.meta.t, { "b" }, "last duplicate wins")
+
+    -- 100000 items, linear (SEC-32 class).
+    local lines = { "---", "tags:" }
+    for i = 1, 100000 do
+      lines[#lines + 1] = "  - item" .. i
+    end
+    lines[#lines + 1] = "---"
+    local big = table.concat(lines, "\n") .. "\n"
+    local t0 = vim.uv.hrtime()
+    local pb = parse(big)
+    eqv(#pb.meta.tags, 100000, "all items read")
+    eqv(fm.serialize(pb), big, "big roundtrip")
+    local items = vim.deepcopy(pb.meta.tags)
+    items[#items + 1] = "extra"
+    items[5] = "changed"
+    ok(fm.set(pb, "tags", items))
+    local out = fm.serialize(pb)
+    ok(out:find("  - extra\n---\n", 1, true), "item appended at the end")
+    ok(out:find("  - changed\n", 1, true), "item changed")
+    ok((vim.uv.hrtime() - t0) / 1e9 < 5, "100000 list items stay linear")
   end
 end
