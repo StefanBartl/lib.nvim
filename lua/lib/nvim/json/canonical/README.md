@@ -63,6 +63,7 @@ local entries = json.memo(big_list)              -- must not change afterwards
 | `array(t?)` | Mark `t` as an array even when empty (the default for an empty table). |
 | `memo(t)` | Remember the compact text of `t`; the readable form ignores the mark. |
 | `bytes_less(a, b)` | `a < b` by byte value, never by the locale. For `table.sort` of a list whose order is hashed (`contract.doc`'s `rev_of` uses it). |
+| `scrub_utf8(s)` | `s` as `encode` writes it: valid UTF-8, every bad byte (overlong form, surrogate, value above U+10FFFF) replaced by U+FFFD. `scrub_utf8(s) ~= s` says that `s` is not valid UTF-8 (`contract.ops.has_control` uses it). |
 
 `encode` raises with a plain message (no source position, see
 [conventions](../../../../../docs/conventions.md)); a contract wraps it in

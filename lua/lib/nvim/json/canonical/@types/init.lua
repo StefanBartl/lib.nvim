@@ -10,5 +10,6 @@
 ---@field memo fun(t: table): table     Remember the compact text of a table that will not change.
 ---@field encode fun(value: any, opts?: Lib.Json.CanonicalOpts): string  Raises on a value JSON cannot hold; the message names the path.
 ---@field bytes_less fun(a: string, b: string): boolean  `a < b` by byte value, never by the locale: for `table.sort` of a list whose order ends up in a hash.
+---@field scrub_utf8 fun(s: string): string  `s` as `encode` writes it: valid UTF-8, every bad byte U+FFFD. `scrub_utf8(s) ~= s` means `s` is not valid UTF-8.
 
 return {}

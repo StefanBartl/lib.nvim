@@ -11,15 +11,22 @@
 --- The protocol, one line each way, UTF-8, `\t` separates the fields, a line ends with `\n`:
 ---
 ---     host -> client   `ready\t<PROTOCOL>`             once, when the modules are loaded
----     client -> host   `<id>\t<method>\t<params>`      `<id>` digits (at most 15); `<params>` is the JSON of the request
+---     client -> host   `<id>\t<method>\t<params>`      `<id>` digits (at most 15); `<method>` runs to the next tab (or
+---                                                      the end of the line); `<params>` is the JSON of the request
 ---                                                      (empty: none); no line break may be in it
 ---     host -> client   `<id>\t<document>`              the document `api.call` answers, on one line
 ---
 --- The host ends when its input ends. A request is answered completely before the next is read (the plugin's lock is
 --- not re-entrant, and the client keeps one question in flight). A line that is not a request is told on stderr and
---- skipped (nothing to answer it with: it has no id). A line that is too long is skipped as well, but when it starts
---- with an id the client gets an error document (`payload_too_large`) for it, so it never waits for ever. A method or
---- parameter that the dispatcher does not accept is the dispatcher's own error document.
+--- skipped (nothing to answer it with: it has no id); an empty line (or one that is only the `\r` of a Windows line
+--- ending) is skipped silently. A line that is too long is skipped as well, but when it starts with an id the client
+--- gets an error document (`payload_too_large`) for it, so it never waits for ever. A method or parameter that the
+--- dispatcher does not accept is the dispatcher's own error document, and the whole method name is judged there: the
+--- host does not cut it at a character (`list-all` is asked for as `list-all`, never as `list`).
+---
+--- On Windows the host reads `io.stdin` in binary mode: in text mode the C runtime ends the stream at the first raw
+--- `0x1A` byte, so the host would drop every later request and exit with nothing told. A line is cut at `\n` only; the
+--- `\r` of a Windows line ending is stripped from the request.
 ---
 --- A non-flat method carries its parameters under `params`: the host wraps them (`{"params": <params>}`); a flat
 --- method (the write door) gets the text as it is. The text is spliced, not parsed: a `<params>` such as
@@ -47,6 +54,32 @@ local M = {}
 
 ---The longest request line is a request plus the id and the method.
 M.LINE_SLACK = 256
+
+---`_O_BINARY` of the C runtime.
+local O_BINARY = 0x8000
+
+---Windows opens `io.stdin` in text mode, where a raw `0x1A` byte is the end of the file: everything after it is lost
+---and the host would end without a word. Binary mode reads every byte (a `\r` stays and is stripped by `handle`).
+---Only the process's own stdin is touched (a table in a spec, a file the caller opened, are not); elsewhere it is a no-op.
+---@param input any
+---@return boolean switched
+function M.binary_stdin(input)
+  if input ~= io.stdin or type(jit) ~= "table" or jit.os ~= "Windows" then
+    return false
+  end
+  local loaded, ffi = pcall(require, "ffi")
+  if not loaded then
+    return false
+  end
+  -- declared once per process; if something declared it already (or the declaration is refused) the call below still
+  -- decides, so a failing `cdef` is not a reason to leave the stream in text mode
+  pcall(ffi.cdef, "int _setmode(int fd, int mode);")
+  local called, previous = pcall(function()
+    return ffi.C._setmode(0, O_BINARY)
+  end)
+  -- `_setmode` answers the previous mode, or -1 when it refuses
+  return called and previous ~= -1
+end
 
 ---@param cfg Lib.Contract.HostConfig
 ---@return Lib.Contract.Host
@@ -101,9 +134,21 @@ function M.make(cfg)
       return nil
     end
     line = line:gsub("\r$", "")
-    local id, method, params = line:match("^(%d+)\t([%w_]+)\t?(.*)$")
+    -- the method runs to the next tab (or the end of the line): the dispatcher judges the whole name, so a name with a
+    -- dash or a dot is neither cut short nor answered as another method
+    local id, method, params = line:match("^(%d+)\t([^\t]+)\t?(.*)$")
     if not id or #id > 15 then
       return nil
+    end
+    -- the dispatcher echoes an unknown name in its refusal: a name that cannot be shown on a terminal (control
+    -- characters, the C1 range, more than 64 bytes) is refused without being echoed
+    if #method > 64 or method:find("[%c\127]") or method:find("\194[\128-\159]") then
+      return id
+        .. "\t"
+        .. api.minimal_error(
+          "not_found",
+          "unknown method (a name that is not printable or is too long)"
+        )
     end
     local request = nil
     if params ~= "" then
@@ -143,6 +188,7 @@ function M.make(cfg)
       return true
     end
 
+    M.binary_stdin(input)
     if not send("ready\t" .. host.PROTOCOL) then
       return
     end
@@ -167,7 +213,8 @@ function M.make(cfg)
           if not send(reply) then
             return
           end
-        elseif line ~= "" then
+        elseif line ~= "" and line ~= "\r" then
+          -- (`handle` strips one trailing `\r`: a blank line of a CRLF client is as empty as `""`)
           warn("host: a line that is not a request is skipped")
         end
       end

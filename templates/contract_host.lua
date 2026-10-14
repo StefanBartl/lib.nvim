@@ -18,7 +18,16 @@ local PLUGIN = "your-plugin.nvim"
 -- Absolute: `nvim -l` from inside scripts/ gives a bare relative name.
 local script = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p")
 local plugin_root = vim.fs.dirname(vim.fs.dirname(vim.fs.normalize(script)))
-vim.opt.rtp:prepend(plugin_root)
+
+---A path as ONE runtimepath entry: 'runtimepath' is a comma list, so a comma in a folder name must be escaped or the
+---path is split in two, the second half a relative entry that is looked up in whatever folder the client started in.
+---@param path string
+---@return string
+local function rtp_entry(path)
+  return (vim.fn.escape(path, ","))
+end
+
+vim.opt.rtp:prepend(rtp_entry(plugin_root))
 
 ---@param dir string|nil
 ---@return boolean
@@ -57,7 +66,7 @@ if not lib then
   )
   os.exit(2)
 end
-vim.opt.rtp:append(lib)
+vim.opt.rtp:append(rtp_entry(lib))
 
 require(MODULE).serve(io.stdin, io.stdout)
 io.stdout:flush()

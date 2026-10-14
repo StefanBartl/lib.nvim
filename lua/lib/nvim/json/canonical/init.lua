@@ -191,6 +191,11 @@ local function scrub(s)
   return table.concat(out)
 end
 
+---The text as `encode` writes it, before the escapes: valid UTF-8, every bad byte (also an overlong form, a surrogate
+---and a value above U+10FFFF) replaced by U+FFFD. For a caller that has to judge or show a text the way the document
+---will hold it: `scrub_utf8(s) ~= s` says that `s` is not valid UTF-8.
+M.scrub_utf8 = scrub
+
 ---@param s string
 ---@return string
 local function string_(s)

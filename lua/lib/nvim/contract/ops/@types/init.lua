@@ -15,8 +15,8 @@
 ---@field doc Lib.Contract.Doc                          # The document builder (`lib.nvim.contract.doc`).
 ---@field ops table<string, Lib.Contract.OpsOperation>
 ---@field order? string[]                               # The order the messages name the operations in (default: byte order of the names).
----@field context? fun(params: table, opts: table): table|nil, Lib.Contract.Error|string|nil  # Builds `ctx` (it needs `root`); `nil, err` refuses the request. Default `{ root = opts.root }`.
----@field finish? fun(ctx: table, results: table[])     # Runs once after the last operation (also on a dry run: look at `ctx.dry`). May change the entries.
+---@field context? fun(params: table, opts: table): table|nil, Lib.Contract.Error|string|nil  # Builds `ctx` (it needs `root`); `nil, err` refuses the request (`run` answers it as an error of the contract: a text is classified, the root hidden). Default `{ root = opts.root }`.
+---@field finish? fun(ctx: table, results: table[])     # Runs once after the last operation (also on a dry run: look at `ctx.dry`). May change the entries; `ok` of the document is judged after it.
 ---@field types? table<string, Lib.Contract.OpsType>    # The plugin's own field types.
 ---@field limits? { batch_ops?: integer, client_op_id?: integer }  # Default 100 operations, 64 characters.
 ---@field patterns? Lib.Contract.ErrorPattern[]         # The plugin's own error-message patterns (`failure`).
@@ -27,7 +27,7 @@
 ---@field failure fun(root: string|nil, err: any, info?: table): table
 ---@field refuse fun(code: string, message: string, details?: table): table
 ---@field check_shape fun(params: any): Lib.Contract.Error|nil
----@field run fun(params: table, opts?: table): table|nil, Lib.Contract.Error|nil
+---@field run fun(params: table, opts?: table): table|nil, Lib.Contract.Error|nil  # The sealed `<prefix>.result` (its `results` are remembered: do not change them), or an error of the contract.
 ---@field method fun(): Lib.Contract.ApiMethod
 
 return {}

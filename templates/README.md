@@ -137,7 +137,8 @@ section for why that's enforced, not just documented), and at least one
 The script behind `nvim --headless -u NONE -i NONE -n -l scripts/<plugin>-host.lua`:
 it puts the plugin and `lib.nvim` on the runtimepath (`$LIB_NVIM_DIR`,
 `$LIB_NVIM_PATH`, `$REPOS_DIR/lib.nvim`, the plugin's `.deps/lib.nvim`, a sibling
-checkout, lazy.nvim's data folder, in that order), then calls
+checkout, lazy.nvim's data folder, in that order; each as one runtimepath entry,
+so a comma in a folder name is escaped and does not split the path), then calls
 `require(MODULE).serve(io.stdin, io.stdout)`. Copy it to `scripts/<plugin>-host.lua`
 and replace the two names at its top (`MODULE`, `PLUGIN`); `MODULE` is the Lua
 module that returns [`contract.host`](../lua/lib/nvim/contract/host/README.md)'s

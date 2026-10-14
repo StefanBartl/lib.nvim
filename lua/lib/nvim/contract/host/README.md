@@ -27,7 +27,7 @@ One line each way, UTF-8, `\t` separates the fields, a line ends with `\n`:
 
 ```
 host   -> client   ready\t<PROTOCOL>
-client -> host     <id>\t<method>\t<params>     id: digits, at most 15; params: the JSON of the request (empty: none), no line break in it
+client -> host     <id>\t<method>\t<params>     id: digits, at most 15; method: up to the next tab (or the end of the line); params: the JSON of the request (empty: none), no line break in it
 host   -> client   <id>\t<document>             the document api.call answers, on one line
 ```
 
@@ -37,7 +37,17 @@ host   -> client   <id>\t<document>             the document api.call answers, o
   not re-entrant and the client keeps one question in flight.
 - A line that is **not a request** (no id, an id of more than 15 digits, no
   method) is told on stderr and skipped: it has no id to answer with. An empty
-  line is skipped silently.
+  line, and the blank line of a client that ends its lines with CR LF (a bare
+  `\r`), are skipped silently.
+- The **method** is everything between the first and the second tab, and the
+  dispatcher judges the whole name: `list-all` and `a.b` are asked for as
+  `list-all` and `a.b`, never cut short (as `list`, as `a`) or answered as
+  another method.
+- A line ends at `\n`; the `\r` of a CR LF line ending is not part of the request.
+  On Windows the host reads `io.stdin` in **binary mode**: in text mode the C
+  runtime ends the stream at the first raw `0x1A` byte, and the host would drop
+  every later request and exit without a word. (A `0x1A` that reaches the
+  dispatcher is judged like any other byte.)
 - A line that is **too long** (`api.MAX_REQUEST_BYTES` plus 256) is skipped and
   told on stderr; when it starts with an id the client gets an error document
   (`payload_too_large`) for it, so it never waits for ever. (The original host
@@ -57,8 +67,9 @@ host   -> client   <id>\t<document>             the document api.call answers, o
 |---|---|
 | `host.make{ api, protocol?, call_opts? }` | The host of one contract. `protocol`: the number after `ready` (default 1). `call_opts`: the options of every `api.call`, a table or a function asked per request. A wrong config raises where it is made. |
 | `host.handle(line)` | One request line -> `<id>\t<document>`, or `nil` for a line that is no request. Never raises. |
-| `host.serve(input, output, warn?)` | Serve until `input` ends. `input`/`output` need `read("l")`, `write`, `flush` (so a table works in a spec). `warn` defaults to stderr. |
+| `host.serve(input, output, warn?)` | Serve until `input` ends. `input`/`output` need `read("l")`, `write`, `flush` (so a table works in a spec). `warn` defaults to stderr. When `input` is the process's `io.stdin` on Windows it is switched to binary mode first. |
 | `host.PROTOCOL`, `host.max_line_bytes()` | The version and the longest line read, at call time. |
+| `require("lib.nvim.contract.host").binary_stdin(input)` | What `serve` does with `io.stdin` on Windows (`_setmode(0, _O_BINARY)`); `true` when it switched. Anything but the process's own `io.stdin`, and any other system, is left alone (`false`). |
 
 ## Limit
 
@@ -72,3 +83,7 @@ client is the app that started the host, and is trusted that far.
 [templates/README.md](../../../../../templates/README.md)). It must be a copy: it
 runs before `lib.nvim` is on the runtimepath, so it cannot `require` anything of
 it to find it. Exit codes: `0` when the input ended, `2` when `lib.nvim` is not found.
+It looks for `lib.nvim` in `$LIB_NVIM_DIR`, `$LIB_NVIM_PATH`, `$REPOS_DIR/lib.nvim`, the
+plugin's `.deps/lib.nvim`, a sibling checkout and lazy.nvim's data folder, in
+that order, and puts the plugin and `lib.nvim` on the runtimepath each as ONE
+entry (a comma in a folder name is escaped, so the path is not split in two).

@@ -229,9 +229,85 @@ return function(H)
     refused({ ops = { { op = { 1 } } } }, "invalid_argument", nil, "table name").message,
     "unknown operation <table>"
   )
+  has(
+    refused({ ops = { { op = vim.NIL } } }, "invalid_argument", nil, "null name").message,
+    "unknown operation null (operations:",
+    "a JSON null is shown as null, not as the userdata it is in Lua"
+  )
   local long_name =
     refused({ ops = { { op = ("x"):rep(5000) } } }, "invalid_argument", nil, "a huge name")
   ok(#long_name.message < 300, "a long name is echoed short: " .. #long_name.message)
+
+  -- what a refusal echoes of a name is cut at 60 CHARACTERS, never inside one, and is printable
+  local ORDER_TAIL = " (operations: set, new, boom, nothing, weird)"
+  local function unknown_op(name)
+    return refused({ ops = { { op = name } } }, "invalid_argument", nil, "name").message
+  end
+  local function unknown_field(name)
+    return refused({ ops = { { op = "set", [name] = 1 } } }, "invalid_argument", nil, "field").message
+  end
+  local FIELDS_TAIL = "' (fields: expect, id, if_match, patch)"
+  local function printable(text)
+    return json.scrub_utf8(text) == text
+      and not text:find("[%z\1-\31\127]")
+      and not text:find("\194[\128-\159]")
+      and not text:find("\226\128[\168\169]")
+  end
+  eq(
+    unknown_field(("日"):rep(100)),
+    "ops[1] (set): unknown field '" .. ("日"):rep(59) .. "…" .. FIELDS_TAIL,
+    "a field name of 100 multibyte characters: 59 of them and the ellipsis, no character cut in two"
+  )
+  eq(
+    unknown_op(("日"):rep(100)),
+    'ops[1]: unknown operation "' .. ("日"):rep(58) .. "…" .. ORDER_TAIL,
+    "an operation name too (the quote counts as a character)"
+  )
+  eq(
+    unknown_field(("\240\159\152\128"):rep(100)),
+    "ops[1] (set): unknown field '" .. ("\240\159\152\128"):rep(59) .. "…" .. FIELDS_TAIL,
+    "4-byte characters: 100 of them are 400 bytes, 59 are kept"
+  )
+  eq(
+    unknown_field(("\240\159\152\128"):rep(60) .. ("x"):rep(100000)),
+    "ops[1] (set): unknown field '" .. ("\240\159\152\128"):rep(59) .. "…" .. FIELDS_TAIL,
+    "61 characters are enough to know: a 100 KB name is not scanned"
+  )
+  eq(
+    unknown_field(("\240\159\152\128"):rep(60)),
+    "ops[1] (set): unknown field '" .. ("\240\159\152\128"):rep(60) .. FIELDS_TAIL,
+    "60 characters of 4 bytes are echoed whole"
+  )
+  eq(
+    unknown_field(("ü"):rep(40)),
+    "ops[1] (set): unknown field '" .. ("ü"):rep(40) .. FIELDS_TAIL,
+    "40 characters are 80 bytes, and are not cut"
+  )
+  eq(
+    unknown_field(("f"):rep(60)),
+    "ops[1] (set): unknown field '" .. ("f"):rep(60) .. FIELDS_TAIL,
+    "60 characters are echoed whole"
+  )
+  eq(
+    unknown_field(("f"):rep(61)),
+    "ops[1] (set): unknown field '" .. ("f"):rep(59) .. "…" .. FIELDS_TAIL,
+    "61 are cut to 59 and the ellipsis"
+  )
+  -- the names are the client's: no escape sequence of a terminal in a message
+  local osc = unknown_field("\27]52;c;ZXZpbA==\7")
+  has(osc, "unknown field '\\x1b]52;c;ZXZpbA==\\x07'", "ESC and BEL are written as escapes")
+  ok(printable(osc), "no control character is left in the message")
+  local nul_name = unknown_field("a\0b")
+  has(nul_name, "'a\\x00b'", "a NUL too")
+  has(unknown_field("a\194\155b"), "'a\\u009bb'", "a C1 control (CSI)")
+  has(unknown_field("a\226\128\168b"), "'a\\u2028b'", "a Unicode line separator")
+  has(unknown_field("a\nb\tc"), "'a\\x0ab\\x09c'", "also a line feed and a tab: no second line")
+  has(unknown_field("a\155b"), "'a\239\191\189b'", "a raw 0x9B (invalid UTF-8) is a U+FFFD")
+  local c1_op = unknown_op("a\194\155b")
+  has(c1_op, '"a\\u009bb"', "an operation name goes through the same")
+  ok(printable(c1_op), "vim.inspect leaves a C1 control alone, the clip does not")
+  ok(printable(unknown_op("\27[2J\7")), "ESC in an operation name")
+  ok(printable(unknown_op(("\27"):rep(5000))), "and a long run of them")
 
   local colour = refused(
     { ops = { { op = "set", colour = "red" } } },
@@ -269,18 +345,13 @@ return function(H)
     refused({ ops = { { op = "new", tags = { "a", 1 } } } }, "invalid_argument", nil, "tags list").message,
     "tags must be text or a list of text"
   )
-  has(
-    refused({ ops = { { op = "new", n = 0 } } }, "invalid_argument", nil, "n=0").message,
-    "n must be a whole number from 1"
-  )
-  has(
-    refused({ ops = { { op = "new", n = 1.5 } } }, "invalid_argument", nil, "n=1.5").message,
-    "n must be a whole number from 1"
-  )
-  has(
-    refused({ ops = { { op = "new", n = 1e6 } } }, "invalid_argument", nil, "n=1e6").message,
-    "n must be a whole number from 1"
-  )
+  for _, bad in ipairs({ 0, 1.5, 1e6, 2000000, -3 }) do
+    eq(
+      refused({ ops = { { op = "new", n = bad } } }, "invalid_argument", nil, "n=" .. bad).message,
+      "ops[1] (new): n must be a whole number from 1 to 999999",
+      "the refusal names both bounds, so it never says no to a number from 1 that is within them"
+    )
+  end
   has(
     refused({ ops = { { op = "new", dry = "yes" } } }, "invalid_argument", nil, "boolean").message,
     "dry must be true or false"
@@ -288,6 +359,11 @@ return function(H)
   has(
     refused({ ops = { { op = "weird", v = 3 } } }, "invalid_argument", nil, "plugin type").message,
     "v must be an even number"
+  )
+  eq(
+    run({ ops = { { op = "weird", v = 4 } } }).ok,
+    true,
+    "a plugin type accepts a value that is its own kind"
   )
   seen = {}
   local accepted =
@@ -475,6 +551,32 @@ return function(H)
     "a context that is no table"
   )
 
+  -- the reason of the hook is an error of the contract for a direct caller too, whatever the hook gave
+  local function refused_by_hook(reason)
+    local hook_door = new_door({
+      context = function()
+        return nil, reason
+      end,
+    })
+    seen = {}
+    local hd, he = hook_door.run({ ops = { { op = "set", id = "x" } } }, { root = ROOT })
+    eq(hd, nil, "no document")
+    eq(#seen, 0, "nothing ran")
+    eq(type(he), "table", "an error, not the text " .. vim.inspect(reason))
+    ok(type(he.code) == "string", "with a code")
+    eq(type(he.message), "string")
+    return he
+  end
+  local from_text = refused_by_hook("unknown area 'x' in C:/Users/me/vault/x")
+  eq(
+    { from_text.code, from_text.message, from_text.retryable },
+    { "not_found", "unknown area 'x' in <vault>/x", false },
+    "a text is classified (the plugin's patterns) and the root hidden"
+  )
+  eq(refused_by_hook("vault is gone").code, "internal", "a text no pattern knows")
+  eq(refused_by_hook({ message = "no code here" }).code, "internal", "a table without a code")
+  eq(refused_by_hook({ code = "io" }).message, "io", "a table with a code and no message")
+
   -- ── a handler never takes the door down ──
   seen = {}
   local mixed = run({ ops = { { op = "boom" }, { op = "nothing" }, { op = "set", id = "after" } } })
@@ -529,6 +631,55 @@ return function(H)
   with_finish.run({ dry_run = true, ops = { { op = "set", id = "a" } } }, { root = ROOT })
   eq(finish_calls, 2, "also on a dry run: it looks at ctx.dry itself")
   eq(finish_seen.ctx.dry, true)
+  eq(
+    with_finish.run({ ops = { { op = "set", id = "a" } } }, { root = ROOT }).ok,
+    true,
+    "a finish that only adds to the entries leaves ok as it was"
+  )
+
+  -- `ok` is judged after finish: it may change the entries, and ok is true only if every entry is
+  local function flip_door(change)
+    return new_door({
+      finish = function(_, results)
+        for _, entry in ipairs(results) do
+          change(entry)
+        end
+      end,
+    })
+  end
+  local both = { ops = { { op = "set", id = "a" }, { op = "set", id = "b" } } }
+  local flipped = flip_door(function(entry)
+    entry.ok = false
+  end).run(both, { root = ROOT })
+  eq(
+    { flipped.ok, flipped.results[1].ok, flipped.results[2].ok },
+    { false, false, false },
+    "every entry not ok: the document is not ok"
+  )
+  local one_flipped = new_door({
+    finish = function(_, results)
+      results[2].ok = false
+    end,
+  }).run(both, { root = ROOT })
+  eq(
+    { one_flipped.ok, one_flipped.results[1].ok, one_flipped.results[2].ok },
+    { false, true, false },
+    "one entry not ok is enough"
+  )
+  local mended = flip_door(function(entry)
+    entry.ok = true
+  end).run({ ops = { { op = "set", id = "bad" }, { op = "set", id = "a" } } }, { root = ROOT })
+  eq(mended.ok, true, "and the other way round: judged on what finish left")
+  local replaced_entries = new_door({
+    finish = function(_, results)
+      results[1] = "nonsense"
+    end,
+  }).run(both, { root = ROOT })
+  eq(
+    replaced_entries.ok,
+    false,
+    "an entry that is no table is not ok (and no throw after the writes)"
+  )
 
   local failing_finish = new_door({
     finish = function()
@@ -540,21 +691,126 @@ return function(H)
   has(ff.finish_error, "cannot write the index in <vault>/a", "and says why, the root hidden")
   eq(ff.results[1].ok, true, "the entries stay as they were")
 
-  -- ── a document that cannot be sealed is an error, not a throw ──
-  local nan = new_door({
+  -- ── a value JSON cannot hold costs its entry, not the answer for the operations that ran ──
+  local writes = 0
+  local unholdable = new_door({
     ops = {
       n = {
-        fields = {},
-        run = function()
-          return { ok = true, value = 0 / 0 }
+        fields = { patch = "object" },
+        run = function(op)
+          writes = writes + 1
+          return {
+            ok = true,
+            outcome = "changed",
+            changed_ids = { "n" .. writes },
+            value = op.patch and op.patch.v,
+          }
         end,
       },
     },
   })
-  local nd2, ne2 = nan.run({ ops = { { op = "n" } } }, { root = ROOT })
+  local function nested(levels)
+    local value = { v = 1 }
+    for _ = 1, levels do
+      value = { v = value }
+    end
+    return value
+  end
+  local function unholdable_entry(patch, what)
+    writes = 0
+    local doc2, err2 = unholdable.run(
+      { ops = { { op = "n" }, { op = "n", patch = { v = patch } }, { op = "n" } } },
+      { root = ROOT }
+    )
+    eq(err2, nil, what .. ": an answer, not an error")
+    eq(writes, 3, what .. ": every operation ran")
+    eq(doc2.ok, false, what .. ": one entry is not ok, so the document is not")
+    ok(doc2.digest:match("^sha256:%x+$"), what .. ": sealed")
+    eq(#doc2.results, 3)
+    eq(
+      { doc2.results[1].ok, doc2.results[1].changed_ids },
+      { true, { "n1" } },
+      what .. ": the first keeps its answer"
+    )
+    eq(
+      { doc2.results[3].ok, doc2.results[3].changed_ids },
+      { true, { "n3" } },
+      what .. ": and the last"
+    )
+    local lost = doc2.results[2]
+    eq(
+      { lost.n, lost.op, lost.ok, lost.outcome, lost.error.code, lost.error.retryable },
+      { 2, "n", false, "failed", "internal", false },
+      what .. ": the entry that cannot be told is an internal one"
+    )
+    eq(lost.changed_ids, { "n2" }, what .. ": it still says what changed")
+    has(lost.error.message, "the operation ran, but its entry cannot be reported", what)
+    has(lost.error.message, "$.results[2].", what .. ": the place of the entry in the document")
+    ok(pcall(json.encode, doc2), what .. ": and the document can be written")
+    return lost
+  end
+  has(unholdable_entry(0 / 0, "NaN").error.message, "$.results[2].value is ")
+  has(unholdable_entry(1e300, "1e300").error.message, "a whole number of 2^53 or more")
+  has(unholdable_entry(2 ^ 53, "2^53").error.message, "a whole number of 2^53 or more")
+  has(unholdable_entry(nested(70), "nesting").error.message, "nested deeper than 64")
+  local cyclic = {}
+  cyclic.v = cyclic
+  has(unholdable_entry(cyclic, "a cycle").error.message, "nested deeper than 64")
+  writes = 0
+  local fine = unholdable.run(
+    { ops = { { op = "n", patch = { v = 2 ^ 52 } }, { op = "n", patch = { v = nested(30) } } } },
+    { root = ROOT }
+  )
+  eq(fine.ok, true, "what the encoder can hold is untouched")
+  eq(fine.results[1].value, 2 ^ 52)
+  -- every entry lost: still an answer
+  local all_lost = unholdable.run(
+    { ops = { { op = "n", patch = { v = 0 / 0 } }, { op = "n", patch = { v = 0 / 0 } } } },
+    { root = ROOT }
+  )
+  eq(
+    { all_lost.ok, all_lost.results[1].error.code, all_lost.results[2].error.code },
+    { false, "internal", "internal" }
+  )
+  has(all_lost.results[2].error.message, "$.results[2].value", "each names its own place")
+  -- a handler that is no good with the ids of an entry: the entry is still told, with no ids
+  local bad_ids = new_door({
+    ops = {
+      n = {
+        fields = {},
+        run = function()
+          return { ok = true, changed_ids = { 0 / 0 } }
+        end,
+      },
+    },
+  }).run({ ops = { { op = "n" } } }, { root = ROOT })
+  eq(
+    { bad_ids.ok, bad_ids.results[1].changed_ids, bad_ids.results[1].error.code },
+    { false, {}, "internal" }
+  )
+  -- the door of a document that cannot be sealed for a reason the entries do not hold is still an error
+  local unsealable_doc = new_doc()
+  unsealable_doc.seal = function()
+    error("the digest is gone", 0)
+  end
+  local unsealable = cops.make({
+    doc = unsealable_doc,
+    ops = {
+      n = {
+        fields = {},
+        run = function()
+          return { ok = true }
+        end,
+      },
+    },
+  })
+  local nd2, ne2 = unsealable.run({ ops = { { op = "n" } } }, { root = ROOT })
   eq(nd2, nil)
-  eq(ne2.code, "internal")
-  has(ne2.message, "$.results[1].value", "the path in the document")
+  eq(
+    { ne2.code, ne2.message },
+    { "internal", "the digest is gone" },
+    "never a throw after the writes"
+  )
 
   -- ── failure / refuse ──
   local f = door.failure(ROOT, "unknown area 'x' in C:/Users/me/vault/x", nil)
@@ -570,7 +826,37 @@ return function(H)
     "7",
     "a message that is no text"
   )
+  eq(
+    door.failure(ROOT, { code = "io" }).error.message,
+    "io",
+    "no message: the code, as contract.doc's error document says it"
+  )
   eq(door.failure(ROOT, nil).error.code, "internal")
+
+  -- the root is hidden before the text is classified: a root with a space in it is cut by the scrub otherwise
+  local SPACED = "C:/Users/John Doe/vault"
+  local spaced = door.failure(SPACED, "bad thing in C:/Users/John Doe/vault/lua/x.lua")
+  eq(spaced.error.message, "bad thing in x.lua", "the same text a raising handler would give")
+  lacks(spaced.error.message, "John", "no part of the root is left")
+  local backslashes =
+    door.failure([[C:\Users\John Doe\vault]], [[boom C:\Users\John Doe\vault\lua\x.lua:3: oops]])
+  eq(backslashes.error.message, "boom x.lua:3: oops", "in the other spelling too")
+  local lua_root =
+    door.failure("C:/Users/John Doe/lua/vault", "bad C:/Users/John Doe/lua/vault/x.md")
+  eq(lua_root.error.message, "bad <vault>/x.md", "a root that itself has a lua folder")
+  eq(
+    door.failure(SPACED, "unknown area 'x' in C:/Users/John Doe/vault/x").error.message,
+    "unknown area 'x' in <vault>/x",
+    "a text a pattern knows is as it was"
+  )
+  eq(
+    door.failure(SPACED, { code = "io", message = "cannot read C:/Users/John Doe/vault/lua/a" }).error.message,
+    "cannot read <vault>/lua/a",
+    "an error that has a code is only hidden"
+  )
+  -- and the same text from a handler
+  local spaced_run = door.run({ ops = { { op = "boom" } } }, { root = "C:/Users/John Doe/vault" })
+  lacks(spaced_run.results[1].error.message, "John")
   local rf = door.refuse("invalid_argument", "nope", { id = "a" })
   eq(rf, {
     ok = false,
@@ -621,6 +907,20 @@ return function(H)
     "\8",
     "\11",
     "\31",
+    -- CR and FF are control characters: a CRLF text from a Windows front end is refused on purpose
+    "a\rb",
+    "a\r\nb",
+    "a\12b",
+    "\13",
+    -- not valid UTF-8: a raw C1 byte (0x9B is a CSI to an 8-bit terminal), an overlong ESC or LF, a lone 0xFF
+    "a\155[2Jb",
+    "a\133b",
+    "\192\155",
+    "\192\138",
+    "\255",
+    "\237\160\128", -- a surrogate
+    "\244\144\128\128", -- above U+10FFFF
+    "ü\195", -- a sequence that is cut off
   }) do
     ok(cops.has_control(text), "control: " .. vim.inspect(text))
   end
@@ -630,11 +930,14 @@ return function(H)
     "line\nfeed",
     "ü日本\240\159\152\128",
     "\194\160",
+    "\239\191\189", -- U+FFFD written out is valid text
+    "\244\143\191\191", -- U+10FFFF
     "",
   }) do
     ok(not cops.has_control(text), "fine: " .. vim.inspect(text))
   end
   ok(cops.has_control({ "ok", "bad\27" }), "a list is searched")
+  ok(cops.has_control({ "ok", "bad\155" }), "and a list for text that is not UTF-8")
   ok(not cops.has_control({ "ok", "fine" }))
   ok(not cops.has_control(vim.NIL), "vim.NIL")
   ok(not cops.has_control(5), "a number")
@@ -644,15 +947,24 @@ return function(H)
   )
   ok(not cops.too_long("ü日", 2) and cops.too_long("ü日本", 2))
   ok(not cops.too_long(5, 1), "a non-text is not too long")
+  -- a NUL (a client can send one: "\u0000") is a character like any other here, and no E976
+  local counted, too_long = pcall(cops.too_long, "a\0b", 2)
+  ok(counted, "too_long does not raise on a NUL: " .. tostring(too_long))
+  ok(too_long, "a\\0b is three characters")
+  ok(not cops.too_long("a\0b", 3), "and not four")
+  ok(cops.too_long("ü\0日", 2) and not cops.too_long("ü\0日", 3), "also next to multibyte text")
+  ok(not cops.too_long("\0", 1) and cops.too_long("\0\0", 1), "a NUL alone")
 
   -- ── through the door of the contract: contract.api ──
   local e2e_doc = new_doc()
+  local e2e_writes = 0
   local e2e_door = cops.make({
     doc = e2e_doc,
     ops = {
       set = {
         fields = { id = "string", patch = "object" },
         run = function(op)
+          e2e_writes = e2e_writes + 1
           return { ok = true, outcome = "changed", id = op.id, patch = op.patch }
         end,
       },
@@ -679,11 +991,42 @@ return function(H)
   local bad_text, bad_code = api.call("ops", '{"ops":[{"op":"explode"}]}', { root = ROOT })
   eq(bad_code, "invalid_argument", "a refused shape is an error document")
   has(vim.json.decode(bad_text).message, 'unknown operation "explode"')
-  eq(
-    select(2, api.call("ops", '{"ops":[],"extra":1}', { root = ROOT })),
-    "invalid_argument",
-    "unknown request field"
-  )
+  local null_text, null_code = api.call("ops", '{"ops":[{"op":null}]}', { root = ROOT })
+  eq(null_code, "invalid_argument")
+  has(vim.json.decode(null_text).message, "unknown operation null (operations: set)")
+  -- the request is valid but for the extra field, so it is the unknown field that is refused, not the list
+  e2e_writes = 0
+  local extra_text, extra_code =
+    api.call("ops", '{"ops":[{"op":"set","id":"a"}],"extra":1}', { root = ROOT })
+  eq(extra_code, "invalid_argument", "unknown request field")
+  has(vim.json.decode(extra_text).message, "unknown field 'extra' in the request")
+  eq(e2e_writes, 0, "and nothing ran")
+  -- an entry that JSON cannot hold: the answer for the others is not lost, and nothing is asked twice
+  local function unholdable_call(patch_json)
+    e2e_writes = 0
+    local utext, ucode = api.call(
+      "ops",
+      '{"ops":[{"op":"set","id":"a"},{"op":"set","id":"b","patch":' .. patch_json .. "}]}",
+      { root = ROOT }
+    )
+    eq(ucode, nil, "an answer, not an error document: " .. tostring(utext))
+    eq(e2e_writes, 2, "both operations ran")
+    local answer = vim.json.decode(utext)
+    eq({ answer.ok, answer.results[1].ok, answer.results[2].ok }, { false, true, false })
+    eq(answer.results[2].error.code, "internal")
+    has(answer.results[2].error.message, "the operation ran, but its entry cannot be reported")
+    has(answer.results[2].error.message, "$.results[2].patch.", "and where in the document")
+    ok(answer.digest:match("^sha256:%x+$"), "sealed")
+  end
+  unholdable_call('{"estimate":1e300}')
+  unholdable_call('{"estimate":9007199254740993}')
+  unholdable_call(('{"a":'):rep(70) .. "1" .. ("}"):rep(70))
+  -- the text of the results is written once, for the digest, and the answer reuses it (json.memo): a change to
+  -- `doc.results` after `run` returns is not seen. That is the contract, and the proof that nothing is written twice.
+  local remembered = e2e_door.run({ ops = { { op = "set", id = "m" } } }, { root = ROOT })
+  local first_text = json.encode(remembered)
+  remembered.results[1].outcome = "changed again"
+  eq(json.encode(remembered), first_text, "the results are remembered, not written a second time")
   eq(
     select(2, api.call("ops", '{"ops":[{"op":"set"}],"dry_run":"yes"}', { root = ROOT })),
     "invalid_argument",
