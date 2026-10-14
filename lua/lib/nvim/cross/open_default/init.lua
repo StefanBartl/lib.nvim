@@ -5,9 +5,10 @@
 --- https:// → default browser).
 ---
 --- Platform dispatch:
----   Windows → explorer.exe <target>
+---   Windows → URL: rundll32 url.dll,FileProtocolHandler <url>
+---             path: explorer.exe <absolute backslashed path>
 ---   WSL     → converts path to a Windows path via `wslpath`, then same as
----             Windows; a URL skips straight to explorer.exe (no path to
+---             Windows; a URL skips straight to rundll32 (no path to
 ---             convert); falls back to `xdg-open` for a Linux-side file with
 ---             no Windows-side equivalent.
 ---   macOS   → open <target>
@@ -92,16 +93,23 @@ return function(target, opts)
   local cmd
 
   if is_windows and not is_wsl then
-    -- explorer.exe hands the target straight to the registered protocol/file
-    -- handler with no cmd.exe re-tokenizing in between. `cmd.exe /C start`
-    -- silently truncates a URL/path containing an unescaped `&` (any link
-    -- with 2+ query params) because cmd.exe's own tokenizer treats a bare
-    -- `&` outside quotes as a command separator, and libuv/vim.system only
-    -- quote an argv entry that contains whitespace.
-    cmd = { "explorer.exe", windows_target(target) }
+    if looks_like_url(target) then
+      -- ShellExecute in-process: `?`, `&`, `%xx` and long URLs arrive intact and the exit
+      -- code is reliable. Not `cmd.exe /C start` (its tokenizer cuts a bare `&`: any link
+      -- with 2+ query params) and not `explorer.exe`: that is a folder browser which, given
+      -- a URL with `?`, `&` or a `%xx` escape, takes the argument for a path pattern, drops
+      -- it and opens the Documents folder instead -- in a hidden window, since children
+      -- start hidden -- while exiting 1 exactly as on success. Measured 2026-10-14 against
+      -- Chrome: `https://x/plain` opened, `https://x/?q=1` and `https://x/a&b=1` did not.
+      cmd = { "rundll32.exe", "url.dll,FileProtocolHandler", target }
+    else
+      -- a file or folder: explorer.exe hands it to the registered handler with no cmd.exe
+      -- re-tokenizing in between
+      cmd = { "explorer.exe", windows_target(target) }
+    end
   elseif is_wsl then
     if looks_like_url(target) then
-      cmd = { "explorer.exe", target }
+      cmd = { "rundll32.exe", "url.dll,FileProtocolHandler", target }
     else
       local win_path = wsl_to_win_path(expand_path(target))
       if win_path then
