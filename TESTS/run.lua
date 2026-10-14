@@ -153,6 +153,7 @@ local specs = {
   "config_repo_file_spec.lua",
   "normalize_switch_group_spec.lua",
   "json_sanitize_spec.lua",
+  "diff_word_ranges_spec.lua",
   "relpath_spec.lua",
   "config_spec.lua",
   "cross_executable_spec.lua",
