@@ -152,6 +152,7 @@ local specs = {
   "checkpoint_spec.lua",
   "config_repo_file_spec.lua",
   "normalize_switch_group_spec.lua",
+  "json_sanitize_spec.lua",
   "relpath_spec.lua",
   "config_spec.lua",
   "cross_executable_spec.lua",
