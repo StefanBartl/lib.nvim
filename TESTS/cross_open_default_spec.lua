@@ -42,6 +42,23 @@ return function(H)
     ok(open_default("www.example.com/x?y=1"), "a www. target is a URL too")
     eq(captured[1], "rundll32.exe", "and also goes to rundll32")
 
+    -- Non-http schemes are handed over untouched, not mangled into a path.
+    for _, uri in ipairs({
+      "ssh://host/x",
+      "mailto:a@b.de",
+      "file:///C:/x.txt",
+      "magnet:?xt=urn:btih:abc",
+    }) do
+      ok(open_default(uri), uri .. " is dispatched")
+      eq(captured[1], "rundll32.exe", uri .. " goes to rundll32")
+      eq(captured[3], uri, uri .. " arrives unchanged")
+    end
+    -- A drive letter or a relative path is still a path.
+    for _, path in ipairs({ "C:\\x", "C:/x/y.txt", "./rel.txt", "rel.txt" }) do
+      ok(open_default(path), path .. " is dispatched")
+      eq(captured[1], "explorer.exe", path .. " stays a path")
+    end
+
     ok(open_default("C:/tmp/some file.pdf"), "a path is dispatched")
     eq(captured[1], "explorer.exe", "windows: a file path keeps explorer.exe")
     ok(not captured[2]:find("/", 1, true), "absolute and backslashed")

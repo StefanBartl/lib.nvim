@@ -27,9 +27,9 @@ local expand_path = require("lib.nvim.cross.fs.expand_path")
 ---@param text string
 ---@return boolean
 local function looks_like_url(text)
-  return text:match("^https?://") ~= nil
-    or text:match("^ftp://") ~= nil
-    or text:match("^www%.") ~= nil
+  -- Any URI scheme (`ssh:`, `mailto:`, `file:`, `magnet:`); at least two characters, so a
+  -- drive letter (`C:\x`) stays a path.
+  return text:match("^%a[%w+.-]+:") ~= nil or text:match("^www%.") ~= nil
 end
 
 ---@internal
