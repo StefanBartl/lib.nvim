@@ -22,7 +22,11 @@
 ---    message scrubbed and the root hidden; the others still run;
 ---  - **no path of this machine in an entry**: `failure` and the `internal` entry hide the root (`contract.doc`);
 ---  - the `finish` hook runs once at the end (the index of every area that changed, the catalogs): its failure is told
----    in the document (`finish_error`, `ok` false), never swallowed and never a throw after the writes.
+---    in the document (`finish_error`, `ok` false), never swallowed and never a throw after the writes. `ok` is judged
+---    after it, on the entries as it left them;
+---  - **an answer is never lost for one entry**: a value JSON cannot hold in an entry (`NaN`, a whole number of 2^53
+---    or more, nesting deeper than the encoder allows) turns that entry into an `internal` one that says the operation
+---    ran but cannot be reported. The others keep their answer, so a client does not repeat the writes.
 ---
 ---```lua
 --- local door = require("lib.nvim.contract.ops").make({
@@ -44,11 +48,18 @@ require("lib.nvim.contract.ops.@types")
 
 local errors = require("lib.nvim.contract.errors")
 local json = require("lib.nvim.json.canonical")
+local nul_safe = require("lib.lua.strings.core").nul_safe
 
 local M = {}
 
 ---The sizes the door keeps unless the plugin says otherwise.
 M.DEFAULT_LIMITS = { batch_ops = 100, client_op_id = 64 }
+
+---The largest value of the `integer` field type (the smallest is 1).
+local INTEGER_MAX = 999999
+
+---Most characters of a request text that a refusal echoes (the request may be 256 KiB).
+local ECHO_MAX = 60
 
 ---The field types of an operation: how a value is checked and how a refusal names it.
 ---@type table<string, Lib.Contract.OpsType>
@@ -83,9 +94,12 @@ local TYPES = {
     end,
   },
   integer = {
-    label = "a whole number from 1",
+    label = ("a whole number from 1 to %d"):format(INTEGER_MAX),
     is = function(value)
-      return type(value) == "number" and value == math.floor(value) and value >= 1 and value < 1e6
+      return type(value) == "number"
+        and value == math.floor(value)
+        and value >= 1
+        and value <= INTEGER_MAX
     end,
   },
   boolean = {
@@ -96,17 +110,50 @@ local TYPES = {
   },
 }
 
----A text of a request as it is echoed in a refusal: short (the request may be 256 KiB).
+---A text of a request as it is echoed in a refusal: short (at most 60 characters, never cut inside one), valid UTF-8
+---and printable. The names are the client's: a control character in one (ESC, BEL, a C1 control, a Unicode line
+---separator) is written as an escape (`\x1b`, `\u009b`), so the message can be shown on a terminal as it is.
 ---@param text string
 ---@return string
 local function clip(text)
-  return #text > 60 and (text:sub(1, 59) .. "…") or text
+  -- 61 characters are 244 bytes at most: what lies behind them is never looked at (the request may be 256 KiB)
+  if #text > 4 * (ECHO_MAX + 1) then
+    text = text:sub(1, 4 * (ECHO_MAX + 1))
+  end
+  text = json.scrub_utf8(text)
+  local keep, chars = 0, 0
+  for i = 1, #text do
+    local byte = text:byte(i)
+    if byte < 0x80 or byte >= 0xC0 then -- not a continuation byte: a character starts here
+      chars = chars + 1
+      if chars == ECHO_MAX then
+        keep = i - 1 -- the ellipsis takes the place of the last character
+      elseif chars > ECHO_MAX then
+        text = text:sub(1, keep) .. "…"
+        break
+      end
+    end
+  end
+  local function escape(c)
+    return ("\\x%02x"):format(c:byte())
+  end
+  text = text:gsub("[%z\1-\31\127]", escape)
+  text = text:gsub("\194([\128-\159])", function(c)
+    return ("\\u%04x"):format(c:byte())
+  end)
+  text = text:gsub("\226\128([\168\169])", function(c)
+    return c == "\168" and "\\u2028" or "\\u2029"
+  end)
+  return text
 end
 
 ---A value as it is shown in a refusal: short, and never a dump of a big table.
 ---@param value any
 ---@return string
 local function shown(value)
+  if value == vim.NIL then
+    return "null" -- a JSON `null`, not the userdata it is in Lua
+  end
   local kind = type(value)
   if kind == "string" or kind == "number" or kind == "boolean" or kind == "nil" then
     return clip(vim.inspect(value))
@@ -115,9 +162,11 @@ local function shown(value)
 end
 
 ---Whether a value carries a character that must not reach a source from a front end: a control character (ESC and the
----rest of C0 but the tab and the line feed, DEL, the 8-bit C1 range) or a Unicode line separator. Other tools print
----the files to a terminal and parse them; the editor's own commands clean what they print, a text editor does not.
----A list is searched entry by entry.
+---rest of C0 but the tab and the line feed, DEL, the 8-bit C1 range), a Unicode line separator, or text that is not
+---valid UTF-8 (a raw 0x9B byte is a CSI to an 8-bit terminal, an overlong form is an ESC or a line feed that
+---the checks above do not see, and the editor would take the whole file for latin1). Other tools print the files to
+---a terminal and parse them; the editor's own commands clean what they print, a text editor does not. A list is
+---searched entry by entry.
 ---@param value any
 ---@return boolean
 function M.has_control(value)
@@ -125,6 +174,7 @@ function M.has_control(value)
     return value:find("[%z\1-\8\11-\31\127]") ~= nil
       or value:find("\194[\128-\159]") ~= nil
       or value:find("\226\128[\168\169]") ~= nil
+      or json.scrub_utf8(value) ~= value
   elseif type(value) == "table" and value ~= vim.NIL then
     for _, v in ipairs(value) do
       if M.has_control(v) then
@@ -135,12 +185,13 @@ function M.has_control(value)
   return false
 end
 
----Whether a text is longer than `max` characters (not bytes).
+---Whether a text is longer than `max` characters (not bytes). A NUL counts as one character (`strchars` itself raises
+---on a Lua string that holds one); `has_control` is what refuses it.
 ---@param s any
 ---@param max integer
 ---@return boolean
 function M.too_long(s, max)
-  return type(s) == "string" and vim.fn.strchars(s) > max
+  return type(s) == "string" and vim.fn.strchars(nul_safe(s)) > max
 end
 
 ---@param names table<string, any>
@@ -221,8 +272,13 @@ function M.make(cfg)
   ---@param info? table
   ---@return table
   function door.failure(root, err, info)
+    if type(root) == "string" and not (type(err) == "table" and err.code) then
+      -- the root goes first, as in `run`: `classify` scrubs a text it cannot place token by token, which cuts a root
+      -- with a space in it in the middle, and what is left of it is no root any more
+      err = d.redact(root, errors.text(err))
+    end
     local e = vim.deepcopy(errors.classify(err, info, { patterns = cfg.patterns }))
-    e.message = errors.text(e.message)
+    e.message = errors.text(e.message == nil and e.code or e.message) -- as `contract.doc` does for an error document
     if type(root) == "string" then
       e.message = d.redact(root, e.message)
     end
@@ -241,6 +297,42 @@ function M.make(cfg)
     local e = errors.fail(code, message)
     e.details = details and json.object(details) or nil
     return { ok = false, outcome = "failed", error = e }
+  end
+
+  ---The entries a document cannot hold (`NaN`, a whole number of 2^53 or more, nesting deeper than the encoder
+  ---allows, a function) are replaced, in place, by an `internal` entry that says so: the operation ran, and the
+  ---answer for the others must not be lost with it (a client that is told nothing repeats the writes). Each entry is
+  ---tried at the place it has in the document, so the message names `$.results[n]...`.
+  ---@param results table[]
+  ---@param hidden fun(text: any): string
+  ---@return boolean replaced
+  local function replace_unreportable(results, hidden)
+    local probe = { results = {} }
+    for i = 1, #results do
+      probe.results[i] = vim.NIL
+    end
+    local replaced = false
+    for i, entry in ipairs(results) do
+      probe.results[i] = entry
+      local fits, why = pcall(json.encode, probe)
+      probe.results[i] = vim.NIL
+      if not fits then
+        local was = type(entry) == "table" and entry or {}
+        local lost = door.refuse(
+          "internal",
+          "the operation ran, but its entry cannot be reported: " .. hidden(why)
+        )
+        lost.n = i
+        lost.op = type(was.op) == "string" and was.op or nil
+        lost.changed_ids = type(was.changed_ids) == "table"
+            and pcall(json.encode, was.changed_ids)
+            and was.changed_ids
+          or {}
+        results[i] = lost
+        replaced = true
+      end
+    end
+    return replaced
   end
 
   ---Check the shape of a request, all of it, before anything runs.
@@ -355,7 +447,12 @@ function M.make(cfg)
       ctx = { root = opts.root }
     end
     if type(ctx) ~= "table" then
-      return nil, cerr or errors.fail("internal", "the operations have no context")
+      if cerr then
+        -- the reason of the hook is an error of the contract here too, not only for the caller that classifies it
+        -- (a text, or a table without a code, as it comes)
+        return nil, door.failure(opts.root, cerr).error
+      end
+      return nil, errors.fail("internal", "the operations have no context")
     end
     ctx.dry = params.dry_run == true
     local root = type(ctx.root) == "string" and ctx.root or nil
@@ -365,7 +462,6 @@ function M.make(cfg)
     end
 
     local results = {}
-    local all_ok = true
     for i, op in ipairs(params.ops) do
       -- a JSON `null` for a field of the operation is the same as leaving it out
       for key, value in pairs(op) do
@@ -382,9 +478,6 @@ function M.make(cfg)
       entry.n = i
       entry.op = op.op
       entry.changed_ids = entry.changed_ids or {}
-      if not entry.ok then
-        all_ok = false
-      end
       results[#results + 1] = entry
     end
 
@@ -392,8 +485,16 @@ function M.make(cfg)
     if cfg.finish then
       local finished, ferr = pcall(cfg.finish, ctx, results)
       if not finished then
-        all_ok = false
         finish_error = hidden(ferr)
+      end
+    end
+
+    -- `finish` may change the entries: `ok` is judged on what it left
+    local all_ok = finish_error == nil
+    for _, entry in ipairs(results) do
+      if type(entry) ~= "table" or not entry.ok then
+        all_ok = false
+        break
       end
     end
 
@@ -401,9 +502,15 @@ function M.make(cfg)
     doc.client_op_id = params.client_op_id
     doc.dry_run = ctx.dry
     doc.ok = all_ok
-    doc.results = results
+    -- written once for the digest, and the answer of `contract.api` reuses that text: `doc.results` must not change
+    -- after `run` returns
+    doc.results = json.memo(results)
     doc.finish_error = finish_error
     local sealed, text = pcall(d.seal, doc, nil)
+    if not sealed and replace_unreportable(results, hidden) then
+      doc.ok = false
+      sealed, text = pcall(d.seal, doc, nil)
+    end
     if not sealed then
       return nil, errors.fail("internal", hidden(text))
     end

@@ -250,6 +250,21 @@ return function(H)
   )
   eq({ json.encode("") }, { '""' }, "an empty string")
 
+  -- scrub_utf8: the text as the encoder holds it, before the escapes
+  for _, text in ipairs({
+    "",
+    "plain",
+    "Größe 日本 \240\159\152\128",
+    "\244\143\191\191",
+    'a\27b"<',
+  }) do
+    eq(json.scrub_utf8(text), text, "valid text is the same string: " .. vim.inspect(text))
+  end
+  eq(json.scrub_utf8("a\155b"), "a" .. FFFD .. "b", "a raw C1 byte")
+  eq(json.scrub_utf8("\192\155"), FFFD:rep(2), "an overlong ESC")
+  eq(json.scrub_utf8("\237\160\128"), FFFD:rep(3), "a surrogate")
+  eq(json.scrub_utf8("ok\226\130"), "ok" .. FFFD:rep(2), "a cut-off sequence at the end")
+
   -- ── what is no JSON is an error that says where ──
   has(fails({ 1, nil, 3 }), "not a list", "a hole")
   has(fails({ 1, 2, a = 3 }), "mixes", "a list that has a string key")

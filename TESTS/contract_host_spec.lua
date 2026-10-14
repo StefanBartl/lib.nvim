@@ -84,6 +84,11 @@ return function(H)
   eq(chost.make({ api = api, protocol = 3 }).PROTOCOL, 3)
   eq(host.max_line_bytes(), 256 * 1024 + 256, "a request plus the id and the method")
 
+  -- the binary mode is for the process's own stdin only: a stream that is not it is left alone (the real thing is
+  -- tried in the child Neovim below)
+  eq(chost.binary_stdin({}), false, "a table is no stdin")
+  eq(chost.binary_stdin(nil), false, "nothing is no stdin")
+
   -- ── handle: one line in, one line out, the bytes of api.call ──
   for _, case in ipairs({
     { id = "1", method = "hello", params = "" },
@@ -114,6 +119,17 @@ return function(H)
   ok(refused ~= nil and refused:sub(1, 2) == "8\t", "an unknown method is answered with its id")
   eq(vim.json.decode(refused:sub(3)).code, "not_found")
   eq(vim.json.decode(host.handle("9\techo\t{not json"):sub(3)).code, "invalid_argument")
+  -- a method name that cannot be shown on a terminal is refused without being echoed back
+  for _, name in ipairs({ "\27]52;c;ZXZpbA==\7", "a\0b", "bad\194\133name", string.rep("m", 65) }) do
+    local reply = host.handle("5\t" .. name .. "\t{}")
+    ok(reply ~= nil and reply:sub(1, 2) == "5\t", "a hostile method name is answered with its id")
+    eq(vim.json.decode(reply:sub(3)).code, "not_found")
+    ok(
+      not reply:find("52;c", 1, true) and not reply:find("mmmm", 1, true),
+      "the name is not echoed"
+    )
+  end
+  eq(vim.json.decode(host.handle("5\t" .. string.rep("m", 64) .. "\t{}"):sub(3)).code, "not_found")
   -- (documented) the params text is spliced into the request, not parsed: it can carry a top-level field of its own.
   -- That is the same client that writes the whole line, so it is no way to anything it could not ask for anyway.
   eq(
@@ -138,13 +154,66 @@ return function(H)
   eq(host.handle("1234567890123456\thello\t"), nil, "an id of 16 digits")
   eq(host.handle("123456789012345\thello\t") ~= nil, true, "15 digits are fine")
   eq(host.handle("1\t\t"), nil, "no method")
-  eq(
-    vim.json.decode(host.handle("1\tbad-name\t"):sub(3)).code,
-    "not_found",
-    "a method name ends at the dash: 'bad' is asked for, and the dispatcher refuses it"
-  )
+  local bad = vim.json.decode(host.handle("1\tbad-name\t"):sub(3))
+  eq(bad.code, "not_found", "the dispatcher refuses a method it does not have")
+  has(bad.message, "unknown method 'bad-name'")
   eq(host.handle(5), nil, "not even a text")
   eq(host.handle(nil), nil)
+
+  -- a method name runs to the next tab and is judged whole, never cut at a dash or a dot: `list-all` is not `list`
+  local named = capi.make({
+    doc = d,
+    methods = {
+      list = {
+        params = {},
+        run = function()
+          return { kind = "tasks.list" }
+        end,
+      },
+      ["list-all"] = {
+        params = { n = "integer" },
+        run = function(p)
+          return { kind = "tasks.list_all", n = p.n }
+        end,
+      },
+      ["a.b"] = {
+        params = {},
+        run = function()
+          return { kind = "tasks.dot" }
+        end,
+      },
+    },
+  })
+  local named_host = chost.make({ api = named, call_opts = { root = ROOT } })
+  eq(
+    named_host.handle('1\tlist-all\t{"n":3}'),
+    "1\t" .. named.call("list-all", '{"params":{"n":3}}', { root = ROOT }),
+    "a dashed method with params: the bytes of api.call"
+  )
+  local dashed = vim.json.decode(named_host.handle('1\tlist-all\t{"n":3}'):sub(3))
+  eq(
+    { dashed.kind, dashed.n },
+    { "tasks.list_all", 3 },
+    "'list-all' ran, not 'list' with a spliced '-all'"
+  )
+  eq(
+    vim.json.decode(named_host.handle("2\tlist\t"):sub(3)).kind,
+    "tasks.list",
+    "and 'list' is still itself"
+  )
+  eq(vim.json.decode(named_host.handle("3\ta.b\t"):sub(3)).kind, "tasks.dot", "a dotted method")
+  eq(
+    vim.json.decode(named_host.handle("4\ta.b"):sub(3)).kind,
+    "tasks.dot",
+    "a dotted method without the second tab"
+  )
+  local unknown = vim.json.decode(named_host.handle("5\ta.c\t"):sub(3))
+  eq(unknown.code, "not_found")
+  has(unknown.message, "unknown method 'a.c'")
+  ok(
+    not unknown.message:find("unknown method 'a'", 1, true),
+    "the host names the method the client sent"
+  )
 
   -- call_opts: a function is asked per request
   local asked = 0
@@ -246,6 +315,7 @@ return function(H)
     "1\thello\t",
     "garbage",
     "",
+    "\r",
     "2\techo\t" .. '{"text":"x"}',
   })
   host.serve(input, output, warn)
@@ -256,10 +326,17 @@ return function(H)
   eq(
     warnings,
     { "host: a line that is not a request is skipped" },
-    "told once; an empty line is not worth a word"
+    "told once; an empty line, and the empty line of a Windows client (a bare CR), are not worth a word"
   )
   eq(output.flushed, 3, "flushed after every line")
-  eq(input.pos, 5, "read until the input ended")
+  eq(input.pos, 6, "read until the input ended")
+
+  -- more than a bare CR is no blank line: it is told
+  warnings = {}
+  local in_cr, out_cr = streams({ "\r\r", " " })
+  host.serve(in_cr, out_cr, warn)
+  eq(#warnings, 2, "only an empty line and a lone CR are silent")
+  eq(#out_cr.out, 1, "only ready")
 
   -- the protocol number
   local _, out3 = streams({})
@@ -299,6 +376,31 @@ return function(H)
   small_host.serve(in4, out4, warn)
   eq(#out4.out, 1, "only ready: a 16-digit id is no id")
 
+  -- the longest id there is (15 digits) on a long line is answered, with that id
+  local in8, out8 = streams({ "123456789012345\thello\t" .. string.rep("x", 400) })
+  small_host.serve(in8, out8, warn)
+  eq(#out8.out, 2, "ready and an answer for the 15-digit id")
+  eq(out8.out[2]:sub(1, 16), "123456789012345\t", "a 15-digit id on a long line is answered")
+  eq(
+    vim.json.decode(out8.out[2]:sub(17)).code,
+    "payload_too_large",
+    "and the answer is the one for a long line"
+  )
+
+  -- the limit itself: exactly max_line_bytes() goes to api.call, one byte more is refused by the host
+  local pad = "7\thello\t"
+  local at = pad .. string.rep(" ", small_host.max_line_bytes() - #pad)
+  eq(#at, small_host.max_line_bytes(), "a line of exactly the limit")
+  local in9, out9 = streams({ at, at .. " " })
+  small_host.serve(in9, out9, warn)
+  eq(out9.out[2], small_host.handle(at) .. "\n", "at the limit: api.call answers")
+  eq(
+    out9.out[3],
+    "7\t" .. small.minimal_error("payload_too_large", "a request is at most 20 bytes") .. "\n",
+    "one over: the host refuses"
+  )
+  ok(out9.out[2] ~= out9.out[3], "the two are told apart")
+
   -- the output goes away: the host ends and does not read on
   local in5, out5 = streams({ "1\thello\t", "2\thello\t", "3\thello\t" }, { fail_after = 2 })
   host.serve(in5, out5, warn)
@@ -322,17 +424,15 @@ return function(H)
 
   -- ── a real child Neovim, started from the template ──
   local dir = vim.fn.tempname()
-  vim.fn.mkdir(dir .. "/plugin/lua/spec_host_plugin", "p")
-  vim.fn.mkdir(dir .. "/plugin/scripts", "p")
   local function write(path, text)
+    vim.fn.mkdir(vim.fs.dirname(path), "p")
     local f = assert(io.open(path, "wb"))
     f:write(text)
     f:close()
   end
 
-  write(
-    dir .. "/plugin/lua/spec_host_plugin/host.lua",
-    [=[
+  -- the module that the template starts: a plugin's host, with a method that tells which process answered
+  local HOST_MODULE = [=[
 local doc = require("lib.nvim.contract.doc")
 local capi = require("lib.nvim.contract.api")
 local d = doc.new({ plugin = "spec.nvim", schema = 1 })
@@ -363,19 +463,54 @@ return require("lib.nvim.contract.host").make({
   end,
 })
 ]=]
-  )
+
+  -- a module that does not serve but tells which fake lib.nvim (see `fake_lib`) the template put on the runtimepath
+  local PROBE_MODULE = [=[
+local M = {}
+function M.serve(_, out)
+  local found = {}
+  for _, path in ipairs(vim.api.nvim_list_runtime_paths()) do
+    local f = io.open(path .. "/lua/lib/nvim/MARKER", "rb")
+    if f then
+      found[#found + 1] = f:read("*a")
+      f:close()
+    end
+  end
+  out:write(table.concat(found, ",") .. "\n")
+end
+return M
+]=]
 
   local template =
     assert(io.open(vim.fn.getcwd() .. "/templates/contract_host.lua", "rb"):read("*a"))
-  local script_text = template
-    :gsub('local MODULE = "your_plugin.host"', 'local MODULE = "spec_host_plugin.host"')
-    :gsub('local PLUGIN = "your%-plugin.nvim"', 'local PLUGIN = "spec.nvim"')
-  ok(
-    script_text:find("spec_host_plugin.host", 1, true),
-    "the template names its module in the place the spec replaces"
-  )
-  write(dir .. "/plugin/scripts/spec-host.lua", script_text)
-  local script = dir .. "/plugin/scripts/spec-host.lua"
+
+  ---Install the template as `<root>/plugin/scripts/host.lua` of a plugin whose `module` is `source`.
+  ---@param root string
+  ---@param module string
+  ---@param source string
+  ---@return string script
+  local function install(root, module, source)
+    local text = template
+      :gsub('local MODULE = "your_plugin.host"', ('local MODULE = "%s"'):format(module))
+      :gsub('local PLUGIN = "your%-plugin.nvim"', 'local PLUGIN = "spec.nvim"')
+    ok(
+      text:find('local MODULE = "' .. module .. '"', 1, true),
+      "the template names its module in the place the spec replaces"
+    )
+    write(root .. "/plugin/lua/" .. (module:gsub("%.", "/")) .. ".lua", source)
+    write(root .. "/plugin/scripts/host.lua", text)
+    return root .. "/plugin/scripts/host.lua"
+  end
+
+  ---A folder that passes the template's check for a lib.nvim checkout, and says who it is.
+  ---@param path string
+  ---@param name string
+  local function fake_lib(path, name)
+    write(path .. "/lua/lib/nvim/MARKER", name)
+  end
+
+  local script = install(dir, "spec_host_plugin.host", HOST_MODULE)
+  write(dir .. "/data-dir.lua", 'io.stdout:write(vim.fn.stdpath("data"))')
 
   local lib_dir = vim.fn.getcwd()
   ok(
@@ -383,16 +518,36 @@ return require("lib.nvim.contract.host").make({
     "the spec runs from the lib.nvim checkout"
   )
 
+  ---Run a script in a child Neovim. The places the template looks in are blank unless the case sets them, so what the
+  ---machine has in its environment (`$REPOS_DIR` on a developer's) never finds lib.nvim for a case.
   ---@param stdin string
   ---@param env table
-  local function run_child(stdin, env)
-    local base = { NVIM = vim.NIL, NVIM_LISTEN_ADDRESS = vim.NIL }
+  ---@param which? string   # The script, default the host of `HOST_MODULE`.
+  local function run_child(stdin, env, which)
+    local base = {
+      NVIM = vim.NIL,
+      NVIM_LISTEN_ADDRESS = vim.NIL,
+      REPOS_DIR = "",
+      LIB_NVIM_DIR = "",
+      LIB_NVIM_PATH = "",
+    }
     return vim
       .system(
-        { vim.v.progpath, "-n", "-i", "NONE", "--headless", "-u", "NONE", "-l", script },
+        { vim.v.progpath, "-n", "-i", "NONE", "--headless", "-u", "NONE", "-l", which or script },
         { text = true, stdin = stdin, env = vim.tbl_extend("force", base, env) }
       )
       :wait(60000)
+  end
+
+  ---The non-empty lines of a child's output, without the carriage returns of a Windows console.
+  ---@param text string
+  ---@return string[]
+  local function lines_of(text)
+    local out = {}
+    for l in (text:gsub("\r", "")):gmatch("[^\n]+") do
+      out[#out + 1] = l
+    end
+    return out
   end
 
   local child = run_child(
@@ -403,10 +558,7 @@ return require("lib.nvim.contract.host").make({
     { LIB_NVIM_DIR = lib_dir, SPEC_ROOT = "/spec/root" }
   )
   eq(child.code, 0, "the host ends cleanly when its input ends; stderr: " .. tostring(child.stderr))
-  local lines = {}
-  for l in (child.stdout:gsub("\r", "")):gmatch("[^\n]+") do
-    lines[#lines + 1] = l
-  end
+  local lines = lines_of(child.stdout)
   eq(lines[1], "ready\t1")
   local hello = vim.json.decode(lines[2]:match("^1\t(.*)$"))
   eq({ hello.kind, hello.plugin, hello.vault.id }, { "spec.hello", "spec.nvim", "root" })
@@ -431,16 +583,86 @@ return require("lib.nvim.contract.host").make({
   eq(quiet.code, 0)
   eq((quiet.stdout:gsub("\r", "")), "ready\t1\n")
 
-  -- the other places the template looks for lib.nvim: $LIB_NVIM_PATH and $REPOS_DIR/lib.nvim
-  local via_path = run_child("", { LIB_NVIM_DIR = "", LIB_NVIM_PATH = lib_dir })
+  -- a raw 0x1A byte in a line is a byte like any other and not the end of the input (Windows reads a text mode stdin
+  -- up to it and no further): the line is answered, and so is the one after it
+  local ctrl_z =
+    run_child('4\techo\t{"text":"a\26b"}\n5\techo\t{"text":"z"}\n', { LIB_NVIM_DIR = lib_dir })
+  eq(ctrl_z.code, 0, "a 0x1A in a line: " .. tostring(ctrl_z.stderr))
+  local zl = lines_of(ctrl_z.stdout)
+  eq(#zl, 3, "ready and one answer for each of the two lines; stdout " .. ctrl_z.stdout)
+  eq(zl[2]:sub(1, 2), "4\t", "the line with the 0x1A is answered with its id")
+  eq(vim.json.decode(zl[3]:match("^5\t(.*)$")).text, "z", "and the line after it is not lost")
+
+  -- a client that ends its lines with CR LF: the request is the line without the CR, and its blank line is no word on
+  -- stderr
+  local crlf = run_child(
+    "1\thello\t\r\n\r\n2\thello\r\n",
+    { LIB_NVIM_DIR = lib_dir, SPEC_ROOT = "/spec/root" }
+  )
+  eq(crlf.code, 0, "CRLF: " .. tostring(crlf.stderr))
+  local cl = lines_of(crlf.stdout)
+  eq(#cl, 3, "ready and two answers; stdout " .. crlf.stdout)
+  eq({ cl[2]:sub(1, 2), cl[3]:sub(1, 2) }, { "1\t", "2\t" })
+  ok(
+    not crlf.stderr:find("not a request", 1, true),
+    "the blank line of a CRLF client is skipped silently: " .. crlf.stderr
+  )
+
+  -- the end-to-end way in by $LIB_NVIM_PATH (the other places are told apart below, with stand-ins for lib.nvim)
+  local via_path = run_child("", { LIB_NVIM_PATH = lib_dir })
   eq(via_path.code, 0, "LIB_NVIM_PATH: " .. tostring(via_path.stderr))
-  local repos = vim.fs.dirname(lib_dir)
-  if vim.fs.basename(lib_dir) == "lib.nvim" then
-    local via_repos = run_child("", { LIB_NVIM_DIR = "", LIB_NVIM_PATH = "", REPOS_DIR = repos })
-    eq(via_repos.code, 0, "REPOS_DIR/lib.nvim: " .. tostring(via_repos.stderr))
-  else
-    H.skipped("contract_host: REPOS_DIR/lib.nvim", "the checkout is not called lib.nvim")
+
+  -- where the template looks for lib.nvim, and in which order. Every place holds a stand-in that names itself; the
+  -- probe says which one the template put on the runtimepath. The winner is removed after each run, so each place is
+  -- shown to be looked in, at its own rank. The environment of the machine does not matter: all variables are set here.
+  local order_root = dir .. "/order"
+  local order_data = order_root .. "/data"
+  vim.fn.mkdir(order_data, "p")
+  local order_env = { XDG_DATA_HOME = order_data, LOCALAPPDATA = order_data }
+  local data_home = vim.trim(run_child("", order_env, dir .. "/data-dir.lua").stdout)
+  ok(
+    vim.startswith(vim.fs.normalize(data_home), vim.fs.normalize(order_data)),
+    "the data folder of the editor is moved under the spec's: " .. data_home
+  )
+  local probe = install(order_root, "spec_host_plugin.probe", PROBE_MODULE)
+  local places = {
+    LIB_NVIM_DIR = order_root .. "/by-dir",
+    LIB_NVIM_PATH = order_root .. "/by-path",
+    REPOS_DIR = order_root .. "/repos/lib.nvim",
+    deps = order_root .. "/plugin/.deps/lib.nvim",
+    sibling = order_root .. "/lib.nvim",
+    lazy = data_home .. "/lazy/lib.nvim",
+  }
+  for name, path in pairs(places) do
+    fake_lib(path, name)
   end
+  local order_vars = vim.tbl_extend("force", order_env, {
+    LIB_NVIM_DIR = places.LIB_NVIM_DIR,
+    LIB_NVIM_PATH = places.LIB_NVIM_PATH,
+    REPOS_DIR = order_root .. "/repos",
+  })
+  for _, name in ipairs({ "LIB_NVIM_DIR", "LIB_NVIM_PATH", "REPOS_DIR", "deps", "sibling", "lazy" }) do
+    local found = run_child("", order_vars, probe)
+    eq(found.code, 0, name .. ": " .. tostring(found.stderr))
+    eq(vim.trim(found.stdout), name, "the first place that holds a lib.nvim wins")
+    vim.fn.delete(places[name], "rf")
+  end
+  local nowhere = run_child("", order_vars, probe)
+  eq(nowhere.code, 2, "and with every place gone there is none; stdout " .. nowhere.stdout)
+  has(nowhere.stderr, "lib.nvim not found for spec.nvim")
+
+  -- a comma in a folder name does not split a runtimepath entry in two (the second half would be a relative entry
+  -- that is looked up in whatever folder the client started in)
+  local comma_host = install(dir .. "/comma,plugin", "spec_host_plugin.host", HOST_MODULE)
+  local comma_plugin = run_child("", { LIB_NVIM_DIR = lib_dir }, comma_host)
+  eq(comma_plugin.code, 0, "a comma in the plugin's folder: " .. tostring(comma_plugin.stderr))
+  eq((comma_plugin.stdout:gsub("\r", "")), "ready\t1\n")
+  local comma_lib = dir .. "/lib,copy"
+  fake_lib(comma_lib, "comma")
+  local comma_probe = install(dir .. "/comma-lib", "spec_host_plugin.probe", PROBE_MODULE)
+  local comma_found = run_child("", { LIB_NVIM_DIR = comma_lib }, comma_probe)
+  eq(comma_found.code, 0, "a comma in the folder of lib.nvim: " .. tostring(comma_found.stderr))
+  eq(vim.trim(comma_found.stdout), "comma", "lib.nvim is found in a folder with a comma")
 
   -- lib.nvim nowhere: exit code 2 and a message that names what to set; the editor's data folder is moved away too
   local empty = dir .. "/empty-data"
