@@ -10,7 +10,8 @@ return function(H)
   local run = require("lib.nvim.cross.run")
   local real_detached = run.run_detached
   local saved = {}
-  for _, name in ipairs({ "is_windows", "is_wsl", "is_macos" }) do
+  local platform_modules = { "is_windows", "is_wsl", "is_macos" }
+  for _, name in ipairs(platform_modules) do
     saved[name] = package.loaded["lib.nvim.cross.platform." .. name]
   end
   package.loaded["lib.nvim.cross.platform.is_windows"] = function()
@@ -74,10 +75,20 @@ return function(H)
   end)
 
   run.run_detached = real_detached
-  for name, mod in pairs(saved) do
-    package.loaded["lib.nvim.cross.platform." .. name] = mod
+  -- Iterate the names, not `pairs(saved)`: a module that was not loaded before has no entry in
+  -- `saved`, so `pairs` skipped it and the mock (is_windows/is_wsl = true) leaked into every
+  -- later spec of the run.
+  for _, name in ipairs(platform_modules) do
+    package.loaded["lib.nvim.cross.platform." .. name] = saved[name]
   end
   if not okrun then
     error(err, 0)
+  end
+  for _, name in ipairs(platform_modules) do
+    eq(
+      package.loaded["lib.nvim.cross.platform." .. name],
+      saved[name],
+      name .. " is restored, not left mocked for later specs"
+    )
   end
 end
