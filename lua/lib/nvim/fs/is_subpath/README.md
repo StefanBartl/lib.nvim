@@ -48,7 +48,21 @@ setting:
 
 ```lua
 is_subpath("c:/a/b/x.lua", "C:/A/B", { realpath = false, ignore_case = true }) --> true, no syscall
+is_subpath("C:/t/ärger/x.md", "C:/t/Ärger", { realpath = false, ignore_case = true }) --> true
 ```
+
+The folding is `vim.fn.tolower`, not `string.lower` (which folds ASCII only and
+would keep `Ärger` and `ärger` apart), so a non-ASCII folder name works; a path
+without a high byte stays on the plain-Lua fast path. It is the Vim function,
+not NTFS's own table, so `i` / `İ` and `ß` / `ẞ` are different names on NTFS but
+compare equal here. These cases are far outside real directory names; only the
+file system itself can tell.
+
+With `opts`, a trailing separator is stripped from both sides after `normkey`
+(a bare root such as `/` or `C:/` keeps its slash), as `vim.fs.normalize` already
+does without `opts`: `is_subpath("/v", "/v/", { realpath = false })` is `true`
+(it was `false` before — `normkey` keeps the slash — so this also corrects the
+plain `realpath = false` mode, not just `ignore_case`).
 
 `{ realpath = false }` still buys the drive-letter uppercasing and separator
 collapsing without touching the filesystem — useful when the paths may not

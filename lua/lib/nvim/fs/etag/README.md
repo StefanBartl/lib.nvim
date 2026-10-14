@@ -20,6 +20,10 @@ NUL is hashed with each NUL replaced by the two bytes `\255\254`: still a
 function of the bytes, which is all a version tag has to be. (Two texts that
 differ only by a NUL versus `\255\254` hash equal; a tag tolerates that.)
 
+Not for a fast-event context (a uv timer or another libuv callback):
+`vim.fn.sha256` raises `E5560` there, so `etag.of` and `etag.sha256` do too
+(`vim.schedule` first).
+
 | | |
 |---|---|
 | `sha256(text)` | 64 lowercase hex digits. |

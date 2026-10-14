@@ -41,6 +41,51 @@ return function(H)
     "byte order, not locale order"
   )
 
+  -- Plain Lua 5.1 sorts with strcoll (the locale's collation), LuaJIT with bytes, so under LuaJIT the sort of the
+  -- keys cannot show a locale at work. What can be shown: the comparator is the module's own bytewise one (a spy on
+  -- `table.sort`, as long as the module sorts its keys with a bare `table.sort(keys)` this fails), and that
+  -- comparator is right on the cases where strcoll and bytes part ways.
+  local real_sort, comparators = table.sort, {}
+  rawset(table, "sort", function(t, cmp)
+    comparators[#comparators + 1] = cmp or false
+    return real_sort(t, cmp)
+  end)
+  local sorted_ok, sorted_err = pcall(json.encode, { B = 1, Z = 2, ["_"] = 3, a = 4, b = 5 })
+  rawset(table, "sort", real_sort)
+  ok(sorted_ok, tostring(sorted_err))
+  ok(#comparators > 0, "the keys of an object are sorted")
+  for _, cmp in ipairs(comparators) do
+    ok(
+      cmp == json.bytes_less,
+      "with the locale-independent comparator, not with the language's own <"
+    )
+  end
+
+  local less = json.bytes_less
+  ok(less("B", "a") and not less("a", "B"), "an upper case letter is before a lower case one")
+  ok(less("Z", "_") and less("_", "a"), "Z, _, a: the order of the ASCII table")
+  ok(less("a", "ab") and not less("ab", "a"), "a prefix is before the longer string")
+  ok(less("", "a") and not less("a", ""), "the empty string is first")
+  ok(less("a", "a\0") and not less("a\0", "a"), "a NUL byte counts, it does not end the string")
+  ok(less("a\0", "a\0b") and less("a\0b", "a\1"), "a NUL inside a string is the lowest byte")
+  ok(
+    less("\195\164", "\200") and not less("\200", "\195\164"),
+    "bytes above 127 by value, not by locale"
+  )
+  ok(not less("same", "same"), "irreflexive (table.sort needs it)")
+  local words = { "b", "_", "a", "B", "Z", "ab", "a\0", "", "\200", "\195\164" }
+  table.sort(words, less)
+  eq(
+    words,
+    { "", "B", "Z", "_", "a", "a\0", "ab", "b", "\195\164", "\200" },
+    "sorted by byte value"
+  )
+  eq(
+    json.encode({ ["\200"] = 5, ab = 4, ["a\0"] = 3, a = 2, B = 1, ["\195\164"] = 6 }),
+    '{"B":1,"a":2,"a\\u0000":3,"ab":4,"\195\164":6,"\239\191\189":5}',
+    "NUL and high bytes in keys: the same order everywhere"
+  )
+
   -- ── empty tables: the point of the whole module ──
   eq(json.encode({}), "[]", "an empty table is an array by default")
   eq(json.encode(json.object({})), "{}", "an object that is empty stays an object")
@@ -52,6 +97,21 @@ return function(H)
   )
   eq(json.encode(json.object({ a = 1 })), '{"a":1}')
   eq(vim.json.encode({}), "[]", "(the reason this module exists)")
+
+  -- Neovim's own empty-object marker is an object here too: decode -> encode must not turn {} into [].
+  eq(json.encode(vim.empty_dict()), "{}", "vim.empty_dict() is an object")
+  local roundtrip = '{"a":{},"b":[],"c":{"d":{}},"e":[{}],"params":{}}'
+  eq(json.encode(vim.json.decode(roundtrip)), roundtrip, "decode -> encode keeps {} and [] apart")
+  eq(json.encode(vim.json.decode("[]")), "[]", "a decoded [] stays an array")
+  eq(json.encode(vim.json.decode("{}")), "{}", "a decoded {} stays an object")
+  eq(json.encode(json.array(vim.empty_dict())), "[]", "an explicit array mark wins over the marker")
+  eq(json.encode({ {}, vim.empty_dict() }), "[[],{}]", "unmarked {} is still an array")
+  local with_key = vim.empty_dict()
+  with_key.k = 1
+  eq(json.encode(with_key), '{"k":1}', "a marked table with keys is an object, as before")
+  local mixed = vim.empty_dict()
+  mixed[1] = "x"
+  has(fails(mixed), "mixes", "marked, but a list key")
 
   -- ── lists ──
   eq(json.encode({ 1, 2, 3 }), "[1,2,3]")
@@ -72,12 +132,35 @@ return function(H)
     "the fewest digits that read back as the same number"
   )
   eq(json.encode({ 1 / 3 }), "[0.3333333333333333]")
-  eq(json.encode({ 1 / 7 }), json.encode({ 1 / 7 }), "and the same every time")
+  eq(json.encode({ 1 / 7 }), "[0.14285714285714285]", "17 digits when 15 and 16 do not read back")
   eq(vim.json.decode(json.encode({ 0.1 + 0.2 }))[1], 0.1 + 0.2, "it reads back exactly")
   eq(json.encode({ 2 ^ 53 - 1 }), "[9007199254740991]", "the largest whole number that is exact")
+  eq(json.encode({ -(2 ^ 53 - 1) }), "[-9007199254740991]", "and the same on the negative side")
   has(fails({ 2 ^ 53 }), "2^53 or more", "a whole number that would lose digits is an error")
+  -- the exact texts: the limit holds for a negative number as it does for a positive one, and NaN, inf and -inf are
+  -- told apart from a number that is only too big
+  eq(
+    fails({ 2 ^ 53 }),
+    "json: $[1] is 9007199254740992, a whole number of 2^53 or more (digits would be lost)"
+  )
+  eq(
+    fails({ -(2 ^ 53) }),
+    "json: $[1] is -9007199254740992, a whole number of 2^53 or more (digits would be lost)",
+    "the negative bound"
+  )
+  eq(
+    fails({ -1e18 }),
+    "json: $[1] is -1000000000000000000, a whole number of 2^53 or more (digits would be lost)",
+    "far below the negative bound"
+  )
+  eq(fails({ math.huge }), "json: $[1] is inf; a contract has no NaN or inf", "inf")
+  eq(fails({ -math.huge }), "json: $[1] is -inf; a contract has no NaN or inf", "-inf")
   has(fails({ 0 / 0 }), "NaN", "NaN")
-  has(fails({ math.huge }), "inf", "inf")
+  -- (how a platform prints NaN, `nan` or `-nan`, is not ours to pin)
+  ok(
+    fails({ 0 / 0 }):find("^json: %$%[1%] is [^;]+; a contract has no NaN or inf$"),
+    "NaN, in full"
+  )
   has(fails({ a = { b = { 0 / 0 } } }), "$.a.b[1]", "the error names the path")
 
   -- ── strings ──
@@ -90,6 +173,7 @@ return function(H)
     '["a\\u009bb\\u0080"]',
     "the C1 controls, CSI among them"
   )
+  eq(json.encode({ "\194\159" }), '["\\u009f"]', "U+009F, the last of the C1 controls")
   eq(json.encode({ "\194\160" }), '["\194\160"]', "U+00A0 (no-break space) is no control")
   eq(
     json.encode({ "</script><!--" }),
@@ -131,6 +215,30 @@ return function(H)
     "a lead byte above F4 is bad"
   )
   eq(json.encode({ "\244\143\191\191" }), '["\244\143\191\191"]', "U+10FFFF itself is fine")
+  -- both sides of every edge of the encoding: what is valid is kept byte for byte, what is not is replaced byte by byte
+  local FFFD = "\239\191\189"
+  for _, case in ipairs({
+    { "U+07FF, the last 2-byte form", "\223\191" },
+    { "U+0800, the first 3-byte form", "\224\160\128" },
+    { "U+D7FF, just below the surrogates", "\237\159\191" },
+    { "U+E000, just above the surrogates", "\238\128\128" },
+    { "U+FFFD", "\239\191\189" },
+    { "U+FFFF, the last 3-byte form", "\239\191\191" },
+    { "U+10000, the first 4-byte form", "\240\144\128\128" },
+  }) do
+    eq(json.encode({ case[2] }), '["' .. case[2] .. '"]', case[1] .. " is kept")
+  end
+  for _, case in ipairs({
+    { "E0 9F BF, an overlong 3-byte form", "\224\159\191", FFFD:rep(3) },
+    { "F0 8F BF BF, an overlong 4-byte form", "\240\143\191\191", FFFD:rep(4) },
+    { "C1 80, an overlong 2-byte form", "\193\128", FFFD:rep(2) },
+    { "a lead byte followed by ASCII", "\195(", FFFD .. "(" },
+    { "a lead byte followed by DEL", "\195\127", FFFD .. "\\u007f" },
+    { "a lead byte followed by C0", "\195\192", FFFD:rep(2) },
+    { "a 3-byte form cut off by ASCII", "\226\130(", FFFD:rep(2) .. "(" },
+  }) do
+    eq(json.encode({ case[2] }), '["' .. case[3] .. '"]', case[1] .. " is replaced")
+  end
   eq(
     json.encode({ "ok\226\130" }),
     '["ok\239\191\189\239\191\189"]',
@@ -147,6 +255,8 @@ return function(H)
   has(fails({ 1, 2, a = 3 }), "mixes", "a list that has a string key")
   has(fails({ [1.5] = true }), "key of type number", "a fractional key")
   has(fails(json.object({ 1, 2 })), "mixes", "an object with list keys")
+  has(fails(json.array({ a = 1 })), "not a list", "an array mark does not make a string key a list")
+  eq(json.encode(json.array({ 1, 2 })), "[1,2]", "and a list that is marked stays a list")
   has(fails({ f = function() end }), "$.f", "a function")
   local cycle = {}
   cycle[1] = cycle
@@ -183,6 +293,59 @@ return function(H)
     fails({ json.memo({ 0 / 0 }) }),
     "$[1][1]",
     "an error inside a memoised table names the full path"
+  )
+
+  -- the depth limit and the cycle guard hold across the memo boundary (a memoised table is rendered on its own)
+  local function chain(wrappers, wrap)
+    local d = {}
+    for _ = 1, wrappers do
+      d = wrap({ d })
+    end
+    return d
+  end
+  local function plain(t)
+    return t
+  end
+  eq(
+    #json.encode(chain(64, json.memo)),
+    2 * 65,
+    "64 wrappers of memoised tables: 65 levels, the most there is"
+  )
+  eq(#json.encode(chain(64, plain)), 2 * 65, "(the same for plain tables)")
+  has(fails(chain(65, json.memo)), "nested deeper", "one level more fails, memoised")
+  has(fails(chain(65, plain)), "nested deeper", "(and plain)")
+  has(
+    fails(chain(100, json.memo)),
+    "nested deeper",
+    "memoised or not does not decide whether a value is too deep"
+  )
+  local memo_cycle = json.memo({})
+  memo_cycle[1] = memo_cycle
+  local cycle_err = fails(memo_cycle)
+  has(
+    cycle_err,
+    "nested deeper than 64 levels",
+    "a cycle through a memoised table is the documented error"
+  )
+  has(cycle_err, "$[1][1]", "and it names the path")
+  lacks(cycle_err, "stack overflow", "not the Lua stack limit")
+  eq(fails(memo_cycle), cycle_err, "and again: a failed encode leaves no state behind")
+  local inner = json.memo({})
+  inner.a = { inner }
+  has(fails({ w = inner }), "nested deeper", "a cycle that starts below the root")
+  local left, right = json.memo({}), json.memo({})
+  left[1], right[1] = right, left
+  has(fails(left), "nested deeper", "a cycle through two memoised tables")
+  local good_list = json.memo({ { a = 1 } })
+  eq(
+    json.encode({ list = good_list, x = 1 }),
+    '{"list":[{"a":1}],"x":1}',
+    "a memoised table below the root encodes"
+  )
+  eq(
+    json.encode({ x = { good_list }, y = good_list }),
+    '{"x":[[{"a":1}]],"y":[{"a":1}]}',
+    "also when it is reused"
   )
 
   -- ── round trip through a real decoder ──

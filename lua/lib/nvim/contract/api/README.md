@@ -34,19 +34,28 @@ local text, code = api.call("rule", '{"params":{"id":"LUA-12"}}', { root = root 
 ## The request
 
 A JSON object `{ "schema": 1, "params": { ... } }`, as text or already decoded.
-`schema` may be left out (it is 1), a higher one is `unsupported_schema`;
+`schema` may be left out (it is 1), a higher one is `unsupported_schema`, one
+that is no whole number (a fraction, `NaN`, infinity) is `invalid_argument`;
 `params` may be left out too. A request is at most 256 KiB. **A field or
 parameter the method does not know is `invalid_argument`**: a request that is
 silently half-understood is worse than one that is refused. A top-level `null`
 is the same as leaving the field out.
 
+The checks run in a fixed order: the **schema first** (a request of a newer
+schema is always `unsupported_schema`, also when it carries a field or, for a
+flat method, a parameter this engine does not know: that is version skew, not a
+typo), then the request's fields, the parameter types, the unknown parameters
+and the required ones. Where one check finds several faults (two unknown fields,
+two parameters of the wrong type) the **alphabetically first** is the one told,
+so the same request gets the same answer in every process.
+
 | Method key | Meaning |
 |---|---|
-| `params` | `name = type`. Types: `string`, `boolean`, `integer`, `number`, `object`, `string_list`, `object_list`, and the plugin's own (`cfg.types`). A value is checked, never coerced. |
+| `params` | `name = type`. Types: `string`, `boolean`, `integer`, `number`, `object`, `string_list`, `object_list`, and the plugin's own (`cfg.types`). A value is checked, never coerced. An `integer` or `number` is finite and below 2^53 in magnitude, the numbers the contract's JSON ([`json.canonical`](../../json/canonical/README.md)) can hold: one it would refuse to write is `invalid_argument` here, not `internal` later. |
 | `required` | Parameters that must be given: `<method> needs the parameter <name>` (checked after the unknown-parameter check). |
 | `flat` | The parameters are the request's own fields (a write door), not under `params`. |
 | `keep_null` | A JSON `null` stays `vim.NIL` (it means "remove" in a patch) instead of being absent. |
-| `run(params, opts)` | Answers a document table, or `nil` and an error: a `contract.errors` table, or a text that `classify` turns into one by the patterns. May raise: that is `internal` with the message scrubbed. |
+| `run(params, opts)` | Answers a document table, or `nil` and an error: a `contract.errors` table, or a text that `classify` turns into one by the patterns. A third value `info` (`{ code, retryable?, id/key/expected/actual/written/writes }`, the shape `fs.with_lock` and the other functions of the lib give) makes the code come from the source and keeps the details, so a method may simply `return fs.with_lock(...)`; only a table counts as `info`, any other third value is ignored, and a `contract.errors` table as the second value wins over it. May raise: that is `internal` with the message scrubbed; a raised value that is no text (an error table) is shown by its `message`, else by its type, never by its address (`errors.text`). A malformed error table (no `message`, a `message` that is no text, `details` that is no table) is coerced into a document by `error_doc`, not thrown on. |
 
 ## Config of `make`
 
@@ -55,8 +64,8 @@ is the same as leaving the field out.
 | `doc` | required | A `contract.doc` instance (schema, plugin, error kind, `encode`, `error_doc`). |
 | `methods` | required | `name -> method`. Checked where it is made: a wrong shape, an unknown type or a `required` without a parameter raises at once (position of the caller). |
 | `engine_opts` | `{ "root" }` | Keys of `call`'s opts that `run` receives. |
-| `root_of(engine_opts, opts)` | `engine_opts.root` | The root to hide in an error message. The plugin resolves it the way its engine does (a source that cannot be found is named in the message, and the path the caller gave is still a path of this machine). |
-| `patterns` | none | The plugin's own message patterns for `classify`. |
+| `root_of(engine_opts, opts)` | `engine_opts.root` | The root to hide in an error message. The plugin resolves it the way its engine does (a source that cannot be found is named in the message, and the path the caller gave is still a path of this machine). The root may be spelled with either slash and a trailing slash (`C:\Users\me\vault`, `C:/Users/me/vault/`): `contract.doc` hides and names it alike, so the default needs no normalising. |
+| `patterns` | none | The plugin's own message patterns for `classify`. The shape is checked where `make` is called (`errors.check_patterns`): a rule that is not `{ code = string, find = string[] }` raises at once, with the position of the caller, instead of failing later when a message reaches it. `nil` and `false` mean none. |
 | `types` | none | `name -> function(value) -> boolean`. |
 | `max_request_bytes` | 256 KiB | Also the field `api.MAX_REQUEST_BYTES`, read at call time. |
 
@@ -64,7 +73,7 @@ is the same as leaving the field out.
 
 | | |
 |---|---|
-| `call(name, request?, opts?)` | `text, code`. `opts.indent` makes the text readable (golden files). Never raises. |
+| `call(name, request?, opts?)` | `text, code`. `opts.indent` makes the text readable (golden files). Never raises, even when a hook of the plugin does: a `root_of`, a type function of `cfg.types` or a name with an `__tostring` that raises, an `opts` that is no table, a bug in `run`, an error document that cannot be made (a `root_of` that answers no text, a `doc` that raises). The answer is a document with code `internal` and the scrubbed message (with the root hidden where the root is known), at worst `minimal_error`. |
 | `methods()` | The names, sorted. |
 | `METHODS` | The plugin's table (a host reads `flat` from it). |
 | `MAX_REQUEST_BYTES` | Seam. |

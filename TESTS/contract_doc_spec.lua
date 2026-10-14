@@ -33,9 +33,14 @@ return function(H)
 
   -- ── new: the config is checked, with the position of the caller ──
   local function refused(cfg, part)
-    local good, err = pcall(doc.new, cfg)
+    -- through a function of this file and not `pcall(doc.new, cfg)`: a message has a position only when something
+    -- of Lua is the caller (and no tail call, which would hide it), and the position must be the caller's
+    local good, err = pcall(function()
+      doc.new(cfg)
+    end)
     ok(not good, "expected an error for " .. vim.inspect(cfg))
     has(tostring(err), part)
+    has(tostring(err), "contract_doc_spec.lua:", "the position is the caller's: " .. tostring(err))
   end
   refused(nil, "needs a table")
   refused({ schema = 1 }, "plugin")
@@ -44,6 +49,66 @@ return function(H)
   refused({ plugin = "x.nvim", schema = 0 }, "schema")
   refused({ plugin = "x.nvim", schema = 1.5 }, "schema")
   refused({ plugin = "x.nvim", schema = "1" }, "schema")
+  refused({ plugin = "x.nvim", schema = math.huge }, "schema") -- every document would fail to encode
+  refused({ plugin = "x.nvim", schema = 0 / 0 }, "schema")
+  -- every other key is checked too: a wrong one used to fail later inside the library, or corrupt the head
+  for _, bad in ipairs({ "big", 0, -1, 1.5, 0 / 0, true }) do
+    refused({ plugin = "x.nvim", schema = 1, max_bytes = bad }, "max_bytes")
+  end
+  for _, key in ipairs({ "kind_prefix", "scope_key", "placeholder", "plugin_root" }) do
+    for _, bad in ipairs({ 5, true, "" }) do
+      refused({ plugin = "x.nvim", schema = 1, [key] = bad }, key)
+    end
+  end
+  for _, key in ipairs({ "engine_version", "too_large_hint" }) do
+    for _, bad in ipairs({ 5, true }) do
+      refused({ plugin = "x.nvim", schema = 1, [key] = bad }, key)
+    end
+  end
+  -- a scope_key of a field the documents have would overwrite it ('engine' made the engine vanish from every head)
+  for _, field in ipairs({
+    "schema",
+    "plugin",
+    "kind",
+    "generated_at",
+    "engine",
+    "rev",
+    "digest",
+    "code",
+    "message",
+    "retryable",
+    "details",
+  }) do
+    refused({ plugin = "x.nvim", schema = 1, scope_key = field }, "scope_key")
+  end
+  has(
+    select(2, pcall(doc.new, { plugin = "x.nvim", schema = 1, scope_key = "engine" })),
+    "'engine'",
+    "the message names the field"
+  )
+  local _, blamed = pcall(function()
+    local made = doc.new({ plugin = "x.nvim", schema = 1, scope_key = "engine" }) -- no tail call: it would hide the caller
+    return made
+  end)
+  has(blamed, "contract_doc_spec.lua", "the position is the caller's, not the library's")
+  ok(
+    pcall(doc.new, {
+      plugin = "x.nvim",
+      schema = 1,
+      kind_prefix = "xx",
+      scope_key = "source",
+      placeholder = "<s>",
+      engine_version = "",
+      too_large_hint = "less",
+      plugin_root = "/opt/x",
+      max_bytes = 1,
+    }),
+    "a right config is still accepted"
+  )
+  ok(
+    pcall(doc.new, { plugin = "x.nvim", schema = 1, max_bytes = math.huge }),
+    "no limit at all is a limit nobody reaches"
+  )
 
   -- ── defaults and names ──
   local plain = doc.new({ plugin = "tasks.nvim", schema = 1 })
@@ -89,6 +154,26 @@ return function(H)
   eq(rh.source.id, "wkdbook-Lua", "the scope field has the plugin's name")
   eq(rh.vault, nil, "and no other")
   eq(rh.plugin, "rules.nvim")
+  -- the root may be spelled any way: the source has the same name and the same bytes (a trailing slash gave "")
+  for _, root in ipairs({
+    "/a/b/vault",
+    "/a/b/vault/",
+    "/a/b/vault//",
+    "C:/a/b/vault/",
+    "C:\\a\\b\\vault",
+    "C:\\a\\b\\vault\\",
+    "C:\\a/b\\vault/",
+  }) do
+    eq(d.head("k", root).vault.id, "vault", root)
+    eq(
+      d.seal(d.head("k", root)).digest,
+      d.seal(d.head("k", "/a/b/vault")).digest,
+      "same source, same digest: " .. root
+    )
+  end
+  for _, root in ipairs({ "", "/", "//", "C:/", "C:\\", "C:" }) do
+    eq(d.head("k", root).vault.id, "", "a root without a name has no name: " .. root)
+  end
 
   -- ── the seams are read when the document is made ──
   local seam = doc.new({ plugin = "tasks.nvim", schema = 1 })
@@ -105,15 +190,64 @@ return function(H)
     real.clock():match("^%d%d%d%d%-%d%d%-%d%dT%d%d:%d%d:%d%dZ$"),
     "the real clock is UTC ISO 8601: " .. real.clock()
   )
+  -- the shape alone is no proof of UTC (a local time with a literal Z has it too). Bracketed by two readings of UTC
+  -- (immune to a second that rolls over): a clock of local time fails here on every host that is not on UTC ...
+  local utc_before = os.date("!%Y-%m-%dT%H:%M:%SZ")
+  local stamp = real.clock()
+  local utc_after = os.date("!%Y-%m-%dT%H:%M:%SZ")
+  ok(
+    utc_before <= stamp and stamp <= utc_after,
+    ("the clock is UTC: %s is not between %s and %s"):format(stamp, utc_before, utc_after)
+  )
+  -- ... and on a host that is on UTC the format asked for decides: "!" is Lua's way to say UTC
+  local asked_format
+  local real_date = os.date
+  H.with_patched(os, "date", function(format, ...)
+    asked_format = format
+    return real_date(format, ...)
+  end, function()
+    real.clock()
+  end)
+  eq(type(asked_format) == "string" and asked_format:sub(1, 1), "!", "the clock asks for UTC")
   local info = real.engine_info()
   eq(info.version, "0.0.0")
   eq(info.git, "unknown", "without plugin_root git is never asked")
   ok(info.nvim:match("^v?%d+%.%d+"), "the nvim version: " .. info.nvim)
+  eq(
+    info.nvim,
+    tostring(vim.version()),
+    "it is what vim.version() prints (no leading v, build metadata)"
+  )
+
+  -- vim.version() asks Neovim over its API (0.7 ms, 99% of a small document) and cannot change: once per instance
+  do
+    local real_version, asked = vim.version, 0
+    vim.version = function()
+      asked = asked + 1
+      return "0.99.1+stub"
+    end
+    local run_ok, err = pcall(function()
+      local once = doc.new({ plugin = "tasks.nvim", schema = 1 })
+      local first = once.engine_info()
+      once.engine_info()
+      eq(once.head("k", "/r").engine.nvim, "0.99.1+stub", "the head says the same")
+      eq(first.nvim, "0.99.1+stub")
+      eq(asked, 1, "asked once for three looks")
+      first.nvim = "changed by a caller"
+      eq(once.engine_info().nvim, "0.99.1+stub", "every look is a table of its own")
+      doc.new({ plugin = "tasks.nvim", schema = 1 }).engine_info()
+      eq(asked, 2, "another instance asks for itself (nothing is shared between instances)")
+    end)
+    vim.version = real_version
+    assert(run_ok, err)
+  end
 
   -- ── engine_info: the commit of the plugin checkout ──
   ---Run `fn(git, calls)` with an instance whose plugin_root is set and a scripted `vim.system`.
   ---@param script (table|string)[]  per call: `{ code, signal, stdout }`, or a string = the start fails with it
-  local function with_script(script, fn)
+  ---@param fn function
+  ---@param plugin_root? string
+  local function with_script(script, fn, plugin_root)
     local real_system = vim.system
     local calls, argvs = {}, {}
     vim.system = function(argv)
@@ -129,8 +263,11 @@ return function(H)
         end,
       }
     end
-    local instance =
-      doc.new({ plugin = "tasks.nvim", schema = 1, plugin_root = "/opt/plugins/tasks.nvim/" })
+    local instance = doc.new({
+      plugin = "tasks.nvim",
+      schema = 1,
+      plugin_root = plugin_root or "/opt/plugins/tasks.nvim/",
+    })
     local run_ok, err = pcall(fn, function()
       return instance.engine_info().git
     end, calls, argvs)
@@ -176,23 +313,56 @@ return function(H)
     eq(git(), "bbb2222", "code 124 without a signal is not pinned either")
     eq(#calls, 2)
   end)
+  -- a git that was killed from outside (the signal is set, the code is no 124: 0, or 128 + the signal) has given no
+  -- answer: it is asked again, and not pinned as "unknown" for the life of the process
+  with_script({ { 0, 9 }, { 137, 9 }, { 0, 0, "eee5555\n" } }, function(git, calls)
+    eq(git(), "unknown", "killed by a signal, code 0")
+    eq(git(), "unknown", "killed by a signal, code 137")
+    eq(git(), "eee5555", "and the third look gets the answer")
+    eq(#calls, 3, "neither of the first two was an answer to keep")
+  end)
+  with_script({ { 1, 15 }, { 0, 0, "fff6666\n" } }, function(git, calls)
+    eq(git(), "unknown", "terminated, code 1")
+    eq(git(), "fff6666", "asked again")
+    eq(#calls, 2)
+  end)
   with_script({ { 0, 0, "fatal: not a hash\n" }, { 0, 0, "ccc3333\n" } }, function(git, calls)
     eq(git(), "unknown")
     eq(git(), "unknown")
     eq(#calls, 1, "an answer of git that is not a commit is an answer: kept")
   end)
+  -- a root is trimmed of its trailing slashes, but a root keeps its own: `-C ""` and `-C C:` mean the current directory
+  for _, case in ipairs({
+    { "/", "/" },
+    { "//", "//" },
+    { "C:/", "C:/" },
+    { "C:\\", "C:/" },
+    { "/opt/p/", "/opt/p" },
+    { "/opt/p//", "/opt/p" },
+    { "C:\\opt\\p\\", "C:/opt/p" },
+    { "//server/share/", "//server/share" },
+  }) do
+    with_script({ { 0, 0, "abc1234\n" } }, function(git, _, argvs)
+      eq(git(), "abc1234")
+      eq(
+        argvs[1],
+        { "git", "-C", case[2], "rev-parse", "--short", "HEAD" },
+        "plugin_root " .. case[1]
+      )
+    end, case[1])
+  end
   -- without plugin_root git is never started
   do
-    local real_system = vim.system
     local started = 0
-    vim.system = function()
+    local git
+    H.with_patched(vim, "system", function()
       started = started + 1
       error("must not start git")
-    end
-    local no_root = doc.new({ plugin = "tasks.nvim", schema = 1 })
-    local git = no_root.engine_info().git
-    no_root.engine_info()
-    vim.system = real_system
+    end, function()
+      local no_root = doc.new({ plugin = "tasks.nvim", schema = 1 })
+      git = no_root.engine_info().git
+      no_root.engine_info()
+    end)
     eq(git, "unknown")
     eq(started, 0, "no checkout named: no process")
   end
@@ -238,6 +408,41 @@ return function(H)
     "rev is content"
   )
 
+  -- a value JSON cannot hold: seal raises (as `encode` words it), and the document is as it was, not stripped
+  do
+    local sd = fixed()
+    local function sick(value)
+      local s = sd.head("tasks.snapshot", "/v")
+      s.rules = { { score = value } }
+      return s
+    end
+    for what, value in pairs({ nan = 0 / 0, inf = math.huge, ["a function"] = function() end }) do
+      local s = sick(value)
+      local sealed_ok, seal_err = pcall(sd.seal, s, "r")
+      eq(sealed_ok, false, what)
+      has(tostring(seal_err), "$.rules[1].score", what .. ": the message names the path")
+      ok(not tostring(seal_err):find("%.lua:%d+:"), what .. ": and has no file:line")
+      eq(s.generated_at, "2026-01-01T00:00:00Z", what .. ": the time is still there")
+      eq(s.engine.git, "abc1234", what .. ": and the engine")
+      eq(s.digest, nil, what .. ": and there is no digest")
+      eq(s.rev, nil, what .. ": and no rev that was never sealed")
+      eq(select(2, sd.encode(s)).code, "internal", what .. ": encode alone returns the error")
+    end
+    -- a document sealed before keeps what it had when the second seal fails
+    local again = sd.seal(sd.head("k", "/v"), "r1")
+    local first_digest = again.digest
+    again.rules = { { score = 0 / 0 } }
+    ok(not pcall(sd.seal, again, "r2"))
+    eq({ again.rev, again.digest }, { "r1", first_digest }, "a failed seal changes nothing")
+
+    -- json.memo changes the cost, not the bytes
+    local plain_doc, memo_doc = sd.head("k", "/v"), sd.head("k", "/v")
+    plain_doc.rules = { { id = "a" }, { id = "b" } }
+    memo_doc.rules = json.memo({ { id = "a" }, { id = "b" } })
+    eq(sd.seal(memo_doc, "r").digest, sd.seal(plain_doc, "r").digest, "same digest")
+    eq(sd.encode(memo_doc), sd.encode(plain_doc), "same bytes")
+  end
+
   -- ── rev_of ──
   local r1 = d.rev_of({ "a\tx", "b\ty" })
   ok(r1:match("^rev:%x%x%x%x%x%x$"), "rev: and 6 digits: " .. r1)
@@ -247,6 +452,22 @@ return function(H)
   local given = { "b", "a" }
   d.rev_of(given)
   eq(given, { "b", "a" }, "the caller's list is not sorted in place")
+  -- The rev is a hash of the sorted lines: the sort must be bytewise on every Lua (plain Lua 5.1 follows the
+  -- locale with `<`, LuaJIT does not, so under LuaJIT only the spy on `table.sort` shows the difference).
+  eq(
+    d.rev_of({ "a", "B", "_", "Z", "b" }),
+    "rev:" .. require("lib.nvim.fs.etag").sha256("B\nZ\n_\na\nb"):sub(1, 6),
+    "the lines are hashed in byte order"
+  )
+  local real_sort, comparators = table.sort, {}
+  rawset(table, "sort", function(t, cmp)
+    comparators[#comparators + 1] = cmp or false
+    return real_sort(t, cmp)
+  end)
+  local rev_ok, rev_err = pcall(d.rev_of, { "b\ty", "a\tx" })
+  rawset(table, "sort", real_sort)
+  ok(rev_ok, tostring(rev_err))
+  eq(comparators, { json.bytes_less }, "sorted with the locale-independent comparator")
 
   -- ── encode: canonical bytes, and the limit ──
   local dd = fixed()
@@ -302,6 +523,22 @@ return function(H)
     "the root itself has no relative path"
   )
   eq(d.relative("/a/b", "/c/d"), nil)
+  -- the root may be spelled either way, with a trailing slash or several
+  for _, root in ipairs({
+    "C:\\Users\\me\\vault",
+    "C:\\Users\\me/vault",
+    "C:/Users/me/vault/",
+    "C:/Users/me/vault//",
+    "C:\\Users\\me\\vault\\",
+  }) do
+    eq(d.relative(root, "C:/Users/me/vault/a.md"), "a.md", root)
+    eq(d.relative(root, "C:\\Users\\me\\vault\\a.md"), "a.md", root)
+    eq(d.relative(root, "C:/Users/me/vault2/a.md"), nil, "a longer name is not inside: " .. root)
+  end
+  -- an empty root is no root (as for redact): nothing is inside it; `/` is the root of the file system
+  eq(d.relative("", "/etc/passwd"), nil, "an empty root has nothing inside")
+  eq(d.relative("", "rel/x.md"), nil)
+  eq(d.relative("/", "/etc/passwd"), "etc/passwd", "the file system root is a root")
 
   eq(d.safe_path("/v", "/v/docs/shared.md"), "docs/shared.md", "inside: relative")
   eq(d.safe_path("/v", "docs/shared.md"), "docs/shared.md", "already relative: as it is")
@@ -310,6 +547,41 @@ return function(H)
   eq(d.safe_path("/v", "C:\\Users\\someone\\notes.md"), "<external>/notes.md", "a drive path")
   eq(d.safe_path("/v", "~/notes/n.md"), "<external>/n.md", "home")
   eq(d.safe_path("/v", "/etc/dir/"), "<external>/dir", "a trailing slash")
+  -- no root known: an absolute path is external whatever its spelling, not "relative" with its slash cut off
+  eq(
+    d.safe_path("", "/home/me/secret/notes.md"),
+    "<external>/notes.md",
+    "no root: an absolute path is external"
+  )
+  eq(d.safe_path("", "C:/Users/me/x.md"), "<external>/x.md")
+  eq(d.safe_path("", "~/x.md"), "<external>/x.md")
+  eq(d.safe_path("", "rel/x.md"), "rel/x.md", "a relative path stays")
+  eq(d.safe_path("/", "/etc/passwd"), "etc/passwd", "the file system root is still a root")
+  eq(d.safe_path("/v", "/"), "<external>/", "a bare slash has no name")
+  eq(d.safe_path("C:\\Users\\me\\vault\\", "C:/Users/me/vault/a.md"), "a.md", "a backslash root")
+
+  -- case beyond ASCII: NTFS treats Ö and ö as one letter, so a name with an umlaut must match whatever its case
+  eq(d.relative("C:/Users/Jörg/vault", "C:/USERS/JÖRG/vault/x"), "x", "Ö and ö")
+  eq(d.relative("C:/Users/JÖRG/vault", "c:/users/jörg/vault/x"), "x", "the other way round")
+  eq(d.safe_path("C:/Users/Jörg/vault", "C:/USERS/JÖRG/vault/x"), "x", "not '<external>/x'")
+  eq(
+    d.relative("C:/Users/Jörg/vault", "C:/USERS/JÖRG/vaultx/x"),
+    nil,
+    "a longer name is not inside"
+  )
+  eq(d.relative("C:/Users/Jörg/vault", "D:/other/x"), nil)
+  eq(
+    d.relative("C:/Users/Jörg/vault", "C:/USERS/JÖRG/vault/Ünï"),
+    "Ünï",
+    "the rest is as it was"
+  )
+  -- a letter whose lower case is another length (Ⱥ 2 bytes -> ⱥ 3, İ 2 -> i 1) stays as it is: no shifted position
+  eq(d.relative("C:/Ⱥ/Jörg", "C:/Ⱥ/JÖRG/f"), "f", "the same letter on both sides")
+  eq(d.relative("C:/İ/Jörg", "C:/İ/JÖRG/f"), "f")
+  eq(d.relative("C:/Ⱥ/Jörg", "C:/ⱥ/JÖRG/f"), nil, "but Ⱥ and ⱥ are not told apart")
+  -- a byte that is no UTF-8 (a Latin-1 name) is no error
+  eq(d.relative("C:/Users/J\233rg/vault", "C:/USERS/J\233RG/vault/x"), "x", "a stray byte")
+  eq(d.relative("C:/Users/J\233rg/vault", "C:/USERS/J\195\169RG/vault/x"), nil, "and is not é")
 
   eq(
     d.redact("C:/Users/me/vault", "cannot read C:/Users/me/vault/a.md"),
@@ -338,6 +610,92 @@ return function(H)
   )
   eq(fixed({ placeholder = "<root>" }).redact("/s", "in /s/x"), "in <root>/x", "or is named")
   eq(d.redact("/a.b", "x /a.b/c /aXb/c"), "x <vault>/c /aXb/c", "the root is text, not a pattern")
+
+  -- the root is hidden whatever its spelling (a root from the environment or the working directory is not tidy)
+  local both = "cannot read C:/Users/me/vault/a.md and C:\\Users\\me\\vault\\b.md"
+  for _, root in ipairs({
+    "C:/Users/me/vault",
+    "C:\\Users\\me\\vault",
+    "C:\\Users\\me/vault",
+    "C:/Users/me\\vault",
+    "C:/Users/me/vault/",
+    "C:/Users/me/vault//",
+    "C:\\Users\\me\\vault\\",
+    "c:\\USERS\\me\\Vault",
+  }) do
+    eq(d.redact(root, both), "cannot read <vault>/a.md and <vault>\\b.md", root)
+  end
+  eq(
+    d.redact("C:/Users/me/vault/", "in C:/Users/me/vault and C:/Users/me/vault/a.md"),
+    "in <vault> and <vault>/a.md",
+    "a trailing slash on the root does not eat the separator, and the bare root is hidden too"
+  )
+  eq(
+    d.redact("C:/Users/me/vault", "a C:\\Users/me\\vault/x b"),
+    "a <vault>/x b",
+    "a message that mixes the slashes"
+  )
+  -- a POSIX root may hold a backslash in a name: it is read as a separator, and the same spelling in a message goes
+  eq(
+    d.redact("/home/a\\b/vault", "in /home/a\\b/vault/x and /home/a/b/vault/y"),
+    "in <vault>/x and <vault>/y",
+    "a literal backslash in the root"
+  )
+  eq(d.redact("/", "x/y"), "x/y", "the root of the file system has no name to hide")
+  eq(d.redact("//", "x/y"), "x/y")
+  eq(d.redact("C:/", "C:/Users/x"), "<vault>/Users/x", "a drive root hides the drive")
+  eq(d.redact("vault", "a vault b"), "a <vault> b", "the placeholder is not searched again")
+  eq(d.redact("aa", "aaaaa"), "<vault><vault>a", "hits do not overlap")
+  eq(d.redact("c:/v", "C:/V C:/v"), "<vault> <vault>", "adjacent hits, every case")
+  eq(d.redact("/v", "/v/x/v"), "<vault>/x<vault>", "a hit at the start and at the end")
+  eq(
+    d.redact("C:/Users/me/vault", ("C:/Users/me/vault/a c:\\USERS\\me\\vault\\b "):rep(3)),
+    ("<vault>/a <vault>\\b "):rep(3),
+    "many hits, mixed spelling and case"
+  )
+  -- Unicode letters (a user name with an umlaut), and what precedes a hit may change length when folded
+  eq(
+    d.redact("C:/Users/Jörg/vault", "in C:/USERS/JÖRG/vault/x here"),
+    "in <vault>/x here",
+    "Ö and ö"
+  )
+  eq(
+    d.redact("C:/Users/JÖRG/vault", "in c:/users/jörg/vault/x here"),
+    "in <vault>/x here",
+    "ö in the message, Ö in the root"
+  )
+  eq(
+    d.redact("C:/Users/Jörg/vault", "in C:\\USERS\\JÖRG\\vault\\x here"),
+    "in <vault>\\x here",
+    "the backslash spelling"
+  )
+  eq(
+    d.redact("C:/Users/Jörg/vault", "C:/users/jörg/VAULT/a and C:/USERS/JÖRG/vault/b"),
+    "<vault>/a and <vault>/b",
+    "two hits"
+  )
+  eq(
+    d.redact("C:/Users/Jörg/vault", "ȺİⱥK ÄÖÜ C:/USERS/JÖRG/vault/x İ"),
+    "ȺİⱥK ÄÖÜ <vault>/x İ",
+    "letters that change length before and after the hit leave the positions right"
+  )
+  eq(d.redact("C:/v", "x \233 C:/V/y \233"), "x \233 <vault>/y \233", "a stray byte is no error")
+
+  -- the work follows the length of the text, not the number of hits (a request echoes up to 256 KiB into a message:
+  -- the quadratic version held the editor for seconds)
+  do
+    local hits = 20000
+    local started = vim.uv.hrtime()
+    local hidden = d.redact("C:/Users/me/vault", ("C:/Users/me/vault "):rep(hits))
+    local took_ms = (vim.uv.hrtime() - started) / 1e6
+    eq(hidden, ("<vault> "):rep(hits), "every hit")
+    ok(took_ms < 1000, ("%d hits took %.0f ms"):format(hits, took_ms))
+    started = vim.uv.hrtime()
+    hidden = d.redact("C:/Users/J\195\182rg/vault", ("c:\\users\\J\195\150rg\\vault "):rep(hits))
+    took_ms = (vim.uv.hrtime() - started) / 1e6
+    eq(hidden, ("<vault> "):rep(hits), "every hit, with a letter beyond ASCII")
+    ok(took_ms < 1000, ("%d hits with an umlaut took %.0f ms"):format(hits, took_ms))
+  end
 
   -- ── error_doc ──
   local e = fixed().error_doc(
@@ -370,6 +728,59 @@ return function(H)
     fixed().error_doc({ code = "io", message = "m", retryable = "yes" }).retryable,
     false,
     "only true is retryable"
+  )
+  -- a malformed error is made into a document, never a throw (the door promises that), with and without a root
+  local ed = fixed()
+  for _, root in ipairs({ "/v", "" }) do
+    local label = "root '" .. root .. "'"
+    local r = root ~= "" and root or nil
+    eq(
+      ed.error_doc({ code = "not_found" }, r).message,
+      "not_found",
+      "no message: the code, " .. label
+    )
+    eq(ed.error_doc({ code = "io", message = 5 }, r).message, "5", "a number: as text, " .. label)
+    eq(
+      ed.error_doc({ code = "io", message = {} }, r).message,
+      "error value of type table",
+      "a table: its type, never its address, " .. label
+    )
+    eq(ed.error_doc({ message = "m" }, r).message, "m", "no code: still the message, " .. label)
+    -- a document always has a code a client can match: one that is no text is `internal`
+    eq(ed.error_doc({ message = "m" }, r).code, "internal", "no code, " .. label)
+    eq(ed.error_doc({ code = 5, message = "m" }, r).code, "internal", "a number as code, " .. label)
+    eq(ed.error_doc({ code = {}, message = "m" }, r).code, "internal", "a table as code, " .. label)
+    eq(ed.error_doc({ code = 5 }, r).message, "5", "and the message is that code, " .. label)
+    eq(ed.error_doc({ code = "io", message = "m" }, r).code, "io", "a text stays, " .. label)
+    eq(ed.error_doc("boom", r).code, "internal", "a text is an internal error, " .. label)
+    eq(ed.error_doc("boom", r).message, "boom", label)
+    eq(ed.error_doc(nil, r).message, "nil", label)
+    eq(
+      ed.error_doc({ code = "io", message = "m", details = "x" }, r).details,
+      nil,
+      "details that is no table is left out, " .. label
+    )
+    eq(
+      ed.error_doc({ code = "io", message = "m", details = { id = "a" } }, r).details,
+      json.object({ id = "a" }),
+      "and a table stays, " .. label
+    )
+  end
+  eq(
+    ed.error_doc({ code = "io", message = 5 }, "/v").vault.id,
+    "v",
+    "the head is the same one with a coerced message"
+  )
+  ok(ed.encode(ed.error_doc({ code = "io", message = 5, details = "x" }, "/v")), "and it encodes")
+  eq(
+    ed.error_doc({ code = "io", message = "at C:/v/x" }, "C:/v").message,
+    "at <vault>/x",
+    "a message that is text is redacted as before"
+  )
+  eq(
+    ed.error_doc({ code = "io", message = "at C:/v/x" }, "C:\\v\\").message,
+    "at <vault>/x",
+    "whatever the spelling of the root"
   )
   eq(
     json.encode(fixed().error_doc({ code = "internal", message = "boom", retryable = false })),

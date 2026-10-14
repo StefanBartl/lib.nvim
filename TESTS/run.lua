@@ -6,7 +6,7 @@
 --   nvim -n -i NONE --headless -u NONE -l TESTS/run.lua
 --
 -- Loads every *_spec.lua listed below, runs it against the shared harness,
--- prints a per-spec result, and exits non-zero on the first failing spec.
+-- prints a per-spec result, runs EVERY spec even after a failure, and exits non-zero at the end if any failed.
 
 -- Make the repo importable whether invoked via -l (cwd) or luafile.
 vim.opt.rtp:append(vim.fn.getcwd())

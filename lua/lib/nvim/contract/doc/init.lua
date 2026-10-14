@@ -12,7 +12,9 @@
 ---
 --- Rules the documents keep:
 ---  - **no path of this machine**: `relative`, `safe_path` and `redact` turn paths into source-relative ones, an
----    absolute one into `<external>/<name>`, the root inside a message into the placeholder (`<vault>`);
+---    absolute one into `<external>/<name>`, the root inside a message into the placeholder (`<vault>`). The root
+---    may be spelled with either slash and a trailing slash, an empty one is no root; case does not matter (Unicode
+---    letters included);
 ---  - **a document is at most `MAX_DOC_BYTES`** (8 MiB); a bigger one is the error `payload_too_large`, never a
 ---    cut-off document; an error document is exempt (the limit must never keep a client from being told why);
 ---  - the bytes are canonical (`lib.nvim.json.canonical`): same document, same bytes.
@@ -22,12 +24,13 @@
 --- forwards them: `d.clock = function() return M.clock() end`.
 ---
 ---```lua
+--- local json = require("lib.nvim.json.canonical")
 --- local d = require("lib.nvim.contract.doc").new({
 ---   plugin = "rules.nvim", schema = 1, scope_key = "source", engine_version = "0.1.0",
 ---   plugin_root = plugin_root,
 --- })
 --- local doc = d.head("rules.hello", root)
---- doc.rules = rules
+--- doc.rules = json.memo(rules)   -- the big part: `seal` writes it for the digest, `encode` reuses that text
 --- local text, err = d.encode(d.seal(doc, d.rev_of(lines)))
 ---```
 ---
@@ -37,6 +40,7 @@ require("lib.nvim.contract.doc.@types")
 
 local json = require("lib.nvim.json.canonical")
 local etag = require("lib.nvim.fs.etag")
+local errors = require("lib.nvim.contract.errors")
 
 local M = {}
 
@@ -46,8 +50,79 @@ local function lower_slash(s)
   return (s:gsub("\\", "/"))
 end
 
+---A root as the paths of this module are compared: forward slashes, no trailing slash (`/` becomes `""`, `C:/`
+---becomes `C:`). The caller may spell it any way; `relative`, `redact` and the head all see the same root.
+---@param root string
+---@return string
+local function bare(root)
+  return (lower_slash(root):gsub("/+$", ""))
+end
+
+---Lower case for a comparison that has the SAME byte length as `s`, so a position found in the folded text is a
+---position in `s`. `string.lower` only folds ASCII (`Ö` and `ö` are one folder on NTFS); a letter beyond ASCII goes
+---through `vim.fn.tolower` (Vim's simple case mapping; it may be called in a fast event). The few letters whose
+---lower case has another length (`İ` 2 bytes -> `i` 1, `Ⱥ` 2 -> `ⱥ` 3, the Kelvin sign) and a byte that is no UTF-8
+---(`vim.fn.tolower` reads it as Latin-1 and writes two bytes) stay as they are.
+---@param s string
+---@return string
+local function fold(s)
+  if not s:find("[\128-\255]") then
+    return (s:lower())
+  end
+  local out, pos = {}, 1
+  while pos <= #s do
+    local from, to = s:find("^[^\128-\255]+", pos)
+    if from then
+      out[#out + 1] = s:sub(from, to):lower()
+    else
+      from, to = s:find("^[\128-\255][\128-\191]*", pos)
+      local char = s:sub(from, to)
+      local folded = vim.fn.tolower(char)
+      out[#out + 1] = #folded == #char and folded or char
+    end
+    pos = to + 1
+  end
+  return table.concat(out)
+end
+
+---The name the head gives the source: the last part of the root. A root without a name (`""`, `/`, `C:/`) has none.
+---@param root string
+---@return string
+local function scope_id(root)
+  local name = bare(root)
+  if name:match("^%a:$") then
+    return ""
+  end
+  return name:match("[^/]*$")
+end
+
 ---A document is never bigger than this unless the plugin says so.
 M.DEFAULT_MAX_DOC_BYTES = 8 * 1024 * 1024
+
+---The head, seal and error fields of a document: a `scope_key` of one of these names would overwrite it.
+---@type table<string, true>
+local DOCUMENT_FIELDS = {}
+for _, field in ipairs({
+  "schema",
+  "plugin",
+  "kind",
+  "generated_at",
+  "engine",
+  "rev",
+  "digest",
+  "code",
+  "message",
+  "retryable",
+  "details",
+}) do
+  DOCUMENT_FIELDS[field] = true
+end
+
+---@param key string
+---@param what string
+local function refuse(key, what)
+  error(("contract.doc.new: %s must be %s"):format(key, what), 3) -- 3: the caller of `new`
+end
 
 ---@param cfg Lib.Contract.DocConfig
 ---@return Lib.Contract.Doc
@@ -58,8 +133,37 @@ function M.new(cfg)
   if type(cfg.plugin) ~= "string" or cfg.plugin == "" then
     error("contract.doc.new: plugin must be a non-empty string", 2)
   end
-  if type(cfg.schema) ~= "number" or cfg.schema < 1 or cfg.schema ~= math.floor(cfg.schema) then
+  if
+    type(cfg.schema) ~= "number"
+    or cfg.schema < 1
+    or cfg.schema ~= math.floor(cfg.schema)
+    or cfg.schema == math.huge
+  then
     error("contract.doc.new: schema must be a whole number from 1", 2)
+  end
+  for _, key in ipairs({ "kind_prefix", "scope_key", "placeholder", "plugin_root" }) do
+    local value = cfg[key]
+    if value ~= nil and (type(value) ~= "string" or value == "") then
+      refuse(key, "a non-empty string")
+    end
+  end
+  for _, key in ipairs({ "engine_version", "too_large_hint" }) do
+    if cfg[key] ~= nil and type(cfg[key]) ~= "string" then
+      refuse(key, "a string")
+    end
+  end
+  if cfg.scope_key and DOCUMENT_FIELDS[cfg.scope_key] then
+    refuse(
+      "scope_key",
+      ("not a field of the documents themselves ('%s' is one)"):format(cfg.scope_key)
+    )
+  end
+  local max_bytes = cfg.max_bytes
+  if
+    max_bytes ~= nil
+    and (type(max_bytes) ~= "number" or max_bytes < 1 or max_bytes ~= math.floor(max_bytes))
+  then
+    refuse("max_bytes", "a whole number from 1")
   end
 
   local kind_prefix = cfg.kind_prefix or (cfg.plugin:gsub("%.nvim$", ""))
@@ -67,7 +171,9 @@ function M.new(cfg)
   local placeholder = cfg.placeholder or ("<" .. scope_key .. ">")
   local hint = cfg.too_large_hint or "ask for a page or an area"
   local error_kind = kind_prefix .. ".error"
-  local plugin_root = cfg.plugin_root and lower_slash(cfg.plugin_root):gsub("/+$", "") or nil
+  -- trailing slashes go, but a root keeps its own: `git -C ""` (and `-C C:`) would mean the current directory
+  local plugin_root = cfg.plugin_root and (lower_slash(cfg.plugin_root):gsub("([^:/])/+$", "%1"))
+    or nil
 
   local d = {
     SCHEMA = cfg.schema,
@@ -135,13 +241,16 @@ function M.new(cfg)
     return os.date("!%Y-%m-%dT%H:%M:%SZ") --[[@as string]]
   end
 
+  local nvim_version -- `vim.version()` asks Neovim over its API (0.7 ms) and cannot change in a process
+
   ---What the head says about the engine (same seam, same reason).
   ---@return { version: string, git: string, nvim: string }
   function d.engine_info()
-    return { version = d.ENGINE_VERSION, git = engine_git(), nvim = tostring(vim.version()) }
+    nvim_version = nvim_version or tostring(vim.version())
+    return { version = d.ENGINE_VERSION, git = engine_git(), nvim = nvim_version }
   end
 
-  ---The head every document starts with.
+  ---The head every document starts with. The root names the source by its last part, whatever its slashes.
   ---@param kind string
   ---@param root? string
   ---@return table
@@ -151,21 +260,26 @@ function M.new(cfg)
       plugin = d.PLUGIN,
       kind = kind,
       generated_at = d.clock(),
-      [scope_key] = json.object({ id = root and vim.fs.basename(root) or "" }),
+      [scope_key] = json.object({ id = root and scope_id(root) or "" }),
       engine = json.object(d.engine_info()),
     }
   end
 
   -- ── paths: nothing of this machine in a document ────────────────────────────
 
-  ---`path` relative to the root, with `/`; `nil` when it is not inside it (case-insensitive: a Windows path).
+  ---`path` relative to the root, with `/`; `nil` when it is not inside it (case-insensitive: a Windows path). The
+  ---root may end in a slash or use backslashes. An empty root is no root: nothing is inside it (`/` is the root of
+  ---the file system and everything absolute is inside that).
   ---@param root string
   ---@param path string
   ---@return string|nil
   function d.relative(root, path)
+    if root == "" then
+      return nil
+    end
     local p = lower_slash(path)
-    local r = lower_slash(root):gsub("/+$", "")
-    if p:sub(1, #r + 1):lower() == (r .. "/"):lower() then
+    local r = bare(root)
+    if fold(p:sub(1, #r + 1)) == fold(r) .. "/" then
       return p:sub(#r + 2)
     end
     return nil
@@ -188,53 +302,69 @@ function M.new(cfg)
     return text
   end
 
-  ---Free text (a message of the engine) with the root named by the placeholder, in both spellings of the path and
-  ---whatever the case.
+  ---Free text (a message of the engine) with the root named by the placeholder, in any spelling of the path (either
+  ---slash, mixed) and whatever the case; the root itself may end in a slash or use backslashes. A root without a
+  ---name (`""`, `/`) hides nothing. One pass over the text, so the cost follows its length, not the number of hits.
   ---@param root string
   ---@param s string
   ---@return string
   function d.redact(root, s)
-    if root == "" then
+    local needle = fold(bare(root))
+    if needle == "" then
       return s
     end
-    local out = s
-    for _, form in ipairs({ root, (root:gsub("/", "\\")) }) do
-      local at = 1
-      while true do
-        local i, j = out:lower():find(form:lower(), at, true)
-        if not i then
-          break
-        end
-        out = out:sub(1, i - 1) .. placeholder .. out:sub(j + 1)
-        at = i + #placeholder
+    local hay = fold(lower_slash(s)) -- the same length as `s`: a position in one is a position in the other
+    local parts, from, at = {}, 1, 1
+    while true do
+      local i, j = hay:find(needle, at, true)
+      if not i then
+        break
       end
+      parts[#parts + 1] = s:sub(from, i - 1)
+      parts[#parts + 1] = placeholder
+      from, at = j + 1, j + 1
     end
-    return out
+    if from == 1 then
+      return s
+    end
+    parts[#parts + 1] = s:sub(from)
+    return table.concat(parts)
   end
 
   -- ── sealing and encoding ─────────────────────────────────────────────────────
 
   ---`rev`: what the source looked like, from lines the plugin builds (an id and a version tag each). The order of
-  ---the lines does not matter.
+  ---the lines does not matter. They are sorted by byte value, not by the language's `<` (on plain Lua 5.1 that
+  ---follows the locale), so the same source has the same rev on every machine.
   ---@param lines string[]
   ---@return string
   function d.rev_of(lines)
     local sorted = vim.list_slice(lines, 1)
-    table.sort(sorted)
+    table.sort(sorted, json.bytes_less)
     return "rev:" .. etag.sha256(table.concat(sorted, "\n")):sub(1, 6)
   end
 
   ---Put `rev` and `digest` on a document. The digest is the hash of the compact document without `generated_at` and
-  ---without `engine`.
+  ---without `engine`. It writes the whole document once: memoise the big part with `json.memo` and `encode` reuses
+  ---that text instead of writing it a second time.
+  ---
+  ---A value JSON cannot hold (NaN, a function, a cycle) makes `seal` RAISE, with the message `encode` would give
+  ---(the path in the document, no position) and leaves the document as it was (time, engine, `rev`, `digest`).
+  ---Anyone who builds a document from foreign values and wants an error to return calls `encode` first, or `pcall`s
+  ---the seal.
   ---@param doc table
   ---@param rev? string
   ---@return table
   function d.seal(doc, rev)
-    doc.rev = rev
-    local at, engine = doc.generated_at, doc.engine
-    doc.generated_at, doc.engine, doc.digest = nil, nil, nil
-    doc.digest = "sha256:" .. etag.sha256(json.encode(doc)):sub(1, 16)
+    local was_rev, was_digest, at, engine = doc.rev, doc.digest, doc.generated_at, doc.engine
+    doc.rev, doc.generated_at, doc.engine, doc.digest = rev, nil, nil, nil
+    local written, text = pcall(json.encode, doc)
     doc.generated_at, doc.engine = at, engine
+    if not written then
+      doc.rev, doc.digest = was_rev, was_digest
+      error(text, 0) -- the message names the path in the document and carries no file:line
+    end
+    doc.digest = "sha256:" .. etag.sha256(text):sub(1, 16)
     return doc
   end
 
@@ -264,16 +394,26 @@ function M.new(cfg)
     return text, nil
   end
 
-  ---An error document.
+  ---An error document. A malformed `err` is made into one, never a throw: a value that is no table is an `internal`
+  ---error with its text, a `message` that is no text is shown as one (the `code` when there is none), a `code` that
+  ---is no text is `internal` (a document always has a code a client can match), `details` that is no table is left
+  ---out.
   ---@param err Lib.Contract.Error
   ---@param root? string
   ---@return table
   function d.error_doc(err, root)
+    if type(err) ~= "table" then
+      err = errors.fail("internal", errors.text(err))
+    end
+    local message = err.message
+    if type(message) ~= "string" then
+      message = errors.text(message == nil and err.code or message)
+    end
     local doc = d.head(error_kind, root)
-    doc.code = err.code
-    doc.message = root and d.redact(root, err.message) or err.message
+    doc.code = type(err.code) == "string" and err.code or "internal"
+    doc.message = root and d.redact(root, message) or message
     doc.retryable = err.retryable == true
-    if err.details then
+    if type(err.details) == "table" then
       doc.details = json.object(err.details)
     end
     return doc

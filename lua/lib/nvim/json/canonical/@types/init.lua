@@ -9,5 +9,6 @@
 ---@field array fun(t?: table): table   Mark a table as a JSON array, even when it is empty.
 ---@field memo fun(t: table): table     Remember the compact text of a table that will not change.
 ---@field encode fun(value: any, opts?: Lib.Json.CanonicalOpts): string  Raises on a value JSON cannot hold; the message names the path.
+---@field bytes_less fun(a: string, b: string): boolean  `a < b` by byte value, never by the locale: for `table.sort` of a list whose order ends up in a hash.
 
 return {}

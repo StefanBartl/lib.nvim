@@ -7,6 +7,33 @@
 local norm = vim.fs.normalize
 local normkey = require("lib.nvim.fs.normkey")
 
+-- Lowercase for `ignore_case`. `string.lower` only folds ASCII, which would leave
+-- `Ärger` and `ärger` -- one folder on NTFS/APFS -- apart, so anything with a high
+-- byte goes through `vim.fn.tolower` (callable from a fast event, never throws on
+-- invalid UTF-8); the all-ASCII common case stays in Lua. Same helper as
+-- `lib.nvim.fs.roots`. The result may differ in length from `s` (`İ` -> `i`), which
+-- is harmless here: only the two folded strings are compared with each other.
+---@param s string
+---@return string
+local function lower(s)
+  if not s:find("[\128-\255]") then
+    return s:lower()
+  end
+  return vim.fn.tolower(s)
+end
+
+-- Strip trailing separators so `/v/` and `/v` are one spelling, as the no-`opts`
+-- branch already gets from `vim.fs.normalize`. A bare root keeps its slash: `/`
+-- stays `/`, and `C:/` stays `C:/` ("C:" alone means "the cwd on drive C").
+---@param p string
+---@return string
+local function trim(p)
+  if #p > 1 and not p:match("^%a:/$") then
+    return (p:gsub("(.)/+$", "%1"))
+  end
+  return p
+end
+
 -- Without `opts` this stays a pure `vim.fs.normalize` string compare: no
 -- syscalls, safe in a `BufReadPost`/`BufWritePost` hot path, and byte-for-byte
 -- the behavior every existing caller already has. What that cannot do is see
@@ -25,12 +52,12 @@ local normkey = require("lib.nvim.fs.normkey")
 return function(path, base, opts)
   if opts then
     local o = { realpath = opts.realpath ~= false }
-    path, base = normkey(path, o), normkey(base, o)
+    path, base = trim(normkey(path, o)), trim(normkey(base, o))
   else
     path, base = norm(path), norm(base)
   end
   if opts and opts.ignore_case then
-    path, base = path:lower(), base:lower()
+    path, base = lower(path), lower(base)
   end
   if path == base then
     return true
