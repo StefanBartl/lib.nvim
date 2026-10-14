@@ -30,6 +30,15 @@ return function(H)
     eq(tables[1].separator_style, "spaced", "the source's separator style is kept")
     eq(tables[1].rows[1][1], "Name", "cells are trimmed")
 
+    local dashes = T.parse({ "| a | b |", "|---|---|", "| - | - |", "| x | y |" })
+    eq(#dashes[1].rows, 3, "only the first separator-looking line is the delimiter row")
+    eq(dashes[1].rows[2][1], "-", "a later `| - | - |` stays a data row")
+    eq(
+      table.concat(T.format_lines({ "| a | b |", "|---|---|", "| - | - |", "| x | y |" }), "\n"),
+      "| a | b |\n|---|---|\n| - | - |\n| x | y |",
+      "formatting does not drop the dash row"
+    )
+
     eq(#T.parse({ "| a |", "| --- |" }), 0, "two lines are not a table")
     eq(T.is_table_line("not a table"), false, "a plain line is not a table line")
     eq(T.is_table_line(nil), false, "a non-string is not a table line")
