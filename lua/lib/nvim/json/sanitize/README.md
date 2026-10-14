@@ -56,13 +56,20 @@ repair by path.
 | `drop_invalid` | for `"list"`: leave a bad element out instead |
 | `warn` | `false`: repair a missing value without reporting it |
 
+A `default` that raises or does not have the field's `type` is ignored (the neutral
+value of the type is used). `"nan"`, `"inf"` and `"1e999"` are not coerced to numbers.
+A list element of type `any` has no placeholder: a `null` there is left out and
+reported as `missing`, so positions shift (describe the element with a concrete
+`type` to keep them). A description that nests deeper than 64 levels is not
+followed further (the data is kept as it is).
+
 A placeholder table is repaired too (a missing `owner` becomes `{ login =
 "Unknown" }`), without one warning per nested field.
 
 ## Warnings
 
 `{ path, code, message }`; `path` is `$` for the root, then `.key` / `[i]`.
-`code` is `missing`, `type`, `coerced` or `dropped`. They come in a stable
+`code` is `missing`, `type`, `coerced` or `dropped` (an element left out that no other warning explained); one warning per repair. They come in a stable
 order (keys sorted). Options:
 
 - `on_warning(w)` is called for each as it is found (a throwing callback is ignored)

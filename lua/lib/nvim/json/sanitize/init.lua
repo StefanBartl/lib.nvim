@@ -111,7 +111,8 @@ local function coerce(v, want)
     return tostring(v), true
   elseif want == "number" and type(v) == "string" then
     local n = tonumber(v)
-    if n ~= nil then
+    -- JSON has no NaN / infinity, and one in the result breaks comparisons and encoding
+    if n ~= nil and n == n and n ~= math.huge and n ~= -math.huge then
       return n, true
     end
   elseif want == "boolean" and type(v) == "string" then
@@ -128,13 +129,18 @@ end
 ---@return any placeholder
 ---@return boolean has
 local function placeholder(f)
+  local want = f.type or "any"
   local d = f.default
   if type(d) == "function" then
-    return d(), true
-  elseif d ~= nil then
+    -- a default that raises or has the wrong type must not break the repair: neutral value instead
+    local made, v = pcall(d)
+    if made and v ~= nil and matches(v, want) then
+      return v, true
+    end
+  elseif d ~= nil and matches(d, want) then
     return vim.deepcopy(d), true
   end
-  local make = NEUTRAL[f.type or "any"]
+  local make = NEUTRAL[want]
   if make then
     return make(), true
   end
@@ -145,6 +151,8 @@ end
 ---@field warnings Lib.Json.Sanitize.Warning[]
 ---@field dropped integer
 ---@field max integer
+---@field count integer  warnings found so far (recorded or not)
+---@field depth integer
 ---@field on_warning? fun(w: Lib.Json.Sanitize.Warning)
 
 ---@param ctx Lib.Json.Sanitize.Ctx
@@ -152,6 +160,7 @@ end
 ---@param code string
 ---@param message string
 local function warn(ctx, path, code, message)
+  ctx.count = ctx.count + 1
   local w = { path = path, code = code, message = path .. ": " .. message }
   if ctx.on_warning then
     pcall(ctx.on_warning, w)
@@ -163,20 +172,22 @@ local function warn(ctx, path, code, message)
   end
 end
 
-local walk
+local walk, walk_inner
+local MAX_DEPTH = 64
 
 ---Build the placeholder of `f` and repair what the description requires inside it, without a
 ---warning per nested field (the placeholder itself was reported).
 ---@param f Lib.Json.Sanitize.Field
 ---@param path string
+---@param ctx Lib.Json.Sanitize.Ctx
 ---@return any
-local function filled(f, path)
+local function filled(f, path, ctx)
   local ph, has = placeholder(f)
   if not has then
     return nil
   end
   if type(ph) == "table" and f.type == "table" and f.fields then
-    local quiet = { warnings = {}, dropped = 0, max = 0 }
+    local quiet = { warnings = {}, dropped = 0, max = 0, count = 0, depth = ctx.depth }
     local fixed = walk(ph, f, path, quiet, true)
     return fixed
   end
@@ -234,10 +245,12 @@ local function walk_list(v, f, path, ctx)
   end
   for i = 1, #v do
     local sub = path .. "[" .. i .. "]"
+    local before = ctx.count
     local nv = walk(v[i], elem, sub, ctx, false)
     if nv ~= nil then
       out[#out + 1] = nv
-    else
+    elseif ctx.count == before then
+      -- nothing was said about it yet (a null element of an `any` list, say)
       warn(ctx, sub, "dropped", "element left out")
     end
   end
@@ -251,6 +264,23 @@ end
 ---@param silent boolean  repairing inside a placeholder that was already reported
 ---@return any
 function walk(v, f, path, ctx, silent)
+  if ctx.depth > MAX_DEPTH then
+    -- a recursive description over deeply nested data: stop repairing, keep what is there
+    return v
+  end
+  ctx.depth = ctx.depth + 1
+  local out = walk_inner(v, f, path, ctx, silent)
+  ctx.depth = ctx.depth - 1
+  return out
+end
+
+---@param v any
+---@param f Lib.Json.Sanitize.Field
+---@param path string
+---@param ctx Lib.Json.Sanitize.Ctx
+---@param silent boolean
+---@return any
+function walk_inner(v, f, path, ctx, silent)
   local want = f.type or "any"
   local say = not silent
   if is_missing(v) then
@@ -258,10 +288,10 @@ function walk(v, f, path, ctx, silent)
       if say and f.warn ~= false then
         warn(ctx, path, "missing", ("required %s is missing, placeholder used"):format(want))
       end
-      return filled(f, path)
+      return filled(f, path, ctx)
     end
     if f.default ~= nil then
-      return filled(f, path)
+      return filled(f, path, ctx)
     end
     return nil
   end
@@ -289,7 +319,7 @@ function walk(v, f, path, ctx, silent)
         )
       end
       if f.required or f.default ~= nil then
-        return filled(f, path)
+        return filled(f, path, ctx)
       end
       return nil
     end
@@ -321,6 +351,8 @@ function M.apply(value, field, opts)
   local ctx = {
     warnings = {},
     dropped = 0,
+    count = 0,
+    depth = 0,
     max = opts.max_warnings or 100,
     on_warning = opts.on_warning,
   }

@@ -161,7 +161,7 @@ return function(H)
     local d = { type = "list", drop_invalid = true, of = { type = "number" } }
     local c2, w2 = sanitize.apply({ 1, "x", 3 }, d)
     eq(c2, { 1, 3 }, "drop_invalid leaves the element out")
-    eq(codes(w2), { "$[2]:type", "$[2]:dropped" }, "reported as dropped")
+    eq(codes(w2), { "$[2]:type" }, "one warning per repair")
     eq(
       sanitize.apply({ a = 1 }, { type = "list", required = true }),
       {},
@@ -241,6 +241,48 @@ return function(H)
       end,
     })
     eq(c3.n, "", "a throwing on_warning is contained")
+  end
+
+  -- ------------------------------------------------------- review findings
+  do
+    -- a null element of an `any` list is left out and says so (no placeholder exists for `any`)
+    local c, w = sanitize.apply({ 1, vim.NIL, 3 }, { type = "list", of = {} })
+    eq(c, { 1, 3 }, "null element of an any list is left out")
+    eq(codes(w), { "$[2]:missing" }, "and reported once")
+    -- NaN / infinity are no JSON numbers
+    for _, text in ipairs({ "nan", "inf", "-inf", "1e999" }) do
+      local n, nw = sanitize.apply(text, { type = "number", coerce = true })
+      eq(n, nil, text .. " is not coerced")
+      eq(codes(nw), { "$:type" }, text .. " is a wrong type")
+    end
+    eq(
+      sanitize.apply("12", { type = "number", coerce = true }),
+      12,
+      "an ordinary numeric string is"
+    )
+    -- a recursive description over required children stops instead of overflowing the stack
+    local fields = {}
+    local node = { type = "table", required = true, fields = fields }
+    fields.child = node
+    local ok_rec, res = pcall(sanitize.apply, {}, node)
+    ok(ok_rec, "recursive description does not overflow: " .. tostring(res))
+    -- a default that raises or has the wrong type falls back to the neutral value
+    local bad = {
+      type = "table",
+      fields = {
+        a = {
+          type = "string",
+          required = true,
+          default = function()
+            error("boom")
+          end,
+        },
+        n = { type = "number", required = true, default = "x" },
+      },
+    }
+    local cb = sanitize.apply({}, bad)
+    eq(cb.a, "", "raising default function")
+    eq(cb.n, 0, "default of the wrong type")
   end
 
   -- --------------------------------------------------------------- programmer errors
