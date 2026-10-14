@@ -8,7 +8,9 @@ return function(H)
   )
 
   -- A minimal luassert look-alike over the harness: the ported cases keep their text.
-  local assert = {
+  -- It is also callable like the global `assert(value, message)`, which the ported file still uses.
+  local plain_assert = _G.assert
+  local assert = setmetatable({
     equals = function(expected, actual, msg)
       H.eq(actual, expected, msg)
     end,
@@ -21,7 +23,11 @@ return function(H)
     same = function(expected, actual, msg)
       H.ok(vim.deep_equal(expected, actual), (msg or "same") .. ": " .. vim.inspect(actual))
     end,
-  }
+  }, {
+    __call = function(_, ...)
+      return plain_assert(...)
+    end,
+  })
   local path = {}
   local function describe(name, fn)
     path[#path + 1] = name

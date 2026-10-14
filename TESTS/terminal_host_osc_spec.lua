@@ -50,7 +50,10 @@ return function(H)
   eq(#osc.sanitize(string.rep("x", 500)), 200, "osc.sanitize: default limit 200")
   local euro = "a" .. string.rep("\226\130\172", 100)
   local cut = osc.sanitize(euro, 120)
-  ok(#cut <= 120 and cut:find("^a[\226\130\172]*$") ~= nil, "osc.sanitize: no character is split")
+  -- 120 bytes would end inside the 40th euro sign (1 + 39 * 3 = 118 whole bytes): the cut steps back.
+  eq(#cut, 118, "osc.sanitize: stepped back to the character boundary")
+  eq(cut:byte(-1), 172, "osc.sanitize: ends on the last byte of a whole character")
+  eq(vim.fn.strchars(cut), 40, "osc.sanitize: no character is split")
 
   local seq = osc.user_var("MUX_NVIM", "1")
   eq(
@@ -72,6 +75,12 @@ return function(H)
     "\27Ptmux;\27\27]1;x\7\27\\",
     "osc.wrap_tmux: ESC doubled inside the envelope"
   )
+  local saved_tmux = vim.env.TMUX
+  vim.env.TMUX = "/tmp/tmux-1/default,1,0"
+  eq(osc.wrap("S"), "\27Ptmux;S\27\\", "osc.wrap: without the flag, $TMUX decides (in tmux)")
+  vim.env.TMUX = ""
+  eq(osc.wrap("S"), "S", "osc.wrap: without the flag, an empty $TMUX is not tmux")
+  vim.env.TMUX = saved_tmux
   eq(osc.wrap("S", false), "S", "osc.wrap: not in tmux, unchanged")
   eq(osc.wrap("S", true), "\27Ptmux;S\27\\", "osc.wrap: in tmux, wrapped")
 
