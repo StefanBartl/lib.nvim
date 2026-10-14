@@ -39,6 +39,22 @@ return function(H)
       "formatting does not drop the dash row"
     )
 
+    -- a header of dashes above the real delimiter row is the header, not the delimiter
+    local dash_head = { "| - | - |", "|---|---|", "| x | y |" }
+    local dh = T.parse(dash_head)
+    eq(#dh, 1, "a dash header does not stop it being a table")
+    eq(dh[1].rows[1][1], "-", "the dash line is the header row")
+    eq(dh[1].rows[2][1], "x", "and the data follows")
+    eq(dh[1].separator_style, "compact", "the delimiter is the second line")
+    eq(
+      table.concat(T.format_lines(dash_head), "\n"),
+      "| - | - |\n|---|---|\n| x | y |",
+      "formatting keeps the dash header (it used to become '---')"
+    )
+    -- two delimiter-looking lines after a real header: the second one is data (GFM)
+    local dup = T.parse({ "| a | b |", "|---|---|", "|---|---|", "| x | y |" })
+    eq(#dup[1].rows, 3, "a repeated delimiter line is a data row")
+
     eq(#T.parse({ "| a |", "| --- |" }), 0, "two lines are not a table")
     eq(T.is_table_line("not a table"), false, "a plain line is not a table line")
     eq(T.is_table_line(nil), false, "a non-string is not a table line")

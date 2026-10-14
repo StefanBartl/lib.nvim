@@ -208,6 +208,11 @@ function M.parse(lines)
         local rows, sep_style, sep_line_idx, col_count = {}, nil, nil, 0
         for ln = start, stop do
           local is_sep, style = M.is_separator_line(lines[ln])
+          -- A header made of dashes (`| - | - |`) directly above the delimiter row is the header,
+          -- not the delimiter: when the first two lines both look like a separator, the second is.
+          if is_sep and ln == start and M.is_separator_line(lines[ln + 1]) then
+            is_sep = false
+          end
           -- only the first such line is the delimiter row; a later `| - | - |` is a data row
           if is_sep and not sep_line_idx then
             sep_line_idx = ln
