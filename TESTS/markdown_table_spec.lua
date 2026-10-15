@@ -361,6 +361,16 @@ return function(H)
       "a misaligned CRLF block is rewritten with CRLF, the LF line stays"
     )
 
+    -- a block where only some lines end in a CR keeps each line's own ending, byte for byte
+    local partial_bad = "| A | B |\r\n|---|---|\n| xxxx | y |"
+    local partial_ok = "| A    | B |\r\n|------|---|\n| xxxx | y |"
+    eq(
+      roundtrip(partial_bad),
+      partial_ok,
+      "a header-only-CR block keeps the CR on the header line only"
+    )
+    eq(roundtrip(partial_ok), partial_ok, "a formatted header-only-CR block is kept byte for byte")
+
     -- an already formatted file is not rewritten: compare the bytes after a call
     -- that would change them if it wrote, with a stat that cannot pass vacuously
     -- (the file is made read-only; a write attempt would report an error)

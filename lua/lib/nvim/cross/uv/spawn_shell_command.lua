@@ -48,14 +48,18 @@ return function(cmd, args, opts)
     cwd = opts.cwd,
     stdio = opts.stdio or { nil, 1, 2 }, -- default: inherit stdout/stderr
   }, function(code, signal)
-    if opts.on_exit then
-      opts.on_exit(code, signal)
-    else
-      print(("Command exited with code %d, signal %s"):format(code, tostring(signal)))
-    end
-    if handle then
+    -- Close first and hand the result over on the main loop: a throwing `on_exit` (a `vim.api` call in the fast
+    -- event context raises E5560) would otherwise leave the process handle open.
+    if handle and not handle:is_closing() then
       handle:close()
     end
+    vim.schedule(function()
+      if opts.on_exit then
+        opts.on_exit(code, signal)
+      else
+        print(("Command exited with code %d, signal %s"):format(code, tostring(signal)))
+      end
+    end)
   end)
 
   return handle

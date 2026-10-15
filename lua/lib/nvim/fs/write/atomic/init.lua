@@ -28,6 +28,12 @@ return function(path, content, opts)
       return false, "mkdir failed: " .. tostring(merr)
     end
   end
+  -- A symlink as target (a dotfile manager) stays a link: the rename replaces what it points to, as `writefile` did.
+  -- A dangling link cannot be resolved and is replaced like any other entry.
+  local lst = uv.fs_lstat(path)
+  if lst and lst.type == "link" then
+    path = uv.fs_realpath(path) or path
+  end
   -- Unique per process and call, so concurrent writers never share a temp file.
   local tmp = ("%s.%s.%d.%d"):format(path, opts.tag or "atomic-tmp", uv.os_getpid(), uv.hrtime())
   local fd, open_err = uv.fs_open(tmp, "wx", 420) -- 0644, less the umask

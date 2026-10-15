@@ -372,6 +372,16 @@ return function(H)
   )
   eq(select(1, write_atomic("", "x")), false, "fs.write.atomic: an empty path is refused")
 
+  -- A symlink as target stays a link and its target takes the new content (skipped where links cannot be made).
+  local link_target = tmp .. "/atomic_link_target.txt"
+  local link_p = tmp .. "/atomic_link.txt"
+  assert(write_atomic(link_target, "old"))
+  if uv.fs_symlink(link_target, link_p) then
+    ok(write_atomic(link_p, "via link"), "fs.write.atomic: writes through a symlink")
+    eq((uv.fs_lstat(link_p) or {}).type, "link", "fs.write.atomic: the symlink is still a symlink")
+    eq(read(link_target), "via link", "fs.write.atomic: the link target has the new content")
+  end
+
   local write_append = require("lib.nvim.fs.write.append")
   local append_p = tmp .. "/append_check.txt"
   ok(write_append(append_p, "x\n"), "fs.write.append: first append")

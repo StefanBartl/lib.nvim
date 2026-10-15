@@ -58,18 +58,20 @@ local function spawn_project_command(cmd, opts)
     cwd = cwd,
     stdio = stdio,
   }, function(code, signal)
-    if on_exit then
-      on_exit(code, signal)
-    else
-      vim.schedule(function()
+    -- Close first and hand the result over on the main loop: a throwing `on_exit` (a `vim.api` call in the fast
+    -- event context raises E5560) would otherwise leave the process handle open.
+    if handle and not handle:is_closing() then
+      handle:close()
+    end
+    vim.schedule(function()
+      if on_exit then
+        on_exit(code, signal)
+      else
         print(
           ("Command '%s' exited with code %d, signal %s"):format(full_cmd, code, tostring(signal))
         )
-      end)
-    end
-    if handle then
-      handle:close()
-    end
+      end
+    end)
   end)
 
   return handle
