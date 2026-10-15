@@ -186,6 +186,16 @@ return function(winid: integer, opts?: { events?: string[], force?: boolean }): 
 return function(winid: integer): boolean ok   -- no-op on non-floats/invalid
 ```
 
+### `lib.nvim.window.matches` (documented in directory README)
+Window-local match ledger over `matchadd`/`matchdelete`, addressed by name.
+```
+M.new(): Ledger
+Ledger:add(win, name, group, pattern, opts?: {priority?, conceal?}): integer|nil id, string|nil err   -- same name replaces
+Ledger:add_pos(win, name, group, positions, opts?): integer|nil, string|nil
+Ledger:remove(win, name): boolean ; :clear(win): integer ; :clear_all(): integer
+Ledger:has(win, name): boolean ; :list(win): table<string, integer>
+```
+
 ### `lib.nvim.window.find_by_filetype` (no README)
 ```
 M.find_by_filetype(filetype: string): integer|false winid

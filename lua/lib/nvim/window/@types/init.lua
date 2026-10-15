@@ -52,6 +52,9 @@
 ---@field close_on_focus_lost fun(opts?: Lib.Window.CloseOnFocusLostOpts): integer|nil
 ---@field center fun(): boolean
 
+---@class Lib.Window.MatchesMod
+---@field new fun(): Lib.Window.Matches.Ledger
+
 ---@class Lib.Window
 ---@field nice_quit fun(winid: integer, opts?: Lib.Window.NiceQuitOpts): boolean
 ---@field set_title fun(winid: integer, title: string|nil, opts?: Lib.Window.SetTitleOpts): boolean
@@ -69,6 +72,7 @@
 ---@field open_named_scratch fun(name: string, lines?: string[], opts?: { filetype?: string, split?: "above"|"below"|"left"|"right", size?: integer, modifiable?: boolean }): integer, integer # Find-or-create a named scratch buffer shown in a split; returns bufnr, winid.
 ---@field open_scratch_split fun(lines?: string[], opts?: Lib.Window.OpenScratchSplitOpts): integer, integer # Open a fresh (non-de-duplicated) scratch buffer in a plain split; returns bufnr, winid.
 ---@field tag Lib.Window.Tag # Tag/find windows by an arbitrary string via `vim.w[win].custom_tag`.
+---@field matches Lib.Window.MatchesMod # Window-local match ledger: `matches.new()` -> named `matchadd` bookkeeping (add/add_pos/remove/clear/clear_all/has/list).
 ---@field find_by_filetype fun(filetype: string): integer|false # First open window whose buffer has `filetype`, or `false` if none exists.
 
 return {}

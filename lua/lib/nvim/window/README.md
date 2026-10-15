@@ -37,6 +37,7 @@ lib.nvim.window/
 ├── open_named_scratch.lua   -- named, de-duplicated scratch split
 ├── open_scratch_split.lua   -- fresh (non-de-duplicated) scratch split
 ├── tag.lua                  -- find windows by an arbitrary string tag
+├── matches.lua              -- named, per-window ledger over matchadd/matchdelete
 ├── focus_helpers.lua        -- keep a log view scrolled to bottom / force focus
 ├── find_usable.lua          -- find a normal, non-floating, non-sidebar window
 ├── find_by_filetype.lua     -- find the first open window showing a given filetype
@@ -280,6 +281,24 @@ window.reveal_at_bottom(winid)   -- force_focus + ensure_bottom
 ```
 
 ---
+
+### `matches.new() -> ledger`
+
+A window-local match ledger: `window -> { name -> match id }`, so highlights made with `matchadd()` are
+addressed by name and the caller never keeps match ids. Each plugin makes its own ledger.
+
+```lua
+local ledger = require("lib.nvim.window.matches").new()
+ledger:add(win, "cursorword", "Search", [[\<foo\>]], { priority = 5 }) --> match id | nil, err
+ledger:add(win, "cursorword", "Search", [[\<bar\>]])  -- same name: replaces (a bad pattern keeps the old one)
+ledger:add_pos(win, "line", "Search", { { 3, 1, 4 } })  -- matchaddpos
+ledger:has(win, "cursorword")   --> boolean (a match deleted elsewhere counts as gone)
+ledger:list(win)                --> { cursorword = <id>, ... }
+ledger:remove(win, "cursorword")--> boolean
+ledger:clear(win)               --> count removed;  ledger:clear_all()
+```
+
+Closed windows are forgotten, never an error; matches of others in the same window are left alone.
 
 ### `find_by_filetype(filetype) -> winid|false`
 
