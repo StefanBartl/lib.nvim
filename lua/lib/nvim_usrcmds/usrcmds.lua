@@ -58,6 +58,11 @@ function M.lib_verb(o)
     routes[#routes + 1] = route
   end
 
+  -- `:Lib cache stats`: like notify, core lib.nvim and not an opt-in feature.
+  for _, route in ipairs(require("lib.nvim.cache").routes()) do
+    routes[#routes + 1] = route
+  end
+
   if o.powershell_profile then
     routes[#routes + 1] = {
       path = { "ps-profile" },

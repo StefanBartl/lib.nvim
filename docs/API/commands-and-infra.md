@@ -689,7 +689,9 @@ M.setup_auto_invalidation(opts?: { prefix? })   -- idempotent; TextChanged prune
 M.disable_auto_invalidation()
 M.is_auto_invalidation_enabled(): boolean
 M.get_all_stats(): Lib.Cache.Memory.Stats[]
+M.format_stats(all?): string[]   -- aligned text: header, one row per namespace (name, entries, hits, misses, invalid, evict, hit rate), total
 M.print_all_stats()
+-- lib.nvim.cache.routes(): table[]  -- the `:Lib cache stats` route (merged into :Lib by lib.nvim_usrcmds)
 ```
 
 ---

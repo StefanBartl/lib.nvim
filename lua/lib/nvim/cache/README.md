@@ -129,5 +129,11 @@ to use a custom augroup name instead of the default
 
 ```lua
 memory.get_all_stats()    -- Lib.Cache.Memory.Stats[]
+memory.format_stats()     -- the same table as string[] (header, one row per namespace, total)
 memory.print_all_stats()  -- formatted table via print()
 ```
+
+`ns.stats()` / `get_all_stats()` also report `entries`, the live entries of a namespace now.
+
+`:Lib cache stats` (registered by `lib.nvim_usrcmds`, through `cache.routes()`) shows that table for every
+namespace of every plugin that uses `lib.nvim.cache.memory`.
