@@ -561,6 +561,127 @@ return function(H)
   else
     H.skipped("tags: a chain of 65 hops is an error", "git peels every level in %(*objecttype)")
   end
+
+  -- ── the same paths on ANY git: a git that peels ONE level (2.43) is simulated ──
+  -- The blocks above only run where `%(*objecttype)` stops after one level (git <= 2.43); every current
+  -- CI runner has a newer git, so `NESTED_TAGS`, `apply_peel` and `PEEL_MAX_ROUNDS` ran nowhere else.
+  -- Here `for-each-ref` is rewritten to the old form (field 3 = the tag's direct target, field 5 =
+  -- that target's type) and `cat-file --batch` stays the real git.
+  ---@param stdout string
+  ---@param repo_dir string
+  ---@return string
+  local function old_form(stdout, repo_dir)
+    local out = {}
+    for line in stdout:gmatch("[^\n]+") do
+      local f = vim.split(line, "\0", { plain = true })
+      if f[4] == "tag" and f[2] and f[2] ~= "" then
+        local res = vim
+          .system({ "git", "-C", repo_dir, "cat-file", "tag", f[2] }, { text = true })
+          :wait()
+        local obj, typ = (res.stdout or ""):match("^object (%x+)\ntype (%S+)\n")
+        if obj then
+          f[3], f[5] = obj, typ
+        end
+      end
+      out[#out + 1] = table.concat(f, "\0")
+    end
+    return table.concat(out, "\n") .. "\n"
+  end
+
+  ---@param repo_dir string
+  ---@param cat_file_fails boolean
+  ---@param body fun(seen: { cat_file: integer })
+  local function with_old_git(repo_dir, cat_file_fails, body)
+    local seen = { cat_file = 0 }
+    local real_run, real_async = git.run, git.run_async
+    local function rewrite(args, res)
+      if args[1] == "for-each-ref" and res.ok then
+        return vim.tbl_extend("force", res, { stdout = old_form(res.stdout, repo_dir) })
+      elseif args[1] == "cat-file" then
+        seen.cat_file = seen.cat_file + 1
+        if cat_file_fails then
+          return {
+            ok = false,
+            code = 3,
+            signal = 0,
+            stdout = "",
+            stderr = "simulated cat-file failure",
+            timed_out = false,
+          }
+        end
+      end
+      return res
+    end
+    H.with_patched(git, "run", function(args, ropts, cmd)
+      return rewrite(args, real_run(args, ropts, cmd))
+    end, function()
+      H.with_patched(git, "run_async", function(args, ropts, on_done, cmd)
+        return real_async(args, ropts, function(res)
+          on_done(rewrite(args, res))
+        end, cmd)
+      end, function()
+        body(seen)
+      end)
+    end)
+  end
+
+  ---@param opts table
+  ---@return Lib.Git.Tag[]|nil, string|nil, Lib.Git.Tag[]|nil, string|nil
+  local function tags_both_ways(opts)
+    local sync_list, sync_err = git.tags(opts)
+    local box
+    git.tags_async(opts, function(list, err)
+      box = { list = list, err = err }
+    end)
+    wait_for(function()
+      return box ~= nil
+    end)
+    return sync_list, sync_err, box and box.list, box and box.err
+  end
+
+  with_old_git(extra, false, function(seen)
+    local sl, _, al = tags_both_ways({ dir = extra })
+    local function by(list)
+      local m = {}
+      for _, t in ipairs(list or {}) do
+        m[t.name] = t
+      end
+      return m
+    end
+    local s, a = by(sl), by(al)
+    H.eq(s.nested and s.nested.sha, e1, "old git: a tag on a tag peels down to the commit")
+    H.eq(s.nested and s.nested.commit, true, "old git: ... and is a commit")
+    H.eq(s.third and s.third.sha, e1, "old git: a chain of three tags reaches the commit")
+    H.eq(a.nested and a.nested.sha, e1, "old git, async: a tag on a tag peels down to the commit")
+    H.eq(a.third and a.third.commit, true, "old git, async: a chain of three tags is a commit")
+    H.ok(seen.cat_file > 0, "old git: the peel really went through cat-file --batch")
+  end)
+
+  with_old_git(extra, true, function()
+    local f_sync, f_serr, f_async, f_aerr = tags_both_ways({ dir = extra })
+    H.eq(f_sync, nil, "old git: a failing cat-file is an error")
+    H.ok(type(f_serr) == "string" and f_serr ~= "", "old git: ... with a reason")
+    H.eq(f_async, nil, "old git, async: ... and so it is asynchronously")
+    H.ok(type(f_aerr) == "string" and f_aerr ~= "", "old git, async: ... with a reason")
+  end)
+
+  with_old_git(long_dir, false, function()
+    local o_sync, o_serr, o_async, o_aerr = tags_both_ways({ dir = long_dir, pattern = "c64" })
+    H.ok(
+      o_sync ~= nil and o_serr == nil and o_sync[1].commit == true,
+      "old git: a chain of 64 hops peels"
+    )
+    H.ok(
+      o_async ~= nil and o_aerr == nil and o_async[1].commit == true,
+      "old git, async: ... and so does it"
+    )
+    o_sync, o_serr, o_async, o_aerr = tags_both_ways({ dir = long_dir, pattern = "c65" })
+    H.ok(o_sync == nil and type(o_serr) == "string", "old git: a chain of 65 hops is an error")
+    H.ok(
+      o_async == nil and type(o_aerr) == "string",
+      "old git, async: ... and so it is asynchronously"
+    )
+  end)
   vim.fn.delete(long_dir, "rf")
 
   -- stop() after the process has exited but before its callback ran: the process can no longer
