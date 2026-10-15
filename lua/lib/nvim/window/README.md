@@ -282,6 +282,22 @@ window.reveal_at_bottom(winid)   -- force_focus + ensure_bottom
 
 ---
 
+### `best_target_window(opts?) -> winid|nil`
+
+The window to put text into, by a fixed chain: `opts.source_win` (where the action came from) -> the
+alternate window (`:wincmd p`) -> the first usable window. Every step must be `is_usable_window` and, unless
+`writable = false`, hold a normal, modifiable buffer. `current_tab_only = true` limits the last step.
+
+```lua
+local win = window.best_target_window({ source_win = state.source_win })
+if win then
+  vim.api.nvim_win_call(win, function() vim.api.nvim_put({ alias }, "c", true, true) end)
+end
+```
+
+Unlike `insertion_window` (current window, else the previous one) it knows an explicit origin window, which
+a float or picker stores when it opens.
+
 ### `matches.new() -> ledger`
 
 A window-local match ledger: `window -> { name -> match id }`, so highlights made with `matchadd()` are

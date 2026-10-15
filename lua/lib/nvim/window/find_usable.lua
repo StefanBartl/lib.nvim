@@ -84,4 +84,54 @@ function M.insertion_window(opts)
   return M.previous_window(opts)
 end
 
+---@class Lib.Window.BestTargetOpts
+---@field source_win? integer         # Tried first: the window the action came from (e.g. a picker's origin).
+---@field writable? boolean           # Require a normal, modifiable buffer (default true: the text is going to be inserted).
+---@field current_tab_only? boolean   # The last resort looks at the current tab only.
+
+---@param winid integer
+---@param writable boolean
+---@return boolean
+local function fits(winid, writable)
+  if type(winid) ~= "number" or not M.is_usable_window(winid) then
+    return false
+  end
+  if not writable then
+    return true
+  end
+  local buf = vim.api.nvim_win_get_buf(winid)
+  return vim.bo[buf].buftype == "" and vim.bo[buf].modifiable
+end
+
+---The best window to put text into, by a fixed chain: `opts.source_win` -> the alternate window (`:wincmd p`)
+---> the first usable window. Every step must be a normal, non-floating, non-sidebar window
+---(`is_usable_window`) and, unless `writable = false`, one with a modifiable, normal buffer.
+---
+---Generalised from the target search of `recommender.nvim`'s float; unlike `insertion_window` it knows an
+---explicit origin window (a float or picker stores where it was opened from).
+---@param opts? Lib.Window.BestTargetOpts
+---@return integer|nil winid
+function M.best_target_window(opts)
+  opts = opts or {}
+  local writable = opts.writable ~= false
+
+  if opts.source_win ~= nil and fits(opts.source_win, writable) then
+    return opts.source_win
+  end
+
+  local alt = vim.fn.win_getid(vim.fn.winnr("#"))
+  if alt ~= 0 and fits(alt, writable) then
+    return alt
+  end
+
+  local wins = opts.current_tab_only and vim.api.nvim_tabpage_list_wins(0)
+    or vim.api.nvim_list_wins()
+  for _, winid in ipairs(wins) do
+    if fits(winid, writable) then
+      return winid
+    end
+  end
+  return nil
+end
+
 return M
