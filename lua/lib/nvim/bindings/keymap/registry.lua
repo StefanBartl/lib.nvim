@@ -304,7 +304,7 @@ function M.register(plugin, spec, user, opts)
             -- from a global one. A buffer-local preset re-registers per
             -- buffer, so without this every one of them would look like it
             -- collides with the global map of the same key.
-            buffer = opts.buffer,
+            buffer = require("lib.nvim.bindings.keymap.records").resolve_buffer(opts.buffer),
           }
 
           if lhs and binding_enabled and rhs ~= nil then

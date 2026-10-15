@@ -56,5 +56,6 @@ by calling back into the registry (the usual shape: a backend module requires th
 itself) does not recurse. After `reset()` it runs again, so the known entries come back on the next read;
 entries registered by hand are gone. A loader that **throws** is not marked as run: the error reaches
 the reading call, and the next read runs it again (what it registered before throwing stays, so a
-half-filled registry is never served silently). `unregister` runs the loader first too, so a known entry
+half-filled registry is never served silently; that run registers those keys again, which `on_duplicate = "error"`
+does not count as a duplicate). `unregister` runs the loader first too, so a known entry
 can be removed before anything read the registry.
