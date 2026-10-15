@@ -205,6 +205,45 @@ local SELF_EXPLAINING = {
   WINDOW = true,
 }
 
+--- Most candidates a custom type's completion adds to the float; the rest is reachable with <Tab>.
+local MAX_TYPE_VALUES = 40
+
+---@internal
+--- The values the float lists for an argument or flag value: its closed set (`enum`, completion-only
+--- `values`), else what the completion of its CUSTOM type offers for an empty lead. The built-in types are
+--- left out (`PATH`/`BUFFER` would list the file system or every buffer). The completion is the author's
+--- own code: a throwing one is the same as offering nothing.
+---@param spec table  # an ArgSpec, FlagSpec or KvSpec
+---@return string[]|nil
+local function closed_values(spec)
+  local closed = spec.enum or spec.values
+  if closed and #closed > 0 then
+    return closed
+  end
+  if not spec.type or spec.type == "STRING" or SELF_EXPLAINING[spec.type] then
+    return nil
+  end
+  local def = argtypes.get(spec.type)
+  if not def or not def.complete then
+    return nil
+  end
+  local ok, got = pcall(def.complete, "", spec, nil)
+  if not ok or type(got) ~= "table" then
+    return nil
+  end
+  local out, seen = {}, {}
+  for _, v in ipairs(got) do
+    if type(v) == "string" and v ~= "" and not seen[v] then
+      seen[v] = true
+      out[#out + 1] = v
+      if #out >= MAX_TYPE_VALUES then
+        break
+      end
+    end
+  end
+  return #out > 0 and out or nil
+end
+
 --- The one-line text of a positional argument: its own `desc`, else the text
 --- of its (custom) type -- written once per type, not once per use -- else
 --- the name of a built-in type. nil for a plain string with nothing to say.
@@ -244,7 +283,7 @@ end
 ---@param spec Lib.UserCmd.Composer.ArgSpec
 ---@return Lib.UserCmd.Composer.Help.Entry[]
 local function arg_entries(spec)
-  local values = spec.enum or spec.values
+  local values = closed_values(spec)
   if values and #values > 0 then
     local out = value_entries(values, spec.enum_desc, nil)
     if spec.desc and spec.desc ~= "" then
@@ -269,7 +308,7 @@ local function value_of_lead(route, lead, kv_only)
   if fname then
     for _, spec in ipairs(route.flags or {}) do
       if spec.name == fname and not spec.bool then
-        local closed = spec.enum or spec.values
+        local closed = closed_values(spec)
         if closed and #closed > 0 then
           return value_entries(closed, spec.enum_desc, "--" .. fname .. "=")
         end
@@ -288,7 +327,7 @@ local function value_of_lead(route, lead, kv_only)
   if key then
     for _, spec in ipairs(route.kv or {}) do
       if spec.key == key then
-        local values = spec.enum or spec.values
+        local values = closed_values(spec)
         if values and #values > 0 then
           return value_entries(values, spec.enum_desc, key .. "=")
         end
@@ -326,7 +365,7 @@ local function pending_flag_value(route, committed)
   if not spec or spec.bool or spec.optional_value then
     return nil
   end
-  local closed = spec.enum or spec.values
+  local closed = closed_values(spec)
   if closed and #closed > 0 then
     return value_entries(closed, spec.enum_desc, nil)
   end
