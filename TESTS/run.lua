@@ -134,6 +134,7 @@ local specs = {
   "git_log_spec.lua",
   "git_hash_describe_spec.lua",
   "git_checkout_spec.lua",
+  "git_skip_worktree_spec.lua",
   "git_sync_spec.lua",
   "git_sync_cancel_spec.lua",
   "git_remote_spec.lua",

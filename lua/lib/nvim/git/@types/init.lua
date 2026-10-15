@@ -9,6 +9,9 @@
 ---@field is_detached_head fun(opts?: Lib.Git.Opts, git_cmd?: string): boolean # Check whether the repository is in a detached HEAD state.
 ---@field is_dirty fun(opts?: Lib.Git.Opts, git_cmd?: string): boolean # Check whether the working tree has uncommitted changes.
 ---@field is_tracked fun(path: string, opts?: Lib.Git.Opts, git_cmd?: string): boolean # Check whether the given path is tracked by Git.
+---@field is_skip_worktree fun(path: string, opts?: Lib.Git.Opts, git_cmd?: string): boolean|nil, string|nil # Whether a tracked file is marked `skip-worktree` (`ls-files -v` tag `S`/`s`); nil + err when unknown (untracked, git failed, invalid path).
+---@field set_skip_worktree fun(path: string, on: boolean, opts?: Lib.Git.Opts, git_cmd?: string): boolean, string|nil # `update-index --[no-]skip-worktree`; ok + git's stderr on failure.
+---@field toggle_skip_worktree fun(path: string, opts?: Lib.Git.Opts, git_cmd?: string): boolean|nil, string|nil # Flip the mark; returns the state after the flip, nil + err on failure.
 ---@field upstream fun(opts?: Lib.Git.Opts, git_cmd?: string): string|nil # Get the upstream branch of the current branch.
 ---@field ahead_behind fun(opts?: Lib.Git.Opts, git_cmd?: string): (boolean, boolean) # Check whether the current branch is ahead or behind its upstream.
 ---@field head_hash fun(opts?: Lib.Git.Opts, git_cmd?: string): string|nil # Get the full hash of HEAD.
