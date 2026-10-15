@@ -185,6 +185,13 @@ local function kill_job(job, signal, owe_follow_up)
       { "taskkill", "/PID", tostring(job.pid), "/T", "/F" },
       { text = true },
       function()
+        -- `taskkill` may finish late (a loop that did not iterate for a while): the job can have exited
+        -- and been closed by then, and Windows reuses its pid within milliseconds. A signal to a closed
+        -- job's stale pid would terminate whatever process holds that pid now (exit code 1) -- in the
+        -- test suite the next child, an unrelated "died at once" flake.
+        if job.is_closing and job:is_closing() then
+          return
+        end
         pcall(job.kill, job, signal)
       end
     )
