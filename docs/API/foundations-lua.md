@@ -88,6 +88,10 @@ M.char_len(lead_byte: integer): integer          -- 1-4
 M.encode(cp: integer): string
 M.decode(str: string, i?: integer): integer|nil cp, integer next_i
 M.iter(str: string): fun(): integer|nil, integer|nil   -- codepoint, byte_index
+M.valid_len(str: string, i?: integer): integer|nil     -- length of the valid sequence at i, nil when invalid
+M.scrub(str: string, repl?: string): string clean, integer replaced
+  -- every byte outside valid UTF-8 (stray continuation, C0/C1, F5-FF, truncated, overlong, surrogate,
+  -- > U+10FFFF) becomes `repl` ("?"), one per byte; valid input returns the same string and 0
 ```
 
 ### `lib.lua.strings.encoding` (see README)

@@ -91,5 +91,92 @@ function M.iter(str)
   end
 end
 
+---Length in bytes of the valid UTF-8 sequence (RFC 3629) starting at `str[i]`, or `nil` when the bytes there
+---are not valid UTF-8: a stray continuation byte, `0xC0`/`0xC1`, `0xF5-0xFF`, a sequence cut short, an overlong
+---form (`E0 80 80`), a UTF-16 surrogate (`ED A0 80`) or a value above U+10FFFF (`F4 90 80 80`).
+---@param str string
+---@param i? integer  # defaults to 1
+---@return integer|nil len
+function M.valid_len(str, i)
+  i = i or 1
+  local c = str:byte(i)
+  if not c then
+    return nil
+  end
+  local len
+  if c < 0x80 then
+    return 1
+  elseif c >= 0xC2 and c <= 0xDF then
+    len = 2
+  elseif c >= 0xE0 and c <= 0xEF then
+    len = 3
+  elseif c >= 0xF0 and c <= 0xF4 then
+    len = 4
+  else
+    return nil
+  end
+  if i + len - 1 > #str then
+    return nil
+  end
+  for k = 1, len - 1 do
+    local b = str:byte(i + k)
+    if b < 0x80 or b > 0xBF then
+      return nil
+    end
+  end
+  if len >= 3 then
+    local b2 = str:byte(i + 1)
+    if
+      (c == 0xE0 and b2 < 0xA0)
+      or (c == 0xED and b2 > 0x9F)
+      or (c == 0xF0 and b2 < 0x90)
+      or (c == 0xF4 and b2 > 0x8F)
+    then
+      return nil
+    end
+  end
+  return len
+end
+
+---Replace every byte that is not part of a valid UTF-8 sequence (see `valid_len`) with `repl`, one replacement
+---per byte, and count them. Valid input is returned unchanged (the same string). A lead byte whose
+---continuation bytes are wrong is replaced alone; the bytes after it are judged on their own.
+---
+---Meant for a consumer that dies on a bad byte (`win32yank.exe -i` exits 101 and the yank is lost).
+---@param str string
+---@param repl? string  # replacement for one bad byte (default "?")
+---@return string clean
+---@return integer replaced  # number of bytes replaced
+function M.scrub(str, repl)
+  repl = repl or "?"
+  -- Pure ASCII is the overwhelmingly common case and always valid.
+  if not str:find("[\128-\255]") then
+    return str, 0
+  end
+  -- copy valid runs whole; only an invalid byte costs an extra piece
+  local out, i, n, run_start, replaced = {}, 1, #str, 1, 0
+  while i <= n do
+    local len = M.valid_len(str, i)
+    if len then
+      i = i + len
+    else
+      if i > run_start then
+        out[#out + 1] = str:sub(run_start, i - 1)
+      end
+      out[#out + 1] = repl
+      replaced = replaced + 1
+      i = i + 1
+      run_start = i
+    end
+  end
+  if replaced == 0 then
+    return str, 0
+  end
+  if run_start <= n then
+    out[#out + 1] = str:sub(run_start, n)
+  end
+  return table.concat(out), replaced
+end
+
 ---@type Lib.Strings.Utf8
 return M
