@@ -938,6 +938,51 @@ return function(H)
     )
   end
 
+  -- Windows: the callback of the `taskkill` that stops a timed out run may run after the job has exited and
+  -- been closed (a loop that did not iterate for a while). Windows reuses pids within milliseconds, so a
+  -- signal to the closed job would terminate whichever process holds its pid now: the next child died with
+  -- exit code 1 right after its spawn (the "run_async_captured: a stalled loop" flake).
+  if vim.fn.has("win32") == 1 then
+    local real_system = vim.system
+    local callbacks, kills = {}, {}
+    local closing = false
+    vim.system = function(cmd, _, on_exit)
+      if cmd[1] == "taskkill" then
+        callbacks[#callbacks + 1] = on_exit
+        return {
+          pid = 0,
+          is_closing = function()
+            return true
+          end,
+          kill = function() end,
+        }
+      end
+      return {
+        pid = 4242,
+        is_closing = function()
+          return closing
+        end,
+        kill = function(_, signal)
+          kills[#kills + 1] = signal
+        end,
+      }
+    end
+    local started, serr = pcall(function()
+      run_argv.run_async_captured({ "never-exits" }, function() end, nil, { timeout_ms = 50 })
+      vim.wait(2000, function()
+        return #callbacks > 0
+      end, 10)
+    end)
+    vim.system = real_system
+    ok(started, "taskkill callback: setup does not raise (" .. tostring(serr) .. ")")
+    ok(#callbacks > 0, "taskkill callback: the deadline started a taskkill")
+    closing = true -- the job exited and was closed before taskkill reported back
+    if callbacks[1] then
+      callbacks[1]({ code = 0, signal = 0 })
+    end
+    eq(#kills, 0, "taskkill callback: a closed job (reusable pid) is not signalled")
+  end
+
   vim.fn.delete(probe)
   vim.fn.delete(sleeper)
   vim.fn.delete(work, "rf")
