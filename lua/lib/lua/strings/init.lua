@@ -52,6 +52,7 @@ M.utf8_char_len = require("lib.lua.strings.utf8").char_len
 M.utf8_encode = require("lib.lua.strings.utf8").encode
 M.utf8_decode = require("lib.lua.strings.utf8").decode
 M.utf8_iter = require("lib.lua.strings.utf8").iter
+M.utf8_scrub = require("lib.lua.strings.utf8").scrub
 
 -- encoding module
 M.url_encode = require("lib.lua.strings.encoding").url_encode

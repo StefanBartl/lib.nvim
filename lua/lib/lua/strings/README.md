@@ -99,7 +99,14 @@ strings.utf8_char_len(0xE2)     --> 3   (byte length implied by the lead byte)
 strings.utf8_encode(0x1F600)    --> "😀" (4-byte UTF-8 string)
 strings.utf8_decode("é", 1)     --> 233, 3   (codepoint, next byte index)
 for cp, i in strings.utf8_iter("héllo") do ... end
+strings.utf8_scrub("a" .. string.char(255) .. "b")  --> "a?b", 1  (invalid byte -> "?", one per byte, plus the count)
 ```
+
+`utf8.scrub(str, repl?)` returns `clean, replaced`; valid input comes back as the same string with `0`.
+Invalid: a stray continuation byte, `0xC0`/`0xC1`, `0xF5-0xFF`, a sequence cut short, an overlong form
+(`E0 80 80`), a UTF-16 surrogate (`ED A0 80`) and anything above U+10FFFF (`F4 90 80 80`).
+`utf8.valid_len(str, i)` is the underlying check: the length of the valid sequence at `i`, or `nil`.
+`safe.utf8` is `scrub` without the count.
 
 ## Encoding ([`encoding.lua`](encoding.lua))
 

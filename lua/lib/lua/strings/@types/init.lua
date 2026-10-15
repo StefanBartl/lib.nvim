@@ -72,6 +72,7 @@
 ---@field utf8_encode fun(cp: integer): string # Encode a Unicode codepoint as UTF-8 bytes.
 ---@field utf8_decode fun(str: string, i?: integer): integer|nil, integer # Decode the UTF-8 char at byte index i; returns (codepoint, next_index).
 ---@field utf8_iter fun(str: string): fun(): integer|nil, integer|nil # Iterate codepoints, yielding (codepoint, byte_index).
+---@field utf8_scrub fun(str: string, repl?: string): string, integer # Replace every byte that is not valid UTF-8 (one `repl`, default "?", per byte); returns (clean, replaced).
 -- =========================================================
 -- lib.lua.strings.encoding
 -- =========================================================
@@ -118,6 +119,8 @@
 ---@field encode fun(cp: integer): string
 ---@field decode fun(str: string, i?: integer): integer|nil, integer
 ---@field iter fun(str: string): fun(): integer|nil, integer|nil
+---@field valid_len fun(str: string, i?: integer): integer|nil
+---@field scrub fun(str: string, repl?: string): string, integer
 
 ---@class Lib.Strings.Encoding
 ---@field url_encode fun(str: string): string
