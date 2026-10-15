@@ -213,14 +213,20 @@ return function(H)
       strict:register("b", 2)
     end,
   })
-  ok(raises(function()
-    strict:count()
-  end), "strict loader: the first read raises the loader's error")
+  ok(
+    raises(function()
+      strict:count()
+    end),
+    "strict loader: the first read raises the loader's error"
+  )
   eq(strict:count(), 2, "strict loader: the retry completes instead of failing on 'a' again")
   eq(table.concat(strict:keys(), ","), "a,b", "strict loader: ... with each key once")
-  ok(raises(function()
-    strict:register("a", 9)
-  end), "strict loader: a real duplicate afterwards is still refused")
+  ok(
+    raises(function()
+      strict:register("a", 9)
+    end),
+    "strict loader: a real duplicate afterwards is still refused"
+  )
 
   -- unregister runs the loader first: a known entry can be removed before anything read the registry
   local known
