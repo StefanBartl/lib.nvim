@@ -18,7 +18,7 @@
 ---@param opts table Optional table:
 ---           cwd: string|nil - working directory (inherits the editor's cwd if nil)
 ---           stdio: uv.spawn stdio table
----           on_exit: callback(code, signal)
+---           on_exit: callback(code, signal) -- handle already closed, delivered on the main loop
 ---@return (uv.uv_process_t)? handle uv.spawn handle
 return function(cmd, args, opts)
   args = args or {}

@@ -39,7 +39,9 @@ A root is `{ path, placeholder }`; both must be non-empty strings (an error othe
 
 ## Boundary rule
 
-A path ends where the next byte cannot continue a file name (`[%w_%-.~]`). `E:/repos/ui.nvim` is a
-prefix of `E:/repos/ui.nvim-backup`; replacing it blindly would turn the latter into
-`{{ROOT}}-backup/...`, which is wrong the moment the placeholder is re-anchored to a directory the sibling
-was never under. The same rule applies to `remap`. Placeholders themselves are matched as plain text.
+A path ends where the next byte cannot continue a file name (`[%w_%-.~]`), and starts where the previous
+byte is neither such a character nor a separator. `E:/repos/ui.nvim` is a prefix of
+`E:/repos/ui.nvim-backup`; replacing it blindly would turn the latter into `{{ROOT}}-backup/...`, and the
+root `/home/me` must not match inside `/srv/home/me/x`: both are wrong the moment the placeholder is
+re-anchored to a directory the text was never under. The same rule applies to `remap`. Placeholders
+themselves are matched as plain text. A Windows drive letter matches in either case.

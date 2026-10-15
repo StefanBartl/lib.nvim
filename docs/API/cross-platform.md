@@ -303,10 +303,13 @@ Cross-platform shell-command runner built on raw `uv.spawn` (wraps with
 ```
 return { spawn_project_command = function(cmd: string, opts: table): uv.uv_process_t? }
 ```
-`opts`: `cwd?`, `args?`, `stdio?`, `on_exit?: fun(code, signal)`.
+`opts`: `cwd?`, `args?`, `stdio?`, `on_exit?: fun(code, signal)`. The process handle is closed first and
+`on_exit` runs on the main loop (`vim.schedule`), so it may call `vim.api` and a throwing `on_exit` cannot
+leak the handle.
 
 ### `lib.nvim.cross.uv.spawn_shell_command` (no README)
-Similar shell-command spawner, taking `cmd`/`args` separately.
+Similar shell-command spawner, taking `cmd`/`args` separately. `opts.on_exit(code, signal)` has the same
+contract as above: handle closed first, called on the main loop.
 
 ```
 return function(cmd: string, args: string[], opts: table): uv.uv_process_t?

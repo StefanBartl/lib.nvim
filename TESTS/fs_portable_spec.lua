@@ -42,6 +42,26 @@ return function(H)
       "make: a root given with backslashes and a trailing separator matches"
     )
     eq(portable.make(text, {}), text, "make: no roots changes nothing")
+
+    -- the root must also START at a path boundary
+    local home = { path = "/home/me", placeholder = "{{HOME}}" }
+    eq(
+      portable.make("a /srv/home/me/x b /home/me/y c=/home/me", { home }),
+      "a /srv/home/me/x b {{HOME}}/y c={{HOME}}",
+      "make: a root is not replaced in the middle of another path"
+    )
+    eq(
+      portable.resolve("a /srv/C:/x", {}, { remap = { ["C:/x"] = "/y" } }),
+      "a /srv/C:/x",
+      "remap: not replaced in the middle of another path either"
+    )
+
+    -- the drive letter matches in either case
+    eq(
+      portable.make("cd e:/repos/ui.nvim/a", { ROOT }),
+      "cd {{ROOT}}/a",
+      "make: a lower-case drive letter matches"
+    )
   end
 
   -- nested roots: the longer one wins, in any order of the list

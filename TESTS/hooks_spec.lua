@@ -206,6 +206,29 @@ return function(H)
     eq(table.concat(seen, ","), "one", "hooks registered during a run wait for the next run")
   end
 
+  -- A typo in the plugin's config hooks is reported, not silently dropped; a bad priority is refused.
+  do
+    local reg = new()
+    local ran = {}
+    local proceed, errs = reg.run("before_apply", {}, {
+      function()
+        ran[#ran + 1] = "fn"
+      end,
+      "not a function",
+    })
+    eq(errs, 1, "a non-callable extra entry is counted as an error")
+    eq(proceed, true, "... and does not veto")
+    eq(#ran, 1, "... and the callable one still ran")
+    ok(errors[1] and errors[1]:find("before_apply:", 1, true), "... and is passed to on_error")
+    local _, errs2 = reg.run("before_apply", {}, 42)
+    eq(errs2, 1, "a non-callable single extra is an error too")
+    eq(
+      pcall(reg.on, "after_apply", function() end, { priority = "high" }),
+      false,
+      "on: a non-numeric priority is refused"
+    )
+  end
+
   -- Registries are independent; unknown events and bad arguments are errors.
   do
     local a, b = new(), new()
