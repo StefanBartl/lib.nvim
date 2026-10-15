@@ -46,6 +46,8 @@ local M = {}
 ---@field private _validate? function
 ---@field private _loader? function
 ---@field private _loaded boolean
+---@field private _failed boolean    # The last loader run threw.
+---@field private _retrying boolean  # The loader is running again after a failed run.
 ---@field private _on_duplicate string
 local Registry = {}
 Registry.__index = Registry
@@ -59,12 +61,18 @@ function Registry:_ensure()
   end
   self._loaded = true
   if self._loader then
+    -- the run after a failed one registers the same keys again: that is not a duplicate
+    local retry = self._failed
+    self._retrying = retry
     local ok, err = pcall(self._loader)
+    self._retrying = false
     if not ok then
       -- not "loaded": the next read runs it again instead of serving a half-filled registry in silence
       self._loaded = false
+      self._failed = true
       error(err, 0)
     end
+    self._failed = false
   end
 end
 
@@ -103,7 +111,7 @@ function Registry:register(key, value)
     end
   end
   if self._values[key] ~= nil then
-    if self._on_duplicate == "error" then
+    if self._on_duplicate == "error" and not self._retrying then
       error(
         ("lib.nvim.registry (%s): %s is already registered"):format(self._name, tostring(key)),
         2
@@ -211,6 +219,7 @@ function Registry:reset()
   self._order = {}
   self._values = {}
   self._loaded = false
+  self._failed = false
   return self
 end
 

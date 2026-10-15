@@ -225,6 +225,14 @@ return function(H)
   for _, r in ipairs(keymap.cheatsheet("(unknown)").rows) do
     in_global = in_global or r.keys[1] == "<Plug>(cs-direct-buf)"
   end
+  -- ... and not for another buffer: the record holds the real buffer number, not "0/true"
+  local other = vim.api.nvim_create_buf(false, true)
+  local in_other = false
+  for _, r in ipairs(keymap.cheatsheet("(unknown)", { buffer = other }).rows) do
+    in_other = in_other or r.keys[1] == "<Plug>(cs-direct-buf)"
+  end
+  eq(in_other, false, "direct buffer-local set(): not in another buffer's sheet")
+  vim.api.nvim_buf_delete(other, { force = true })
   eq(in_sheet, true, "direct buffer-local set(): in that buffer's sheet")
   eq(in_global, false, "direct buffer-local set(): not in the global sheet")
   vim.api.nvim_buf_delete(dbuf, { force = true })

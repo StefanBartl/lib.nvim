@@ -75,6 +75,18 @@ local function mode_key(modes)
   return modes
 end
 
+---`buffer = true`/`0` mean "the buffer that is current right now"; recorded as such they would read as
+---"some buffer" forever. Resolved to the real number at the moment of binding, so a record can be compared
+---with `==` against the buffer a reader asks about.
+---@param buffer integer|boolean|nil
+---@return integer|boolean|nil
+function M.resolve_buffer(buffer)
+  if buffer == true or buffer == 0 then
+    return vim.api.nvim_get_current_buf()
+  end
+  return buffer
+end
+
 ---Record one keymap created by a plain `set()`.
 ---
 ---Called from the `set` wrapper. `registry.register()` passes `record = false`
@@ -108,7 +120,7 @@ function M.add(modes, lhs, rhs, opts)
   local plugin = plugin_of(src)
   direct[plugin] = direct[plugin] or {}
 
-  local key_mode, key_buffer = mode_key(modes), opts.buffer
+  local key_mode, key_buffer = mode_key(modes), M.resolve_buffer(opts.buffer)
   for i, existing in ipairs(direct[plugin]) do
     if
       existing.lhs == lhs
@@ -134,7 +146,7 @@ function M.add(modes, lhs, rhs, opts)
     rhs = rhs,
     bound = true,
     direct = true,
-    buffer = opts.buffer,
+    buffer = key_buffer,
     src = src,
   })
 end

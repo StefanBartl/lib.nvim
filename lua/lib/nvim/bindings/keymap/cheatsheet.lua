@@ -98,9 +98,7 @@ local function collect(plugin, opts)
   for _, e in ipairs(require("lib.nvim.bindings.keymap").registered(plugin)) do
     local local_ok = e.buffer == nil or e.buffer == false
     if opts.buffer ~= nil then
-      -- a direct `set()` records `buffer = 0`/`true` ("the buffer that was current"), which cannot be told
-      -- from here: it is buffer-local somewhere, and counted for the buffer asked about
-      local_ok = local_ok or e.buffer == opts.buffer or e.buffer == 0 or e.buffer == true
+      local_ok = local_ok or e.buffer == opts.buffer
     end
     if e.bound and e.lhs and e.lhs ~= "" and local_ok then
       local row = by_name[e.name]
