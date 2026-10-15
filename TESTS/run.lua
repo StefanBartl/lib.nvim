@@ -76,6 +76,7 @@ local specs = {
   "scoring_spec.lua",
   "window_matches_spec.lua",
   "window_best_target_spec.lua",
+  "tab_buffers_spec.lua",
   "fs_read_bounded_spec.lua",
   "frontmatter_spec.lua",
   "markdown_link_cursor_spec.lua",
