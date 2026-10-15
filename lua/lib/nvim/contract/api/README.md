@@ -49,6 +49,9 @@ and the required ones. Where one check finds several faults (two unknown fields,
 two parameters of the wrong type) the **alphabetically first** is the one told,
 so the same request gets the same answer in every process.
 
+The names of a request that a refusal repeats (an unknown method, field or parameter) are echoed through
+[`contract.echo`](../echo/README.md): at most 60 characters, valid UTF-8, a control character written as an escape.
+
 | Method key | Meaning |
 |---|---|
 | `params` | `name = type`. Types: `string`, `boolean`, `integer`, `number`, `object`, `string_list`, `object_list`, and the plugin's own (`cfg.types`). A value is checked, never coerced. An `integer` or `number` is finite and below 2^53 in magnitude, the numbers the contract's JSON ([`json.canonical`](../../json/canonical/README.md)) can hold: one it would refuse to write is `invalid_argument` here, not `internal` later. |
