@@ -1,6 +1,6 @@
 # API Reference — `lib.nvim.fs.*` (filesystem / path helpers)
 
-Part of the [lib.nvim API reference](README.md). 29 submodules covering
+Part of the [lib.nvim API reference](README.md). 30 submodules covering
 path resolution, root/project detection, directory creation and scanning,
 file reading/writing/watching, ignore lists, and opening files/URLs. All
 built on `vim.fs`/`vim.uv` (or `vim.loop` fallback), not shell commands,
@@ -384,6 +384,22 @@ fallback otherwise).
 ```
 M.trash(path: string, cb: fun(ok: boolean, err: string|nil))   -- async
 M.trash_blocking(path: string): boolean ok, string|nil err
+```
+
+---
+
+## Portable artifacts (placeholders for machine-specific roots)
+
+### `lib.nvim.fs.portable` (see README)
+Root paths become placeholders when a file is written and are resolved again on read through a temporary
+copy; the stored file is never changed. Boundary-aware (`ui.nvim` does not match inside `ui.nvim-backup`).
+
+```
+M.make(content: string, roots: Lib.Fs.Portable.Root[]): string       -- { path, placeholder }[]; longest root wins
+M.resolve(content: string, roots, opts?: { remap?: table<string,string> }): string
+M.make_file(path: string, roots): boolean ok, string|nil err         -- in place, byte-exact, atomic
+M.resolve_file(path: string, roots, opts?: { remap?, suffix? }): string source, boolean is_temp, string|nil err
+  -- source is a temp copy when anything was resolved (the caller deletes it), otherwise `path`
 ```
 
 ---
