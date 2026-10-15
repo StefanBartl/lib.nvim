@@ -91,6 +91,7 @@ function M.namespace(name, opts)
       evictions = 0,
       total_requests = 0,
       hit_rate = 0,
+      entries = 0,
     }
     sets_since_sweep[name] = 0
   end
@@ -189,8 +190,13 @@ function M.namespace(name, opts)
 
     stats = function()
       local total = ns_stats.hits + ns_stats.misses
+      local entries = 0
+      for _ in pairs(cache) do
+        entries = entries + 1
+      end
       return {
         name = name,
+        entries = entries,
         hits = ns_stats.hits,
         misses = ns_stats.misses,
         invalidations = ns_stats.invalidations,
@@ -278,10 +284,15 @@ end
 ---@return Lib.Cache.Memory.Stats[]
 function M.get_all_stats()
   local all = {}
-  for name in pairs(caches) do
+  for name, store in pairs(caches) do
     local s = stats[name]
     local total = s.hits + s.misses
+    local entries = 0
+    for _ in pairs(store) do
+      entries = entries + 1
+    end
     all[#all + 1] = {
+      entries = entries,
       name = name,
       hits = s.hits,
       misses = s.misses,
@@ -294,36 +305,58 @@ function M.get_all_stats()
   return all
 end
 
+--- The stats of every namespace as aligned text lines (header, rule, one row per namespace sorted by
+--- name, a total row), ready to print or show in a float.
+---@param all? Lib.Cache.Memory.Stats[]  # default: `M.get_all_stats()`
+---@return string[]
+function M.format_stats(all)
+  all = all or M.get_all_stats()
+  table.sort(all, function(x, y)
+    return x.name < y.name
+  end)
+  local fmt = "%-30s %8s %8s %8s %8s %8s %9s"
+  local lines = {
+    "Cache Statistics:",
+    fmt:format("Namespace", "Entries", "Hits", "Misses", "Invalid", "Evict", "Hit Rate"),
+    string.rep("-", 90),
+  }
+  local sum = { entries = 0, hits = 0, misses = 0, invalidations = 0, evictions = 0 }
+  for _, s in ipairs(all) do
+    lines[#lines + 1] = ("%-30s %8d %8d %8d %8d %8d %8.2f%%"):format(
+      s.name,
+      s.entries or 0,
+      s.hits,
+      s.misses,
+      s.invalidations,
+      s.evictions,
+      s.hit_rate
+    )
+    for k in pairs(sum) do
+      sum[k] = sum[k] + (s[k] or 0)
+    end
+  end
+  if #all > 0 then
+    local total = sum.hits + sum.misses
+    lines[#lines + 1] = string.rep("-", 90)
+    lines[#lines + 1] = ("%-30s %8d %8d %8d %8d %8d %8.2f%%"):format(
+      ("total (%d namespaces)"):format(#all),
+      sum.entries,
+      sum.hits,
+      sum.misses,
+      sum.invalidations,
+      sum.evictions,
+      total > 0 and (sum.hits / total * 100) or 0
+    )
+  else
+    lines[#lines + 1] = "(no namespaces yet)"
+  end
+  return lines
+end
+
 --- `print()` a formatted table of every namespace's stats; debugging aid.
 function M.print_all_stats()
-  local all = M.get_all_stats()
-
-  print("Cache Statistics:")
-  print(
-    string.format(
-      "%-30s %8s %8s %8s %8s %10s",
-      "Namespace",
-      "Hits",
-      "Misses",
-      "Invalid",
-      "Evict",
-      "Hit Rate"
-    )
-  )
-  print(string.rep("-", 80))
-
-  for _, s in ipairs(all) do
-    print(
-      string.format(
-        "%-30s %8d %8d %8d %8d %9.2f%%",
-        s.name,
-        s.hits,
-        s.misses,
-        s.invalidations,
-        s.evictions,
-        s.hit_rate
-      )
-    )
+  for _, line in ipairs(M.format_stats()) do
+    print(line)
   end
 end
 

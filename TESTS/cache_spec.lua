@@ -211,6 +211,45 @@ return function(H)
   ok(#all >= 2, "cache.memory: get_all_stats reports every namespace")
   memory.print_all_stats() -- smoke: must not error
 
+  -- entries (size), the aligned text and the `:Lib cache stats` route
+  local sized = memory.namespace("spec.size")
+  sized.set("a", 1)
+  sized.set("b", 2)
+  eq(sized.stats().entries, 2, "cache.memory: stats().entries counts the live entries")
+  local found
+  for _, s in ipairs(memory.get_all_stats()) do
+    if s.name == "spec.size" then
+      found = s
+    end
+  end
+  eq(found and found.entries, 2, "cache.memory: get_all_stats carries entries too")
+  local lines = memory.format_stats()
+  eq(lines[1], "Cache Statistics:", "cache.memory: format_stats starts with its title")
+  ok(
+    lines[2]:find("Entries", 1, true) and lines[2]:find("Hit Rate", 1, true),
+    "cache.memory: ... the header names the columns"
+  )
+  local row
+  for _, l in ipairs(lines) do
+    if l:find("spec.size", 1, true) == 1 then
+      row = l
+    end
+  end
+  ok(row ~= nil, "cache.memory: ... one row per namespace")
+  ok(lines[#lines]:find("total (", 1, true) == 1, "cache.memory: ... and a total row")
+  eq(
+    memory.format_stats({})[4],
+    "(no namespaces yet)",
+    "cache.memory: format_stats of nothing says so"
+  )
+  local routes = require("lib.nvim.cache").routes()
+  eq(
+    table.concat(routes[1].path, " "),
+    "cache stats",
+    "cache: routes() names the `cache stats` route"
+  )
+  eq(type(routes[1].run), "function", "cache: ... with a run function")
+
   -- auto-invalidation is opt-in and toggleable
   eq(memory.is_auto_invalidation_enabled(), false, "cache.memory: auto-invalidation off by default")
 

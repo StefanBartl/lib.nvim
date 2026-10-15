@@ -45,6 +45,7 @@
 ---@field evictions integer # TTL/tick invalidations discovered on `get`.
 ---@field total_requests integer
 ---@field hit_rate number # Percentage 0-100
+---@field entries? integer # Live entries in the namespace now (set by `get_all_stats`).
 
 --- A single namespace's accessor surface, as returned by `memory.namespace(name, opts)`.
 ---@class Lib.Cache.Memory.Namespace
@@ -65,6 +66,7 @@
 ---@field disable_auto_invalidation fun(): nil # Toggle off: remove the augroup installed by `setup_auto_invalidation`. No-op if never enabled.
 ---@field is_auto_invalidation_enabled fun(): boolean
 ---@field get_all_stats fun(): Lib.Cache.Memory.Stats[]
+---@field format_stats fun(all?: Lib.Cache.Memory.Stats[]): string[] # Aligned text lines: header, one row per namespace, total.
 ---@field print_all_stats fun(): nil # `print()` a formatted table of every namespace's stats; debugging aid.
 
 -- =========================================================
@@ -75,5 +77,6 @@
 ---@class Lib.Cache
 ---@field disk Lib.Cache.Disk
 ---@field memory Lib.Cache.Memory
+---@field routes fun(): table[] # The `:Lib cache stats` route, for `lib.nvim_usrcmds` to merge into the `:Lib` verb.
 
 return {}
