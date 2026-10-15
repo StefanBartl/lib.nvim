@@ -107,9 +107,24 @@ return function(H)
     local _, msg = pcall(f)
     return tostring(msg):match("scoring_spec%.lua:%d+") ~= nil
   end
-  ok(located(function() scoring.new():bonus("x", 0 / 0) end), "bonus: error located at the caller")
-  ok(located(function() scoring.new():malus("x", nil) end), "malus: error located at the caller")
-  ok(located(function() scoring.new():add("x", 0 / 0) end), "add: error located at the caller")
+  ok(
+    located(function()
+      scoring.new():bonus("x", 0 / 0)
+    end),
+    "bonus: error located at the caller"
+  )
+  ok(
+    located(function()
+      scoring.new():malus("x", nil)
+    end),
+    "malus: error located at the caller"
+  )
+  ok(
+    located(function()
+      scoring.new():add("x", 0 / 0)
+    end),
+    "add: error located at the caller"
+  )
   fails(function()
     scoring.new():bonus("", 1):result()
   end, "empty name")
