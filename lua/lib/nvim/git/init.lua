@@ -964,6 +964,83 @@ function M.run_async(args, opts, on_done, git_cmd)
 end
 
 ---@internal
+--- Refuse a path that cannot be one: not a string, empty, or with a line break or `NUL` in it. (A leading
+--- `-` is harmless: the path always comes after `--`.)
+---@param path any
+---@param what string The git subcommand, for the message.
+---@return string|nil err
+local function bad_path(path, what)
+  if type(path) ~= "string" or path == "" or path:find("[%z\r\n]") then
+    return ("git %s: invalid path %s"):format(what, vim.inspect(path))
+  end
+  return nil
+end
+
+--- Whether a tracked file is marked `skip-worktree`: git then ignores local modifications of it (a config
+--- repo that holds a personal or transient file, such as a session).
+---
+--- `git ls-files -v` tags such a file `S` (`s` when it is also marked assume-unchanged).
+---@param path string Absolute path, or relative to `opts.dir`/the cwd.
+---@param opts? Lib.Git.Opts
+---@param git_cmd? string
+---@return boolean|nil skipped nil when the state is unknown: the path is not tracked, or git failed
+---@return string|nil err
+function M.is_skip_worktree(path, opts, git_cmd)
+  local bad = bad_path(path, "ls-files")
+  if bad then
+    return nil, bad
+  end
+  local res = M.run({ "ls-files", "-v", "--", path }, read_opts(opts), git_cmd)
+  if not res.ok then
+    return nil, failure_message(res, "git ls-files", opts)
+  end
+  local tag = vim.trim(res.stdout or ""):sub(1, 1)
+  if tag == "" then
+    return nil, ("git ls-files: %s is not tracked"):format(path)
+  end
+  return tag == "S" or tag == "s", nil
+end
+
+--- Mark (`on = true`) or unmark (`on = false`) a tracked file `skip-worktree`
+--- (`git update-index --[no-]skip-worktree`). A real index mutation.
+---@param path string Absolute path, or relative to `opts.dir`/the cwd.
+---@param on boolean
+---@param opts? Lib.Git.Opts
+---@param git_cmd? string
+---@return boolean ok
+---@return string|nil err Git's own stderr on failure.
+function M.set_skip_worktree(path, on, opts, git_cmd)
+  local bad = bad_path(path, "update-index")
+  if bad then
+    return false, bad
+  end
+  local flag = on and "--skip-worktree" or "--no-skip-worktree"
+  local res = M.run({ "update-index", flag, "--", path }, opts, git_cmd)
+  if not res.ok then
+    return false, failure_message(res, "git update-index", opts)
+  end
+  return true, nil
+end
+
+--- Flip the `skip-worktree` mark of a tracked file.
+---@param path string Absolute path, or relative to `opts.dir`/the cwd.
+---@param opts? Lib.Git.Opts
+---@param git_cmd? string
+---@return boolean|nil skipped The state after the toggle; nil when it failed.
+---@return string|nil err
+function M.toggle_skip_worktree(path, opts, git_cmd)
+  local was, err = M.is_skip_worktree(path, opts, git_cmd)
+  if was == nil then
+    return nil, err
+  end
+  local ok, set_err = M.set_skip_worktree(path, not was, opts, git_cmd)
+  if not ok then
+    return nil, set_err
+  end
+  return not was, nil
+end
+
+---@internal
 --- Split on `NUL`, keeping empty tokens; a trailing `NUL` does not add one.
 ---@param raw string
 ---@return string[]

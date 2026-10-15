@@ -26,6 +26,9 @@ git.checkout("main")       --> boolean ok, string|nil err (git's own stderr on f
 git.is_detached_head()     --> boolean (false outside a repo: no HEAD to detach)
 git.is_dirty()             --> boolean (any porcelain status output at all)
 git.is_tracked("src/a.lua")  --> boolean
+git.is_skip_worktree("session.vim")      --> true | false | nil, err   (nil: untracked / git failed)
+git.set_skip_worktree("session.vim", true)  --> ok, err                (git update-index --skip-worktree)
+git.toggle_skip_worktree("session.vim")  --> state after the flip | nil, err
 git.upstream()             --> "origin/main"-style string, or nil (no upstream)
 git.head_hash()            --> full hash string, or nil
 git.head_short_hash()      --> short hash string, or nil

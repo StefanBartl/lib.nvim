@@ -568,6 +568,10 @@ M.checkout(name: string, opts?: {dir?}, git_cmd?: string): boolean ok, string|ni
 M.is_detached_head(opts?: {dir?}, git_cmd?: string): boolean
 M.is_dirty(opts?: {dir?}, git_cmd?: string): boolean
 M.is_tracked(path: string, opts?: {dir?}, git_cmd?: string): boolean
+M.is_skip_worktree(path: string, opts?: {dir?}, git_cmd?: string): boolean|nil, string|nil err
+  -- `ls-files -v` tag S/s; nil + "not tracked" for an untracked path
+M.set_skip_worktree(path: string, on: boolean, opts?: {dir?}, git_cmd?: string): boolean ok, string|nil err
+M.toggle_skip_worktree(path: string, opts?: {dir?}, git_cmd?: string): boolean|nil skipped_after, string|nil err
 M.upstream(opts?: {dir?}, git_cmd?: string): string|nil        -- "origin/main"-style
 M.ahead_behind(opts?: {dir?}, git_cmd?: string): boolean ahead, boolean behind   -- vs @{u}
 M.head_hash(opts?: {dir?}, git_cmd?: string): string|nil        -- full SHA
