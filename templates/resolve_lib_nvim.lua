@@ -36,7 +36,8 @@ local function add_lib_nvim()
     -- does not resolve either, so an unnormalized entry silently finds nothing.
     local norm = vim.fs.normalize(path)
     if vim.fn.isdirectory(norm .. "/lua/lib") == 1 then
-      vim.opt.rtp:append(norm)
+      -- a comma in a folder name must not split the entry: 'runtimepath' is a comma list
+      vim.opt.rtp:append((vim.fn.escape(norm, ",")))
       -- rtp alone is not enough here: the runtimepath searcher does not pick
       -- up entries appended after startup on every Neovim version this suite
       -- may run under. lib.nvim's own README prescribes registering it on

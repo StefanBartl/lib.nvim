@@ -937,7 +937,8 @@ return function(H)
     eq(code_, "invalid_argument", "an unknown field")
     eq(e.message:find("unknown field '", 1, true), 1)
     lacks(e.message, root, "the root is hidden in every copy")
-    ok(select(2, e.message:gsub("<vault>", "")) == 14000, "all copies are replaced")
+    ok(select(2, e.message:gsub("<vault>", "")) >= 1, "the copies that are echoed are replaced")
+    ok(#e.message < 300, "the echoed name is clipped, not 238 KB: " .. #e.message)
     ok(took_ms < 500, ("a field made of the root 14000 times took %.0f ms"):format(took_ms))
     started = vim.uv.hrtime()
     text_, code_ = api.call(root:rep(14000), "{}", { root = root })
@@ -951,6 +952,53 @@ return function(H)
     eq(code_, "invalid_argument", "an unknown parameter")
     lacks(text_, root)
     ok(took_ms < 500, ("a parameter made of the root 14000 times took %.0f ms"):format(took_ms))
+  end
+
+  -- ── the names of a request are echoed clipped and printable (the client's text, shown on a terminal) ──
+  do
+    local esc = string.char(27)
+    local bell = string.char(7)
+    local long = ("n"):rep(500)
+    local cases = {
+      {
+        "unknown method",
+        function(name)
+          return api.call(name, "{}", { root = ROOT })
+        end,
+        "not_found",
+      },
+      {
+        "unknown field",
+        function(name)
+          return api.call("list", vim.json.encode({ [name] = 1 }), { root = ROOT })
+        end,
+        "invalid_argument",
+      },
+      {
+        "unknown parameter",
+        function(name)
+          return api.call("list", vim.json.encode({ params = { [name] = 1 } }), { root = ROOT })
+        end,
+        "invalid_argument",
+      },
+    }
+    for _, c in ipairs(cases) do
+      local c1 = string.char(194, 155) -- U+009B, a CSI to an 8-bit terminal
+      local text_, code_ = c[2](esc .. "[31mred" .. bell .. c1 .. "x")
+      eq(code_, c[3], c[1])
+      local m = vim.json.decode(text_).message
+      ok(
+        not m:find(esc, 1, true) and not m:find(bell, 1, true),
+        c[1] .. ": no raw control character in the message"
+      )
+      ok(not m:find(c1, 1, true), c[1] .. ": no raw C1 character")
+      has(m, string.char(92) .. "x1b", c[1] .. ": the escape is written out")
+      has(m, string.char(92) .. "u009b", c[1] .. ": and the C1 character too")
+      text_ = c[2](long)
+      m = vim.json.decode(text_).message
+      ok(#m < 400, c[1] .. ": a 500-character name is clipped: " .. #m)
+      ok(not m:find(long, 1, true), c[1] .. ": and not echoed whole")
+    end
   end
 
   local nan = refused("nan", nil, "internal", "a value JSON cannot hold")

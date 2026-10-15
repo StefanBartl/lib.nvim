@@ -51,6 +51,7 @@
 
 require("lib.nvim.contract.api.@types")
 
+local clip = require("lib.nvim.contract.echo").clip
 local errors = require("lib.nvim.contract.errors")
 local json = require("lib.nvim.json.canonical")
 
@@ -251,7 +252,10 @@ function M.make(cfg)
       return nil,
         fail(
           "not_found",
-          ("unknown method '%s' (methods: %s)"):format(name, table.concat(api.methods(), ", "))
+          ("unknown method '%s' (methods: %s)"):format(
+            clip(tostring(name)),
+            table.concat(api.methods(), ", ")
+          )
         )
     end
     local req = request
@@ -326,7 +330,7 @@ function M.make(cfg)
         fail(
           "invalid_argument",
           ("unknown field '%s' in the request (fields: %s)"):format(
-            unknown_field,
+            clip(tostring(unknown_field)),
             table.concat(fields, ", ")
           )
         )
@@ -362,7 +366,7 @@ function M.make(cfg)
           "invalid_argument",
           ("%s takes no parameter '%s'%s"):format(
             name,
-            unknown_param,
+            clip(tostring(unknown_param)),
             #known > 0 and (" (parameters: " .. table.concat(known, ", ") .. ")") or ""
           )
         )
