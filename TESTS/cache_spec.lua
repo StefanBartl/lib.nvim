@@ -242,6 +242,24 @@ return function(H)
     "(no namespaces yet)",
     "cache.memory: format_stats of nothing says so"
   )
+  local function zero(name)
+    return {
+      name = name,
+      hits = 0,
+      misses = 0,
+      invalidations = 0,
+      evictions = 0,
+      total_requests = 0,
+      hit_rate = 0,
+    }
+  end
+  local given = { zero("zzz.last"), zero("aaa.first") }
+  local given_lines = memory.format_stats(given)
+  eq(given[1].name, "zzz.last", "cache.memory: format_stats does not reorder the table it is given")
+  ok(
+    given_lines[4]:find("aaa.first", 1, true) == 1,
+    "cache.memory: ... and lists the namespaces sorted by name"
+  )
   local routes = require("lib.nvim.cache").routes()
   eq(
     table.concat(routes[1].path, " "),

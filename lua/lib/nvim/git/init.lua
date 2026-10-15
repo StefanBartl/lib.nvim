@@ -980,6 +980,10 @@ end
 --- repo that holds a personal or transient file, such as a session).
 ---
 --- `git ls-files -v` tags such a file `S` (`s` when it is also marked assume-unchanged).
+---
+--- The path is a file name, not a pathspec (`*.vim` is not a glob here), and must name ONE tracked file: a
+--- directory is `nil` + an error. In a sparse checkout git marks the files outside the cone `skip-worktree`
+--- itself: this reports `true` for them, and clearing the mark takes them back into the work tree.
 ---@param path string Absolute path, or relative to `opts.dir`/the cwd.
 ---@param opts? Lib.Git.Opts
 ---@param git_cmd? string
@@ -990,14 +994,33 @@ function M.is_skip_worktree(path, opts, git_cmd)
   if bad then
     return nil, bad
   end
-  local res = M.run({ "ls-files", "-v", "--", path }, read_opts(opts), git_cmd)
+  -- A directory has no single state (`ls-files` would answer for the file inside it, or the first of many).
+  local abs = path
+  if vim.fn.isabsolutepath(path) ~= 1 then
+    abs = vim.fs.joinpath((opts and opts.dir ~= "" and opts.dir) or vim.uv.cwd() or ".", path)
+  end
+  local lst = vim.uv.fs_lstat(abs)
+  if lst and lst.type == "directory" then
+    return nil, ("git ls-files: %s is a directory, not a file"):format(path)
+  end
+  -- literal: `*.vim` or `:(top)x` is a file name here, not a pathspec that answers for the first match
+  local res =
+    M.run({ "--literal-pathspecs", "ls-files", "-v", "--", path }, read_opts(opts), git_cmd)
   if not res.ok then
     return nil, failure_message(res, "git ls-files", opts)
   end
-  local tag = vim.trim(res.stdout or ""):sub(1, 1)
-  if tag == "" then
+  local lines = {}
+  for line in (res.stdout or ""):gmatch("[^\n]+") do
+    lines[#lines + 1] = line
+  end
+  if #lines == 0 then
     return nil, ("git ls-files: %s is not tracked"):format(path)
   end
+  if #lines > 1 then
+    -- a directory: no single state to report
+    return nil, ("git ls-files: %s names %d files, not one"):format(path, #lines)
+  end
+  local tag = lines[1]:sub(1, 1)
   return tag == "S" or tag == "s", nil
 end
 

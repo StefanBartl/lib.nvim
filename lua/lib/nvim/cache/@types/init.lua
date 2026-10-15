@@ -45,7 +45,7 @@
 ---@field evictions integer # TTL/tick invalidations discovered on `get`.
 ---@field total_requests integer
 ---@field hit_rate number # Percentage 0-100
----@field entries? integer # Live entries in the namespace now (set by `get_all_stats`).
+---@field entries? integer # Entries held by the namespace now, expired ones not yet evicted included (set by `get_all_stats` and `ns.stats()`).
 
 --- A single namespace's accessor surface, as returned by `memory.namespace(name, opts)`.
 ---@class Lib.Cache.Memory.Namespace

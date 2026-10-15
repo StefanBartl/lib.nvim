@@ -105,6 +105,26 @@ return function(H)
     H.eq(ok_set, false, "set_skip_worktree: invalid path " .. vim.inspect(bad) .. " is refused")
   end
 
+  -- a path is a file name, not a pathspec: no glob, no pathspec magic, and one file only
+  F.write(repo .. "/sub/inner.vim", "i\n")
+  F.commit(repo, "sub")
+  local gstate, gerr = git.is_skip_worktree("*.vim", opts)
+  H.eq(gstate, nil, "is_skip_worktree: a glob is not expanded")
+  H.ok(
+    type(gerr) == "string" and gerr:find("not tracked", 1, true) ~= nil,
+    "... it is a name nobody tracks: " .. tostring(gerr)
+  )
+  local dstate, derr = git.is_skip_worktree("sub", opts)
+  H.ok(
+    dstate == nil and type(derr) == "string",
+    "is_skip_worktree: a directory has no single state"
+  )
+  H.eq(
+    (git.is_skip_worktree(":(top)other.txt", opts)),
+    nil,
+    "is_skip_worktree: pathspec magic is part of the name"
+  )
+
   -- a leading dash is a file name, not an option (the path comes after `--`)
   F.write(repo .. "/-weird", "w\n")
   F.git(repo, { "add", "--", "-weird" })
