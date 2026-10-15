@@ -79,6 +79,10 @@ see `maybe_attach`'s own doc comment in `init.lua` for the full writeup.
   `kinds` (`history=false` kinds to keep anyway, merged over the default `shell_out`/`shell_err`), `renderer_override`
   (force `has_renderer()`'s answer instead of auto-detecting noice).
 - `notify_renderer_changed()` — re-evaluate attach/detach now.
+- `status()` — read-only state for a host or `:checkhealth`: `{ attached, renderer, renderer_override,
+  noice_loaded, ring_size, count }`. `renderer` is `"renderer_override"`, `"noice"` or `nil`; without a
+  renderer the logger is not attached and a "recent messages" popup holds only what `lib.nvim.notify`
+  pushed. Nothing is attached and noice is never `require`d (only `package.loaded` is read).
 - `wrap_noice()` — opt-in, pcall-guarded, no-op without noice installed.
 - `push(entry)` — low-level append, bypasses the `ext_messages` feed and its
   attach policy entirely. `entry.replace_last = true` overwrites the last

@@ -257,6 +257,91 @@ return function(H)
     package.loaded["noice.config"] = nil
   end
 
+  -- status(): read-only; the renderer that keeps the logger attached, or nil.
+  do
+    local messages = fresh_messages()
+    package.loaded["noice"] = nil
+    package.loaded["noice.config"] = nil
+    local st = messages.status()
+    eq(st.attached, false, "status: not attached without a renderer")
+    eq(st.renderer, nil, "status: no renderer")
+    eq(st.noice_loaded, false, "status: noice is not loaded")
+    eq(st.renderer_override, nil, "status: auto-detect")
+    ok(type(st.ring_size) == "number" and type(st.count) == "number", "status: ring size and count")
+
+    -- noice loaded and running -> renderer "noice"; loaded but disabled -> nil, noice_loaded stays true
+    local running = true
+    package.loaded["noice"] = {}
+    package.loaded["noice.config"] = {
+      is_running = function()
+        return running
+      end,
+    }
+    eq(messages.status().renderer, "noice", "status: noice running")
+    running = false
+    st = messages.status()
+    eq(st.renderer, nil, "status: noice loaded but disabled is no renderer")
+    eq(st.noice_loaded, true, "status: ... and says noice is loaded")
+
+    -- a throwing is_running is "not running", not an error
+    package.loaded["noice.config"] = {
+      is_running = function()
+        error("boom")
+      end,
+    }
+    eq(messages.status().renderer, nil, "status: a throwing is_running is no renderer")
+
+    -- never requires noice itself: only `package.loaded["noice"]` set, no `noice.config` loaded
+    package.loaded["noice.config"] = nil
+    local required = false
+    local real_require = require
+    ---@diagnostic disable-next-line: duplicate-set-field
+    _G.require = function(name)
+      if name == "noice" or name == "noice.config" then
+        required = true
+      end
+      return real_require(name)
+    end
+    local bare = messages.status()
+    _G.require = real_require
+    eq(required, false, "status: never requires noice")
+    eq(bare.renderer, nil, "status: noice without its config is no renderer")
+
+    -- the override wins both ways
+    package.loaded["noice"] = nil
+    messages.setup({ renderer_override = true })
+    eq(messages.status().renderer, "renderer_override", "status: renderer_override = true")
+    eq(messages.status().renderer_override, true, "status: ... and reports the override")
+    package.loaded["noice"] = {}
+    package.loaded["noice.config"] = {
+      is_running = function()
+        return true
+      end,
+    }
+    messages.setup({ renderer_override = false })
+    eq(messages.status().renderer, nil, "status: renderer_override = false beats a running noice")
+
+    -- attached follows the real attach state
+    messages.setup({ renderer_override = nil })
+    local attach_calls = 0
+    H.with_patched(vim, "ui_attach", function()
+      attach_calls = attach_calls + 1
+      return 1
+    end, function()
+      messages.notify_renderer_changed()
+      vim.wait(50)
+    end)
+    eq(messages.status().attached, true, "status: attached once the logger attached")
+
+    -- read-only: status() changes nothing
+    local before = vim.deepcopy(messages.status())
+    messages.status()
+    eq(vim.deep_equal(before, messages.status()), true, "status: reading changes nothing")
+
+    package.loaded["noice"] = nil
+    package.loaded["noice.config"] = nil
+  end
+
   -- The ext_messages feed: kind -> level mapping, the history=false kinds kept by default,
   -- shell-chunk merging and the replace_last guard. The callback is captured from a patched
   -- vim.ui_attach and fed by hand, with the argument shape Neovim really sends
