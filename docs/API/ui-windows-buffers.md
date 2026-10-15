@@ -39,6 +39,14 @@ M.collect_report(): table   -- {count, tabs, textual}
 -- TabInfo = { tabnr, tabpage, wins, bufs, current_win, current_buf }
 ```
 
+### `lib.nvim.buf_win_tab.tab_buffers` (header comment)
+The buffers of the current tab in the order a user sees them, through a four-step fallback chain.
+```
+M.list(): integer[] bufnrs, "vim.t.bufs"|"tabpagebuflist"|"windows"|"getbufinfo"|nil source
+M.nth(n: integer): integer|nil bufnr
+```
+The first step with a valid buffer wins; invalid numbers are dropped, duplicates removed, order kept.
+
 ### `lib.nvim.buf_win_tab.windows_utils` (no README; documented in `Command-List.md`)
 Inspect buffers/tabs/windows, cross-platform.
 
