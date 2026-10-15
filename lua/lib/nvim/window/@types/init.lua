@@ -73,6 +73,7 @@
 ---@field open_scratch_split fun(lines?: string[], opts?: Lib.Window.OpenScratchSplitOpts): integer, integer # Open a fresh (non-de-duplicated) scratch buffer in a plain split; returns bufnr, winid.
 ---@field tag Lib.Window.Tag # Tag/find windows by an arbitrary string via `vim.w[win].custom_tag`.
 ---@field matches Lib.Window.MatchesMod # Window-local match ledger: `matches.new()` -> named `matchadd` bookkeeping (add/add_pos/remove/clear/clear_all/has/list).
+---@field best_target_window fun(opts?: { source_win?: integer, writable?: boolean, current_tab_only?: boolean }): integer|nil # Best window to insert text into: `source_win`, then the alternate window, then the first usable one; each a normal window with a modifiable buffer (unless `writable = false`).
 ---@field find_by_filetype fun(filetype: string): integer|false # First open window whose buffer has `filetype`, or `false` if none exists.
 
 return {}

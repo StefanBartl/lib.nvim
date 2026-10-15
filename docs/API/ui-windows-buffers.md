@@ -208,6 +208,8 @@ reuse for content.
 ```
 M.is_usable_window(winid: integer): boolean
 M.target_window(opts?: { current_tab_only?: boolean }): integer|nil winid
+M.best_target_window(opts?: { source_win?: integer, writable?: boolean, current_tab_only?: boolean }): integer|nil winid
+  -- chain: source_win -> alternate window -> first usable; each normal + modifiable unless writable = false
   -- SIDEBAR_FILETYPES: neo-tree, NvimTree, aerial, Outline, qf
 ```
 

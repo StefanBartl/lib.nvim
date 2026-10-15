@@ -29,6 +29,7 @@ M.close_on_focus_lost = require("lib.nvim.window.close_on_focus_lost")
 M.center = require("lib.nvim.window.center")
 M.is_usable_window = require("lib.nvim.window.find_usable").is_usable_window
 M.target_window = require("lib.nvim.window.find_usable").target_window
+M.best_target_window = require("lib.nvim.window.find_usable").best_target_window
 M.ensure_bottom = require("lib.nvim.window.focus_helpers").ensure_bottom
 M.make_focusable = require("lib.nvim.window.focus_helpers").make_focusable
 M.force_focus = require("lib.nvim.window.focus_helpers").force_focus
