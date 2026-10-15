@@ -64,6 +64,15 @@ function M.registered(plugin)
   return require("lib.nvim.bindings.keymap.registry").registered(plugin)
 end
 
+--- The lines (and highlight spans) of a `g?` cheatsheet for one plugin: grouped, aligned, only what is
+--- really bound. See `cheatsheet.build`.
+---@param plugin string
+---@param opts? Lib.Keymap.CheatsheetOpts
+---@return Lib.Keymap.Cheatsheet
+function M.cheatsheet(plugin, opts)
+  return require("lib.nvim.bindings.keymap.cheatsheet").build(plugin, opts)
+end
+
 --- Forget direct `set()` records. See `registry.forget`.
 ---@param plugin string|nil
 ---@return integer

@@ -98,5 +98,6 @@
 ---@field conflict_lines fun(): string[]
 ---@field create_usercmd fun(name: string|nil): nil
 ---@field forget fun(plugin: string|nil): integer
+---@field cheatsheet fun(plugin: string, opts?: Lib.Keymap.CheatsheetOpts): Lib.Keymap.Cheatsheet # `g?` lines + highlight spans from what the plugin really has bound (see `cheatsheet.lua`).
 
 return {}
