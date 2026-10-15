@@ -12,7 +12,7 @@ clip(string.rep("n", 500))         --> 59 characters and an ellipsis (at most `M
 clip("a" .. string.char(27) .. "b") --> the ESC written out as an escape, so the message prints as it is
 ```
 
-`clip(text)` returns a string that is short (at most 60 characters), valid UTF-8 (invalid bytes are scrubbed) and
+`clip(text)` returns a string that is short (at most 60 characters of the text itself; an escape such as `\x1b` is longer than the character it stands for, so a text full of control characters can come out a few times longer), valid UTF-8 (invalid bytes are scrubbed) and
 printable: a control character, a C1 control (U+0080..U+009F) and the Unicode line separators are written as escapes
 (`\x1b`, `\u009b`, `\u2028`). Only the first 244 bytes are looked at, however long the text is.
 

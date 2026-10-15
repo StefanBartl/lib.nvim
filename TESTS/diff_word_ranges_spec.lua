@@ -1,7 +1,7 @@
 -- TESTS/diff_word_ranges_spec.lua — lib.nvim.diff.word_ranges
 --
 -- The spans of a changed line come back as 0-based [from, to) byte ranges, on code-point
--- boundaries for valid UTF-8 and byte by byte for anything else.
+-- boundaries; a byte that is no part of a well-formed sequence is a unit of its own.
 
 return function(H)
   local ok = H.ok
@@ -52,7 +52,7 @@ return function(H)
     "a four-byte character replaced whole"
   )
 
-  -- invalid UTF-8 falls back to bytes and does not throw
+  -- invalid UTF-8: every bad byte is its own unit, and nothing throws
   local bad = word_ranges("a\xFFb", "a\xFEb")
   eq(bad, { a = { { 1, 2 } }, b = { { 1, 2 } } }, "malformed bytes compared one by one")
 
@@ -81,4 +81,46 @@ return function(H)
     eq(old, { "i", "o" }, "changed text of the old side")
     eq(new, { "a", "i" }, "changed text of the new side")
   end
+
+  -- review of 53cfc42: a change at the END of the line must not mark the last common unit
+  eq(word_ranges("abc", "ab"), { a = { { 2, 3 } }, b = {} }, "trailing character removed")
+  eq(word_ranges("ab", "abc"), { a = {}, b = { { 2, 3 } } }, "trailing character added")
+  eq(word_ranges("foo", "foo bar"), { a = {}, b = { { 3, 7 } } }, "a word appended")
+  eq(word_ranges("x = 1", "x = 1;"), { a = {}, b = { { 5, 6 } } }, "a semicolon appended")
+  eq(word_ranges("x = 1;", "x = 1"), { a = { { 5, 6 } }, b = {} }, "a semicolon removed")
+  for _, alg in ipairs({ "myers", "minimal", "patience", "histogram" }) do
+    eq(
+      word_ranges("abc", "ab", alg),
+      { a = { { 2, 3 } }, b = {} },
+      alg .. ": same at the end of the line"
+    )
+  end
+
+  -- a line break or a NUL inside the text is an ordinary unit, never a throw or a drifting range
+  eq(
+    word_ranges("a\nb\nc", "a\nX\nc"),
+    { a = { { 2, 3 } }, b = { { 2, 3 } } },
+    "a line feed inside"
+  )
+  eq(
+    word_ranges("a\nb", "a\nc"),
+    { a = { { 2, 3 } }, b = { { 2, 3 } } },
+    "a change after a line feed"
+  )
+  eq(word_ranges("a\r\nb", "a\r\nc"), { a = { { 3, 4 } }, b = { { 3, 4 } } }, "CRLF inside")
+  eq(
+    word_ranges("a\255\nb", "a\254\nc"),
+    { a = { { 1, 2 }, { 3, 4 } }, b = { { 1, 2 }, { 3, 4 } } },
+    "invalid byte and line feed"
+  )
+  eq(word_ranges("x\0y", "x\0z"), { a = { { 2, 3 } }, b = { { 2, 3 } } }, "a NUL byte is one unit")
+  eq(word_ranges("", "ab"), { a = {}, b = { { 0, 2 } } }, "from nothing")
+  eq(word_ranges("ab", ""), { a = { { 0, 2 } }, b = {} }, "to nothing")
+
+  -- a stray or truncated byte is its own unit, a well-formed neighbour keeps its two bytes
+  eq(
+    word_ranges("a\195", "a\195\164"),
+    { a = { { 1, 2 } }, b = { { 1, 3 } } },
+    "truncated sequence vs the full character"
+  )
 end
