@@ -37,7 +37,7 @@ reg.run("after_apply", { file = file })
 | Call | Meaning |
 |---|---|
 | `hooks.new(opts)` | New registry. `opts.events` (required): the event names. `opts.vetoable`: events whose hooks can veto, default the ones named `before_*`. `opts.short_circuit`: stop at the first veto. `opts.on_error(event, err, fn)`: replaces the default `vim.notify` WARN. |
-| `reg.on(event, fn, { priority? })` | Register `fn`; returns a function that unregisters exactly this registration. |
+| `reg.on(event, fn, { priority? })` | Register `fn` (`priority` must be a number); returns a function that unregisters exactly this registration. |
 | `reg.off(event, fn)` | Remove the first registration of `fn`; returns whether one was removed. |
 | `reg.clear(event?)` | Remove the registrations of one event, or of all. |
 | `reg.count(event)` | Number of registered hooks of an event. |
@@ -53,5 +53,6 @@ An unknown event name is an error in every call (a typo fails loudly instead of 
   Every other hook still runs (a later hook may be a cleanup that must see the event) unless
   `short_circuit = true`. A `false` from a non-vetoable event is ignored.
 - **Errors:** a throwing hook is passed to `on_error` and counted in the second result; it never vetoes and
-  never stops the pass. A throwing `on_error` does not escape either.
+  never stops the pass. An entry of `extra` that is not callable counts the same way (a typo in a plugin's
+  config is reported, not dropped). A throwing `on_error` does not escape either.
 - **Snapshot:** a hook that registers or removes hooks changes the next run, not the running one.

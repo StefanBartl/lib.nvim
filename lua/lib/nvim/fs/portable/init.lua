@@ -40,7 +40,16 @@ local function continues_name(c)
 end
 
 ---@internal
---- Replace every occurrence of `needle` that ends at a path boundary. Plain text on both sides.
+--- A path starts where the previous byte cannot belong to a longer path: not a name character and not a
+--- separator (`/srv/home/me` must not match the root `/home/me`).
+---@param c string
+---@return boolean
+local function continues_path(c)
+  return c ~= "" and c:match("[%w_%-%.~/\\]") ~= nil
+end
+
+---@internal
+--- Replace every occurrence of `needle` that starts and ends at a path boundary. Plain text on both sides.
 ---@param content string
 ---@param needle string
 ---@param replacement string
@@ -56,7 +65,7 @@ local function boundary_replace(content, needle, replacement)
       out[#out + 1] = content:sub(pos)
       break
     end
-    if continues_name(content:sub(e + 1, e + 1)) then
+    if continues_name(content:sub(e + 1, e + 1)) or continues_path(content:sub(s - 1, s - 1)) then
       -- Not a boundary: keep the text and resume right after the first byte of this hit.
       out[#out + 1] = content:sub(pos, s)
       pos = s + 1
@@ -88,6 +97,12 @@ end
 local function spellings(path)
   local abs = slashed(path)
   local out = { abs }
+  -- (the drive letter in the other case: Windows paths compare case-insensitively)
+  local drive = abs:match("^(%a):")
+  if drive then
+    local flipped = (drive:lower() == drive and drive:upper() or drive:lower()) .. abs:sub(2)
+    out[#out + 1] = flipped
+  end
   -- (a native Windows spelling, as a tool that does not normalise separators writes it)
   local back = abs:gsub("/", "\\")
   if back ~= abs then

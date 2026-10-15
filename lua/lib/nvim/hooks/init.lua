@@ -85,8 +85,12 @@ function M.new(opts)
     if type(fn) ~= "function" then
       error("lib.nvim.hooks: a hook must be a function", 2)
     end
+    local priority = hook_opts and hook_opts.priority
+    if priority ~= nil and (type(priority) ~= "number" or priority ~= priority) then
+      error("lib.nvim.hooks: priority must be a number", 2)
+    end
     seq = seq + 1
-    local entry = { fn = fn, priority = (hook_opts and hook_opts.priority) or 0, seq = seq }
+    local entry = { fn = fn, priority = priority or 0, seq = seq }
     local entries = list[event]
     entries[#entries + 1] = entry
     -- Stable by construction: `seq` breaks priority ties.
@@ -143,15 +147,15 @@ function M.new(opts)
     if not known[event] then
       bad(event, "run")
     end
+    -- Anything that is not callable is called anyway: `pcall` turns it into a reported error, so a typo in
+    -- a plugin's `config.hooks` is visible instead of silently dropped.
     local fns = {}
-    if type(extra) == "function" then
-      fns[1] = extra
-    elseif type(extra) == "table" then
+    if type(extra) == "table" then
       for _, fn in ipairs(extra) do
-        if type(fn) == "function" then
-          fns[#fns + 1] = fn
-        end
+        fns[#fns + 1] = fn
       end
+    elseif extra ~= nil then
+      fns[1] = extra
     end
     -- A snapshot: a hook that registers or removes hooks does not change this run.
     for _, e in ipairs(list[event]) do

@@ -23,7 +23,8 @@ local uv = vim.loop
 ---   cwd: string|nil - working directory; if nil, uses current buffer/project root
 ---   args: string[]|nil - extra arguments appended to cmd
 ---   stdio: table|nil - uv.spawn stdio configuration
----   on_exit: fun(code:number, signal:number)|nil - callback when process exits
+---   on_exit: fun(code:number, signal:number)|nil - callback when process exits (handle already closed,
+---     delivered on the main loop, so `vim.api` calls are fine)
 ---@return (uv.uv_process_t)? # handle uv.spawn handle
 local function spawn_project_command(cmd, opts)
   opts = opts or {}
