@@ -56,6 +56,7 @@ local specs = {
   "autocmd_spec.lua",
   "keymap_registry_spec.lua",
   "keymap_cheatsheet_spec.lua",
+  "registry_spec.lua",
   "count_spec.lua",
   "lastcmd_spec.lua",
   "keymap_modifier_spec.lua",
