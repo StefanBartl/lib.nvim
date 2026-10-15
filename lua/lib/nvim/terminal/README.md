@@ -44,6 +44,30 @@ True if `$KITTY_LISTEN_ON` is set and non-empty, or if `$TERM` contains
 
 ---
 
+## `terminal.capabilities` — what can it draw
+
+```lua
+local caps = require("lib.nvim.terminal.capabilities")
+
+caps.supports("kitty_graphics")   --> boolean, detected once per session and cached
+if caps.require("sixel", { feature = "inline images" }) then ... end
+caps.detect({ TERM = "foot" })    --> pure: capabilities of the environment given (tests)
+caps.names()                      --> { "kitty_graphics", "osc1337_images", "sixel", "truecolor" }
+caps.reset()                      -- forget the cache and the warnings
+```
+
+Names: `kitty_graphics` (Kitty, WezTerm, Ghostty, Konsole), `osc1337_images` (WezTerm, iTerm2, Konsole,
+from `terminal.host`), `sixel` (foot, mlterm, WezTerm, iTerm2, a `$TERM` naming sixel), `truecolor`
+(`$COLORTERM` truecolor/24bit). None has a runtime query: `true` means "known to", `false` "not known to".
+`detect` also carries `host` (the recognised terminal, `in_tmux`, the passthrough `hint`).
+
+`require(name, { feature?, notify? })` is `supports` plus **one** warning per missing capability for the
+whole session (the message names the feature, the capability, the terminal and the tmux hint): a plugin
+that tries to draw on every cursor move does not repeat it a hundred times. `notify` replaces the default
+`lib.nvim.notify` WARN.
+
+---
+
 ## `terminal.host` — which terminal is this
 
 ```lua
