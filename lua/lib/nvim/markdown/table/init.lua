@@ -450,18 +450,24 @@ function M.format_lines(lines, opts)
         override_map = map,
         width_fn = opts.width_fn,
       })
-      -- A table whose every line ends in a CR (a CRLF block inside a file with
-      -- mixed endings, where `format_file` could not strip the CRs globally)
-      -- gets its CR back on every rendered line; `trim` drops it while parsing,
-      -- so without this an already formatted block would still count as changed.
-      local cr = true
+      -- A source line that ends in a CR (a CRLF block inside a file with mixed endings, where `format_file`
+      -- could not strip the CRs globally) gets its CR back on the rendered line at the same position; `trim`
+      -- drops it while parsing, so without this an already formatted block would still count as changed.
+      -- Rendering keeps one line per source line, so each keeps its own ending; a block whose line count
+      -- changed (it cannot be matched line by line) takes a CR only when every source line had one.
+      local span = parsed.end_line - parsed.start_line + 1
+      local all_cr = true
       for ln = parsed.start_line, parsed.end_line do
         if lines[ln]:sub(-1) ~= "\r" then
-          cr = false
+          all_cr = false
           break
         end
       end
-      for _, l in ipairs(rendered) do
+      for k, l in ipairs(rendered) do
+        local cr = all_cr
+        if #rendered == span then
+          cr = lines[parsed.start_line + k - 1]:sub(-1) == "\r"
+        end
         out[#out + 1] = cr and (l .. "\r") or l
       end
       i = parsed.end_line + 1
