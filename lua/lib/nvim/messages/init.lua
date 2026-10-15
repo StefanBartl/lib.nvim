@@ -405,6 +405,41 @@ function M.on_message(fn)
   return fn
 end
 
+---What `M.status()` reports about the `ext_messages` logger. Read-only: nothing is attached, and noice is
+---looked at only through `package.loaded`, never `require`d.
+---
+---`renderer` names what keeps the logger attached:
+---  * `"renderer_override"` -- `setup({ renderer_override = true })` forces it on;
+---  * `"noice"` -- noice is loaded and reports running;
+---  * `nil` -- no renderer: the feed is not attached, and the popup holds only what `lib.nvim.notify` pushed
+---    (`renderer_override = false` is this too, by choice).
+---`noice_loaded` tells "noice is not installed or loaded" from "noice is loaded but disabled".
+---@return Lib.Messages.Status
+function M.status()
+  local override = config.renderer_override
+  local noice_loaded = package.loaded["noice"] ~= nil
+  local renderer ---@type "renderer_override"|"noice"|nil
+  if override ~= nil then
+    renderer = override and "renderer_override" or nil
+  elseif noice_loaded then
+    local noice_config = package.loaded["noice.config"]
+    local running = false
+    if type(noice_config) == "table" and type(noice_config.is_running) == "function" then
+      local ok, value = pcall(noice_config.is_running)
+      running = ok and value == true
+    end
+    renderer = running and "noice" or nil
+  end
+  return {
+    attached = attached,
+    renderer = renderer,
+    renderer_override = override,
+    noice_loaded = noice_loaded,
+    ring_size = config.ring_size,
+    count = count,
+  }
+end
+
 ---Unsubscribe a handle returned by `on_message`.
 ---@param fn fun(entry: Lib.Messages.Entry)
 ---@return nil

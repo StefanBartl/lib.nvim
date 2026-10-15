@@ -28,10 +28,19 @@
 ---@field kinds? table<string, boolean> `history=false` `msg_show` kinds to keep anyway (e.g. `{ list_cmd = true }`). Default `{ shell_out = true, shell_err = true, shell_ret = true }` (what `:!cmd` prints, and a non-zero exit code; consecutive output chunks of one command are one entry; `false` opts a default out); a caller's table is merged over it. All other `history=false` kinds (`echo`, `shell_cmd`, ...) stay out unless listed
 ---@field renderer_override? boolean Force `has_renderer()`'s answer instead of checking `package.loaded["noice"]`. Default `nil` (auto-detect)
 
+---@class Lib.Messages.Status
+---@field attached boolean Whether the `ext_messages` logger is attached right now
+---@field renderer "renderer_override"|"noice"|nil What keeps it attached; `nil` when nothing does
+---@field renderer_override? boolean The `renderer_override` config value (`nil` = auto-detect)
+---@field noice_loaded boolean `package.loaded["noice"]` is set (it may still be disabled)
+---@field ring_size integer Configured ring size
+---@field count integer Entries held now
+
 --- `lib.nvim.messages` module surface.
 ---@class Lib.Messages
 ---@field setup fun(opts?: Lib.Messages.Config): nil
 ---@field notify_renderer_changed fun(): nil
+---@field status fun(): Lib.Messages.Status
 ---@field wrap_noice fun(): nil
 ---@field push fun(entry: Lib.Messages.PushEntry): nil
 ---@field snapshot fun(opts?: Lib.Messages.SnapshotOpts): Lib.Messages.Entry[]
