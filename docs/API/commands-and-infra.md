@@ -434,6 +434,17 @@ M.DEFAULT_WHITELIST: table<string, boolean>
 M.is_enabled(bufnr: integer, whitelist?: table<string, boolean>): boolean
 ```
 
+### `lib.nvim.treesitter.regions` (header comment)
+Capture name -> ranges of a buffer, fail-open (no parser / query / capture is `nil, reason`, never an error).
+```
+M.collect(bufnr, captures: string[], opts?: { query?, lang?, first_row?, last_row? }): table<string, Region[]>|nil, reason|nil
+  -- Region = { sr, sc, er, ec, start_byte=, end_byte= } (0-based, end exclusive)
+  -- reasons: "invalid_buffer"|"no_filetype"|"no_parser"|"no_query"|"capture_not_defined"|"parse_failed"
+M.contains(ranges, row, col): boolean        M.contains_pos(ranges, lnum, col): boolean   -- 1-based
+M.contains_byte(ranges, byte): boolean       M.byte_ranges(ranges): { start_byte, end_byte }[]
+```
+Not `guard` (a filetype allowlist) nor `parser_policy`. From `language.nvim`'s spell regions.
+
 ### `lib.nvim.treesitter.parser_policy` (see README)
 Prompt-or-auto-install policy for missing-but-available treesitter parsers.
 ```
