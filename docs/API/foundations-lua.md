@@ -413,6 +413,16 @@ M.custom(from: integer, to: integer): { from, to } | nil range, string|nil err
 
 ## Numeral conversion
 
+### `lib.lua.scoring` (see README)
+Additive score: base plus a named bonus/malus list, clamped, with a per-contribution breakdown. Pure Lua.
+
+```
+M.new(opts?: { base?, min?, max?, round?: "floor"|"ceil"|"nearest"|false }): Lib.Scoring.Builder
+  -- builder: :add(name, delta, applies?) :bonus(name, points, applies?) :malus(name, points, applies?) (chainable), :result()
+M.compute(entries: { name, delta, applies? }[], opts?): Lib.Scoring.Result
+  -- { score, raw, base, clamped: "min"|"max"|nil, details: { name, delta, total }[] }
+```
+
 ### `lib.lua.numeral` (aggregator, see README)
 Bundles `roman` and `alpha`.
 
