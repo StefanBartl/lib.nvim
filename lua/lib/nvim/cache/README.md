@@ -133,7 +133,8 @@ memory.format_stats()     -- the same table as string[] (header, one row per nam
 memory.print_all_stats()  -- formatted table via print()
 ```
 
-`ns.stats()` / `get_all_stats()` also report `entries`, the live entries of a namespace now.
+`ns.stats()` / `get_all_stats()` also report `entries`: the entries a namespace holds now (an expired one
+stays counted until a `get`, a sweep or `invalidate` evicts it).
 
 `:Lib cache stats` (registered by `lib.nvim_usrcmds`, through `cache.routes()`) shows that table for every
 namespace of every plugin that uses `lib.nvim.cache.memory`.

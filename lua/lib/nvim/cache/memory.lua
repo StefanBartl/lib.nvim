@@ -91,7 +91,6 @@ function M.namespace(name, opts)
       evictions = 0,
       total_requests = 0,
       hit_rate = 0,
-      entries = 0,
     }
     sets_since_sweep[name] = 0
   end
@@ -307,10 +306,10 @@ end
 
 --- The stats of every namespace as aligned text lines (header, rule, one row per namespace sorted by
 --- name, a total row), ready to print or show in a float.
----@param all? Lib.Cache.Memory.Stats[]  # default: `M.get_all_stats()`
+---@param all? Lib.Cache.Memory.Stats[]  # default: `M.get_all_stats()`; not modified
 ---@return string[]
 function M.format_stats(all)
-  all = all or M.get_all_stats()
+  all = vim.deepcopy(all or M.get_all_stats())
   table.sort(all, function(x, y)
     return x.name < y.name
   end)
