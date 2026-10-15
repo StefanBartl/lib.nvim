@@ -306,6 +306,20 @@ Unknown event names are errors.
 
 ---
 
+## `lib.nvim.registry` (see README)
+
+Generic ordered key -> value registry with a lazy loader, validation and `reset()`.
+
+```
+M.new(opts?: { name?, validate?: fun(key, value): boolean?, string?, loader?: fun(), on_duplicate?: "replace"|"keep"|"error" }): Lib.Registry
+r:register(key, value): Lib.Registry   r:unregister(key): boolean   r:reset(): Lib.Registry
+r:get(key) r:has(key) r:count()        r:keys(): any[]   r:all(pred?): any[]   r:entries(): { key, value }[]
+r:find(pred: fun(key, value): boolean?): key, value        -- first in registration order
+```
+Order is registration order; `loader` runs once before the first read (again after `reset`).
+
+---
+
 ## `lib.nvim.debounce.*`
 
 ### `lib.nvim.debounce` (see README)

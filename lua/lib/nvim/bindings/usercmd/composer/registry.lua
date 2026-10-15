@@ -1,16 +1,12 @@
 ---@module 'lib.nvim.bindings.usercmd.composer.registry'
---- Module-level registry of every verb built in this process, plus the docs
---- configuration. Lets `composer.document()` emit the whole plugin's command
---- surface in one call.
+--- Module-level registry of every verb built in this process (on `lib.nvim.registry`), plus the docs
+--- configuration. Lets `composer.document()` emit the whole plugin's command surface in one call.
 
 local M = {}
 
----@type table<string, Lib.UserCmd.Composer.Handle>
-local VERBS = {}
-
---- Insertion order, so generated docs are stable and predictable.
----@type string[]
-local ORDER = {}
+--- Every verb built in this process, in registration order (so generated docs are stable and predictable).
+---@type Lib.Registry
+local VERBS = require("lib.nvim.registry").new({ name = "composer.verbs" })
 
 ---@type Lib.UserCmd.Composer.DocsDefaults
 M.docs = {
@@ -22,33 +18,30 @@ M.docs = {
 ---@param name string
 ---@param handle Lib.UserCmd.Composer.Handle
 function M.add(name, handle)
-  if VERBS[name] == nil then
-    ORDER[#ORDER + 1] = name
-  end
-  VERBS[name] = handle
+  VERBS:register(name, handle)
 end
 
 --- Look up a registered verb handle by command name.
 ---@param name string
 ---@return Lib.UserCmd.Composer.Handle|nil
 function M.get(name)
-  return VERBS[name]
+  return VERBS:get(name)
 end
 
 --- All handles in registration order.
 ---@return Lib.UserCmd.Composer.Handle[]
 function M.all()
-  local out = {}
-  for _, name in ipairs(ORDER) do
-    out[#out + 1] = VERBS[name]
-  end
-  return out
+  return VERBS:all()
 end
 
 --- The full name→handle map (for `composer.registry()`).
 ---@return table<string, Lib.UserCmd.Composer.Handle>
 function M.map()
-  return vim.tbl_extend("force", {}, VERBS)
+  local out = {}
+  for _, pair in ipairs(VERBS:entries()) do
+    out[pair[1]] = pair[2]
+  end
+  return out
 end
 
 --- Apply setup() docs overrides.
