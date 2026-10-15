@@ -418,6 +418,11 @@ is written once and shown for every argument of that type. An enum with a
 built-in types (`INT`, `PATH` ...) show their name. `help.undocumented(verb,
 { args = true })` lists arguments that still say nothing.
 
+A custom type that has a `complete` function is listed by it: the float shows what the completion
+offers for an empty lead (at most 40 candidates, deduplicated, blanks dropped) for a positional
+argument, a `--flag` value and a `key=` value, and the typed lead narrows the list. A throwing
+completion offers nothing; built-in types are not listed (`PATH` would list the file system).
+
 A level whose only row is such a free-text argument (no enum values, flags or
 `key=` pairs) has nothing to pick, but the text is the whole answer: the float
 opens with that one row, `<CR>` does nothing there, and `<Esc>` gives the line

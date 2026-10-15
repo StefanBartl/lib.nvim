@@ -687,6 +687,79 @@ return function(H)
   eq(hint_of({ "go", "T-1", "a" }).desc, "INT", "arg: a built-in type shows its name")
   eq(hint_of({ "go", "T-1", "a", "3" }).desc, nil, "arg: a bare string has nothing to say")
 
+  -- A custom type that completes: the float lists what its completion offers, for a positional
+  -- argument, a flag value and a key=value value. A throwing completion offers nothing.
+  composer.register_type("HELP_SPEC_BRANCH", {
+    desc = "A branch",
+    validate = function(raw)
+      return true, raw
+    end,
+    complete = function(lead)
+      local out = {}
+      for _, b in ipairs({ "main", "dev", "dev", "", "feature/x" }) do
+        if vim.startswith(b, lead) then
+          out[#out + 1] = b
+        end
+      end
+      return out
+    end,
+  })
+  composer.register_type("HELP_SPEC_BROKEN", {
+    validate = function(raw)
+      return true, raw
+    end,
+    complete = function()
+      error("boom")
+    end,
+  })
+  local type_root = tree.build({
+    {
+      path = { "go" },
+      args = { { name = "branch", type = "HELP_SPEC_BRANCH" } },
+      flags = { { name = "onto", type = "HELP_SPEC_BRANCH" } },
+      kv = { { key = "from", type = "HELP_SPEC_BRANCH" } },
+      run = noop,
+    },
+    { path = { "bad" }, args = { { name = "x", type = "HELP_SPEC_BROKEN" } }, run = noop },
+    { path = { "built" }, args = { { name = "f", type = "FILE" } }, run = noop },
+  })
+  local function values_of(root_, committed, lead)
+    local out = {}
+    for _, e in ipairs(entries.compute(root_, committed, lead or "").items) do
+      if e.kind == "value" then
+        out[#out + 1] = e.insert
+      end
+    end
+    return table.concat(out, ",")
+  end
+  eq(
+    values_of(type_root, { "go" }),
+    "main,dev,feature/x",
+    "type completion: a positional argument lists the candidates (deduplicated, blanks dropped)"
+  )
+  eq(
+    values_of(type_root, { "go" }, "de"),
+    "dev",
+    "type completion: the typed lead narrows the list"
+  )
+  eq(
+    values_of(type_root, { "go", "--onto=" }, "--onto="),
+    "--onto=main,--onto=dev,--onto=feature/x",
+    "type completion: a flag value lists the candidates with the flag prefix"
+  )
+  eq(
+    values_of(type_root, { "go", "--onto" }, ""),
+    "main,dev,feature/x",
+    "type completion: `--flag <lead>` lists them too"
+  )
+  eq(
+    values_of(type_root, { "go", "from=" }, "from="),
+    "from=main,from=dev,from=feature/x",
+    "type completion: a key=value value lists the candidates"
+  )
+  eq(values_of(type_root, { "bad" }), "", "type completion: a throwing completion offers nothing")
+  eq(values_of(type_root, { "built" }), "", "type completion: a built-in type is not listed")
+
   composer.verb("ComposerHelpSpecArgs", {
     routes = {
       {
