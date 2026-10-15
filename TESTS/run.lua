@@ -55,6 +55,7 @@ local specs = {
   "progress_kit_style_spec.lua",
   "autocmd_spec.lua",
   "keymap_registry_spec.lua",
+  "keymap_cheatsheet_spec.lua",
   "count_spec.lua",
   "lastcmd_spec.lua",
   "keymap_modifier_spec.lua",

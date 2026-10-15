@@ -182,6 +182,15 @@ normalizes to `0`. On validation failure, `vim.keymap.set` is **not**
 called — reports every failing field plus the real caller's call site
 instead.
 
+### `lib.nvim.bindings.keymap.cheatsheet` (see README)
+`keymap.cheatsheet(plugin, opts?)`: the lines and highlight spans of a `g?` cheatsheet, from the registry.
+```
+M.build(plugin: string, opts?: { groups?: {title, actions}[], other_title?, buffer?, footer?: string|string[],
+  width?, indent?, modes?, hl?: {heading?, key?, desc?, footer?} }): { lines: string[],
+  highlights: { line, col_start, col_end, group }[], rows: { name, keys, modes, desc }[], width: integer }
+```
+Only bound actions; several keys of one action on one row; the `plugin: ` desc prefix stripped.
+
 ### `lib.nvim.bindings.keymap.portability` (see README)
 Static reachability classifier over an `lhs` notation string — no terminal
 is queried or probed; classifying the notation itself is the only part of

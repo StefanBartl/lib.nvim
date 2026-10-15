@@ -254,6 +254,29 @@ keymap.conflicts()             -- lhs values claimed more than once
 keymap.forget("spotlight")     -- drop a plugin's direct records before a re-setup
 ```
 
+### A `g?` cheatsheet from it
+
+```lua
+local sheet = keymap.cheatsheet("testing", {
+  groups = { { title = "Run", actions = { "run_file", "run_nearest" } }, { title = "Move", actions = { "next_fail" } } },
+  footer = "q close",      -- hint line(s) under the list
+  width = 60,              -- cut longer text with an ellipsis; the key column takes at most half
+  -- buffer = bufnr, modes = true, indent = 2, other_title = "Other",
+  -- hl = { heading = "Title", key = "Special", desc = "Normal", footer = "Comment" },
+})
+vim.api.nvim_buf_set_lines(buf, 0, -1, false, sheet.lines)
+for _, h in ipairs(sheet.highlights) do -- { line (0-based), col_start, col_end (exclusive), group }
+  vim.api.nvim_buf_add_highlight(buf, ns, h.group, h.line, h.col_start, h.col_end)
+end
+```
+
+Only what is **bound** is listed (a disabled action, `preset = false`, or an action without a key is
+not), one action on several keys is one row (`<a> / <b>`), the registry's `plugin: ` prefix is stripped
+from the description, aligned on one key column. `groups` orders the sections; actions not named in
+one go under `other_title`. Without `buffer` only global entries show; with it, global ones plus that
+buffer's. `sheet.rows` holds what is shown (`name`, `keys`, `modes`, `desc`), `sheet.width` the widest
+line. A `plugin/surface` registry key is addressed as given.
+
 This is what makes it a registry rather than a binder. The same list is what a
 `:checkhealth` section, a generated bindings page, and a "is every action also
 reachable as a user command?" audit each need — and each of them re-deriving it
