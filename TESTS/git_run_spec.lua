@@ -633,9 +633,11 @@ return function(H)
     git.tags_async(opts, function(list, err)
       box = { list = list, err = err }
     end)
-    wait_for(function()
+    -- a 64-hop chain is 64 sequential `cat-file` processes: far more than the 10 s `wait_for` allows
+    -- on a loaded Windows runner (it failed once inside the full suite)
+    vim.wait(90000, function()
       return box ~= nil
-    end)
+    end, 10)
     return sync_list, sync_err, box and box.list, box and box.err
   end
 
