@@ -172,6 +172,45 @@ return function(H)
   eq(self_reading:get("a"), 1, "loader: a loader that reads its own registry works")
   eq(reentered, 1, "loader: ... without running twice")
 
+  -- a loader that throws: the error reaches the reader, the registry is not left "loaded" half-filled
+  local attempts = 0
+  local flaky
+  flaky = registry.new({
+    loader = function()
+      attempts = attempts + 1
+      flaky:register("first", 1)
+      if attempts == 1 then
+        error("loader boom")
+      end
+      flaky:register("second", 2)
+    end,
+  })
+  local lr, lm = raises(function()
+    flaky:get("first")
+  end)
+  ok(
+    lr and lm:find("loader boom", 1, true) ~= nil,
+    "loader: its own error reaches the reading call"
+  )
+  eq(flaky:get("second"), 2, "loader: the next read runs it again and gets the full set")
+  eq(attempts, 2, "loader: ... exactly once more")
+  eq(
+    table.concat(flaky:keys(), ","),
+    "first,second",
+    "loader: entries are not duplicated by the retry"
+  )
+
+  -- unregister runs the loader first: a known entry can be removed before anything read the registry
+  local known
+  known = registry.new({
+    loader = function()
+      known:register("a", 1)
+      known:register("b", 2)
+    end,
+  })
+  eq(known:unregister("a"), true, "unregister: a loader-registered entry, before any read")
+  eq(table.concat(known:keys(), ","), "b", "unregister: ... and the rest stays")
+
   -- reset: empty, and the loader runs again before the next read
   lazy:reset()
   eq(lazy:count(), 2, "reset: the loader re-registers the known entries on the next read")

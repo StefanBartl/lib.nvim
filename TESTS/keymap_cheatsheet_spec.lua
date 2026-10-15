@@ -177,6 +177,59 @@ return function(H)
     "surface: ... prefix stripped too"
   )
 
+  -- a description with a newline or a control character stays ONE buffer line
+  keymap.register("cs_nl", {
+    actions = {
+      multi = {
+        default = "<Plug>(cs-nl)",
+        rhs = noop,
+        desc = "first line" .. string.char(10) .. "second",
+      },
+      tabbed = { default = "<Plug>(cs-tab)", rhs = noop, desc = "a" .. string.char(9) .. "b" },
+    },
+  }, nil)
+  local nl_sheet = keymap.cheatsheet("cs_nl", {
+    footer = "hint" .. string.char(10) .. "more",
+    groups = { { title = "T" .. string.char(10) .. "T", actions = { "multi", "tabbed" } } },
+  })
+  for _, l in ipairs(nl_sheet.lines) do
+    ok(not l:find("%c"), "control characters: no line holds one: " .. vim.inspect(l))
+  end
+  eq(
+    pcall(vim.api.nvim_buf_set_lines, 0, 0, -1, false, nl_sheet.lines),
+    true,
+    "control characters: nvim accepts the lines"
+  )
+
+  -- a plain set() shows up too (recorded as direct, `bound = true`)
+  keymap.set("n", "<Plug>(cs-direct)", noop, {}, "a direct map")
+  local direct_found
+  for _, r in ipairs(keymap.cheatsheet("(unknown)").rows) do
+    if r.keys[1] == "<Plug>(cs-direct)" then
+      direct_found = r
+    end
+  end
+  ok(direct_found ~= nil, "direct set(): listed")
+  eq(direct_found and direct_found.desc, "a direct map", "direct set(): with its description")
+
+  -- a buffer-local direct set() (recorded as buffer 0/true) counts for the buffer asked about
+  local dbuf = vim.api.nvim_create_buf(false, true)
+  local prev_buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_set_current_buf(dbuf)
+  keymap.set("n", "<Plug>(cs-direct-buf)", noop, { buffer = true }, "buffer-local direct")
+  vim.api.nvim_set_current_buf(prev_buf)
+  local in_sheet, in_global = false, false
+  for _, r in ipairs(keymap.cheatsheet("(unknown)", { buffer = dbuf }).rows) do
+    in_sheet = in_sheet or r.keys[1] == "<Plug>(cs-direct-buf)"
+  end
+  for _, r in ipairs(keymap.cheatsheet("(unknown)").rows) do
+    in_global = in_global or r.keys[1] == "<Plug>(cs-direct-buf)"
+  end
+  eq(in_sheet, true, "direct buffer-local set(): in that buffer's sheet")
+  eq(in_global, false, "direct buffer-local set(): not in the global sheet")
+  vim.api.nvim_buf_delete(dbuf, { force = true })
+  keymap.forget("(unknown)")
+
   -- bad input
   eq(pcall(keymap.cheatsheet, ""), false, "an empty plugin name is an error")
   eq(pcall(keymap.cheatsheet, nil), false, "a missing plugin name is an error")

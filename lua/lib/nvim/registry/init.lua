@@ -59,7 +59,12 @@ function Registry:_ensure()
   end
   self._loaded = true
   if self._loader then
-    self._loader()
+    local ok, err = pcall(self._loader)
+    if not ok then
+      -- not "loaded": the next read runs it again instead of serving a half-filled registry in silence
+      self._loaded = false
+      error(err, 0)
+    end
   end
 end
 
@@ -117,6 +122,7 @@ end
 ---@param key any
 ---@return boolean
 function Registry:unregister(key)
+  self:_ensure()
   if self._values[key] == nil then
     return false
   end

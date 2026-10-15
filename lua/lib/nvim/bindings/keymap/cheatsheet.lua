@@ -68,11 +68,19 @@ local function as_list(value)
   return type(value) == "table" and value or {}
 end
 
+---Text that is safe as part of ONE buffer line: control characters (a newline in a description makes
+---`nvim_buf_set_lines` refuse the line) become a space.
+---@param s any
+---@return string
+local function one_line(s)
+  return (tostring(s or ""):gsub("%c", " "))
+end
+
 ---@param plugin string
 ---@param desc string|nil
 ---@return string
 local function strip_plugin(plugin, desc)
-  desc = desc or ""
+  desc = one_line(desc)
   local base = plugin:gsub("/.*$", "")
   local prefix = base .. ": "
   if desc:sub(1, #prefix) == prefix then
@@ -90,7 +98,9 @@ local function collect(plugin, opts)
   for _, e in ipairs(require("lib.nvim.bindings.keymap").registered(plugin)) do
     local local_ok = e.buffer == nil or e.buffer == false
     if opts.buffer ~= nil then
-      local_ok = local_ok or e.buffer == opts.buffer
+      -- a direct `set()` records `buffer = 0`/`true` ("the buffer that was current"), which cannot be told
+      -- from here: it is buffer-local somewhere, and counted for the buffer asked about
+      local_ok = local_ok or e.buffer == opts.buffer or e.buffer == 0 or e.buffer == true
     end
     if e.bound and e.lhs and e.lhs ~= "" and local_ok then
       local row = by_name[e.name]
@@ -102,8 +112,9 @@ local function collect(plugin, opts)
       if row.desc == "" then
         row.desc = strip_plugin(plugin, e.desc)
       end
-      if not vim.tbl_contains(row.keys, e.lhs) then
-        row.keys[#row.keys + 1] = e.lhs
+      local lhs = one_line(e.lhs)
+      if not vim.tbl_contains(row.keys, lhs) then
+        row.keys[#row.keys + 1] = lhs
       end
       for _, m in ipairs(as_list(e.mode)) do
         if not vim.tbl_contains(row.modes, m) then
@@ -199,14 +210,14 @@ function M.build(plugin, opts)
       lines[#lines + 1] = ""
     end
     if sec.title then
-      lines[#lines + 1] = string.rep(" ", math.max(indent - 2, 0)) .. sec.title
+      lines[#lines + 1] = string.rep(" ", math.max(indent - 2, 0)) .. one_line(sec.title)
       add_span(#lines - 1, math.max(indent - 2, 0), #lines[#lines], hl.heading)
     end
     for _, row in ipairs(sec.rows) do
       local key = key_text(row)
       local pad = string.rep(" ", key_w - dw(key))
       local left = string.rep(" ", indent) .. key .. pad .. "  "
-      local desc = row.desc ~= "" and row.desc or row.name
+      local desc = row.desc ~= "" and row.desc or one_line(row.name)
       if opts.width then
         local room = opts.width - dw(left)
         if room < 1 then
@@ -231,7 +242,7 @@ function M.build(plugin, opts)
       lines[#lines + 1] = ""
     end
     for _, text in ipairs(footer) do
-      lines[#lines + 1] = string.rep(" ", indent) .. text
+      lines[#lines + 1] = string.rep(" ", indent) .. one_line(text)
       add_span(#lines - 1, indent, #lines[#lines], hl.footer)
     end
   end
