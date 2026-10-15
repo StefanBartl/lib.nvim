@@ -2,7 +2,7 @@
 
 Part of the [lib.nvim API reference](README.md). Covers `lib.nvim.bindings.usercmd`
 (including the `composer` subsystem), `autocmd`, `map`, `dotrepeat`,
-`debounce`, `deps`, `treesitter`, `store`, `logger`, `progress`, `harvest`,
+`debounce`, `hooks`, `deps`, `treesitter`, `store`, `logger`, `progress`, `harvest`,
 `git`, `net.curl`, `lua_ls`, `cache`, `core`, `normalize`, `require`,
 `safe_api`, `system`, `token`, and `neotree`.
 
@@ -273,6 +273,27 @@ M.run(fn: Lib.Dotrepeat.Fn)
 M.repeatable(fn: Lib.Dotrepeat.Fn): Lib.Dotrepeat.Fn   -- wrapped equivalent, usable directly as a keymap callback
 M._invoke(motion_type: string|nil)   -- dispatcher reached from Vimscript via v:lua; technically public
 ```
+
+---
+
+## `lib.nvim.hooks`
+
+### `lib.nvim.hooks` (see README)
+Hook registry for a pipeline with named stages: ordered callbacks, veto for `before_*` events, error isolation.
+
+```
+M.new(opts: Lib.Hooks.Opts): Lib.Hooks.Registry
+  -- opts: { events: string[], vetoable?: string[], short_circuit?: boolean, on_error?: fun(event, err, fn) }
+reg.on(event: string, fn: fun(ctx): boolean|nil, opts?: { priority?: integer }): fun()  -- returns the unregister function
+reg.off(event: string, fn: function): boolean
+reg.clear(event?: string)
+reg.count(event: string): integer
+reg.run(event: string, ctx?: any, extra?: function|function[]): boolean proceed, integer errors
+```
+Order: `extra` first, then registered hooks by ascending `priority` (default 0), ties in registration order.
+Only an exact `false` from a vetoable event (default: names starting with `before_`) vetoes; every hook still
+runs unless `short_circuit`. A throwing hook goes to `on_error` (default `vim.notify` WARN) and never aborts.
+Unknown event names are errors.
 
 ---
 

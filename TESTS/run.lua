@@ -155,6 +155,7 @@ local specs = {
   "json_sanitize_spec.lua",
   "diff_word_ranges_spec.lua",
   "spawn_shell_spec.lua",
+  "hooks_spec.lua",
   "resolve_lib_nvim_spec.lua",
   "relpath_spec.lua",
   "config_spec.lua",
