@@ -434,6 +434,15 @@ M.DEFAULT_WHITELIST: table<string, boolean>
 M.is_enabled(bufnr: integer, whitelist?: table<string, boolean>): boolean
 ```
 
+### `lib.nvim.terminal.capabilities` (see terminal README)
+Terminal capabilities from environment variables, cached per session; one warning per missing one.
+```
+M.detect(env?): { kitty_graphics, osc1337_images, sixel, truecolor: boolean, host: Lib.Terminal.Host }   -- pure
+M.supports(name): boolean            -- cached; unknown name is an error
+M.require(name, opts?: { feature?, notify?: fun(msg) }): boolean   -- + ONE warning per capability per session
+M.names(): string[]    M.reset()
+```
+
 ### `lib.nvim.treesitter.regions` (header comment)
 Capture name -> ranges of a buffer, fail-open (no parser / query / capture is `nil, reason`, never an error).
 ```
