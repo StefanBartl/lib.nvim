@@ -36,6 +36,7 @@ M.reveal_at_bottom = require("lib.nvim.window.focus_helpers").reveal_at_bottom
 M.open_named_scratch = require("lib.nvim.window.open_named_scratch")
 M.open_scratch_split = require("lib.nvim.window.open_scratch_split")
 M.tag = require("lib.nvim.window.tag")
+M.matches = require("lib.nvim.window.matches")
 M.find_by_filetype = require("lib.nvim.window.find_by_filetype").find_by_filetype
 
 ---Construct a fluent wrapper bound to a single window id.
