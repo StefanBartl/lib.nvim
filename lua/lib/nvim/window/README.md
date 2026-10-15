@@ -300,6 +300,10 @@ ledger:clear(win)               --> count removed;  ledger:clear_all()
 
 Closed windows are forgotten, never an error; matches of others in the same window are left alone.
 
+Note: Vim copies a window's matches into the window a `:split` creates, with the same ids. The ledger
+is keyed by window id, so the copies are not its own: `ledger:list(new_win)` is empty and `clear(new_win)`
+does not reach them. Matches that must not appear in a split are added again per window (e.g. on `WinNew`).
+
 ### `find_by_filetype(filetype) -> winid|false`
 
 First open window whose buffer has the given `filetype`, or `false` if none

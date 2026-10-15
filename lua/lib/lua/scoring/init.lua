@@ -124,6 +124,13 @@ Builder.__index = Builder
 ---@param applies? boolean  # `false` leaves the contribution out (nothing is listed)
 ---@return Lib.Scoring.Builder
 function Builder:add(name, delta, applies)
+  -- checked here, not only in `result()`: the error should point at the call that passed the bad value
+  if type(name) ~= "string" or name == "" then
+    error("lib.lua.scoring: a contribution needs a non-empty name", 2)
+  end
+  if not finite(delta) then
+    error(("lib.lua.scoring: %q needs a finite number, got %s"):format(name, tostring(delta)), 2)
+  end
   self.entries[#self.entries + 1] = { name = name, delta = delta, applies = applies }
   return self
 end

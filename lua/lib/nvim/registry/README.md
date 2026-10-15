@@ -54,4 +54,7 @@ langs:reset()   -- tests: empty; the loader runs again before the next read
 `register` alone does not trigger it. It is marked as run *before* it is called, so a loader that registers
 by calling back into the registry (the usual shape: a backend module requires the registry and registers
 itself) does not recurse. After `reset()` it runs again, so the known entries come back on the next read;
-entries registered by hand are gone.
+entries registered by hand are gone. A loader that **throws** is not marked as run: the error reaches
+the reading call, and the next read runs it again (what it registered before throwing stays, so a
+half-filled registry is never served silently). `unregister` runs the loader first too, so a known entry
+can be removed before anything read the registry.
