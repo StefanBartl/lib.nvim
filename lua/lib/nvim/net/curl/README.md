@@ -114,12 +114,14 @@ returns the path; a fresh entry is served without a request (`ttl_s`, `refresh`)
 | option            | effect                                                                                |
 | ----------------- | ------------------------------------------------------------------------------------- |
 | `max_age_s`       | after a download, entries not used for this many seconds are removed                  |
-| `max_total_bytes` | after a download, the least recently used entries are removed until the directory fits |
+| `max_total_bytes` | after a download, the least recently used entries are removed until the cache entries (64-hex files; `.part` and foreign files are not counted) total at most this |
 
 "Used" is the later of the download time and the last hit: a hit renews the file's **atime** only, never its
 mtime, because `ttl_s` counts from the download. Only files named like an entry (the 64 hex digits of the hash,
 optionally `.ext`) are ever removed — never a `.part` file of a running download, never anything else in the
-directory — and the file just stored is kept. Neither option set: nothing is removed.
+directory — and the file just stored is kept. Neither option set: nothing is removed. Both must be numbers >= 0 (anything else raises; `0` keeps only the file
+just stored). Order is by last use at sub-second precision where the file system has it, then by name. A prune error
+never fails the download; it is reported once as a warning.
 
 ## Credentials never go in argv
 
