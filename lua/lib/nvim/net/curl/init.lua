@@ -770,12 +770,15 @@ local function prune_cache(dir, opts, keep)
     return 0
   end
   local now, entries, total, removed = os.time(), {}, 0, 0
+  -- by name, not by path: `dir` comes from `dirname` (slashes, no trailing slash) and `keep` from the caller's
+  -- `cache_dir` spelling, so the two paths of one file need not be equal as strings
+  local keep_name = keep and vim.fs.basename(keep)
   for _, name in ipairs(vim.fn.readdir(dir)) do
     local full = dir .. "/" .. name
     if
       (name:match("^%x+$") or name:match("^%x+%.%w+$"))
       and #name:match("^%x+") == 64
-      and full ~= keep
+      and name ~= keep_name
     then
       local st = vim.uv.fs_stat(full)
       if st and st.type == "file" then
@@ -789,13 +792,17 @@ local function prune_cache(dir, opts, keep)
     total = total + (st and st.size or 0)
   end
   table.sort(entries, function(a, b)
-    return a.used < b.used
+    if a.used ~= b.used then
+      return a.used < b.used
+    end
+    return a.path < b.path
   end)
   for _, e in ipairs(entries) do
     local too_old = opts.max_age_s and (now - e.used) > opts.max_age_s
     local too_big = opts.max_total_bytes and total > opts.max_total_bytes
     if too_old or too_big then
-      if pcall(os.remove, e.path) then
+      -- `os.remove` reports failure as `nil, err` (a locked file on Windows), it does not throw
+      if vim.uv.fs_unlink(e.path) then
         removed = removed + 1
         total = total - e.size
       end
@@ -804,7 +811,7 @@ local function prune_cache(dir, opts, keep)
   return removed
 end
 
---@internal
+---@internal
 ---@param path string
 ---@param opts Lib.Net.Curl.CachedOpts
 local function after_store(path, opts)

@@ -468,6 +468,40 @@ return function(H)
     -- LRU: the hit entry outlives a never-used one that is younger by mtime
     fetch("d.txt", { max_total_bytes = 220 })
     ok(uv.fs_stat(hit_path) ~= nil, "max_total_bytes: an entry that was hit recently is kept")
+
+    -- the file just stored survives a limit below its own size, whatever the spelling of cache_dir
+    -- (trailing slash, backslashes on Windows): it must not be mistaken for an eviction candidate
+    for _, spelled in ipairs({ dir .. "/", (dir:gsub("/", string.char(92))) }) do
+      local g, stored = curl.download_cached_blocking(
+        ("http://127.0.0.1:%d/own-%d.txt"):format(port, #spelled),
+        { cache_dir = spelled, max_total_bytes = 1 }
+      )
+      ok(
+        g and uv.fs_stat(stored) ~= nil,
+        "max_total_bytes: the stored file is kept (cache_dir " .. spelled .. ")"
+      )
+    end
+
+    -- a removal that fails does not count as freed space: the next entries go instead of stopping short
+    local keys = {}
+    for i = 1, 3 do
+      keys[i] = entry("fail" .. i, 100, 600 - i * 100)
+    end
+    local real_unlink = uv.fs_unlink
+    H.with_patched(uv, "fs_unlink", function(p, ...)
+      if p:find(vim.fn.sha256("fail1"), 1, true) then
+        return nil, "EBUSY"
+      end
+      return real_unlink(p, ...)
+    end, function()
+      fetch("e.txt", { max_total_bytes = 150 })
+    end)
+    ok(uv.fs_stat(keys[1]) ~= nil, "removal failure: the locked oldest entry is still there")
+    eq(
+      uv.fs_stat(keys[2]),
+      nil,
+      "removal failure: not counted as freed, so the next oldest goes too"
+    )
     srv.close()
     vim.fn.delete(dir, "rf")
   end
