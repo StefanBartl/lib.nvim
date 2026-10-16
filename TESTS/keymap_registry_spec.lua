@@ -584,6 +584,43 @@ return function(H)
       H.eq(count(), 1, "recreated buffer: only the live buffer's keymap is recorded")
       vim.api.nvim_buf_delete(b3, { force = true })
       H.eq(count(), 0, "recreated buffer: a wiped buffer's record is gone when read")
+
+      -- adding prunes on its own: look at the raw list, no registered()/all() read in between
+      keymap.forget()
+      local records = require("lib.nvim.bindings.keymap.records")
+      local raw = records.all()
+      local function raw_count()
+        local n = 0
+        for _, entries in pairs(raw) do
+          for _, e in ipairs(entries) do
+            if e.lhs == "<Plug>SpecUiKey" then
+              n = n + 1
+            end
+          end
+        end
+        return n
+      end
+      local d1 = open_ui()
+      vim.api.nvim_buf_delete(d1, { force = true })
+      local d2 = open_ui()
+      H.eq(raw_count(), 1, "add prunes the dead buffer's record without a read")
+
+      -- :bdelete / :bunload keep the buffer number valid but discard its buffer-local maps
+      vim.cmd("bdelete " .. d2)
+      H.eq(count(), 0, "a bdelete'd buffer's record is gone (Neovim dropped its maps)")
+      local d3 = open_ui()
+      vim.cmd("bunload " .. d3)
+      H.eq(count(), 0, "a bunload'ed buffer's record is gone")
+
+      -- a plugin bucket left empty is removed, not returned as an empty list
+      for plugin, entries in pairs(records.all()) do
+        H.ok(#entries > 0, "no empty direct bucket left behind: " .. plugin)
+      end
+
+      -- a live buffer that was merely hidden keeps its record
+      local d4 = open_ui()
+      H.eq(count(), 1, "a live buffer keeps its record")
+      vim.api.nvim_buf_delete(d4, { force = true })
       keymap.forget()
     end
   end
