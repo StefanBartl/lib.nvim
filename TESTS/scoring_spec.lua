@@ -140,6 +140,16 @@ return function(H)
   fails(function()
     scoring.compute({ "not a table" })
   end, "compute: non-table entry")
+  -- a number or boolean entry cannot be indexed: only the explicit guard names the module and the cause
+  for _, bad in ipairs({ 5, true }) do
+    local good, err = pcall(scoring.compute, { bad })
+    eq(good, false, "compute: non-table entry (" .. type(bad) .. ")")
+    ok(
+      type(err) == "string"
+        and err:find("lib.lua.scoring.compute: entries[1] must be a table", 1, true) ~= nil,
+      "compute: a " .. type(bad) .. " entry says it must be a table"
+    )
+  end
   fails(function()
     scoring.new():bonus("", 1):result()
   end, "empty name")

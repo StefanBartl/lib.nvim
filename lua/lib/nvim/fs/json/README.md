@@ -30,4 +30,5 @@ local tbl, err2 = json.read("/tmp/state.json")
 file over `path` via `fs_rename`. This is atomic on POSIX filesystems; on
 Windows `fs_rename` is best-effort (it can fail if `path` is open elsewhere).
 On rename failure, the `.tmp` file is cleaned up and `M.write` returns
-`false, err`.
+`false, err`. If `path` is a symlink, the link target is written through (resolved with
+`fs_realpath`) and the link stays a link; a dangling link is replaced like any other entry.

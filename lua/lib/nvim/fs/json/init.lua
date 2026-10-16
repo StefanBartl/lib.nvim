@@ -40,6 +40,7 @@ end
 ---`.tmp` file first, then rename it over `path`. Renaming is atomic on
 ---POSIX filesystems; on Windows `fs_rename` is best-effort (it can fail if
 ---`path` is open elsewhere) but still avoids leaving a half-written file.
+---A symlink `path` is written through (the link stays a link); a dangling link is replaced.
 ---@param path string
 ---@param tbl table
 ---@return boolean ok
