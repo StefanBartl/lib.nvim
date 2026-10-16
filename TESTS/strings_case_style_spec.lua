@@ -52,6 +52,48 @@ return function(H)
   eq(strings.apply_style(nil, "upper"), "", "apply_style: nil text gives empty string")
   eq(strings.apply_style("__", "camel"), "__", "apply_style: no words, text unchanged")
 
+  -- non-ASCII letters travel inside their word (case itself stays ASCII only); punctuation separates words
+  local function u(code)
+    return vim.fn.nr2char(code)
+  end
+  local gross = "gr" .. u(246) .. u(223) .. "e" -- "grosse" with o-umlaut and sharp s
+  eq(
+    strings.apply_style(gross .. "_x", "camel"),
+    gross .. "X",
+    "apply_style: a non-ASCII letter is kept (camel)"
+  )
+  eq(
+    strings.apply_style(gross .. "_x", "pascal"),
+    gross:sub(1, 1):upper() .. gross:sub(2) .. "X",
+    "apply_style: ... (pascal)"
+  )
+  eq(
+    strings.apply_style(u(252) .. "ber_foo", "pascal"),
+    u(252) .. "berFoo",
+    "apply_style: a leading non-ASCII letter is not capitalised, not damaged"
+  )
+  local nihon = u(26085) .. u(26412)
+  eq(
+    strings.apply_style(nihon .. "_foo", "camel"),
+    nihon .. "Foo",
+    "apply_style: CJK is kept as a word"
+  )
+  eq(
+    strings.identifier_style(gross .. "X"),
+    "camel",
+    "identifier_style: a non-ASCII word then a capital is camel"
+  )
+  eq(
+    strings.apply_style(u(201) .. "A", "lower"),
+    u(201) .. "a",
+    "apply_style: lower() is ASCII only, the other letter is kept intact"
+  )
+  eq(
+    strings.apply_style("foo.bar", "camel"),
+    "fooBar",
+    "apply_style: punctuation separates words and is dropped"
+  )
+
   -- the use case: one replacement follows the casing of every match
   eq(strings.apply_style("bar", strings.identifier_style("FOO")), "BAR", "match FOO -> BAR")
   eq(strings.apply_style("bar", strings.identifier_style("Foo")), "Bar", "match Foo -> Bar")

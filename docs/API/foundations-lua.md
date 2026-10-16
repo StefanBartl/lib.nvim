@@ -55,6 +55,8 @@ converters.
 M.case_shape(word: string): "lower"|"upper"|"capital"|"mixed"
 M.apply_shape(word: string, shape: "lower"|"upper"|"capital"|"mixed"): string
 M.change_case(str: string, mode: "title"|"sentence"|"upper"|"lower"): string
+M.identifier_style(text: string|nil): "upper"|"lower"|"title"|"camel"|"pascal"|nil  -- style of a token / identifier
+M.apply_style(text: string|nil, style: ...): string  -- re-case text in that style (camel/pascal re-join the words; ASCII-only case)
 ```
 
 ### `lib.lua.strings.patterns` (see README)

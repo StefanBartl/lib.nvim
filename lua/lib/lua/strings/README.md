@@ -157,6 +157,7 @@ strings.case_shape("hELLo")          --> "mixed"
 strings.apply_shape("world", "capital")  --> "World"
 strings.identifier_style("fooBar")   --> "camel"   ("FooBar" "pascal", "Foo" "title", "FOO_BAR" "upper", "foo_bar" "lower")
 strings.apply_style("baz_qux", "camel")  --> "bazQux"   (re-cases a replacement like the token it replaces)
+                                    -- letter case is ASCII only; non-ASCII letters stay in their word unchanged, punctuation separates words
 strings.change_case("hello world", "title")     --> "Hello World"
 strings.change_case("Hello World", "sentence")  --> "Hello world"
 ```
