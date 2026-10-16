@@ -17,6 +17,7 @@ lib.nvim.cache/
 ├── init.lua       -- aggregator: disk, memory
 ├── disk.lua        -- persistent JSON disk cache
 ├── memory.lua       -- in-memory TTL/tick namespace cache + auto-invalidation
+├── invocation.lua   -- per-call cache (`run`/`memo`) and the editor-state reader
 └── @types/        -- LuaLS types (Lib.Cache.*)
 ```
 
@@ -138,3 +139,35 @@ stays counted until a `get`, a sweep or `invalidate` evicts it).
 
 `:Lib cache stats` (registered by `lib.nvim_usrcmds`, through `cache.routes()`) shows that table for every
 namespace of every plugin that uses `lib.nvim.cache.memory`.
+
+## `lib.nvim.cache.invocation`
+
+A cache that lives for **one call**. Inside `scope:run(fn)` a value computed by `scope:memo(key, produce)` is
+remembered until the outermost `run` returns (or raises), then dropped; outside a `run` nothing is remembered and
+`produce()` is simply called. Built on a `lib.nvim.cache.memory` namespace (`invocation:<name>`), so it shows up in
+`:Lib cache stats`.
+
+Use it when nested helpers of one command must see ONE reading of the editor without a table being passed
+through every signature (generalised from open.nvim's `context.with_cache`).
+
+```lua
+local scope = require("lib.nvim.cache.invocation").new("open")
+
+scope:run(function()
+  local state = scope:editor_state()   -- reads the editor once ...
+  local again = scope:editor_state()   -- ... the same table here, however deep the call
+  local root = scope:memo("git_root", function() return find_root() end)
+end)
+```
+
+| Function                    | Returns                                                                                       |
+| --------------------------- | --------------------------------------------------------------------------------------------- |
+| `new(name)`                 | a scope; two scopes never share values                                                        |
+| `scope:run(fn, ...)`        | `fn`'s results; nested runs share the outer values; an error is re-raised unchanged (level 0) |
+| `scope:memo(key, produce)`  | the cached value (`nil`/`false` are cached too); a raising producer stores nothing            |
+| `scope:active()`            | whether a `run` is in progress                                                                |
+| `scope:editor_state()`      | `read_editor_state()`, read once per `run`; do not mutate it                                  |
+| `read_editor_state()`       | `{ buf, win, mode, cursor, cfile, cword, selection, buffer_path }` read now, uncached         |
+
+`selection` is the text of a **live** visual selection only (read with `getregion`, so the `'<`/`'>` marks of an
+earlier selection are never returned); `cfile`, `cword` and `buffer_path` are `nil` when empty.

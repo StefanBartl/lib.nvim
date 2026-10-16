@@ -16,6 +16,7 @@ local M = {}
 
 M.disk = require("lib.nvim.cache.disk")
 M.memory = require("lib.nvim.cache.memory")
+M.invocation = require("lib.nvim.cache.invocation")
 
 ---The `:Lib cache stats` route, for `lib.nvim_usrcmds` to merge into the `:Lib` verb it builds (data,
 ---not registered here, so exactly one place owns the verb). It shows the hit rate, size and evictions
