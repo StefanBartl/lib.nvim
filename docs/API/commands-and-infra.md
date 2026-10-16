@@ -450,15 +450,16 @@ Terminal capabilities from environment variables, cached per session; one warnin
 ```
 M.detect(env?): { kitty_graphics, osc1337_images, sixel, truecolor: boolean, host: Lib.Terminal.Host }   -- pure
 M.supports(name): boolean            -- cached; unknown name is an error
-M.require(name, opts?: { feature?, notify?: fun(msg) }): boolean   -- + ONE warning per capability per session
+M.require(name, opts?: { feature?, notify?: fun(msg) }): boolean   -- + ONE warning per capability AND feature per session
 M.names(): string[]    M.reset()
 ```
 
 ### `lib.nvim.treesitter.regions` (header comment)
 Capture name -> ranges of a buffer, fail-open (no parser / query / capture is `nil, reason`, never an error).
 ```
-M.collect(bufnr, captures: string[], opts?: { query?, lang?, first_row?, last_row? }): table<string, Region[]>|nil, reason|nil
+M.collect(bufnr, captures: string[], opts?: { query?, lang?, first_row?, last_row?, hierarchical? }): table<string, Region[]>|nil, reason|nil
   -- Region = { sr, sc, er, ec, start_byte=, end_byte= } (0-based, end exclusive)
+  -- names match EXACTLY ("comment" is not "comment.documentation") unless hierarchical = true (dotted children included)
   -- reasons: "invalid_buffer"|"no_filetype"|"no_parser"|"no_query"|"capture_not_defined"|"parse_failed"
 M.contains(ranges, row, col): boolean        M.contains_pos(ranges, lnum, col): boolean   -- 1-based
 M.contains_byte(ranges, byte): boolean       M.byte_ranges(ranges): { start_byte, end_byte }[]

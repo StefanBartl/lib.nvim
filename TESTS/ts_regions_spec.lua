@@ -58,6 +58,51 @@ return function(H)
   eq(#f2.comment, 0, "empty match: a defined capture without nodes is an empty list")
   eq(f2.no_such_capture_xyz, nil, "an undefined capture is absent from the map")
 
+  -- exact names by default; `hierarchical` also takes the dotted children. A prefix that has dotted children
+  -- in this parser's query but no capture of its own name:
+  local hq = vim.treesitter.query.get("lua", "highlights")
+  local own, child = {}, nil
+  for _, cap in ipairs(hq.captures) do
+    own[cap] = true
+  end
+  for _, cap in ipairs(hq.captures) do
+    local parent = cap:match("^(.*)%.[^.]+$")
+    if parent and not own[parent] then
+      child = { parent = parent, name = cap }
+      break
+    end
+  end
+  if child then
+    local hbuf = lua_buf({ "local function f() return { 1, 2 } end", "-- c", '"x"' })
+    local exact = regions.collect(hbuf, { child.parent })
+    eq(exact, nil, "exact: `" .. child.parent .. "` does not collect `" .. child.name .. "`")
+    local deep, deep_why = regions.collect(hbuf, { child.parent }, { hierarchical = true })
+    ok(
+      deep ~= nil,
+      "hierarchical: the parent collects its dotted children (" .. tostring(deep_why) .. ")"
+    )
+    local direct = regions.collect(hbuf, { child.name }, { hierarchical = true })
+    ok(
+      direct ~= nil and #direct[child.name] >= 0,
+      "hierarchical: the specific name is still itself"
+    )
+    local both = regions.collect(hbuf, { child.parent, child.name }, { hierarchical = true })
+    ok(
+      both ~= nil and both[child.name] ~= nil and both[child.parent] ~= nil,
+      "hierarchical: both names are keys"
+    )
+    eq(
+      #deep[child.parent],
+      #both[child.parent] + #both[child.name],
+      "hierarchical: the most specific requested name owns a node, once"
+    )
+  else
+    H.skipped(
+      "treesitter.regions hierarchical",
+      "the lua highlights query has no dotted capture without a parent"
+    )
+  end
+
   -- row window
   local f3 = regions.collect(buf, { "comment" }, { first_row = 0, last_row = 1 })
   eq(#f3.comment, 0, "first_row/last_row: the comment is outside rows 0..1")
