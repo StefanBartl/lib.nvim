@@ -285,7 +285,8 @@ require("lib.nvim.deps.health").pointer_for("pdfport.nvim")
 
 `status` answers "what is missing on this machine for the plugins I run";
 `project` answers "what is missing for the files in *this directory*": it
-scans a root asynchronously (cached per root), maps the file kinds to
+scans a root asynchronously (bounded by file count, depth and time, cached
+per root), maps the file kinds to
 filetypes, treesitter languages and the tools a caller registered for those
 filetypes, and reports what is not installed. Installing asks once and uses
 the same confirmed ways as everything else here (a terminal with the command
@@ -296,7 +297,7 @@ including the answer to "can Mason be driven from Lua without UI", in
 ```lua
 local project = require("lib.nvim.deps.project")
 project.register_tools("my.nvim", { lua = { { mason = "stylua" } } })
-project.setup({ auto = true })   -- optional: one notification per root with something missing
+project.setup({ auto = true })   -- optional: one notification per root with something missing (home and drive roots are skipped)
 ```
 
 ## `lib.nvim.deps.status` — all of it at once

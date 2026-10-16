@@ -8,17 +8,45 @@
 ---@field count integer files of this kind
 ---@field sample string one real path of this kind (what `vim.filetype.match` is asked about)
 
+---How far one walk may go. Defaults: `deps.project.walk.DEFAULTS` for `scan`,
+---`deps.project.TRIGGER_LIMITS` for the `DirChanged` trigger.
+---@class Lib.Deps.Project.Limits
+---@field max_files integer stop after this many counted files
+---@field max_depth integer do not enter directories deeper than this (the root is depth 0)
+---@field max_ms integer stop after this many milliseconds
+
 ---@class Lib.Deps.Project.Scan
 ---@field root string normalized root that was walked
 ---@field total integer files seen
 ---@field keys table<string, Lib.Deps.Project.KeyCount>
 ---@field errors string[]|nil directories that could not be read ("<dir>: <reason>")
+---@field truncated? "max_files"|"max_depth"|"max_ms"|nil the limit that cut the walk short
+---@field failed? string|nil the error a walk died of (a throwing `ignore`); the counts are what it had by then
+---@field limits? Lib.Deps.Project.Limits the limits the walk ran with (nil for `count`)
 ---@field at integer `os.time()` the walk finished (the cache ages from here)
 
 ---@class Lib.Deps.Project.ScanOpts
 ---@field refresh? boolean walk again even if a cached scan of this root is fresh
 ---@field ttl_seconds? integer how long a cached scan of one root is trusted; default 600
----@field ignore? fun(abs_path: string, is_dir: boolean): boolean prune entries (a directory prunes its subtree); default: `lib.nvim.fs.ignore.list` basenames
+---@field ignore? fun(abs_path: string, is_dir: boolean): boolean prune entries (a directory prunes its subtree); runs in a libuv callback (no `vim.fn`/`vim.api`); default: `deps.project.default_ignore()`
+---@field max_files? integer see `Lib.Deps.Project.Limits`; default 100000
+---@field max_depth? integer see `Lib.Deps.Project.Limits`; default 32
+---@field max_ms? integer see `Lib.Deps.Project.Limits`; default 30000
+
+---@class Lib.Deps.Project.WalkOpts
+---@field ignore? fun(abs_path: string, is_dir: boolean): boolean
+---@field max_files? integer
+---@field max_depth? integer
+---@field max_ms? integer
+
+---What `deps.project.walk.run` hands back.
+---@class Lib.Deps.Project.WalkResult
+---@field keys table<string, Lib.Deps.Project.KeyCount>
+---@field total integer
+---@field errors string[]|nil
+---@field truncated? "max_files"|"max_depth"|"max_ms"|nil
+---@field failed? string|nil
+---@field root_unreadable boolean the root itself could not be opened
 
 ---A tool the CALLER says a filetype wants, installed from a Mason package.
 ---@class Lib.Deps.Project.MasonTool
@@ -54,6 +82,9 @@
 ---@field root string
 ---@field total integer files seen
 ---@field errors string[]|nil
+---@field truncated? "max_files"|"max_depth"|"max_ms"|nil carried over from the scan
+---@field failed? string|nil carried over from the scan
+---@field limits? Lib.Deps.Project.Limits carried over from the scan
 ---@field languages Lib.Deps.Project.Language[] most files first
 ---@field missing_parsers Lib.Deps.Project.Language[] subset of `languages`: installable and not installed (state `available` or `declined`)
 ---@field tools Lib.Deps.Project.ToolStatus[]
@@ -77,6 +108,9 @@
 ---@class Lib.Deps.Project.SetupOpts
 ---@field auto? boolean scan the current directory now and on every `DirChanged`, and notify once per root when something is missing. Default false.
 ---@field ttl_seconds? integer passed to every scan the trigger starts
+---@field max_files? integer walk limit of the trigger's scans; default `TRIGGER_LIMITS.max_files` (20000)
+---@field max_depth? integer walk limit of the trigger's scans; default `TRIGGER_LIMITS.max_depth` (12)
+---@field max_ms? integer walk limit of the trigger's scans; default `TRIGGER_LIMITS.max_ms` (5000)
 ---@field tools? Lib.Deps.Project.ToolMap|fun(): Lib.Deps.Project.ToolMap passed to every report the trigger builds
 
 ---`lib.nvim.deps.project` module surface.
@@ -85,6 +119,11 @@
 ---@field count fun(root: string, paths: string[], errors?: string[]|nil): Lib.Deps.Project.Scan
 ---@field scan fun(root: string, opts: Lib.Deps.Project.ScanOpts|nil, on_done: fun(scan: Lib.Deps.Project.Scan)): fun()
 ---@field forget fun(root?: string): nil
+---@field IGNORE_KEEP string[]
+---@field default_ignore fun(): fun(abs_path: string, is_dir: boolean): boolean
+---@field TRIGGER_LIMITS Lib.Deps.Project.Limits
+---@field is_broad_root fun(root: string): boolean
+---@field report_async fun(scan: Lib.Deps.Project.Scan, opts: Lib.Deps.Project.ReportOpts|nil, on_done: fun(report: Lib.Deps.Project.Report)): nil
 ---@field register_tools fun(owner: string, tools: Lib.Deps.Project.ToolMap|fun(): Lib.Deps.Project.ToolMap): fun()
 ---@field registered fun(): string[]
 ---@field report fun(scan: Lib.Deps.Project.Scan, opts?: Lib.Deps.Project.ReportOpts): Lib.Deps.Project.Report

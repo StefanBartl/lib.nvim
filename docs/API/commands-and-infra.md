@@ -418,17 +418,20 @@ M.show(plugin_name, result, opts?): integer bufnr, integer winid
 The project view: which treesitter parsers and tools the files under a root
 need and lack. Nothing installs without one confirmation. See its README.
 ```
-M.scan(root, opts?: { refresh?, ttl_seconds?, ignore? }, on_done: fun(scan)): fun() cancel
+M.scan(root, opts?: { refresh?, ttl_seconds?, ignore?, max_files?, max_depth?, max_ms? }, on_done: fun(scan)): fun() cancel
 M.forget(root?)
+M.default_ignore(): fun(abs_path, is_dir): boolean     M.IGNORE_KEEP: string[]   -- fs.ignore.list minus `.github`
 M.count(root, paths, errors?): Lib.Deps.Project.Scan     -- pure; M.key_of(path): "*.ext" | file name
 M.register_tools(owner, { [filetype] = tools[] } | fn): fun() unregister   -- tool = Lib.Deps.Tool | { mason = "pkg" }
 M.registered(): string[]
 M.report(scan, opts?: { tools?, registered? }): Lib.Deps.Project.Report
+M.report_async(scan, opts?, on_done)   -- report(), after one Mason registry refresh when an entry reads `unavailable`
 M.lines(report, opts?): string[]    M.summary(report): string|nil
 M.install_plan(report, opts?): Lib.Deps.Project.InstallPlan
 M.install(report, opts?: { confirm?, manager? }): { parsers, mason, terminal }|nil
 M.run(root?, action?: "refresh"|"install", opts?)        -- :Lib deps project [refresh|install]
-M.setup(opts?: { auto?, ttl_seconds?, tools? })          -- optional DirChanged trigger, default off
+M.setup(opts?: { auto?, ttl_seconds?, tools?, max_files?, max_depth?, max_ms? })   -- optional DirChanged trigger, default off
+M.TRIGGER_LIMITS    M.is_broad_root(root): boolean   -- the trigger's walk limits / roots it never scans
 M.reset_announced()
 ```
 

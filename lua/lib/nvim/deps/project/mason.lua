@@ -73,7 +73,9 @@ function M.status(name)
 end
 
 ---Fetch the registry if Mason has never done so (fresh machine) or its
----cache is stale; a no-op callback `(true)` when Mason is not loadable.
+---cache is stale (Mason's `registry.refresh` decides by age). `on_done(ok)`
+---is called once; with `false`, right away, when Mason is not loadable or
+---has no `refresh`.
 ---@param on_done fun(ok: boolean)
 ---@return nil
 function M.refresh(on_done)

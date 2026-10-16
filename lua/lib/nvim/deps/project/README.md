@@ -69,21 +69,36 @@ lists only known after the owner's own `setup()`. Unusable entries are named in
 ## Scanning
 
 `scan(root, opts, on_done)` walks `root` asynchronously
-(`lib.nvim.fs.collect_recursive`, one directory at a time, the main loop is
-never blocked) and keeps **only counts**: files per extension (`*.rs`) or per
-bare file name (`Makefile`, `.gitignore`), plus one sample path of each kind.
-The path list is thrown away.
+(`deps.project.walk`, one directory at a time, the main loop is never blocked)
+and keeps **only counts**: files per extension (`*.rs`) or per bare file name
+(`Makefile`, `.gitignore`), plus one sample path of each kind. No path list
+is ever built.
 
-- Pruned by default: the basenames of `lib.nvim.fs.ignore.list`
-  (`.git`, `node_modules`, `target`, caches, …); `opts.ignore` replaces that.
+- **Bounded**: the walk stops after `max_files` files (default 100000) or
+  `max_ms` milliseconds (default 30000) and does not enter directories deeper
+  than `max_depth` levels (default 32). `scan.truncated` names the limit that
+  cut it short; the report says the counts are partial.
+- **Always answers**: a walk that raises (a throwing `opts.ignore`) is
+  delivered with `scan.failed` instead of leaving its callers waiting.
+- Pruned by default (`default_ignore()`): the basenames of
+  `lib.nvim.fs.ignore.list` except `.github` (`IGNORE_KEEP` -- workflows are
+  project content). That is VCS directories (`.git`, `.hg`, `.svn`, …),
+  dependency stores (`node_modules`, `.yarn`, `.venv`, …), caches, editor
+  state (`.vscode`, `.idea`, `.claude`, `.agents`) **and the build output
+  names `build`, `dist`, `out`, `target`, `bin`, `obj`** -- a `bin/` of
+  scripts is pruned too. The names match directories and files alike,
+  case-insensitively on Windows. `opts.ignore` replaces the filter (it runs in
+  a libuv callback: no `vim.fn`/`vim.api`).
 - **Cached per root** (`ttl_seconds`, default 600): a `:cd` back to a known root
   costs nothing; `refresh = true` walks again. Two callers asking for one root
-  while a walk runs share it.
-- A walk that could not read a directory is delivered (`scan.errors`) but not
-  cached — a momentarily unreadable root would otherwise answer "nothing here"
-  for the whole TTL.
+  while a walk runs share it (with the first caller's limits).
+- Cached too: a walk where some *subdirectory* could not be read (`scan.errors`)
+  and a truncated walk (it answers later requests with the same or smaller
+  limits; larger ones walk again). Not cached: a walk whose *root* could not be
+  read -- a momentarily unreadable root would otherwise answer "nothing here"
+  for the whole TTL -- and a failed walk.
 - `on_done` always runs on the main loop, also for a cache hit; the returned
-  function cancels the wait.
+  function cancels the wait, and the walk stops once nobody waits for it.
 
 ## The mapping
 
@@ -122,10 +137,21 @@ the same plan and question text without doing anything.
 ## `setup({ auto = true })` — the optional trigger
 
 Off by default (`setup()` without `auto` does nothing). With `auto = true` the
-current directory is scanned now and on every `DirChanged`; one
-`lib.nvim.notify` line per root says what is missing, and again only when
-*what is missing* changes. It never installs. `reset_announced()` forgets the
-announcements; `setup({})` turns the trigger off.
+current directory is scanned now and on every `DirChanged` (the directory the
+event names); one `lib.nvim.notify` line per root says what is missing, and
+again only when *what is missing* changes. It never installs.
+
+A `:cd` is not a request to walk a disk, so the trigger is bounded:
+
+- its scans use `TRIGGER_LIMITS` (20000 files, depth 12, 5000 ms), or
+  `setup({ max_files, max_depth, max_ms })`;
+- the next `DirChanged` cancels the scan of the directory that was left;
+- broad roots (`is_broad_root`: the home directory, `/`, a drive root such as
+  `C:/`, a UNC share root) are not scanned at all -- `:Lib deps project` still
+  scans them when asked.
+
+`reset_announced()` forgets the announcements; `setup({})` turns the trigger
+off (and cancels its running scan).
 
 ## Feasibility: driving Mason from Lua without UI (answered)
 
@@ -143,9 +169,14 @@ source (the checkout in use, `2a6940a`, 2026-06-11):
   events if a caller ever wants progress.
 - Two traps, both handled in `deps.project.mason`: `get_package` **raises** for
   a name the registry does not know *and for every name while the registry has
-  never been fetched* (a fresh machine) — so it is always `pcall`ed and
-  `registry.refresh(cb)` runs once before the first install; and `install`
-  **asserts** the package is not already installing, so that is checked first.
+  never been fetched* (a fresh machine) — so it is always `pcall`ed. On a
+  fresh machine every package would therefore read `unavailable` and never be
+  offered: `report_async` (what `:Lib deps project` and the trigger use)
+  refreshes the registry once when a report holds an `unavailable` Mason entry
+  and reports again (Mason's `registry.refresh` is age-gated: it downloads the
+  registry index only when it is missing or stale, and installs nothing);
+  `install` refreshes once more before it starts. And `install` **asserts** the
+  package is not already installing, so that is checked first.
 - Mason is a soft dependency: without it every Mason entry reports `unknown`
   (not `missing`) and is never offered.
 
@@ -155,14 +186,17 @@ Whether a modern installer of our own should replace Mason is not part of this.
 
 | Function | Meaning |
 |---|---|
-| `scan(root, opts?, on_done)` | async, cached per root; returns a cancel function |
+| `scan(root, opts?, on_done)` | async, bounded (`max_files`, `max_depth`, `max_ms`), cached per root; returns a cancel function |
+| `default_ignore()` / `IGNORE_KEEP` | the default walk filter / the shared-list names it keeps |
 | `forget(root?)` | drop the cached scan of a root (or all) |
 | `count(root, paths, errors?)` / `key_of(path)` | the pure counting `scan` is built on |
 | `register_tools(owner, table_or_fn)` / `registered()` | the caller's filetype → tools table; returns an unregister function |
-| `report(scan, opts?)` | languages, missing parsers, tools, missing tools, unmapped, problems |
+| `report(scan, opts?)` | languages, missing parsers, tools, missing tools, unmapped, problems; `errors`/`truncated`/`failed` of a partial scan |
+| `report_async(scan, opts?, on_done)` | `report`, after one Mason registry refresh when a Mason entry reads `unavailable` (fresh machine) |
 | `lines(report, opts?)` / `summary(report)` | the report as text / one notification line (nil when nothing is missing) |
 | `install_plan(report, opts?)` / `install(report, opts?)` | the plan and its question / ask once, then start |
 | `run(root?, action?, opts?)` | what `:Lib deps project [refresh\|install]` calls |
 | `setup(opts?)` / `reset_announced()` | the optional `DirChanged` trigger |
+| `TRIGGER_LIMITS` / `is_broad_root(root)` | the trigger's walk limits / the roots it never scans |
 
 Types: `Lib.Deps.Project*` in [`@types/init.lua`](@types/init.lua).
