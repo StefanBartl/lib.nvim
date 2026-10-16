@@ -115,25 +115,35 @@ jobs:
         run: |
           # Look the branch up on the remote instead of inferring "missing" from an API
           # error: a failed lookup must stop the job, not fall through to a push.
-          tip=$(git ls-remote --heads origin refs/heads/ci-verified | cut -f1)
-          if [ -z "$tip" ]; then
-            # First publish. A plain push creates the branch and is rejected if a
-            # concurrent run created it first.
-            git push origin HEAD:refs/heads/ci-verified
-            exit 0
-          fi
-          status=$(gh api "repos/$REPO/compare/$tip...$SHA" --jq .status)
-          case "$status" in
-            behind | identical)
-              echo "ci-verified ($tip) is '$status' relative to $SHA (published or superseded); leaving it alone"
-              ;;
-            ahead | diverged)
-              # The lease makes the server refuse the update if ci-verified moved since
-              # the comparison, so an older run can never overwrite a newer one.
-              git push origin HEAD:refs/heads/ci-verified --force-with-lease="refs/heads/ci-verified:$tip"
-              ;;
-            *)
-              echo "::error::unexpected compare status '$status' for $tip...$SHA"
-              exit 1
-              ;;
-          esac
+          # A concurrent run may move ci-verified between the comparison and the push
+          # (lease rejected). Re-read the tip and compare again: if the newer run is
+          # already ahead of this commit there is nothing left to publish, so that is
+          # success, not a failure.
+          for attempt in 1 2 3 4; do
+            tip=$(git ls-remote --heads origin refs/heads/ci-verified | cut -f1)
+            if [ -z "$tip" ]; then
+              # First publish. A plain push creates the branch and is rejected if a
+              # concurrent run created it first; the next attempt then compares.
+              git push origin HEAD:refs/heads/ci-verified && exit 0
+              continue
+            fi
+            status=$(gh api "repos/$REPO/compare/$tip...$SHA" --jq .status)
+            case "$status" in
+              behind | identical)
+                echo "ci-verified ($tip) is '$status' relative to $SHA (published or superseded); leaving it alone"
+                exit 0
+                ;;
+              ahead | diverged)
+                # The lease makes the server refuse the update if ci-verified moved since
+                # the comparison, so an older run can never overwrite a newer one.
+                git push origin HEAD:refs/heads/ci-verified --force-with-lease="refs/heads/ci-verified:$tip" && exit 0
+                echo "ci-verified moved during attempt $attempt; re-checking"
+                ;;
+              *)
+                echo "::error::unexpected compare status '$status' for $tip...$SHA"
+                exit 1
+                ;;
+            esac
+          done
+          echo "::error::could not publish ci-verified after 4 attempts"
+          exit 1
