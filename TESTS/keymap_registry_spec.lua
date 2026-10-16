@@ -556,5 +556,35 @@ return function(H)
     }) do
       pcall(vim.keymap.del, "n", lhs)
     end
+    -- A UI buffer recreated on every open binds its keys again from the same call site with a new buffer number;
+    -- the records of the wiped buffers must not pile up.
+    do
+      keymap.forget()
+      local function open_ui()
+        local b = vim.api.nvim_create_buf(false, true)
+        keymap.set("n", "<Plug>SpecUiKey", function() end, { buffer = b }, "ui key")
+        return b
+      end
+      local function count()
+        local n = 0
+        for _, entries in pairs(keymap.registered()) do
+          for _, e in ipairs(entries) do
+            if e.lhs == "<Plug>SpecUiKey" then
+              n = n + 1
+            end
+          end
+        end
+        return n
+      end
+      local b1 = open_ui()
+      vim.api.nvim_buf_delete(b1, { force = true })
+      local b2 = open_ui()
+      vim.api.nvim_buf_delete(b2, { force = true })
+      local b3 = open_ui()
+      H.eq(count(), 1, "recreated buffer: only the live buffer's keymap is recorded")
+      vim.api.nvim_buf_delete(b3, { force = true })
+      H.eq(count(), 0, "recreated buffer: a wiped buffer's record is gone when read")
+      keymap.forget()
+    end
   end
 end

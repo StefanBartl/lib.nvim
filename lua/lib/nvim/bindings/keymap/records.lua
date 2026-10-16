@@ -87,6 +87,25 @@ function M.resolve_buffer(buffer)
   return buffer
 end
 
+---Drop the records of buffer-local keymaps whose buffer is gone. A UI buffer that is recreated on every
+---open (a picker, a float) gets a fresh buffer number each time and binds its keys again from the same call
+---site, so without this the list grew by one entry per open and `registered()` described keymaps of buffers
+---nobody can reach any more. Buffer numbers are never reused, so a record of an invalid buffer is dead.
+---@return integer removed
+local function prune_dead_buffers()
+  local removed = 0
+  for _, entries in pairs(direct) do
+    for i = #entries, 1, -1 do
+      local b = entries[i].buffer
+      if type(b) == "number" and b > 0 and not vim.api.nvim_buf_is_valid(b) then
+        table.remove(entries, i)
+        removed = removed + 1
+      end
+    end
+  end
+  return removed
+end
+
 ---Record one keymap created by a plain `set()`.
 ---
 ---Called from the `set` wrapper. `registry.register()` passes `record = false`
@@ -118,6 +137,7 @@ end
 function M.add(modes, lhs, rhs, opts)
   local src = caller_site()
   local plugin = plugin_of(src)
+  prune_dead_buffers()
   direct[plugin] = direct[plugin] or {}
 
   local key_mode, key_buffer = mode_key(modes), M.resolve_buffer(opts.buffer)
@@ -154,6 +174,7 @@ end
 ---Everything `set()` recorded, keyed by plugin.
 ---@return table<string, Lib.Keymap.Registered[]>
 function M.all()
+  prune_dead_buffers()
   return direct
 end
 
