@@ -100,6 +100,8 @@
 -- =========================================================
 ---@field case_shape fun(word: string): "lower"|"upper"|"capital"|"mixed" # Detect a word's casing shape.
 ---@field apply_shape fun(word: string, shape: "lower"|"upper"|"capital"|"mixed"): string # Reapply a detected shape onto text ("mixed" is a no-op).
+---@field identifier_style fun(text: string|nil): "upper"|"lower"|"title"|"camel"|"pascal"|nil # Detect the casing style of a token/identifier.
+---@field apply_style fun(text: string|nil, style: "upper"|"lower"|"title"|"camel"|"pascal"|nil): string # Re-case text in a detected style.
 ---@field change_case fun(str: string, mode: "title"|"sentence"|"upper"|"lower"): string
 -- =========================================================
 -- lib.lua.strings.wrap
@@ -149,6 +151,8 @@
 ---@class Lib.Strings.Case
 ---@field case_shape fun(word: string): "lower"|"upper"|"capital"|"mixed"
 ---@field apply_shape fun(word: string, shape: "lower"|"upper"|"capital"|"mixed"): string
+---@field identifier_style fun(text: string|nil): "upper"|"lower"|"title"|"camel"|"pascal"|nil
+---@field apply_style fun(text: string|nil, style: "upper"|"lower"|"title"|"camel"|"pascal"|nil): string
 ---@field change_case fun(str: string, mode: "title"|"sentence"|"upper"|"lower"): string
 
 ---@class Lib.Strings.Wrap

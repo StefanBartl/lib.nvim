@@ -78,6 +78,8 @@ M.parse_location = require("lib.lua.strings.location").parse_location
 -- case module
 M.case_shape = require("lib.lua.strings.case").case_shape
 M.apply_shape = require("lib.lua.strings.case").apply_shape
+M.identifier_style = require("lib.lua.strings.case").identifier_style
+M.apply_style = require("lib.lua.strings.case").apply_style
 M.change_case = require("lib.lua.strings.case").change_case
 
 -- wrap module
