@@ -182,6 +182,59 @@ local function install(lang, on_installed)
   end)
 end
 
+---Read-only: where does the parser for `lang` stand right now? No prompt,
+---no install, no `vim.treesitter.language.add` -- safe to call from a scan.
+---
+---  * `"installed"`   a parser library for `lang` is on `runtimepath` (the
+---                    bundled ones and everything `nvim-treesitter` installed
+---                    are, since its install dir is added there), or
+---                    `nvim-treesitter` lists it as installed
+---  * `"available"`   not installed, but `nvim-treesitter` can install it
+---  * `"unavailable"` not installed and `nvim-treesitter` does not know it
+---  * `"unknown"`     `nvim-treesitter` is not loadable and nothing is on
+---                    `runtimepath`: cannot tell, and nothing can be installed
+---@param lang string
+---@return "installed"|"available"|"unavailable"|"unknown" state
+function M.status(lang)
+  if type(lang) ~= "string" or lang == "" then
+    return "unavailable"
+  end
+  if #vim.api.nvim_get_runtime_file("parser/" .. lang .. ".*", false) > 0 then
+    return "installed"
+  end
+  local ok_ts, ts = pcall(require, "nvim-treesitter")
+  if not ok_ts or type(ts.get_installed) ~= "function" or type(ts.get_available) ~= "function" then
+    return "unknown"
+  end
+  if vim.list_contains(ts.get_installed(), lang) then
+    return "installed"
+  end
+  if vim.list_contains(ts.get_available(), lang) then
+    return "available"
+  end
+  return "unavailable"
+end
+
+---Install the parser for `lang` NOW, whatever the mode (even `"off"`), and
+---never asking: the caller has already asked, in its own UI, and owns that
+---confirmation. `ensure()` is the prompting entry point; this is what a
+---caller that batched several languages into one question calls afterwards.
+---A language that is already installing, or that `nvim-treesitter` cannot
+---install, is refused.
+---@param lang string
+---@param on_installed? fun(lang: string)
+---@return boolean started false when nothing was started (and why is in `status`)
+function M.install(lang, on_installed)
+  if type(lang) ~= "string" or lang == "" or PENDING[lang] then
+    return false
+  end
+  if M.status(lang) ~= "available" then
+    return false
+  end
+  install(lang, on_installed)
+  return PENDING[lang] == true
+end
+
 ---@internal
 --- Forward-declared: `process_queue` and `open_prompt` call each other
 --- (a resolved prompt processes the queue, which may open the next prompt).

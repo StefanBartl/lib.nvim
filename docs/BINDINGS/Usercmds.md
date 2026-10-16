@@ -4,12 +4,14 @@
 
 ## :Lib
 
-lib.nvim utility commands
+> lib.nvim utility commands
 
 | Invocation | Description |
 | --- | --- |
+| `:Lib cache stats` | Hit rate, entries and evictions of every in-memory cache namespace |
 | `:Lib cwd-here` | lcd to the current buffer's directory |
 | `:Lib deps install [{plugin:DEPS_PLUGIN}]` | Offer to install missing external tools — one plugin's, or every plugin's (asks first) |
+| `:Lib deps project [{action}]` | Scan this directory's files and show which treesitter parsers and tools are missing for them |
 | `:Lib deps reset-first-run [{plugin:DEPS_PLUGIN}]` | Forget that a plugin's (or every plugin's) first-run popup was already shown |
 | `:Lib deps show [{plugin:DEPS_PLUGIN}]` | List a plugin's declared external tools, why each matters, and what's missing |
 | `:Lib deps status` | Every declared tool across every plugin, and what's missing here |
@@ -18,3 +20,5 @@ lib.nvim utility commands
 | `:Lib notify history [{source}]` | Open the notify history (optionally filtered by source) |
 | `:Lib notify last` | Show the last delivered message in full (viewer) |
 | `:Lib ps-profile` | Open the active PowerShell profile |
+
+`{action}` ∈ `refresh | install`  

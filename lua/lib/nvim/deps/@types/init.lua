@@ -177,6 +177,7 @@
 ---@field view Lib.Deps.View
 ---@field first_run Lib.Deps.FirstRun
 ---@field status Lib.Deps.Status
+---@field project Lib.Deps.Project
 ---@field show_once fun(plugin_name: string, opts?: { manager?: Lib.Deps.Manager, cache?: Lib.Cache.Opts }): boolean
 ---@field require_tool fun(plugin_name: string, bin: string, opts?: Lib.Deps.RequireTool.Opts): string|nil is this tool here — and if not, report it usefully
 ---@field plugins fun(): string[] every plugin on runtimepath shipping a deps spec

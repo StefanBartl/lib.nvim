@@ -83,6 +83,8 @@ end, { nargs = "?", complete = function() return { "off", "prompt", "auto", "res
 | `declined()` | Sorted `string[]` of languages the user said "never" to. |
 | `reset_declined()` | Clears the declined list, in memory and on disk. |
 | `ensure(lang, opts?)` | Runs the policy for `lang`. No-op if `lang` is empty, already installed, not a known installable parser, mid-install/mid-prompt already, or (in `"prompt"` mode) declined. `opts.on_installed(lang)` fires once, only on a real successful install. |
+| `status(lang)` | Read-only: `"installed"` (a `parser/<lang>.*` library is on `runtimepath`, or `nvim-treesitter` lists it), `"available"` (installable), `"unavailable"`, or `"unknown"` (`nvim-treesitter` not loadable). No prompt, no install, no `vim.treesitter.language.add`. Used by `lib.nvim.deps.project`. |
+| `install(lang, on_installed?)` | Install `lang` now, whatever the mode (even `"off"`), without asking: the caller owns the confirmation (`lib.nvim.deps.project` asks once for a whole batch). Returns `false` when nothing was started (already installing, or not `"available"`). |
 
 ## Why this is safe to call on every `FileType`
 

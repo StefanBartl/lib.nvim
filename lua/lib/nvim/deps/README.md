@@ -23,6 +23,7 @@ Requiring this module registers nothing and touches nothing.
 | `deps.first_run` | Show a plugin's tool report once, ever — for a consuming plugin's own `setup()` |
 | `deps.require_tool` | The failure moment: is this tool here *right now*, and if not, say why it mattered and how to get it |
 | `deps.status` | Every declared tool across **every** plugin, merged into one report |
+| `deps.project` | The project view: scan a root, report which treesitter parsers and tools its files need and are missing ([README](project/README.md)) |
 
 ## `:Lib deps` — the user-facing surface
 
@@ -36,6 +37,8 @@ second top-level command:
 :Lib deps status             " every plugin's tools at once — what's missing HERE
 :Lib deps install <plugin>   " compose, confirm, hand off to a terminal
 :Lib deps install            " ... for everything missing, across every plugin
+:Lib deps project            " this directory's files: which parsers and tools are missing for them
+:Lib deps project install    " ... ask once, then install them
 ```
 
 `<Tab>` completes plugin names that actually ship a spec.
@@ -276,6 +279,24 @@ contradicting itself rather than confirming it.
 -- inside your plugin's health.lua, in M.check(), when every declared tool
 -- already has its own hand-rolled check elsewhere in the same function:
 require("lib.nvim.deps.health").pointer_for("pdfport.nvim")
+```
+
+## `lib.nvim.deps.project` — what this project's files need
+
+`status` answers "what is missing on this machine for the plugins I run";
+`project` answers "what is missing for the files in *this directory*": it
+scans a root asynchronously (cached per root), maps the file kinds to
+filetypes, treesitter languages and the tools a caller registered for those
+filetypes, and reports what is not installed. Installing asks once and uses
+the same confirmed ways as everything else here (a terminal with the command
+typed, `parser_policy.install`, Mason's registry API). Full description,
+including the answer to "can Mason be driven from Lua without UI", in
+[`project/README.md`](project/README.md).
+
+```lua
+local project = require("lib.nvim.deps.project")
+project.register_tools("my.nvim", { lua = { { mason = "stylua" } } })
+project.setup({ auto = true })   -- optional: one notification per root with something missing
 ```
 
 ## `lib.nvim.deps.status` — all of it at once

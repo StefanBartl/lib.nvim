@@ -360,7 +360,8 @@ M.show_once(plugin_name: string, opts?: { manager?, cache? }): boolean shown
 M.plugins(): string[]                       -- every plugin on rtp shipping a deps spec
 M.show(plugin_name: string): boolean shown
 M.install_for(plugin_name: string): boolean started
-M.routes(): table[]                          -- :Lib deps show|install|reset-first-run composer routes
+M.routes(): table[]                          -- :Lib deps show|status|install|project|reset-first-run composer routes
+M.project                                    -- lib.nvim.deps.project, see below
 ```
 
 ### `lib.nvim.deps.health`
@@ -411,6 +412,24 @@ M.render(plugin_name, result, opts?, ui?): { lines, line_tools }
 M.lines(plugin_name, result, opts?): string[]
 M.show_split(plugin_name, result): integer bufnr, integer winid
 M.show(plugin_name, result, opts?): integer bufnr, integer winid
+```
+
+### `lib.nvim.deps.project`
+The project view: which treesitter parsers and tools the files under a root
+need and lack. Nothing installs without one confirmation. See its README.
+```
+M.scan(root, opts?: { refresh?, ttl_seconds?, ignore? }, on_done: fun(scan)): fun() cancel
+M.forget(root?)
+M.count(root, paths, errors?): Lib.Deps.Project.Scan     -- pure; M.key_of(path): "*.ext" | file name
+M.register_tools(owner, { [filetype] = tools[] } | fn): fun() unregister   -- tool = Lib.Deps.Tool | { mason = "pkg" }
+M.registered(): string[]
+M.report(scan, opts?: { tools?, registered? }): Lib.Deps.Project.Report
+M.lines(report, opts?): string[]    M.summary(report): string|nil
+M.install_plan(report, opts?): Lib.Deps.Project.InstallPlan
+M.install(report, opts?: { confirm?, manager? }): { parsers, mason, terminal }|nil
+M.run(root?, action?: "refresh"|"install", opts?)        -- :Lib deps project [refresh|install]
+M.setup(opts?: { auto?, ttl_seconds?, tools? })          -- optional DirChanged trigger, default off
+M.reset_announced()
 ```
 
 ### `lib.nvim.deps.first_run`

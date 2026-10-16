@@ -27,6 +27,7 @@ CONTENTS                                            *lib.nvim-deps-contents*
        deps.view ............................. |lib.nvim-deps-view|
        deps.first_run ........................ |lib.nvim-deps-first_run|
        deps.status ........................... |lib.nvim-deps-status|
+       deps.project .......................... |lib.nvim-deps-project|
        deps.require_tool ..................... |lib.nvim-deps-require_tool|
        deps.detect ........................... |lib.nvim-deps-detect|
   5. Resolution ............................... |lib.nvim-deps-resolution|
@@ -110,8 +111,15 @@ top-level command name.
                             package manager, ask, then hand it to a
                             terminal. See |lib.nvim-deps-safety|.
 
+                                                       *:Lib-deps-project*
 :Lib deps install           The same, for everything missing across every
                             plugin.
+
+:Lib deps project           Scan the current directory and show which
+                            treesitter parsers and tools its files need and
+                            lack. `refresh` walks again instead of using the
+                            cached scan; `install` asks ONCE and then installs
+                            what the report lists. See |lib.nvim-deps-project|.
 
 `<Tab>` completes plugin names that actually ship a spec.
 
@@ -315,6 +323,48 @@ implementation.
 A plugin `spec.plugins()` lists but whose spec cannot be read lands in
 `failed` and is named in a warning rather than dropped: "absent from the
 report" and "declares nothing" would otherwise look identical.
+
+------------------------------------------------------------------------------
+deps.project                                          *lib.nvim-deps-project*
+
+The project view of what is missing: not "this buffer needs a parser" (that
+is `treesitter.parser_policy`, per filetype, when needed) but "this root holds
+files of kinds X, Y and Z, and for them the parsers A, B and the tools C, D
+are not here". Backs `:Lib deps project`. >lua
+
+    local project = require("lib.nvim.deps.project")
+
+    project.register_tools("lsp.nvim", {
+      lua = { { mason = "stylua" } },
+      markdown = { { bin = "pandoc", why = "Export", pkg = { brew = "pandoc" } } },
+    })
+    project.scan(vim.fn.getcwd(), nil, function(scan)
+      print(table.concat(project.lines(project.report(scan)), "\n"))
+    end)
+    project.setup({ auto = true })   -- optional, default off
+<
+SCAN. Async (one directory at a time, the main loop is never blocked), counts
+files per extension or bare file name and keeps only the counts. Pruned by
+`lib.nvim.fs.ignore.list`. Cached per root for `ttl_seconds` (600), so
+wiring it to `DirChanged` does not rescan on every `:cd`; two callers of one
+root share one walk; a walk that could not read a directory is not cached.
+
+MAPPING. kind -> filetype (`vim.filetype.match` on a real sample path) ->
+language (`get_lang`) -> `parser_policy.status`. Only installable-and-not-
+installed parsers count as missing. What a filetype WANTS is the caller's
+knowledge: `register_tools(owner, { [filetype] = entries })`, an entry being
+a `deps` tool (`bin`, `pkg`, … as in `docs/install.json`) or `{ mason = "pkg" }`.
+
+INSTALL. `install(report)` asks once, listing everything, then: parsers via
+`parser_policy.install`, `bin` tools via `deps.install.run` (a terminal with
+the command typed, NOT submitted), Mason packages via the registry API
+(headless: `Package:install(opts, cb)` opens no window; `get_package` raises
+for unknown names and before the first registry fetch, so it is guarded and
+the registry is refreshed once first). Nothing installs silently.
+
+TRIGGER. `setup({ auto = true })` scans now and on every `DirChanged` and
+notifies once per root (again only when what is missing changes). It never
+installs.
 
 ------------------------------------------------------------------------------
 deps.require_tool                                *lib.nvim-deps-require_tool*
