@@ -9,11 +9,10 @@ Built on [`lib.nvim.fs.collect_recursive`](../collect_recursive/README.md) (the
 actual walk) and [`lib.nvim.fs.json`](../json/README.md) (cache persistence);
 neither is duplicated here.
 
-Scanning is **sequential by design** — one root after another, whether via
-`scan` (blocking) or `scan_async` (non-blocking, below). Bounded-concurrency
-*parallel* scanning was deliberately left out of both to keep the walker
-simple; callers that need it can invoke either once per root from their own
-scheduler.
+Scanning is **sequential by default** — one root after another, whether via
+`scan` (blocking) or `scan_async` (non-blocking, below). `scan_async` can walk
+several roots at once with `opts.concurrency` (a bounded work queue, built on
+`lib.nvim.async.map_limit`); a single root is always walked directory by directory.
 
 ## Usage
 
@@ -71,7 +70,9 @@ across restarts.
 Non-blocking counterpart to `scan`. Same options and cache semantics — the
 cache file itself is still read/written synchronously (one small JSON file,
 not the part that scales badly); only the per-root walk becomes async.
-Roots are still visited sequentially, one `collect_recursive.collect_async`
-call at a time, chained through its own `on_done`. `on_done(paths, errors)`
-fires exactly once, always `vim.schedule`-dispatched — directly on a cache
-hit, via the last root's `collect_async` otherwise.
+Roots are walked one `collect_recursive.collect_async` at a time, unless
+`opts.concurrency = n` lets up to `n` roots be in flight (default `1`). The result is merged
+in the order of `roots` whichever walk finishes first, so it does not depend on timing. A
+root that fails with an error is reported in `errors` and does not stop the others.
+`on_done(paths, errors)` fires exactly once, always `vim.schedule`-dispatched — directly
+on a cache hit, via `map_limit` otherwise.

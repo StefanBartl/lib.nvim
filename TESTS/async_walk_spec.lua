@@ -170,4 +170,40 @@ return function(H)
     scan_roots.scan_async({ tmp .. "/walk/keep", tmp .. "/walk/skipme" }, nil, done)
   end)[1]
   eq(#two_roots, 5, "scan_roots.scan_async: merges results across multiple roots")
+
+  -- Bounded concurrency over the roots: never more than `concurrency` walks in flight, and the answer keeps
+  -- the order of `roots` whichever walk finishes first.
+  local many = {}
+  for i = 1, 6 do
+    local dir = ("%s/walk_many/r%d"):format(tmp, i)
+    vim.fn.mkdir(dir, "p")
+    vim.fn.writefile({ "x" }, dir .. "/f.txt")
+    many[#many + 1] = dir
+  end
+  local real_collect_async = collect.collect_async
+  local function max_in_flight(opts)
+    local current, peak = 0, 0
+    collect.collect_async = function(root, o, on_done)
+      current = current + 1
+      peak = math.max(peak, current)
+      return real_collect_async(root, o, function(...)
+        current = current - 1
+        on_done(...)
+      end)
+    end
+    local result = await(function(done)
+      scan_roots.scan_async(many, opts, done)
+    end)[1]
+    collect.collect_async = real_collect_async
+    return peak, result
+  end
+  local peak1, seq = max_in_flight(nil)
+  local peak3, par = max_in_flight({ concurrency = 3 })
+  eq(peak1, 1, "scan_roots.scan_async: one root at a time by default")
+  eq(peak3, 3, "scan_roots.scan_async: concurrency = 3 keeps three walks in flight, no more")
+  eq(#par, 6, "scan_roots.scan_async: concurrency: every root is scanned")
+  ok(
+    vim.deep_equal(par, seq),
+    "scan_roots.scan_async: concurrency: the result keeps the order of roots"
+  )
 end
