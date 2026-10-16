@@ -106,6 +106,21 @@ and a default would cut off a legitimately long streaming response.
 Each pair delivers these values to `cb` for the async form, or returns them
 directly for the blocking form.
 
+### `download_cached` / `download_cached_blocking`
+
+Downloads into `stdpath("cache")/lib.nvim/net/download` (or `opts.cache_dir`) under the hash of the URL and
+returns the path; a fresh entry is served without a request (`ttl_s`, `refresh`). The directory can be bounded:
+
+| option            | effect                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------- |
+| `max_age_s`       | after a download, entries not used for this many seconds are removed                  |
+| `max_total_bytes` | after a download, the least recently used entries are removed until the directory fits |
+
+"Used" is the later of the download time and the last hit: a hit renews the file's **atime** only, never its
+mtime, because `ttl_s` counts from the download. Only files named like an entry (the 64 hex digits of the hash,
+optionally `.ext`) are ever removed — never a `.part` file of a running download, never anything else in the
+directory — and the file just stored is kept. Neither option set: nothing is removed.
+
 ## Credentials never go in argv
 
 A process's command line is readable by any other process on the machine —

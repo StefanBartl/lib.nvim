@@ -738,6 +738,80 @@ local function finish_cached(part, path, response)
 end
 
 ---@internal
+--- Last use of a cache file: the later of atime (a hit sets it, see `touch_hit`) and mtime (the download).
+---@param st uv.fs_stat.result
+---@return integer
+local function last_used(st)
+  return math.max(st.atime.sec, st.mtime.sec)
+end
+
+---@internal
+--- A hit renews the file's atime only, never its mtime: `ttl_s` counts from the download, so a renewed mtime
+--- would keep a file fresh forever.
+---@param path string
+local function touch_hit(path)
+  local st = vim.uv.fs_stat(path)
+  if st then
+    pcall(vim.uv.fs_utime, path, os.time(), st.mtime.sec)
+  end
+end
+
+---@internal
+--- Keep the cache directory bounded: drop files not used for `max_age_s` seconds, then the least recently
+--- used ones until the total is within `max_total_bytes`. Only files named like a cache entry (the 64 hex digits
+--- of the URL hash, optionally `.ext`) are touched -- never a `.part` file of a running download and never
+--- something the user put there. `keep` (the file just stored) is never removed.
+---@param dir string
+---@param opts { max_age_s?: integer, max_total_bytes?: integer }
+---@param keep? string  # full path
+---@return integer removed
+local function prune_cache(dir, opts, keep)
+  if not (opts.max_age_s or opts.max_total_bytes) then
+    return 0
+  end
+  local now, entries, total, removed = os.time(), {}, 0, 0
+  for _, name in ipairs(vim.fn.readdir(dir)) do
+    local full = dir .. "/" .. name
+    if
+      (name:match("^%x+$") or name:match("^%x+%.%w+$"))
+      and #name:match("^%x+") == 64
+      and full ~= keep
+    then
+      local st = vim.uv.fs_stat(full)
+      if st and st.type == "file" then
+        entries[#entries + 1] = { path = full, used = last_used(st), size = st.size }
+        total = total + st.size
+      end
+    end
+  end
+  if keep then
+    local st = vim.uv.fs_stat(keep)
+    total = total + (st and st.size or 0)
+  end
+  table.sort(entries, function(a, b)
+    return a.used < b.used
+  end)
+  for _, e in ipairs(entries) do
+    local too_old = opts.max_age_s and (now - e.used) > opts.max_age_s
+    local too_big = opts.max_total_bytes and total > opts.max_total_bytes
+    if too_old or too_big then
+      if pcall(os.remove, e.path) then
+        removed = removed + 1
+        total = total - e.size
+      end
+    end
+  end
+  return removed
+end
+
+--@internal
+---@param path string
+---@param opts Lib.Net.Curl.CachedOpts
+local function after_store(path, opts)
+  pcall(prune_cache, vim.fs.dirname(path), opts, path)
+end
+
+---@internal
 ---@param path string
 ---@return string
 local function part_path(path)
@@ -755,6 +829,7 @@ function M.download_cached(url, opts, cb)
   opts = opts or {}
   local path = M.cache_path(url, opts)
   if cache_fresh(path, opts) then
+    touch_hit(path)
     vim.schedule(function()
       cb(true, path, { cached = true })
     end)
@@ -771,6 +846,7 @@ function M.download_cached(url, opts, cb)
       cb(false, err, { cached = false, response = response_or_err })
       return
     end
+    after_store(path, opts)
     cb(true, path, { cached = false, response = response_or_err })
   end)
 end
@@ -785,6 +861,7 @@ function M.download_cached_blocking(url, opts)
   opts = opts or {}
   local path = M.cache_path(url, opts)
   if cache_fresh(path, opts) then
+    touch_hit(path)
     return true, path, { cached = true }
   end
   local part = part_path(path)
@@ -796,6 +873,7 @@ function M.download_cached_blocking(url, opts)
   if err then
     return false, err, { cached = false, response = response_or_err }
   end
+  after_store(path, opts)
   return true, path, { cached = false, response = response_or_err }
 end
 
