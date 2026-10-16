@@ -471,7 +471,12 @@ return function(H)
 
     -- the file just stored survives a limit below its own size, whatever the spelling of cache_dir
     -- (trailing slash, backslashes on Windows): it must not be mistaken for an eviction candidate
-    for _, spelled in ipairs({ dir .. "/", (dir:gsub("/", string.char(92))) }) do
+    local spellings = { dir .. "/" }
+    if vim.fn.has("win32") == 1 then
+      -- only a real separator on Windows; elsewhere it would be a directory named with backslashes
+      spellings[#spellings + 1] = (dir:gsub("/", string.char(92)))
+    end
+    for _, spelled in ipairs(spellings) do
       local g, stored = curl.download_cached_blocking(
         ("http://127.0.0.1:%d/own-%d.txt"):format(port, #spelled),
         { cache_dir = spelled, max_total_bytes = 1 }
@@ -501,6 +506,11 @@ return function(H)
       uv.fs_stat(keys[2]),
       nil,
       "removal failure: not counted as freed, so the next oldest goes too"
+    )
+    eq(
+      uv.fs_stat(keys[3]),
+      nil,
+      "removal failure: ... and the one after that, until the limit is met"
     )
     srv.close()
     vim.fn.delete(dir, "rf")
