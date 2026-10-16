@@ -426,6 +426,14 @@ return function(H)
   eq(jdata.a, 1, "fs.json: scalar round-trips")
   eq(jdata.b[2], "y", "fs.json: nested array round-trips")
   eq(uv.fs_stat(jp .. ".tmp"), nil, "fs.json.write: the atomic .tmp file is cleaned up")
+  local jl_target = tmp .. "/json_link_target.json"
+  local jl = tmp .. "/json_link.json"
+  assert(json.write(jl_target, { v = 1 }))
+  if uv.fs_symlink(jl_target, jl) then
+    ok(json.write(jl, { v = 2 }), "fs.json.write: writes through a symlink")
+    eq((uv.fs_lstat(jl) or {}).type, "link", "fs.json.write: the symlink is still a symlink")
+    eq((json.read(jl_target) or {}).v, 2, "fs.json.write: the link target has the new content")
+  end
   local jbad, jerr = json.read(tmp .. "/nope.json")
   eq(jbad, nil, "fs.json.read: missing file -> nil")
   ok(jerr ~= nil, "fs.json.read: missing file yields an error message")

@@ -50,6 +50,12 @@ function M.write(path, tbl)
     return false, "encode failed: " .. tostring(encode_err)
   end
 
+  -- A symlink as target (a dotfile manager) stays a link: the rename replaces what it points to.
+  local lst = uv.fs_lstat(path)
+  if lst and lst.type == "link" then
+    path = uv.fs_realpath(path) or path
+  end
+
   local tmp_path = path .. ".tmp"
   local ok_write, write_err = write_to_file(tmp_path, encoded)
   if not ok_write then
