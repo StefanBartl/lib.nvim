@@ -129,9 +129,9 @@ end
 ---Async counterpart to `scan`: same cache semantics (still read/written
 ---synchronously — a single small JSON file, not the part that scales badly),
 ---but the actual per-root walk uses `collect_recursive.collect_async`
----instead of blocking the main loop. Roots are still walked one at a time,
----sequentially — see `collect_async`'s own note on why this isn't
----parallelized. `on_done(paths, errors)` fires exactly once, always
+---instead of blocking the main loop. Roots are walked one at a time unless
+---`opts.concurrency` (> 1) allows several in flight; the result is always
+---merged in the order of `roots`. `on_done(paths, errors)` fires exactly once, always
 ---`vim.schedule`-dispatched (directly on a cache hit, via `collect_async`
 ---otherwise); `errors` follows the same rule as in `scan`.
 ---@param roots string[]
@@ -158,41 +158,44 @@ function M.scan_async(roots, opts, on_done)
     end
   end
 
-  local merged, errors = {}, {}
-  local idx = 0
-
-  local function next_root()
-    idx = idx + 1
-    local root = roots[idx]
-    if not root then
-      if opts.cache_path and #errors == 0 then
-        json.write(opts.cache_path, cache_payload(roots, kind, ignore_dirs, merged))
-      end
-      -- `collect_recursive.collect_async` already vim.schedule-dispatches
-      -- its own on_done, and every step here runs from inside that
-      -- dispatch, so this final call is already on a scheduled callback —
-      -- no extra vim.schedule needed to match the cache-hit branch's
-      -- contract above.
-      on_done(merged, (#errors > 0) and errors or nil)
-      return
-    end
-    collect_recursive.collect_async(root, {
-      kind = kind,
-      ignore = function(path)
-        return is_ignored(path, ignore_dirs)
-      end,
-    }, function(found, root_errors)
-      for _, p in ipairs(found) do
-        merged[#merged + 1] = p
-      end
-      for _, e in ipairs(root_errors or {}) do
-        errors[#errors + 1] = e
-      end
-      next_root()
-    end)
+  -- Roots are walked by `async.map_limit`: at most `opts.concurrency` at a time (default 1 -- one after the
+  -- other, as before). The result is merged in the order of `roots`, whichever root finishes first, so the
+  -- answer does not depend on timing. A single root is still walked directory by directory.
+  local concurrency = opts.concurrency or 1
+  local ignore = function(path)
+    return is_ignored(path, ignore_dirs)
   end
-
-  next_root()
+  require("lib.nvim.async").map_limit(roots, concurrency, function(root, _, done)
+    local cancel = collect_recursive.collect_async(
+      root,
+      { kind = kind, ignore = ignore },
+      function(found, root_errors)
+        done({ found = found, errors = root_errors })
+      end
+    )
+    return { stop = cancel }
+  end, function(results, worker_errors)
+    local merged, errors = {}, {}
+    for i, root in ipairs(roots) do
+      local r = results[i]
+      if r then
+        for _, p in ipairs(r.found) do
+          merged[#merged + 1] = p
+        end
+        for _, e in ipairs(r.errors or {}) do
+          errors[#errors + 1] = e
+        end
+      elseif worker_errors[i] then
+        errors[#errors + 1] = root .. ": " .. tostring(worker_errors[i])
+      end
+    end
+    if opts.cache_path and #errors == 0 then
+      json.write(opts.cache_path, cache_payload(roots, kind, ignore_dirs, merged))
+    end
+    -- `map_limit` vim.schedule-dispatches `on_done`, so the cache-hit branch above and this one both
+    -- deliver on a scheduled callback.
+    on_done(merged, (#errors > 0) and errors or nil)
+  end)
 end
 
 ---@type Lib.Fs.ScanRoots
