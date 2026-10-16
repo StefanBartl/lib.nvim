@@ -56,6 +56,29 @@ return function(H)
       "remap: not replaced in the middle of another path either"
     )
 
+    -- a root right behind a URL scheme starts at a boundary (oil://, fugitive://, file:///, term://)
+    eq(
+      portable.make("oil:///home/me/sub/ file:///home/me/b term://~/x//1:sh", { home }),
+      "oil://{{HOME}}/sub/ file://{{HOME}}/b term://~/x//1:sh",
+      "make: a root behind scheme:// is replaced"
+    )
+    eq(
+      portable.make("fugitive://E:/repos/ui.nvim/.git//abc", { ROOT }),
+      "fugitive://{{ROOT}}/.git//abc",
+      "make: a drive root behind scheme:// is replaced"
+    )
+    eq(
+      portable.resolve("oil:///old/root/sub/", {}, { remap = { ["/old/root"] = "/new/root" } }),
+      "oil:///new/root/sub/",
+      "remap: a root behind scheme:// is translated"
+    )
+    -- the search resumes after the FIRST byte of a rejected hit, not after its end
+    eq(
+      portable.make("ab_ ab_ ab", { { path = "ab_ ab", placeholder = "P" } }),
+      "ab_ P",
+      "make: an overlapping hit is found after a rejected one"
+    )
+
     -- the drive letter matches in either case
     eq(
       portable.make("cd e:/repos/ui.nvim/a", { ROOT }),
