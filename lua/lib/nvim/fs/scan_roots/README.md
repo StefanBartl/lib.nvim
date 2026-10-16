@@ -34,7 +34,7 @@ local cached = scan_roots.scan({ "/repo" }, {
 -- Directories instead of files
 local dirs = scan_roots.scan({ "/repo" }, { kind = "dirs" })
 
--- Non-blocking counterpart: same options, roots walked one at a time via
+-- Non-blocking counterpart: same options, roots walked one at a time by default via
 -- collect_recursive.collect_async instead of stalling the main loop.
 scan_roots.scan_async({ "/repo" }, { ignore_dirs = { "node_modules" } }, function(files)
   -- ...
@@ -47,6 +47,7 @@ end)
 |---------------|------------|-------------|---------------------------------------------------------------|
 | `ignore_dirs` | `string[]` | `{}`        | Directory names to skip (matched as a whole path component)   |
 | `kind`        | `string`   | `"files"`   | `"files"`, `"dirs"` or `"all"` — forwarded to `collect_recursive` |
+| `concurrency` | `integer?` | `1`         | `scan_async` only: how many roots are walked at once; the result keeps the order of `roots` |
 | `cache_path`  | `string?`  | `nil`       | When set, results are cached to this JSON file                |
 | `ttl_seconds` | `integer?` | `nil`       | Cache lifetime; `nil` means the cache never expires            |
 

@@ -100,9 +100,7 @@ function M.scan(roots, opts)
     end
   end
 
-  -- Sequential by design: bounded-concurrency async scanning was left out
-  -- for simplicity. Callers needing that can call `M.scan` once per root
-  -- from their own async scheduler instead.
+  -- The blocking scan is sequential by design; use `scan_async` with `opts.concurrency` for parallel roots.
   local merged, errors = {}, {}
   for _, root in ipairs(roots) do
     local found, root_errors = collect_recursive.collect(root, {
@@ -132,7 +130,7 @@ end
 ---instead of blocking the main loop. Roots are walked one at a time unless
 ---`opts.concurrency` (> 1) allows several in flight; the result is always
 ---merged in the order of `roots`. `on_done(paths, errors)` fires exactly once, always
----`vim.schedule`-dispatched (directly on a cache hit, via `collect_async`
+---`vim.schedule`-dispatched (directly on a cache hit, via the async walk
 ---otherwise); `errors` follows the same rule as in `scan`.
 ---@param roots string[]
 ---@param opts? Lib.Fs.ScanRoots.Opts
