@@ -111,10 +111,10 @@ top-level command name.
                             package manager, ask, then hand it to a
                             terminal. See |lib.nvim-deps-safety|.
 
-                                                       *:Lib-deps-project*
 :Lib deps install           The same, for everything missing across every
                             plugin.
 
+                                                       *:Lib-deps-project*
 :Lib deps project           Scan the current directory and show which
                             treesitter parsers and tools its files need and
                             lack. `refresh` walks again instead of using the
@@ -344,10 +344,19 @@ are not here". Backs `:Lib deps project`. >lua
     project.setup({ auto = true })   -- optional, default off
 <
 SCAN. Async (one directory at a time, the main loop is never blocked), counts
-files per extension or bare file name and keeps only the counts. Pruned by
-`lib.nvim.fs.ignore.list`. Cached per root for `ttl_seconds` (600), so
-wiring it to `DirChanged` does not rescan on every `:cd`; two callers of one
-root share one walk; a walk that could not read a directory is not cached.
+files per extension or bare file name and keeps only the counts (no path
+list). Bounded: stops after `max_files` (100000) files or `max_ms` (30000)
+and skips directories deeper than `max_depth` (32); `scan.truncated` names
+the limit. A walk that raises (a throwing `opts.ignore`) is delivered with
+`scan.failed`, never left hanging. Pruned by `default_ignore()`: the
+basenames of `lib.nvim.fs.ignore.list` except `.github` -- VCS directories,
+dependency stores, caches, editor state and the build output names `build`,
+`dist`, `out`, `target`, `bin`, `obj` (a `bin/` of scripts too), for
+directories and files, case-insensitive on Windows. Cached per root for
+`ttl_seconds` (600), so wiring it to `DirChanged` does not rescan on every
+`:cd`; two callers of one root share one walk. Cached also with an
+unreadable subdirectory and when truncated (for the same or smaller limits);
+not cached: an unreadable root, a failed walk.
 
 MAPPING. kind -> filetype (`vim.filetype.match` on a real sample path) ->
 language (`get_lang`) -> `parser_policy.status`. Only installable-and-not-
@@ -362,9 +371,19 @@ the command typed, NOT submitted), Mason packages via the registry API
 for unknown names and before the first registry fetch, so it is guarded and
 the registry is refreshed once first). Nothing installs silently.
 
-TRIGGER. `setup({ auto = true })` scans now and on every `DirChanged` and
-notifies once per root (again only when what is missing changes). It never
-installs.
+FRESH MASON. Before Mason ever fetched its registry, every package reads
+`unavailable` and would never be offered. `report_async(scan, opts, cb)` --
+what `:Lib deps project` and the trigger use -- refreshes the registry once
+when a report holds an `unavailable` Mason entry, then reports again (Mason's
+refresh is age-gated: it downloads the index only when missing or stale).
+
+TRIGGER. `setup({ auto = true })` scans now and on every `DirChanged` (the
+directory the event names) and notifies once per root (again only when what
+is missing changes). It never installs. Bounded: its scans use
+`TRIGGER_LIMITS` (20000 files, depth 12, 5000 ms; `setup` takes
+`max_files`, `max_depth`, `max_ms`), the next `DirChanged` cancels the scan
+still running, and broad roots (`is_broad_root`: home, `/`, a drive root, a
+UNC share root) are not scanned.
 
 ------------------------------------------------------------------------------
 deps.require_tool                                *lib.nvim-deps-require_tool*

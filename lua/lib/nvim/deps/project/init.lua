@@ -4,10 +4,13 @@
 --- needed) but "this root holds files of kinds X, Y and Z, and for them the
 --- parsers A, B and the tools C, D are not here".
 ---
----   scan(root)      async walk, counts files per extension / file name,
----                   cached per root (a `:cd` back to a known root costs nothing)
+---   scan(root)      async, bounded walk (`deps.project.walk`), counts files
+---                   per extension / file name, cached per root (a `:cd` back
+---                   to a known root costs nothing)
 ---   report(scan)    kind -> filetype (`vim.filetype.match`) -> treesitter
 ---                   language, and the caller's filetype -> tools table
+---                   (`report_async`: the same after one Mason registry
+---                   refresh, for a machine where Mason never fetched it)
 ---   lines(report)   the report as text
 ---   install(report) ONE question, then the existing confirmed ways
 ---
@@ -63,12 +66,7 @@ end
 ---@param path string
 ---@return string key
 function M.key_of(path)
-  local name = path:match("([^/\\]+)$") or path
-  local ext = name:match("^.+%.([^.]+)$")
-  if ext then
-    return "*." .. ext:lower()
-  end
-  return name
+  return require("lib.nvim.deps.project.walk").key_of(path)
 end
 
 ---Count `paths` per kind. Pure; the shape `scan` caches and `report` reads.
@@ -77,15 +75,10 @@ end
 ---@param errors? string[]|nil
 ---@return Lib.Deps.Project.Scan
 function M.count(root, paths, errors)
+  local walk = require("lib.nvim.deps.project.walk")
   local keys = {}
   for _, path in ipairs(paths) do
-    local key = M.key_of(path)
-    local entry = keys[key]
-    if entry then
-      entry.count = entry.count + 1
-    else
-      keys[key] = { count = 1, sample = path }
-    end
+    walk.add(keys, path)
   end
   return {
     root = normalize(root),
@@ -96,28 +89,65 @@ function M.count(root, paths, errors)
   }
 end
 
----@internal
----Default walk filter: the basenames every dev tool agrees are not project
----sources (`.git`, `node_modules`, `target`, caches, …).
+---Basenames of `lib.nvim.fs.ignore.list` that ARE project content for this
+---question: `.github` holds the workflows (YAML) a project ships.
+---@type string[]
+M.IGNORE_KEEP = { ".github" }
+
+---The default walk filter: the basenames of `lib.nvim.fs.ignore.list`
+---(VCS directories, dependency stores, caches, editor state and the build
+---output names `build`, `dist`, `out`, `target`, `bin`, `obj` -- a `bin/` of
+---scripts is pruned too) except `IGNORE_KEEP`, applied to directories and
+---files alike, case-insensitively where the file system is (Windows).
 ---@return fun(abs_path: string, is_dir: boolean): boolean
-local function default_ignore()
-  local set = {}
-  for _, name in ipairs(require("lib.nvim.fs.ignore.list").basenames) do
-    set[name] = true
+function M.default_ignore()
+  local list = require("lib.nvim.fs.ignore.list")
+  local set = list.as_set()
+  for _, name in ipairs(M.IGNORE_KEEP) do
+    set[list.normalize(name)] = nil
   end
   return function(abs_path)
-    return set[abs_path:match("([^/\\]+)$") or abs_path] == true
+    return set[list.normalize(abs_path:match("([^/\\]+)$") or abs_path)] == true
   end
+end
+
+---@internal
+---Would a cached scan answer a request with these limits? A complete scan
+---answers anything; a truncated one only a request whose limits are not
+---larger than the ones it stopped at.
+---@param hit Lib.Deps.Project.Scan
+---@param limits Lib.Deps.Project.Limits
+---@return boolean
+local function covers(hit, limits)
+  if not hit.truncated then
+    return true
+  end
+  local had = hit.limits or {}
+  for _, key in ipairs({ "max_files", "max_depth", "max_ms" }) do
+    if (limits[key] or 0) > (had[key] or 0) then
+      return false
+    end
+  end
+  return true
 end
 
 ---Count the files under `root`, asynchronously, and remember the answer.
 ---
+---The walk (`deps.project.walk`) keeps only counts, and stops at
+---`max_files` files, `max_ms` milliseconds, or prunes below `max_depth`
+---levels (defaults `walk.DEFAULTS`); `scan.truncated` names the limit that
+---cut it short. A walk that raised (a throwing `opts.ignore`) is delivered
+---with `scan.failed`, so no caller ever waits forever.
+---
 ---A repeat call within `ttl_seconds` (default 600) answers from the cache
 ---without touching the disk, so wiring this to `DirChanged` does not rescan
----on every `:cd`; `refresh = true` walks again. Two callers asking for the
----same root while a walk is running share it. A walk that could not read
----some directory is delivered but not cached (a momentarily unreadable root
----would otherwise answer "nothing here" for the whole TTL).
+---on every `:cd`; `refresh = true` walks again. Cached: every scan whose
+---root could be read -- also one where some subdirectory could not
+---(`scan.errors`), and a truncated one (it answers later requests with the
+---same or smaller limits). Not cached: an unreadable root (a momentarily
+---unreadable root would otherwise answer "nothing here" for the whole TTL)
+---and a failed walk. Two callers asking for the same root while a walk is
+---running share it (with the first caller's limits).
 ---
 ---`on_done` always runs on the main loop, also for a cache hit.
 ---@param root string
@@ -128,9 +158,16 @@ function M.scan(root, opts, on_done)
   opts = opts or {}
   root = normalize(root)
   local ttl = opts.ttl_seconds or DEFAULT_TTL
+  local defaults = require("lib.nvim.deps.project.walk").DEFAULTS
+  ---@type Lib.Deps.Project.Limits
+  local limits = {
+    max_files = opts.max_files or defaults.max_files,
+    max_depth = opts.max_depth or defaults.max_depth,
+    max_ms = opts.max_ms or defaults.max_ms,
+  }
 
   local hit = CACHE[root]
-  if hit and not opts.refresh and os.time() - hit.at < ttl then
+  if hit and not opts.refresh and os.time() - hit.at < ttl and covers(hit, limits) then
     local cancelled = false
     vim.schedule(function()
       if not cancelled then
@@ -146,12 +183,28 @@ function M.scan(root, opts, on_done)
   if not flight then
     flight = { waiters = {}, cancel = function() end }
     INFLIGHT[root] = flight
-    flight.cancel = require("lib.nvim.fs.collect_recursive").files_async(root, {
-      ignore = opts.ignore or default_ignore(),
-    }, function(paths, errors)
-      INFLIGHT[root] = nil
-      local scan = M.count(root, paths, errors)
-      if not errors then
+    local walk_opts = {
+      ignore = opts.ignore or M.default_ignore(),
+      max_files = limits.max_files,
+      max_depth = limits.max_depth,
+      max_ms = limits.max_ms,
+    }
+    flight.cancel = require("lib.nvim.deps.project.walk").run(root, walk_opts, function(result)
+      if INFLIGHT[root] == flight then
+        INFLIGHT[root] = nil
+      end
+      ---@type Lib.Deps.Project.Scan
+      local scan = {
+        root = root,
+        total = result.total,
+        keys = result.keys,
+        errors = result.errors,
+        truncated = result.truncated,
+        failed = result.failed,
+        limits = limits,
+        at = os.time(),
+      }
+      if not result.failed and not result.root_unreadable then
         CACHE[root] = scan
       end
       for _, waiter in ipairs(flight.waiters) do
@@ -417,6 +470,9 @@ function M.report(scan, opts)
     root = scan.root,
     total = scan.total,
     errors = scan.errors,
+    truncated = scan.truncated,
+    failed = scan.failed,
+    limits = scan.limits,
     languages = languages,
     missing_parsers = missing_parsers,
     tools = tools,
@@ -424,6 +480,32 @@ function M.report(scan, opts)
     unmapped = unmapped,
     problems = problems,
   }
+end
+
+---`report()`, but with a Mason registry that has been fetched at least once.
+---
+---On a fresh machine Mason has never fetched its registry, and until it has,
+---every package reads as `unavailable` -- nothing would ever be offered. So
+---when the report holds an `unavailable` Mason entry, the registry is
+---refreshed once (`deps.project.mason.refresh`: Mason's own age-gated
+---`registry.refresh`, a download of the registry index only when it is
+---missing or stale; nothing is installed) and the report is built again.
+---Without such an entry `on_done` is called right away, before this returns.
+---@param scan Lib.Deps.Project.Scan
+---@param opts? Lib.Deps.Project.ReportOpts
+---@param on_done fun(report: Lib.Deps.Project.Report)
+---@return nil
+function M.report_async(scan, opts, on_done)
+  local report = M.report(scan, opts)
+  for _, status in ipairs(report.tools) do
+    if status.kind == "mason" and status.state == "unavailable" then
+      require("lib.nvim.deps.project.mason").refresh(function()
+        on_done(M.report(scan, opts))
+      end)
+      return
+    end
+  end
+  on_done(report)
 end
 
 -- -------------------------------------------------------------------- lines
@@ -466,6 +548,24 @@ function M.lines(report, opts)
         #report.errors == 1 and "y" or "ies"
       )
     )
+  end
+  if report.truncated then
+    local limits = report.limits or {}
+    local why = {
+      max_files = ("it stopped after %s files"):format(tostring(limits.max_files)),
+      max_ms = ("it stopped after %s ms"):format(tostring(limits.max_ms)),
+      max_depth = ("directories deeper than %s levels were skipped"):format(
+        tostring(limits.max_depth)
+      ),
+    }
+    add(
+      ("The walk was cut short (%s); the counts are partial."):format(
+        why[report.truncated] or report.truncated
+      )
+    )
+  end
+  if report.failed then
+    add(("The walk failed: %s; the counts are partial."):format(report.failed))
   end
   add("")
 
@@ -557,7 +657,13 @@ function M.lines(report, opts)
   end
 
   if #report.missing_parsers == 0 and #report.missing_tools == 0 then
-    add("Nothing missing for the files in this root.")
+    if report.errors or report.truncated or report.failed then
+      add("Nothing missing for the files that were counted — the scan was partial (see above).")
+    elseif #unusable > 0 then
+      add('Nothing missing among what could be checked — see "Could not be checked".')
+    else
+      add("Nothing missing for the files in this root.")
+    end
   else
     add("`:Lib deps project install` asks once, then installs what is listed above.")
   end
@@ -587,8 +693,10 @@ function M.summary(report)
   if #tools > 0 then
     parts[#parts + 1] = "tools: " .. table.concat(tools, ", ")
   end
+  -- The tail names the root; a filesystem or drive root has none.
+  local name = vim.fn.fnamemodify(report.root, ":t")
   return ("%s — missing %s  (:Lib deps project)"):format(
-    vim.fn.fnamemodify(report.root, ":t"),
+    name ~= "" and name or report.root,
     table.concat(parts, "; ")
   )
 end
@@ -754,12 +862,13 @@ function M.run(root, action, opts)
   local n = notify()
   n.info("Scanning " .. normalize(root) .. " …")
   M.scan(root, { refresh = action == "refresh" }, function(scan)
-    local report = M.report(scan, opts)
-    if action == "install" then
-      M.install(report)
-    else
-      open_view(report)
-    end
+    M.report_async(scan, opts, function(report)
+      if action == "install" then
+        M.install(report)
+      else
+        open_view(report)
+      end
+    end)
   end)
 end
 
@@ -773,28 +882,92 @@ local SETUP = {}
 ---@type table<string, string> root -> the summary last announced for it
 local ANNOUNCED = {}
 
+---The walk limits of a scan the trigger starts (each overridable through
+---`setup`): a `:cd` is not a request to walk a whole disk.
+---@type Lib.Deps.Project.Limits
+M.TRIGGER_LIMITS = { max_files = 20000, max_depth = 12, max_ms = 5000 }
+
+---@type fun()|nil cancels the trigger's scan that is still running
+local PENDING
+
+---@internal
+---@param a string
+---@param b string
+---@return boolean
+local function same_path(a, b)
+  if package.config:sub(1, 1) == "\\" then
+    return a:lower() == b:lower()
+  end
+  return a == b
+end
+
+---Is `root` too broad to scan just because the working directory went there:
+---the home directory, a filesystem or drive root (`/`, `C:/`), a UNC share
+---root (`//server/share`). The trigger skips these; `:Lib deps project`
+---still scans them when asked.
+---@param root string
+---@return boolean
+function M.is_broad_root(root)
+  root = normalize(root)
+  if root == "/" or root:match("^%a:/?$") or root:match("^//[^/]+/[^/]+$") then
+    return true
+  end
+  local home = (vim.uv or vim.loop).os_homedir()
+  return home ~= nil and home ~= "" and same_path(normalize(home), root)
+end
+
 ---@internal
 ---@param root string
 local function check(root)
-  M.scan(root, { ttl_seconds = SETUP.ttl_seconds }, function(scan)
-    local summary = M.summary(M.report(scan, { tools = SETUP.tools }))
-    if summary and ANNOUNCED[scan.root] ~= summary then
-      ANNOUNCED[scan.root] = summary
-      notify().info(summary)
+  -- A newer directory supersedes the scan of the previous one.
+  if PENDING then
+    local cancel = PENDING
+    PENDING = nil
+    cancel()
+  end
+  if M.is_broad_root(root) then
+    return
+  end
+  local scan_opts = {
+    ttl_seconds = SETUP.ttl_seconds,
+    max_files = SETUP.max_files or M.TRIGGER_LIMITS.max_files,
+    max_depth = SETUP.max_depth or M.TRIGGER_LIMITS.max_depth,
+    max_ms = SETUP.max_ms or M.TRIGGER_LIMITS.max_ms,
+  }
+  local cancel
+  cancel = M.scan(root, scan_opts, function(scan)
+    if PENDING == cancel then
+      PENDING = nil
     end
+    M.report_async(scan, { tools = SETUP.tools }, function(report)
+      local summary = M.summary(report)
+      if summary and ANNOUNCED[scan.root] ~= summary then
+        ANNOUNCED[scan.root] = summary
+        notify().info(summary)
+      end
+    end)
   end)
+  PENDING = cancel
 end
 
 ---Configure the optional trigger. With `auto = true` the current directory
 ---is scanned now and every `DirChanged` after, and one notification per root
 ---(again only when what is missing changes) says what is missing -- it never
----installs. Calling `setup()` again replaces the previous setup; without
----`auto` it turns the trigger off.
+---installs. Its scans are bounded (`TRIGGER_LIMITS`, or `max_files`,
+---`max_depth`, `max_ms` here), the scan of a directory that is left before it
+---finished is cancelled, and broad roots (`is_broad_root`: home, `/`, a drive)
+---are not scanned at all. Calling `setup()` again replaces the previous
+---setup; without `auto` it turns the trigger off.
 ---@param opts? Lib.Deps.Project.SetupOpts
 ---@return nil
 function M.setup(opts)
   opts = opts or {}
   pcall(vim.api.nvim_del_augroup_by_name, AUGROUP)
+  if PENDING then
+    local cancel = PENDING
+    PENDING = nil
+    cancel()
+  end
   SETUP = opts
   if not opts.auto then
     return

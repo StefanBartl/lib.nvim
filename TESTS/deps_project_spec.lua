@@ -21,7 +21,7 @@ return function(H)
   local mason = require("lib.nvim.deps.project.mason")
   local deps_install = require("lib.nvim.deps.install")
   local pm = require("lib.nvim.deps.pm")
-  local collect = require("lib.nvim.fs.collect_recursive")
+  local walk = require("lib.nvim.deps.project.walk")
 
   -- Invented filetypes: whether `rust` has a parser on runtimepath depends on the
   -- machine running the spec, `zzra` never does. The names are language names too
@@ -117,6 +117,45 @@ return function(H)
       touch(root .. "/" .. name)
     end
     return vim.fs.normalize(root)
+  end
+
+  ---Run `fn(n)` with the real walk counted: `n.walks` starts, `n.opts[i]`
+  ---the options of start i.
+  ---@param fn fun(n: { walks: integer, opts: table[] })
+  local function counting_walks(fn)
+    local n = { walks = 0, opts = {} }
+    local real = walk.run
+    H.with_patched(walk, "run", function(root, opts, on_done)
+      n.walks = n.walks + 1
+      n.opts[#n.opts + 1] = opts
+      return real(root, opts, on_done)
+    end, function()
+      fn(n)
+    end)
+  end
+
+  ---Run `fn(starts)` with a stand-in walk that never touches the disk: every
+  ---start is recorded (`root`, `opts`, `on_done`, `cancelled` = how often its
+  ---cancel function ran) and answered only when the test calls `on_done`.
+  ---@param fn fun(starts: table[])
+  local function fake_walks(fn)
+    local starts = {}
+    H.with_patched(walk, "run", function(root, opts, on_done)
+      local start = { root = root, opts = opts, on_done = on_done, cancelled = 0 }
+      starts[#starts + 1] = start
+      return function()
+        start.cancelled = start.cancelled + 1
+      end
+    end, function()
+      fn(starts)
+    end)
+  end
+
+  ---A `Lib.Deps.Project.WalkResult` with `over` applied.
+  ---@param over? table
+  ---@return Lib.Deps.Project.WalkResult
+  local function walk_result(over)
+    return vim.tbl_extend("force", { keys = {}, total = 0, root_unreadable = false }, over or {})
   end
 
   -- ------------------------------------------------- parser_policy.status
@@ -256,12 +295,7 @@ return function(H)
 
     -- One walk for two callers of the same root.
     project.forget()
-    local walks = 0
-    local real = collect.files_async
-    H.with_patched(collect, "files_async", function(...)
-      walks = walks + 1
-      return real(...)
-    end, function()
+    counting_walks(function(n)
       local first, second
       project.scan(root, nil, function(s)
         first = s
@@ -275,44 +309,209 @@ return function(H)
         end, 5),
         "scan: both callers are answered"
       )
-      eq(walks, 1, "scan: two callers of one root share one walk")
+      eq(n.walks, 1, "scan: two callers of one root share one walk")
       eq(first, second, "scan: and receive the same result")
+      eq(n.opts[1].max_files, walk.DEFAULTS.max_files, "scan: default file limit")
+      eq(n.opts[1].max_depth, walk.DEFAULTS.max_depth, "scan: default depth limit")
+      eq(n.opts[1].max_ms, walk.DEFAULTS.max_ms, "scan: default time limit")
     end)
 
-    -- A walk that could not read a directory is delivered, not cached.
+    -- Cache policy: an unreadable SUBdirectory is cached, an unreadable root
+    -- or a walk that died is not.
     project.forget()
-    local attempts = 0
-    H.with_patched(collect, "files_async", function(_, _, on_done)
-      attempts = attempts + 1
-      vim.schedule(function()
-        on_done({ root .. "/a.lua" }, { root .. "/locked: permission denied" })
+    fake_walks(function(starts)
+      local partial
+      project.scan(root, nil, function(s)
+        partial = s
       end)
-      return function() end
-    end, function()
-      local partial = await(function(done)
+      starts[1].on_done(walk_result({ total = 1, errors = { root .. "/locked: EACCES" } }))
+      eq(partial.errors[1], root .. "/locked: EACCES", "scan: errors are delivered")
+      local cached
+      project.scan(root, nil, function(s)
+        cached = s
+      end)
+      eq(#starts, 1, "scan: a walk with an unreadable subdirectory is cached")
+      ok(
+        vim.wait(2000, function()
+          return cached ~= nil
+        end, 5),
+        "scan: the cache answers"
+      )
+      eq(cached, partial, "scan: with that scan")
+
+      project.forget()
+      project.scan(root, nil, function() end)
+      starts[2].on_done(walk_result({ errors = { root .. ": ENOENT" }, root_unreadable = true }))
+      project.scan(root, nil, function() end)
+      eq(#starts, 3, "scan: a walk whose root could not be read is not cached")
+      starts[3].on_done(walk_result({ failed = "boom" }))
+      project.scan(root, nil, function() end)
+      eq(#starts, 4, "scan: a failed walk is not cached")
+      starts[4].on_done(walk_result())
+    end)
+
+    -- Cancel: only the waiter that cancelled goes; the walk stops with the last one.
+    project.forget()
+    fake_walks(function(starts)
+      local first_fired, second = false, nil
+      local cancel_first = project.scan(root, nil, function()
+        first_fired = true
+      end)
+      project.scan(root, nil, function(s)
+        second = s
+      end)
+      eq(#starts, 1, "cancel: two waiters share one walk")
+      cancel_first()
+      eq(starts[1].cancelled, 0, "cancel: the walk goes on while another caller waits")
+      starts[1].on_done(walk_result({ total = 7 }))
+      eq(first_fired, false, "cancel: a cancelled wait is never called back")
+      eq(second and second.total, 7, "cancel: the caller still waiting gets the scan")
+
+      project.forget()
+      local fired = false
+      local cancel = project.scan(root, nil, function()
+        fired = true
+      end)
+      cancel()
+      eq(starts[2].cancelled, 1, "cancel: the last waiter leaving stops the walk")
+      project.scan(root, nil, function() end)
+      eq(#starts, 3, "cancel: the next caller does not join the stopped walk")
+      starts[3].on_done(walk_result())
+      eq(fired, false, "cancel: the cancelled caller is not answered by the next walk")
+    end)
+
+    -- A walk that throws (here: the caller's ignore function) still answers,
+    -- and leaves nothing behind that later scans of the root would hang on.
+    project.forget()
+    local died = await(function(done)
+      project.scan(root, {
+        ignore = function()
+          error("boom from ignore")
+        end,
+      }, done)
+    end)
+    ok(
+      died.failed and died.failed:find("boom from ignore", 1, true),
+      "scan: a throwing walk -> failed"
+    )
+    local after = await(function(done)
+      project.scan(root, nil, done)
+    end)
+    eq(after.failed, nil, "scan: the next scan of that root walks again")
+    eq(after.keys["*.lua"].count, 4, "scan: and counts normally")
+
+    -- Limits.
+    project.forget()
+    local capped = await(function(done)
+      project.scan(root, { max_files = 2 }, done)
+    end)
+    eq(capped.total, 2, "limits: max_files stops the count")
+    eq(capped.truncated, "max_files", "limits: and says so")
+    local shallow = await(function(done)
+      project.scan(root, { refresh = true, max_depth = 0 }, done)
+    end)
+    eq(shallow.keys["*.zzra"], nil, "limits: max_depth = 0 does not enter sub/")
+    eq(shallow.keys["*.lua"].count, 4, "limits: but counts the root's own files")
+    eq(shallow.truncated, "max_depth", "limits: and says that it pruned")
+    local timed = await(function(done)
+      project.scan(root, { refresh = true, max_ms = 0 }, done)
+    end)
+    eq(timed.truncated, "max_ms", "limits: max_ms stops the walk")
+    eq(timed.total, 0, "limits: max_ms = 0 counts nothing")
+
+    -- A truncated scan answers requests with the same limits, not larger ones.
+    project.forget()
+    counting_walks(function(n)
+      await(function(done)
+        project.scan(root, { max_files = 2 }, done)
+      end)
+      await(function(done)
+        project.scan(root, { max_files = 2 }, done)
+      end)
+      eq(n.walks, 1, "limits: a truncated scan is cached for the same limits")
+      local full = await(function(done)
         project.scan(root, nil, done)
       end)
-      eq(partial.errors[1], root .. "/locked: permission denied", "scan: errors are delivered")
+      eq(n.walks, 2, "limits: a request with larger limits walks again")
+      eq(full.truncated, nil, "limits: and gets the whole tree")
+    end)
+
+    -- forget(root) drops that root only.
+    project.forget()
+    local other = tree({ "o.lua" })
+    counting_walks(function(n)
+      for _, r in ipairs({ root, other }) do
+        await(function(done)
+          project.scan(r, nil, done)
+        end)
+      end
+      project.forget(root)
       await(function(done)
         project.scan(root, nil, done)
       end)
-      eq(attempts, 2, "scan: a partial walk is not cached")
+      eq(n.walks, 3, "forget(root): that root is walked again")
+      await(function(done)
+        project.scan(other, nil, done)
+      end)
+      eq(n.walks, 3, "forget(root): another root stays cached")
     end)
-
-    -- Cancel: the callback never fires.
-    project.forget()
-    local fired = false
-    local cancel = project.scan(root, nil, function()
-      fired = true
-    end)
-    cancel()
-    vim.wait(200, function()
-      return false
-    end, 20)
-    eq(fired, false, "scan: a cancelled wait is never called back")
+    vim.fn.delete(other, "rf")
 
     vim.fn.delete(root, "rf")
     project.forget()
+  end
+
+  -- ------------------------------------------------------------ the walk
+  do
+    local root = tree({ "a.lua", "sub/b.lua" })
+    local uv = vim.uv or vim.loop
+    local real_scandir = uv.fs_scandir
+    H.with_patched(uv, "fs_scandir", function(dir, cb)
+      if dir:sub(-4) == "/sub" then
+        vim.schedule(function()
+          cb("EACCES: permission denied", nil)
+        end)
+        return
+      end
+      return real_scandir(dir, cb)
+    end, function()
+      local r = await(function(done)
+        walk.run(root, nil, done)
+      end)
+      eq(r.errors[1], root .. "/sub: EACCES: permission denied", "walk: an unreadable subdirectory")
+      eq(r.root_unreadable, false, "walk: is not an unreadable root")
+      eq(r.total, 1, "walk: the readable rest is counted")
+    end)
+    local gone = await(function(done)
+      walk.run(root .. "/does-not-exist", nil, done)
+    end)
+    eq(gone.root_unreadable, true, "walk: a root that cannot be opened is flagged")
+    eq(gone.total, 0, "walk: and counts nothing")
+    vim.fn.delete(root, "rf")
+  end
+
+  -- -------------------------------------------------------- default_ignore
+  do
+    local ignore = project.default_ignore()
+    eq(ignore("/r/.github", true), false, "default_ignore: .github is project content")
+    eq(ignore("/r/node_modules", true), true, "default_ignore: node_modules is pruned")
+    eq(ignore("/r/bin", true), true, "default_ignore: bin/ counts as build output (documented)")
+    eq(ignore("/r/main.lua", false), false, "default_ignore: sources are kept")
+    if package.config:sub(1, 1) == "\\" then
+      eq(ignore("C:/r/Thumbs.db", false), true, "default_ignore: case-insensitive on Windows")
+      eq(ignore("C:/r/Node_Modules", true), true, "default_ignore: also for directories")
+    else
+      eq(ignore("/r/Node_Modules", true), false, "default_ignore: case-sensitive elsewhere")
+    end
+
+    local root = tree({ ".github/workflows/ci.yml", "x.lua" })
+    project.forget()
+    local scan = await(function(done)
+      project.scan(root, nil, done)
+    end)
+    eq(scan.keys["*.yml"] and scan.keys["*.yml"].count, 1, "scan: .github workflows are counted")
+    project.forget()
+    vim.fn.delete(root, "rf")
   end
 
   -- -------------------------------------------------------------- report
@@ -524,8 +723,99 @@ return function(H)
       local report = project.report(scan_of(paths), { registered = false })
       eq(project.summary(report), nil, "summary: nil when nothing is missing")
       local text = table.concat(project.lines(report), "\n")
-      ok(text:find("Nothing missing", 1, true), "lines: says so when nothing is missing")
+      ok(
+        text:find("Nothing missing for the files in this root.", 1, true),
+        "lines: says so when nothing is missing"
+      )
     end)
+  end
+
+  -- ------------------------------------- partial scans, unusable entries
+  do
+    local paths = { "/proj/a.zzra" }
+    with_module("nvim-treesitter", fake_ts({ "zzra" }, { "zzra" }), function()
+      ---@param over table fields set on the scan
+      ---@return string text, Lib.Deps.Project.Report report
+      local function text_of(over)
+        local scan = vim.tbl_extend("force", scan_of(paths), over)
+        local report = project.report(scan, { registered = false })
+        return table.concat(project.lines(report), "\n"), report
+      end
+      local whole = "Nothing missing for the files in this root."
+      local partial = "Nothing missing for the files that were counted"
+
+      local text, report = text_of({ errors = { "/proj/locked: EACCES" } })
+      eq(
+        report.errors and report.errors[1],
+        "/proj/locked: EACCES",
+        "report: carries the scan's errors"
+      )
+      ok(text:find("1 directory could not be read", 1, true), "lines: names unreadable directories")
+      ok(text:find(partial, 1, true), "lines: errors -> nothing missing among what was counted")
+      ok(not text:find(whole, 1, true), "lines: errors -> not 'nothing missing in this root'")
+
+      text, report = text_of({
+        truncated = "max_files",
+        limits = { max_files = 2, max_depth = 32, max_ms = 30000 },
+      })
+      eq(report.truncated, "max_files", "report: carries truncated")
+      ok(text:find("it stopped after 2 files", 1, true), "lines: names the file limit")
+      ok(text:find(partial, 1, true), "lines: truncated -> partial")
+      ok(not text:find(whole, 1, true), "lines: truncated -> not 'nothing missing'")
+
+      text, report = text_of({ failed = "boom" })
+      eq(report.failed, "boom", "report: carries failed")
+      ok(text:find("The walk failed: boom", 1, true), "lines: names the failure")
+      ok(not text:find(whole, 1, true), "lines: failed -> not 'nothing missing'")
+
+      -- Mason entries that could not be checked, and unusable table entries.
+      with_module("mason-registry", {
+        get_package = function(name)
+          error("Cannot find package " .. name)
+        end,
+      }, function()
+        local r = project.report(scan_of(paths), {
+          registered = false,
+          tools = { zzra = { { mason = "zz-typo" }, { why = "neither bin nor mason" } } },
+        })
+        local t = table.concat(project.lines(r), "\n")
+        ok(t:find("## Could not be checked", 1, true), "lines: 'Could not be checked' section")
+        ok(t:find("zz-typo (not in the Mason registry", 1, true), "lines: names the package")
+        ok(t:find("## Tools table problems", 1, true), "lines: 'Tools table problems' section")
+        ok(t:find("zzra: entry has neither `bin` nor `mason`", 1, true), "lines: names the problem")
+        ok(
+          t:find("Nothing missing among what could be checked", 1, true),
+          "lines: unchecked entries -> not a plain 'nothing missing'"
+        )
+        ok(not t:find(whole, 1, true), "lines: unchecked entries -> not 'nothing missing'")
+      end)
+    end)
+
+    -- summary: a "Never" parser is not announced; a root without a tail still has a name.
+    with_module("nvim-treesitter", fake_ts({}, { "zzra", "zzgo" }), function()
+      H.with_patched(policy, "declined", function()
+        return { "zzgo" }
+      end, function()
+        local only_never = project.report(scan_of({ "/proj/a.zzgo" }), { registered = false })
+        eq(project.summary(only_never), nil, "summary: a declined parser alone is not announced")
+        local both = project.report(scan_of({ "/proj/a.zzgo", "/proj/a.zzra" }), {
+          registered = false,
+        })
+        local summary = project.summary(both)
+        ok(summary:find("parsers: zzra", 1, true), "summary: the installable one is named")
+        ok(not summary:find("zzgo", 1, true), "summary: the declined one is not")
+      end)
+    end)
+    local rooted = project.summary({
+      root = "/",
+      missing_parsers = { { lang = "zzra", state = "available" } },
+      missing_tools = {},
+    })
+    eq(
+      rooted:find("/ — missing", 1, true),
+      1,
+      "summary: a root without a tail is named by its path"
+    )
   end
 
   -- ---------------------------------------------------------- install_plan
@@ -581,6 +871,14 @@ return function(H)
         local empty =
           project.install_plan(project.report(scan_of({ "/proj/c.lua" }), { registered = false }))
         eq(empty.empty, true, "install_plan: nothing missing -> empty")
+
+        -- Only a Mason package missing (lua's parser is installed): not empty.
+        local mason_only = project.install_plan(project.report(scan_of({ "/proj/c.lua" }), {
+          registered = false,
+          tools = { lua = { { mason = "stylua" } } },
+        }))
+        eq(#mason_only.parsers, 0, "install_plan: no parser in the Mason-only case")
+        eq(mason_only.empty, false, "install_plan: a missing Mason package alone is not empty")
       end)
     end)
   end
@@ -742,6 +1040,11 @@ return function(H)
     end)
 
     with_module("mason-registry", nil, function()
+      local refreshed
+      mason.refresh(function(success)
+        refreshed = success
+      end)
+      eq(refreshed, false, "mason.refresh: without Mason it answers false, right away")
       eq(mason.available(), false, "mason: unavailable without the registry")
       eq(mason.status("a"), "unknown", "mason.status: unknown without Mason")
       local result
@@ -755,6 +1058,127 @@ return function(H)
         "mason.install: without Mason it still answers"
       )
       eq(result.a, false, "mason.install: and says no")
+    end)
+  end
+
+  -- ----------------------------------------------------------- report_async
+  do
+    -- A Mason that never fetched its registry: get_package raises for every
+    -- name until refresh() ran (real Mason behaves like this on a fresh machine).
+    local fetched, refreshes = false, 0
+    local fresh_registry = {
+      refresh = function(cb)
+        refreshes = refreshes + 1
+        fetched = true
+        cb(true, {})
+      end,
+      get_package = function(name)
+        if not fetched or name ~= "rust-analyzer" then
+          error("Cannot find package " .. name)
+        end
+        return {
+          is_installed = function()
+            return false
+          end,
+        }
+      end,
+    }
+    local function opts_for(name)
+      return { registered = false, tools = { zzra = { { mason = name } } } }
+    end
+    with_module("nvim-treesitter", fake_ts({ "zzra" }, { "zzra" }), function()
+      with_module("mason-registry", fresh_registry, function()
+        local scan = scan_of({ "/proj/a.zzra" })
+        eq(
+          project.report(scan, opts_for("rust-analyzer")).tools[1].state,
+          "unavailable",
+          "fresh Mason: before a fetch every package is unavailable"
+        )
+        local report = await(function(done)
+          project.report_async(scan, opts_for("rust-analyzer"), done)
+        end)
+        eq(refreshes, 1, "report_async: an unavailable Mason entry refreshes the registry")
+        eq(report.tools[1].state, "missing", "report_async: after which the package is missing")
+        eq(
+          project.install_plan(report).mason[1],
+          "rust-analyzer",
+          "report_async: and offered for install"
+        )
+
+        await(function(done)
+          project.report_async(scan, opts_for("rust-analyzer"), done)
+        end)
+        eq(refreshes, 1, "report_async: nothing unavailable -> no refresh")
+
+        local typo = await(function(done)
+          project.report_async(scan, opts_for("zz-typo"), done)
+        end)
+        eq(refreshes, 2, "report_async: one refresh per report, not a loop")
+        eq(typo.tools[1].state, "unavailable", "report_async: a typo stays unavailable")
+      end)
+
+      -- The trigger on that fresh machine announces the package.
+      fetched = false
+      local auto_root = tree({ "x.zzra" })
+      project.forget()
+      project.reset_announced()
+      with_module("mason-registry", fresh_registry, function()
+        local infos = {}
+        H.with_patched(require("lib.nvim.notify"), "create", function()
+          return {
+            info = function(msg)
+              infos[#infos + 1] = msg
+            end,
+            warn = function() end,
+            error = function() end,
+            debug = function() end,
+          }
+        end, function()
+          local old_cwd = vim.fn.getcwd()
+          vim.cmd("cd " .. vim.fn.fnameescape(auto_root))
+          local ok_run, err = pcall(function()
+            project.setup({ auto = true, tools = opts_for("rust-analyzer").tools })
+            ok(
+              vim.wait(5000, function()
+                return #infos >= 1
+              end, 5),
+              "trigger: a fresh Mason still gets announced"
+            )
+            ok(infos[1]:find("tools: rust-analyzer", 1, true), "trigger: naming the package")
+          end)
+          project.setup({})
+          vim.cmd("cd " .. vim.fn.fnameescape(old_cwd))
+          if not ok_run then
+            error(err, 0)
+          end
+        end)
+      end)
+      project.reset_announced()
+      project.forget()
+      vim.fn.delete(auto_root, "rf")
+
+      -- :Lib deps project install on that fresh machine offers the package.
+      fetched = false
+      local root = tree({ "x.zzra" })
+      project.forget()
+      with_module("mason-registry", fresh_registry, function()
+        local asked = {}
+        H.with_patched(vim.fn, "confirm", function(text)
+          asked[#asked + 1] = text
+          return 2
+        end, function()
+          project.run(root, "install", opts_for("rust-analyzer"))
+          ok(
+            vim.wait(5000, function()
+              return #asked >= 1
+            end, 5),
+            "run: a fresh Mason still gets asked about"
+          )
+          ok(asked[1]:find("rust-analyzer", 1, true), "run: the question names the Mason package")
+        end)
+      end)
+      project.forget()
+      vim.fn.delete(root, "rf")
     end)
   end
 
@@ -825,7 +1249,146 @@ return function(H)
     vim.fn.delete(root, "rf")
   end
 
+  -- ----------------------------------------------- trigger: bounds and roots
+  do
+    local is_windows = package.config:sub(1, 1) == "\\"
+    local a, b = tree({ "x.zzra" }), tree({ "y.zzra" })
+    local old_cwd = vim.fn.getcwd()
+    local uv = vim.uv or vim.loop
+    local scans = {}
+    local function cd(dir)
+      vim.cmd("cd " .. vim.fn.fnameescape(dir))
+    end
+
+    eq(project.is_broad_root("/"), true, "is_broad_root: the filesystem root")
+    eq(project.is_broad_root("C:/"), true, "is_broad_root: a drive root")
+    eq(project.is_broad_root("C:"), true, "is_broad_root: a bare drive")
+    eq(project.is_broad_root("//server/share"), true, "is_broad_root: a UNC share root")
+    eq(project.is_broad_root(uv.os_homedir()), true, "is_broad_root: the home directory")
+    eq(project.is_broad_root(a), false, "is_broad_root: a project directory is not")
+
+    local ok_run, err = pcall(function()
+      H.with_patched(project, "scan", function(root, opts, on_done)
+        local s = { root = vim.fs.normalize(root), opts = opts, on_done = on_done, cancelled = 0 }
+        scans[#scans + 1] = s
+        return function()
+          s.cancelled = s.cancelled + 1
+        end
+      end, function()
+        cd(a)
+        project.setup({ auto = true })
+        eq(#scans, 1, "trigger: the current directory is scanned at setup")
+        eq(scans[1].root, a, "trigger: that directory")
+        eq(scans[1].opts.max_files, project.TRIGGER_LIMITS.max_files, "trigger: file limit")
+        eq(scans[1].opts.max_depth, project.TRIGGER_LIMITS.max_depth, "trigger: depth limit")
+        eq(scans[1].opts.max_ms, project.TRIGGER_LIMITS.max_ms, "trigger: time limit")
+
+        -- getcwd() answers the OLD directory: only v:event.cwd names the new one.
+        H.with_patched(vim.fn, "getcwd", function()
+          return a
+        end, function()
+          cd(b)
+        end)
+        eq(#scans, 2, "trigger: a :cd starts a scan")
+        eq(scans[2].root, b, "trigger: of the directory the DirChanged event names")
+        eq(scans[1].cancelled, 1, "trigger: the next :cd cancels the scan still running")
+        eq(scans[2].cancelled, 0, "trigger: but not its own")
+
+        project.setup({ auto = true, max_files = 5, max_depth = 2, max_ms = 100 })
+        eq(scans[2].cancelled, 1, "trigger: setup() again cancels the pending scan")
+        eq(scans[3].opts.max_files, 5, "trigger: setup's max_files")
+        eq(scans[3].opts.max_depth, 2, "trigger: setup's max_depth")
+        eq(scans[3].opts.max_ms, 100, "trigger: setup's max_ms")
+
+        H.with_patched(uv, "os_homedir", function()
+          return a
+        end, function()
+          cd(a)
+        end)
+        eq(#scans, 3, "trigger: the home directory is not scanned")
+        eq(scans[3].cancelled, 1, "trigger: leaving for it still cancels the running scan")
+
+        cd(is_windows and a:sub(1, 3) or "/")
+        eq(#scans, 3, "trigger: a filesystem or drive root is not scanned")
+
+        cd(b)
+        eq(#scans, 4, "trigger: back in a project directory it scans again")
+        project.setup({})
+        eq(scans[4].cancelled, 1, "trigger: turning it off cancels the pending scan")
+      end)
+    end)
+    project.setup({})
+    cd(old_cwd)
+    vim.fn.delete(a, "rf")
+    vim.fn.delete(b, "rf")
+    if not ok_run then
+      error(err, 0)
+    end
+  end
+
   -- -------------------------------------------------------------------- run
+  do
+    local root = tree({ "x.zzra" })
+
+    -- The action decides whether the cache may answer.
+    local seen = {}
+    H.with_patched(project, "scan", function(_, opts)
+      seen[#seen + 1] = opts
+      return function() end
+    end, function()
+      project.run(root, "refresh")
+      project.run(root)
+    end)
+    eq(seen[1].refresh, true, "run: refresh walks again")
+    eq(seen[2].refresh, false, "run: without an action the cache may answer")
+
+    -- Without an action: the report view, whose `I` installs.
+    project.forget()
+    with_module("nvim-treesitter", fake_ts({}, { "zzra" }), function()
+      local before = {}
+      for _, win in ipairs(vim.api.nvim_list_wins()) do
+        before[win] = true
+      end
+      project.run(root, nil, { registered = false })
+      local view
+      ok(
+        vim.wait(5000, function()
+          for _, win in ipairs(vim.api.nvim_list_wins()) do
+            if not before[win] then
+              view = win
+              return true
+            end
+          end
+          return false
+        end, 5),
+        "run: without an action a view opens"
+      )
+      local buf = vim.api.nvim_win_get_buf(view)
+      local text = table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n")
+      ok(text:find("# Project scan", 1, true), "run: the view shows the report")
+      ok(text:find("- zzra  (zzra, 1 file)", 1, true), "run: with the missing parser")
+      local install_map
+      for _, map in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do
+        if map.lhs == "I" then
+          install_map = map
+        end
+      end
+      ok(install_map and install_map.callback, "run: the view maps I")
+      local asked = {}
+      H.with_patched(vim.fn, "confirm", function(question)
+        asked[#asked + 1] = question
+        return 2
+      end, function()
+        install_map.callback()
+      end)
+      eq(#asked, 1, "run: I asks to install")
+      ok(asked[1]:find("zzra", 1, true), "run: about the report's parser")
+      pcall(vim.api.nvim_win_close, view, true)
+    end)
+    project.forget()
+    vim.fn.delete(root, "rf")
+  end
+
   do
     local root = tree({ "x.zzra" })
     project.forget()
@@ -861,5 +1424,27 @@ return function(H)
     eq(found.args[1].optional, true, "routes: the action is optional")
     eq(table.concat(found.args[1].enum, ","), "refresh,install", "routes: refresh|install")
     ok(require("lib.nvim.deps").project == project, "deps.project is reachable from lib.nvim.deps")
+  end
+
+  -- -------------------------------------------------------------- help tag
+  do
+    -- This checkout's help file, not whichever copy is first on runtimepath.
+    local spec_dir = vim.fs.dirname(vim.fs.normalize(debug.getinfo(1, "S").source:sub(2)))
+    local lines = vim.fn.readfile(vim.fs.dirname(spec_dir) .. "/doc/lib.nvim-deps.txt")
+    local entry
+    for i, line in ipairs(lines) do
+      if line:find("*:Lib-deps-project*", 1, true) then
+        for j = i + 1, #lines do
+          if lines[j] ~= "" then
+            entry = lines[j]
+            break
+          end
+        end
+      end
+    end
+    ok(
+      entry and entry:find("^:Lib deps project"),
+      "help: *:Lib-deps-project* sits right above `:Lib deps project`"
+    )
   end
 end
