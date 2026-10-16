@@ -105,7 +105,7 @@ a CI dependency. Pointing them at `main` would mean a broken commit here turns
 all of them red before anyone traces it back. `ci-verified` is moved to the
 commit at `main` only after stylua, luacheck and the suite have all passed,
 so consumers pinning `ref: ci-verified` always test against a known-good state.
-It only ever moves forward: two overlapping runs cannot swap a newer verified
+It only ever moves forward along main (after a force-push to main it is reset to the new verified commit): two overlapping runs cannot swap a newer verified
 commit for an older one, and a failed lookup stops the job instead of pushing.
 Nothing to do by hand — but it is why a red build here is worth fixing before
 anything else.

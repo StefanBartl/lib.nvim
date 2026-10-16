@@ -102,8 +102,10 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v5
-      # Never move ci-verified backwards: two pushes can finish out of order,
-      # and the older run must not overwrite the newer verified commit. The
+      # Never move ci-verified backwards along main's history: two pushes can finish
+      # out of order, and the older run must not overwrite the newer verified commit.
+      # If main's history was rewritten (compare status 'diverged'), ci-verified is
+      # deliberately reset to the new verified commit. The
       # lookup fails closed (an API or network error stops the job instead of
       # falling through to a push) and the update carries a lease on the tip it
       # compared against.
@@ -128,6 +130,8 @@ jobs:
               # First publish. A plain push creates the branch and is rejected if a
               # concurrent run created it first; the next attempt then compares.
               git push origin HEAD:refs/heads/ci-verified && exit 0
+              echo "first publish failed on attempt $attempt (another run may have created the branch)"
+              [ "$attempt" -lt 4 ] && sleep $((attempt * 2))
               continue
             fi
             status=$(gh api "repos/$REPO/compare/$tip...$SHA" --jq .status)
@@ -140,7 +144,8 @@ jobs:
                 # The lease makes the server refuse the update if ci-verified moved since
                 # the comparison, so an older run can never overwrite a newer one.
                 git push origin HEAD:refs/heads/ci-verified --force-with-lease="refs/heads/ci-verified:$tip" && exit 0
-                echo "ci-verified moved during attempt $attempt; re-checking"
+                echo "push failed on attempt $attempt (lease rejected or another error, see the git output above)"
+                [ "$attempt" -lt 4 ] && sleep $((attempt * 2))
                 ;;
               *)
                 echo "::error::unexpected compare status '$status' for $tip...$SHA"
