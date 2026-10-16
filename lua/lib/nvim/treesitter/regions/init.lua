@@ -36,10 +36,12 @@ local M = {}
 ---@field lang? string    # Language (default: from the buffer's filetype).
 ---@field first_row? integer  # Only nodes from this 0-based row on (default 0).
 ---@field last_row? integer   # ... up to this row, exclusive (default: the end).
+---@field hierarchical? boolean  # A requested name also takes its dotted children: "string" collects "string.escape" too.
 
 ---@alias Lib.Ts.RegionsReason "no_filetype"|"no_parser"|"no_query"|"capture_not_defined"|"parse_failed"|"invalid_buffer"
 
----Ranges of the nodes carrying each requested capture, keyed by capture name (without `@`).
+---Ranges of the nodes carrying each requested capture, keyed by capture name (without `@`). Names are matched
+---EXACTLY (`comment` does not collect `comment.documentation`) unless `opts.hierarchical` is set.
 ---
 ---Returns `nil, reason` when the buffer cannot say (see the module description). When at least one requested
 ---capture exists in the query the result holds an entry for every one the query defines: a capture that
@@ -74,14 +76,28 @@ function M.collect(bufnr, captures, opts)
     return nil, "no_query"
   end
 
+  -- query capture name -> the requested name it is collected under (exact, or with `hierarchical` the
+  -- nearest requested ancestor: "string.escape" -> "string")
   local wanted = {}
   for _, name in ipairs(captures) do
     wanted[name] = true
   end
-  local defined, defined_any = {}, false
+  local target, defined, defined_any = {}, {}, false
   for _, name in ipairs(query.captures) do
-    if wanted[name] then
-      defined[name] = true
+    local owner = wanted[name] and name or nil
+    if not owner and opts.hierarchical then
+      local parent = name
+      while not owner do
+        parent = parent:match("^(.*)%.[^.]+$")
+        if not parent then
+          break
+        end
+        owner = wanted[parent] and parent or nil
+      end
+    end
+    if owner then
+      target[name] = owner
+      defined[owner] = true
       defined_any = true
     end
   end
@@ -107,7 +123,8 @@ function M.collect(bufnr, captures, opts)
   for _, tree in ipairs(trees) do
     local ok_iter = pcall(function()
       for id, node in query:iter_captures(tree:root(), bufnr, first, last) do
-        local bucket = found[query.captures[id]]
+        local owner = target[query.captures[id]]
+        local bucket = owner and found[owner]
         if bucket then
           local sr, sc, sb, er, ec, eb = node:range(true)
           bucket[#bucket + 1] = { sr, sc, er, ec, start_byte = sb, end_byte = eb }

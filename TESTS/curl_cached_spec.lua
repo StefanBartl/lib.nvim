@@ -77,6 +77,25 @@ return function(H)
       "cache_path: no extension, none invented"
     )
     eq(vim.fs.dirname(a), vim.fs.normalize(cache_dir), "cache_path: inside cache_dir")
+    -- the host is not an extension
+    for _, bare in ipairs({
+      "http://example.com",
+      "http://example.com/",
+      "https://host:8080/dir.v2/file",
+      "http://u:p@host.org",
+    }) do
+      eq(
+        curl.cache_path(bare, { cache_dir = cache_dir }):match("%.%w+$"),
+        nil,
+        "cache_path: no extension for " .. bare
+      )
+    end
+    ok(
+      curl
+        .cache_path("https://host:8080/dir.v2/pic.jpeg#frag", { cache_dir = cache_dir })
+        :match("%.jpeg$") ~= nil,
+      "cache_path: the extension of the last path segment, fragment ignored"
+    )
   end
 
   -- blocking: miss downloads, hit makes no request
@@ -346,6 +365,29 @@ return function(H)
     eq(res and res.ok, false, "ignoring curl, async: refused by our own check")
     ok(names_limit(res and res.err), "ignoring curl, async: the reason names the limit")
     eq(uv.fs_stat(dest2), nil, "ignoring curl, async: the file is removed")
+  end
+
+  -- stale .part files (a crashed download) are swept once per directory, young ones are left alone
+  do
+    local dir = vim.fn.tempname() .. "-sweep"
+    vim.fn.mkdir(dir, "p")
+    local old_part, young_part, other =
+      dir .. "/abc.png.part.1.2", dir .. "/def.png.part.3.4", dir .. "/keep.png"
+    for _, f in ipairs({ old_part, young_part, other }) do
+      local fh = assert(io.open(f, "wb"))
+      fh:write("x")
+      fh:close()
+    end
+    uv.fs_utime(old_part, os.time() - 3 * 24 * 3600, os.time() - 3 * 24 * 3600)
+    uv.fs_utime(other, os.time() - 3 * 24 * 3600, os.time() - 3 * 24 * 3600)
+    curl.cache_path("http://example.com/x.png", { cache_dir = dir })
+    eq(uv.fs_stat(old_part), nil, "sweep: a day-old .part file is removed")
+    ok(
+      uv.fs_stat(young_part) ~= nil,
+      "sweep: a young .part file stays (another instance may be writing it)"
+    )
+    ok(uv.fs_stat(other) ~= nil, "sweep: an old cache file that is no .part stays")
+    vim.fn.delete(dir, "rf")
   end
 
   vim.fn.delete(cache_dir, "rf")

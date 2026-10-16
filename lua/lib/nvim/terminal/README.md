@@ -59,10 +59,12 @@ caps.reset()                      -- forget the cache and the warnings
 Names: `kitty_graphics` (Kitty, WezTerm, Ghostty, Konsole), `osc1337_images` (WezTerm, iTerm2, Konsole,
 from `terminal.host`), `sixel` (foot, mlterm, WezTerm, iTerm2, a `$TERM` naming sixel), `truecolor`
 (`$COLORTERM` truecolor/24bit). None has a runtime query: `true` means "known to", `false` "not known to".
-`detect` also carries `host` (the recognised terminal, `in_tmux`, the passthrough `hint`).
+Over SSH the terminal-specific variables are usually not forwarded (a capable terminal reads as `false`);
+under tmux they are inherited (`true`, but graphics only arrive with `allow-passthrough on`: see
+`host.in_tmux` / `host.hint`). `detect` also carries `host` (the recognised terminal, `in_tmux`, the passthrough `hint`).
 
-`require(name, { feature?, notify? })` is `supports` plus **one** warning per missing capability for the
-whole session (the message names the feature, the capability, the terminal and the tmux hint): a plugin
+`require(name, { feature?, notify? })` is `supports` plus **one** warning per missing capability and
+`feature` for the whole session (a second plugin that needs the same capability tells its user once too) (the message names the feature, the capability, the terminal and the tmux hint): a plugin
 that tries to draw on every cursor move does not repeat it a hundred times. `notify` replaces the default
 `lib.nvim.notify` WARN.
 

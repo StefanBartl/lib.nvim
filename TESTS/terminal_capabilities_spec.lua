@@ -98,11 +98,25 @@ return function(H)
   eq(caps.require("truecolor", { notify = sink }), true, "require: present is true")
   eq(#seen, 2, "require: no warning when present")
 
+  -- a second feature missing the same capability warns once for itself; the first stays silent
+  caps.require("kitty_graphics", { feature = "inline images", notify = sink })
+  local before = #seen
+  eq(
+    caps.require("kitty_graphics", { feature = "another plugin", notify = sink }),
+    false,
+    "require: other feature, still missing"
+  )
+  eq(#seen, before + 1, "require: a different feature gets its own warning")
+  caps.require("kitty_graphics", { feature = "another plugin", notify = sink })
+  caps.require("kitty_graphics", { feature = "inline images", notify = sink })
+  eq(#seen, before + 1, "require: ... and neither repeats")
+
   -- reset forgets the warnings too
   vim.env.COLORTERM = nil
   caps.reset()
+  local pre_reset = #seen
   caps.require("truecolor", { notify = sink })
-  eq(#seen, 3, "require: after reset the warning can show again")
+  eq(#seen, pre_reset + 1, "require: after reset the warning can show again")
 
   -- the default sink is lib.nvim.notify at WARN
   caps.reset()

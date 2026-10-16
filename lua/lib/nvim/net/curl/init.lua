@@ -647,12 +647,38 @@ end
 
 -- ── cached downloads ───────────────────────────────────────────────────────
 
+---@type table<string, true>
+local swept = {}
+
+---@internal
+--- A `.part` file is left behind when Neovim exits (or curl is killed) in the middle of a download. Once per
+--- directory and session, those older than a day are removed -- not younger ones: another instance may be
+--- writing them right now.
+---@param dir string
+local function sweep_parts(dir)
+  if swept[dir] then
+    return
+  end
+  swept[dir] = true
+  local cutoff = os.time() - 24 * 3600
+  for _, name in ipairs(vim.fn.readdir(dir)) do
+    if name:find(".part.", 1, true) then
+      local full = dir .. "/" .. name
+      local st = vim.uv.fs_stat(full)
+      if st and st.type == "file" and st.mtime.sec < cutoff then
+        pcall(os.remove, full)
+      end
+    end
+  end
+end
+
 ---@internal
 ---@param opts Lib.Net.Curl.CachedOpts
 ---@return string
 local function cache_root(opts)
   local dir = opts.cache_dir or (vim.fn.stdpath("cache") .. "/lib.nvim/net/download")
   vim.fn.mkdir(dir, "p")
+  pcall(sweep_parts, dir)
   return dir
 end
 
@@ -664,7 +690,9 @@ end
 ---@return string path
 function M.cache_path(url, opts)
   local key = vim.fn.sha256(url)
-  local ext = url:gsub("[?#].*$", ""):match("%.(%w+)$")
+  -- the extension of the PATH: "http://example.com" has none (its ".com" is the host)
+  local path_part = url:match("^%a[%w+.-]*://[^/?#]*([^?#]*)") or url:gsub("[?#].*$", "")
+  local ext = path_part:match("/[^/]*%.(%w+)$")
   return cache_root(opts or {})
     .. "/"
     .. key

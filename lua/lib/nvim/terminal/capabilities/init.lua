@@ -5,7 +5,10 @@
 --- Built for plugins that send terminal-dependent escape sequences (inline images, hyperlinks, true colour):
 --- none of these has a reliable capability query a plugin could ask at runtime, so the answer is a heuristic
 --- over `$TERM`, `$TERM_PROGRAM`, `$COLORTERM` and the terminal-specific variables, built on
---- `lib.nvim.terminal.host`. An answer is "this terminal is known to", never a guarantee.
+--- `lib.nvim.terminal.host`. An answer is "this terminal is known to", never a guarantee: over SSH the
+--- terminal-specific variables are usually not forwarded (a capable terminal reads as `false`), and under
+--- tmux they ARE inherited (`true`, but graphics only arrive with `allow-passthrough on`: see `host.in_tmux`
+--- and `host.hint` in the result of `detect`).
 ---
 --- Generalised from `images.nvim`'s terminal check.
 ---
@@ -111,8 +114,9 @@ end
 ---@field feature? string                   # What needs it, for the warning ("inline images").
 ---@field notify? fun(msg: string)          # Warning sink (default: `lib.nvim.notify` WARN).
 
----`supports(name)`, plus exactly ONE warning per missing capability for the whole session: a plugin that
----tries to draw on every cursor move would otherwise repeat it a hundred times.
+---`supports(name)`, plus exactly ONE warning per missing capability and `opts.feature` for the whole session:
+---a plugin that tries to draw on every cursor move would otherwise repeat it a hundred times, while a second
+---plugin (or feature) that also needs it still tells its own user once.
 ---@param name Lib.Terminal.CapabilityName
 ---@param opts? Lib.Terminal.RequireOpts
 ---@return boolean
@@ -120,11 +124,14 @@ function M.require(name, opts)
   if M.supports(name) then
     return true
   end
-  if warned[name] then
+  opts = opts or {}
+  -- per capability AND feature: two plugins missing the same capability each tell their user once, one
+  -- feature retrying on every cursor move stays silent after the first
+  local mark = name .. "|" .. (opts.feature or "")
+  if warned[mark] then
     return false
   end
-  warned[name] = true
-  opts = opts or {}
+  warned[mark] = true
   local host = session().host
   local msg = ("%s needs %s, which this terminal is not known to support (terminal: %s)"):format(
     opts.feature or "this feature",
