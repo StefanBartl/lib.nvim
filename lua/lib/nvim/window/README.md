@@ -316,9 +316,9 @@ ledger:clear(win)               --> count removed;  ledger:clear_all()
 
 Closed windows are forgotten, never an error; matches of others in the same window are left alone.
 
-Note: Vim copies a window's matches into the window a `:split` creates, with the same ids. The ledger
-is keyed by window id, so the copies are not its own: `ledger:list(new_win)` is empty and `clear(new_win)`
-does not reach them. Matches that must not appear in a split are added again per window (e.g. on `WinNew`).
+Note: a window's matches stay with that window. Neovim does not copy them into the window a `:split` creates
+(checked on 0.12; `TESTS/window_matches_spec.lua` pins it), so the new window has none and
+`ledger:list(new_win)` is empty. A match wanted in the split is added again for it (e.g. on `WinNew`).
 
 ### `find_by_filetype(filetype) -> winid|false`
 
