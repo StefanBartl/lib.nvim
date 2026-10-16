@@ -456,8 +456,10 @@ M.is_enabled(bufnr: integer, whitelist?: table<string, boolean>): boolean
 ### `lib.nvim.net.curl` download cache (see header comments)
 ```
 M.cache_path(url, opts?: {cache_dir?}): string       -- sha256(url) + the extension of the URL's path
-M.download_cached(url, opts?: FetchOpts + {cache_dir?, ttl_s?, refresh?}, cb: fun(ok, path_or_err, info: {cached, response?}))
+M.download_cached(url, opts?: FetchOpts + {cache_dir?, ttl_s?, refresh?, max_age_s?, max_total_bytes?}, cb: fun(ok, path_or_err, info: {cached, response?}))
 M.download_cached_blocking(url, opts?): ok, path_or_err, info
+-- after a download: entries unused for max_age_s are removed, then the least recently used ones until the cache
+-- entries total at most max_total_bytes; a hit renews the atime only; the file just stored is kept
 ```
 A fresh entry is returned without a request; the body goes to a `.part` file renamed into place only after a 2xx
 answer, so the cache never holds a partial file or an error page. `download` also checks the written file against

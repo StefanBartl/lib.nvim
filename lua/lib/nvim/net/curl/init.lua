@@ -739,10 +739,14 @@ end
 
 ---@internal
 --- Last use of a cache file: the later of atime (a hit sets it, see `touch_hit`) and mtime (the download).
+--- Sub-second precision where the file system has it, so two entries used in the same second keep their order.
 ---@param st uv.fs_stat.result
----@return integer
+---@return number
 local function last_used(st)
-  return math.max(st.atime.sec, st.mtime.sec)
+  return math.max(
+    st.atime.sec + (st.atime.nsec or 0) / 1e9,
+    st.mtime.sec + (st.mtime.nsec or 0) / 1e9
+  )
 end
 
 ---@internal
@@ -752,7 +756,22 @@ end
 local function touch_hit(path)
   local st = vim.uv.fs_stat(path)
   if st then
-    pcall(vim.uv.fs_utime, path, os.time(), st.mtime.sec)
+    local sec, usec = vim.uv.gettimeofday()
+    local now = sec and (sec + (usec or 0) / 1e6) or os.time()
+    pcall(vim.uv.fs_utime, path, now, st.mtime.sec + (st.mtime.nsec or 0) / 1e9)
+  end
+end
+
+---@internal
+--- `max_age_s` / `max_total_bytes` must be numbers >= 0 (0 keeps only the file just stored). A string or a
+--- negative value would otherwise switch the pruning off, or wipe the cache, without a word.
+---@param opts Lib.Net.Curl.CachedOpts
+local function check_bounds(opts)
+  for _, key in ipairs({ "max_age_s", "max_total_bytes" }) do
+    local v = opts[key]
+    if v ~= nil and not (type(v) == "number" and v >= 0 and v == v) then
+      error(("lib.nvim.net.curl: %s must be a number >= 0, got %s"):format(key, vim.inspect(v)), 3)
+    end
   end
 end
 
@@ -802,8 +821,12 @@ local function prune_cache(dir, opts, keep)
     local too_big = opts.max_total_bytes and total > opts.max_total_bytes
     if too_old or too_big then
       -- `os.remove` reports failure as `nil, err` (a locked file on Windows), it does not throw
-      if vim.uv.fs_unlink(e.path) then
+      local freed, err = vim.uv.fs_unlink(e.path)
+      if freed then
         removed = removed + 1
+        total = total - e.size
+      elseif err and err:find("ENOENT", 1, true) then
+        -- another Neovim instance removed it first: the space is free all the same
         total = total - e.size
       end
     end
@@ -815,7 +838,16 @@ end
 ---@param path string
 ---@param opts Lib.Net.Curl.CachedOpts
 local function after_store(path, opts)
-  pcall(prune_cache, vim.fs.dirname(path), opts, path)
+  local ok, err = pcall(prune_cache, vim.fs.dirname(path), opts, path)
+  if not ok then
+    -- the download itself succeeded: report, never raise
+    vim.schedule(function()
+      vim.notify_once(
+        "lib.nvim.net.curl: cache pruning failed: " .. tostring(err),
+        vim.log.levels.WARN
+      )
+    end)
+  end
 end
 
 ---@internal
@@ -834,6 +866,7 @@ end
 ---@param cb fun(ok: boolean, path_or_err: string, info: { cached: boolean, response?: Lib.Net.Curl.RawResponse })
 function M.download_cached(url, opts, cb)
   opts = opts or {}
+  check_bounds(opts)
   local path = M.cache_path(url, opts)
   if cache_fresh(path, opts) then
     touch_hit(path)
@@ -866,6 +899,7 @@ end
 ---@return { cached: boolean, response?: Lib.Net.Curl.RawResponse } info
 function M.download_cached_blocking(url, opts)
   opts = opts or {}
+  check_bounds(opts)
   local path = M.cache_path(url, opts)
   if cache_fresh(path, opts) then
     touch_hit(path)

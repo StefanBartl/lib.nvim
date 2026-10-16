@@ -512,6 +512,155 @@ return function(H)
       nil,
       "removal failure: ... and the one after that, until the limit is met"
     )
+    -- review cases, each in a fresh directory so that the totals are exact
+    local function new_dir()
+      local d = vim.fn.tempname() .. "-curl-rev"
+      vim.fn.mkdir(d, "p")
+      return d
+    end
+    local function make(d, tag, size, atime, mtime)
+      local p = d .. "/" .. vim.fn.sha256(tag)
+      vim.fn.writefile({ string.rep("x", size - 1) }, p, "b")
+      uv.fs_utime(p, atime, mtime or atime)
+      return p
+    end
+    local function fetch_in(d, name, opts)
+      opts.cache_dir = d
+      return curl.download_cached_blocking(("http://127.0.0.1:%d/%s"):format(port, name), opts)
+    end
+    local t0 = os.time() - 1000
+
+    -- the stored file (9 bytes) counts toward the total: 200 + 9 > 205 needs one eviction
+    local d1 = new_dir()
+    local a1, a2 = make(d1, "c1", 100, t0), make(d1, "c2", 100, t0 + 10)
+    fetch_in(d1, "s1.txt", { max_total_bytes = 205 })
+    eq(uv.fs_stat(a1), nil, "stored file counts: the least recently used entry goes")
+    ok(uv.fs_stat(a2) ~= nil, "stored file counts: ... and only that one")
+
+    -- equal use times: the smaller name goes first, deterministically
+    local d2 = new_dir()
+    local tied = { make(d2, "t1", 100, t0), make(d2, "t2", 100, t0), make(d2, "t3", 100, t0) }
+    table.sort(tied)
+    fetch_in(d2, "s2.txt", { max_total_bytes = 150 }) -- 309 total: two evictions
+    eq(uv.fs_stat(tied[1]), nil, "tie-break: the smallest name goes first")
+    eq(uv.fs_stat(tied[2]), nil, "tie-break: then the next smallest")
+    ok(uv.fs_stat(tied[3]) ~= nil, "tie-break: the largest name stays")
+
+    -- use time at sub-second precision: the entry used earlier goes, whatever its name
+    local d3 = new_dir()
+    local lo, hi = vim.fn.sha256("sub-a"), vim.fn.sha256("sub-b")
+    if lo > hi then
+      lo, hi = hi, lo
+    end
+    local older, newer = d3 .. "/" .. hi, d3 .. "/" .. lo -- the older entry has the LARGER name
+    vim.fn.writefile({ string.rep("x", 99) }, older, "b")
+    vim.fn.writefile({ string.rep("x", 99) }, newer, "b")
+    uv.fs_utime(older, t0 + 0.1, t0 + 0.1)
+    uv.fs_utime(newer, t0 + 0.9, t0 + 0.9)
+    local st_o, st_n = uv.fs_stat(older), uv.fs_stat(newer)
+    if st_o.mtime.nsec ~= 0 or st_n.mtime.nsec ~= 0 then -- the file system keeps fractions
+      fetch_in(d3, "s3.txt", { max_total_bytes = 150 })
+      eq(uv.fs_stat(older), nil, "sub-second: the entry used earlier goes first")
+      ok(uv.fs_stat(newer) ~= nil, "sub-second: the entry used later stays")
+    else
+      H.skipped("curl cache sub-second order", "this file system stores whole seconds")
+    end
+
+    -- an unlink that finds the file already gone (another instance) frees its space all the same
+    local d4 = new_dir()
+    local g1 = make(d4, "g1", 99, t0)
+    local g2 = make(d4, "g2", 99, t0 + 10)
+    local g3 = make(d4, "g3", 99, t0 + 20)
+    local orig_unlink = uv.fs_unlink
+    H.with_patched(uv, "fs_unlink", function(p, ...)
+      if p:find(vim.fn.sha256("g1"), 1, true) then
+        orig_unlink(p, ...)
+        return nil, "ENOENT: no such file or directory"
+      end
+      return orig_unlink(p, ...)
+    end, function()
+      fetch_in(d4, "s4.txt", { max_total_bytes = 250 }) -- 297 + 9: the lost file alone brings it to 207
+    end)
+    eq(uv.fs_stat(g1), nil, "lost race: setup, the oldest is gone")
+    ok(
+      uv.fs_stat(g2) ~= nil and uv.fs_stat(g3) ~= nil,
+      "lost race: no other entry is evicted for it"
+    )
+
+    -- option validation, and 0 keeps only the file just stored
+    for _, bad in ipairs({ "1000", -1, 0 / 0, true }) do
+      local raised = pcall(
+        curl.download_cached_blocking,
+        "http://127.0.0.1:1/x",
+        { cache_dir = d4, max_age_s = bad }
+      )
+      eq(raised, false, "validation: max_age_s = " .. vim.inspect(bad) .. " is refused")
+    end
+    local raised_total = pcall(
+      curl.download_cached_blocking,
+      "http://127.0.0.1:1/x",
+      { cache_dir = d4, max_total_bytes = "9" }
+    )
+    eq(raised_total, false, "validation: a string max_total_bytes is refused")
+    local d5 = new_dir()
+    local z1 = make(d5, "z1", 100, t0)
+    local zok, zpath = fetch_in(d5, "s5.txt", { max_total_bytes = 0 })
+    eq(uv.fs_stat(z1), nil, "max_total_bytes = 0 removes every other entry")
+    ok(zok and uv.fs_stat(zpath) ~= nil, "max_total_bytes = 0 keeps the file just stored")
+
+    -- the async path prunes after a download and renews the use time on a hit
+    local d6 = new_dir()
+    local y_old = make(d6, "y-old", 100, t0)
+    local async_url = ("http://127.0.0.1:%d/async.txt"):format(port)
+    local got
+    curl.download_cached(async_url, { cache_dir = d6, max_age_s = 500 }, function(g, p, info)
+      got = { g, p, info }
+    end)
+    vim.wait(5000, function()
+      return got ~= nil
+    end, 10)
+    ok(got and got[1], "async: download works")
+    eq(uv.fs_stat(y_old), nil, "async: the stale entry is pruned after the download")
+    ok(got and uv.fs_stat(got[2]) ~= nil, "async: the stored file stays")
+    local mt_async = os.time() - 4000
+    uv.fs_utime(got[2], mt_async, mt_async)
+    local hit
+    curl.download_cached(async_url, { cache_dir = d6 }, function(g, p, info)
+      hit = { g, p, info }
+    end)
+    vim.wait(5000, function()
+      return hit ~= nil
+    end, 10)
+    ok(hit and hit[3].cached, "async hit: served from the cache")
+    local hst = uv.fs_stat(got[2])
+    ok(os.time() - hst.atime.sec <= 5, "async hit: the use time is renewed")
+    eq(hst.mtime.sec, mt_async, "async hit: the mtime is left alone")
+
+    -- a failing prune never fails the download; it is reported once
+    local d7 = new_dir()
+    make(d7, "w1", 100, t0)
+    local warned
+    H.with_patched(vim, "notify_once", function(msg)
+      warned = msg
+    end, function()
+      H.with_patched(vim.fs, "basename", function()
+        error("boom from prune", 0)
+      end, function()
+        local wok = fetch_in(d7, "s7.txt", { max_age_s = 10 })
+        ok(wok, "prune failure: the download still succeeds")
+      end)
+      vim.wait(2000, function()
+        return warned ~= nil
+      end, 10)
+    end)
+    ok(
+      warned and warned:find("cache pruning failed", 1, true) ~= nil,
+      "prune failure: reported as a warning"
+    )
+
+    for _, d in ipairs({ d1, d2, d3, d4, d5, d6, d7 }) do
+      vim.fn.delete(d, "rf")
+    end
     srv.close()
     vim.fn.delete(dir, "rf")
   end
