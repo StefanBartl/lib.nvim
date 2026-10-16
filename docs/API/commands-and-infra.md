@@ -434,6 +434,17 @@ M.DEFAULT_WHITELIST: table<string, boolean>
 M.is_enabled(bufnr: integer, whitelist?: table<string, boolean>): boolean
 ```
 
+### `lib.nvim.net.curl` download cache (see header comments)
+```
+M.cache_path(url, opts?: {cache_dir?}): string       -- sha256(url) + the extension of the URL's path
+M.download_cached(url, opts?: FetchOpts + {cache_dir?, ttl_s?, refresh?}, cb: fun(ok, path_or_err, info: {cached, response?}))
+M.download_cached_blocking(url, opts?): ok, path_or_err, info
+```
+A fresh entry is returned without a request; the body goes to a `.part` file renamed into place only after a 2xx
+answer, so the cache never holds a partial file or an error page. `download` also checks the written file against
+`max_bytes` (while it grows, async; afterwards, blocking) for curl versions that do not enforce `--max-filesize`
+on a body without `Content-Length`.
+
 ### `lib.nvim.terminal.capabilities` (see terminal README)
 Terminal capabilities from environment variables, cached per session; one warning per missing one.
 ```

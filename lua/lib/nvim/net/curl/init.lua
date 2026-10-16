@@ -513,6 +513,55 @@ local function bounded(opts)
   return out
 end
 
+---@internal
+--- curl documents `--max-filesize` as not guaranteed when the size is not known beforehand (a chunked
+--- response): current curl enforces it while receiving, older versions let such a body through. The file a
+--- download writes is therefore watched while curl runs, so the limit does not depend on the curl version.
+---@param dest_path string
+---@param max_bytes number|false|nil
+---@param proc vim.SystemObj
+---@return fun() stop        # Call when curl has exited.
+---@return fun(): boolean exceeded  # Whether the file outgrew the limit (curl was killed for it).
+local function watch_size(dest_path, max_bytes, proc)
+  if type(max_bytes) ~= "number" then
+    return function() end, function()
+      return false
+    end
+  end
+  local exceeded = false
+  local timer = vim.uv.new_timer()
+  timer:start(200, 200, function()
+    local st = vim.uv.fs_stat(dest_path)
+    if st and st.size > max_bytes then
+      exceeded = true
+      timer:stop()
+      pcall(proc.kill, proc, 15)
+    end
+  end)
+  return function()
+    if not timer:is_closing() then
+      timer:stop()
+      timer:close()
+    end
+  end, function()
+    return exceeded
+  end
+end
+
+---@internal
+---@param dest_path string
+---@param max_bytes number|false|nil
+---@return boolean over
+local function over_limit(dest_path, max_bytes)
+  if type(max_bytes) ~= "number" then
+    return false
+  end
+  local st = vim.uv.fs_stat(dest_path)
+  return st ~= nil and st.size > max_bytes
+end
+
+local EXCEEDED = "download exceeded max_bytes"
+
 ---Fetch `url` and write the response body directly to `dest_path` instead
 ---of buffering it in memory, asynchronously. Returns status/headers like
 ---`fetch_raw` — `response.body` is always `""` here, since the body went
@@ -529,24 +578,37 @@ function M.download(url, dest_path, opts, cb)
 
   local argv, stdin = build_argv(url, opts, false, dest_path)
 
-  vim.system(argv, { text = true, stdin = stdin, timeout = opts.timeout_ms or nil }, function(obj)
-    -- See fetch_raw's identical comment: this callback runs in a fast
-    -- event context, and a caller's `cb` routinely touches the UI.
-    vim.schedule(function()
-      if obj.code ~= 0 then
-        remove_partial(dest_path)
-        local err = (obj.stderr and obj.stderr ~= "") and obj.stderr or ("curl exited " .. obj.code)
-        cb(false, err, obj)
-        return
-      end
-      local response, err = parse_raw_response(obj.stdout)
-      if not response then
-        cb(false, err or UNPARSEABLE, obj)
-        return
-      end
-      cb(true, response, obj)
-    end)
-  end)
+  local stop_watch, exceeded
+  local proc = vim.system(
+    argv,
+    { text = true, stdin = stdin, timeout = opts.timeout_ms or nil },
+    function(obj)
+      stop_watch()
+      -- See fetch_raw's identical comment: this callback runs in a fast
+      -- event context, and a caller's `cb` routinely touches the UI.
+      vim.schedule(function()
+        if exceeded() or over_limit(dest_path, opts.max_bytes) then
+          remove_partial(dest_path)
+          cb(false, EXCEEDED, obj)
+          return
+        end
+        if obj.code ~= 0 then
+          remove_partial(dest_path)
+          local err = (obj.stderr and obj.stderr ~= "") and obj.stderr
+            or ("curl exited " .. obj.code)
+          cb(false, err, obj)
+          return
+        end
+        local response, err = parse_raw_response(obj.stdout)
+        if not response then
+          cb(false, err or UNPARSEABLE, obj)
+          return
+        end
+        cb(true, response, obj)
+      end)
+    end
+  )
+  stop_watch, exceeded = watch_size(dest_path, opts.max_bytes, proc)
 end
 
 ---Blocking counterpart to `M.download`.
@@ -566,6 +628,11 @@ function M.download_blocking(url, dest_path, opts)
 
   local timeout = opts.timeout_ms or nil
   local obj = vim.system(argv, { text = true, stdin = stdin, timeout = timeout }):wait(timeout)
+  -- (no watcher while blocked: the size is checked afterwards, the timeout is what bounds the wait)
+  if over_limit(dest_path, opts.max_bytes) then
+    remove_partial(dest_path)
+    return false, EXCEEDED, obj
+  end
   if obj.code ~= 0 then
     remove_partial(dest_path)
     local err = (obj.stderr and obj.stderr ~= "") and obj.stderr or ("curl exited " .. obj.code)
@@ -576,6 +643,132 @@ function M.download_blocking(url, dest_path, opts)
     return false, err or UNPARSEABLE, obj
   end
   return true, response, obj
+end
+
+-- ── cached downloads ───────────────────────────────────────────────────────
+
+---@internal
+---@param opts Lib.Net.Curl.CachedOpts
+---@return string
+local function cache_root(opts)
+  local dir = opts.cache_dir or (vim.fn.stdpath("cache") .. "/lib.nvim/net/download")
+  vim.fn.mkdir(dir, "p")
+  return dir
+end
+
+---The file a `url` is cached under: a hash of the whole URL (query included, so two URLs never share a
+---file), keeping the extension of the URL's path where there is one -- a consumer that decides by file
+---extension (an image viewer telling `.svg` from `.png`) still can.
+---@param url string
+---@param opts? { cache_dir?: string }
+---@return string path
+function M.cache_path(url, opts)
+  local key = vim.fn.sha256(url)
+  local ext = url:gsub("[?#].*$", ""):match("%.(%w+)$")
+  return cache_root(opts or {})
+    .. "/"
+    .. key
+    .. ((ext and #ext <= 8) and ("." .. ext:lower()) or "")
+end
+
+---@internal
+---@param path string
+---@param opts Lib.Net.Curl.CachedOpts
+---@return boolean
+local function cache_fresh(path, opts)
+  if opts.refresh then
+    return false
+  end
+  local st = vim.uv.fs_stat(path)
+  if not st or st.type ~= "file" or st.size == 0 then
+    return false
+  end
+  if opts.ttl_s then
+    return (os.time() - st.mtime.sec) <= opts.ttl_s
+  end
+  return true
+end
+
+---@internal
+--- A non-2xx answer is not a download: curl exits 0 for a 404, and the error page would sit in the cache as
+--- if it were the file.
+---@param part string
+---@param path string
+---@param response Lib.Net.Curl.RawResponse
+---@return string|nil err
+local function finish_cached(part, path, response)
+  if response.status < 200 or response.status >= 300 then
+    pcall(os.remove, part)
+    return ("HTTP %d %s"):format(response.status, response.status_text or "")
+  end
+  local ok, err = require("lib.nvim.cross.fs.mutate").rename_file(part, path)
+  if not ok then
+    pcall(os.remove, part)
+    return "could not store the download: " .. tostring(err)
+  end
+  return nil
+end
+
+---@internal
+---@param path string
+---@return string
+local function part_path(path)
+  return ("%s.part.%d.%d"):format(path, vim.uv.os_getpid(), vim.uv.hrtime())
+end
+
+---Download `url` into the cache and hand over the cached path; a fresh entry is returned without any
+---request. Bounded like `download` (timeout, `max_bytes`, which is also enforced while the file grows).
+---The body goes to a temporary file and is renamed into place only when the answer was 2xx and the file
+---is complete: the cache never holds a partial file or an error page.
+---@param url string
+---@param opts Lib.Net.Curl.CachedOpts|nil
+---@param cb fun(ok: boolean, path_or_err: string, info: { cached: boolean, response?: Lib.Net.Curl.RawResponse })
+function M.download_cached(url, opts, cb)
+  opts = opts or {}
+  local path = M.cache_path(url, opts)
+  if cache_fresh(path, opts) then
+    vim.schedule(function()
+      cb(true, path, { cached = true })
+    end)
+    return
+  end
+  local part = part_path(path)
+  M.download(url, part, opts, function(ok, response_or_err)
+    if not ok then
+      cb(false, tostring(response_or_err), { cached = false })
+      return
+    end
+    local err = finish_cached(part, path, response_or_err)
+    if err then
+      cb(false, err, { cached = false, response = response_or_err })
+      return
+    end
+    cb(true, path, { cached = false, response = response_or_err })
+  end)
+end
+
+---Blocking counterpart to `download_cached`.
+---@param url string
+---@param opts Lib.Net.Curl.CachedOpts|nil
+---@return boolean ok
+---@return string path_or_err
+---@return { cached: boolean, response?: Lib.Net.Curl.RawResponse } info
+function M.download_cached_blocking(url, opts)
+  opts = opts or {}
+  local path = M.cache_path(url, opts)
+  if cache_fresh(path, opts) then
+    return true, path, { cached = true }
+  end
+  local part = part_path(path)
+  local ok, response_or_err = M.download_blocking(url, part, opts)
+  if not ok then
+    return false, tostring(response_or_err), { cached = false }
+  end
+  local err = finish_cached(part, path, response_or_err)
+  if err then
+    return false, err, { cached = false, response = response_or_err }
+  end
+  return true, path, { cached = false, response = response_or_err }
 end
 
 ---Fetch `url`, calling `handlers.on_chunk` once per line of the raw response

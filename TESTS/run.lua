@@ -147,6 +147,7 @@ local specs = {
   "git_sync_cancel_spec.lua",
   "git_remote_spec.lua",
   "curl_spec.lua",
+  "curl_cached_spec.lua",
   "deps_spec.lua",
   "contextmenu_spec.lua",
   "is_subpath_spec.lua",
