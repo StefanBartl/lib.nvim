@@ -29,7 +29,9 @@ return function(H)
   -- mark it: a local modification no longer shows
   H.eq(select(1, git.set_skip_worktree("session.vim", true, opts)), true, "set_skip_worktree: on")
   H.eq(git.is_skip_worktree("session.vim", opts), true, "is_skip_worktree: ... marked now")
-  F.write(repo .. "/session.vim", "two\n")
+  -- a different SIZE, not just different bytes: with the same size in the same second git can take the
+  -- file for unchanged (racy git), and "... and git status reports the modification" below was a coin flip
+  F.write(repo .. "/session.vim", "two, and longer than one\n")
   H.eq(porcelain(), "", "a modified skip-worktree file is not reported by git status")
   H.eq(git.is_dirty(opts), false, "... so the repository is not dirty")
 
