@@ -42,10 +42,15 @@ end
 ---@internal
 --- A path starts where the previous byte cannot belong to a longer path: not a name character and not a
 --- separator (`/srv/home/me` must not match the root `/home/me`).
----@param c string
+--- Exception: a root right behind a URL scheme (`oil:///home/me`, `file:///C:/x`, `term://~/x`) starts there.
+---@param before string  The text in front of the hit (a window of it is enough).
 ---@return boolean
-local function continues_path(c)
-  return c ~= "" and c:match("[%w_%-%.~/\\]") ~= nil
+local function continues_path(before)
+  local c = before:sub(-1)
+  if c == "" or c:match("[%w_%-%.~/\\]") == nil then
+    return false
+  end
+  return before:find("%a[%w+.%-]*://+$") == nil
 end
 
 ---@internal
@@ -65,7 +70,10 @@ local function boundary_replace(content, needle, replacement)
       out[#out + 1] = content:sub(pos)
       break
     end
-    if continues_name(content:sub(e + 1, e + 1)) or continues_path(content:sub(s - 1, s - 1)) then
+    if
+      continues_name(content:sub(e + 1, e + 1))
+      or continues_path(content:sub(math.max(1, s - 40), s - 1))
+    then
       -- Not a boundary: keep the text and resume right after the first byte of this hit.
       out[#out + 1] = content:sub(pos, s)
       pos = s + 1
