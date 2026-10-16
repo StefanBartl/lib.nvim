@@ -46,8 +46,9 @@ local M = {}
 ---@field private _validate? function
 ---@field private _loader? function
 ---@field private _loaded boolean
----@field private _failed boolean    # The last loader run threw.
----@field private _retrying boolean  # The loader is running again after a failed run.
+---@field private _seeded? table<any, true>     # Keys a failed loader run left behind.
+---@field private _tolerated? table<any, true>  # While the loader re-runs: those keys, each may be registered once more.
+---@field private _recording? table<any, true>  # While the loader runs: the keys it registers.
 ---@field private _on_duplicate string
 local Registry = {}
 Registry.__index = Registry
@@ -61,18 +62,20 @@ function Registry:_ensure()
   end
   self._loaded = true
   if self._loader then
-    -- the run after a failed one registers the same keys again: that is not a duplicate
-    local retry = self._failed
-    self._retrying = retry
+    -- the run after a failed one registers the keys the failed run left behind again: once each, that is
+    -- no duplicate (any other collision still is one)
+    self._tolerated = self._seeded
+    self._recording = {}
     local ok, err = pcall(self._loader)
-    self._retrying = false
+    local recorded = self._recording
+    self._tolerated, self._recording = nil, nil
     if not ok then
       -- not "loaded": the next read runs it again instead of serving a half-filled registry in silence
       self._loaded = false
-      self._failed = true
+      self._seeded = vim.tbl_extend("force", self._seeded or {}, recorded)
       error(err, 0)
     end
-    self._failed = false
+    self._seeded = nil
   end
 end
 
@@ -111,7 +114,9 @@ function Registry:register(key, value)
     end
   end
   if self._values[key] ~= nil then
-    if self._on_duplicate == "error" and not self._retrying then
+    if self._on_duplicate == "error" and self._tolerated and self._tolerated[key] then
+      self._tolerated[key] = nil -- left by the failed run: replaced once, a second claim is a real duplicate
+    elseif self._on_duplicate == "error" then
       error(
         ("lib.nvim.registry (%s): %s is already registered"):format(self._name, tostring(key)),
         2
@@ -123,6 +128,9 @@ function Registry:register(key, value)
     self._order[#self._order + 1] = key
   end
   self._values[key] = value
+  if self._recording then
+    self._recording[key] = true
+  end
   return self
 end
 
@@ -219,7 +227,7 @@ function Registry:reset()
   self._order = {}
   self._values = {}
   self._loaded = false
-  self._failed = false
+  self._seeded = nil
   return self
 end
 

@@ -15,7 +15,8 @@ keymap.set("n", "q", close, { buffer = true }, "close")   -- the same thing
 ```
 
 Defaults applied when unset: `noremap = true`, `silent = true`, `desc = ""`.
-`opts.buffer = true` is normalised to buffer `0` (the current one). Wrong
+`opts.buffer = true` is normalised to buffer `0` (the current one); the record
+kept for `registered()`/`cheatsheet()` holds the real buffer number. Wrong
 argument types are reported through `lib.nvim.notify` **with the caller's
 file and line**, instead of a stack trace from inside `vim.keymap.set`.
 
