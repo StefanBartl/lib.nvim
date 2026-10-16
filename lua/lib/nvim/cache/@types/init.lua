@@ -77,6 +77,7 @@
 ---@class Lib.Cache
 ---@field disk Lib.Cache.Disk
 ---@field memory Lib.Cache.Memory
+---@field invocation table # `lib.nvim.cache.invocation`: a cache that lives for one call (`new(name)` -> scope with `run`/`memo`/`editor_state`).
 ---@field routes fun(): table[] # The `:Lib cache stats` route, for `lib.nvim_usrcmds` to merge into the `:Lib` verb.
 
 return {}
