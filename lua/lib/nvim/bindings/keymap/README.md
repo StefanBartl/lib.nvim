@@ -307,8 +307,8 @@ docs generator — read them, do not mutate them. A `setup()` that rebinds the
 same keys should call `forget(plugin)` first, or the list grows on every call.
 
 UI buffers that are recreated on every open (a picker, a float) bind their keys again from the same call
-site under a new buffer number. Direct records of a buffer that no longer exists are dropped whenever a new
-one is added or the list is read, so those buffers do not pile up; no tag or scope argument is needed.
+site under a new buffer number. Direct records of a buffer that is wiped or unloaded (`:bdelete`, `bufhidden=delete`:
+Neovim discards its buffer-local maps) are dropped whenever a new one is added or the list is read, so those buffers do not pile up; no tag or scope argument is needed.
 
 ### `conflicts()`
 

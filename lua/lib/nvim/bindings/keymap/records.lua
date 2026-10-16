@@ -87,20 +87,48 @@ function M.resolve_buffer(buffer)
   return buffer
 end
 
----Drop the records of buffer-local keymaps whose buffer is gone. A UI buffer that is recreated on every
----open (a picker, a float) gets a fresh buffer number each time and binds its keys again from the same call
----site, so without this the list grew by one entry per open and `registered()` described keymaps of buffers
----nobody can reach any more. Buffer numbers are never reused, so a record of an invalid buffer is dead.
+---Whether the keymap a record describes can no longer exist: its buffer was wiped (buffer numbers are never
+---reused), or it was only unloaded (`:bdelete`, `:bunload`, `bufhidden=delete`), which discards the
+---buffer-local maps while the buffer number stays valid. An unloaded buffer that still has a map in the
+---record's mode is kept: this errs on the side of keeping a record.
+---@param entry table
+---@return boolean
+local function is_dead(entry)
+  local b = entry.buffer
+  if type(b) ~= "number" or b <= 0 then
+    return false
+  end
+  if not vim.api.nvim_buf_is_valid(b) then
+    return true
+  end
+  if vim.api.nvim_buf_is_loaded(b) then
+    return false
+  end
+  local modes = type(entry.mode) == "table" and entry.mode or { entry.mode }
+  for _, m in ipairs(modes) do
+    if #vim.api.nvim_buf_get_keymap(b, m) > 0 then
+      return false
+    end
+  end
+  return true
+end
+
+---Drop the records of buffer-local keymaps that are gone with their buffer. A UI buffer that is recreated on
+---every open (a picker, a float) gets a fresh buffer number each time and binds its keys again from the same
+---call site, so without this the list grew by one entry per open and `registered()` described keymaps of
+---buffers nobody can reach any more. A plugin bucket left empty is removed too.
 ---@return integer removed
 local function prune_dead_buffers()
   local removed = 0
-  for _, entries in pairs(direct) do
+  for plugin, entries in pairs(direct) do
     for i = #entries, 1, -1 do
-      local b = entries[i].buffer
-      if type(b) == "number" and b > 0 and not vim.api.nvim_buf_is_valid(b) then
+      if is_dead(entries[i]) then
         table.remove(entries, i)
         removed = removed + 1
       end
+    end
+    if #entries == 0 then
+      direct[plugin] = nil
     end
   end
   return removed
