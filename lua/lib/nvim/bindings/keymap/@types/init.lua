@@ -78,7 +78,7 @@
 ---@field which_key? Lib.Keymap.WhichKey|false
 ---@field bound boolean                   # False when disabled, preset off, or no rhs.
 ---@field direct? boolean                 # Came from a plain `set()` rather than `register()`.
----@field buffer? integer|boolean         # Buffer-local scope, for a direct entry.
+---@field buffer? integer|boolean         # Buffer-local scope: the real buffer number (`true`/`0` are resolved when recorded), nil/false = global.
 ---@field src? string                     # "file:line" of the call, for a direct entry.
 
 --- One `lhs` claimed by more than one registered plugin.

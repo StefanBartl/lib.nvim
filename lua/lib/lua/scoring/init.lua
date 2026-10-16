@@ -140,6 +140,7 @@ end
 ---@param applies? boolean
 ---@return Lib.Scoring.Builder
 function Builder:bonus(name, points, applies)
+  -- a tail call on purpose: add() raises at level 2, which then is the caller of bonus()
   return self:add(name, points, applies)
 end
 
@@ -151,6 +152,7 @@ function Builder:malus(name, points, applies)
   if finite(points) then
     points = -math.abs(points)
   end
+  -- a tail call on purpose, see bonus()
   return self:add(name, points, applies)
 end
 

@@ -228,6 +228,32 @@ return function(H)
     "strict loader: a real duplicate afterwards is still refused"
   )
 
+  -- only the keys the failed run left behind are tolerated, once each: a real collision still raises
+  local dup, dup_runs = nil, 0
+  dup = registry.new({
+    on_duplicate = "error",
+    loader = function()
+      dup_runs = dup_runs + 1
+      dup:register("a", 1)
+      if dup_runs == 1 then
+        error("boom")
+      end
+      dup:register("a", 2)
+    end,
+  })
+  ok(
+    raises(function()
+      dup:count()
+    end),
+    "dup loader: the first read raises the loader's error"
+  )
+  ok(
+    raises(function()
+      dup:count()
+    end),
+    "dup loader: a key registered twice by the retry itself is still a duplicate"
+  )
+
   -- unregister runs the loader first: a known entry can be removed before anything read the registry
   local known
   known = registry.new({

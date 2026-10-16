@@ -238,6 +238,24 @@ return function(H)
   vim.api.nvim_buf_delete(dbuf, { force = true })
   keymap.forget("(unknown)")
 
+  -- ONE call site binding with buffer = true in two buffers: two records, one per buffer
+  local b1, b2 = vim.api.nvim_create_buf(false, true), vim.api.nvim_create_buf(false, true)
+  for _, b in ipairs({ b1, b2 }) do
+    vim.api.nvim_set_current_buf(b)
+    keymap.set("n", "<Plug>(cs-site)", noop, { buffer = true }, "same site")
+  end
+  vim.api.nvim_set_current_buf(prev_buf)
+  for _, b in ipairs({ b1, b2 }) do
+    local seen = false
+    for _, r in ipairs(keymap.cheatsheet("(unknown)", { buffer = b }).rows) do
+      seen = seen or r.keys[1] == "<Plug>(cs-site)"
+    end
+    eq(seen, true, "same call site, two buffers: each buffer's sheet has the key")
+  end
+  vim.api.nvim_buf_delete(b1, { force = true })
+  vim.api.nvim_buf_delete(b2, { force = true })
+  keymap.forget("(unknown)")
+
   -- bad input
   eq(pcall(keymap.cheatsheet, ""), false, "an empty plugin name is an error")
   eq(pcall(keymap.cheatsheet, nil), false, "a missing plugin name is an error")
