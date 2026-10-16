@@ -1252,9 +1252,14 @@ return function(H)
   -- ----------------------------------------------- trigger: bounds and roots
   do
     local is_windows = package.config:sub(1, 1) == "\\"
-    local a, b = tree({ "x.zzra" }), tree({ "y.zzra" })
-    local old_cwd = vim.fn.getcwd()
     local uv = vim.uv or vim.loop
+    -- Real paths: the directory a DirChanged event names is resolved (macOS:
+    -- /var is /private/var), so the spec compares against resolved ones.
+    local function real(p)
+      return vim.fs.normalize(uv.fs_realpath(p) or p)
+    end
+    local a, b = real(tree({ "x.zzra" })), real(tree({ "y.zzra" }))
+    local old_cwd = vim.fn.getcwd()
     local scans = {}
     local function cd(dir)
       vim.cmd("cd " .. vim.fn.fnameescape(dir))
@@ -1266,6 +1271,25 @@ return function(H)
     eq(project.is_broad_root("//server/share"), true, "is_broad_root: a UNC share root")
     eq(project.is_broad_root(uv.os_homedir()), true, "is_broad_root: the home directory")
     eq(project.is_broad_root(a), false, "is_broad_root: a project directory is not")
+
+    -- A home directory reached through a link is still the home directory.
+    local link = vim.fs.normalize(vim.fn.tempname() .. "_homelink")
+    if uv.fs_symlink(a, link, { dir = true, junction = true }) then
+      local ok_link, link_err = pcall(function()
+        H.with_patched(uv, "os_homedir", function()
+          return link
+        end, function()
+          eq(project.is_broad_root(a), true, "is_broad_root: home behind a link, compared resolved")
+        end)
+      end)
+      uv.fs_unlink(link)
+      pcall(uv.fs_rmdir, link)
+      if not ok_link then
+        error(link_err, 0)
+      end
+    else
+      H.skipped("is_broad_root through a link", "this host cannot create a directory link")
+    end
 
     local ok_run, err = pcall(function()
       H.with_patched(project, "scan", function(root, opts, on_done)

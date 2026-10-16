@@ -912,8 +912,20 @@ function M.is_broad_root(root)
   if root == "/" or root:match("^%a:/?$") or root:match("^//[^/]+/[^/]+$") then
     return true
   end
-  local home = (vim.uv or vim.loop).os_homedir()
-  return home ~= nil and home ~= "" and same_path(normalize(home), root)
+  local uv = vim.uv or vim.loop
+  local home = uv.os_homedir()
+  if home == nil or home == "" then
+    return false
+  end
+  if same_path(normalize(home), root) then
+    return true
+  end
+  -- The directory a `DirChanged` names is resolved (macOS: `/var` is
+  -- `/private/var`), the home directory may not be: compare real paths too.
+  local real_home, real_root = uv.fs_realpath(home), uv.fs_realpath(root)
+  return real_home ~= nil
+    and real_root ~= nil
+    and same_path(normalize(real_home), normalize(real_root))
 end
 
 ---@internal
