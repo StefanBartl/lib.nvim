@@ -1,6 +1,6 @@
 # `lib.nvim.cache`
 
-Caching namespace with two independent backends:
+Caching namespace with two independent backends (plus the per-call `invocation` cache, below):
 
 * **`lib.nvim.cache.disk`** — persistent JSON disk cache with TTL, keyed by a
   `namespace` string. Survives Neovim restarts.
@@ -144,8 +144,12 @@ namespace of every plugin that uses `lib.nvim.cache.memory`.
 
 A cache that lives for **one call**. Inside `scope:run(fn)` a value computed by `scope:memo(key, produce)` is
 remembered until the outermost `run` returns (or raises), then dropped; outside a `run` nothing is remembered and
-`produce()` is simply called. Built on a `lib.nvim.cache.memory` namespace (`invocation:<name>`), so it shows up in
-`:Lib cache stats`.
+`produce()` is simply called. Each scope keeps its values in a table of its own, so they are not touched by
+`lib.nvim.cache.memory`'s auto-invalidation and do not appear in `:Lib cache stats`.
+
+**A run belongs to the coroutine that started it.** `fn` may yield: after the resume it still sees its values, while
+the main thread and other coroutines neither see them nor end them. A coroutine spawned inside a run does not share
+the values either (its `memo` calls through).
 
 Use it when nested helpers of one command must see ONE reading of the editor without a table being passed
 through every signature (generalised from open.nvim's `context.with_cache`).
@@ -162,12 +166,13 @@ end)
 
 | Function                    | Returns                                                                                       |
 | --------------------------- | --------------------------------------------------------------------------------------------- |
-| `new(name)`                 | a scope; two scopes never share values                                                        |
+| `new(name)`                 | a scope; two scopes never share values, even with the same name                               |
 | `scope:run(fn, ...)`        | `fn`'s results; nested runs share the outer values; an error is re-raised unchanged (level 0) |
-| `scope:memo(key, produce)`  | the cached value (`nil`/`false` are cached too); a raising producer stores nothing            |
+| `scope:memo(key, produce)`  | the cached value (`key` is a string; `nil`/`false` are cached too); a raising producer stores nothing |
 | `scope:active()`            | whether a `run` is in progress                                                                |
 | `scope:editor_state()`      | `read_editor_state()`, read once per `run`; do not mutate it                                  |
 | `read_editor_state()`       | `{ buf, win, mode, cursor, cfile, cword, selection, buffer_path }` read now, uncached         |
 
-`selection` is the text of a **live** visual selection only (read with `getregion`, so the `'<`/`'>` marks of an
-earlier selection are never returned); `cfile`, `cword` and `buffer_path` are `nil` when empty.
+`selection` is the text of a **live** visual or select-mode selection (charwise, linewise or blockwise; read with
+`getregion`, so the `'<`/`'>` marks of an earlier selection are never returned). A `:` command typed from visual
+mode runs in normal mode: `selection` is `nil` there; `cfile`, `cword` and `buffer_path` are `nil` when empty.
