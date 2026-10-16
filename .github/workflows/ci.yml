@@ -112,6 +112,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
+        # `bash` (not the default `bash -e`) adds pipefail: a failing `git ls-remote | cut` must stop the job
+        # instead of reading as "branch missing".
+        shell: bash
         run: |
           # Look the branch up on the remote instead of inferring "missing" from an API
           # error: a failed lookup must stop the job, not fall through to a push.
