@@ -390,5 +390,87 @@ return function(H)
     vim.fn.delete(dir, "rf")
   end
 
+  -- bounded cache: max_age_s / max_total_bytes drop least recently used entries, only cache-named files
+  do
+    local dir = vim.fn.tempname() .. "-curl-bound"
+    vim.fn.mkdir(dir, "p")
+    local function entry(tag, size, ago, ext)
+      local p = dir .. "/" .. vim.fn.sha256(tag) .. (ext or "")
+      vim.fn.writefile({ string.rep("x", size - 1) }, p, "b")
+      local t = os.time() - ago
+      uv.fs_utime(p, t, t)
+      return p
+    end
+    local port, srv = start_server(function()
+      return ok_response("12345678")
+    end)
+    local function fetch(name, opts)
+      opts.cache_dir = dir
+      return curl.download_cached_blocking(("http://127.0.0.1:%d/%s"):format(port, name), opts)
+    end
+
+    -- max_age_s
+    local old = entry("old", 100, 5000, ".png")
+    local young = entry("young", 100, 10)
+    local foreign = dir .. "/notes.txt"
+    vim.fn.writefile({ "mine" }, foreign)
+    uv.fs_utime(foreign, os.time() - 9000, os.time() - 9000)
+    local shorthex = dir .. "/deadbeef.txt"
+    vim.fn.writefile({ "mine too" }, shorthex)
+    uv.fs_utime(shorthex, os.time() - 9000, os.time() - 9000)
+    local part = dir .. "/" .. vim.fn.sha256("p") .. ".png.part.1.2"
+    vim.fn.writefile({ "partial" }, part)
+    uv.fs_utime(part, os.time() - 9000, os.time() - 9000)
+    local good, fresh = fetch("a.txt", { max_age_s = 1000 })
+    ok(good, "max_age_s: download works")
+    eq(uv.fs_stat(old), nil, "max_age_s: an entry unused for longer is removed")
+    ok(uv.fs_stat(young) ~= nil, "max_age_s: a younger entry stays")
+    ok(uv.fs_stat(fresh) ~= nil, "max_age_s: the file just stored stays")
+    ok(uv.fs_stat(foreign) ~= nil, "max_age_s: a file without a cache name is never touched")
+    ok(uv.fs_stat(part) ~= nil, "max_age_s: a .part file is never touched")
+    ok(
+      uv.fs_stat(shorthex) ~= nil,
+      "max_age_s: a hex name that is not a 64-digit hash is never touched"
+    )
+
+    -- no limit set: nothing is removed
+    local keepme = entry("keepme", 100, 99999)
+    fetch("b.txt", {})
+    ok(uv.fs_stat(keepme) ~= nil, "no limits: nothing is removed")
+    vim.fn.delete(keepme)
+
+    -- max_total_bytes: least recently used go first
+    for _, p in ipairs({ old, young, fresh }) do
+      vim.fn.delete(p)
+    end
+    local oldest = entry("o1", 100, 300)
+    local middle = entry("o2", 100, 200)
+    local newest = entry("o3", 100, 100)
+    fetch("c.txt", { max_total_bytes = 250 }) -- 300 + 9 stored: must drop the oldest
+    eq(uv.fs_stat(oldest), nil, "max_total_bytes: the least recently used entry goes first")
+    ok(
+      uv.fs_stat(middle) ~= nil and uv.fs_stat(newest) ~= nil,
+      "max_total_bytes: stops once within the limit"
+    )
+
+    -- a hit renews the use time (so it survives), but not the mtime (ttl_s still counts from the download)
+    local hit_url = ("http://127.0.0.1:%d/c.txt"):format(port)
+    local hit_path = curl.cache_path(hit_url, { cache_dir = dir })
+    local mt = os.time() - 4000
+    uv.fs_utime(hit_path, mt, mt)
+    local before = uv.fs_stat(middle)
+    local hit_ok, _, hit_info = curl.download_cached_blocking(hit_url, { cache_dir = dir })
+    ok(hit_ok and hit_info.cached, "hit: served from the cache")
+    local st = uv.fs_stat(hit_path)
+    ok(os.time() - st.atime.sec <= 5, "hit: the use time is renewed")
+    eq(st.mtime.sec, mt, "hit: the mtime is left alone (ttl_s counts from the download)")
+    ok(before ~= nil, "hit: setup")
+    -- LRU: the hit entry outlives a never-used one that is younger by mtime
+    fetch("d.txt", { max_total_bytes = 220 })
+    ok(uv.fs_stat(hit_path) ~= nil, "max_total_bytes: an entry that was hit recently is kept")
+    srv.close()
+    vim.fn.delete(dir, "rf")
+  end
+
   vim.fn.delete(cache_dir, "rf")
 end

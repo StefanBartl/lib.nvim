@@ -36,6 +36,8 @@
 ---@field cache_dir? string Where cached files live (default `stdpath("cache")/lib.nvim/net/download`).
 ---@field ttl_s? integer A cached file older than this many seconds is downloaded again (default: never).
 ---@field refresh? boolean Ignore a cached file and download again.
+---@field max_age_s? integer After a download, cache files not used for this many seconds are removed (a hit counts as use; default: never).
+---@field max_total_bytes? integer After a download, the least recently used cache files are removed until the directory is within this size (default: unbounded).
 
 ---Callbacks for `fetch_stream`. `on_chunk` fires once per line of raw
 ---response body, in order, as it arrives; `on_done` fires once after the
