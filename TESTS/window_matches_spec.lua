@@ -105,5 +105,18 @@ return function(H)
   e_id = ledger:add_pos(99999, "x", "Search", { { 1 } })
   eq(e_id, nil, "add_pos: an invalid window is refused")
 
+  -- :split does not copy matches into the new window, so there is nothing the ledger could miss there.
+  -- If a Neovim ever copies them (same ids), this fails and the ledger needs a WinNew adoption step.
+  vim.cmd("silent! only")
+  local sw = vim.api.nvim_get_current_win()
+  ledger:add(sw, "split_src", "Search", "foo")
+  vim.cmd("split")
+  local new_win = vim.api.nvim_get_current_win()
+  eq(#vim.fn.getmatches(new_win), 0, "split: matches are not copied into the new window")
+  eq(vim.tbl_count(ledger:list(new_win)), 0, "split: the ledger lists nothing for the new window")
+  eq(ledger:has(sw, "split_src"), true, "split: the source window keeps its match")
+  eq(ledger:clear(sw), 1, "split: clear removes the source window's match")
+  eq(#vim.fn.getmatches(sw), 0, "split: nothing is left behind in the source window")
+
   vim.cmd("silent! only")
 end
