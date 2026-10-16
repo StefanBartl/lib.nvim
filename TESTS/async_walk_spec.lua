@@ -181,20 +181,29 @@ return function(H)
     many[#many + 1] = dir
   end
   local real_collect_async = collect.collect_async
-  local function max_in_flight(opts)
-    local current, peak = 0, 0
-    collect.collect_async = function(root, o, on_done)
+  ---@param opts table|nil
+  ---@param delay_first? integer ms to hold back the first root's answer (so it finishes last)
+  local function max_in_flight(opts, delay_first)
+    local current, peak, result = 0, 0, nil
+    H.with_patched(collect, "collect_async", function(root, o, on_done)
       current = current + 1
       peak = math.max(peak, current)
       return real_collect_async(root, o, function(...)
         current = current - 1
-        on_done(...)
+        if delay_first and root == many[1] then
+          local args = { ... }
+          vim.defer_fn(function()
+            on_done(unpack(args))
+          end, delay_first)
+        else
+          on_done(...)
+        end
       end)
-    end
-    local result = await(function(done)
-      scan_roots.scan_async(many, opts, done)
-    end)[1]
-    collect.collect_async = real_collect_async
+    end, function()
+      result = await(function(done)
+        scan_roots.scan_async(many, opts, done)
+      end)[1]
+    end)
     return peak, result
   end
   local peak1, seq = max_in_flight(nil)
@@ -206,4 +215,106 @@ return function(H)
     vim.deep_equal(par, seq),
     "scan_roots.scan_async: concurrency: the result keeps the order of roots"
   )
+
+  -- the first root answers last, the merged result still starts with its file
+  local _, late = max_in_flight({ concurrency = 3 }, 80)
+  ok(
+    vim.deep_equal(late, seq),
+    "scan_roots.scan_async: order of roots kept although the first root finishes last"
+  )
+
+  -- the stub is gone after the helper, even though it patched a module function
+  eq(
+    collect.collect_async,
+    real_collect_async,
+    "scan_roots.scan_async: the test restores collect_async"
+  )
+
+  -- a failing root is reported, the others are merged in order, nothing is cached
+  for _, c in ipairs({ 1, 3 }) do
+    local cache = tmp .. ("/scan_err_%d.json"):format(c)
+    local bad_root = tmp .. "/walk_many/does_not_exist"
+    local out = await(function(done)
+      scan_roots.scan_async(
+        { many[1], bad_root, many[2] },
+        { concurrency = c, cache_path = cache },
+        done
+      )
+    end)
+    eq(#out[1], 2, ("scan_roots.scan_async (concurrency %d): the good roots are merged"):format(c))
+    ok(
+      out[1][1]:find("r1", 1, true) and out[1][2]:find("r2", 1, true),
+      ("scan_roots.scan_async (concurrency %d): in the order of roots"):format(c)
+    )
+    eq(
+      out[2] and #out[2],
+      1,
+      ("scan_roots.scan_async (concurrency %d): one error for the bad root"):format(c)
+    )
+    eq(
+      (vim.uv or vim.loop).fs_stat(cache),
+      nil,
+      ("scan_roots.scan_async (concurrency %d): a scan with errors is not cached"):format(c)
+    )
+  end
+
+  -- a walk that throws is an error for that root only; on_done fires exactly once
+  do
+    local calls = 0
+    local out
+    H.with_patched(collect, "collect_async", function(root, o, on_done)
+      if root == many[2] then
+        error("walk exploded", 0)
+      end
+      return real_collect_async(root, o, on_done)
+    end, function()
+      out = await(function(done)
+        scan_roots.scan_async({ many[1], many[2], many[3] }, { concurrency = 2 }, function(...)
+          calls = calls + 1
+          done(...)
+        end)
+      end)
+    end)
+    vim.wait(100)
+    eq(calls, 1, "scan_roots.scan_async: on_done fires exactly once after a throwing walk")
+    eq(#out[1], 2, "scan_roots.scan_async: the other roots are still merged after a throwing walk")
+    ok(
+      out[2] and #out[2] == 1 and out[2][1]:find("walk exploded", 1, true) ~= nil,
+      "scan_roots.scan_async: the throwing root is reported with its message"
+    )
+  end
+
+  -- no roots: one scheduled answer, an empty list and no errors
+  do
+    local sync_called, answer = false, nil
+    local is_sync = true
+    scan_roots.scan_async({}, nil, function(...)
+      answer = { ... }
+      sync_called = is_sync
+    end)
+    is_sync = false
+    vim.wait(500, function()
+      return answer ~= nil
+    end)
+    ok(
+      answer ~= nil and #answer[1] == 0 and answer[2] == nil,
+      "scan_roots.scan_async: no roots -> {} and no errors"
+    )
+    eq(
+      sync_called,
+      false,
+      "scan_roots.scan_async: no roots -> on_done is scheduled, not synchronous"
+    )
+  end
+
+  -- odd concurrency values are clamped, never stall: every root is scanned
+  for _, c in ipairs({ 0, -1, "2", 2.5 }) do
+    local res = await(function(done)
+      scan_roots.scan_async(many, { concurrency = c }, done)
+    end, 5000)
+    ok(
+      res and res[1] and #res[1] == 6,
+      "scan_roots.scan_async: concurrency " .. vim.inspect(c) .. " still scans every root"
+    )
+  end
 end

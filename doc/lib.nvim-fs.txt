@@ -408,7 +408,7 @@ either way, so both branches behave the same to a caller).
 ------------------------------------------------------------------------------
 scan_roots({roots}, {opts})                          *lib.nvim-fs-scan_roots*
 
-Function `M.scan`. Scan multiple root directories sequentially, merged into
+Function `M.scan`. Scan multiple root directories, merged into
 one flat array, with an optional TTL-based **on-disk** JSON cache. >lua
 
     local scan_roots = require("lib.nvim.fs.scan_roots")
@@ -429,8 +429,8 @@ Options ~
 `M.scan_async(roots, opts, on_done)` is the non-blocking counterpart: same
 options and cache semantics (the JSON cache file itself is still read/
 written synchronously — one small file, not the part that scales badly),
-roots still walked sequentially, one `collect_async` call chained into the
-next.
+roots walked one at a time unless `opts.concurrency` > 1 lets several be in flight (bounded, via
+`async.map_limit`); the result keeps the order of `roots`.
 
 ==============================================================================
 7. IO                                                     *lib.nvim-fs-io*

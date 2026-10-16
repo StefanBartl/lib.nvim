@@ -54,8 +54,8 @@ end)
 `scan_cached.scan_async` and `scan_roots.scan_async` build directly on this:
 a cache hit still calls `on_done` (so both branches behave uniformly to a
 caller), a miss walks via `collect_async` instead of the blocking walk.
-`scan_roots.scan_async` chains one root's `collect_async` into the next
-through its own `on_done`, same as the synchronous version's `for` loop.
+`scan_roots.scan_async` walks one root at a time by default (`opts.concurrency` allows several roots in
+flight, merged in the order of `roots`), same as the synchronous version's `for` loop otherwise.
 
 ## What this deliberately is not
 
@@ -65,8 +65,8 @@ responsiveness during a large scan, not raw scan throughput; per-call
 event-loop round trips can make it *slower* in wall time than the
 synchronous walk for a tree that would have finished fast anyway. Sibling
 directories are visited sequentially on purpose, to keep the coroutine
-driver simple — matching `scan_roots`'s existing "sequential by design"
-stance on multiple roots.
+driver simple. Several roots can be walked at once with `scan_roots.scan_async`'s
+`opts.concurrency`; the blocking `scan` stays sequential.
 
 **Superseded:** this section used to argue that `await`/`run_async` were
 deliberately scoped to this one recursive-walk problem and should not

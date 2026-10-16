@@ -257,8 +257,8 @@ M.scan_async(root: string, opts?: Lib.Fs.ScanCached.Opts, on_done: fun(paths: st
 
 ### `lib.nvim.fs.scan_roots` (see README)
 Scan multiple root directories, with directory-name ignoring and an
-optional TTL-based on-disk JSON cache. Sequential by design — `scan_async`
-too, one root at a time, not in parallel.
+optional TTL-based on-disk JSON cache. `scan` is sequential; `scan_async` walks one root at a time
+unless `opts.concurrency` > 1 (bounded, via `async.map_limit`); the merged result keeps the order of `roots`.
 
 ```
 M.scan(roots: string[], opts?: Lib.Fs.ScanRoots.Opts): string[] paths, string[]|nil errors

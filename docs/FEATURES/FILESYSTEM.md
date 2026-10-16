@@ -125,8 +125,8 @@ caller), a miss walks via `collect_async`. Deliberately **not** a wall-clock
 speedup — this walks one directory at a time, never in parallel, so it can
 be slower in wall time than the synchronous walk on a tree that would have
 finished fast anyway; the fix targets UI responsiveness, not raw scan
-throughput. `scan_roots` visits multiple roots sequentially by design, sync
-or async. `collect_async` returns a `cancel()` that stops the walk after the
+throughput. `scan_roots` visits multiple roots sequentially (the blocking `scan` always;
+`scan_async` by default, `opts.concurrency` lets it walk several roots at once). `collect_async` returns a `cancel()` that stops the walk after the
 current in-flight libuv call settles and skips `on_done` entirely — not "a
 partial result," genuinely never called.
 
