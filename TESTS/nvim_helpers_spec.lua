@@ -433,6 +433,8 @@ return function(H)
     ok(json.write(jl, { v = 2 }), "fs.json.write: writes through a symlink")
     eq((uv.fs_lstat(jl) or {}).type, "link", "fs.json.write: the symlink is still a symlink")
     eq((json.read(jl_target) or {}).v, 2, "fs.json.write: the link target has the new content")
+  else
+    H.skipped("fs.json.write symlink", "no permission to create a symlink on this host")
   end
   local jbad, jerr = json.read(tmp .. "/nope.json")
   eq(jbad, nil, "fs.json.read: missing file -> nil")
