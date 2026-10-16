@@ -20,3 +20,5 @@
 ---@field declined fun(): string[] Sorted list of languages the user chose "never" for.
 ---@field reset_declined fun(): nil Clears the declined list, in memory and on disk.
 ---@field ensure fun(lang: string, opts?: Lib.Treesitter.ParserPolicy.EnsureOpts): nil
+---@field status fun(lang: string): "installed"|"available"|"unavailable"|"unknown" Read-only: no prompt, no install, no side effect.
+---@field install fun(lang: string, on_installed?: fun(lang: string)): boolean Install now, whatever the mode, without asking -- the caller owns the confirmation. false when nothing was started.

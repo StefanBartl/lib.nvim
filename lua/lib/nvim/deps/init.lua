@@ -20,6 +20,7 @@ M.install = require("lib.nvim.deps.install")
 M.view = require("lib.nvim.deps.view")
 M.first_run = require("lib.nvim.deps.first_run")
 M.status = require("lib.nvim.deps.status")
+M.project = require("lib.nvim.deps.project")
 
 ---Show `plugin_name`'s declared-tools popup once, ever — call from the
 ---consuming plugin's own `setup()`. See `lib.nvim.deps.first_run` for the
@@ -185,6 +186,22 @@ function M.routes()
         else
           M.status.install()
         end
+      end,
+    },
+    {
+      path = { "deps", "project" },
+      args = {
+        {
+          name = "action",
+          type = "STRING",
+          enum = { "refresh", "install" },
+          optional = true,
+          desc = "refresh: scan again; install: ask once, then install; omit: show",
+        },
+      },
+      desc = "Scan this directory's files and show which treesitter parsers and tools are missing for them",
+      run = function(ctx)
+        M.project.run(nil, ctx.args.action)
       end,
     },
     {

@@ -149,6 +149,7 @@ local specs = {
   "curl_spec.lua",
   "curl_cached_spec.lua",
   "deps_spec.lua",
+  "deps_project_spec.lua",
   "contextmenu_spec.lua",
   "is_subpath_spec.lua",
   "to_absolute_spec.lua",
