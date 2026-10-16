@@ -32,6 +32,11 @@
 ---@field headers table<string, string> Response headers, keys lowercased so a lookup does not depend on a server's own casing convention.
 ---@field body string Raw response body text, exactly as received.
 
+---@class Lib.Net.Curl.CachedOpts : Lib.Net.Curl.FetchOpts
+---@field cache_dir? string Where cached files live (default `stdpath("cache")/lib.nvim/net/download`).
+---@field ttl_s? integer A cached file older than this many seconds is downloaded again (default: never).
+---@field refresh? boolean Ignore a cached file and download again.
+
 ---Callbacks for `fetch_stream`. `on_chunk` fires once per line of raw
 ---response body, in order, as it arrives; `on_done` fires once after the
 ---process exits (even if the request failed — check `raw_obj.code`);
@@ -50,5 +55,8 @@
 ---@field fetch_stream fun(url: string, opts: Lib.Net.Curl.FetchOpts|nil, handlers: Lib.Net.Curl.StreamHandlers): vim.SystemObj
 ---@field download fun(url: string, dest_path: string, opts: Lib.Net.Curl.FetchOpts|nil, cb: fun(ok: boolean, response_or_err: Lib.Net.Curl.RawResponse|string, raw_obj: vim.SystemCompleted))
 ---@field download_blocking fun(url: string, dest_path: string, opts: Lib.Net.Curl.FetchOpts|nil): boolean, Lib.Net.Curl.RawResponse|string, vim.SystemCompleted
+---@field cache_path fun(url: string, opts?: { cache_dir?: string }): string # The file a URL is cached under: sha256 of the URL + its path extension.
+---@field download_cached fun(url: string, opts: Lib.Net.Curl.CachedOpts|nil, cb: fun(ok: boolean, path_or_err: string, info: { cached: boolean, response?: Lib.Net.Curl.RawResponse }))
+---@field download_cached_blocking fun(url: string, opts: Lib.Net.Curl.CachedOpts|nil): boolean, string, { cached: boolean, response?: Lib.Net.Curl.RawResponse }
 ---@field config_quote fun(value: string): string  Escape a value for a curl config file's quoted-string form; public so a caller building its own argv shares this instead of a second copy.
 ---@field is_secret_header fun(name: string): boolean  Whether a header name carries a credential and must go through the config-file path rather than argv.
