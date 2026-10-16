@@ -39,13 +39,18 @@ function M.apply_shape(word, shape)
   return word
 end
 
----Split `text` into words on `_`, `-`, whitespace and inner lower->upper boundaries, so "fooBar", "foo_bar" and
----"foo-bar" all give { "foo", "bar" }. Digits stay inside their word.
+--- A word character: ASCII letters and digits, and every byte of a multi-byte UTF-8 character (so non-ASCII
+--- letters travel inside their word instead of being dropped). Everything else separates words.
+local WORD = "[%w" .. string.char(128) .. "-" .. string.char(255) .. "]+"
+
+---Split `text` into words on `_`, `-`, whitespace, punctuation and inner lower->upper boundaries, so "fooBar",
+---"foo_bar" and "foo-bar" all give { "foo", "bar" }. Digits and non-ASCII letters stay inside their word; the
+---case boundary is ASCII only (a non-ASCII letter never starts a new word).
 ---@param text string
 ---@return string[]
 local function split_words(text)
   local words = {}
-  for chunk in text:gmatch("[%a%d]+") do
+  for chunk in text:gmatch(WORD) do
     local start = 1
     for i = 2, #chunk do
       local prev, cur = chunk:sub(i - 1, i - 1), chunk:sub(i, i)
@@ -83,7 +88,8 @@ function M.identifier_style(text)
 end
 
 ---Re-case `text` in `style` (as `identifier_style` returns it). `"camel"` and `"pascal"` re-join the words of
----`text` without separators; the other styles change letter case only. An unknown or nil style, or empty
+---`text` without separators (`_`, `-`, whitespace and punctuation are dropped); the other styles change letter
+---case only. Letter case is ASCII only: a non-ASCII letter keeps its case (`"größe_x"` camel gives `"größeX"`). An unknown or nil style, or empty
 ---text, returns `text` unchanged (nil gives `""`).
 ---@param text string|nil
 ---@param style "upper"|"lower"|"title"|"camel"|"pascal"|nil
