@@ -89,3 +89,26 @@ front of the message on `vim/` rather than on `:%d+:` alone.
 
 Pin the behaviour in the spec: assert the actionable text is present *and*
 that `%.lua:%d+:` is absent (or, for a re-raise, occurs exactly once).
+
+## `status()`: statusline component vs. state snapshot
+
+`status` is a name two kinds of function use across the plugins, and they must not be confused (checked
+against the tree on 2026-10-16):
+
+| kind | where | returns | examples |
+| ---- | ----- | ------- | -------- |
+| **Statusline component** | `require("<plugin>.statusline").status(buf?)` | a short **string** | `casedesk`, `github_stats`, `gitsuite`, `recommender`, `runtime-analysis`, `sandbox` (all in a `statusline` module); `diff.nvim` is the one that exposes it as `require("diff").status(opts)` |
+| **State snapshot** | `require("<plugin>").status()` | a **table** (or lines) for `:checkhealth`, `:<Cmd> status` and bug reports | `lsp.nvim`, `hover.nvim`, `terminal.nvim`, `lib.nvim.messages.status()` |
+
+So `plugin.status()` is **not** one plugin-wide statusline convention: a top-level `status()` is a snapshot
+unless the plugin documents otherwise. A new statusline component goes in a `statusline` module and follows
+the component contract:
+
+- returns a `string`, `""` when there is nothing worth showing (inactive, no file, any failure) -- a badge with
+  nothing to act on is clutter, and a statusline cannot tell the two empty cases apart anyway;
+- takes an optional buffer (`buf`, default the current one) so a window-local statusline can ask for its own;
+- never raises and never blocks: it runs on every redraw. Cache per buffer (`changedtick`) or with a TTL, and
+  swallow errors into `""`;
+- is cheap to call unconditionally (`%{v:lua.require'<plugin>.statusline'.status()}`).
+
+A plugin that needs both keeps them apart: `statusline.status()` for the string, `status()` for the snapshot.
