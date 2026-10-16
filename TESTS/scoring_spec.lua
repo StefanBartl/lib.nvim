@@ -125,6 +125,21 @@ return function(H)
     end),
     "add: error located at the caller"
   )
+  ok(
+    located(function()
+      scoring.compute({ { name = "x", delta = 0 / 0 } })
+    end),
+    "compute: bad delta located at the caller"
+  )
+  ok(
+    located(function()
+      scoring.compute({ { name = "", delta = 1 } })
+    end),
+    "compute: empty name located at the caller"
+  )
+  fails(function()
+    scoring.compute({ "not a table" })
+  end, "compute: non-table entry")
   fails(function()
     scoring.new():bonus("", 1):result()
   end, "empty name")

@@ -51,6 +51,19 @@ local function finite(v)
   return type(v) == "number" and v == v and v ~= math.huge and v ~= -math.huge
 end
 
+--- The one place that validates a contribution; errors point at the caller of the public function.
+---@param label string  # e.g. "lib.lua.scoring.compute: entries[2]"
+---@param name any
+---@param delta any
+local function validate_entry(label, name, delta)
+  if type(name) ~= "string" or name == "" then
+    error(("%s needs a non-empty name"):format(label), 3)
+  end
+  if not finite(delta) then
+    error(("%s (%q) needs a finite number, got %s"):format(label, name, tostring(delta)), 3)
+  end
+end
+
 ---@param opts Lib.Scoring.Opts|nil
 ---@return Lib.Scoring.Opts
 local function checked(opts)
@@ -85,12 +98,10 @@ function M.compute(entries, opts)
   local base = opts.base or 0
   local total, details = base, {}
   for i, e in ipairs(entries) do
-    if type(e) ~= "table" or type(e.name) ~= "string" or e.name == "" then
-      error(("lib.lua.scoring.compute: entries[%d] needs a name"):format(i), 2)
+    if type(e) ~= "table" then
+      error(("lib.lua.scoring.compute: entries[%d] must be a table"):format(i), 2)
     end
-    if not finite(e.delta) then
-      error(("lib.lua.scoring.compute: entries[%d] (%s) needs a finite delta"):format(i, e.name), 2)
-    end
+    validate_entry(("lib.lua.scoring.compute: entries[%d]"):format(i), e.name, e.delta)
     if e.applies ~= false then
       total = total + e.delta
       details[#details + 1] = { name = e.name, delta = e.delta, total = total }
@@ -125,12 +136,7 @@ Builder.__index = Builder
 ---@return Lib.Scoring.Builder
 function Builder:add(name, delta, applies)
   -- checked here, not only in `result()`: the error should point at the call that passed the bad value
-  if type(name) ~= "string" or name == "" then
-    error("lib.lua.scoring: a contribution needs a non-empty name", 2)
-  end
-  if not finite(delta) then
-    error(("lib.lua.scoring: %q needs a finite number, got %s"):format(name, tostring(delta)), 2)
-  end
+  validate_entry("lib.lua.scoring: a contribution", name, delta)
   self.entries[#self.entries + 1] = { name = name, delta = delta, applies = applies }
   return self
 end
