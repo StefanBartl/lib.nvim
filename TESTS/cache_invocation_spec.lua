@@ -139,5 +139,129 @@ return function(H)
     end)
   end)
 
+  -- the live selection by mode: visual, linewise, blockwise and the select-mode twins; never from stale marks
+  local function selection_in(mode, vmark, cursor)
+    local text
+    H.with_patched(vim.fn, "mode", function()
+      return mode
+    end, function()
+      H.with_patched(vim.fn, "getpos", function(mark)
+        return mark == "v" and vmark or cursor
+      end, function()
+        text = invocation.read_editor_state().selection
+      end)
+    end)
+    return text
+  end
+  local v_from, v_to = { 0, 1, 1, 0 }, { 0, 2, 3, 0 }
+  eq(selection_in("v", v_from, v_to), "alpha beta\ngam", "selection: charwise")
+  eq(selection_in("V", v_from, v_to), "alpha beta\ngamma", "selection: linewise takes whole lines")
+  eq(
+    selection_in(string.char(22), { 0, 1, 2, 0 }, v_to),
+    "lp\nam",
+    "selection: blockwise takes the block"
+  )
+  eq(selection_in("s", v_from, v_to), "alpha beta\ngam", "selection: select mode (charwise)")
+  eq(selection_in("S", v_from, v_to), "alpha beta\ngamma", "selection: select mode (linewise)")
+  eq(
+    selection_in(string.char(19), { 0, 1, 2, 0 }, v_to),
+    "lp\nam",
+    "selection: select mode (blockwise)"
+  )
+  eq(selection_in("n", v_from, v_to), nil, "selection: none in normal mode, whatever the marks say")
+
+  -- two scopes with the same name are still two scopes
+  local twin_a, twin_b = invocation.new("twin"), invocation.new("twin")
+  local twin_calls = 0
+  twin_a:run(function()
+    twin_a:memo("k", function()
+      return "A"
+    end)
+    twin_b:run(function()
+      eq(
+        twin_b:memo("k", function()
+          twin_calls = twin_calls + 1
+          return "B"
+        end),
+        "B",
+        "same-name scopes: the second one has its own value"
+      )
+    end)
+    eq(
+      twin_a:memo("k", function()
+        twin_calls = twin_calls + 100
+        return "A2"
+      end),
+      "A",
+      "same-name scopes: the end of the other run does not wipe this one's values"
+    )
+  end)
+  eq(twin_calls, 1, "same-name scopes: each producer ran as expected")
+
+  -- a run belongs to its coroutine: a yield in the middle neither leaks values nor blocks the cleanup
+  local co_scope = invocation.new("co")
+  local co = coroutine.create(function()
+    co_scope:run(function()
+      co_scope:memo("x", function()
+        return "inside"
+      end)
+      coroutine.yield()
+    end)
+  end)
+  coroutine.resume(co)
+  eq(co_scope:active(), false, "coroutine: the main thread is not inside the suspended run")
+  eq(
+    co_scope:memo("x", function()
+      return "main"
+    end),
+    "main",
+    "coroutine: the suspended run's values are not visible outside it"
+  )
+  local main_calls = 0
+  for _ = 1, 2 do
+    co_scope:run(function()
+      co_scope:memo("x", function()
+        main_calls = main_calls + 1
+        return "m"
+      end)
+    end)
+  end
+  eq(
+    main_calls,
+    2,
+    "coroutine: a run on the main thread still starts empty and cleans up afterwards"
+  )
+  coroutine.resume(co)
+  eq(coroutine.status(co), "dead", "coroutine: the suspended run finishes normally")
+
+  -- memory's BufWritePost auto-invalidation clears namespaces; a run must survive it
+  local memory = require("lib.nvim.cache.memory")
+  memory.setup_auto_invalidation()
+  local inv_calls = 0
+  scope:run(function()
+    for _ = 1, 2 do
+      scope:memo("w", function()
+        inv_calls = inv_calls + 1
+        return 1
+      end)
+      vim.api.nvim_exec_autocmds("BufWritePost", {})
+    end
+  end)
+  memory.disable_auto_invalidation()
+  eq(inv_calls, 1, "a BufWritePost mid-run does not clear the run's values")
+
+  -- keys: only strings; the editor-state slot cannot be hijacked
+  ok(not pcall(scope.memo, scope, 5, function() end), "memo: a non-string key is refused")
+  scope:run(function()
+    scope:memo("editor_state", function()
+      return "not a state"
+    end)
+    eq(
+      type(scope:editor_state()),
+      "table",
+      "memo: the key 'editor_state' does not collide with the reading"
+    )
+  end)
+
   vim.api.nvim_buf_delete(buf, { force = true })
 end

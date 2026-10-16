@@ -746,7 +746,18 @@ return function(opts?: { bufnr?, row?, col? }): boolean success
 
 ## `lib.nvim.cache.*`
 
-### `lib.nvim.cache` (aggregator, see README) — two backends: `disk` and `memory`.
+### `lib.nvim.cache` (aggregator, see README) — `disk`, `memory` and `invocation`.
+
+### `lib.nvim.cache.invocation`
+A cache that lives for one call (`run`); a run belongs to the coroutine that started it.
+```
+M.new(name: string): Scope                      -- independent scope; same name does not share values
+Scope:run(fn, ...): any...                      -- values live until the outermost run ends; errors re-raised unchanged
+Scope:memo(key: string, produce: fun(): any): any   -- outside a run: produce() every time; nil/false are cached too
+Scope:active(): boolean
+Scope:editor_state(): EditorState               -- read_editor_state(), once per run
+M.read_editor_state(): { buf, win, mode, cursor, cfile, cword, selection, buffer_path }
+```
 
 ### `lib.nvim.cache.disk`
 Persistent JSON disk cache with TTL, one JSON file per namespace under
