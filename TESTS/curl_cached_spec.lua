@@ -704,6 +704,32 @@ return function(H)
       ok(os.time() - fresh_st.mtime.sec <= 5, "touch race: the fresh download keeps its own mtime")
       vim.fn.delete(d8, "rf")
     end
+    -- (On Windows the real replace, a rename over the open file, is refused while the handle is open and
+    -- `rename_file` retries it; the move-away above is what both systems allow, and it still tells which file
+    -- got the times.)
+
+    -- a cache file that cannot be opened for writing (read-only) still gets its use time renewed, by path
+    do
+      local d9 = new_dir()
+      local url9 = ("http://127.0.0.1:%d/ro.txt"):format(port)
+      local p9 = curl.cache_path(url9, { cache_dir = d9 })
+      vim.fn.writefile({ "read only" }, p9, "b")
+      local mt9 = os.time() - 4000
+      uv.fs_utime(p9, mt9, mt9)
+      uv.fs_chmod(p9, 292) -- 0444
+      local ro_fd = uv.fs_open(p9, "r+", 438)
+      if ro_fd then
+        uv.fs_close(ro_fd)
+      end
+      ok(ro_fd == nil, "read-only hit: setup, the file cannot be opened for writing")
+      local ro_ok, _, ro_info = curl.download_cached_blocking(url9, { cache_dir = d9 })
+      ok(ro_ok and ro_info.cached, "read-only hit: served from the cache")
+      local ro_st = uv.fs_stat(p9)
+      ok(os.time() - ro_st.atime.sec <= 5, "read-only hit: the use time is renewed by path")
+      eq(ro_st.mtime.sec, mt9, "read-only hit: the mtime is left alone")
+      uv.fs_chmod(p9, 420) -- 0644, so it can be deleted
+      vim.fn.delete(d9, "rf")
+    end
 
     for _, d in ipairs({ d1, d2, d3, d4, d5, d6, d7 }) do
       vim.fn.delete(d, "rf")
