@@ -80,6 +80,15 @@ return function(H)
 
     local marks_a = vim.api.nvim_buf_get_extmarks(a.surf.bufnr, a._hl_ns, 0, -1, { details = true })
     eq(#marks_a, 1, "the error highlight landed on a's own buffer")
+    local line_a = vim.api.nvim_buf_get_lines(a.surf.bufnr, 0, 1, false)[1]
+    local d = marks_a[1][4]
+    eq(marks_a[1][2] .. ":" .. marks_a[1][3], "0:0", "the highlight starts at the line's start")
+    eq(
+      d.end_row .. ":" .. d.end_col,
+      "0:" .. #line_a,
+      "and spans the whole line, like col_end = -1"
+    )
+    eq(type(d.hl_group), "string", "it carries the level's highlight group")
 
     local marks_b = vim.api.nvim_buf_get_extmarks(b.surf.bufnr, b._hl_ns, 0, -1, { details = true })
     eq(#marks_b, 0, "b has no highlight and is unaffected by a's, despite the shared namespace")

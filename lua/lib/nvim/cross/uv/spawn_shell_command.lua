@@ -24,7 +24,7 @@ return function(cmd, args, opts)
   args = args or {}
   opts = opts or {}
 
-  local uv = vim.loop
+  local uv = vim.uv or vim.loop
   local shell, shell_flag, full_cmd
 
   if vim.fn.has("win32") == 1 then

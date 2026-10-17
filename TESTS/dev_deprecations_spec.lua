@@ -249,4 +249,18 @@ return function(H)
 
   vim.api.nvim_buf_delete(wbuf, { force = true })
   vim.fn.delete(root, "rf")
+
+  -- lib.nvim's own tree is clean -------------------------------------------
+  -- The watcher's own repo must not carry what it warns about (bare
+  -- `vim.loop`, `nvim_buf_add_highlight`, ...). Rules newer than the running
+  -- Neovim are inactive, so an older CI Neovim checks a subset.
+  local spec_dir = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
+  local lua_root = vim.fs.normalize(spec_dir .. "../lua")
+  local own, own_truncated = dep.scan_roots({ lua_root })
+  eq(own_truncated, false, "self-scan: the whole lua/ tree was walked")
+  local listed = {}
+  for _, f in ipairs(own) do
+    listed[#listed + 1] = (f.file or "?"):sub(#lua_root + 2) .. ":" .. dep.format(f)
+  end
+  eq(table.concat(listed, "\n"), "", "self-scan: no deprecated calls in lib.nvim's own lua/")
 end
