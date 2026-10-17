@@ -1028,6 +1028,33 @@ return function(H)
   plain.close()
   vim.cmd("stopinsert")
 
+  -- no augroup is left behind per opened picker, whichever way it closes
+  do
+    local function has_group(name)
+      return (pcall(vim.api.nvim_get_autocmds, { group = name }))
+    end
+    local own = assert(kit.picker({ items = { "a", "b" }, on_submit = function() end }))
+    local own_win = own.slots.prompt.winid
+    ok(has_group("lib_kit_picker_" .. own_win), "an open picker has its prompt augroup")
+    own.close()
+    vim.cmd("stopinsert")
+    ok(not has_group("lib_kit_picker_" .. own_win), "close(): the prompt augroup is gone")
+    ok(not has_group("lib_kit_picker_resize_" .. own_win), "close(): the resize augroup is gone")
+
+    local ext = assert(kit.picker({ items = { "a", "b" }, on_submit = function() end }))
+    local ext_win = ext.slots.prompt.winid
+    vim.api.nvim_win_close(ext_win, true) -- a plain `:close`, none of the picker's own keys
+    vim.cmd("stopinsert")
+    ok(
+      not has_group("lib_kit_picker_" .. ext_win),
+      "closed from outside: the prompt augroup is gone"
+    )
+    ok(
+      not has_group("lib_kit_picker_resize_" .. ext_win),
+      "closed from outside: the resize augroup is gone"
+    )
+  end
+
   -- --------------------------------------------------------------- confirm (buttons)
   local confirm = require("lib.nvim.ui.kit.confirm")
 
