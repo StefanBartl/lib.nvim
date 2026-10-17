@@ -471,9 +471,11 @@ bytes, for files inside a repository somebody else controls (a FIFO would
 block, a device never ends, a huge file exhausts memory). Type and size are
 checked on the stat and again on the open descriptor; the read never takes
 more than `max_bytes + 1` bytes. Bytes come back as stored. A symlink is
-followed unless `{ follow_symlinks = false }`; a path swapped for a link
-between the check and the open is refused. Returns `content, err`; never
-raises. >lua
+followed unless `{ follow_symlinks = false }`. Only then must the opened file
+be the one the `lstat` saw, so a path swapped for a link between the check
+and the open is refused; the default (links followed) does not notice that
+swap and reads the link target when it is a regular file within the limit.
+Returns `content, err`; never raises. >lua
 
     local read_bounded = require("lib.nvim.fs.read_bounded")
     local text, err = read_bounded(dir .. "/.git/config", 256 * 1024)
