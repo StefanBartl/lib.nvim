@@ -769,7 +769,9 @@ local function touch_hit(path)
     uv.fs_close(fd)
     return
   end
-  -- not writable (read-only file): by path, as before; the replace race stays possible for such a file
+  -- Not opened for writing (a read-only file, a handle another program holds without write sharing on
+  -- Windows, a read-only file system, or the file is gone): by path, as before. The replace race stays
+  -- possible there; a vanished file is simply not touched.
   local st = uv.fs_stat(path)
   if st then
     pcall(uv.fs_utime, path, now, st.mtime.sec + (st.mtime.nsec or 0) / 1e9)
