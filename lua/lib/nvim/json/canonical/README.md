@@ -41,6 +41,16 @@ does, cuts a float to 16 digits and is only sometimes an error on `NaN`.
   also through a `memo` table; the limit is checked while a text is computed,
   not when a remembered one is reused.
 
+## Cost
+
+All of this is plain Lua, so it is slower than `vim.json.encode` (C): a
+1.4 MB export with 3000 entries takes about 60 ms here against 5 ms. The path of
+a value (`$.a.b[1]`) is only built when an error names it, the escaped text of
+an object key is remembered across calls (at most 1024 keys, then the cache
+starts over), and the UTF-8 check only looks at bytes of 0x80 and above one by
+one and copies valid stretches whole. For a document that is written twice
+(digest and answer), `memo` saves the second pass.
+
 ## Usage
 
 ```lua

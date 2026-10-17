@@ -20,7 +20,10 @@ end
 
 ## Behaviour
 
-- The parent directory is created first (`lib.nvim.fs.mkdirp`); a file where a
+- A missing parent directory is created (`lib.nvim.fs.mkdirp`), but only when
+  the exclusive open answers `ENOENT`: a parent that exists costs nothing extra
+  (walking the whole chain on every call cost about six times the create
+  itself, and `with_lock` retries a contended lock every 10 ms). A file where a
   folder should be is an error, not `exists`.
 - Bytes are written as given: no newline is added, NUL and CRLF stay.
 - An empty `content` makes an empty file.

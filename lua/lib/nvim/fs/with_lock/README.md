@@ -69,7 +69,8 @@ end
   `wait_ms` and answers `locked`, even though the lock file holds your own pid.
   Do not nest; hand the already-locked work to the inner step.
 - **The folder of the lock is created if missing** (`create_exclusive` makes the
-  parent), and it stays: a mistyped folder name leaves a new empty folder
+  parent when the create answers `ENOENT`, so a contended retry costs no folder
+  walk), and it stays: a mistyped folder name leaves a new empty folder
   behind. Check that the folder exists first if that matters.
 - **It blocks the editor loop** (`vim.wait` in steps of 10 ms) while a lock is
   contended. For that reason a contended call cannot run in a fast-event context

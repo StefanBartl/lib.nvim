@@ -162,6 +162,33 @@ return function(H)
     "NaN, in full"
   )
   has(fails({ a = { b = { 0 / 0 } } }), "$.a.b[1]", "the error names the path")
+  -- the path is only built for the error: it must still be the path of THIS value, not of a deeper sibling written
+  -- before it, nor of the key that came before it at the same level
+  eq(
+    fails({ a = { { x = { y = { 1, 2 } } }, { z = 0 / 0 } } }):match("^json: (%S+)"),
+    "$.a[2].z",
+    "after a deeper sibling, the path has the right length"
+  )
+  eq(
+    fails({ a = 1, b = { 1, 2, math.huge } }):match("^json: (%S+)"),
+    "$.b[3]",
+    "the key of the value, not the one before it"
+  )
+  eq(
+    fails({ k = { { 1 }, { 2, { f = function() end } } } }):match("^json: (%S+)"),
+    "$.k[2][2].f",
+    "a value JSON cannot hold, deep down"
+  )
+  eq(
+    fails({ k = { [true] = 1 } }):match("^json: (%S+)"),
+    "$.k",
+    "a bad key names the table that has it"
+  )
+  eq(
+    fails({ x = { y = { json.memo({ { ok = 1 }, { n = 2 ^ 60 } }) } } }):match("^json: (%S+)"),
+    "$.x.y[1][2].n",
+    "the path runs on inside a memoised table"
+  )
 
   -- ── strings ──
   eq(json.encode({ 'a"b\\c' }), '["a\\"b\\\\c"]')
@@ -264,6 +291,39 @@ return function(H)
   eq(json.scrub_utf8("\192\155"), FFFD:rep(2), "an overlong ESC")
   eq(json.scrub_utf8("\237\160\128"), FFFD:rep(3), "a surrogate")
   eq(json.scrub_utf8("ok\226\130"), "ok" .. FFFD:rep(2), "a cut-off sequence at the end")
+  -- the valid stretches between bad bytes are copied whole: every byte of them, in place, none twice
+  eq(
+    json.scrub_utf8("\255Größe\254 日本 \253x\240\159\152\128\252"),
+    FFFD .. "Größe" .. FFFD .. " 日本 " .. FFFD .. "x\240\159\152\128" .. FFFD,
+    "bad bytes at the start, between valid text and at the end"
+  )
+  eq(json.scrub_utf8("\255\254"), FFFD:rep(2), "two bad bytes in a row")
+  eq(json.scrub_utf8("ä\255"), "ä" .. FFFD, "a valid sequence right before a bad byte")
+  local long_valid = ("abc äöü 日本 \240\159\152\128 "):rep(500)
+  ok(rawequal(json.scrub_utf8(long_valid), long_valid), "long valid text: no copy is made")
+  eq(
+    json.scrub_utf8(long_valid .. "\255" .. long_valid),
+    long_valid .. FFFD .. long_valid,
+    "one bad byte in a long text"
+  )
+
+  -- ── escaped object keys are remembered across documents: a remembered key is the same text ──
+  eq(json.encode({ ['a"<'] = 1 }), '{"a\\"\\u003c":1}', "a key that needs escapes")
+  eq(json.encode({ ['a"<'] = 2 }), '{"a\\"\\u003c":2}', "and again, from the cache")
+  eq(json.encode({ ['a"<'] = 3 }, { indent = 1 }), '{\n "a\\"\\u003c": 3\n}', "readable too")
+  -- more distinct keys than the cache keeps: it starts over, and every key is still right
+  local many, expect = {}, {}
+  for i = 1, 3000 do
+    many["k" .. i .. "\n"] = i
+  end
+  local many_keys = vim.tbl_keys(many)
+  table.sort(many_keys, json.bytes_less)
+  for i, k in ipairs(many_keys) do
+    expect[i] = ('"%s":%d'):format(k:gsub("\n", "\\n"), many[k])
+  end
+  local many_text = "{" .. table.concat(expect, ",") .. "}"
+  eq(json.encode(many), many_text, "3000 distinct keys")
+  eq(json.encode(many), many_text, "and the same text a second time")
 
   -- ── what is no JSON is an error that says where ──
   has(fails({ 1, nil, 3 }), "not a list", "a hole")

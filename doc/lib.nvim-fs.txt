@@ -39,6 +39,7 @@ CONTENTS                                              *lib.nvim-fs-contents*
        scan_roots ................................ |lib.nvim-fs-scan_roots|
   7. IO ............................................... |lib.nvim-fs-io|
        read ........................................ |lib.nvim-fs-read|
+       read_bounded ........................ |lib.nvim-fs-read_bounded|
        write.to_file ...................... |lib.nvim-fs-write.to_file|
        write.append ......................... |lib.nvim-fs-write.append|
        write.async ............................ |lib.nvim-fs-write.async|
@@ -46,6 +47,9 @@ CONTENTS                                              *lib.nvim-fs-contents*
        json ........................................ |lib.nvim-fs-json|
        mkdirp .................................... |lib.nvim-fs-mkdirp|
        create_entry ........................ |lib.nvim-fs-create_entry|
+       create_exclusive ................ |lib.nvim-fs-create_exclusive|
+       with_lock ............................. |lib.nvim-fs-with_lock|
+       etag ........................................ |lib.nvim-fs-etag|
   8. Ignore patterns ................................. |lib.nvim-fs-ignore|
        ignore.list ................................ |lib.nvim-fs-ignore.list|
   9. System ........................................... |lib.nvim-fs-system|
@@ -115,7 +119,7 @@ whitespace-only string. Returns `ok, err`. >lua
     local ok, err = is_valid_filename("new_file.lua")
 <
 ------------------------------------------------------------------------------
-is_subpath({path}, {base})                        *lib.nvim-fs-is_subpath*
+is_subpath({path}, {base}, {opts})                *lib.nvim-fs-is_subpath*
 
 Function. `true` if `path == base` or `path` starts with `base .. "/"`,
 after `vim.fs.normalize`-ing both (always forward slashes). >lua
@@ -123,6 +127,21 @@ after `vim.fs.normalize`-ing both (always forward slashes). >lua
     local is_subpath = require("lib.nvim.fs.is_subpath")
     is_subpath("/a/b/c", "/a/b") -- true
     is_subpath("/a/bc", "/a/b")  -- false
+<
+Without {opts} it is a pure string comparison (no syscall). With {opts} (a
+table, `{}` is enough) both sides go through |lib.nvim-fs-normkey| instead,
+and a trailing separator is dropped from both (a bare root keeps it):
+
+  `realpath`     (default `true`) resolve both sides with `uv.fs_realpath`:
+                 symlinked prefixes and Windows 8.3 short names compare
+                 equal. `false` keeps the drive-letter and separator
+                 normalisation without touching the file system.
+  `ignore_case`  (default `false`) compare case-insensitively, for a file
+                 system that ignores case (Windows, macOS by default). The
+                 folding is `vim.fn.tolower`, so non-ASCII names work. >lua
+
+    is_subpath(vim.fn.tempname(), base, {})            -- realpath on
+    is_subpath("c:/a/b/x.lua", "C:/A/B", { realpath = false, ignore_case = true })
 <
 ==============================================================================
 4. PATH UTILITIES                                *lib.nvim-fs-path-utils*
@@ -445,6 +464,21 @@ Returns `content, err`. >lua
     local content, err = read("/repo/README.md")
 <
 ------------------------------------------------------------------------------
+read_bounded({path}, {max_bytes}, {opts})        *lib.nvim-fs-read_bounded*
+
+Function. Read a file only when it is a regular file of at most {max_bytes}
+bytes, for files inside a repository somebody else controls (a FIFO would
+block, a device never ends, a huge file exhausts memory). Type and size are
+checked on the stat and again on the open descriptor; the read never takes
+more than `max_bytes + 1` bytes. Bytes come back as stored. A symlink is
+followed unless `{ follow_symlinks = false }`; a path swapped for a link
+between the check and the open is refused. Returns `content, err`; never
+raises. >lua
+
+    local read_bounded = require("lib.nvim.fs.read_bounded")
+    local text, err = read_bounded(dir .. "/.git/config", 256 * 1024)
+<
+------------------------------------------------------------------------------
 write.to_file({path}, {content})                *lib.nvim-fs-write.to_file*
 
 Function. Truncate-write `content` to `path`, creating parent directories.
@@ -517,6 +551,60 @@ Returns `ok, kind, path_or_err`. >lua
     local create_entry = require("lib.nvim.fs.create_entry")
     local ok, kind, path = create_entry("/repo/src", "new_file.lua")
     local ok2, kind2, dir = create_entry("/repo/src", "sub/dir/")
+<
+------------------------------------------------------------------------------
+create_exclusive({path}, {content})        *lib.nvim-fs-create_exclusive*
+
+Callable table. Create a file with {content}, failing with `"exists"` when
+the name is already taken (by anything: a folder, a symlink, a dangling one
+too). The exclusive open (`O_CREAT|O_EXCL`) is the atomic part: two writers
+never both believe they made the file. A missing parent folder is made when
+the open answers `ENOENT`. Bytes are written as given; a failed or short
+write removes the file again. Returns `true, nil` or `false, err`; never
+raises. Compare the error with `is_exists(err)`, not with the word. >lua
+
+    local create = require("lib.nvim.fs.create_exclusive")
+    local ok, err = create(dir .. "/new.md", "text")
+    if not ok and create.is_exists(err) then
+      -- somebody else was first; the file is untouched
+    end
+<
+------------------------------------------------------------------------------
+with_lock({path}, {fn}, {opts})                      *lib.nvim-fs-with_lock*
+
+Function. Run {fn} while holding an advisory lock on {path}: a hidden
+`.<name>.lock` file beside it, made with |lib.nvim-fs-create_exclusive|. It
+serialises the cooperating writers of a file (an agent's command line and an
+editor plugin). What {fn} answers (up to three values) is handed back; an
+error of {fn} is raised again after the lock is released. A lock older than
+`opts.stale_s` (10 s) is taken over, one waiter at a time; waiting is bounded
+by `opts.wait_ms` (2000). A failed lock answers `nil, message, info` with
+`info.code` `locked` (retryable), `lock_stuck` (remove it by hand) or `io`.
+
+Limits: keyed by the spelling of the path (a hard link or symlink takes
+another lock); not re-entrant; a missing folder is created and stays; a
+contended call blocks the editor loop and raises `E5560` in a fast-event
+context. >lua
+
+    local with_lock = require("lib.nvim.fs.with_lock")
+    local res, err, info = with_lock(path, function()
+      return "done" -- read, change, write
+    end, { wait_ms = 500 })
+    if res == nil and info and info.retryable then
+      -- ask again later
+    end
+<
+------------------------------------------------------------------------------
+etag                                                       *lib.nvim-fs-etag*
+
+Table. The version tag of some bytes, for compare-and-set writes: the same
+bytes give the same tag on every machine. `of(text)` is `sha256:` and the
+first 16 hex digits, `sha256(text)` all 64. A NUL byte is hashed as
+`\255\254` (`vim.fn.sha256` refuses NUL). Not for a fast-event context
+(`vim.fn.sha256` raises `E5560` there). >lua
+
+    local etag = require("lib.nvim.fs.etag")
+    etag.of("hello")     --> "sha256:2cf24dba5fb0a30e"
 <
 ==============================================================================
 8. IGNORE PATTERNS                                     *lib.nvim-fs-ignore*

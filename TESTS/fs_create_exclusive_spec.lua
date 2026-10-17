@@ -56,6 +56,37 @@ return function(H)
   eq({ made, err }, { true, nil })
   eq(read(path), "one\r\ntwo\0three", "no newline added, NUL and CRLF kept")
 
+  -- ── a parent that exists is not walked again: the folders are only made when the open says they are missing ──
+  local walks = { mkdir = 0, stat = 0 }
+  H.with_patched(uv, "fs_mkdir", function()
+    walks.mkdir = walks.mkdir + 1
+    return nil, "EACCES: the spec forbids folders here"
+  end, function()
+    H.with_patched(uv, "fs_stat", function()
+      walks.stat = walks.stat + 1
+      return nil, "ENOENT: the spec forbids stat here"
+    end, function()
+      made, err = create(dir .. "/a/b/second.md", "2")
+    end)
+  end)
+  eq({ made, err }, { true, nil }, "the parent exists: created")
+  eq(walks, { mkdir = 0, stat = 0 }, "without walking the folder chain")
+  eq(read(dir .. "/a/b/second.md"), "2")
+  -- ... a missing parent is still made, and the create then goes through
+  made, err = create(dir .. "/c/d/e/deep.md", "3")
+  eq({ made, err }, { true, nil }, "a missing parent chain")
+  eq(read(dir .. "/c/d/e/deep.md"), "3")
+  -- ... and a parent that cannot be made is the error of mkdirp, not 'exists'
+  local mk_ok, mk_err
+  H.with_patched(uv, "fs_mkdir", function()
+    return nil, "EACCES: permission denied"
+  end, function()
+    mk_ok, mk_err = create(dir .. "/nope/x.md", "x")
+  end)
+  eq(mk_ok, false, "a parent that cannot be made")
+  ok(not create.is_exists(mk_err), "is no 'exists': " .. tostring(mk_err))
+  has(mk_err, "mkdirp: cannot create")
+
   -- ── the second one learns it was too late, and the file is not touched ──
   local again, aerr = create(path, "other")
   eq(again, false)
