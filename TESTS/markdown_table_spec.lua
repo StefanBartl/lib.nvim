@@ -55,6 +55,20 @@ return function(H)
     local dup = T.parse({ "| a | b |", "|---|---|", "|---|---|", "| x | y |" })
     eq(#dup[1].rows, 3, "a repeated delimiter line is a data row")
 
+    -- separator_index: the one rule every consumer asks (parse, renderers, row insertion)
+    local data_dash = { "| a | b |", "|---|---|", "| - | - |", "| x | y |" }
+    eq(T.separator_index(data_dash, 1, 4), 2, "the delimiter is the second line")
+    eq(T.separator_index(data_dash, 3, 4), 3, "a sub-range starting on a dash line finds it")
+    eq(T.separator_index(dash_head, 1, 3), 2, "a dash header is skipped")
+    eq(
+      T.separator_index({ "| - |", "| - |" }, 1, 1),
+      1,
+      "a one-line block has no next line to defer to"
+    )
+    eq(T.separator_index({ "| a |", "| b |" }, 1, 2), nil, "no delimiter row")
+    local _, sty = T.separator_index(SRC, 3, 6)
+    eq(sty, "spaced", "the style comes along")
+
     eq(#T.parse({ "| a |", "| --- |" }), 0, "two lines are not a table")
     eq(T.is_table_line("not a table"), false, "a plain line is not a table line")
     eq(T.is_table_line(nil), false, "a non-string is not a table line")

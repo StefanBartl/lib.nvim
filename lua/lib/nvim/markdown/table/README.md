@@ -65,7 +65,7 @@ each raw cell in the line, for cell-at-cursor); `parse_row` is its cells half.
 The importers must write a literal pipe in cell text as `\|`.
 
 Lower-level primitives (`display_width`, `pad_cell`, `is_table_line`,
-`is_separator_line`, `parse_row`, `calc_widths`, `resolve_overrides`,
+`is_separator_line`, `separator_index`, `parse_row`, `calc_widths`, `resolve_overrides`,
 `trim`, `gen_separator`, `format_row`) are public too: `trim`/`gen_separator`/
 `format_row` in particular exist because markdown.nvim's `table_wrap`
 (soft-wrapping long cells) builds rows outside the normal parse → render

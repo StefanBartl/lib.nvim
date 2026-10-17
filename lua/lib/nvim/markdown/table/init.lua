@@ -205,6 +205,29 @@ function M.parse_row(line)
   return (M.split_cells(line))
 end
 
+---The delimiter row of the table block `lines[start..stop]` (GFM).
+---
+---Only the first separator-looking line is the delimiter row; a later
+---`| - | - |` is a data row. A header made of dashes directly above the
+---delimiter row is the header: when the first two lines of the block both look
+---like a separator, the second one is the delimiter. Every consumer that tells
+---the delimiter row from the other rows (parse, renderers, row insertion) asks
+---this, so they cannot drift apart.
+---@param lines string[]
+---@param start integer  # 1-based first line of the block
+---@param stop integer  # 1-based last line of the block (inclusive)
+---@return integer|nil idx  # 1-based index into `lines`; nil when the block has none
+---@return "spaced"|"compact"|nil style
+function M.separator_index(lines, start, stop)
+  for ln = start, stop do
+    local is_sep, style = M.is_separator_line(lines[ln])
+    if is_sep and not (ln == start and ln < stop and M.is_separator_line(lines[ln + 1])) then
+      return ln, style
+    end
+  end
+  return nil, nil
+end
+
 ---Every GFM table in `lines`.
 ---
 ---A run of consecutive table lines shorter than three (header, separator, one
@@ -224,19 +247,10 @@ function M.parse(lines)
       end
       local stop = i - 1
       if stop - start >= 2 then
-        local rows, sep_style, sep_line_idx, col_count = {}, nil, nil, 0
+        local rows, col_count = {}, 0
+        local sep_line_idx, sep_style = M.separator_index(lines, start, stop)
         for ln = start, stop do
-          local is_sep, style = M.is_separator_line(lines[ln])
-          -- A header made of dashes (`| - | - |`) directly above the delimiter row is the header,
-          -- not the delimiter: when the first two lines both look like a separator, the second is.
-          if is_sep and ln == start and M.is_separator_line(lines[ln + 1]) then
-            is_sep = false
-          end
-          -- only the first such line is the delimiter row; a later `| - | - |` is a data row
-          if is_sep and not sep_line_idx then
-            sep_line_idx = ln
-            sep_style = style
-          else
+          if ln ~= sep_line_idx then
             local cells = M.parse_row(lines[ln])
             rows[#rows + 1] = cells
             if #cells > col_count then
