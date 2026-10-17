@@ -101,6 +101,12 @@ The window is `winfixbuf` unless `wo.winfixbuf = false`: a surface lives and die
 with its one buffer, so `<C-o>`, `:bnext` or `:e` in it fail with E1513 instead of
 swapping the user's file in and wiping the component's buffer from under it.
 
+A surface that is entered (`enter`, the default) and not `modifiable` ends Insert
+mode when it opens from it: entering a window keeps the mode, so a read-only float
+opened by an Insert-mode mapping (a picker's caller key showing details) would
+otherwise type `q` (E21) instead of closing, and need `<Esc>` first. A `modifiable`
+surface, and one that is not entered, leave the mode alone.
+
 `kit.surface.mark_secret(bufnr)` / `kit.surface.is_secret(bufnr?)` set and read
 the buffer variable `vim.b.ui_kit_secret` (its name is `kit.surface.SECRET_VAR`): a
 buffer a secret is typed into. `kit.input` with `secret = true` and a `kit.sheet`
@@ -217,6 +223,11 @@ local p = kit.picker({
 
 The words typed in the prompt filter the list (every word must occur, any case); an empty result stays open.
 `set_items` keeps the cursor on its item and the marks of items that are still there.
+
+A caller key may open another window from the prompt (a `kit.viewer` with the current item's
+details): that window opens in Normal mode, so `q`/`<Esc>` close it on the first press, and when
+the focus comes back to the prompt, Insert mode is back at the column it was left at -- the next
+letter goes into the query. A prompt left from Normal mode is given back in Normal mode.
 
 `kit.picker({ prompt = "plain" })` falls back to a bare
 `kit.layout.template("picker")` whose prompt slot you wire yourself.

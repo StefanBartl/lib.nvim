@@ -101,6 +101,7 @@ local specs = {
   "ui_kit_sheet_spec.lua",
   "ui_kit_winfixbuf_spec.lua",
   "ui_kit_insert_chain_spec.lua",
+  "ui_kit_insert_detour_spec.lua",
   "ui_kit_secret_traces_spec.lua",
   "ui_kit_oneline_spec.lua",
   "ui_kit_nul_spec.lua",
