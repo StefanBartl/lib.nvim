@@ -47,6 +47,7 @@
 ---@field pad_cell fun(str: string, width: integer, align: string, width_fn?: fun(s: string): integer): string
 ---@field is_table_line fun(line: any): boolean
 ---@field is_separator_line fun(line: any): boolean, ("spaced"|"compact"|nil)
+---@field separator_index fun(lines: string[], start: integer, stop: integer): integer|nil, ("spaced"|"compact"|nil)
 ---@field parse_row fun(line: string): string[]
 ---@field parse fun(lines: string[]): Lib.Markdown.Table[]
 ---@field at_cursor fun(tables: Lib.Markdown.Table[], lnum: integer): Lib.Markdown.Table|nil, string|nil
