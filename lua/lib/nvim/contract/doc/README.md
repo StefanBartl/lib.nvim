@@ -40,12 +40,13 @@ end
 | `plugin_root` | none | The checkout whose commit `engine.git` names; a non-empty path (trailing slashes are dropped, `/` and `C:/` stay as they are). |
 | `max_bytes` | 8 MiB | Largest document: a whole number from 1. |
 | `too_large_hint` | `ask for a page or an area` | Advice in the `payload_too_large` message. |
+| `prewarm` | `false` | `true` calls `d.prewarm()` right away: the git lookup of `engine.git` starts in the background. |
 
 A wrong config raises with the position of the caller (a programmer error): every
 key is checked, not only `plugin` and `schema`. `schema` is a whole number (not
 `inf`); `kind_prefix`, `scope_key`, `placeholder` and `plugin_root` are non-empty
 strings when given, `engine_version` and `too_large_hint` strings, `max_bytes` a
-whole number from 1. A `scope_key` must not be a field of the documents themselves
+whole number from 1, `prewarm` a boolean. A `scope_key` must not be a field of the documents themselves
 (`schema`, `plugin`, `kind`, `generated_at`, `engine`, `rev`, `digest`, `code`,
 `message`, `retryable`, `details`): it would overwrite that field in every head.
 
@@ -68,9 +69,17 @@ the life of the instance; a lookup that did not finish in time is asked again,
 three times at most (the first look waits 2 s, a retry 0.5 s); git saying there
 is no commit stays `unknown`. The lookup is synchronous: the first `head()` (or
 `engine_info()`) of an instance waits for git, usually about 100 ms on a warm
-machine, up to 2 s on a loaded one. A command-line tool does not notice; an
-editor host that answers on the UI loop should call `engine_info()` once while
-it starts, not inside the first request.
+machine, up to 2 s on a loaded one. A command-line tool does not notice.
+
+An editor host that answers on the UI loop calls `d.prewarm()` once while it
+starts (or passes `prewarm = true` to `new`): git runs in the background
+(`vim.system` with a callback and a 2 s timeout) and its answer fills the same
+cache under the same rules (a timeout is one of the three tries, a retry later
+is synchronous with 0.5 s). A `head()` while that lookup still runs does not
+wait: it says `unknown` for that document, caches nothing and counts no try, so
+the next document after the callback carries the commit. `prewarm()` does
+nothing when the answer is known, a lookup runs already, or there is no
+`plugin_root`.
 
 ## Sealing
 
