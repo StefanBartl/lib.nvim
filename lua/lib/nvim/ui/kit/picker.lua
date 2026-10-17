@@ -523,6 +523,12 @@ function M.open(opts)
     record = false, -- throwaway per-window hook: not recorded (see lib.nvim.ui.kit.surface)
     desc = "lib.nvim.ui.kit.picker: query changed",
   })
+  -- The autocmds are buffer-local and die with the prompt buffer, but the group itself
+  -- would stay (one empty group per opened picker, window ids are never reused). Dropped
+  -- on the prompt's own close, which runs on every close path (see `resize_group`).
+  prompt:on_close(function()
+    pcall(api.nvim_del_augroup_by_id, prompt_group)
+  end)
 
   -- Typing goes into the query after a detour too. A caller key that opens a window to read
   -- (a viewer with the item's details) leaves the prompt in Insert mode, and that window ends
