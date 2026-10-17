@@ -634,17 +634,17 @@ end
 ---route — one box per item, meant to be worked through **by hand** in a real
 ---session: trigger each one yourself, tick it if it does what its
 ---description says, leave a note if it does not. Same
----checkbox-and-manual-verification shape
----`docs/ROADMAP/personal/All/FINISH/PLUGIN_ROADMAPS_TESTPLAN.md` already
----uses in the calling config, not a new convention.
+---checkbox-and-manual-verification shape the calling config's plugin
+---roadmap test plan (`PLUGIN_ROADMAPS_TESTPLAN.md`) already uses, not a new
+---convention. Where the output file lives is the caller's business.
 ---
 ---**Deliberately never invokes anything itself.** The obvious next step —
 ---auto-run everything that "looks safe" — was considered and rejected: this
 ---config's own command surface includes things like `:Sandbox wsl
 ---shutdown-all`, `:Cases delete` and `:File delete`, and a keyword guess
----is not trustworthy enough to gate real execution of ~1300 entries. See
----`docs/ROADMAP/handovers/CDX-bindings-runtime-check.md`, Phase 4, for the
----full reasoning. `looks_risky` below sorts candidates into their own
+---is not trustworthy enough to gate real execution of ~1300 entries. The
+---full reasoning is in the config's `CDX-bindings-runtime-check.md` handover
+---(Phase 4), kept in the tasks vault, not in this repo. `looks_risky` below sorts candidates into their own
 ---section for extra caution — a hint for the human doing the walk, nothing
 ---more.
 ---@param root string|nil
