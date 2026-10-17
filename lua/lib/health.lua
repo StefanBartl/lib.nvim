@@ -118,6 +118,18 @@ function M.check_roots()
   end
 end
 
+---Deprecated Neovim calls still in the user's config (`lib.nvim.dev.deprecations`): the
+---on-demand counterpart of its `watch()` save hook, which only sees the file just saved.
+function M.check_deprecations()
+  local ok_dep, dep = pcall(require, "lib.nvim.dev.deprecations")
+  if not ok_dep then
+    h_start("lib.nvim: deprecated API calls")
+    h_error("lib.nvim.dev.deprecations failed to load: " .. tostring(dep))
+    return
+  end
+  dep.health({ vim.fn.stdpath("config") })
+end
+
 ---Runs all lib.nvim health checks and reports via vim.health.
 function M.check()
   -- Neovim version --------------------------------------------------------
@@ -214,6 +226,8 @@ function M.check()
       end
     end
   end
+
+  M.check_deprecations()
 end
 
 return M

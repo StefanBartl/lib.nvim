@@ -2,7 +2,7 @@
 
 Tooling for whoever is developing *across* the plugin ecosystem lib.nvim sits
 under, not for a single plugin's own runtime. Occupants: `duplicates.lua`,
-`reload.lua`, `notify_scan.lua`.
+`reload.lua`, `notify_scan.lua`, `deprecations/`.
 
 ## `reload.lua` — reload a config module on save
 
@@ -73,3 +73,49 @@ scan.lines("B:/repos")     -- Markdown: summary table + findings per repo
 your own config). A line scanner, not a parser: it skips `TESTS/`, `.deps/`,
 `lib.nvim` and `ui.nvim`, and counts `lib.nvim.notify` *creation* sites, not
 each `notifier.info(...)` call.
+
+## `deprecations/` — deprecated Neovim calls, on save and in `:checkhealth`
+
+```lua
+require("lib.nvim.dev.deprecations").watch()   -- in your own config
+```
+
+`watch()` registers one `BufWritePost` autocmd (pattern `*.lua`): after a save
+it scans the buffer and, only if it still holds deprecated calls, warns once
+with the locations — `12:5 vim.loop -> vim.uv (deprecated since 0.10)`. A
+clean save is silent. `opts.on_findings(findings, buf)` replaces the warning
+(quickfix, diagnostics, ...); `unwatch()` removes it. Nothing runs at startup
+beyond creating that autocmd; the rule table loads on the first scan.
+
+`:checkhealth lib` has a **deprecated API calls** section scanning
+`stdpath("config")`. A plugin can report on its own tree from its
+`health.lua`:
+
+```lua
+require("lib.nvim.dev.deprecations").health({ plugin_root }, { title = "myplugin: deprecated calls" })
+```
+
+The rest of the surface: `scan_lines(lines)`, `scan_buffer(buf)`,
+`scan_file(path)`, `scan_roots(roots)` (skips dot-directories such as `.git/`
+or `.claude/worktrees/`, `node_modules/` and `---@meta` annotation files,
+never follows a symlink, stops at `max_files`), `format(f)`,
+`active_rules()`. `opts.rules` replaces the default table
+([`rules.lua`](deprecations/rules.lua): `vim.loop`, `nvim_buf_set_option` and
+the other option getters/setters, `vim.highlight`, `vim.tbl_flatten`,
+`vim.lsp.get_active_clients`, `termopen`, `nvim_buf_add_highlight`,
+`vim.diagnostic.goto_next`, ...), `opts.extra_rules` adds to it. A rule only
+applies on a Neovim at least as new as its `since`, because on an older one
+the replacement may not exist.
+
+A line scanner, not a parser: comments and string contents are blanked
+before matching, with open long strings / block comments carried across
+lines, so a name inside a string or comment is not reported. A call built at
+runtime is not seen. `---@diagnostic disable-next-line: deprecated` (or
+`disable-line: deprecated`) silences a line — the marker LuaLS honours, so a
+deliberate fallback for older Neovim is waived once for both.
+
+**Why here and not in migrate.nvim or a mini plugin:** migrate.nvim rewrites
+calls and deliberately has no watcher; the watcher is a dependency-free
+scanner plus a few lines of autocmd and health wiring, and every config and
+plugin already has lib.nvim on the runtime path — a separate plugin would add
+an install step for the same code.

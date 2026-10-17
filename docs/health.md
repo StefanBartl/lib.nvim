@@ -12,6 +12,11 @@ the filesystem root, or that points at a missing directory is a warning with the
 `$NVIM_CONFIG_DIR` in the environment disagrees with `stdpath('config')` (usually inherited from a parent Neovim with
 another `NVIM_APPNAME`).
 
+The **deprecated API calls** section (`lib.nvim.dev.deprecations`) scans every `*.lua` under `stdpath('config')` (not in dot-directories or `---@meta` files) and
+warns per deprecated Neovim call still in it (`vim.loop`, `nvim_buf_set_option`, `vim.highlight`, ...) with file, line,
+column and the replacement. A line under `---@diagnostic disable-next-line: deprecated` is not reported. The same
+check on save: `require("lib.nvim.dev.deprecations").watch()`, see the [module README](../lua/lib/nvim/dev/README.md).
+
 ## `ℹ️ INFO` highlighting for consumers
 
 `after/syntax/checkhealth.vim` highlights the hand-written `ℹ️ INFO` prefix
