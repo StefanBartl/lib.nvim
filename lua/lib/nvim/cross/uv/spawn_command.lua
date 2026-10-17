@@ -16,7 +16,7 @@
 --- instead.
 ---
 
-local uv = vim.loop
+local uv = vim.uv or vim.loop
 
 ---@param cmd string Command to execute (shell syntax allowed)
 ---@param opts table Optional configuration:

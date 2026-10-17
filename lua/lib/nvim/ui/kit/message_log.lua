@@ -232,7 +232,13 @@ function Handle:_redraw(anchor)
   if vim.api.nvim_buf_is_valid(self.surf.bufnr) then
     vim.api.nvim_buf_clear_namespace(self.surf.bufnr, self._hl_ns, 0, -1)
     for lnum, hl in pairs(highlights) do
-      pcall(vim.api.nvim_buf_add_highlight, self.surf.bufnr, self._hl_ns, hl, lnum - 1, 0, -1)
+      -- Whole-line highlight as an extmark (nvim_buf_add_highlight is
+      -- deprecated since 0.11); end_col = the line's byte length mirrors
+      -- its col_end = -1.
+      pcall(vim.api.nvim_buf_set_extmark, self.surf.bufnr, self._hl_ns, lnum - 1, 0, {
+        end_col = #(lines[lnum] or ""),
+        hl_group = hl,
+      })
     end
     pcall(vim.api.nvim_buf_clear_namespace, self.surf.bufnr, MARK_NS, 0, -1)
     for lnum, text in pairs(marks) do
