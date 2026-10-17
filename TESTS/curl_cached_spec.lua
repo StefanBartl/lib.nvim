@@ -658,6 +658,53 @@ return function(H)
       "prune failure: reported as a warning"
     )
 
+    -- a hit renews the use time of the file it OPENED: if the cache file is replaced meanwhile (another
+    -- Neovim re-downloading it), the fresh download keeps its own mtime instead of the stale one
+    do
+      local d8 = new_dir()
+      local url8 = ("http://127.0.0.1:%d/race.txt"):format(port)
+      local p8 = curl.cache_path(url8, { cache_dir = d8 })
+      vim.fn.writefile({ "old" }, p8, "b")
+      local stale = os.time() - 4000
+      uv.fs_utime(p8, stale, stale)
+      local armed, replaced = true, false
+      local function swap_in_a_fresh_file()
+        if armed then
+          armed = false
+          replaced = true
+          uv.fs_rename(p8, p8 .. ".old")
+          vim.fn.writefile({ "new download" }, p8, "b") -- mtime: now
+        end
+      end
+      local real_open, real_stat = uv.fs_open, uv.fs_stat
+      local stats_of_p8 = 0
+      H.with_patched(uv, "fs_open", function(path, ...)
+        local fd, err = real_open(path, ...)
+        if path == p8 then
+          swap_in_a_fresh_file()
+        end
+        return fd, err
+      end, function()
+        H.with_patched(uv, "fs_stat", function(path, ...)
+          local race_st, race_err = real_stat(path, ...)
+          if path == p8 then
+            stats_of_p8 = stats_of_p8 + 1
+            if stats_of_p8 == 2 then -- cache_fresh() was the first; a path-based touch is the second
+              swap_in_a_fresh_file()
+            end
+          end
+          return race_st, race_err
+        end, function()
+          local race_ok, _, race_info = curl.download_cached_blocking(url8, { cache_dir = d8 })
+          ok(race_ok and race_info.cached, "touch race: served from the cache")
+        end)
+      end)
+      ok(replaced, "touch race: setup, the file was replaced during the hit")
+      local fresh_st = uv.fs_stat(p8)
+      ok(os.time() - fresh_st.mtime.sec <= 5, "touch race: the fresh download keeps its own mtime")
+      vim.fn.delete(d8, "rf")
+    end
+
     for _, d in ipairs({ d1, d2, d3, d4, d5, d6, d7 }) do
       vim.fn.delete(d, "rf")
     end

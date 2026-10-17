@@ -754,11 +754,25 @@ end
 --- would keep a file fresh forever.
 ---@param path string
 local function touch_hit(path)
-  local st = vim.uv.fs_stat(path)
+  local uv = vim.uv
+  local sec, usec = uv.gettimeofday()
+  local now = sec and (sec + (usec or 0) / 1e6) or os.time()
+  -- stat and set the times on ONE open file: if another Neovim replaces the cache file in between, only the
+  -- old (now unlinked) file is touched, never the fresh download. Opened "r+" because Windows refuses
+  -- `futime` on a read-only handle.
+  local fd = uv.fs_open(path, "r+", 438)
+  if fd then
+    local st = uv.fs_fstat(fd)
+    if st then
+      pcall(uv.fs_futime, fd, now, st.mtime.sec + (st.mtime.nsec or 0) / 1e9)
+    end
+    uv.fs_close(fd)
+    return
+  end
+  -- not writable (read-only file): by path, as before; the replace race stays possible for such a file
+  local st = uv.fs_stat(path)
   if st then
-    local sec, usec = vim.uv.gettimeofday()
-    local now = sec and (sec + (usec or 0) / 1e6) or os.time()
-    pcall(vim.uv.fs_utime, path, now, st.mtime.sec + (st.mtime.nsec or 0) / 1e9)
+    pcall(uv.fs_utime, path, now, st.mtime.sec + (st.mtime.nsec or 0) / 1e9)
   end
 end
 
