@@ -76,12 +76,19 @@ return function(H)
   end)
   eq({ a, b, c }, { "one", "two", { three = true } })
   ok(not exists(lock), "and is gone afterwards")
-  eq(
+  eq({
     with_lock(target, function()
       return nil, "an answer of its own"
     end),
-    nil,
-    "(nil, err) of the function is handed on"
+  }, { nil, "an answer of its own" }, "(nil, err) of the function is handed on, the error too")
+  eq(
+    {
+      with_lock(target, function()
+        return nil, "with info", { code = "own" }
+      end),
+    },
+    { nil, "with info", { code = "own" } },
+    "(nil, err, info) of the function: the info of the function, not one of the lock"
   )
   ok(not exists(lock))
 
@@ -449,6 +456,65 @@ return function(H)
   else
     H.skipped("fs_with_lock: link to a file as the lock", "this host cannot create symbolic links")
   end
+
+  -- ... and so is a junction (Windows' folder link that needs no rights; elsewhere the flag makes a folder symlink)
+  local junction_target = dir .. "/junction-target"
+  vim.fn.mkdir(junction_target, "p")
+  if uv.fs_symlink(junction_target, lock, { junction = true }) then
+    local ran_j = false
+    t0 = uv.hrtime()
+    local jn, jmsg, jinfo = with_lock(target, function()
+      ran_j = true
+      return "never"
+    end, { wait_ms = 1500 })
+    local j_st = uv.fs_lstat(lock)
+    eq(jn, nil)
+    eq(jinfo and jinfo.code, "lock_stuck", "a junction is no lock that can be taken")
+    eq(jinfo and jinfo.retryable, false)
+    has(jmsg, "remove it by hand")
+    eq(ran_j, false, "the function did not run")
+    ok(seconds_since(t0) < 1, "it is told at once, not after the wait")
+    eq(j_st and j_st.type, "link", "and the junction is not removed")
+    eq(listing(junction_target), {}, "nothing is made inside the folder it points to")
+    uv.fs_unlink(lock)
+  else
+    H.skipped("fs_with_lock: junction as the lock", "this host cannot create a junction")
+  end
+
+  -- ── a folder that does not let anybody create a file: io at once, not a busy lock ──
+  -- (POSIX modes only: on Windows a folder's read-only flag does not stop a create, that needs an ACL. A root user
+  -- writes anyway: then there is nothing to see.)
+  local ro = dir .. "/read-only"
+  vim.fn.mkdir(ro, "p")
+  local ro_target = ro .. "/doc.md"
+  if vim.fn.has("win32") == 1 then
+    H.skipped("fs_with_lock: read-only folder", "a folder mode does not deny a create on Windows")
+  elseif not uv.fs_chmod(ro, tonumber("555", 8)) then
+    H.skipped("fs_with_lock: read-only folder", "chmod failed on this host")
+  else
+    local probe = io.open(ro .. "/probe", "wb")
+    if probe then
+      probe:close()
+      os.remove(ro .. "/probe")
+      H.skipped("fs_with_lock: read-only folder", "this user writes into a 0555 folder (root)")
+    else
+      local ro_ran = false
+      t0 = uv.hrtime()
+      local rn, rmsg, rinfo = with_lock(ro_target, function()
+        ro_ran = true
+        return "never"
+      end, { wait_ms = 5000 })
+      eq(rn, nil, "a read-only folder")
+      eq(rinfo and rinfo.code, "io", "is an io failure")
+      eq(rinfo and rinfo.retryable, false, "and asking again will not help")
+      has(rmsg, "cannot lock")
+      has(rmsg, "EACCES")
+      eq(ro_ran, false, "the function did not run")
+      ok(seconds_since(t0) < 1, "no waiting for a refusal that will not get better")
+    end
+    uv.fs_chmod(ro, tonumber("755", 8))
+  end
+  eq(listing(ro), {}, "and nothing is left in the folder")
 
   -- ── a path that names no file is an io failure: no lock, no folder, no hidden leftovers ──
   local before = listing(dir)

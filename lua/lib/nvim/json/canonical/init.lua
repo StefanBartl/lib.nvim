@@ -99,17 +99,22 @@ local MAX_DEPTH = 64
 ---Whole numbers at or above this cannot be told apart from their neighbours in a double.
 local MAX_SAFE = 2 ^ 53
 
+---The path of the value being written (`$.a.b[1]`), built only when an error names it.
+---@alias Lib.Json.CanonicalWhere fun(depth: integer): string
+
 ---@param n number
+---@param where Lib.Json.CanonicalWhere
+---@param depth integer
 ---@return string
-local function number(n, path)
+local function number(n, where, depth)
   if n ~= n or n == math.huge or n == -math.huge then
-    error(("json: %s is %s; a contract has no NaN or inf"):format(path, tostring(n)), 0)
+    error(("json: %s is %s; a contract has no NaN or inf"):format(where(depth), tostring(n)), 0)
   end
   if n == math.floor(n) then
     if math.abs(n) >= MAX_SAFE then
       error(
         ("json: %s is %s, a whole number of 2^53 or more (digits would be lost)"):format(
-          path,
+          where(depth),
           ("%.0f"):format(n)
         ),
         0
@@ -138,56 +143,76 @@ local ESCAPES = {
   ["\127"] = "\\u007f",
 }
 
----Valid UTF-8 or the same text with every bad byte replaced by U+FFFD.
+local FFFD = "\239\191\189"
+
+---The length of the valid UTF-8 sequence that starts at byte `i` of `s` (a byte of 0x80 or more), or 0 when the byte
+---starts none: a bad lead byte, a sequence cut off, an overlong form, a surrogate or a value above U+10FFFF.
+---@param s string
+---@param i integer
+---@param n integer  # `#s`
+---@return integer
+local function sequence(s, i, n)
+  local b = byte(s, i)
+  local len = 0
+  if b >= 0xC2 and b <= 0xDF then
+    len = 2
+  elseif b >= 0xE0 and b <= 0xEF then
+    len = 3
+  elseif b >= 0xF0 and b <= 0xF4 then
+    len = 4
+  end
+  if len == 0 or i + len - 1 > n then
+    return 0
+  end
+  for j = 1, len - 1 do
+    local c = byte(s, i + j)
+    if c < 0x80 or c > 0xBF then
+      return 0
+    end
+  end
+  local c1 = byte(s, i + 1)
+  -- overlong forms, surrogates and everything above U+10FFFF
+  if
+    (b == 0xE0 and c1 < 0xA0)
+    or (b == 0xED and c1 > 0x9F)
+    or (b == 0xF0 and c1 < 0x90)
+    or (b == 0xF4 and c1 > 0x8F)
+  then
+    return 0
+  end
+  return len
+end
+
+---Valid UTF-8 or the same text with every bad byte replaced by U+FFFD. Only the bytes of 0x80 or more are looked at
+---one by one (ASCII runs are skipped with one `find`), and a text without a bad byte is handed back as it is: the
+---valid stretches between two bad bytes are copied whole, never byte by byte.
 ---@param s string
 ---@return string
 local function scrub(s)
-  if not s:find("[\128-\255]") then
+  local i = s:find("[\128-\255]")
+  if not i then
     return s
   end
-  local out, i, n = {}, 1, #s
-  while i <= n do
-    local b = s:byte(i)
-    local len = 0
-    if b < 0x80 then
-      len = 1
-    elseif b >= 0xC2 and b <= 0xDF then
-      len = 2
-    elseif b >= 0xE0 and b <= 0xEF then
-      len = 3
-    elseif b >= 0xF0 and b <= 0xF4 then
-      len = 4
-    end
-    local ok = len > 0 and i + len - 1 <= n
-    if ok and len > 1 then
-      for j = 1, len - 1 do
-        local c = s:byte(i + j)
-        if c < 0x80 or c > 0xBF then
-          ok = false
-          break
-        end
-      end
-      if ok then
-        local c1 = s:byte(i + 1)
-        -- overlong forms, surrogates and everything above U+10FFFF
-        if
-          (b == 0xE0 and c1 < 0xA0)
-          or (b == 0xED and c1 > 0x9F)
-          or (b == 0xF0 and c1 < 0x90)
-          or (b == 0xF4 and c1 > 0x8F)
-        then
-          ok = false
-        end
-      end
-    end
-    if ok then
-      out[#out + 1] = s:sub(i, i + len - 1)
+  local n = #s
+  local out, m, from = nil, 0, 1
+  while i do
+    local len = sequence(s, i, n)
+    if len > 0 then
       i = i + len
     else
-      out[#out + 1] = "\239\191\189"
+      out = out or {}
+      out[m + 1] = s:sub(from, i - 1)
+      out[m + 2] = FFFD
+      m = m + 2
       i = i + 1
+      from = i
     end
+    i = s:find("[\128-\255]", i)
   end
+  if not out then
+    return s
+  end
+  out[m + 1] = s:sub(from)
   return table.concat(out)
 end
 
@@ -204,27 +229,61 @@ local function string_(s)
     return '"' .. s .. '"'
   end
   s = scrub(s)
-  s = s:gsub('[%c"\\<\127]', function(c)
-    return ESCAPES[c] or ("\\u%04x"):format(c:byte())
-  end)
-  s = s:gsub("\226\128[\168\169]", function(c)
-    return c:byte(3) == 168 and "\\u2028" or "\\u2029"
-  end)
+  -- each substitution only where it has something to do: a long non-ASCII text (a task body) mostly has none
+  if s:find('[%c"\\<\127]') then
+    s = s:gsub('[%c"\\<\127]', function(c)
+      return ESCAPES[c] or ("\\u%04x"):format(c:byte())
+    end)
+  end
+  if s:find("\226\128[\168\169]") then
+    s = s:gsub("\226\128[\168\169]", function(c)
+      return c:byte(3) == 168 and "\\u2028" or "\\u2029"
+    end)
+  end
   -- the 8-bit C1 controls (CSI is U+009B) are two bytes in UTF-8; a terminal may act on them
-  s = s:gsub("\194[\128-\159]", function(c)
-    return ("\\u%04x"):format(c:byte(2))
-  end)
+  if s:find("\194[\128-\159]") then
+    s = s:gsub("\194[\128-\159]", function(c)
+      return ("\\u%04x"):format(c:byte(2))
+    end)
+  end
   return '"' .. s .. '"'
 end
 
----Object, list or error: what a table is, and its keys in the order they are written.
+---Most texts of escaped object keys that are remembered (`key_text`). The keys of a document are few and repeat in
+---every entry; a document with many distinct keys only fills the cache, which then starts over.
+local KEY_CACHE_MAX = 1024
+
+---Escaped object key followed by its `:`, per key. Strings are values in Lua: a weak table would never drop them,
+---hence the cap instead.
+---@type table<string, string>
+local key_text, key_count = {}, 0
+
+---@param k string
+---@return string  # `"k":`, escaped as any string
+local function key_(k)
+  local text = key_text[k]
+  if not text then
+    text = string_(k) .. ":"
+    if key_count >= KEY_CACHE_MAX then
+      key_text, key_count = {}, 0
+    end
+    key_text[k] = text
+    key_count = key_count + 1
+  end
+  return text
+end
+
+---Object, list or error: what a table is, and the keys of an object in the order they are written (one pass over the
+---table; a list answers its length instead of a list of its indices).
 ---@param t table
----@param path string
+---@param where Lib.Json.CanonicalWhere
+---@param depth integer
 ---@return "object"|"array"
----@return (string|integer)[] keys
-local function shape(t, path)
+---@return string[]|integer keys  # the sorted keys of an object, the length of a list
+local function shape(t, where, depth)
   local mt = getmetatable(t)
   local count, max, strings = 0, 0, 0
+  local keys = {}
   for k in pairs(t) do
     count = count + 1
     if type(k) == "number" and k >= 1 and k == math.floor(k) then
@@ -233,17 +292,14 @@ local function shape(t, path)
       end
     elseif type(k) == "string" then
       strings = strings + 1
+      keys[strings] = k
     else
-      error(("json: %s has a key of type %s"):format(path, type(k)), 0)
+      error(("json: %s has a key of type %s"):format(where(depth), type(k)), 0)
     end
   end
   if mt == OBJECT or mt == EMPTY_DICT or (mt ~= ARRAY and strings > 0) then
     if count ~= strings then
-      error(("json: %s mixes list and object keys"):format(path), 0)
-    end
-    local keys = {}
-    for k in pairs(t) do
-      keys[#keys + 1] = k
+      error(("json: %s mixes list and object keys"):format(where(depth)), 0)
     end
     table.sort(keys, bytes_less)
     return "object", keys
@@ -251,16 +307,12 @@ local function shape(t, path)
   if strings > 0 or max ~= count then
     error(
       ("json: %s is not a list (holes or a string key); mark it with json.object if it is an object"):format(
-        path
+        where(depth)
       ),
       0
     )
   end
-  local keys = {}
-  for i = 1, count do
-    keys[i] = i
-  end
-  return "array", keys
+  return "array", count
 end
 
 ---@param value any
@@ -271,56 +323,109 @@ end
 ---@return string
 local function render(value, indent, path0, bypass, depth0)
   depth0 = depth0 or 0
-  local out = {}
-  local function put(v, depth, path)
+  local out, n = {}, 0
+  -- The key that leads to each level below the root (`steps[depth]`). The path of a value is only needed by an
+  -- error; building it as a string for every value cost a fifth of the whole encode.
+  local steps = {}
+  ---@type Lib.Json.CanonicalWhere
+  local function where(depth)
+    local parts = { path0 }
+    for d = depth0 + 1, depth do
+      local k = steps[d]
+      parts[#parts + 1] = type(k) == "number" and ("[" .. k .. "]") or ("." .. k)
+    end
+    return table.concat(parts)
+  end
+  local colon = indent and " " or nil
+  local function put(v, depth)
     local ty = type(v)
     if v == nil or v == vim.NIL then
-      out[#out + 1] = "null"
+      n = n + 1
+      out[n] = "null"
     elseif ty == "boolean" then
-      out[#out + 1] = v and "true" or "false"
+      n = n + 1
+      out[n] = v and "true" or "false"
     elseif ty == "number" then
-      out[#out + 1] = number(v, path)
+      n = n + 1
+      out[n] = number(v, where, depth)
     elseif ty == "string" then
-      out[#out + 1] = string_(v)
+      n = n + 1
+      out[n] = string_(v)
     elseif ty == "table" then
       if depth > MAX_DEPTH then
-        error(("json: %s is nested deeper than %d levels (a cycle?)"):format(path, MAX_DEPTH), 0)
+        error(
+          ("json: %s is nested deeper than %d levels (a cycle?)"):format(where(depth), MAX_DEPTH),
+          0
+        )
       end
       if not indent and memo[v] ~= nil and not (bypass and depth == depth0) then
-        local text = memo[v] or render(v, nil, path, true, depth)
+        local text = memo[v] or render(v, nil, where(depth), true, depth)
         memo[v] = text
-        out[#out + 1] = text
+        n = n + 1
+        out[n] = text
         return
       end
-      local kind, keys = shape(v, path)
-      local open, close = "[", "]"
+      local kind, keys = shape(v, where, depth)
+      local inner = depth + 1
+      local pad = indent and ("\n" .. string.rep(" ", indent * inner)) or nil
       if kind == "object" then
-        open, close = "{", "}"
-      end
-      if #keys == 0 then
-        out[#out + 1] = open .. close
-        return
-      end
-      out[#out + 1] = open
-      local pad = indent and ("\n" .. string.rep(" ", indent * (depth + 1))) or ""
-      for i, k in ipairs(keys) do
-        if i > 1 then
-          out[#out + 1] = ","
+        ---@cast keys string[]
+        if #keys == 0 then
+          n = n + 1
+          out[n] = "{}"
+          return
         end
-        out[#out + 1] = pad
-        if kind == "object" then
-          out[#out + 1] = string_(k --[[@as string]]) .. (indent and ": " or ":")
-          put(v[k], depth + 1, path .. "." .. k)
-        else
-          put(v[k], depth + 1, path .. "[" .. k .. "]")
+        n = n + 1
+        out[n] = "{"
+        for i = 1, #keys do
+          local k = keys[i]
+          if i > 1 then
+            n = n + 1
+            out[n] = ","
+          end
+          if pad then
+            n = n + 1
+            out[n] = pad
+          end
+          n = n + 1
+          out[n] = key_(k)
+          if colon then
+            n = n + 1
+            out[n] = colon
+          end
+          steps[inner] = k
+          put(v[k], inner)
+        end
+      else
+        ---@cast keys integer
+        if keys == 0 then
+          n = n + 1
+          out[n] = "[]"
+          return
+        end
+        n = n + 1
+        out[n] = "["
+        for i = 1, keys do
+          if i > 1 then
+            n = n + 1
+            out[n] = ","
+          end
+          if pad then
+            n = n + 1
+            out[n] = pad
+          end
+          steps[inner] = i
+          put(v[i], inner)
         end
       end
-      out[#out + 1] = (indent and ("\n" .. string.rep(" ", indent * depth)) or "") .. close
+      n = n + 1
+      out[n] = (indent and ("\n" .. string.rep(" ", indent * depth)) or "")
+        .. (kind == "object" and "}" or "]")
     else
-      error(("json: %s is a %s, which JSON cannot hold"):format(path, ty), 0)
+      error(("json: %s is a %s, which JSON cannot hold"):format(where(depth), ty), 0)
     end
   end
-  put(value, depth0, path0)
+  put(value, depth0)
   return table.concat(out)
 end
 

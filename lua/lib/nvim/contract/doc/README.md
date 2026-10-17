@@ -66,7 +66,11 @@ metadata (`0.12.2+v0.12.2`; a nightly looks like `0.13.0-dev+g<hash>`). Like all
 `engine.git` is the short commit of `plugin_root`. A definite answer is kept for
 the life of the instance; a lookup that did not finish in time is asked again,
 three times at most (the first look waits 2 s, a retry 0.5 s); git saying there
-is no commit stays `unknown`.
+is no commit stays `unknown`. The lookup is synchronous: the first `head()` (or
+`engine_info()`) of an instance waits for git, usually about 100 ms on a warm
+machine, up to 2 s on a loaded one. A command-line tool does not notice; an
+editor host that answers on the UI loop should call `engine_info()` once while
+it starts, not inside the first request.
 
 ## Sealing
 

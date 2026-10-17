@@ -4,8 +4,8 @@
 --- The exclusive open (`O_CREAT|O_EXCL`) is the atomic part, so two writers can never both believe they created the
 --- same file. A name that is taken by anything counts as present, a symlink included (a dangling one too): it is
 --- looked up with an `lstat` first, because on Windows `O_EXCL` follows a dangling link and would create the file
---- (or a folder) at the link TARGET, outside the folder. The parent directory is created first
---- (`lib.nvim.fs.mkdirp`). Bytes are written as given. A failed or short write removes the file again, so no
+--- (or a folder) at the link TARGET, outside the folder. A missing parent directory is created
+--- (`lib.nvim.fs.mkdirp`) when the open answers `ENOENT`, not before every call. Bytes are written as given. A failed or short write removes the file again, so no
 --- half-written file is left that the next caller would read as "exists".
 ---
 --- It never raises: a `path` or `content` that is not a string, and a `path` that names a folder (ends in a
@@ -53,19 +53,25 @@ local function create_exclusive(path, content)
     -- no file name: the parent would be the folder with the file's name, made by mkdirp and then answered "exists"
     return false, "open failed: the path names a folder, not a file: " .. path
   end
-  local parent = slashed:match("^(.*)/[^/]*$")
-  if parent and parent ~= "" then
-    local made, merr = mkdirp(parent)
-    if not made then
-      return false, tostring(merr)
-    end
-  end
   -- POSIX O_EXCL refuses a name that is a symlink, even a dangling one; Windows follows it and creates (or fails
   -- on) the link TARGET, outside the folder. Any existing name, link included, counts as present on every platform.
   if uv.fs_lstat(path) then
     return false, EXISTS
   end
   local fd, open_err = uv.fs_open(path, "wx", 420) -- 0644, less the umask
+  local parent = slashed:match("^(.*)/[^/]*$")
+  if not fd and parent and parent ~= "" and tostring(open_err):match("^ENOENT") then
+    -- The parent folder is missing: only now is it made. Walking the whole chain first costs about six times the
+    -- create itself, on every call, and `with_lock` retries a contended lock every 10 ms.
+    local made, merr = mkdirp(parent)
+    if not made then
+      return false, tostring(merr)
+    end
+    if uv.fs_lstat(path) then -- (made by somebody else meanwhile, a link included: see above)
+      return false, EXISTS
+    end
+    fd, open_err = uv.fs_open(path, "wx", 420)
+  end
   if not fd then
     if tostring(open_err):match("^EEXIST") then
       return false, EXISTS
