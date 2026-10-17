@@ -93,8 +93,50 @@ return function(H)
     end)
     eq(content, nil, "a path swapped for a link after the lstat is refused")
     ok(err and err:find("not a regular file", 1, true), "... and says why")
+
+    -- ... but only with follow_symlinks = false: the default follows links, so the same swap (after the stat)
+    -- is not noticed and the link target is read. The help says so; this pins what it describes.
+    local swap2 = dir .. "/swap2.txt"
+    local sh2 = assert(io.open(swap2, "wb"))
+    sh2:write("plain")
+    sh2:close()
+    local real_stat = uv.fs_stat
+    H.with_patched(uv, "fs_stat", function(p, ...)
+      local st = real_stat(p, ...)
+      if p == swap2 then
+        uv.fs_unlink(swap2)
+        uv.fs_symlink(file, swap2)
+      end
+      return st
+    end, function()
+      content = read_bounded(swap2, 100)
+    end)
+    eq(content, "a\r\nb\0c", "the default reads the target of a link swapped in after the stat")
   else
     ok(true, "symlinks cannot be created here")
+  end
+
+  -- the help entry must not promise the swap check for the default (it is made with follow_symlinks = false only)
+  do
+    local spec_dir = vim.fs.dirname(vim.fs.normalize(debug.getinfo(1, "S").source:sub(2)))
+    local lines = vim.fn.readfile(vim.fs.dirname(spec_dir) .. "/doc/lib.nvim-fs.txt")
+    local entry, inside = {}, false
+    for _, line in ipairs(lines) do
+      if line:find("*lib.nvim-fs-read_bounded*", 1, true) then
+        inside = true
+      elseif inside and line:find("^%-%-%-%-") then
+        break
+      elseif inside then
+        entry[#entry + 1] = line
+      end
+    end
+    local text = table.concat(entry, " "):gsub("%s+", " ")
+    ok(text:find("swapped for a link", 1, true), "the help entry talks about the swap: " .. text)
+    ok(
+      text:find("Only then must the opened file be the one the `lstat` saw", 1, true)
+        and text:find("the default (links followed) does not notice that swap", 1, true),
+      "the help entry limits the swap check to follow_symlinks = false: " .. text
+    )
   end
 
   -- more than one block (256 KiB), exactly at and one under the limit

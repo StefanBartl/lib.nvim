@@ -142,6 +142,51 @@ return function(H)
   else
     H.skipped("fs_create_exclusive: dangling folder link", "this host cannot create symbolic links")
   end
+
+  -- ── the name is taken while the missing parent is made: looked up again before the second open ──
+  -- (deterministic: right after mkdirp makes the parent, a rival plants a dangling link at the name, or a plain
+  -- file where links cannot be made. Windows' O_EXCL would follow the link and write at its target; the second
+  -- lstat is the only lock there, so the create must answer 'exists' without opening the name again.)
+  local raced_parent = dir .. "/race_parent"
+  local raced_name = raced_parent .. "/x.md"
+  local raced_target = outside .. "/target.md"
+  local real_mkdir, real_fs_open2 = uv.fs_mkdir, uv.fs_open
+  local planted_as, opens_after = nil, 0
+  local pok, perr
+  H.with_patched(uv, "fs_mkdir", function(p, ...)
+    local r1, r2 = real_mkdir(p, ...)
+    if r1 and not planted_as and p:gsub("\\", "/"):match("/race_parent$") then
+      if uv.fs_symlink(raced_target, raced_name) then
+        planted_as = "link"
+      else
+        local fd = assert(real_fs_open2(raced_name, "w", 420))
+        uv.fs_write(fd, "RIVAL", 0)
+        uv.fs_close(fd)
+        planted_as = "file"
+      end
+    end
+    return r1, r2
+  end, function()
+    H.with_patched(uv, "fs_open", function(p, ...)
+      if planted_as and p == raced_name then
+        opens_after = opens_after + 1
+      end
+      return real_fs_open2(p, ...)
+    end, function()
+      pok, perr = create(raced_name, "payload")
+    end)
+  end)
+  ok(planted_as ~= nil, "the rival came in while the parent was made")
+  eq(pok, false, "the name taken meanwhile (" .. tostring(planted_as) .. ")")
+  ok(create.is_exists(perr), "is present: " .. tostring(perr))
+  eq(opens_after, 0, "the name is not opened again once it is taken")
+  eq(uv.fs_stat(raced_target), nil, "nothing is written at the link target")
+  local rst = uv.fs_lstat(raced_name)
+  eq(rst and rst.type, planted_as, "the rival's entry is left as it was")
+  if planted_as == "file" then
+    eq(read(raced_name), "RIVAL", "the rival's bytes stay")
+  end
+  uv.fs_unlink(raced_name)
   eq(listing(outside), {}, "nothing was written outside")
 
   -- ── a path that ends in a slash names a folder: an error, never 'exists', and no folder is made ──
