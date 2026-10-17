@@ -101,11 +101,14 @@ The window is `winfixbuf` unless `wo.winfixbuf = false`: a surface lives and die
 with its one buffer, so `<C-o>`, `:bnext` or `:e` in it fail with E1513 instead of
 swapping the user's file in and wiping the component's buffer from under it.
 
-A surface that is entered (`enter`, the default) and not `modifiable` ends Insert
-mode when it opens from it: entering a window keeps the mode, so a read-only float
-opened by an Insert-mode mapping (a picker's caller key showing details) would
+A surface opened with an explicit `enter = true` that is not `modifiable` ends
+Insert mode when it opens from it: entering a window keeps the mode, so a read-only
+float opened by an Insert-mode mapping (a picker's caller key showing details) would
 otherwise type `q` (E21) instead of closing, and need `<Esc>` first. A `modifiable`
-surface, and one that is not entered, leave the mode alone.
+surface, one with `enter = false`, and one that leaves `enter` at its default leave
+the mode alone -- the default is what a component uses for the helper panes it
+passes through on the way to its own prompt (`kit.compare`), where a pending
+`:stopinsert` would beat the prompt's `:startinsert`.
 
 `kit.surface.mark_secret(bufnr)` / `kit.surface.is_secret(bufnr?)` set and read
 the buffer variable `vim.b.ui_kit_secret` (its name is `kit.surface.SECRET_VAR`): a

@@ -43,7 +43,8 @@ return function(H)
       local api = vim.api
 
       --- Open a picker whose caller keys open a viewer (`<C-v>`), a viewer after the
-      --- caller ended Insert mode itself (`<C-s>`) and a float that is typed into (`<C-e>`).
+      --- caller ended Insert mode itself (`<C-s>`), a float that is typed into (`<C-e>`) and
+      --- a compare (`<C-k>`), whose helper panes are entered on the way to its prompt.
       function _G.detour_open()
         for _, w in ipairs(api.nvim_list_wins()) do
           if api.nvim_win_is_valid(w) and api.nvim_win_get_config(w).relative ~= "" then
@@ -68,6 +69,14 @@ return function(H)
                 modifiable = true,
                 width = 20,
                 height = 1,
+              })
+            end,
+            ["<C-k>"] = function()
+              kit.compare({
+                items = { "a", "b" },
+                render = function(item, surface)
+                  surface:set_lines({ item })
+                end,
               })
             end,
           },
@@ -170,6 +179,19 @@ return function(H)
     s = state()
     eq(s.in_viewer, true, "the caller key focused the modifiable float")
     eq(s.mode, "i", "a modifiable float opened from Insert mode stays in Insert mode")
+
+    -- A compare enters its read-only helper panes on the way (the default `enter`) and
+    -- ends up in its prompt, in Insert mode: those panes must not end it.
+    open()
+    input("<C-k>")
+    s = state()
+    eq(s.in_prompt, false, "the compare took the focus")
+    eq(
+      lua("return vim.bo.filetype"),
+      "lib-kit-compare-prompt",
+      "the focus is in the compare's prompt"
+    )
+    eq(s.mode, "i", "a compare opened from Insert mode is in Insert mode")
   end)
 
   pcall(vim.fn.jobstop, chan)

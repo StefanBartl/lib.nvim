@@ -207,7 +207,11 @@ function M.open(opts)
   -- where `q` is typed (E21) instead of closing it and `<Esc>` only gets back to
   -- Normal mode. `:stopinsert` takes effect once the mapping returns. A float
   -- that is typed into keeps Insert mode, as does one that is not entered.
-  if opts.modifiable ~= true and api.nvim_get_current_win() == winid then
+  -- Only an explicit `enter = true`: a component that mounts several floats opens
+  -- its helper panes with the default (they are entered on the way, `make_scratch`
+  -- enters by default) and then focuses its prompt and starts Insert mode there --
+  -- which `:startinsert` cannot do once a `:stopinsert` is pending (kit.compare).
+  if opts.enter == true and opts.modifiable ~= true and api.nvim_get_current_win() == winid then
     local mode = api.nvim_get_mode().mode
     if mode:find("^[iR]") or mode:find("^ni") then
       vim.cmd("stopinsert")
