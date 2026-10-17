@@ -230,7 +230,10 @@ The words typed in the prompt filter the list (every word must occur, any case);
 A caller key may open another window from the prompt (a `kit.viewer` with the current item's
 details): that window opens in Normal mode, so `q`/`<Esc>` close it on the first press, and when
 the focus comes back to the prompt, Insert mode is back at the column it was left at -- the next
-letter goes into the query. A prompt left from Normal mode is given back in Normal mode.
+letter goes into the query. That holds for a window that is typed into and closes from Insert
+mode as well (a `kit.input`, a nested `kit.picker`): the prompt resumes once the closer has ended
+that window's Insert mode, ahead of any key typed after it. A prompt left from Normal mode is
+given back in Normal mode.
 
 `kit.picker({ prompt = "plain" })` falls back to a bare
 `kit.layout.template("picker")` whose prompt slot you wire yourself.

@@ -43,8 +43,9 @@ return function(H)
       local api = vim.api
 
       --- Open a picker whose caller keys open a viewer (`<C-v>`), a viewer after the
-      --- caller ended Insert mode itself (`<C-s>`), a float that is typed into (`<C-e>`) and
-      --- a compare (`<C-k>`), whose helper panes are entered on the way to its prompt.
+      --- caller ended Insert mode itself (`<C-s>`), a float that is typed into (`<C-e>`),
+      --- a kit.input (`<C-t>`), a nested picker (`<C-g>`) and a compare (`<C-k>`), whose
+      --- helper panes are entered on the way to its prompt.
       function _G.detour_open()
         for _, w in ipairs(api.nvim_list_wins()) do
           if api.nvim_win_is_valid(w) and api.nvim_win_get_config(w).relative ~= "" then
@@ -52,6 +53,7 @@ return function(H)
           end
         end
         _G.V = nil
+        _G.SUBMITTED = nil
         _G.P = kit.picker({
           items = { "alpha", "beta", "gamma" },
           on_submit = function() end,
@@ -70,6 +72,17 @@ return function(H)
                 width = 20,
                 height = 1,
               })
+            end,
+            ["<C-t>"] = function()
+              kit.input({
+                prompt = "name",
+                on_submit = function(line)
+                  _G.SUBMITTED = line
+                end,
+              })
+            end,
+            ["<C-g>"] = function()
+              kit.picker({ items = { "inner" }, on_submit = function() end })
             end,
             ["<C-k>"] = function()
               kit.compare({
@@ -179,6 +192,47 @@ return function(H)
     s = state()
     eq(s.in_viewer, true, "the caller key focused the modifiable float")
     eq(s.mode, "i", "a modifiable float opened from Insert mode stays in Insert mode")
+
+    -- A window that is typed into closes back into the prompt while its own Insert mode is
+    -- still on, and its closer ends that Insert mode right after (kit.input's `:stopinsert`):
+    -- the prompt still gets Insert mode back, at the column it had (ending Insert mode in the
+    -- prompt stepped its cursor one to the left). The submit and the next letter come in one
+    -- batch: the resume must run before the letter, not after it.
+    open()
+    input("ab<Left>")
+    input("<C-t>")
+    s = state()
+    eq(s.in_prompt, false, "the caller key focused the kit.input")
+    eq(s.mode, "i", "the kit.input is in Insert mode")
+    input("foo<CR>x")
+    s = state()
+    eq(lua("return _G.SUBMITTED"), "foo", "the kit.input submitted what was typed into it")
+    eq(s.in_prompt, true, "the kit.input closed back into the prompt")
+    eq(s.mode, "i", "back from a kit.input, the prompt is in Insert mode")
+    eq(s.query, "axb", "after a kit.input, typing resumes at the column Insert mode had")
+
+    -- The same at the end of the query, and with the kit.input cancelled.
+    open()
+    input("ab")
+    input("<C-t>")
+    input("foo<Esc>")
+    input("x")
+    s = state()
+    eq(lua("return _G.SUBMITTED"), vim.NIL, "<Esc> cancelled the kit.input")
+    eq(s.mode, "i", "back from a cancelled kit.input, the prompt is in Insert mode")
+    eq(s.query, "abx", "after a cancelled kit.input, typing appends")
+
+    -- A nested picker ends Insert mode on its way out without asking (its `finish_close`).
+    open()
+    input("ab")
+    input("<C-g>")
+    s = state()
+    eq(s.in_prompt, false, "the caller key focused the nested picker")
+    input("<Esc>x")
+    s = state()
+    eq(s.in_prompt, true, "the nested picker closed back into the prompt")
+    eq(s.mode, "i", "back from a nested picker, the prompt is in Insert mode")
+    eq(s.query, "abx", "after a nested picker, the next letter goes into the query")
 
     -- A compare enters its read-only helper panes on the way (the default `enter`) and
     -- ends up in its prompt, in Insert mode: those panes must not end it.
