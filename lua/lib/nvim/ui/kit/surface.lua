@@ -138,7 +138,8 @@ local M = {}
 --- `secret = true`, a `kit.sheet` with a secret field). Anything that records or shows the
 --- keys as they are typed -- `ui.screenkey`, a keycast overlay, a macro logger -- reads it
 --- and leaves that buffer's keys out. The name is part of the kit's contract (`lib.nvim`'s
---- frozen copy uses the same one, so a HUD from either side sees both).
+--- mirror copy -- kept in step by ui.nvim's `TESTS/kit_drift_spec.lua` -- uses the same one,
+--- so a HUD from either side sees both).
 ---@type string
 M.SECRET_VAR = "ui_kit_secret"
 
