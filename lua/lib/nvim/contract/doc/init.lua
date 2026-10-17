@@ -158,6 +158,9 @@ function M.new(cfg)
       ("not a field of the documents themselves ('%s' is one)"):format(cfg.scope_key)
     )
   end
+  if cfg.prewarm ~= nil and type(cfg.prewarm) ~= "boolean" then
+    refuse("prewarm", "a boolean")
+  end
   local max_bytes = cfg.max_bytes
   if
     max_bytes ~= nil
@@ -195,12 +198,48 @@ function M.new(cfg)
 
   local git_cache
   local git_tries = 0
+  local git_running = false -- a `prewarm` lookup has started and not called back yet
+
+  ---@return string[]
+  local function git_argv()
+    return { "git", "-C", plugin_root, "rev-parse", "--short", "HEAD" }
+  end
+
+  ---The wait of the next look: the first one gets the full 2 s, a retry 0.5 s.
+  ---@return integer
+  local function git_wait()
+    return git_tries == 0 and 2000 or 500
+  end
+
+  ---Take the outcome of one look (synchronous or the callback of `prewarm`) into the cache: a commit is kept, an
+  ---answer of git that is none (code 1.., no hash) is kept as "unknown"; no answer in time (the code 124 of a
+  ---timeout, the signal of a kill, an error of the start) counts one try and is asked again, three looks at most.
+  ---@param ok boolean the start did not raise
+  ---@param res? vim.SystemCompleted
+  ---@return string
+  local function git_settle(ok, res)
+    if ok and res and res.code == 0 then
+      local sha = vim.trim(res.stdout or "")
+      if sha:match("^%x+$") then
+        git_cache = sha
+        return git_cache
+      end
+    end
+    git_tries = git_tries + 1
+    local answered = ok and res and res.code ~= 124 and (res.signal or 0) == 0
+    if answered or git_tries >= 3 then
+      git_cache = "unknown"
+      return git_cache
+    end
+    return "unknown"
+  end
 
   ---Short commit of the plugin checkout; "unknown" when there is no git, no checkout or no `plugin_root`. A definite
   ---answer is kept for the life of the process. A lookup that did not finish in time (a loaded machine, a slow start
   ---of git) is not: it is asked again, three times at most, so a long-lived host does not stay "unknown" because of
   ---one slow moment. Only the first look gets the full wait; a retry is quick (a warm git answers in about 100 ms),
-  ---so a machine that stays loaded holds a request for 3 s in all, not 6.
+  ---so a machine that stays loaded holds a request for 3 s in all, not 6. While a `prewarm` lookup runs, the answer
+  ---is "unknown" at once: nothing waits, nothing is cached and no try is counted.
   ---@return string
   local function engine_git()
     if git_cache then
@@ -210,28 +249,37 @@ function M.new(cfg)
       git_cache = "unknown"
       return git_cache
     end
-    local wait_ms = git_tries == 0 and 2000 or 500
+    if git_running then
+      return "unknown"
+    end
+    local wait_ms = git_wait()
     local ok, res = pcall(function()
-      return vim
-        .system({ "git", "-C", plugin_root, "rev-parse", "--short", "HEAD" }, { text = true })
-        :wait(wait_ms)
+      return vim.system(git_argv(), { text = true }):wait(wait_ms)
     end)
-    if ok and res and res.code == 0 then
-      local sha = vim.trim(res.stdout or "")
-      if sha:match("^%x+$") then
-        git_cache = sha
-        return git_cache
-      end
+    return git_settle(ok, res)
+  end
+
+  ---Start the git lookup of `engine.git` in the background (`vim.system` with a callback) so that no later `head()`
+  ---or `engine_info()` waits for it: an editor host that answers on its UI loop calls it once at start (or passes
+  ---`prewarm = true` to `new`). The callback fills the same cache under the same rules (a timeout is one of the
+  ---three tries). Does nothing when the answer is known, a lookup runs already, or there is no `plugin_root`.
+  function d.prewarm()
+    if git_cache or git_running then
+      return
     end
-    -- git ran and said there is no commit (code 1..): that stays. No answer in time (the code 124 of `:wait`, the
-    -- signal of the kill, or an error of the start): try again on a later call.
-    git_tries = git_tries + 1
-    local answered = ok and res and res.code ~= 124 and (res.signal or 0) == 0
-    if answered or git_tries >= 3 then
+    if not plugin_root then
       git_cache = "unknown"
-      return git_cache
+      return
     end
-    return "unknown"
+    git_running = true
+    local function on_exit(res)
+      git_running = false
+      git_settle(true, res)
+    end
+    if not pcall(vim.system, git_argv(), { text = true, timeout = git_wait() }, on_exit) then
+      git_running = false
+      git_settle(false) -- an error of the start: one try, asked again on a later look
+    end
   end
 
   ---The time a document is stamped with (UTC, `YYYY-MM-DDTHH:MM:SSZ`). A seam: golden files and reproducible runs
@@ -417,6 +465,10 @@ function M.new(cfg)
       doc.details = json.object(err.details)
     end
     return doc
+  end
+
+  if cfg.prewarm then
+    d.prewarm()
   end
 
   return d --[[@as Lib.Contract.Doc]]

@@ -12,6 +12,7 @@
 ---@field plugin_root? string      The plugin's checkout, non-empty, for the commit named in `engine.git`. Without it the commit is `unknown` and git is never started.
 ---@field max_bytes? integer       Largest document, a whole number from 1 (default 8 MiB).
 ---@field too_large_hint? string   What the `payload_too_large` message advises (default `ask for a page or an area`).
+---@field prewarm? boolean         `true` calls `prewarm()` in `new`: the git lookup of `engine.git` starts in the background.
 
 ---@class Lib.Contract.Doc
 ---@field SCHEMA integer
@@ -23,6 +24,7 @@
 ---@field kind fun(name: string): string
 ---@field clock fun(): string                                     Seam: `generated_at`.
 ---@field engine_info fun(): { version: string, git: string, nvim: string }  Seam: `engine`.
+---@field prewarm fun()                                           Start the git lookup in the background; until it calls back `engine.git` is `unknown` (not cached, no wait).
 ---@field head fun(kind: string, root?: string): table                       `root` may be spelled with either slash and a trailing slash.
 ---@field relative fun(root: string, path: string): string|nil                `root` as for `head`; `""` is no root: nothing is inside it.
 ---@field safe_path fun(root: string, s: string): string

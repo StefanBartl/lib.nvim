@@ -366,6 +366,113 @@ return function(H)
     eq(git, "unknown")
     eq(started, 0, "no checkout named: no process")
   end
+
+  -- ── prewarm: the lookup in the background, the callback fired later by the spec ──
+  ---Run `fn(inst, async, waits)` with a stubbed `vim.system`: a call with a callback is recorded in `async`
+  ---(`{ argv, opts, cb }`, fired by the spec), a synchronous `:wait(ms)` answers from `sync_script` and records `ms`.
+  ---@param sync_script table[]
+  ---@param fn function
+  ---@param cfg? table
+  local function with_async(sync_script, fn, cfg)
+    local async, waits = {}, {}
+    H.with_patched(vim, "system", function(argv, opts, cb)
+      if cb then
+        async[#async + 1] = { argv = argv, opts = opts, cb = cb }
+        return {}
+      end
+      return {
+        wait = function(_, ms)
+          waits[#waits + 1] = ms
+          local step = sync_script[#waits]
+          return { code = step[1], signal = step[2], stdout = step[3] or "" }
+        end,
+      }
+    end, function()
+      local inst = doc.new(vim.tbl_extend("force", {
+        plugin = "tasks.nvim",
+        schema = 1,
+        plugin_root = "/opt/plugins/tasks.nvim",
+      }, cfg or {}))
+      fn(inst, async, waits)
+    end)
+  end
+
+  with_async({}, function(inst, async, waits)
+    inst.prewarm()
+    eq(#async, 1, "one background lookup")
+    eq(async[1].argv, { "git", "-C", "/opt/plugins/tasks.nvim", "rev-parse", "--short", "HEAD" })
+    eq(async[1].opts, { text = true, timeout = 2000 }, "the first look gets 2 s")
+    inst.prewarm()
+    eq(#async, 1, "a second prewarm while it runs starts nothing")
+    eq(inst.head("k", "/r").engine.git, "unknown", "while it runs: no wait")
+    eq(inst.engine_info().git, "unknown")
+    eq(#waits, 0, "nothing synchronous while the lookup runs")
+    async[1].cb({ code = 0, signal = 0, stdout = "abc1234\n" })
+    eq(inst.engine_info().git, "abc1234", "the callback fills the cache: unknown was not pinned")
+    inst.prewarm()
+    eq(#async, 1, "a known answer: prewarm does nothing")
+    eq(#waits, 0)
+  end)
+  -- `new{ prewarm = true }` starts it right away
+  with_async({}, function(inst, async)
+    eq(#async, 1, "started by new")
+    async[1].cb({ code = 0, signal = 0, stdout = "bcd2345\n" })
+    eq(inst.engine_info().git, "bcd2345")
+  end, { prewarm = true })
+  -- a timeout of the background lookup is one of the three tries; the retry is synchronous and quick
+  with_async({ { 124, 9 }, { 124, 9 }, { 0, 0, "never" } }, function(inst, async, waits)
+    inst.prewarm()
+    async[1].cb({ code = 124, signal = 9, stdout = "" })
+    eq(inst.engine_info().git, "unknown", "first retry")
+    eq(inst.engine_info().git, "unknown", "second retry: the third look")
+    eq(inst.engine_info().git, "unknown")
+    eq(waits, { 500, 500 }, "two retries of 0.5 s after the background look, then no more")
+  end)
+  -- a definite answer of git in the background stays (no retry)
+  with_async({}, function(inst, async, waits)
+    inst.prewarm()
+    async[1].cb({ code = 128, signal = 0, stdout = "" })
+    eq(inst.engine_info().git, "unknown")
+    inst.prewarm()
+    eq(#async, 1, "nothing asked again")
+    eq(#waits, 0)
+  end)
+  -- a prewarm after a timed-out look gets the retry wait
+  with_async({ { 124, 9 } }, function(inst, async)
+    eq(inst.engine_info().git, "unknown")
+    inst.prewarm()
+    eq(async[1].opts.timeout, 500)
+  end)
+  -- the start fails: one try, nothing hangs
+  do
+    local inst
+    H.with_patched(vim, "system", function()
+      error("spawn failed")
+    end, function()
+      inst = doc.new({ plugin = "tasks.nvim", schema = 1, plugin_root = "/opt/p" })
+      inst.prewarm()
+    end)
+    with_script({ { 0, 0, "eee5555\n" } }, function(_, calls)
+      eq(inst.engine_info().git, "eee5555", "a later look recovers")
+      eq(calls, { 500 }, "the failed start was one try: the retry wait")
+    end)
+  end
+  -- without plugin_root prewarm starts nothing
+  do
+    local started = 0
+    H.with_patched(vim, "system", function()
+      started = started + 1
+    end, function()
+      local no_root = doc.new({ plugin = "tasks.nvim", schema = 1, prewarm = true })
+      no_root.prewarm()
+      eq(no_root.engine_info().git, "unknown")
+    end)
+    eq(started, 0)
+  end
+  ok(
+    not pcall(doc.new, { plugin = "tasks.nvim", schema = 1, prewarm = "yes" }),
+    "prewarm must be a boolean"
+  )
   -- two instances do not share what they know
   with_script({ { 0, 0, "ddd4444\n" } }, function(git)
     eq(git(), "ddd4444")
