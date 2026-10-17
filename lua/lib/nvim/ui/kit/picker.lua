@@ -18,6 +18,24 @@ local autocmd = require("lib.nvim.bindings.autocmd")
 
 local M = {}
 
+--- The resumes of Insert mode that wait for the detour's own Insert mode to end: a prompt
+--- the focus came back to while that was still on feeds a `<Cmd>` key that runs its entry.
+---@type table<integer, fun()>
+local waiting = {}
+---@type integer
+local last_wait = 0
+
+---@internal
+--- Run the waiting resume `id` (the `<Cmd>` key a picker prompt fed, see `M.open`).
+---@param id integer
+function M._resume(id)
+  local fn = waiting[id]
+  waiting[id] = nil
+  if fn then
+    fn()
+  end
+end
+
 ---@internal
 --- Move the cursor in `win` by `delta` rows, wrapping around.
 ---@param win integer
@@ -509,10 +527,34 @@ function M.open(opts)
   -- Typing goes into the query after a detour too. A caller key that opens a window to read
   -- (a viewer with the item's details) leaves the prompt in Insert mode, and that window ends
   -- it (see lib.nvim.ui.kit.surface); coming back, the prompt would stand in Normal mode, the
-  -- next letter a command (`x` deletes instead of filtering). The column is the one Insert
-  -- mode had: `:stopinsert` steps the cursor one to the left.
+  -- next letter a command (`x` deletes instead of filtering).
+  --
+  -- A window that is typed into (a kit.input, a nested picker) is still in Insert mode
+  -- while it closes back into the prompt: `:startinsert` is ignored then, and the closer
+  -- ends that Insert mode right after (its own `:stopinsert`), here, in the prompt. So the
+  -- resume waits: a `<Cmd>` key fed in front of whatever is typed next runs it once the
+  -- closer is through. Ending Insert mode in the prompt steps its cursor one to the left,
+  -- which is why the column is put back.
   ---@type integer|nil
   local resume_col
+  ---@param col integer
+  local function resume(col)
+    local line = api.nvim_get_current_line()
+    if col >= #line then
+      vim.cmd("startinsert!")
+    else
+      pcall(api.nvim_win_set_cursor, prompt.winid, { 1, col })
+      vim.cmd("startinsert")
+    end
+  end
+  ---@type integer|nil  # this picker's entry in `waiting`, while a fed resume is on its way
+  local wait_id
+  prompt:on_close(function()
+    if wait_id then
+      waiting[wait_id] = nil
+      wait_id = nil
+    end
+  end)
   autocmd.create("WinLeave", function()
     local mode = api.nvim_get_mode().mode
     resume_col = nil
@@ -533,13 +575,39 @@ function M.open(opts)
     end
     local col = resume_col
     resume_col = nil
-    local line = api.nvim_get_current_line()
-    if col >= #line then
-      vim.cmd("startinsert!")
-    else
-      pcall(api.nvim_win_set_cursor, prompt.winid, { 1, col })
-      vim.cmd("startinsert")
+    if not api.nvim_get_mode().mode:find("^[iR]") then
+      resume(col)
+      return
     end
+    if wait_id then
+      waiting[wait_id] = nil
+    end
+    last_wait = last_wait + 1
+    local id = last_wait
+    wait_id = id
+    waiting[id] = function()
+      wait_id = nil
+      -- Still in Insert mode (the closer kept it on): typing simply goes on in the prompt.
+      -- Elsewhere (the closer opened the next window): that window's own way back counts.
+      if
+        api.nvim_win_is_valid(prompt.winid)
+        and api.nvim_get_current_win() == prompt.winid
+        and not api.nvim_get_mode().mode:find("^[iR]")
+      then
+        resume(col)
+      end
+    end
+    -- "i": in front of the keys that are already waiting, "n": no mapping of the user's applies.
+    api.nvim_feedkeys(
+      api.nvim_replace_termcodes(
+        ("<Cmd>lua require('lib.nvim.ui.kit.picker')._resume(%d)<CR>"):format(id),
+        true,
+        false,
+        true
+      ),
+      "ni",
+      false
+    )
   end, {
     group = prompt_group,
     buffer = prompt.bufnr,
