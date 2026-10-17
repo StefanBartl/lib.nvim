@@ -498,11 +498,53 @@ function M.open(opts)
   -- another's `on_change`/`on_submit` -- clear the first picker's own
   -- TextChanged autocmd out from under it on `autocmd.group(name, true)`'s
   -- clear-on-create, silently killing its debounce while it is still open.
+  local prompt_group = autocmd.group("lib_kit_picker_" .. prompt.winid, true)
   autocmd.create({ "TextChangedI", "TextChanged" }, schedule_change, {
-    group = autocmd.group("lib_kit_picker_" .. prompt.winid, true),
+    group = prompt_group,
     buffer = prompt.bufnr,
     record = false, -- throwaway per-window hook: not recorded (see lib.nvim.ui.kit.surface)
     desc = "lib.nvim.ui.kit.picker: query changed",
+  })
+
+  -- Typing goes into the query after a detour too. A caller key that opens a window to read
+  -- (a viewer with the item's details) leaves the prompt in Insert mode, and that window ends
+  -- it (see lib.nvim.ui.kit.surface); coming back, the prompt would stand in Normal mode, the
+  -- next letter a command (`x` deletes instead of filtering). The column is the one Insert
+  -- mode had: `:stopinsert` steps the cursor one to the left.
+  ---@type integer|nil
+  local resume_col
+  autocmd.create("WinLeave", function()
+    local mode = api.nvim_get_mode().mode
+    resume_col = nil
+    if mode:find("^i") or mode:find("^ni") then
+      resume_col = api.nvim_win_get_cursor(0)[2]
+    end
+  end, {
+    group = prompt_group,
+    buffer = prompt.bufnr,
+    record = false, -- throwaway per-window hook: not recorded (see lib.nvim.ui.kit.surface)
+    desc = "lib.nvim.ui.kit.picker: remember Insert mode when the prompt is left",
+  })
+  autocmd.create("WinEnter", function()
+    -- `nvim_open_win` fires WinEnter while the new float still shows the buffer it
+    -- was split from (the prompt's), before its own buffer is put in: not a return.
+    if resume_col == nil or api.nvim_get_current_win() ~= prompt.winid then
+      return
+    end
+    local col = resume_col
+    resume_col = nil
+    local line = api.nvim_get_current_line()
+    if col >= #line then
+      vim.cmd("startinsert!")
+    else
+      pcall(api.nvim_win_set_cursor, prompt.winid, { 1, col })
+      vim.cmd("startinsert")
+    end
+  end, {
+    group = prompt_group,
+    buffer = prompt.bufnr,
+    record = false, -- throwaway per-window hook: not recorded (see lib.nvim.ui.kit.surface)
+    desc = "lib.nvim.ui.kit.picker: back in the prompt, back in Insert mode",
   })
 
   -- Throwaway buffer-local keys: not recorded (see lib.nvim.ui.kit.chooser's `mo`).

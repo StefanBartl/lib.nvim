@@ -202,6 +202,18 @@ function M.open(opts)
 
   theme.apply(winid, resolved)
 
+  -- Entering a window keeps the mode: a read-only float opened by an Insert-mode
+  -- mapping (a picker's caller key showing details) would stand in Insert mode,
+  -- where `q` is typed (E21) instead of closing it and `<Esc>` only gets back to
+  -- Normal mode. `:stopinsert` takes effect once the mapping returns. A float
+  -- that is typed into keeps Insert mode, as does one that is not entered.
+  if opts.modifiable ~= true and api.nvim_get_current_win() == winid then
+    local mode = api.nvim_get_mode().mode
+    if mode:find("^[iR]") or mode:find("^ni") then
+      vim.cmd("stopinsert")
+    end
+  end
+
   local self = setmetatable({
     winid = winid,
     bufnr = bufnr,
