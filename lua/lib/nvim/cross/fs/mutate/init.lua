@@ -147,6 +147,12 @@ function M.mkdir_p(path, opts)
     -- — it goes through M.retry for a uniform signature, not for the retry.
     local ok, err = pcall(vim.fn.mkdir, path, "p")
     if not ok then
+      -- Two processes that make the same folder at once (the temp folder `nvim`, say) race: the one that loses
+      -- gets E739 "file already exists" although the folder is there and is what was asked for.
+      local stat = uv().fs_stat(path)
+      if stat and stat.type == "directory" then
+        return true, nil
+      end
       return false, tostring(err)
     end
     return true, nil

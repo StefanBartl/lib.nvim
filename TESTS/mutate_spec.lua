@@ -154,6 +154,31 @@ return function(H)
   local mkdirp_again_ok = mutate.mkdir_p(nested)
   eq(mkdirp_again_ok, true, "mkdir_p: re-creating an already-existing directory is still ok")
 
+  -- A race with another process that makes the same folder: Vim's mkdir loses and raises E739 although the folder
+  -- is there. That is the folder that was asked for, so it is ok; a real failure (a file in the way) still is not.
+  do
+    local raced = dir .. "/raced/inner"
+    local real_mkdir = vim.fn.mkdir
+    vim.fn.mkdir = function(path)
+      vim.fn.delete(path, "rf")
+      real_mkdir(path, "p") -- the other process wins
+      error("Vim:E739: Cannot create directory " .. path .. ": file already exists")
+    end
+    local raced_ok, raced_err = mutate.mkdir_p(raced)
+    vim.fn.mkdir = real_mkdir
+    eq(raced_ok, true, "mkdir_p: losing a race for the folder is ok")
+    eq(raced_err, nil, "mkdir_p: ... and says nothing")
+    eq(vim.fn.isdirectory(raced), 1, "mkdir_p: ... the folder is there")
+
+    local blocker = dir .. "/blocker"
+    local fh = assert(io.open(blocker, "wb"))
+    fh:write("a file")
+    fh:close()
+    local blocked_ok, blocked_err = mutate.mkdir_p(blocker .. "/below")
+    eq(blocked_ok, false, "mkdir_p: a file in the way is still an error")
+    ok(blocked_err ~= nil, "mkdir_p: ... with its reason")
+  end
+
   -- ------------------------------------------------------------------- rmdir
 
   local empty_dir = dir .. "/to-remove"
