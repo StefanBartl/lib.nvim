@@ -13,6 +13,7 @@ delegate the merge and the lookup here.
 ```
 lib.lua.config/
 ├── init.lua       -- copy, deep_merge, get
+├── schema/        -- check, check_record, infer (see schema/README.md)
 └── @types/        -- LuaLS types (Lib.Config)
 ```
 
