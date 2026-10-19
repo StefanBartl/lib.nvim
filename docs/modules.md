@@ -42,7 +42,7 @@ aggregator exists for convenience, not as the entry point.
 | [`lib.lua.lazy`](../lua/lib/lua/lazy/README.md) | lazy-`require` proxy                 |
 | [`lib.lua.class`](../lua/lib/lua/class/README.md) | prototype OOP: `new`/`extend`/`include` mixins |
 | [`lib.lua.context_manager`](../lua/lib/lua/context_manager/README.md) | try/finally: `with(acquire, release, body)` |
-| [`lib.lua.config`](../lua/lib/lua/config/README.md) | pure helpers for the "defaults + user overrides" config-store pattern: `copy`, `deep_merge` (no table shared with its arguments), `get(tbl, path)`; [`.schema`](../lua/lib/lua/config/schema/README.md): option specs (`check`, `check_record`, `infer`) |
+| [`lib.lua.config`](../lua/lib/lua/config/README.md) | pure helpers for the "defaults + user overrides" config-store pattern: `new` (config object: layers, schema inferred from DEFAULTS, `setup`/`get`/`snapshot`/`issues`), `copy`, `deep_merge` (no table shared with its arguments), `get(tbl, path)`; [`.schema`](../lua/lib/lua/config/schema/README.md): option specs (`check`, `check_record`, `infer`) |
 | [`lib.lua.diff`](../lua/lib/lua/diff/README.md) | line-array diff, two strategies: `lines` (cheap common-prefix/suffix splice region) and `myers` (full DP LCS-based edit script) |
 | [`lib.lua.dump`](../lua/lib/lua/dump/README.md) | recursive Lua value dumper (tables/metatables/functions/threads/userdata), depth-limited against cyclic structures — `vim.inspect` alternative/complement |
 | [`lib.lua.error`](../lua/lib/lua/error/README.md) | structured-error + safe-call-with-traceback convention: `new`, `is`, `safe_call` |

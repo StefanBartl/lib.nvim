@@ -178,6 +178,7 @@ local specs = {
   "config_spec.lua",
   "config_merge_spec.lua",
   "config_schema_spec.lua",
+  "config_new_spec.lua",
   "cross_executable_spec.lua",
   "cross_open_default_spec.lua",
   "which_key_spec.lua",

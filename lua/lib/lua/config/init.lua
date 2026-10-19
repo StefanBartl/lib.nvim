@@ -54,13 +54,37 @@ function M.copy(t, seen)
 end
 
 ---Write `override` into `out`, which is already a private copy (see
----`deep_merge` for the rules).
+---`deep_merge` for the rules). With `rules` (dotted path -> rule), a path can
+---be merged differently from the default way:
+---  * `"replace"`: the override value replaces whatever is there, even `{}` or
+---    a map, so "this exact set" can be said for a section that would merge;
+---  * `"entries"`: the override is a map of independent entries; each entry
+---    replaces the default one of the same key as a whole, `false` removes it,
+---    entries it does not name stay.
 ---@param out table
 ---@param override table
-local function merge_into(out, override)
+---@param rules? table<string, Lib.Config.MergeRule>
+---@param path? string  dotted path of `out`, only tracked when `rules` is given
+function M.merge_into(out, override, rules, path)
   for k, v in pairs(override) do
     local cur = out[k]
-    if type(v) ~= "table" or type(cur) ~= "table" then
+    local here = rules and (path and (path .. "." .. tostring(k)) or tostring(k)) or nil
+    local rule = rules and rules[here] or nil
+    if rule == "replace" then
+      out[k] = M.copy(v)
+    elseif rule == "entries" and type(v) == "table" then
+      if type(cur) ~= "table" then
+        cur = {}
+        out[k] = cur
+      end
+      for entry_key, entry in pairs(v) do
+        if entry == false then
+          cur[entry_key] = nil
+        else
+          cur[entry_key] = M.copy(entry)
+        end
+      end
+    elseif type(v) ~= "table" or type(cur) ~= "table" then
       out[k] = M.copy(v)
     elseif next(v) == nil then
       if next(cur) == nil or tables.is_array(cur) then
@@ -69,7 +93,7 @@ local function merge_into(out, override)
     elseif tables.is_array(v) or tables.is_array(cur) then
       out[k] = M.copy(v)
     else
-      merge_into(cur, v)
+      M.merge_into(cur, v, rules, here)
     end
   end
 end
@@ -84,13 +108,15 @@ end
 ---    another empty table) it replaces, i.e. "no entries", over a map it
 ---    changes nothing, because an empty map has no key to override;
 ---  * a map override merges key by key into a map default;
----  * anything else (scalar, `false`, mismatched shapes) replaces.
+---  * anything else (scalar, `false`, mismatched shapes) replaces;
+---  * `rules` changes this for single paths, see `merge_into`.
 ---@param base table
 ---@param override table
+---@param rules? table<string, Lib.Config.MergeRule>
 ---@return table
-function M.deep_merge(base, override)
+function M.deep_merge(base, override, rules)
   local out = M.copy(base)
-  merge_into(out, override)
+  M.merge_into(out, override, rules)
   return out
 end
 
@@ -112,6 +138,33 @@ function M.get(tbl, path)
     node = node[key]
   end
   return node
+end
+
+local checked = os.getenv("LIB_CONFIG_CHECKED") == "1"
+
+---Switch the checking mode of every config object made by `new`: while on,
+---`get()` fails when the stored table was written to since it was built (the
+---message names the path), instead of the write going unnoticed until a later
+---`setup()` starts from a changed state. Meant for the specs of a plugin; the
+---environment variable `LIB_CONFIG_CHECKED=1` turns it on from the outside.
+---(A read-only proxy would catch the write itself, but LuaJIT has no `__pairs`,
+---`__len` or `__ipairs`, so a proxy could not be iterated.)
+---@param on boolean
+function M.set_checked(on)
+  checked = on == true
+end
+
+---@return boolean
+function M.is_checked()
+  return checked
+end
+
+---A config object for a plugin: see `lib.lua.config.instance`.
+---@param defaults table
+---@param spec? Lib.Config.Spec
+---@return Lib.Config.Instance
+function M.new(defaults, spec)
+  return require("lib.lua.config.instance").new(defaults, spec)
 end
 
 ---@type Lib.Config
