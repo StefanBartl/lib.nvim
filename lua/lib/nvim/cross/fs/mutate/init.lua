@@ -153,6 +153,13 @@ function M.mkdir_p(path, opts)
       if stat and stat.type == "directory" then
         return true, nil
       end
+      -- The race can also be lost on a parent (`~/.cache/nvim` made by the other process while this one made the
+      -- chain below it): the folders that are there now are fine, so the rest is made once more.
+      local again = pcall(vim.fn.mkdir, path, "p")
+      stat = uv().fs_stat(path)
+      if again and stat and stat.type == "directory" then
+        return true, nil
+      end
       return false, tostring(err)
     end
     return true, nil

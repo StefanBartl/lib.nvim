@@ -170,6 +170,25 @@ return function(H)
     eq(raced_err, nil, "mkdir_p: ... and says nothing")
     eq(vim.fn.isdirectory(raced), 1, "mkdir_p: ... the folder is there")
 
+    -- The race is lost on a PARENT: the other process made `parent`, this call has not made the rest of the chain.
+    local parent = dir .. "/raced-parent"
+    local deep = parent .. "/a/b"
+    vim.fn.delete(parent, "rf")
+    local calls = 0
+    vim.fn.mkdir = function(path, flags)
+      calls = calls + 1
+      if calls == 1 then
+        real_mkdir(parent, "p")
+        error("Vim:E739: Cannot create directory " .. parent .. ": file already exists")
+      end
+      return real_mkdir(path, flags)
+    end
+    local parent_ok, parent_err = mutate.mkdir_p(deep)
+    vim.fn.mkdir = real_mkdir
+    eq(parent_ok, true, "mkdir_p: losing a race for a parent is ok, the rest of the chain is made")
+    eq(parent_err, nil, "mkdir_p: ... and says nothing")
+    eq(vim.fn.isdirectory(deep), 1, "mkdir_p: ... the whole chain is there")
+
     local blocker = dir .. "/blocker"
     local fh = assert(io.open(blocker, "wb"))
     fh:write("a file")
