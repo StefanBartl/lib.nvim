@@ -163,7 +163,7 @@ at the end of this file.
   (register/active/keys/reset_cache), `lib.strategies.telemetry_wrap`
   (setup/teardown): none had a module-surface class despite complete real
   functions — same mechanical pattern as the rest of this audit. Added and
-  wired all three, `lib.nvim@e77c981`.
+  wired all three, `lib.nvim@dd96b29`.
 - `lib.strategies.{eager,lazy,metatable}` (the three actual aggregator
   strategies): already had correct `---@type Lib`/`Lib.Strategy.Lazy` on
   their `return`. No fix needed.

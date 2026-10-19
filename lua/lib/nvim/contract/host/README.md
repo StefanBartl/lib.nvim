@@ -1,7 +1,7 @@
 # `lib.nvim.contract.host`
 
 The **persistent engine process**: a machine contract over a line protocol on
-stdin and stdout. Moved here from `tasks_nvim.host` (tasks.nvim@921a0c4).
+stdin and stdout. Moved here from `tasks_nvim.host` (tasks.nvim@6bc8d99).
 
 `nvim --headless -u NONE -l scripts/<plugin>-host.lua` does what a command line
 `call <method>` does, many times in one process: the modules are loaded once and

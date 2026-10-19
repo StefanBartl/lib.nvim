@@ -8,7 +8,7 @@
 ---
 --- Not for a fast-event context: `vim.fn.sha256` raises E5560 there (`vim.schedule` first).
 ---
---- Moved here from `tasks_nvim.fsio.etag` / `fsio.sha256` (tasks.nvim@921a0c4).
+--- Moved here from `tasks_nvim.fsio.etag` / `fsio.sha256` (tasks.nvim@6bc8d99).
 ---
 ---```lua
 --- local etag = require("lib.nvim.fs.etag")

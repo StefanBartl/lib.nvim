@@ -7,7 +7,7 @@ read-modify-writes the same file (an agent's command line and an editor plugin)
 goes through it, so two of them never start from the same text and drop each
 other's change. It serialises the *cooperating* writers only; an editor with the
 file open is not one of them. Moved here from `tasks_nvim.fsio.with_lock`
-(tasks.nvim@921a0c4).
+(tasks.nvim@6bc8d99).
 
 Not to be confused with [`lib.nvim.cross.fs.lock`](../../cross/fs/lock/README.md),
 which diagnoses who holds a file open on Windows.

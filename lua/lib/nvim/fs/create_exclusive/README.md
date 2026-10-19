@@ -6,7 +6,7 @@ writers can never both believe they created the same file; a `lstat` first makes
 a name that is taken by anything, a symlink included (dangling too), count as
 `exists` (Windows' `O_EXCL` follows a dangling link and would create the file at
 the link target, outside the folder). Moved here from
-`tasks_nvim.fsio.create_exclusive` (tasks.nvim@921a0c4); it is the claim of a
+`tasks_nvim.fsio.create_exclusive` (tasks.nvim@6bc8d99); it is the claim of a
 new file and the lock file of [`lib.nvim.fs.with_lock`](../with_lock/README.md).
 
 ```lua

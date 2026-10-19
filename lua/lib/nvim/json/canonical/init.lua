@@ -1,7 +1,7 @@
 ---@module 'lib.nvim.json.canonical'
 ---@brief The canonical JSON encoder of the contract documents: same value, same bytes, on every machine.
 ---@description
---- Moved here from `tasks_nvim.json` (tasks.nvim@921a0c4) so that every plugin that speaks a machine contract
+--- Moved here from `tasks_nvim.json` (tasks.nvim@6bc8d99) so that every plugin that speaks a machine contract
 --- (`tasks-export/1`, `rules-export/1`) writes the same bytes. Unlike `lib.nvim.json.encode` (a plain encoder) this one
 --- is meant for text that is hashed or compared.
 ---

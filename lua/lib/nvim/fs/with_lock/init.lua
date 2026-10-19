@@ -34,7 +34,7 @@
 --- (up to three values) is handed back; an error of `fn` is raised again after the lock is released. The codes are
 --- those of `lib.nvim.contract.errors`.
 ---
---- Moved here from `tasks_nvim.fsio.with_lock` (tasks.nvim@921a0c4). Not to be confused with
+--- Moved here from `tasks_nvim.fsio.with_lock` (tasks.nvim@6bc8d99). Not to be confused with
 --- `lib.nvim.cross.fs.lock`, which diagnoses who holds a file open on Windows.
 ---
 ---```lua

@@ -2,7 +2,7 @@
 ---@brief The write door of a machine contract: a list of operations, answered with one `<prefix>.result` document.
 ---@description
 --- `ops.make{ doc, ops, ... }` returns the write door of ONE plugin's contract (`tasks-ops/1`, `rules-ops/1`). Moved
---- here from the shell of `tasks_nvim.ops` (tasks.nvim@921a0c4); what an operation DOES (`set`, `new`, ...) stays with
+--- here from the shell of `tasks_nvim.ops` (tasks.nvim@6bc8d99); what an operation DOES (`set`, `new`, ...) stays with
 --- the plugin as a handler.
 ---
 --- A front end that is not the editor (an app, an agent) changes the source only through here. A request is

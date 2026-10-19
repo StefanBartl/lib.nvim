@@ -2,7 +2,7 @@
 ---@brief The documents of a machine contract: the head every one starts with, `seal`, `encode`, the error document.
 ---@description
 --- `doc.new{ plugin, schema, ... }` returns the document builder of ONE plugin's contract (`tasks-export/1`,
---- `rules-export/1`). Moved here from the head/seal/encode part of `tasks_nvim.contract` (tasks.nvim@921a0c4); what
+--- `rules-export/1`). Moved here from the head/seal/encode part of `tasks_nvim.contract` (tasks.nvim@6bc8d99); what
 --- a document CONTAINS (snapshot, list, a rule) stays with the plugin.
 ---
 --- Every document starts with the same head (`schema`, `plugin`, `kind`, `generated_at`, `<scope_key>.id`, `engine`).

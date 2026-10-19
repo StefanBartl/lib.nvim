@@ -2,7 +2,7 @@
 
 The **version tag of some bytes**: what a later write compares against
 (compare-and-set). Moved here from `tasks_nvim.fsio.etag` / `sha256`
-(tasks.nvim@921a0c4).
+(tasks.nvim@6bc8d99).
 
 ```lua
 local etag = require("lib.nvim.fs.etag")

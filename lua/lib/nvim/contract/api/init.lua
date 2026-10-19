@@ -2,7 +2,7 @@
 ---@brief The one door of a machine contract: `call(method, request)` answers with a JSON document, never with a throw.
 ---@description
 --- `api.make{ doc, methods, ... }` returns the dispatcher of ONE plugin's contract. Moved here from
---- `tasks_nvim.api` (tasks.nvim@921a0c4): the mechanics are generic, the table of methods is the plugin's.
+--- `tasks_nvim.api` (tasks.nvim@6bc8d99): the mechanics are generic, the table of methods is the plugin's.
 ---
 --- Everything outside the engine (an app, an agent, CI) asks through here and gets the canonical bytes of one
 --- document of the contract (`lib.nvim.contract.doc`): the answer, or an error document that says what went wrong in

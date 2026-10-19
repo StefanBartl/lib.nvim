@@ -2,7 +2,7 @@
 ---@brief The persistent engine process: a machine contract over a line protocol on stdin and stdout.
 ---@description
 --- `host.make{ api = api }` returns the host of ONE plugin's contract (`lib.nvim.contract.api`). Moved here from
---- `tasks_nvim.host` (tasks.nvim@921a0c4). `nvim --headless -u NONE -l scripts/<plugin>-host.lua` (the script is the
+--- `tasks_nvim.host` (tasks.nvim@6bc8d99). `nvim --headless -u NONE -l scripts/<plugin>-host.lua` (the script is the
 --- template `templates/contract_host.lua`) does what a command line `call <method>` does, many times in one process:
 --- the modules are loaded once and a scan of a source that did not change can be answered from the plugin's caches,
 --- so a question costs milliseconds and not a process start. Nothing else changes: the answers are the documents of

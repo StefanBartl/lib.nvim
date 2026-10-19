@@ -2,7 +2,7 @@
 
 The **write door of a machine contract**: a list of operations, answered with
 one `<prefix>.result` document. Moved here from the shell of `tasks_nvim.ops`
-(tasks.nvim@921a0c4); what an operation *does* (`set`, `new`, `retire`, ...)
+(tasks.nvim@6bc8d99); what an operation *does* (`set`, `new`, `retire`, ...)
 stays with the plugin as a handler.
 
 A front end that is not the editor (an app, an agent) changes the source only

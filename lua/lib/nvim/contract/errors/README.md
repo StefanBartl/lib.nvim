@@ -2,7 +2,7 @@
 
 The error vocabulary of a **machine contract** (`tasks-export/1`, `rules-export/1`,
 ...): a stable `code`, a `message`, and whether asking again can help
-(`retryable`). Moved here from `tasks_nvim.errors` (tasks.nvim@921a0c4); the one
+(`retryable`). Moved here from `tasks_nvim.errors` (tasks.nvim@6bc8d99); the one
 domain-specific part, the matching of a plugin's own messages, is now a hook.
 
 ## Codes

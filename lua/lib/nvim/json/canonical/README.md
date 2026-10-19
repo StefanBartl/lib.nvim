@@ -3,7 +3,7 @@
 The **canonical** JSON encoder of a machine contract: the same value gives the
 same bytes on every machine, so the text can be hashed (`digest`, `etag`),
 compared and kept as a golden file. Moved here from `tasks_nvim.json`
-(tasks.nvim@921a0c4) so that `tasks-export/1` and `rules-export/1` write
+(tasks.nvim@6bc8d99) so that `tasks-export/1` and `rules-export/1` write
 identical bytes.
 
 Use [`lib.nvim.json`](../README.md) for everyday encoding; use this one when the

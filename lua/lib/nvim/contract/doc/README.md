@@ -3,7 +3,7 @@
 The **documents of a machine contract** (`tasks-export/1`, `rules-export/1`):
 the head every document starts with, `seal` (`rev` and `digest`), `encode`
 (canonical bytes, size limit) and the error document. Moved here from the
-head/seal/encode part of `tasks_nvim.contract` (tasks.nvim@921a0c4). What a
+head/seal/encode part of `tasks_nvim.contract` (tasks.nvim@6bc8d99). What a
 document *contains* (snapshot, list, a rule) stays with the plugin.
 
 `doc.new{...}` returns the builder of ONE plugin's contract:

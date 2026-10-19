@@ -1,7 +1,7 @@
 ---@module 'lib.nvim.contract.errors'
 ---@brief The error vocabulary of a machine contract: a stable code, a message, whether asking again can help.
 ---@description
---- Moved here from `tasks_nvim.errors` (tasks.nvim@921a0c4), with the one domain-specific part made a hook.
+--- Moved here from `tasks_nvim.errors` (tasks.nvim@6bc8d99), with the one domain-specific part made a hook.
 ---
 --- A plugin's functions answer `nil, "text"` and, where a caller has to act on the reason, a third value
 --- `{ code = ..., ... }` (a compare-and-set: `conflict`, `locked`, `forbidden`; a file lock: `locked`, `lock_stuck`).

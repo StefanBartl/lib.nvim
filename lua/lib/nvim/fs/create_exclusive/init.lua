@@ -11,7 +11,7 @@
 --- It never raises: a `path` or `content` that is not a string, and a `path` that names a folder (ends in a
 --- slash), are answered as an error before anything is created.
 ---
---- Moved here from `tasks_nvim.fsio.create_exclusive` (tasks.nvim@921a0c4), where it is the claim of a new task
+--- Moved here from `tasks_nvim.fsio.create_exclusive` (tasks.nvim@6bc8d99), where it is the claim of a new task
 --- file and the lock file of `lib.nvim.fs.with_lock`.
 ---
 ---```lua

@@ -2,7 +2,7 @@
 
 The **one door of a machine contract**: `call(method, request)` answers with a
 JSON document, never with a throw. Moved here from `tasks_nvim.api`
-(tasks.nvim@921a0c4); the mechanics are generic, the table of methods is the
+(tasks.nvim@6bc8d99); the mechanics are generic, the table of methods is the
 plugin's.
 
 Everything outside the engine (an app, an agent, CI) asks through here and gets
