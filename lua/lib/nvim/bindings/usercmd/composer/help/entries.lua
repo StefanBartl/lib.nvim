@@ -390,6 +390,60 @@ local function narrow(entries, lead)
   return out
 end
 
+--- The family a child of the help's node belongs to: its own route's, else
+--- (a group without a route of its own) that of its first route below it.
+---@param node Lib.UserCmd.Composer.Node
+---@return string|nil
+local function family_of(node)
+  if node.route and type(node.route.family) == "string" and node.route.family ~= "" then
+    return node.route.family
+  end
+  for _, k in ipairs(tree.child_keys(node)) do
+    local f = family_of(node.children[k])
+    if f then
+      return f
+    end
+  end
+  return nil
+end
+
+--- `subs` as help sections: one per family, ordered by `order` (the spec's
+--- `families`) and then by first appearance, the entries without a family last
+--- under "Subcommands". No family anywhere: the single "Subcommands" section,
+--- exactly as before families existed.
+---@param subs { entry: Lib.UserCmd.Composer.Help.Entry, family: string|nil }[]
+---@param order string[]|nil
+---@return { title: string, entries: Lib.UserCmd.Composer.Help.Entry[] }[]
+local function family_sections(subs, order)
+  local by, seen, titles, rest = {}, {}, {}, {}
+  for _, f in ipairs(order or {}) do
+    if not seen[f] then
+      seen[f] = true
+      titles[#titles + 1] = f
+    end
+  end
+  for _, s in ipairs(subs) do
+    if s.family then
+      if not seen[s.family] then
+        seen[s.family] = true
+        titles[#titles + 1] = s.family
+      end
+      by[s.family] = by[s.family] or {}
+      table.insert(by[s.family], s.entry)
+    else
+      rest[#rest + 1] = s.entry
+    end
+  end
+  local out = {}
+  for _, t in ipairs(titles) do
+    if by[t] then
+      out[#out + 1] = { title = t, entries = by[t] }
+    end
+  end
+  out[#out + 1] = { title = "Subcommands", entries = rest }
+  return out
+end
+
 --- Compute the option list for the tokens typed so far.
 ---
 --- `committed` are the finished tokens after the command word; `lead` is the
@@ -452,14 +506,19 @@ function M.compute(root, committed, lead)
             desc = summarize(child)
           end
           subs[#subs + 1] = {
-            kind = group and "group" or "sub",
-            label = k,
-            insert = k,
-            desc = desc,
+            entry = {
+              kind = group and "group" or "sub",
+              label = k,
+              insert = k,
+              desc = desc,
+            },
+            family = family_of(child),
           }
         end
       end
-      add("Subcommands", subs)
+      for _, sec in ipairs(family_sections(subs, root.families)) do
+        add(sec.title, sec.entries)
+      end
     end
     if route then
       local spec = next_arg(route, filled)

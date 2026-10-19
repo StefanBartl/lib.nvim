@@ -86,6 +86,47 @@ return function(H)
     end
   end
 
+  -- ------------------------------------------------------------ families
+  -- `route.family` groups the subcommands of a node under one heading each, in
+  -- the order of the spec's `families`, then as they first appear; the rest stay
+  -- under "Subcommands". A group without a route of its own takes its first
+  -- route's family. Paths are untouched.
+  local fam_root = tree.build({
+    { path = { "open" }, family = "Files", run = noop },
+    { path = { "zap" }, family = "Danger", run = noop },
+    { path = { "close" }, family = "Files", run = noop },
+    { path = { "ai", "ask" }, family = "AI", run = noop },
+    { path = { "misc" }, run = noop },
+  }, { "AI", "Files" })
+  local fam = entries.compute(fam_root, {}, "")
+  eq(
+    table.concat(labels(fam.items, "heading"), ","),
+    "AI,Files,Danger,Subcommands",
+    "families: named order first, then first appearance, the unfamilied last"
+  )
+  local order = {}
+  for _, e in ipairs(fam.items) do
+    order[#order + 1] = e.label
+  end
+  eq(
+    table.concat(order, ","),
+    "AI,ai,Files,close,open,Danger,zap,Subcommands,misc",
+    "families: each subcommand under its family's heading, sorted inside it"
+  )
+  local fam_narrow = entries.compute(fam_root, {}, "c")
+  eq(
+    table.concat(labels(fam_narrow.items, "heading"), ","),
+    "Files",
+    "families: a lead narrows inside the sections, empty ones drop out"
+  )
+  local no_family =
+    entries.compute(tree.build({ { path = { "a" }, run = noop } }, { "AI" }), {}, "")
+  eq(
+    table.concat(labels(no_family.items, "heading"), ","),
+    "Subcommands",
+    "families: a `families` list with no route in it changes nothing"
+  )
+
   local ui_level = entries.compute(root, { "ui" }, "")
   eq(table.concat(labels(ui_level.items, "sub"), ","), "hide,show", "group: its children")
 

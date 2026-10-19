@@ -428,6 +428,27 @@ A level whose only row is such a free-text argument (no enum values, flags or
 opens with that one row, `<CR>` does nothing there, and `<Esc>` gives the line
 back. Only a level with no row at all (a route without arguments) opens no float.
 
+### Grouping subcommands by family (`family` / `families`)
+
+A verb with many subcommands reads better grouped by what they are for than in
+one alphabetical list. Give a route a `family`, and the float lists the
+subcommands of a level under one heading per family; the ones without a family
+stay under "Subcommands", last. The verb's `families` fixes the order of the
+headings (a family it does not name follows, in order of first appearance). A
+group without a route of its own (`ai` above `ai ask`) takes the family of its
+first route. Only the float changes: paths, `<Tab>` completion and dispatch do
+not, and a verb without any `family` looks exactly as before.
+
+```lua
+composer.verb("Case", {
+  families = { "Open", "State" },
+  routes = {
+    { path = { "open" }, family = "Open", run = open },
+    { path = { "solved" }, family = "State", run = solved },
+  },
+})
+```
+
 `composer.help` exposes the pieces (`parse_line`, `insertion`, `open`,
 `from_cmdline`, `set_keymap`); the option list itself is the pure
 `require("lib.nvim.bindings.usercmd.composer.help.entries").compute(root, committed_tokens, lead)`.

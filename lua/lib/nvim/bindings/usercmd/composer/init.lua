@@ -218,7 +218,7 @@ local function register(name, spec)
   assert(type(name) == "string" and name ~= "", "composer.verb: name must be a non-empty string")
   spec.routes = spec.routes or {}
 
-  local root = tree.build(spec.routes)
+  local root = tree.build(spec.routes, spec.families)
   local deferred = make_deferred_notify(name, spec, root)
 
   local handler = function(opts)
@@ -334,7 +334,7 @@ function M.document(path)
     entries[#entries + 1] = {
       name = handle:name(),
       spec = handle:spec(),
-      root = tree.build(handle:spec().routes or {}),
+      root = tree.build(handle:spec().routes or {}, handle:spec().families),
     }
   end
   if #entries == 0 then

@@ -74,6 +74,7 @@
 ---@field children table<string, Lib.UserCmd.Composer.Node>
 ---@field route?   Lib.UserCmd.Composer.Route
 ---@field token?   string   # the literal token that reaches this node (nil at root)
+---@field families? string[] # root only: the spec's `families`, the order the help lists them in
 
 --- A single command route: a literal token path, an optional positional arg
 --- schema, optional flags, and the handler.
@@ -84,6 +85,7 @@
 ---@field kv?    Lib.UserCmd.Composer.KvSpec[]       # bare key=value pairs (no dashes) accepted anywhere in the tail
 ---@field run    (fun(ctx: Lib.UserCmd.Composer.Ctx): any)|string  # handler, or a module path returning a callable / { run = fn }. Whatever it returns is what `dispatch` returns.
 ---@field desc?  string
+---@field family? string                             # the help float lists the subcommands of a node under one heading per family (in the order of the spec's `families`, then as they first appear), the ones without a family under "Subcommands" as before. Only the help changes: paths, completion and dispatch do not. A group without a route of its own takes the family of its first route
 ---@field bang?  boolean                             # honor :Verb! for this route
 ---@field range? boolean|integer
 ---@field count? integer                             # accept a :N Verb count prefix, defaulting to this value when omitted (see nvim_create_user_command's `count`)
@@ -96,6 +98,7 @@
 ---@field desc?    string                                    # verb description (docs + :command listing)
 ---@field default? fun(ctx: Lib.UserCmd.Composer.Ctx): any   # handler for the bare `:Verb` (no tokens); its return value is `dispatch`'s
 ---@field routes?  Lib.UserCmd.Composer.Route[]
+---@field families? string[]                                 # the order the help float lists the routes' `family` headings in; a family not named here follows, in order of first appearance
 ---@field bang?    boolean                                   # allow the bang form at the command level (default: true if any route uses it)
 ---@field range?   boolean|integer                           # allow a range at the command level
 ---@field count?   integer                                   # allow a :N Verb count prefix at the command level, default value when omitted

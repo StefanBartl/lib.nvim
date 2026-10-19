@@ -286,7 +286,7 @@ local function verb_tree(name)
     return nil, nil
   end
   local spec = handle:spec()
-  return spec, tree.build(spec.routes or {})
+  return spec, tree.build(spec.routes or {}, spec.families)
 end
 
 --- Open the cheatsheet for the verb typed in `line`. False when `line` is not

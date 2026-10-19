@@ -15,11 +15,14 @@ local function new_node(token)
   return { children = {}, token = token }
 end
 
---- Build a tree from a list of routes.
+--- Build a tree from a list of routes. `families` (the spec's own, optional)
+--- is kept on the root: the order the help float lists route families in.
 ---@param routes Lib.UserCmd.Composer.Route[]|nil
+---@param families string[]|nil
 ---@return Lib.UserCmd.Composer.Node root
-function M.build(routes)
+function M.build(routes, families)
   local root = new_node(nil)
+  root.families = families
   for _, route in ipairs(routes or {}) do
     assert(type(route.path) == "table", "composer: every route needs a `path` array")
     assert(
