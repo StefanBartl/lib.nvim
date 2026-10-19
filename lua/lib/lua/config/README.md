@@ -12,7 +12,7 @@ delegate the merge and the lookup here.
 
 ```
 lib.lua.config/
-├── init.lua       -- deep_merge, get
+├── init.lua       -- copy, deep_merge, get
 └── @types/        -- LuaLS types (Lib.Config)
 ```
 
@@ -31,6 +31,36 @@ have: a user who explicitly redefines a list expects it gone, not merged.
 `lib.lua.config.deep_merge` copies `base` instead of mutating it, and
 replaces a list-like table (per `lib.lua.tables.core.is_array`, checked on
 the override side) wholesale rather than recursing into it.
+
+## What the result shares
+
+Nothing. Every table in the result is new, including the branches the
+override never mentions and the tables that only the override has. Without
+that, a plugin that writes into its live config (`cfg.state.last = …`) would
+change `DEFAULTS` through the shared branch, and the next `setup()` would no
+longer start from the real defaults; writing into a table the caller passed
+in would change their `opts` the same way. Functions are kept as they are,
+metatables are carried over by reference. `vim.tbl_deep_extend("force", {},
+DEFAULTS, opts)` does **not** have this property: a key only one side has is
+taken by reference (checked on Neovim 0.12.2).
+
+## Which tables merge, which replace
+
+| Override value | Default value | Result |
+| -------------- | ------------- | ------ |
+| map            | map           | merged key by key |
+| non-empty list | anything      | replaces |
+| map or list    | list          | replaces |
+| `{}`           | list or `{}`  | `{}` (no entries) |
+| `{}`           | map           | the default map, unchanged |
+| scalar, `false`| anything      | replaces |
+
+The `{}` row is why an empty table can not be decided from the override side
+alone: `{ groups = {} }` means "no groups" where the default is a list and
+"nothing to override" where it is a map.
+
+`copy(t)` is the deep copy `deep_merge` uses: cyclic and repeated references
+stay cyclic and repeated inside the copy.
 
 ## API
 

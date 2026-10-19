@@ -16,31 +16,81 @@
 --- explicitly tried to replace. This version copies `base` instead of
 --- mutating it, and replaces a list-like table (per
 --- `lib.lua.tables.core.is_array`) wholesale rather than recursing into it.
+---
+--- The result shares no table with either argument: writing into it later
+--- (a plugin storing a cursor position under `cfg.state`, say) can neither
+--- change the defaults a following `setup()` starts from nor the table the
+--- caller passed in (a lazy.nvim `opts`).
 
 local tables = require("lib.lua.tables.core")
 
 local M = {}
 
+---Deep copy of `t`: every table is new, functions and other values are kept as
+---they are, metatables are carried over by reference. Shared and cyclic
+---references inside `t` stay shared and cyclic inside the copy.
+---@generic T
+---@param t T
+---@param seen? table<table, table>
+---@return T
+function M.copy(t, seen)
+  if type(t) ~= "table" then
+    return t
+  end
+  seen = seen or {}
+  if seen[t] then
+    return seen[t]
+  end
+  local out = {}
+  seen[t] = out
+  for k, v in pairs(t) do
+    out[M.copy(k, seen)] = M.copy(v, seen)
+  end
+  local mt = getmetatable(t)
+  if mt ~= nil then
+    setmetatable(out, mt)
+  end
+  return out
+end
+
+---Write `override` into `out`, which is already a private copy (see
+---`deep_merge` for the rules).
+---@param out table
+---@param override table
+local function merge_into(out, override)
+  for k, v in pairs(override) do
+    local cur = out[k]
+    if type(v) ~= "table" or type(cur) ~= "table" then
+      out[k] = M.copy(v)
+    elseif next(v) == nil then
+      if next(cur) == nil or tables.is_array(cur) then
+        out[k] = {}
+      end
+    elseif tables.is_array(v) or tables.is_array(cur) then
+      out[k] = M.copy(v)
+    else
+      merge_into(cur, v)
+    end
+  end
+end
+
 ---Recursively merge `override` into a copy of `base`. Neither argument is
----mutated. A value that is a list-like table (checked on the *override*
----side) is replaced wholesale rather than merged element-by-element, so
----overriding e.g. `cycle.groups` fully redefines it instead of inheriting
----leftover defaults past the override's length.
+---mutated and the result shares no table with them.
+---
+---Which tables merge and which replace:
+---  * a list-like override replaces wholesale (never merged index by index),
+---    so overriding e.g. `cycle.groups` fully redefines it;
+---  * an empty `{}` override follows the shape of the default: over a list (or
+---    another empty table) it replaces, i.e. "no entries", over a map it
+---    changes nothing, because an empty map has no key to override;
+---  * a map override merges key by key into a map default;
+---  * anything else (scalar, `false`, mismatched shapes) replaces.
 ---@param base table
 ---@param override table
 ---@return table
 function M.deep_merge(base, override)
-  local out = {}
-  for k, v in pairs(base) do
-    out[k] = v
-  end
-  for k, v in pairs(override) do
-    if type(v) == "table" and type(out[k]) == "table" and not tables.is_array(v) then
-      out[k] = M.deep_merge(out[k], v)
-    else
-      out[k] = v
-    end
-  end
+  local out = M.copy(base)
+  merge_into(out, override)
   return out
 end
 

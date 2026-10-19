@@ -176,6 +176,7 @@ local specs = {
   "resolve_lib_nvim_spec.lua",
   "relpath_spec.lua",
   "config_spec.lua",
+  "config_merge_spec.lua",
   "cross_executable_spec.lua",
   "cross_open_default_spec.lua",
   "which_key_spec.lua",
