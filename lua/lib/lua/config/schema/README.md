@@ -41,6 +41,7 @@ local schema = require("lib.lua.config.schema")
 local issues = {}
 local kept = schema.check(value, spec, "picker.engine", issues)   -- value or nil
 local clean = schema.check_record(opts, fields, "", issues)        -- new table, bad keys left out
+schema.describe_got(value)   -- how a rejected value reads in a message: 5, false, "x", table
 ```
 
 Messages name the dotted path (`option 'ui.sizes.w' must be a number, got "x"

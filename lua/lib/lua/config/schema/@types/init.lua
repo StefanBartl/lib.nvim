@@ -15,6 +15,7 @@
 
 ---@class Lib.Config.Schema
 ---@field describe_unknown fun(key: any, known: table<string, any>, prefix: string): string
+---@field describe_got fun(value: any): string
 ---@field check fun(value: any, spec: Lib.Config.Schema.Spec, path: string, issues: string[]): any
 ---@field check_record fun(body: table, fields: Lib.Config.Schema.Fields, path: string, issues: string[]): table
 ---@field infer fun(defaults: table, exceptions?: table<string, Lib.Config.Schema.Spec>): Lib.Config.Schema.SpecTable

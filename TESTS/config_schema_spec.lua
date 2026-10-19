@@ -29,6 +29,11 @@ return function(H)
     return false
   end
 
+  eq(schema.describe_got(5), "5", "describe_got: a number as it is")
+  eq(schema.describe_got(false), "false", "describe_got: a boolean as it is")
+  eq(schema.describe_got("x"), '"x"', "describe_got: a string quoted")
+  eq(schema.describe_got({}), "table", "describe_got: anything else by its type")
+
   -- ------------------------------------------------------------------ plain types
   local kept, issues = one(5, "number")
   eq(kept, 5, "number: accepted")

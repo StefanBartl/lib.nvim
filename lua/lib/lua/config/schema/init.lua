@@ -98,9 +98,10 @@ local function parse_union(union)
   return hit
 end
 
+---How a rejected value reads in a message: numbers and booleans as they are, a string quoted, anything else by its type.
 ---@param value any
 ---@return string
-local function describe_got(value)
+function M.describe_got(value)
   local t = type(value)
   if t == "number" or t == "boolean" then
     return tostring(value)
@@ -156,7 +157,7 @@ function M.check(value, spec, path, issues)
           issues[#issues + 1] = ("option '%s.%d' must be a string, got %s -- using the default"):format(
             path,
             i,
-            describe_got(lhs)
+            M.describe_got(lhs)
           )
           return nil
         end
@@ -166,7 +167,7 @@ function M.check(value, spec, path, issues)
     end
     issues[#issues + 1] = ("option '%s' must be a string, a list of strings or false, got %s -- using the default"):format(
       path,
-      describe_got(value)
+      M.describe_got(value)
     )
     return nil
   end
@@ -178,7 +179,7 @@ function M.check(value, spec, path, issues)
     issues[#issues + 1] = ("option '%s' must be %s, got %s -- using the default"):format(
       path,
       p.label,
-      describe_got(value)
+      M.describe_got(value)
     )
     return nil
   end
@@ -218,7 +219,7 @@ function M.check(value, spec, path, issues)
     issues[#issues + 1] = ("option '%s' must be one of %s, got %s -- using the default"):format(
       path,
       table.concat(quoted, ", "),
-      describe_got(value)
+      M.describe_got(value)
     )
     return nil
   end
