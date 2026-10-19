@@ -440,6 +440,12 @@ local function family_sections(subs, order)
       out[#out + 1] = { title = t, entries = by[t] }
     end
   end
+  -- One family and nothing else (typically the level below a group, whose
+  -- routes all carry the group's family): a heading that groups nothing. The
+  -- level is listed as it was before families, under "Subcommands".
+  if #out == 1 and #rest == 0 then
+    return { { title = "Subcommands", entries = out[1].entries } }
+  end
   out[#out + 1] = { title = "Subcommands", entries = rest }
   return out
 end

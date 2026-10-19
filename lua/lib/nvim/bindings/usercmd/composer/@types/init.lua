@@ -85,7 +85,7 @@
 ---@field kv?    Lib.UserCmd.Composer.KvSpec[]       # bare key=value pairs (no dashes) accepted anywhere in the tail
 ---@field run    (fun(ctx: Lib.UserCmd.Composer.Ctx): any)|string  # handler, or a module path returning a callable / { run = fn }. Whatever it returns is what `dispatch` returns.
 ---@field desc?  string
----@field family? string                             # the help float lists the subcommands of a node under one heading per family (in the order of the spec's `families`, then as they first appear), the ones without a family under "Subcommands" as before. Only the help changes: paths, completion and dispatch do not. A group without a route of its own takes the family of its first route
+---@field family? string                             # the help float lists the subcommands of a node under one heading per family (in the order of the spec's `families`, then as they first appear), the ones without a family under "Subcommands" as before. Only the help changes: paths, completion and dispatch do not. A group without a route of its own takes the family of its first route; a node whose subcommands all share one family lists them under "Subcommands"
 ---@field bang?  boolean                             # honor :Verb! for this route
 ---@field range? boolean|integer
 ---@field count? integer                             # accept a :N Verb count prefix, defaulting to this value when omitted (see nvim_create_user_command's `count`)

@@ -436,8 +436,11 @@ subcommands of a level under one heading per family; the ones without a family
 stay under "Subcommands", last. The verb's `families` fixes the order of the
 headings (a family it does not name follows, in order of first appearance). A
 group without a route of its own (`ai` above `ai ask`) takes the family of its
-first route. Only the float changes: paths, `<Tab>` completion and dispatch do
-not, and a verb without any `family` looks exactly as before.
+first route. A level whose subcommands all share one family (the level below
+`ai`, whose routes all carry `ai`'s family) lists them under "Subcommands": one
+heading over all of them would group nothing. Only the float changes: paths,
+`<Tab>` completion and dispatch do not, and a verb without any `family` looks
+exactly as before.
 
 ```lua
 composer.verb("Case", {

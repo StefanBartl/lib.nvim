@@ -126,6 +126,27 @@ return function(H)
     "Subcommands",
     "families: a `families` list with no route in it changes nothing"
   )
+  -- The level below a group: all its routes share the group's family, and a
+  -- heading over all of them would group nothing.
+  local one_family = entries.compute(
+    tree.build({
+      { path = { "ai", "ask" }, family = "AI", run = noop },
+      { path = { "ai", "send" }, family = "AI", run = noop },
+      { path = { "open" }, family = "Files", run = noop },
+    }, { "AI", "Files" }),
+    { "ai" },
+    ""
+  )
+  eq(
+    table.concat(labels(one_family.items, "heading"), ","),
+    "Subcommands",
+    "families: a level of one family only lists under Subcommands"
+  )
+  eq(
+    table.concat(labels(one_family.items, "sub"), ","),
+    "ask,send",
+    "families: ... with every subcommand of it"
+  )
 
   local ui_level = entries.compute(root, { "ui" }, "")
   eq(table.concat(labels(ui_level.items, "sub"), ","), "hide,show", "group: its children")
