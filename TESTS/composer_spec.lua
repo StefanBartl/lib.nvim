@@ -1591,4 +1591,33 @@ return function(H)
       usercmd.delete(n)
     end
   end
+
+  -- ------------------------------------------- docs configuration starts fresh
+  do
+    local registry = require("lib.nvim.bindings.usercmd.composer.registry")
+    local given = { path = "docs/OTHER.md", mode = "append" }
+    registry.configure(given)
+    eq(registry.docs.path, "docs/OTHER.md", "configure: an option is applied")
+    eq(registry.docs.mode, "append", "configure: ...each one")
+    eq(given.path, "docs/OTHER.md", "configure: the caller's table is not changed")
+
+    registry.configure({ mode = "replace" })
+    eq(
+      registry.docs.path,
+      "docs/BINDINGS/Usercmds.md",
+      "configure: a path left out is back at its default"
+    )
+    eq(registry.docs.mode, "replace", "configure: the new option applies")
+
+    registry.configure({ path = "docs/OTHER.md" })
+    registry.configure(nil)
+    eq(registry.docs.path, "docs/BINDINGS/Usercmds.md", "configure(nil): the defaults")
+    registry.docs.path = "written"
+    registry.configure(nil)
+    eq(
+      registry.docs.path,
+      "docs/BINDINGS/Usercmds.md",
+      "configure: writing into docs does not change the defaults"
+    )
+  end
 end

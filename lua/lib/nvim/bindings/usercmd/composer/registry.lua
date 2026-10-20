@@ -9,10 +9,13 @@ local M = {}
 local VERBS = require("lib.nvim.registry").new({ name = "composer.verbs" })
 
 ---@type Lib.UserCmd.Composer.DocsDefaults
-M.docs = {
+local DOCS_DEFAULTS = {
   path = "docs/BINDINGS/Usercmds.md",
   mode = "replace",
 }
+
+---@type Lib.UserCmd.Composer.DocsDefaults
+M.docs = vim.deepcopy(DOCS_DEFAULTS)
 
 --- Register (or replace) a verb handle by command name.
 ---@param name string
@@ -44,12 +47,12 @@ function M.map()
   return out
 end
 
---- Apply setup() docs overrides.
+--- Apply setup() docs overrides. Every call starts from the built-in defaults, so an
+--- option an earlier call set and this one leaves out is back at its default; `nil`
+--- is the defaults.
 ---@param opts Lib.UserCmd.Composer.DocsOpts|nil
 function M.configure(opts)
-  if opts then
-    M.docs = vim.tbl_extend("force", M.docs, opts) --[[@as Lib.UserCmd.Composer.DocsDefaults]]
-  end
+  M.docs = vim.tbl_extend("force", vim.deepcopy(DOCS_DEFAULTS), opts or {}) --[[@as Lib.UserCmd.Composer.DocsDefaults]]
 end
 
 return M
