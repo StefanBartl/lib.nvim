@@ -72,6 +72,19 @@ shell-interpolated.
 return function(text: string): boolean
 ```
 
+### `lib.nvim.cross.copy_image_to_clipboard` (see README)
+A PNG file onto the clipboard as an **image**, asynchronously: PowerShell `-STA`
+`Clipboard::SetImage` on Windows and WSL, `wl-copy --type image/png` / `xclip -t
+image/png` on Linux, `osascript` on macOS. The path travels in the environment or
+as one argv element, never in a script string.
+
+```
+copy_image_to_clipboard(path: string, on_done?: fun(ok: boolean, err: string|nil))   -- callable module
+M.copy(path, on_done?)
+M.plan(abs: string, platform): Plan|nil, err   -- pure: argv + env for a platform
+M.detect(): Platform
+```
+
 ---
 
 ## Open with default app / reveal in file manager

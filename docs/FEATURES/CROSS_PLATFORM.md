@@ -50,6 +50,13 @@ depending on Wayland/X11; PowerShell `Set-Clipboard` on native Windows;
 
 - **Module:** `lib.nvim.cross.copy_to_clipboard`
 
+An image is a separate module, since no register can carry one: a PNG file
+goes onto the clipboard as a picture through PowerShell (Windows, WSL),
+`wl-copy`/`xclip` (Linux) or `osascript` (macOS), asynchronously, the path
+never spliced into a script.
+
+- **Module:** `lib.nvim.cross.copy_image_to_clipboard`
+
 ## Open with default app / reveal in file manager
 
 Two related but distinct actions: launch a path/URL with its registered
