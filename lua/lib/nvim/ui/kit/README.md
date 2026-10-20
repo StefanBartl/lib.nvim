@@ -289,6 +289,20 @@ kit.confirm({ question = "Pick", choices = { "Keep", "Discard", "Cancel" },
 `h`/`l`/arrows/`<Tab>` move focus (the focused button uses `KitSelection`),
 `<CR>` confirms, `<Esc>`/`q` cancels (default → `false`, custom → `nil`).
 
+**`kit.ask(opts)` — the yes/no question that always answers.** `kit.confirm` is
+single-instance: opening one closes the open dialog *without* answering it, so a
+question raised at a moment the user did not pick (a stream ending minutes after
+the command) can swallow another. `kit.ask` waits until no dialog is open, then
+shows its own; anything that is not an explicit yes (the dialog stays open for
+`max_wait_ms`, default ten minutes) calls `on_answer(false)`, so "unanswered"
+is "no" with no second code path. If the float cannot open at all it falls back
+to `vim.ui.select` (Yes/No). `on_answer` fires at most once, and the optional
+`abandoned()` drops a question that is no longer wanted when its turn comes.
+
+```lua
+kit.ask({ question = "File the answer?", on_answer = function(yes) end })
+```
+
 **Mouse:** a left click on a button focuses *and* confirms it in one action
 (needs `:set mouse=a`, as any mouse interaction does). Clicking blank space
 inside the dialog is a no-op — it does not cancel, matching the rest of the

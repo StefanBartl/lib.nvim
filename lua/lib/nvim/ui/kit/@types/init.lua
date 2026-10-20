@@ -374,7 +374,8 @@
 ---@field prompt fun(opts: table): any                       # ask: confirm (yes/no) or text
 ---@field picker fun(opts: table): table|nil                 # interactive picker (prompt drives results)
 ---@field confirm fun(opts: table): Lib.UI.Kit.Surface|nil    # button-confirm dialog (horizontal buttons)
----@field menu fun(opts: table): Lib.UI.Kit.Surface|nil        # cursor-anchored action list (label → callback)
+---@field ask fun(opts: table)                                 # yes/no that waits for an open dialog, answers false when unanswered, falls back to vim.ui.select
+---@field menu fun(opts: table): Lib.UI.Kit.Surface|nil       # cursor-anchored action list (label → callback)
 ---@field compare fun(opts: Lib.UI.Kit.CompareOpts): Lib.UI.Kit.CompareHandle|nil  # pick two items, view them side by side
 ---@field progress fun(opts: table): table                     # passthrough to lib.nvim.progress.create
 ---@field sync fun(open_fn: fun(opts: table): any, opts: table, timeout_ms: integer|nil): any  # vim.wait bridge for on_submit/on_cancel components; full signature (incl. the two boolean returns) is on lua/lib/nvim/ui/kit/init.lua's M.sync
