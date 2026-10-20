@@ -181,6 +181,14 @@ function M.confirm(opts)
   return confirm.open(opts)
 end
 
+--- Yes/no question that waits for an open dialog instead of replacing it, and
+--- answers `false` ("no") whenever it cannot get a real answer; falls back to
+--- `vim.ui.select` when the float cannot open. See `lib.nvim.ui.kit.confirm.ask`.
+---@param opts { question: string, on_answer: fun(yes: boolean), abandoned?: (fun(): boolean), theme?: any, title?: string, max_wait_ms?: integer }
+function M.ask(opts)
+  return confirm.ask(opts)
+end
+
 --- Open a cursor-anchored action menu (label → callback).
 ---@param opts table
 ---@return Lib.UI.Kit.Surface|nil

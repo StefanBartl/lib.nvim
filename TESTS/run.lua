@@ -106,6 +106,7 @@ local specs = {
   "ui_kit_secret_traces_spec.lua",
   "ui_kit_oneline_spec.lua",
   "ui_kit_nul_spec.lua",
+  "ui_kit_ask_spec.lua",
   "ui_kit_conceal_spec.lua",
   "ui_kit_secret_buffer_spec.lua",
   "ui_kit_prompt_hooks_spec.lua",

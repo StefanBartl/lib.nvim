@@ -143,6 +143,76 @@ function M.cancel()
   end
 end
 
+--- How often a waiting `ask` looks again, and how long it waits at most.
+M.ASK_POLL_MS = 300
+M.ASK_MAX_WAIT_MS = 10 * 60 * 1000
+
+--- Yes/no question that waits its turn and always answers, "no" included.
+---
+--- `open` is single-instance: opening a dialog closes the open one WITHOUT
+--- answering it, so a question raised while another is showing (a stream
+--- that ends minutes after the command was typed) would vanish unanswered.
+--- `ask` instead polls until no dialog is open, then shows its own. Anything
+--- that is not an explicit yes -- a dialog that stays open for `max_wait_ms`
+--- -- calls `on_answer(false)`, so callers treat an unanswered question as
+--- "no" without a second code path. When the float cannot be opened at all
+--- it falls back to `vim.ui.select` (Yes/No).
+---
+--- `on_answer` fires at most once, and never when `abandoned()` is true by
+--- the time the question's turn comes.
+---@param opts { question: string, on_answer: fun(yes: boolean), abandoned?: (fun(): boolean), theme?: any, title?: string, max_wait_ms?: integer }
+---@return nil
+function M.ask(opts)
+  opts = opts or {}
+  local waited = 0
+  local max_wait = opts.max_wait_ms or M.ASK_MAX_WAIT_MS
+  local answered = false
+  local function answer(yes)
+    if answered then
+      return
+    end
+    answered = true
+    if opts.on_answer then
+      opts.on_answer(yes == true)
+    end
+  end
+
+  local function attempt()
+    if opts.abandoned and opts.abandoned() then
+      return
+    end
+    if M.is_open() then
+      if waited >= max_wait then
+        answer(false)
+        return
+      end
+      waited = waited + M.ASK_POLL_MS
+      vim.defer_fn(attempt, M.ASK_POLL_MS)
+      return
+    end
+    -- `open` answers "no" synchronously when the float cannot be created; that
+    -- is a failure to show the question, not an answer, so it is not forwarded.
+    local opening = true
+    local shown = M.open({
+      question = opts.question,
+      theme = opts.theme,
+      title = opts.title,
+      on_answer = function(yes)
+        if not opening then
+          answer(yes)
+        end
+      end,
+    })
+    opening = false
+    if not shown then
+      vim.ui.select({ "Yes", "No" }, { prompt = tostring(opts.question or "") }, function(choice)
+        answer(choice == "Yes")
+      end)
+    end
+  end
+  attempt()
+end
+
 --- Open a button-confirm dialog.
 ---@param opts table  # { question, choices?, theme?, on_answer }
 ---@return Lib.UI.Kit.Surface|nil
