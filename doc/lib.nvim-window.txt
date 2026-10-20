@@ -88,7 +88,9 @@ Options ~
     border      string|string[] border style (default "rounded")
     title       string          float title (only shown with a border)
     title_pos   string          "left" | "center" | "right"
-    focusable   boolean         whether the float is focusable (default true)
+    footer      string          float footer (left out without a border)
+    footer_pos  string          "left" | "center" | "right"
+    focusable  boolean         whether the float is focusable (default true)
     enter       boolean         focus the new window on creation (default true)
     zindex      integer         stacking order
     filetype    string          buffer filetype

@@ -289,6 +289,37 @@ return function(H)
     H.eq(width, control_width, "make_scratch: the NUL counts two cells, as drawn")
   end
 
+  -- footer / footer_pos reach the window config, spelled out like a title, and are left
+  -- out when there is no frame to draw them on (Neovim 0.10 refuses a footer there).
+  do
+    local make_scratch = require("lib.nvim.window.make_scratch")
+    local function frame_footer(win)
+      local cfg = vim.api.nvim_win_get_config(win)
+      return cfg.footer and cfg.footer[1] and cfg.footer[1][1] or nil, cfg.footer_pos
+    end
+
+    local winid = make_scratch({ lines = { "body" }, footer = " ? Help ", footer_pos = "right" })
+    local text, pos = frame_footer(winid)
+    H.eq(text, " ? Help ", "make_scratch: footer is on the frame")
+    H.eq(pos, "right", "make_scratch: footer_pos is passed on")
+    pcall(vim.api.nvim_win_close, winid, true)
+
+    winid = make_scratch({ lines = { "body" }, footer = "a" .. string.char(27) .. "b" })
+    H.eq((frame_footer(winid)), "a^[b", "make_scratch: a hostile footer is spelled out")
+    pcall(vim.api.nvim_win_close, winid, true)
+
+    for _, border in ipairs({ "none", "", { "", "", "", "", "", "", "", "" } }) do
+      local opened, win = pcall(make_scratch, { lines = { "body" }, border = border, footer = "x" })
+      H.ok(opened and win ~= nil, "make_scratch: an unframed float with a footer still opens")
+      H.eq(
+        opened and win and (frame_footer(win)) or nil,
+        nil,
+        "make_scratch: no footer without a border: " .. vim.inspect(border)
+      )
+      pcall(vim.api.nvim_win_close, win, true)
+    end
+  end
+
   -- A float title is spelled out, never drawn raw: `nvim_open_win` / `nvim_win_set_config` keep
   -- the control characters of a plain-string title as grid cells of their own, which the TUI
   -- writes to the terminal verbatim (an ESC ] 0 ; ... BEL in a pasted file name sets the

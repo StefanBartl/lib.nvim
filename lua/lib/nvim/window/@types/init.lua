@@ -34,6 +34,8 @@
 ---@field border? string|string[] Border style passed to `nvim_open_win` (default `"rounded"`)
 ---@field title? string Float title (only shown with a border)
 ---@field title_pos? "left"|"center"|"right" `title_pos` for the float title
+---@field footer? string Float footer, on the bottom edge of the border; left out without a border (`"none"`, `""`)
+---@field footer_pos? "left"|"center"|"right" `footer_pos` for the float footer
 ---@field focusable? boolean Whether the float is focusable (default `true`)
 ---@field enter? boolean Focus the new window on creation (default `true`)
 ---@field zindex? integer Stacking order for the float

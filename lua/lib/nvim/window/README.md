@@ -106,6 +106,8 @@ local winid, bufnr = window.make_scratch({
 | `border`      | `string\|string[]`                    | `"rounded"`  | border style                                           |
 | `title`       | `string`                              | –            | title (only visible with a border); control characters in it are spelled out (`^[`), never drawn raw |
 | `title_pos`   | `"left"\|"center"\|"right"`           | –            | title position                                         |
+| `footer`      | `string`                              | –            | footer on the bottom edge of the border, spelled out like `title`; left out without a border (`"none"`, `""`) |
+| `footer_pos`  | `"left"\|"center"\|"right"`           | –            | footer position                                        |
 | `focusable`   | `boolean`                             | `true`       | focusable                                              |
 | `enter`       | `boolean`                             | `true`       | focus the new window immediately                       |
 | `zindex`      | `integer`                             | –            | stacking order                                         |

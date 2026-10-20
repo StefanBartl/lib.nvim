@@ -202,6 +202,28 @@ local function anchor_screenrow(relative)
 end
 
 ---@internal
+---Whether `border` draws a frame at all. `"none"` and `""` do not, and neither does a
+---list of only empty strings; a footer has nowhere to go without one, and Neovim
+---0.10 refuses `footer` on an unframed float outright rather than ignoring it.
+---@param border string|string[]|table
+---@return boolean
+local function has_border(border)
+  if type(border) == "string" then
+    return border ~= "none" and border ~= ""
+  end
+  if type(border) == "table" then
+    for _, part in ipairs(border) do
+      local char = type(part) == "table" and part[1] or part
+      if type(char) == "string" and char ~= "" then
+        return true
+      end
+    end
+    return false
+  end
+  return true
+end
+
+---@internal
 ---Build the floating-window config, centering on the editor when no position is given.
 ---@param width integer
 ---@param height integer
@@ -265,6 +287,14 @@ local function build_win_config(width, height, opts)
     cfg.title = printable_title(opts.title)
     if opts.title_pos ~= nil then
       cfg.title_pos = opts.title_pos
+    end
+  end
+  -- Same treatment as the title: a footer is just as often built from a file
+  -- name. Left out rather than passed on when there is no frame to put it in.
+  if opts.footer ~= nil and has_border(cfg.border) then
+    cfg.footer = printable_title(opts.footer)
+    if opts.footer_pos ~= nil then
+      cfg.footer_pos = opts.footer_pos
     end
   end
   if opts.zindex ~= nil then
