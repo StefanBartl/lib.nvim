@@ -242,6 +242,41 @@ return function(H)
   N.setup({ width = 1 })
   ok(N.get() ~= before, "not stable: a new table after setup()")
 
+  -- ------------------------------------------------------------- opaque
+  do
+    local module = { name = "live", calls = 0 }
+    function module.hit()
+      module.calls = module.calls + 1
+    end
+    local O = config.new(defaults(), {
+      optional = {
+        tools = { "table", fields = { module = "table|string", other = "table" } },
+      },
+      opaque = { "tools.module" },
+    })
+    O.setup({ tools = { module = module, other = { 1 } } })
+    ok(
+      rawequal(O.get("tools.module"), module),
+      "opaque: the user's table is kept as that very table"
+    )
+    ok(not rawequal(O.get("tools.other"), nil), "opaque: the other tables are still copies")
+    O.get("tools.module").hit()
+    eq(module.calls, 1, "opaque: a call through the config reaches the user's own table")
+    O.setup({ tools = { module = "name" } })
+    eq(O.get("tools.module"), "name", "opaque: a string stays a string")
+    O.setup({})
+    eq(O.get("tools"), nil, "opaque: a call without it is back at the defaults")
+    local bad = config.new(defaults(), {
+      optional = { tools = { "table", fields = { module = "string" } } },
+      opaque = { "tools.module" },
+    })
+    bad.setup({ tools = { module = module } })
+    ok(
+      not rawequal(bad.get("tools.module"), module),
+      "opaque: a value that failed the check is not put back"
+    )
+  end
+
   -- --------------------------------------------------------- checking mode
   eq(config.is_checked(), false, "the checking mode is off by default")
   config.set_checked(true)

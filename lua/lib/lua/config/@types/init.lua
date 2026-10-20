@@ -8,6 +8,7 @@
 ---@field schema? table<string, Lib.Config.Schema.Spec>  Exceptions to the schema inferred from DEFAULTS, by dotted path.
 ---@field optional? table<string, Lib.Config.Schema.Spec>  Keys that are allowed but have no default (an opt-in feature whose absence means off).
 ---@field merge? table<string, Lib.Config.MergeRule>  Merge rule per dotted path: "replace" or "entries".
+---@field opaque? string[]  Dotted paths whose table is the user's own (a loaded module, an object): kept as that very table instead of a copy.
 ---@field layers? string[]  Rank of the layers, lowest first, DEFAULTS below all; must contain "setup". Default { "setup" }.
 ---@field normalize? fun(opts: table, issues: string[], layer: string): table?  Before the check, on a private copy: liberal in, canonical out. May return a new table.
 ---@field resolve? fun(cfg: table, issues: string[]): table?  After the merge: derived values, joint constraints. May return a new table.

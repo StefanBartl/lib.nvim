@@ -29,6 +29,25 @@ local function append(dst, src)
   end
 end
 
+---Write `value` at the dotted `path` of `tbl`, creating the tables on the way.
+---@param tbl table
+---@param path string
+---@param value any
+local function set_path(tbl, path, value)
+  local node = tbl
+  local keys = {}
+  for key in path:gmatch("[^.]+") do
+    keys[#keys + 1] = key
+  end
+  for i = 1, #keys - 1 do
+    if type(node[keys[i]]) ~= "table" then
+      node[keys[i]] = {}
+    end
+    node = node[keys[i]]
+  end
+  node[keys[#keys]] = value
+end
+
 ---@param path string
 ---@param key any
 ---@return string
@@ -145,6 +164,19 @@ function M.new(defaults, spec)
   local function prepare(layer_name, data)
     local raw = {}
     local clean
+    -- Opaque paths hold a table that is the user's own (a loaded module, an object): the copy
+    -- below would turn it into a different table, so the original is kept and put back after the
+    -- merge.
+    local refs
+    if spec.opaque and type(data) == "table" then
+      for _, path in ipairs(spec.opaque) do
+        local value = config.get(data, path)
+        if type(value) == "table" then
+          refs = refs or {}
+          refs[path] = value
+        end
+      end
+    end
     if type(data) ~= "table" then
       raw[1] = ("%s takes a table of options, got %s -- ignored"):format(
         layer_name == SETUP and "setup()" or ("layer '" .. layer_name .. "'"),
@@ -166,7 +198,7 @@ function M.new(defaults, spec)
     for i, line in ipairs(raw) do
       issues[i] = tag .. line
     end
-    return { clean = clean, issues = issues }
+    return { clean = clean, issues = issues, refs = refs }
   end
 
   local built = false
@@ -177,6 +209,12 @@ function M.new(defaults, spec)
       local l = state.layers[layer_name]
       if l then
         config.merge_into(result, l.clean, rules)
+        -- only where the value passed the check and is still there
+        for path, value in pairs(l.refs or {}) do
+          if type(config.get(l.clean, path)) == "table" then
+            set_path(result, path, value)
+          end
+        end
       end
     end
     local found = {}
