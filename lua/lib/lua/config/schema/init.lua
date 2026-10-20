@@ -57,7 +57,15 @@ function M.describe_unknown(key, known, prefix)
   local best, best_distance = nil, nil
   for candidate in pairs(known) do
     local d = levenshtein(name, tostring(candidate))
-    if d <= 3 and (best_distance == nil or d < best_distance) then
+    -- on a tie the alphabetically first wins, so the hint does not depend on `pairs` order
+    if
+      d <= 3
+      and (
+        best_distance == nil
+        or d < best_distance
+        or (d == best_distance and tostring(candidate) < tostring(best))
+      )
+    then
       best, best_distance = candidate, d
     end
   end

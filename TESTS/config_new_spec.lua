@@ -277,6 +277,67 @@ return function(H)
     )
   end
 
+  -- opaque with more than one layer: a higher layer never writes into the user's table
+  do
+    local lower = { name = "lower", extra = 1 }
+    local higher = { name = "higher" }
+    local LY = config.new(defaults(), {
+      layers = { "base", "setup" },
+      optional = { tools = { "table", fields = { module = "table" } } },
+      opaque = { "tools.module" },
+    })
+    LY.layer("base", { tools = { module = lower } })
+    LY.setup({ tools = { module = higher } })
+    ok(rawequal(LY.get("tools.module"), higher), "opaque layers: the highest layer's table wins")
+    ok(
+      same(lower, { name = "lower", extra = 1 }),
+      "opaque layers: the lower layer's table is untouched"
+    )
+    ok(same(higher, { name = "higher" }), "opaque layers: the higher layer's table is untouched")
+    LY.setup({})
+    ok(rawequal(LY.get("tools.module"), lower), "opaque layers: back to the lower layer's table")
+    ok(same(lower, { name = "lower", extra = 1 }), "opaque layers: still untouched")
+  end
+
+  -- opaque with stable: the old table is replaced, not overwritten with the new one's content
+  do
+    local first = { name = "first" }
+    local second = { name = "second" }
+    local ST = config.new(defaults(), {
+      stable = true,
+      optional = { tools = { "table", fields = { module = "table" } } },
+      opaque = { "tools.module" },
+    })
+    ST.setup({ tools = { module = first } })
+    local live = ST.get()
+    ok(rawequal(live.tools.module, first), "opaque stable: the user's table")
+    ST.setup({ tools = { module = second } })
+    ok(rawequal(ST.get(), live), "opaque stable: the config table itself is kept")
+    ok(rawequal(live.tools.module, second), "opaque stable: now the second table")
+    ok(same(first, { name = "first" }), "opaque stable: the first table was not written into")
+  end
+
+  -- opaque in the checking mode: the user's own table may change, that is what it is for
+  do
+    local module = { calls = 0 }
+    module.self = module
+    local K = config.new(defaults(), {
+      optional = { tools = { "table", fields = { module = "table" } } },
+      opaque = { "tools.module" },
+    })
+    config.set_checked(true)
+    K.setup({ tools = { module = module } })
+    K.get()
+    module.calls = module.calls + 1
+    local fine, err = pcall(K.get)
+    config.set_checked(false)
+    ok(
+      fine,
+      "opaque checked: a change in the user's own (even cyclic) table is no write: "
+        .. tostring(err)
+    )
+  end
+
   -- --------------------------------------------------------- checking mode
   eq(config.is_checked(), false, "the checking mode is off by default")
   config.set_checked(true)

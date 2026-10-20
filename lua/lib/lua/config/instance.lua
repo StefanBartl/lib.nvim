@@ -48,6 +48,24 @@ local function set_path(tbl, path, value)
   node[keys[#keys]] = value
 end
 
+---Remove the value at the dotted `path` of `tbl`, if the tables on the way exist.
+---@param tbl table
+---@param path string
+local function clear_path(tbl, path)
+  local node = tbl
+  local keys = {}
+  for key in path:gmatch("[^.]+") do
+    keys[#keys + 1] = key
+  end
+  for i = 1, #keys - 1 do
+    node = node[keys[i]]
+    if type(node) ~= "table" then
+      return
+    end
+  end
+  node[keys[#keys]] = nil
+end
+
 ---@param path string
 ---@param key any
 ---@return string
@@ -203,18 +221,41 @@ function M.new(defaults, spec)
 
   local built = false
 
+  ---The user's own tables behind the opaque paths, as a `seen` map for `config.copy`: a copy of
+  ---the config then holds those very tables instead of descending into (and duplicating) them.
+  ---@return table<table, table>
+  local function opaque_refs()
+    local seen = {}
+    for _, l in pairs(state.layers) do
+      for _, ref in pairs(l.refs or {}) do
+        seen[ref] = ref
+      end
+    end
+    return seen
+  end
+
   local function rebuild()
     local result = config.copy(defaults)
+    -- opaque path -> the user's own table, from the highest layer that names the path
+    local pending = {}
     for _, layer_name in ipairs(layer_names) do
       local l = state.layers[layer_name]
       if l then
         config.merge_into(result, l.clean, rules)
-        -- only where the value passed the check and is still there
-        for path, value in pairs(l.refs or {}) do
-          if type(config.get(l.clean, path)) == "table" then
-            set_path(result, path, value)
+        for _, path in ipairs(spec.opaque or {}) do
+          local here = config.get(l.clean, path)
+          if here ~= nil then
+            -- only where the value passed the check and is still there
+            pending[path] = type(here) == "table" and l.refs and l.refs[path] or false
           end
         end
+      end
+    end
+    -- Put back after every layer is merged: a higher layer merging into the path would otherwise
+    -- write into the user's table.
+    for path, value in pairs(pending) do
+      if value then
+        set_path(result, path, value)
       end
     end
     local found = {}
@@ -228,7 +269,11 @@ function M.new(defaults, spec)
     local prev
     if spec.stable then
       state.live = state.live or {}
-      prev = (built and spec.on_change) and config.copy(state.live) or nil
+      prev = (built and spec.on_change) and config.copy(state.live, opaque_refs()) or nil
+      -- the user's own tables are replaced, never written into
+      for _, path in ipairs(spec.opaque or {}) do
+        clear_path(state.live, path)
+      end
       assign_into(state.live, result)
       state.current = state.live
     else
@@ -296,7 +341,7 @@ function M.new(defaults, spec)
   function self.verify()
     local c = current()
     if not state.pristine then
-      state.pristine = config.copy(c)
+      state.pristine = config.copy(c, opaque_refs())
       return nil
     end
     return first_difference(c, state.pristine, "")

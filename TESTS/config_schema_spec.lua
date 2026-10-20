@@ -193,6 +193,18 @@ return function(H)
     "unknown option 'x.titel' (did you mean 'x.title'?)",
     "typo: prefix on both names"
   )
+  do
+    -- equally close candidates: the alphabetically first, whatever order `pairs` gives
+    local near = {}
+    for _, letter in ipairs({ "k", "j", "i", "h", "g", "f", "e", "d", "c", "b" }) do
+      near["x" .. letter] = true
+    end
+    eq(
+      schema.describe_unknown("xa", near, ""),
+      "unknown option 'xa' (did you mean 'xb'?)",
+      "typo: a tie is decided alphabetically"
+    )
+  end
 
   -- ------------------------------------------------------------------------- of
   kept = one({ "a", "b" }, { "table", of = "string" })
