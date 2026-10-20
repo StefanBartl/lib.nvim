@@ -105,6 +105,26 @@ return function(H)
     H.ok(err:find("xclip", 1, true) ~= nil, "linux: and says what to install")
   end
 
+  -- system_opts: a forking tool gets no output pipes, or on_done waits for the next copy --
+  do
+    local xclip = clip.plan("/tmp/a.png", platform({ linux = true, x11 = true }))
+    local opts = clip.system_opts(xclip, "PNG")
+    H.eq(opts.stdout, false, "system_opts: xclip forks, so no stdout pipe")
+    H.eq(opts.stderr, false, "system_opts: and no stderr pipe")
+    H.eq(opts.stdin, nil, "system_opts: xclip reads the file itself")
+
+    local wl = clip.plan("/tmp/a.png", platform({ linux = true, wayland = true }))
+    opts = clip.system_opts(wl, "PNG")
+    H.eq(opts.stdout, false, "system_opts: wl-copy forks too")
+    H.eq(opts.stdin, "PNG", "system_opts: wl-copy gets the bytes on stdin")
+
+    local win = clip.plan("C:/a.png", platform({ windows = true }))
+    opts = clip.system_opts(win, "PNG")
+    H.eq(opts.stdout, nil, "system_opts: PowerShell keeps its pipes")
+    H.eq(opts.stderr, nil, "system_opts: so its error message reaches err")
+    H.eq(opts.env.LIB_NVIM_CLIP_IMAGE, "C:/a.png", "system_opts: the environment is passed on")
+  end
+
   -- nothing at all ------------------------------------------------------------
   do
     local none = clip.plan("/tmp/a.png", platform())

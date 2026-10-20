@@ -33,6 +33,18 @@ Checked by the file's signature, not its extension. macOS has to be told the
 type and Linux announces it as `image/png`; a crop written by
 `images.convert` is a PNG anyway.
 
+## Known limits
+
+- **Windows drops transparency.** `Clipboard::SetImage` puts a bitmap on the
+  clipboard, so a transparent PNG often pastes onto black. Screenshots and
+  crops of them have no alpha, which is what this was built for.
+- **macOS and non-ASCII paths are untested.** AppleScript's `system attribute`
+  is known to mis-decode some non-ASCII environment values; a path with
+  typographic quotes may fail there (reported in `err`).
+- `xclip` and `wl-copy` fork a child that keeps serving the selection. They run
+  without stdout/stderr pipes, otherwise `on_done` would only fire once another
+  program takes the clipboard; their failures report the exit code only.
+
 ## Usage
 
 ```lua

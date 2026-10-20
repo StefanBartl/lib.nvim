@@ -61,6 +61,7 @@ local MACOS_SCRIPT = 'set the clipboard to (read (POSIX file (system attribute "
 ---@field argv string[] the process to run
 ---@field env? table<string, string> extra environment for it (merged with the current one)
 ---@field stdin_file? boolean feed the file's bytes on stdin
+---@field forks? boolean the tool leaves a background child owning the selection: no stdout/stderr pipes
 
 ---@param bins string[]
 ---@param has fun(bin: string): boolean
@@ -78,10 +79,17 @@ end
 ---@param abs string
 ---@return Lib.Cross.ImageClipboard.Plan
 local function linux_plan(bin, abs)
+  -- Both tools fork a child that keeps serving the selection, and that child inherits
+  -- stdout/stderr. `vim.system` reports the exit only once those pipes reach EOF, so with
+  -- pipes `on_done` would wait until some other program takes the clipboard. Neovim's own
+  -- clipboard provider works around the same thing ("xclip does not close stdout").
   if bin == "wl-copy" then
-    return { argv = { "wl-copy", "--type", "image/png" }, stdin_file = true }
+    return { argv = { "wl-copy", "--type", "image/png" }, stdin_file = true, forks = true }
   end
-  return { argv = { "xclip", "-selection", "clipboard", "-t", "image/png", "-i", abs } }
+  return {
+    argv = { "xclip", "-selection", "clipboard", "-t", "image/png", "-i", abs },
+    forks = true,
+  }
 end
 
 --- How to copy the PNG at `abs` on `platform`. Pure: runs nothing, reads no file, so every
@@ -185,6 +193,23 @@ local function read_png(abs)
   return bytes
 end
 
+--- The `vim.system` options for `plan`: its environment, the file on stdin when it reads
+--- one, and no stdout/stderr pipes for a tool that forks (see `linux_plan`).
+---@param plan Lib.Cross.ImageClipboard.Plan
+---@param bytes string the file's contents
+---@return vim.SystemOpts
+function M.system_opts(plan, bytes)
+  local opts = { env = plan.env, text = true }
+  if plan.stdin_file then
+    opts.stdin = bytes
+  end
+  if plan.forks then
+    opts.stdout = false
+    opts.stderr = false
+  end
+  return opts
+end
+
 --- Copy the PNG at `path` to the clipboard as an image. Asynchronous; `on_done(ok, err)` runs
 --- on the main loop once the tool has finished (or at once, scheduled, when it cannot start).
 ---@param path string
@@ -213,11 +238,7 @@ function M.copy(path, on_done)
     return finish(false, plan_err)
   end
 
-  local started, err = pcall(vim.system, plan.argv, {
-    env = plan.env,
-    stdin = plan.stdin_file and bytes or nil,
-    text = true,
-  }, function(obj)
+  local started, err = pcall(vim.system, plan.argv, M.system_opts(plan, bytes), function(obj)
     if obj.code == 0 then
       return finish(true, nil)
     end
