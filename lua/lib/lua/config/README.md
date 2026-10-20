@@ -68,7 +68,7 @@ left out. `notify` gets the problems of that layer once, not on every later chan
 | `normalize(opts, issues, layer)` | before the check, on a private copy: `keymaps = false` to `{ enable = false }`, an old key name to the new one |
 | `resolve(cfg, issues)` | after the merge: derived values, joint constraints (`min <= max`) |
 | `on_change(cfg, prev)` | after every change: clear caches, rebuild lookups |
-| `opaque` | dotted paths whose value is a table of the user's own that must stay that very table: a loaded module handed in as an option (`neotree.quarantine = require("x")`), an object with state. The copy every other table gets would be a different table; the original is put back after the merge, only where the value passed the check |
+| `opaque` | dotted paths whose value is a table of the user's own that must stay that very table: a loaded module handed in as an option (`neotree.quarantine = require("x")`), an object with state. The copy every other table gets would be a different table; the original is put back after the merge, only where the value passed the check, and from the highest layer that names the path (a higher layer never writes into it; with `stable` it is replaced, not assigned into; the checking mode does not compare its content) |
 | `stable` | write into the same table every time, so a module that stashed `cfg.get().picker` keeps seeing the current values |
 | `notify(message)` | called with a layer's problems when it is set |
 
