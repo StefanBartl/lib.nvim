@@ -30,91 +30,60 @@ local STRATEGY_MODULES = {
   eager = "lib.strategies.eager",
 }
 
----@type Lib.Config.Options
-M.options = vim.deepcopy(defaults)
-
----@internal
----An unknown key, with the nearest known one as a hint when there is a
----plausible one.
----@param key any
----@return string
-local function describe_unknown(key)
-  local levenshtein = require("lib.lua.strings.distance").levenshtein
-  local name = tostring(key)
-  local best, best_distance = nil, nil
-  for known in pairs(defaults) do
-    local d = levenshtein(name, known)
-    if d <= 3 and (best_distance == nil or d < best_distance) then
-      best, best_distance = known, d
-    end
-  end
-  return best and ("%s (did you mean %s?)"):format(name, best) or name
+---@param message string
+local function warn(message)
+  vim.notify("lib.config: " .. message, vim.log.levels.WARN)
 end
 
----Merge user options.
+local cfg = require("lib.lua.config").new(defaults, {
+  name = "lib.config",
+  schema = { strategy = { "string", enum = { "metatable", "lazy", "eager" } } },
+  notify = warn,
+  on_change = function(current, prev)
+    -- The same table the options were always read from.
+    M.options = current
+    -- The aggregator is resolved once, on the first require("lib"). If that has
+    -- already happened, a strategy change here silently has no effect -- warn so
+    -- the call order can be fixed (setup() must run BEFORE require("lib")).
+    local before = prev and prev.strategy or defaults.strategy
+    if current.strategy ~= before and package.loaded["lib"] ~= nil then
+      warn(
+        (
+          'strategy changed to %q after require("lib") already ran; '
+          .. "this has no effect. Call lib.config.setup() before the first "
+          .. 'require("lib").'
+        ):format(current.strategy)
+      )
+    end
+  end,
+})
+
+---The options in force: `Lib.Config.Options`, the same table `get()` returns.
+---@type Lib.Config.Options
+M.options = cfg.get()
+
+---Set the options. Every call starts from the defaults, so an option left out
+---of a second call is back at its default.
 ---
----Unknown keys are reported before anything is merged and are not stored:
----a typo such as `startegy = "eager"` would otherwise land in `M.options`
----as a dead field while the default stays in force, and nothing would ever
----say so.
+---An unknown key is reported before anything is merged and is not stored: a typo
+---such as `startegy = "eager"` would otherwise land as a dead field while the
+---default stays in force, and nothing would ever say so. A strategy that is not
+---one of the three falls back to the default, with a warning.
 ---@param opts Lib.Config.Options|nil
 function M.setup(opts)
-  opts = opts or {}
-  local prev = M.options.strategy
-
-  local known, unknown = {}, {}
-  for key, value in pairs(opts) do
-    if defaults[key] ~= nil then
-      known[key] = value
-    else
-      unknown[#unknown + 1] = describe_unknown(key)
-    end
-  end
-  if #unknown > 0 then
-    table.sort(unknown)
-    vim.notify(
-      ("lib.config: unknown option(s) ignored: %s"):format(table.concat(unknown, ", ")),
-      vim.log.levels.WARN
-    )
-  end
-
-  M.options = vim.tbl_extend("force", M.options, known)
-
-  if not STRATEGY_MODULES[M.options.strategy] then
-    vim.notify(
-      ("lib.config: unknown strategy %q, falling back to 'metatable'"):format(
-        tostring(M.options.strategy)
-      ),
-      vim.log.levels.WARN
-    )
-    M.options.strategy = "metatable"
-  end
-
-  -- The aggregator is resolved once, on the first require("lib"). If that has
-  -- already happened, a strategy change here silently has no effect — warn so
-  -- the call order can be fixed (setup() must run BEFORE require("lib")).
-  if M.options.strategy ~= prev and package.loaded["lib"] ~= nil then
-    vim.notify(
-      (
-        'lib.config: strategy changed to %q after require("lib") already ran; '
-        .. "this has no effect. Call lib.config.setup() before the first "
-        .. 'require("lib").'
-      ):format(M.options.strategy),
-      vim.log.levels.WARN
-    )
-  end
+  cfg.setup(opts)
 end
 
 ---Returns the current (merged) configuration.
 ---@return Lib.Config.Options
 function M.get()
-  return M.options
+  return cfg.get()
 end
 
 ---Resolve the module path for the configured aggregator strategy.
 ---@return string
 function M.strategy_module()
-  return STRATEGY_MODULES[M.options.strategy] or STRATEGY_MODULES.metatable
+  return STRATEGY_MODULES[cfg.get("strategy")] or STRATEGY_MODULES.metatable
 end
 
 ---@type Lib.Config

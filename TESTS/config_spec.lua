@@ -26,7 +26,7 @@ return function(H)
   eq(#warnings, 1, "config.setup: the unknown key is reported once")
   ok(
     warnings[1].msg:find("startegy", 1, true) ~= nil
-      and warnings[1].msg:find("did you mean strategy", 1, true) ~= nil,
+      and warnings[1].msg:find("did you mean 'strategy'", 1, true) ~= nil,
     "config.setup: the report names the key and the nearest known one: " .. warnings[1].msg
   )
   eq(warnings[1].level, vim.log.levels.WARN, "config.setup: reported as a warning")
@@ -43,6 +43,24 @@ return function(H)
     "config.setup: an unknown strategy falls back to metatable"
   )
 
+  -- every setup() starts from the defaults: an option left out is back at its default
+  config.setup({ strategy = "lazy" })
+  eq(config.get().strategy, "lazy", "config.setup: a strategy is applied")
+  config.setup({} --[[@as any]])
+  eq(
+    config.get().strategy,
+    before.strategy,
+    "config.setup: a re-setup without it is back at the default"
+  )
+  config.setup(nil)
+  eq(config.get().strategy, before.strategy, "config.setup: setup(nil) is the defaults")
+  eq(config.options, config.get(), "config.options is the table get() returns")
+  eq(
+    config.strategy_module(),
+    "lib.strategies.metatable",
+    "config.strategy_module: follows the options in force"
+  )
+
   vim.notify = real_notify
-  config.options = before
+  config.setup({ strategy = before.strategy })
 end

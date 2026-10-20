@@ -327,4 +327,31 @@ return function(H)
     eq(after[1].id, retried[1].id, "no arming once the retry went through")
     pcall(vim.api.nvim_del_augroup_by_name, group)
   end
+
+  -- ------------------------------------------------------------ setup() is fresh
+  do
+    local function fresh_logger()
+      return L.new({ file = false, capture = false, notify_level = "off", level = "trace" })
+    end
+    local given = { name = "from-setup", enabled = false, min_level = "error" }
+    L.setup(given)
+    eq(given.enabled, false, "setup: the caller's opts keep `enabled`")
+    eq(given.min_level, "error", "setup: ...and `min_level`")
+    eq(L.is_enabled(), false, "setup: enabled = false is applied")
+    eq(fresh_logger().name, "from-setup", "setup: a default is applied to new loggers")
+    L.setup(given)
+    eq(L.is_enabled(), false, "setup: the same table twice gives the same result")
+
+    L.setup({})
+    eq(L.is_enabled(), true, "setup: a call without `enabled` is back at on")
+    eq(fresh_logger().name, "lib", "setup: a default left out is back at the built-in one")
+
+    local lg = fresh_logger()
+    L.setup({ min_level = "error" })
+    lg.info("below the global minimum")
+    eq(#lg.snapshot(), 0, "setup: a global min_level drops lower records")
+    L.setup({})
+    lg.info("the global minimum is gone")
+    eq(#lg.snapshot(), 1, "setup: a call without `min_level` clears it again")
+  end
 end

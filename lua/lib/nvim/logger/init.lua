@@ -409,19 +409,18 @@ end
 -- Global switches
 -- ---------------------------------------------------------------------------
 
----Merge global defaults / apply global switches.
----@param opts? table  # any Lib.Logger.Options keys become new defaults; plus `enabled`, `min_level`
+---Set the global defaults and switches. Every call starts from the built-in
+---ones, so what an earlier call set and this one leaves out is back at its
+---default (`enabled` on, no global `min_level`); the table passed in is not
+---changed.
+---@param opts? table  # any Lib.Logger.Options keys become the defaults of new loggers; plus `enabled`, `min_level`
 function M.setup(opts)
-  opts = opts or {}
-  if opts.enabled ~= nil then
-    G.enabled = opts.enabled ~= false
-    opts.enabled = nil
-  end
-  if opts.min_level ~= nil then
-    G.min_level = resolve_log_level(opts.min_level, nil)
-    opts.min_level = nil
-  end
-  G.defaults = vim.tbl_extend("force", G.defaults, opts)
+  local given = vim.deepcopy(opts or {})
+  G.enabled = given.enabled ~= false
+  given.enabled = nil
+  G.min_level = given.min_level ~= nil and resolve_log_level(given.min_level, nil) or nil
+  given.min_level = nil
+  G.defaults = vim.tbl_extend("force", vim.deepcopy(config.defaults), given)
 end
 
 ---GLOBAL master switch. When off, every log call returns after one comparison.
