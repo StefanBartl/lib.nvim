@@ -50,7 +50,7 @@ return function(H)
   found = latest.find({ a }, { now = now })
   eq(found.path, fresh, "without max_age_s there is no age limit")
 
-  found, err = latest.find({ a }, { now = now, exts = { "txt" } })
+  found = latest.find({ a }, { now = now, exts = { "txt" } })
   eq(found.path, vim.fs.normalize(a .. "/newer-but-text.txt"), "exts selects the file types")
 
   found, err = latest.find({ a .. "_missing" }, { now = now })

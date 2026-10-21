@@ -190,21 +190,30 @@ function M.ask(opts)
       vim.defer_fn(attempt, M.ASK_POLL_MS)
       return
     end
-    -- `open` answers "no" synchronously when the float cannot be created; that
-    -- is a failure to show the question, not an answer, so it is not forwarded.
+    -- `open` answers "no" synchronously and returns nil when the float cannot be
+    -- created: a failure to show the question, not an answer, so it is not
+    -- forwarded. A dialog that did open and answers at once (a stub, another
+    -- implementation) is a real answer and counts.
     local opening = true
+    local sync_answer
     local shown = M.open({
       question = opts.question,
       theme = opts.theme,
       title = opts.title,
       on_answer = function(yes)
-        if not opening then
+        if opening then
+          sync_answer = yes
+        else
           answer(yes)
         end
       end,
     })
     opening = false
-    if not shown then
+    if shown then
+      if sync_answer ~= nil then
+        answer(sync_answer)
+      end
+    else
       vim.ui.select({ "Yes", "No" }, { prompt = tostring(opts.question or "") }, function(choice)
         answer(choice == "Yes")
       end)

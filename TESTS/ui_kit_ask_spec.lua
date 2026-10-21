@@ -134,6 +134,24 @@ return function(H)
   eq(picked_prompt, "fallback?", "the fallback carries the question")
   eq(fb, true, "the fallback's Yes is the answer, not the failed float's synchronous no")
 
+  -- a dialog that opens and answers at once (a stub, another implementation) is a real answer
+  confirm.open = function(o)
+    o.on_answer(false)
+    return {}
+  end
+  vim.ui.select = function()
+    error("the fallback must not run when the dialog opened")
+  end
+  local instant
+  kit.ask({
+    question = "instant?",
+    on_answer = function(yes)
+      instant = yes
+    end,
+  })
+  confirm.open, vim.ui.select = orig_open, orig_select
+  eq(instant, false, "a synchronous answer of an opened dialog is delivered")
+
   -- on_answer fires once only
   local count = 0
   kit.ask({
