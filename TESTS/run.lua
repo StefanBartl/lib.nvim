@@ -188,6 +188,8 @@ local specs = {
   "contract_errors_spec.lua",
   "fs_create_exclusive_spec.lua",
   "fs_etag_spec.lua",
+  "fs_latest_file_spec.lua",
+  "clipboard_image_spec.lua",
   "fs_with_lock_spec.lua",
   "contract_doc_spec.lua",
   "contract_api_spec.lua",
