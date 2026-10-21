@@ -164,4 +164,64 @@ return function(H)
   confirm.cancel()
   eq(count, 1, "on_answer fires exactly once")
   close_all()
+
+  -- Waiting questions are shown in the order they were asked, whichever poll ticks first.
+  -- The timers are driven by hand: B's tick runs BEFORE A's, the order a free-running
+  -- poll can produce.
+  do
+    local timers = {}
+    local orig_defer = vim.defer_fn
+    vim.defer_fn = function(fn)
+      timers[#timers + 1] = fn
+    end
+    local shown = {}
+    confirm.open({ question = "blocker", on_answer = function() end })
+    kit.ask({ question = "A", on_answer = function() end })
+    local a_tick = timers[1]
+    kit.ask({ question = "B", on_answer = function() end })
+    local b_tick = timers[2]
+    confirm.close()
+    local real_open = confirm.open
+    confirm.open = function(o)
+      shown[#shown + 1] = o.question
+      return real_open(o)
+    end
+    b_tick() -- B's poll fires first, with A still waiting
+    eq(#shown, 0, "a later question does not overtake the older one")
+    a_tick()
+    eq(shown[1], "A", "the older question is shown first")
+    confirm.confirm() -- answer A
+    vim.defer_fn = orig_defer
+    -- B asks again on its next tick: run the timers it left behind
+    for _, t in ipairs(timers) do
+      t()
+    end
+    ok(vim.tbl_contains(shown, "B"), "and the younger one follows")
+    confirm.open = real_open
+    close_all()
+    vim.defer_fn = orig_defer
+  end
+
+  -- A question that raises must not block the ones behind it for ever.
+  do
+    local seen
+    local ok_call = pcall(kit.ask, {
+      question = "throws",
+      abandoned = function()
+        error("boom")
+      end,
+      on_answer = function() end,
+    })
+    eq(ok_call, false, "the error surfaces")
+    kit.ask({
+      question = "after the error",
+      on_answer = function(yes)
+        seen = yes
+      end,
+    })
+    ok(confirm.is_open(), "the next question is shown at once, the failed one left the queue")
+    confirm.confirm()
+    eq(seen, true, "and it is answered")
+    close_all()
+  end
 end

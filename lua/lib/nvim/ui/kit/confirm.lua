@@ -147,6 +147,20 @@ end
 M.ASK_POLL_MS = 300
 M.ASK_MAX_WAIT_MS = 10 * 60 * 1000
 
+--- The questions `ask` is holding back, oldest first (a ticket each).
+---@type table[]
+local waiting = {}
+
+---@param ticket table
+local function leave_queue(ticket)
+  for i, t in ipairs(waiting) do
+    if t == ticket then
+      table.remove(waiting, i)
+      return
+    end
+  end
+end
+
 --- Yes/no question that waits its turn and always answers, "no" included.
 ---
 --- `open` is single-instance: opening a dialog closes the open one WITHOUT
@@ -158,6 +172,9 @@ M.ASK_MAX_WAIT_MS = 10 * 60 * 1000
 --- "no" without a second code path. When the float cannot be opened at all
 --- it falls back to `vim.ui.select` (Yes/No).
 ---
+--- Several waiting questions are shown in the order they were asked, whichever
+--- of their polls happens to tick first.
+---
 --- `on_answer` fires at most once, and never when `abandoned()` is true by
 --- the time the question's turn comes.
 ---@param opts { question: string, on_answer: fun(yes: boolean), abandoned?: (fun(): boolean), theme?: any, title?: string, max_wait_ms?: integer }
@@ -167,6 +184,8 @@ function M.ask(opts)
   local waited = 0
   local max_wait = opts.max_wait_ms or M.ASK_MAX_WAIT_MS
   local answered = false
+  local ticket = {}
+  waiting[#waiting + 1] = ticket
   local function answer(yes)
     if answered then
       return
@@ -177,12 +196,15 @@ function M.ask(opts)
     end
   end
 
-  local function attempt()
+  local attempt
+  local function step()
     if opts.abandoned and opts.abandoned() then
+      leave_queue(ticket)
       return
     end
-    if M.is_open() then
+    if waiting[1] ~= ticket or M.is_open() then
       if waited >= max_wait then
+        leave_queue(ticket)
         answer(false)
         return
       end
@@ -190,6 +212,7 @@ function M.ask(opts)
       vim.defer_fn(attempt, M.ASK_POLL_MS)
       return
     end
+    leave_queue(ticket)
     -- `open` answers "no" synchronously and returns nil when the float cannot be
     -- created: a failure to show the question, not an answer, so it is not
     -- forwarded. A dialog that did open and answers at once (a stub, another
@@ -217,6 +240,16 @@ function M.ask(opts)
       vim.ui.select({ "Yes", "No" }, { prompt = tostring(opts.question or "") }, function(choice)
         answer(choice == "Yes")
       end)
+    end
+  end
+
+  -- A step that raises (a throwing `abandoned`, a failing `open`) must not leave its
+  -- place in the queue, or every question behind it would wait for ever.
+  attempt = function()
+    local ok, err = pcall(step)
+    if not ok then
+      leave_queue(ticket)
+      error(err, 0)
     end
   end
   attempt()
