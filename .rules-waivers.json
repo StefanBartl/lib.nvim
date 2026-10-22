@@ -1,14 +1,5 @@
 {
-  "NEW-54": {
-    "expires": "2027-04-23",
-    "reason": "Bootstrap cycle: the core modules run on their own TESTS/harness.lua; testing.nvim depends on lib.nvim (tasks-vault: testing.nvim/lib-harness-bootstrap)"
-  },
-  "NEW-55": {
-    "expires": "2027-04-23",
-    "reason": "Bootstrap cycle: no scripts/test.sh for the core, which runs on TESTS/harness.lua (tasks-vault: testing.nvim/lib-harness-bootstrap)"
-  },
-  "NEW-56": {
-    "expires": "2027-04-23",
-    "reason": "Bootstrap cycle: CI runs TESTS/run.lua for the core, not testing.nvim (tasks-vault: testing.nvim/lib-harness-bootstrap)"
-  }
+  "NEW-54": "Bootstrap cycle (permanent for the core): the core modules run on their own TESTS/harness.lua because testing.nvim depends on lib.nvim (tasks-vault: testing.nvim/lib-harness-bootstrap)",
+  "NEW-55": "Bootstrap cycle (permanent for the core): no scripts/test.sh, the core runs on TESTS/harness.lua (tasks-vault: testing.nvim/lib-harness-bootstrap)",
+  "NEW-56": "Bootstrap cycle (permanent for the core): CI runs TESTS/run.lua for the core, not testing.nvim (tasks-vault: testing.nvim/lib-harness-bootstrap)"
 }
