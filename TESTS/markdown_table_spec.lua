@@ -237,6 +237,49 @@ return function(H)
     eq(same[1], "no tables here", "and comes back unchanged")
   end
 
+  -- ------------------------------------------------------------ skip_fenced
+  do
+    local doc = {
+      "|a|b|",
+      "|---|---|",
+      "|1|22|",
+      "```md",
+      "|x|y|",
+      "|---|---|",
+      "|1|2|",
+      "```",
+      "~~~~",
+      "|p|q|",
+      "|---|---|",
+      "|3|4|",
+      "~~~",
+      "|still|inside|",
+      "|---|---|",
+      "|5|6|",
+      "~~~~",
+      "|c|d|",
+      "|---|---|",
+      "|7|8|",
+    }
+    eq(#T.parse(doc), 5, "without the option a table in a fence is found like any other")
+    local tables = T.parse(doc, { skip_fenced = true })
+    eq(#tables, 2, "with it only the tables outside of a fence are found")
+    ok(tables[1].start_line == 1 and tables[2].start_line == 18, "at their real lines")
+    local out, count = T.format_lines(doc, { skip_fenced = true })
+    eq(count, 2, "format_lines re-renders those two")
+    eq(out[5], "|x|y|", "and leaves the tables in the fences as they are")
+    eq(out[10], "|p|q|", "(a tilde fence is closed only by a tilde fence as long)")
+    eq(out[14], "|still|inside|")
+    eq(out[1], "| a | b  |", "the table outside is formatted")
+    local plain = T.format_lines(doc)
+    eq(plain[5], "| x | y |", "without the option the example table is rewritten, as before")
+    eq(
+      #T.parse({ "```", "|a|b|", "|---|---|", "|1|2|" }, { skip_fenced = true }),
+      0,
+      "an unclosed fence runs to the end"
+    )
+  end
+
   -- --------------------------------------------------------------- buffer
   do
     local buf = vim.api.nvim_create_buf(false, true)

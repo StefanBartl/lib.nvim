@@ -228,17 +228,50 @@ function M.separator_index(lines, start, stop)
   return nil, nil
 end
 
+---Which lines are inside a fenced code block (the fence lines included). A backtick fence has no backtick in its
+---info string, a tilde fence anything; a closing fence is the same character, at least as long, with nothing else on
+---the line.
+---@param lines string[]
+---@return boolean[]
+local function fenced_mask(lines)
+  local inside, char, len = {}, nil, nil
+  for i, line in ipairs(lines) do
+    if not char then
+      local ticks = line:match("^%s*(```+)[^`]*$")
+      local tildes = not ticks and line:match("^%s*(~~~+)") or nil
+      if ticks then
+        char, len = "`", #ticks
+      elseif tildes then
+        char, len = "~", #tildes
+      end
+      inside[i] = char ~= nil
+    else
+      inside[i] = true
+      local run = line:match("^%s*(" .. char .. "+)%s*$")
+      if run and #run >= len then
+        char, len = nil, nil
+      end
+    end
+  end
+  return inside
+end
+
 ---Every GFM table in `lines`.
 ---
 ---A run of consecutive table lines shorter than three (header, separator, one
 ---row) is not a table and is skipped rather than reported.
+---
+---`opts.skip_fenced`: a table inside a fenced code block is an example, not a table of the document, and is left
+---out (the scans that rewrite files want this; the table under the cursor is the user's choice).
 ---@param lines string[]
+---@param opts? { skip_fenced?: boolean }
 ---@return Lib.Markdown.Table[]
-function M.parse(lines)
+function M.parse(lines, opts)
   local tables = {}
+  local fenced = opts and opts.skip_fenced and fenced_mask(lines) or nil
   local i = 1
   while i <= #lines do
-    if not M.is_table_line(lines[i]) then
+    if not M.is_table_line(lines[i]) or (fenced and fenced[i]) then
       i = i + 1
     else
       local start = i
@@ -246,7 +279,7 @@ function M.parse(lines)
         i = i + 1
       end
       local stop = i - 1
-      if stop - start >= 2 then
+      if stop - start >= 2 and not (fenced and fenced[start]) then
         local rows, col_count = {}, 0
         local sep_line_idx, sep_style = M.separator_index(lines, start, stop)
         for ln = start, stop do
@@ -435,7 +468,7 @@ end
 ---@return string[] warnings
 function M.format_lines(lines, opts)
   opts = opts or {}
-  local tables = M.parse(lines)
+  local tables = M.parse(lines, { skip_fenced = opts.skip_fenced })
   if #tables == 0 then
     return lines, 0, {}
   end

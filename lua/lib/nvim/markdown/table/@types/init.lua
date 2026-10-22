@@ -40,6 +40,7 @@
 ---@field col_overrides? Lib.Markdown.Table.ColOverride[]
 ---@field width_fn? fun(s: string): integer
 ---@field lnum? integer                          # `format_at_cursor` only; defaults to the cursor line.
+---@field skip_fenced? boolean                       # leave out the tables inside fenced code blocks (`format_lines` and what builds on it).
 
 ---@class Lib.Markdown.Table.Mod
 ---@field trim fun(str: any): string
@@ -49,7 +50,7 @@
 ---@field is_separator_line fun(line: any): boolean, ("spaced"|"compact"|nil)
 ---@field separator_index fun(lines: string[], start: integer, stop: integer): integer|nil, ("spaced"|"compact"|nil)
 ---@field parse_row fun(line: string): string[]
----@field parse fun(lines: string[]): Lib.Markdown.Table[]
+---@field parse fun(lines: string[], opts?: { skip_fenced?: boolean }): Lib.Markdown.Table[]
 ---@field at_cursor fun(tables: Lib.Markdown.Table[], lnum: integer): Lib.Markdown.Table|nil, string|nil
 ---@field calc_widths fun(rows: string[][], col_count: integer, width_fn?: fun(s: string): integer): integer[]
 ---@field resolve_overrides fun(overrides: Lib.Markdown.Table.ColOverride[]|nil, header_cells: string[], col_count: integer): table<integer, string>, string[]
