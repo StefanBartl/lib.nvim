@@ -15,7 +15,7 @@
 ---@field title? string # float only
 ---@field border? string # float only, default "rounded"
 ---@field ratio? number # float only, share of the editor, default 0.9
----@field size? integer # split height
+---@field size? integer # split: height, vsplit: width
 ---@field close_on_exit? "always"|"ok"|"never" # default "never"
 ---@field startinsert? boolean # default true
 ---@field on_open? fun(bufnr: integer, winid: integer, job: integer) # after the job started (terminal-mode keymaps)

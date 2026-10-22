@@ -54,7 +54,8 @@ end
 
 ---@param opts Lib.Terminal.SpawnOpts
 ---@return integer|nil winid
----@return integer bufnr
+---@return integer|nil bufnr
+---@return string|nil err why the window could not be opened (nothing is left behind then)
 local function open_window(opts)
   local layout = opts.layout or "float"
   local bufnr = vim.api.nvim_create_buf(false, layout == "float")
@@ -73,17 +74,44 @@ local function open_window(opts)
     })
     if not ok then
       pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
-      return nil, bufnr
+      return nil, nil, tostring(winid)
     end
     return winid, bufnr
   end
-  vim.cmd(layout == "vsplit" and "belowright vsplit" or "belowright split")
+  -- E36 (not enough room) must come back as a failure, not a throw that
+  -- leaves the buffer created above behind.
+  local ok, split_err =
+    pcall(vim.cmd, layout == "vsplit" and "belowright vsplit" or "belowright split")
+  if not ok then
+    pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
+    return nil, nil, tostring(split_err)
+  end
   local winid = vim.api.nvim_get_current_win()
   if opts.size then
-    vim.api.nvim_win_set_height(winid, opts.size)
+    -- The height of a vsplit is the height of its whole row: setting it would
+    -- resize the windows beside it too.
+    if layout == "vsplit" then
+      pcall(vim.api.nvim_win_set_width, winid, opts.size)
+    else
+      pcall(vim.api.nvim_win_set_height, winid, opts.size)
+    end
   end
   vim.api.nvim_win_set_buf(winid, bufnr)
   return winid, bufnr
+end
+
+---Closes `winid` and wipes `bufnr`, both only if still there. Never throws:
+---closing the last window (E444) leaves it, the buffer goes either way when
+---it is not shown anywhere else.
+---@param winid integer
+---@param bufnr integer
+local function discard(winid, bufnr)
+  if vim.api.nvim_win_is_valid(winid) then
+    pcall(vim.api.nvim_win_close, winid, true)
+  end
+  if vim.api.nvim_buf_is_valid(bufnr) and #vim.fn.win_findbuf(bufnr) == 0 then
+    pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
+  end
 end
 
 ---Start `opts.argv` in a terminal window.
@@ -104,9 +132,9 @@ function M.spawn(opts)
     return nil, err
   end
 
-  local winid, bufnr = open_window(opts)
-  if not winid then
-    return nil, "failed to open the window"
+  local winid, bufnr, win_err = open_window(opts)
+  if not winid or not bufnr then
+    return nil, "failed to open the window: " .. (win_err or "unknown error")
   end
 
   local close = opts.close_on_exit or "never"
@@ -114,12 +142,10 @@ function M.spawn(opts)
     cwd = opts.cwd,
     on_exit = function(_, code)
       vim.schedule(function()
-        -- The window may already be gone (closed by hand) by now.
-        if
-          (close == "always" or (close == "ok" and code == 0))
-          and vim.api.nvim_win_is_valid(winid)
-        then
-          vim.api.nvim_win_close(winid, true)
+        -- The window may already be gone (closed by hand) by now, or be the
+        -- last one (then it stays); either way on_exit below still runs.
+        if close == "always" or (close == "ok" and code == 0) then
+          discard(winid, bufnr)
         end
         if opts.on_exit then
           opts.on_exit(code, bufnr)
@@ -139,13 +165,19 @@ function M.spawn(opts)
   -- SYNCHRONOUS failure; on_exit never fires for either, so the window around
   -- the dead terminal has to be closed here.
   if not ok or type(job) ~= "number" or job <= 0 then
-    pcall(vim.api.nvim_win_close, winid, true)
-    pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
+    discard(winid, bufnr)
     return nil, ("failed to start %s"):format(argv[1])
   end
 
   if opts.on_open then
-    opts.on_open(bufnr, winid, job)
+    -- A throwing on_open would leave a running program in a window its caller
+    -- does not know about: stop it and report like any other start failure.
+    local open_ok, open_err = pcall(opts.on_open, bufnr, winid, job)
+    if not open_ok then
+      pcall(vim.fn.jobstop, job)
+      discard(winid, bufnr)
+      return nil, ("on_open failed for %s: %s"):format(argv[1], tostring(open_err))
+    end
   end
   if opts.startinsert ~= false then
     vim.cmd("startinsert")

@@ -88,6 +88,7 @@ return function(H)
     end),
     "float: window closed on exit"
   )
+  eq(vim.api.nvim_buf_is_valid(f.bufnr), false, "float: the finished terminal buffer is wiped")
 
   -- split, close_on_exit = "ok" keeps the window of a failing program
   code = nil
@@ -113,4 +114,75 @@ return function(H)
   eq(vim.api.nvim_win_is_valid(s.winid), true, "split: a failing program keeps its window")
   vim.api.nvim_win_close(s.winid, true)
   pcall(vim.api.nvim_buf_delete, s.bufnr, { force = true })
+
+  -- vsplit: size is the width; the window beside it keeps its height
+  local orig = vim.api.nvim_get_current_win()
+  local orig_height = vim.api.nvim_win_get_height(orig)
+  local v = spawn.spawn({ argv = prog, layout = "vsplit", size = 20, startinsert = false })
+  ok(v ~= nil, "vsplit: started")
+  eq(vim.api.nvim_win_get_width(v.winid), 20, "vsplit: size is the width")
+  eq(vim.api.nvim_win_get_height(orig), orig_height, "vsplit: the other window keeps its height")
+  wait_for(function()
+    return vim.fn.jobwait({ v.job }, 0)[1] ~= -1
+  end)
+  vim.api.nvim_win_close(v.winid, true)
+  pcall(vim.api.nvim_buf_delete, v.bufnr, { force = true })
+
+  -- no room for a split (E36): nil + message, no buffer left behind, no throw
+  local extra = {}
+  while pcall(vim.cmd, "split") do
+    extra[#extra + 1] = vim.api.nvim_get_current_win()
+  end
+  local bufs_full = #vim.api.nvim_list_bufs()
+  local thrown, r_full, e_full = pcall(spawn.spawn, { argv = prog, layout = "split" })
+  ok(thrown, "no room: spawn does not throw")
+  eq(r_full, nil, "no room: nil")
+  ok(e_full and e_full:find("failed to open the window", 1, true), "no room: message")
+  eq(#vim.api.nvim_list_bufs(), bufs_full, "no room: no buffer left behind")
+  for _, w in ipairs(extra) do
+    pcall(vim.api.nvim_win_close, w, true)
+  end
+
+  -- on_open throwing: the job is stopped, nothing is left open, nil + message
+  local wins_oo = #vim.api.nvim_list_wins()
+  local job_oo
+  local r_oo, e_oo = spawn.spawn({
+    argv = { vim.v.progpath, "--headless", "-u", "NONE", "-c", "sleep 5", "-c", "qa!" },
+    startinsert = false,
+    on_open = function(_, _, job)
+      job_oo = job
+      error("boom")
+    end,
+  })
+  eq(r_oo, nil, "on_open throws: nil")
+  ok(e_oo and e_oo:find("boom", 1, true), "on_open throws: the error is in the message")
+  eq(#vim.api.nvim_list_wins(), wins_oo, "on_open throws: no window left behind")
+  eq(vim.fn.jobwait({ job_oo }, 2000)[1] ~= -1, true, "on_open throws: the job is stopped")
+
+  -- close_on_exit with the terminal as the last window: no E444, on_exit still runs
+  local last_code
+  local errs = {}
+  local l
+  H.with_patched(vim, "notify", function(msg)
+    errs[#errs + 1] = msg
+  end, function()
+    l = spawn.spawn({
+      argv = { vim.v.progpath, "--headless", "-u", "NONE", "-c", "sleep 300m", "-c", "cq 4" },
+      layout = "split",
+      close_on_exit = "always",
+      startinsert = false,
+      on_exit = function(c)
+        last_code = c
+      end,
+    })
+    vim.cmd("only")
+    wait_for(function()
+      return last_code ~= nil
+    end)
+  end)
+  ok(l ~= nil, "last window: started")
+  eq(last_code, 4, "last window: on_exit runs although the window could not close")
+  eq(vim.api.nvim_win_is_valid(l.winid), true, "last window: the window stays")
+  vim.cmd("enew")
+  pcall(vim.api.nvim_buf_delete, l.bufnr, { force = true })
 end

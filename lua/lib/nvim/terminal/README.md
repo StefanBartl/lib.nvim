@@ -58,7 +58,10 @@ local term = terminal.spawn({
 
 Starts the program in a terminal buffer (`jobstart` with `term = true`, `termopen` before 0.11). A
 failure to open the window or start the job returns `nil` and a message and leaves no window or buffer
-behind; `on_exit` never fires then. `startinsert = false` keeps normal mode.
+behind; `on_exit` never fires then (also for a split with no room, E36, and an `on_open` that throws:
+the job is stopped). `size` is the height of a split and the width of a vsplit. Closing on exit also
+wipes the finished terminal buffer; a window that is the last one stays, and `on_exit` runs anyway.
+`startinsert = false` keeps normal mode.
 
 ---
 
