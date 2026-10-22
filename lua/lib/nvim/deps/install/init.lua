@@ -113,21 +113,15 @@ end
 ---@param text string
 ---@return integer|nil bufnr
 local function open_terminal_with(text)
-  vim.cmd("belowright split")
-  local win = vim.api.nvim_get_current_win()
-  local bufnr = vim.api.nvim_create_buf(false, false)
-  vim.api.nvim_win_set_buf(win, bufnr)
-
-  local ok, chan = pcall(vim.fn.jobstart, { vim.o.shell }, { term = true })
-  if not ok or chan <= 0 then
-    vim.api.nvim_win_close(win, true)
-    return nil
-  end
-
-  -- No trailing newline, on purpose: the user submits it (see module header).
-  vim.fn.chansend(chan, text)
-  vim.cmd("startinsert")
-  return bufnr
+  local term = require("lib.nvim.terminal").spawn({
+    argv = { vim.o.shell },
+    layout = "split",
+    -- No trailing newline, on purpose: the user submits it (see module header).
+    on_open = function(_, _, job)
+      vim.fn.chansend(job, text)
+    end,
+  })
+  return term and term.bufnr or nil
 end
 
 ---Offer to install everything in `plan` that this host's package manager can.

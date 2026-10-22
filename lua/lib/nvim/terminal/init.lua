@@ -63,5 +63,13 @@ function M.is_kitty()
   return term:find("kitty", 1, true) ~= nil
 end
 
+--- Start an argv in a terminal float or split. See `lib.nvim.terminal.spawn`.
+---@param opts Lib.Terminal.SpawnOpts
+---@return Lib.Terminal.Spawned|nil spawned
+---@return string|nil err
+function M.spawn(opts)
+  return require("lib.nvim.terminal.spawn").spawn(opts)
+end
+
 ---@type Lib.Terminal
 return M

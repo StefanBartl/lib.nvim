@@ -81,6 +81,7 @@ local specs = {
   "tab_buffers_spec.lua",
   "ts_regions_spec.lua",
   "terminal_capabilities_spec.lua",
+  "terminal_spawn_spec.lua",
   "fs_read_bounded_spec.lua",
   "frontmatter_spec.lua",
   "markdown_link_cursor_spec.lua",

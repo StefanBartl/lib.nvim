@@ -1,7 +1,8 @@
 # `lib.nvim.terminal`
 
 Small terminal-buffer helpers: shell-escaping, terminal-buffer detection and
-cleanup, and a Kitty-terminal check.
+cleanup, starting a program in a terminal float or split (`spawn`), and a
+Kitty-terminal check.
 
 ## Usage
 
@@ -41,6 +42,23 @@ terminal.is_kitty()   --> boolean
 
 True if `$KITTY_LISTEN_ON` is set and non-empty, or if `$TERM` contains
 `"kitty"`.
+
+```lua
+local term = terminal.spawn({
+  argv = { "lazygit", "-p", repo },   -- a list, never a shell string
+  cwd = repo,
+  layout = "float",                   -- "float" (default), "split", "vsplit"
+  title = " lazygit ",                -- float: title, border, ratio (default 0.9)
+  close_on_exit = "always",           -- "always", "ok" (exit code 0), "never" (default)
+  on_open = function(bufnr, winid, job) end,  -- terminal-mode keymaps, chansend, ...
+  on_exit = function(code, bufnr) end,        -- scheduled, after the optional close
+})
+--> { bufnr, winid, job }  or  nil, "failed to start lazygit"
+```
+
+Starts the program in a terminal buffer (`jobstart` with `term = true`, `termopen` before 0.11). A
+failure to open the window or start the job returns `nil` and a message and leaves no window or buffer
+behind; `on_exit` never fires then. `startinsert = false` keeps normal mode.
 
 ---
 
