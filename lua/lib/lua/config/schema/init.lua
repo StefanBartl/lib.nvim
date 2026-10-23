@@ -46,8 +46,14 @@ local function child(path, key)
   return path .. "." .. tostring(key)
 end
 
+---Largest edit distance that still counts as a typo of a known key.
+---@type integer
+local TYPO_EDITS = 3
+
 ---`key` with the nearest known one as a hint when there is a plausible one
----(edit distance <= 3).
+---(edit distance <= 3). A candidate whose length differs by more than that cannot be within it (the distance is
+---at least the difference of the lengths), so it is not compared: an option name of 120 kB costs nothing instead
+---of a table of `#name * #candidate` cells per known key.
 ---@param key any
 ---@param known table<string, any>
 ---@param prefix string  dotted path of the table `key` sits in, with a trailing dot (or "")
@@ -56,10 +62,11 @@ function M.describe_unknown(key, known, prefix)
   local name = tostring(key)
   local best, best_distance = nil, nil
   for candidate in pairs(known) do
-    local d = levenshtein(name, tostring(candidate))
+    local text = tostring(candidate)
+    local d = math.abs(#name - #text) <= TYPO_EDITS and levenshtein(name, text) or TYPO_EDITS + 1
     -- on a tie the alphabetically first wins, so the hint does not depend on `pairs` order
     if
-      d <= 3
+      d <= TYPO_EDITS
       and (
         best_distance == nil
         or d < best_distance

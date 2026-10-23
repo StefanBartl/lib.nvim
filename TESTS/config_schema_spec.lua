@@ -206,6 +206,34 @@ return function(H)
     )
   end
 
+  do
+    -- a huge name is not compared with the known keys (a hint needs at most 3 edits, so a candidate whose length
+    -- differs by more than 3 is out): counted, not timed - a time limit measures the machine, not the code
+    local real = require("lib.lua.strings.distance")
+    local longest = 0
+    package.loaded["lib.lua.strings.distance"] = {
+      levenshtein = function(a, b)
+        longest = math.max(longest, #a, #b)
+        return real.levenshtein(a, b)
+      end,
+    }
+    package.loaded["lib.lua.config.schema"] = nil
+    local fresh = require("lib.lua.config.schema")
+    local huge = ("p"):rep(120000)
+    local text = fresh.describe_unknown(huge, { policy = true, polices = true }, "")
+    eq(longest, 0, "typo: a 120 kB name is compared with nothing")
+    eq(text, "unknown option '" .. huge .. "'", "typo: and gets no hint")
+    eq(
+      fresh.describe_unknown("polcy", { policy = true, polices = true }, ""),
+      "unknown option 'polcy' (did you mean 'policy'?)",
+      "typo: a short name is still compared"
+    )
+    ok(longest > 0 and longest < 20, "typo: the comparison saw only short strings")
+    package.loaded["lib.lua.strings.distance"] = real
+    package.loaded["lib.lua.config.schema"] = nil
+    schema = require("lib.lua.config.schema")
+  end
+
   -- ------------------------------------------------------------------------- of
   kept = one({ "a", "b" }, { "table", of = "string" })
   eq(#kept, 2, "of: every element matches")
