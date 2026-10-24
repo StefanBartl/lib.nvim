@@ -3,7 +3,7 @@
 ---@description
 --- `version_ok`: extracted from **three** copies of the same six lines
 --- checking `vim.version()` against a `{major, minor, patch}` floor — this
---- repo's own `lib.health`, documentation.nvim, and runtime-analysis.nvim.
+--- repo's own `lib.health`, docmap.nvim, and runtime-analysis.nvim.
 ---
 --- `check_require`: extracted from **two** byte-identical copies (dap.nvim,
 --- debugging.nvim) that each reported one required module through

@@ -15,7 +15,7 @@ Entry point is `require("lib.nvim.health")`.
 Both were literal, byte-identical duplicates found by
 `docs/ROADMAP/tools/duplicate_functions.py`:
 
-* **`version_ok(min)`** — this repo's own `lib.health`, documentation.nvim,
+* **`version_ok(min)`** — this repo's own `lib.health`, docmap.nvim,
   and runtime-analysis.nvim each carried the same six lines checking
   `vim.version()` against a `{major, minor, patch}` floor.
 * **`check_require(mod, label, level)`** — dap.nvim and debugging.nvim each

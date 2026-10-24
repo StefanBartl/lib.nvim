@@ -3,7 +3,7 @@
 Read a repository-local JSON config file and split its keys into `allowed`
 (the repository's own business) and everything else, without deciding *how*
 to warn about the latter — that stays yours. Extracted after
-`documentation.nvim`'s `.docmap.json` loader and `lsp.nvim`'s
+`docmap.nvim`'s `.docmap.json` loader and `lsp.nvim`'s
 `.nvim-lsp.json` loader turned out to have independently built the exact
 same read/decode/split shape.
 
@@ -59,7 +59,7 @@ underlying message for `"read_failed"`/`"invalid_json"` only.
 - **No warning text.** `reason`/`detail` are yours to format — including
   whether "refused" deserves one combined message or a split between
   "a real option, wrong owner" and "not an option at all" (two categories
-  `documentation.nvim`'s loader distinguishes and `lsp.nvim`'s doesn't;
+  `docmap.nvim`'s loader distinguishes and `lsp.nvim`'s doesn't;
   both are legitimate call-site decisions this module has no opinion on).
 - **No `null`-as-sentinel.** A JSON `null` in the file is dropped from
   `data` entirely (`vim.json.decode`'s `luanil` option), not turned into

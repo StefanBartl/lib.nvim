@@ -229,7 +229,7 @@ Neovim adapters.
     (telemetry)            opt-in call counting / usage statistics moved to
                            runtime-analysis.telemetry (runtime-analysis.nvim,
                            a sibling plugin; see that plugin's README.md and
-                           documentation.nvim's docs/ECOSYSTEM.md step 7).
+                           docmap.nvim's docs/ECOSYSTEM.md step 7).
                            This repo keeps a thin caller,
                            lib.strategies.telemetry_wrap, for instrumenting
                            require("lib")'s own metatable-hidden aggregate

@@ -6,7 +6,7 @@
 --- required), lookups are answered in **registration order** (never `pairs()` order, so a scan or a generated
 --- doc is the same on every run), and a test can start from an empty one.
 ---
---- Extracted from `documentation.nvim`'s `lang_registry` and `usercmd.composer.registry`. Domain rules stay
+--- Extracted from `docmap.nvim`'s `lang_registry` and `usercmd.composer.registry`. Domain rules stay
 --- with the owner (which backend claims a file name, a scan-scoped filter ...): this holds the entries.
 ---
 --- ```lua

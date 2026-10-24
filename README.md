@@ -31,7 +31,7 @@ copy. It has **no third-party dependencies** — only `vim` and itself.
 
 ## Around it
 
-> **[documentation.nvim](https://github.com/StefanBartl/documentation.nvim)** —
+> **[docmap.nvim](https://github.com/StefanBartl/docmap.nvim)** —
 > reads and navigates the docs this library's conventions produce; it also holds
 > the ecosystem architecture that says what belongs down here.
 >
@@ -82,9 +82,9 @@ question.
 `:help lib.nvim` is the same reference inside the editor — see
 [docs/help.md](docs/help.md) for how the tags are generated.
 
-Not in this repository: [ecosystem architecture](https://github.com/StefanBartl/documentation.nvim/blob/main/docs/ECOSYSTEM.md)
+Not in this repository: [ecosystem architecture](https://github.com/StefanBartl/docmap.nvim/blob/main/docs/ECOSYSTEM.md)
 — where docs, static analysis and runtime each belong across the four pieces
-this library is the bottom of (`lib.nvim`, `documentation.nvim`,
+this library is the bottom of (`lib.nvim`, `docmap.nvim`,
 `runtime-analysis.nvim`, `mdview.nvim`), and the rule that decides what moves
 down here and what does not.
 

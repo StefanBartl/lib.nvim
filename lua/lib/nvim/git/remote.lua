@@ -3,7 +3,7 @@
 --- (GitHub, GitLab, Codeberg) plus self-hosted instances a caller declares.
 --- Pure: no `vim.api`, no process, headless-testable -- moved here from
 --- gitsuite.nvim's `features/browse/url.lua` (GS-16) once a second and
---- third consumer (github_stats.nvim, documentation.nvim) needed the same
+--- third consumer (github_stats.nvim, docmap.nvim) needed the same
 --- grammar instead of each parsing remotes with their own regex.
 
 local encoding = require("lib.lua.strings.encoding")

@@ -1,7 +1,7 @@
 ---@module 'lib.nvim.config.repo_file'
 --- Read a repository-local JSON config file and split its keys into
 --- `allowed` (the repository's own business, e.g. `servers`/`formatter`)
---- and everything else -- the shape `documentation.nvim`'s `.docmap.json`
+--- and everything else -- the shape `docmap.nvim`'s `.docmap.json`
 --- loader and `lsp.nvim`'s `.nvim-lsp.json` loader each built independently
 --- before this module existed, one allowlist + one warning apart.
 ---

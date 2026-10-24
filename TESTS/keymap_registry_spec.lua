@@ -436,7 +436,7 @@ return function(H)
 
   -- ------------------------------------------- set() leaves opts untouched
   -- One options table reused across two calls must not carry the first
-  -- binding's `desc` into the second: that is how documentation.nvim ended up
+  -- binding's `desc` into the second: that is how docmap.nvim ended up
   -- with every key in its browser labelled "close".
   local shared = { buffer = false }
   keymap("n", "<Plug>(libspec-opts1)", function() end, shared, "first")

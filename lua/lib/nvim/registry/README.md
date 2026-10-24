@@ -6,7 +6,7 @@ themselves (a backend module calls `register` when it is required), lookups answ
 order** (never `pairs()` order, so a scan or a generated doc is the same on every run), and a test can
 start from an empty one.
 
-Extracted from `documentation.nvim`'s `lang_registry` and `lib.nvim.bindings.usercmd.composer.registry`
+Extracted from `docmap.nvim`'s `lang_registry` and `lib.nvim.bindings.usercmd.composer.registry`
 (which now sits on it). Domain rules stay with the owner: which backend claims a file name, a scan-scoped
 filter, a handshake report. This holds the entries.
 
