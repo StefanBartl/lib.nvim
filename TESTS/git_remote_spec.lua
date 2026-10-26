@@ -11,7 +11,7 @@ return function(H)
   H.ok(
     vim.deep_equal(
       remote.parse_remote("https://github.com/WKDSteve/gitsuite.nvim.git"),
-      { host = "github.com", owner = "StefanBartl", repo = "gitsuite.nvim" }
+      { host = "github.com", owner = "WKDSteve", repo = "gitsuite.nvim" }
     ),
     "parse_remote: an https URL"
   )
@@ -67,7 +67,7 @@ return function(H)
   )
 
   -- ── build ────────────────────────────────────────────────────────────────
-  local gh_remote = { host = "github.com", owner = "StefanBartl", repo = "gitsuite.nvim" }
+  local gh_remote = { host = "github.com", owner = "WKDSteve", repo = "gitsuite.nvim" }
 
   H.eq(
     remote.build("github", gh_remote, "main", nil),
