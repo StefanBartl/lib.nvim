@@ -1,7 +1,7 @@
 # Contributing to lib.nvim
 
 Thank you for your interest! Bugs, ideas and questions are welcome in the
-[issue tracker](https://github.com/StefanBartl/lib.nvim/issues); pull requests
+[issue tracker](https://github.com/WKDSteve/lib.nvim/issues); pull requests
 very welcome.
 
 Read this one first: `lib.nvim` sits under every other plugin in the

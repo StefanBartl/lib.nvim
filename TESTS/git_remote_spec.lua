@@ -10,7 +10,7 @@ return function(H)
   -- ── parse_remote ─────────────────────────────────────────────────────────
   H.ok(
     vim.deep_equal(
-      remote.parse_remote("https://github.com/StefanBartl/gitsuite.nvim.git"),
+      remote.parse_remote("https://github.com/WKDSteve/gitsuite.nvim.git"),
       { host = "github.com", owner = "StefanBartl", repo = "gitsuite.nvim" }
     ),
     "parse_remote: an https URL"
@@ -71,31 +71,31 @@ return function(H)
 
   H.eq(
     remote.build("github", gh_remote, "main", nil),
-    "https://github.com/StefanBartl/gitsuite.nvim",
+    "https://github.com/WKDSteve/gitsuite.nvim",
     "build: the repo root when rel_path is nil"
   )
 
   H.eq(
     remote.build("github", gh_remote, "main", "README.md"),
-    "https://github.com/StefanBartl/gitsuite.nvim/blob/main/README.md",
+    "https://github.com/WKDSteve/gitsuite.nvim/blob/main/README.md",
     "build: a github file URL with no line anchor"
   )
 
   H.eq(
     remote.build("github", gh_remote, "main", "README.md", 5),
-    "https://github.com/StefanBartl/gitsuite.nvim/blob/main/README.md#L5",
+    "https://github.com/WKDSteve/gitsuite.nvim/blob/main/README.md#L5",
     "build: a github file URL with a single-line anchor"
   )
 
   H.eq(
     remote.build("github", gh_remote, "main", "README.md", 5, 9),
-    "https://github.com/StefanBartl/gitsuite.nvim/blob/main/README.md#L5-L9",
+    "https://github.com/WKDSteve/gitsuite.nvim/blob/main/README.md#L5-L9",
     "build: a github file URL with a range anchor"
   )
 
   H.eq(
     remote.build("github", gh_remote, "main", "README.md", 5, 5),
-    "https://github.com/StefanBartl/gitsuite.nvim/blob/main/README.md#L5",
+    "https://github.com/WKDSteve/gitsuite.nvim/blob/main/README.md#L5",
     "build: collapses an equal first/last range to a single-line anchor"
   )
 
@@ -121,13 +121,13 @@ return function(H)
   -- reads as a real path rather than a literal "%2F".
   H.eq(
     remote.build("github", gh_remote, "main", "docs/notes #1.md"),
-    "https://github.com/StefanBartl/gitsuite.nvim/blob/main/docs/notes%20%231.md",
+    "https://github.com/WKDSteve/gitsuite.nvim/blob/main/docs/notes%20%231.md",
     "build: percent-encodes '#' and a space in a file name, keeps '/' as the separator"
   )
 
   H.eq(
     remote.build("github", gh_remote, "feature/x?y", "a.lua"),
-    "https://github.com/StefanBartl/gitsuite.nvim/blob/feature/x%3Fy/a.lua",
+    "https://github.com/WKDSteve/gitsuite.nvim/blob/feature/x%3Fy/a.lua",
     "build: percent-encodes '?' in a branch name, but keeps its own real '/' namespace separator intact"
   )
 
@@ -135,7 +135,7 @@ return function(H)
   local sha = "4fbc0bbfacb53d23907fa8a61afbbdf717889b80"
   H.eq(
     remote.commit_url("github", gh_remote, sha),
-    "https://github.com/StefanBartl/gitsuite.nvim/commit/" .. sha,
+    "https://github.com/WKDSteve/gitsuite.nvim/commit/" .. sha,
     "commit_url: github"
   )
   H.eq(
@@ -151,7 +151,7 @@ return function(H)
 
   H.eq(
     remote.compare_url("github", gh_remote, "v1.0.0", "v1.1.0"),
-    "https://github.com/StefanBartl/gitsuite.nvim/compare/v1.0.0...v1.1.0",
+    "https://github.com/WKDSteve/gitsuite.nvim/compare/v1.0.0...v1.1.0",
     "compare_url: github, three dots"
   )
   H.eq(
@@ -166,13 +166,13 @@ return function(H)
   )
   H.eq(
     remote.compare_url("github", gh_remote, "a#1", "b c"),
-    "https://github.com/StefanBartl/gitsuite.nvim/compare/a%231...b%20c",
+    "https://github.com/WKDSteve/gitsuite.nvim/compare/a%231...b%20c",
     "compare_url: '#' and a space are percent-encoded on each side"
   )
 
   H.eq(
     remote.tag_url("github", gh_remote, "v1.2.3"),
-    "https://github.com/StefanBartl/gitsuite.nvim/releases/tag/v1.2.3",
+    "https://github.com/WKDSteve/gitsuite.nvim/releases/tag/v1.2.3",
     "tag_url: github, the release page"
   )
   H.eq(

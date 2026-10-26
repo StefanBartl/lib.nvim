@@ -103,7 +103,7 @@ was actually green here. Point consumer checkouts at it instead:
 ```yaml
 - uses: actions/checkout@v5
   with:
-    repository: StefanBartl/lib.nvim
+    repository: WKDSteve/lib.nvim
     path: lib.nvim
     ref: ci-verified
 ```

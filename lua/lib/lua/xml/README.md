@@ -22,7 +22,7 @@ schema (which sibling repeats become a list? which attribute becomes "the"
 value?) — this module leaves that decision to the caller instead of guessing.
 One consequence: `lib.lua.tables.path_flatten` on a decoded element produces
 mechanical paths like `children.1.attrs.id`, not a human-curated summary —
-see [`data.nvim`'s own architecture notes](https://github.com/StefanBartl/data.nvim/blob/main/docs/architecture.md)
+see [`data.nvim`'s own architecture notes](https://github.com/WKDSteve/data.nvim/blob/main/docs/architecture.md)
 for how it uses this in practice.
 
 ## Usage

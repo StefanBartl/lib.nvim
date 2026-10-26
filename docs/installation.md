@@ -23,7 +23,7 @@ dependency — [lazy.nvim] loads it on demand:
 ```lua
 {
   "you/my-plugin.nvim",
-  dependencies = { "StefanBartl/lib.nvim" },
+  dependencies = { "WKDSteve/lib.nvim" },
 }
 ```
 
@@ -32,7 +32,7 @@ With [packer.nvim]:
 ```lua
 use {
   "you/my-plugin.nvim",
-  requires = { "StefanBartl/lib.nvim" },
+  requires = { "WKDSteve/lib.nvim" },
 }
 ```
 
@@ -45,7 +45,7 @@ use {
 Standalone (loaded lazily on first `require`):
 
 ```lua
-{ "StefanBartl/lib.nvim", lazy = true }
+{ "WKDSteve/lib.nvim", lazy = true }
 ```
 
 ## Config-wide use (bootstrap required)
@@ -65,7 +65,7 @@ local libpath = vim.fn.stdpath("data") .. "/lazy/lib.nvim"
 if not (vim.uv or vim.loop).fs_stat(libpath) then
   vim.fn.system({
     "git", "clone", "--filter=blob:none",
-    "https://github.com/StefanBartl/lib.nvim.git", libpath,
+    "https://github.com/WKDSteve/lib.nvim.git", libpath,
   })
 end
 vim.opt.rtp:prepend(libpath)
@@ -82,7 +82,7 @@ Then add a managed spec so `:Lazy update` keeps it current. Because the
 bootstrap makes it effectively always loaded, use `lazy = false`:
 
 ```lua
-{ "StefanBartl/lib.nvim", lazy = false, priority = 1000 }
+{ "WKDSteve/lib.nvim", lazy = false, priority = 1000 }
 ```
 
 See [Usage](usage.md) for how to require modules once `lib.nvim` is installed.

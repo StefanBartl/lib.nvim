@@ -1,10 +1,10 @@
 # `lib.nvim.ui.kit`
 
 > **Migrated to `ui.nvim` (2026-09-14).** This module's canonical home is now
-> [`ui.nvim`](https://github.com/StefanBartl/ui.nvim) (`lua/ui/kit/`,
+> [`ui.nvim`](https://github.com/WKDSteve/ui.nvim) (`lua/ui/kit/`,
 > `require("ui.kit")`) — every one of this ecosystem's ~31 consumer plugins
 > was moved over (see `ui.nvim`'s own
-> [`PLAN-ui-kit-migration.md`](https://github.com/StefanBartl/ui.nvim) for
+> [`PLAN-ui-kit-migration.md`](https://github.com/WKDSteve/ui.nvim) for
 > the full history). No shim was built and no code here was deleted, so
 > this copy still works standalone, but it no longer receives new
 > features — those land in `ui.nvim` only. Do not build new callers

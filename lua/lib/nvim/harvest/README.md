@@ -151,4 +151,4 @@ harvest.emit(
 
 ## Used by
 
-- [`open.nvim`](https://github.com/StefanBartl/open.nvim) — `:Open urlview` / `:UrlView`
+- [`open.nvim`](https://github.com/WKDSteve/open.nvim) — `:Open urlview` / `:UrlView`

@@ -109,8 +109,8 @@ aggregator exists for convenience, not as the entry point.
 
 Opt-in call counting / usage statistics (`wrap`/`wrap_loaded`, persistence,
 Markdown/browser reports, `:RATelemetry`) moved to
-[`runtime-analysis.telemetry`](https://github.com/StefanBartl/runtime-analysis.nvim/blob/main/lua/runtime-analysis/telemetry/README.md)
-— [`docmap.nvim/docs/ECOSYSTEM.md`](https://github.com/StefanBartl/docmap.nvim/blob/main/docs/ECOSYSTEM.md)
+[`runtime-analysis.telemetry`](https://github.com/WKDSteve/runtime-analysis.nvim/blob/main/lua/runtime-analysis/telemetry/README.md)
+— [`docmap.nvim/docs/ECOSYSTEM.md`](https://github.com/WKDSteve/docmap.nvim/blob/main/docs/ECOSYSTEM.md)
 step 7, in that plugin's sibling.
 This repo keeps a thin caller, `lib.strategies.telemetry_wrap`, for
 instrumenting `require("lib")`'s own metatable-hidden aggregate specifically.

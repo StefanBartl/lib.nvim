@@ -1,7 +1,7 @@
 # `lib.nvim.ui.kit` — User Guide
 
 > **Migrated to `ui.nvim` (2026-09-14).** The kit's canonical home is now
-> [`ui.nvim`](https://github.com/StefanBartl/ui.nvim)
+> [`ui.nvim`](https://github.com/WKDSteve/ui.nvim)
 > (`require("ui.kit")`) — this guide describes the original copy that still
 > lives in this repository (unremoved, no shim, still functional) but no
 > longer receives new features. Everything below still applies verbatim to

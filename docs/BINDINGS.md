@@ -86,7 +86,7 @@ namespace has no keymaps module at all: a library its dependents load has no
 business claiming a key on their behalf. A feature that genuinely wants a
 keystroke borrows one for as long as its window is on screen and hands back
 whatever it shadowed — the pattern
-[hover.nvim](https://github.com/StefanBartl/hover.nvim) uses for `q`/`<Esc>`,
+[hover.nvim](https://github.com/WKDSteve/hover.nvim) uses for `q`/`<Esc>`,
 and the exception that proves the rule.
 
 The generated table is also kept at

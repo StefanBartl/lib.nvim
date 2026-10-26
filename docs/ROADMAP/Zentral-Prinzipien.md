@@ -7,7 +7,7 @@ Status: good · partial / improvable · gap · N/A.
 ## lib.nvim usage (the "WICHTIG" preamble)
 
 Self-referential: the preamble tells every *other* repo to depend on
-`StefanBartl/lib.nvim`. lib.nvim is that library, so it cannot depend on
+`WKDSteve/lib.nvim`. lib.nvim is that library, so it cannot depend on
 itself. The relevant question instead is whether lib.nvim's own modules
 embody the equivalent principles internally — covered principle-by-principle
 below.

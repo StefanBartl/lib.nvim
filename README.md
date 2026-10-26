@@ -17,10 +17,10 @@
 [![Lua](https://img.shields.io/badge/Lua-5.1%2FLuaJIT-2C2D72?logo=lua&logoColor=white)](https://www.lua.org)
 ![Status](https://img.shields.io/badge/status-beta-orange)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)
-[![CI](https://github.com/StefanBartl/lib.nvim/actions/workflows/ci.yml/badge.svg)](https://github.com/StefanBartl/lib.nvim/actions/workflows/ci.yml)
-[![wkd](https://img.shields.io/badge/wkd-family-c6ff3d)](https://stefanbartl.github.io/wkd/p/lib/)
+[![CI](https://github.com/WKDSteve/lib.nvim/actions/workflows/ci.yml/badge.svg)](https://github.com/WKDSteve/lib.nvim/actions/workflows/ci.yml)
+[![wkd](https://img.shields.io/badge/wkd-family-c6ff3d)](https://wkdsteve.github.io/wkd/p/lib/)
 
-> Part of the [wkd](https://stefanbartl.github.io/wkd/) family — see this plugin's [page](https://stefanbartl.github.io/wkd/p/lib/) on the site.
+> Part of the [wkd](https://wkdsteve.github.io/wkd/) family — see this plugin's [page](https://wkdsteve.github.io/wkd/p/lib/) on the site.
 
 Reusable Lua and Neovim helpers — one tested base under a whole set of plugins.
 Extracted from a private Neovim configuration so that personal plugins can
@@ -31,15 +31,15 @@ copy. It has **no third-party dependencies** — only `vim` and itself.
 
 ## Around it
 
-> **[docmap.nvim](https://github.com/StefanBartl/docmap.nvim)** —
+> **[docmap.nvim](https://github.com/WKDSteve/docmap.nvim)** —
 > reads and navigates the docs this library's conventions produce; it also holds
 > the ecosystem architecture that says what belongs down here.
 >
-> **[insights.nvim](https://github.com/StefanBartl/insights.nvim)** — static
+> **[insights.nvim](https://github.com/WKDSteve/insights.nvim)** — static
 > analysis of a project from inside the editor, and the largest single consumer
 > of the helpers here.
 >
-> **[runtime-analysis.nvim](https://github.com/StefanBartl/runtime-analysis.nvim)** —
+> **[runtime-analysis.nvim](https://github.com/WKDSteve/runtime-analysis.nvim)** —
 > the runtime counterpart, measuring what was actually called rather than what
 > the source says.
 >
@@ -77,12 +77,12 @@ question.
 - [Health check](docs/health.md) — what `:checkhealth lib` reports.
 - [Contributing](docs/CONTRIBUTING.md) — ground rules, repository layout, and how to add a module.
 - [Test-runner templates](templates/README.md) — resolving `lib.nvim` in a dependent plugin's own headless test suite.
-- [Feedback](https://github.com/StefanBartl/lib.nvim/issues) — bugs, feature requests and usage questions; broader discussion in [Discussions](https://github.com/StefanBartl/lib.nvim/discussions).
+- [Feedback](https://github.com/WKDSteve/lib.nvim/issues) — bugs, feature requests and usage questions; broader discussion in [Discussions](https://github.com/WKDSteve/lib.nvim/discussions).
 
 `:help lib.nvim` is the same reference inside the editor — see
 [docs/help.md](docs/help.md) for how the tags are generated.
 
-Not in this repository: [ecosystem architecture](https://github.com/StefanBartl/docmap.nvim/blob/main/docs/ECOSYSTEM.md)
+Not in this repository: [ecosystem architecture](https://github.com/WKDSteve/docmap.nvim/blob/main/docs/ECOSYSTEM.md)
 — where docs, static analysis and runtime each belong across the four pieces
 this library is the bottom of (`lib.nvim`, `docmap.nvim`,
 `runtime-analysis.nvim`, `mdview.nvim`), and the rule that decides what moves

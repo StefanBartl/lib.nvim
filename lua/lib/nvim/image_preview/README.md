@@ -1,6 +1,6 @@
 # `lib.nvim.image_preview`
 
-In-Neovim image preview via [images.nvim](https://github.com/StefanBartl/images.nvim),
+In-Neovim image preview via [images.nvim](https://github.com/WKDSteve/images.nvim),
 [snacks.nvim](https://github.com/folke/snacks.nvim) (`Snacks.image`), or
 [image.nvim](https://github.com/3rd/image.nvim) — all three are soft
 dependencies, auto-detected. With none installed, `preview()` fails cleanly

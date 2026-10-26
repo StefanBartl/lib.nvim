@@ -15,7 +15,7 @@ plugin code `require`s something under `lib.*`:
 -- your-plugin.nvim's own lazy.nvim spec, or the consuming config's
 {
   "you/my-plugin.nvim",
-  dependencies = { "StefanBartl/lib.nvim" },
+  dependencies = { "WKDSteve/lib.nvim" },
 }
 ```
 
@@ -172,7 +172,7 @@ scan doesn't freeze the editor while it runs.
 
 ## Building a UI: `ui.kit` vs. hand-rolled floats
 
-> **For a new plugin, reach for [`ui.nvim`](https://github.com/StefanBartl/ui.nvim)'s
+> **For a new plugin, reach for [`ui.nvim`](https://github.com/WKDSteve/ui.nvim)'s
 > `ui.kit` (`require("ui.kit")`), not this repo's copy.** The kit migrated
 > there on 2026-09-14 and every consumer in this ecosystem now targets it;
 > `lib.nvim.ui.kit` (below) still works but is frozen, no new features land

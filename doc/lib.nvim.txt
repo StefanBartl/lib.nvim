@@ -38,14 +38,14 @@ As a dependency of other plugins (loaded on demand): >lua
 
     {
       "you/my-plugin.nvim",
-      dependencies = { "StefanBartl/lib.nvim" },
+      dependencies = { "WKDSteve/lib.nvim" },
     }
 <
 With packer.nvim: >lua
 
     use {
       "you/my-plugin.nvim",
-      requires = { "StefanBartl/lib.nvim" },
+      requires = { "WKDSteve/lib.nvim" },
     }
 <
 The package.path bootstrap below (|lib.nvim-bootstrap|) is specific to
@@ -55,7 +55,7 @@ require("lib.*").
 
 Standalone, lazily on first require: >lua
 
-    { "StefanBartl/lib.nvim", lazy = true }
+    { "WKDSteve/lib.nvim", lazy = true }
 <
                                                        *lib.nvim-bootstrap*
 Config-wide use ~
@@ -73,7 +73,7 @@ Bootstrap it in init.lua, BEFORE require("lazy").setup(): >lua
     if not (vim.uv or vim.loop).fs_stat(libpath) then
       vim.fn.system({
         "git", "clone", "--filter=blob:none",
-        "https://github.com/StefanBartl/lib.nvim.git", libpath,
+        "https://github.com/WKDSteve/lib.nvim.git", libpath,
       })
     end
     vim.opt.rtp:prepend(libpath)
@@ -85,7 +85,7 @@ Bootstrap it in init.lua, BEFORE require("lazy").setup(): >lua
 <
 Then add a managed spec so :Lazy update keeps it current: >lua
 
-    { "StefanBartl/lib.nvim", lazy = false, priority = 1000 }
+    { "WKDSteve/lib.nvim", lazy = false, priority = 1000 }
 <
 lib.nvim has no third-party dependencies; it uses only `vim` and itself.
 

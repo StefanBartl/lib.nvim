@@ -68,7 +68,7 @@ stale by the next commit.
 
 ## Not in this repository
 
-[Ecosystem architecture](https://github.com/StefanBartl/docmap.nvim/blob/main/docs/ECOSYSTEM.md)
+[Ecosystem architecture](https://github.com/WKDSteve/docmap.nvim/blob/main/docs/ECOSYSTEM.md)
 — where docs, static analysis and runtime each belong across the four pieces
 this library sits at the bottom of (`lib.nvim`, `docmap.nvim`,
 `runtime-analysis.nvim`, `mdview.nvim`), and the rule deciding what moves down

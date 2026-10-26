@@ -123,7 +123,7 @@ the same string means something different in each.
 
 ## Used by
 
-- [`pickers.nvim`](https://github.com/StefanBartl/pickers.nvim) — the `smart`
+- [`pickers.nvim`](https://github.com/WKDSteve/pickers.nvim) — the `smart`
   action's file ranking. This module is that implementation, extracted.
-- [`gopath.nvim`](https://github.com/StefanBartl/gopath.nvim) — alternate-file
+- [`gopath.nvim`](https://github.com/WKDSteve/gopath.nvim) — alternate-file
   candidates, ordered by what you actually chose before.

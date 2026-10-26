@@ -37,7 +37,7 @@ that is meant to run headless at require-time).
 
 ## `lib.nvim.ui.kit`
 
-> Migrated to [`ui.nvim`](https://github.com/StefanBartl/ui.nvim) on
+> Migrated to [`ui.nvim`](https://github.com/WKDSteve/ui.nvim) on
 > 2026-09-14 (`require("ui.kit")`) — these examples still run against this
 > repo's own (frozen) copy, and apply unchanged to `ui.nvim`'s copy too.
 

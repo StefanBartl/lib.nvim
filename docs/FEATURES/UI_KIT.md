@@ -1,7 +1,7 @@
 # UI kit
 
 > **Migrated to `ui.nvim` (2026-09-14).** Canonical home is now
-> [`ui.nvim`](https://github.com/StefanBartl/ui.nvim) (`require("ui.kit")`).
+> [`ui.nvim`](https://github.com/WKDSteve/ui.nvim) (`require("ui.kit")`).
 > This page describes the original copy, still present here (no shim, not
 > deleted) but no longer receiving new features.
 
