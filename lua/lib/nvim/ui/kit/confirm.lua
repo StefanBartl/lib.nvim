@@ -516,9 +516,9 @@ local function open_new(opts, settle_old)
     -- Held until the answer is out: a question waiting in `kit.ask` must not open between the
     -- close and the answer (whose handler may open a dialog of its own).
     local release = require("lib.nvim.ui.kit.modal").hold()
-    local cb, custom, labels, focus = retire()
+    local gone_cb, gone_custom, gone_labels, gone_focus = retire()
     vim.schedule(function()
-      local ok, err = pcall(deliver, cb, custom, labels, focus, false)
+      local ok, err = pcall(deliver, gone_cb, gone_custom, gone_labels, gone_focus, false)
       release()
       if not ok then
         error(err, 0)
