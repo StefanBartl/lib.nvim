@@ -68,7 +68,7 @@ return function(_)
 
   -- a single word wider than the window is broken between characters
   surf = open({ question = string.rep("x", 200) })
-  _, lines = assert_inside(surf, "one long word")
+  lines = select(2, assert_inside(surf, "one long word"))
   ok(#lines > 3, "the word was broken")
   restore()
 
