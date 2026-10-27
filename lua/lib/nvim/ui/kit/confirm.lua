@@ -16,6 +16,15 @@
 ---   - cancel (<Esc>/q)         -> on_answer(false) for the default case,
 ---                                 on_answer(nil) for a custom choice list.
 ---
+--- Options beyond `question`/`choices`/`title`/`theme`:
+---   - `default`: the button that starts focused (index or label; default the first).
+---   - `choices` as a list of labels, or as a `vim.fn.confirm` string ("&Delete\n&Cancel": buttons
+---     separated by a newline, `&` before the letter that picks the button). Hotkeys: those
+---     letters, `y`/`n` for the Yes/No default, the digits 1-9. h, l and q stay navigation.
+---   - `<C-c>` cancels like <Esc>; so does focus moving elsewhere, unless `keep_on_focus_lost`.
+---   - `kind = "danger" | "warn" | "info"`: border and title in the status colour.
+---   - `legend = true`: a one-line key legend in the window's winbar.
+---
 --- Every way the dialog can end answers exactly once: a button, <Esc>/q, the float closed from
 --- outside (`:q`, `:only`), another dialog replacing it, or `close()`. The last three count as
 --- a cancel.
@@ -223,6 +232,17 @@ function M.click()
   M.confirm()
 end
 
+--- Focus button `index` and confirm it, like a click on it (what a hotkey does).
+---@param index integer  # 1-based
+function M.pick(index)
+  if not M.is_open() or not state.labels[index] then
+    return
+  end
+  state.focus = index
+  render_focus()
+  M.confirm()
+end
+
 --- Move focus by `delta` buttons, wrapping around.
 ---@param delta integer
 function M.move(delta)
@@ -363,6 +383,9 @@ function M.ask(opts)
     -- implementation) is a real answer and counts.
     local open_opts = vim.tbl_extend("force", {}, opts)
     open_opts.abandoned, open_opts.max_wait_ms = nil, nil
+    if open_opts.keep_on_focus_lost == nil then
+      open_opts.keep_on_focus_lost = true
+    end
     local opening = true
     local sync_answer, has_sync = nil, false
     open_opts.on_answer = function(value)
@@ -417,9 +440,118 @@ end
 ---@param opts table
 ---@param settle_old fun()  # answers the dialog this one replaces, once this one is in place
 ---@return Lib.UI.Kit.Surface|nil
+---@internal
+--- The one-line key legend of the winbar. A `%` in a key or text is a statusline item to the
+--- winbar (`%{...}` even evaluates an expression), so it is doubled.
+---@param entries { lhs: string, legend: string }[]
+---@return string
+local function legend_text(entries)
+  local function plain(x)
+    return (tostring(x):gsub("%%", "%%%%"))
+  end
+  local parts = {}
+  for _, e in ipairs(entries) do
+    parts[#parts + 1] = ("%%#Special#%s %%#Comment#%s"):format(plain(e.lhs), plain(e.legend))
+  end
+  return " " .. table.concat(parts, "%#NonText#  │  ") .. "%#Normal#"
+end
+
+--- Keys that move or cancel and so cannot be a button's hotkey.
+local RESERVED_KEYS = { h = true, l = true, q = true }
+
+--- The status group of a `kind`, drawn on the border and the title.
+local KIND_GROUPS = { danger = "KitError", warn = "KitWarn", info = "KitInfo" }
+
+---@internal
+--- Choices given as a `vim.fn.confirm` string -- buttons separated by a newline, `&` in front of
+--- the letter that is the button's hotkey -- as labels and hotkeys. A list of labels is taken as
+--- it is (a `&` in a list is part of the text): hotkeys are the digits then.
+---@param choices string|string[]|nil
+---@return string[]|nil labels  # nil: use the Yes/No default
+---@return table<integer, { key: string, col: integer }> marks  # per button: its `&` key and the byte column of that letter in the label
+local function parse_choices(choices)
+  if type(choices) == "table" and #choices > 0 then
+    return choices, {}
+  end
+  if type(choices) ~= "string" or choices == "" then
+    return nil, {}
+  end
+  local labels, marks = {}, {}
+  for piece in vim.gsplit(choices, "\n", { plain = true }) do
+    local at = piece:find("&", 1, true)
+    if at and at < #piece then
+      labels[#labels + 1] = piece:sub(1, at - 1) .. piece:sub(at + 1)
+      -- the letter is one character, possibly several bytes
+      local char = vim.fn.strcharpart(piece:sub(at + 1), 0, 1)
+      marks[#labels] = { key = char, col = at - 1 }
+    else
+      labels[#labels + 1] = piece
+    end
+  end
+  return labels, marks
+end
+
+---@internal
+--- 1-based index of the button `default` names (an index, or a label), 1 when it names none.
+---@param default integer|string|nil
+---@param labels string[]
+---@return integer
+local function default_index(default, labels)
+  if type(default) == "number" and labels[default] then
+    return default
+  end
+  if type(default) == "string" then
+    for i, l in ipairs(labels) do
+      if l == default then
+        return i
+      end
+    end
+  end
+  return 1
+end
+
+---@internal
+--- Which key picks which button: the `&` letters, `y`/`n` for the Yes/No default, the digits
+--- 1-9 for the first nine. Navigation keys are never taken; a key that two buttons ask for goes to
+--- the first, and what was refused is returned for a warning.
+---@param labels string[]
+---@param marks table<integer, { key: string, col: integer }>
+---@param custom boolean
+---@return table<string, integer> keys  # lower-case key -> button index
+---@return string[] refused
+local function hotkeys(labels, marks, custom)
+  local keys, refused = {}, {}
+  local function take(key, i, why)
+    local k = key:lower()
+    if RESERVED_KEYS[k] then
+      refused[#refused + 1] = ("%q of %q (%s)"):format(key, tostring(labels[i]), "moves or cancels")
+    elseif keys[k] and keys[k] ~= i then
+      refused[#refused + 1] = ("%q of %q (%s)"):format(key, tostring(labels[i]), why or "taken")
+    else
+      keys[k] = i
+    end
+  end
+  -- in button order, so the first button that asks for a key gets it
+  for i = 1, #labels do
+    if marks[i] then
+      take(marks[i].key, i)
+    end
+  end
+  if not custom then
+    take("y", 1)
+    take("n", 2)
+  end
+  for i = 1, math.min(#labels, 9) do
+    keys[tostring(i)] = keys[tostring(i)] or i
+  end
+  return keys, refused
+end
+
 local function open_new(opts, settle_old)
-  local custom = type(opts.choices) == "table" and #opts.choices > 0
-  local labels = custom and opts.choices or { "Yes", "No" }
+  local parsed, marks = parse_choices(opts.choices)
+  local custom = parsed ~= nil
+  local labels = parsed or { "Yes", "No" }
+  local focus0 = default_index(opts.default, labels)
 
   -- The float is never wider than the window `make_scratch` would clamp it to: sizing and
   -- centering against a wider width pushed the buttons out of the visible window. The question is
@@ -473,7 +605,8 @@ local function open_new(opts, settle_old)
     theme = opts.theme,
     title = opts.title,
     width = width,
-    height = #lines,
+    -- the legend is a winbar: it takes one row of the window
+    height = #lines + (opts.legend and 1 or 0),
     relative = opts.relative or "editor",
     enter = true,
     filetype = "lib-kit-confirm",
@@ -498,10 +631,58 @@ local function open_new(opts, settle_old)
   state.surf = surf
   state.labels = labels
   state.ranges = ranges
-  state.focus = 1
+  state.focus = focus0
   state.custom = custom
   state.on_answer = opts.on_answer
   render_focus()
+
+  local keys, refused = hotkeys(labels, marks, custom)
+
+  -- The hotkey letters of a `&` choice are drawn with the accent, where the label is shown whole.
+  for i, m in pairs(marks) do
+    local r = ranges[i]
+    local line = lines[r.row + 1]
+    local col = r.start_col + 2 + m.col -- "[ " in front of the label
+    if line and line:sub(col + 1, col + #m.key) == m.key then
+      pcall(api.nvim_buf_set_extmark, surf.bufnr, state.ns, r.row, col, {
+        end_col = col + #m.key,
+        hl_group = "KitAccent",
+        priority = 90,
+      })
+    end
+  end
+
+  -- `kind` colours the border and the title with the status group of the theme.
+  local group = KIND_GROUPS[opts.kind]
+  if group and api.nvim_win_is_valid(surf.winid) then
+    local wh = vim.wo[surf.winid].winhighlight
+    vim.wo[surf.winid].winhighlight = (wh ~= "" and wh .. "," or "")
+      .. ("FloatBorder:%s,FloatTitle:%s"):format(group, group)
+  end
+
+  if opts.legend and api.nvim_win_is_valid(surf.winid) then
+    local entries = { { lhs = "←/→", legend = "move" }, { lhs = "⏎", legend = "select" } }
+    if not custom then
+      entries[#entries + 1] = { lhs = "y/n", legend = "answer" }
+    end
+    entries[#entries + 1] = { lhs = "q", legend = "cancel" }
+    vim.wo[surf.winid].winbar = legend_text(entries)
+  end
+
+  if #refused > 0 then
+    vim.notify(
+      "lib.nvim.ui.kit.confirm: hotkey not used: " .. table.concat(refused, ", "),
+      vim.log.levels.WARN
+    )
+  end
+
+  -- Focus moving elsewhere (a click outside, another plugin switching windows) dismisses the
+  -- dialog as a cancel instead of leaving it open behind the cursor. `keep_on_focus_lost = true`
+  -- keeps it; `kit.ask` does by default, since a question nobody asked for must not be answered
+  -- "no" by a window change.
+  if not opts.keep_on_focus_lost then
+    require("lib.nvim.window.close_on_focus_lost")(surf.winid)
+  end
 
   -- The float going away by any other route (`:q`, `<C-w>c`, `:only`) is a cancel: without
   -- this the answer never came. Only for this dialog: a replaced one has already been taken
@@ -540,8 +721,18 @@ local function open_new(opts, settle_old)
   end
   map("n", "<CR>", M.confirm, mo)
   map("n", "<Esc>", M.cancel, mo)
+  map("n", "<C-c>", M.cancel, mo)
   map("n", "q", M.cancel, mo)
   map("n", "<LeftMouse>", M.click, mo)
+  for key, index in pairs(keys) do
+    local pick = function()
+      M.pick(index)
+    end
+    map("n", key, pick, mo)
+    if key:match("%a") then
+      map("n", key:upper(), pick, mo)
+    end
+  end
 
   settle_old()
   return surf

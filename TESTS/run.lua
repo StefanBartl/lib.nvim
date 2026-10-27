@@ -110,6 +110,7 @@ local specs = {
   "ui_kit_ask_spec.lua",
   "ui_kit_confirm_answers_spec.lua",
   "ui_kit_confirm_layout_spec.lua",
+  "ui_kit_confirm_keys_spec.lua",
   "ui_kit_ask_modal_spec.lua",
   "ui_kit_async_spec.lua",
   "ui_kit_conceal_spec.lua",

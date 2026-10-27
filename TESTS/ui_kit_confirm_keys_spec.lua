@@ -1,0 +1,205 @@
+-- Test code: when something here comes back nil, this file must crash and
+-- name it rather than silently skip -- see TESTS/ui_kit_spec.lua's header.
+---@diagnostic disable: need-check-nil
+-- TESTS/ui_kit_confirm_keys_spec.lua -- lib.nvim.ui.kit.confirm options: default focus, & hotkeys,
+-- <C-c>, focus loss, kind, legend. Port of ui.nvim's spec of the same name.
+
+return function(_)
+  local restores = {}
+  --- Every stub is put back, also when the body fails (shared run of lib.nvim).
+  local function stub(tbl, key, fn)
+    restores[#restores + 1] = { tbl, key, tbl[key] }
+    tbl[key] = fn
+  end
+  local ok_body, err_body = pcall(function()
+    local kit = require("lib.nvim.ui.kit")
+    local confirm = require("lib.nvim.ui.kit.confirm")
+    local api = vim.api
+
+    local function eq(actual, expected, msg)
+      assert(
+        vim.deep_equal(actual, expected),
+        ("%s: expected %s, got %s"):format(msg, vim.inspect(expected), vim.inspect(actual))
+      )
+    end
+    local function ok(cond, msg)
+      assert(cond, msg)
+    end
+
+    confirm.close()
+
+    --- Open a dialog; returns its answers (a list: `nil` becomes the string "nil") and its surface.
+    local function open(opts)
+      local calls = {}
+      opts.on_answer = function(v)
+        calls[#calls + 1] = v == nil and "nil" or v
+      end
+      local surf = kit.confirm(opts)
+      ok(surf, "the dialog opened")
+      return calls, surf
+    end
+
+    --- Type `keys` into the focused dialog the way a person would.
+    local function type_keys(keys)
+      api.nvim_feedkeys(api.nvim_replace_termcodes(keys, true, false, true), "x", false)
+    end
+
+    local function wait_for(fn, msg)
+      ok(vim.wait(800, fn, 5), msg)
+    end
+
+    local warnings = {}
+    stub(vim, "notify", function(msg)
+      warnings[#warnings + 1] = msg
+    end)
+
+    -- ---------------------------------------------------------------- default
+    local calls = open({ question = "Delete?", default = 2 })
+    eq(confirm.current_focus(), 2, "default = 2 starts on the second button")
+    type_keys("<CR>")
+    eq(calls, { false }, "<CR> on the default 'No' answers false")
+
+    open({ question = "Which?", choices = { "a", "b", "c" }, default = "c" })
+    eq(confirm.current_focus(), 3, "default by label")
+    confirm.cancel()
+    open({ question = "Which?", choices = { "a", "b" }, default = 9 })
+    eq(confirm.current_focus(), 1, "a default that names no button falls back to the first")
+    confirm.cancel()
+
+    -- ---------------------------------------------------------------- hotkeys
+    calls = open({ question = "Sure?" })
+    type_keys("n")
+    eq(calls, { false }, "n answers No on the Yes/No default")
+    calls = open({ question = "Sure?" })
+    type_keys("y")
+    eq(calls, { true }, "y answers Yes")
+    calls = open({ question = "Sure?" })
+    type_keys("Y")
+    eq(calls, { true }, "and so does the capital")
+
+    calls = open({ question = "Which?", choices = { "first", "second", "third" } })
+    type_keys("3")
+    eq(calls, { "third" }, "a digit picks the button")
+
+    -- a vim.fn.confirm string: the letters are hotkeys and are not shown
+    local surf
+    calls, surf = open({ question = "Remove?", choices = "&Delete\n&Cancel\nRe&name" })
+    local line = api.nvim_buf_get_lines(surf.bufnr, 0, -1, false)
+    ok(table.concat(line, "\n"):find("%[ Delete %]"), "the & is not drawn")
+    ok(table.concat(line, "\n"):find("%[ Rename %]"), "also in the middle of a label")
+    local accents = {}
+    for _, m in ipairs(api.nvim_buf_get_extmarks(surf.bufnr, -1, 0, -1, { details = true })) do
+      if m[4].hl_group == "KitAccent" then
+        accents[#accents + 1] =
+          api.nvim_buf_get_text(surf.bufnr, m[2], m[3], m[2], m[4].end_col, {})[1]
+      end
+    end
+    table.sort(accents)
+    eq(accents, { "C", "D", "n" }, "the hotkey letters are drawn with the accent")
+    type_keys("n")
+    eq(calls, { "Rename" }, "the & letter picks the button, and answers the label without &")
+    calls = open({ question = "Remove?", choices = "&Delete\n&Cancel" })
+    type_keys("C") -- capital works too
+    eq(calls, { "Cancel" }, "the capital of an & letter")
+
+    -- a list is taken as it is: a & in it is text
+    surf = select(2, open({ question = "Q?", choices = { "R&D", "Other" } }))
+    ok(
+      table.concat(api.nvim_buf_get_lines(surf.bufnr, 0, -1, false), "\n"):find("R&D", 1, true),
+      "a & in a list stays"
+    )
+    confirm.cancel()
+
+    -- keys that move or cancel are never a hotkey, and a taken key goes to the first button
+    warnings = {}
+    calls = open({ question = "Q?", choices = "&Help\n&Save\n&Send" })
+    ok(#warnings == 1, "what was refused is reported once")
+    ok(warnings[1]:find("Help", 1, true) and warnings[1]:find("Send", 1, true), "naming both")
+    type_keys("l") -- still moves focus
+    eq(confirm.current_focus(), 2, "h/l keep moving focus")
+    type_keys("s")
+    eq(calls, { "Save" }, "the taken key went to the first button that asked")
+
+    -- ---------------------------------------------------------------- <C-c>
+    calls = open({ question = "Q?" })
+    type_keys("<C-c>")
+    eq(calls, { false }, "<C-c> cancels")
+    calls = open({ question = "Q?", choices = { "a", "b" } })
+    type_keys("<C-c>")
+    eq(calls, { "nil" }, "<C-c> on a choices list answers nil")
+
+    -- ---------------------------------------------------------------- focus lost
+    local main = api.nvim_list_wins()[1]
+    calls = open({ question = "Q?" })
+    api.nvim_set_current_win(main)
+    wait_for(function()
+      return #calls > 0
+    end, "moving focus away cancels")
+    eq(calls, { false }, "as a cancel, once")
+    eq(confirm.is_open(), false, "and the dialog is gone")
+
+    calls = open({ question = "Q?", keep_on_focus_lost = true })
+    api.nvim_set_current_win(main)
+    vim.wait(80, function()
+      return false
+    end, 5)
+    eq(confirm.is_open(), true, "keep_on_focus_lost keeps it open")
+    eq(calls, {}, "unanswered")
+    confirm.close()
+
+    -- a question nobody asked for is not answered "no" by a window change
+    local asked = {}
+    kit.ask({
+      question = "Asked?",
+      on_answer = function(v)
+        asked[#asked + 1] = v
+      end,
+    })
+    ok(confirm.is_open(), "the ask is showing")
+    api.nvim_set_current_win(main)
+    vim.wait(80, function()
+      return false
+    end, 5)
+    eq(confirm.is_open(), true, "kit.ask keeps its dialog when focus moves")
+    eq(asked, {}, "and has not answered")
+    confirm.close()
+    wait_for(function()
+      return #asked > 0
+    end, "close() answers it")
+
+    -- ---------------------------------------------------------------- kind, legend
+    surf = select(2, open({ question = "Delete everything?", kind = "danger", title = "Danger" }))
+    ok(
+      vim.wo[surf.winid].winhighlight:find("FloatBorder:KitError", 1, true),
+      "danger colours the border"
+    )
+    ok(vim.wo[surf.winid].winhighlight:find("FloatTitle:KitError", 1, true), "and the title")
+    confirm.cancel()
+    surf = select(2, open({ question = "Careful", kind = "warn" }))
+    ok(vim.wo[surf.winid].winhighlight:find("KitWarn", 1, true), "warn")
+    confirm.cancel()
+
+    surf = select(2, open({ question = "With a legend?", legend = true }))
+    local bar = vim.wo[surf.winid].winbar
+    ok(bar:find("select", 1, true) and bar:find("cancel", 1, true), "the legend lists the keys")
+    ok(bar:find("y/n", 1, true), "including y/n for the Yes/No default")
+    local rows = #api.nvim_buf_get_lines(surf.bufnr, 0, -1, false)
+    ok(api.nvim_win_get_height(surf.winid) >= rows + 1, "the winbar row is on top of the content")
+    confirm.cancel()
+    surf = select(2, open({ question = "No legend", choices = { "a", "b" }, legend = true }))
+    ok(not vim.wo[surf.winid].winbar:find("y/n", 1, true), "no y/n in the legend of a choices list")
+    confirm.cancel()
+    surf = select(2, open({ question = "Plain" }))
+    eq(vim.wo[surf.winid].winbar, "", "no legend unless asked for")
+    eq(vim.wo[surf.winid].winhighlight:find("KitError", 1, true), nil, "and no kind colour")
+    confirm.cancel()
+  end)
+  for i = #restores, 1, -1 do
+    local r = restores[i]
+    r[1][r[2]] = r[3]
+  end
+  require("lib.nvim.ui.kit.confirm").close()
+  if not ok_body then
+    error(err_body, 0)
+  end
+end

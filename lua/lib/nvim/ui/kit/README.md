@@ -294,6 +294,24 @@ dialog is never wider than the editor allows and the buttons stay in the window;
 wider than the window is cut with `…` (the answer is still the full label). A question taller
 than the editor is cut to leave the buttons visible.
 
+Options of `kit.confirm` / `kit.ask`:
+
+- `default` -- the button that starts focused (index or label; the first when omitted or unknown).
+  With it the order of the buttons is the natural one (action first, cancel last) and `<CR>` still
+  lands on the safe answer.
+- `choices` as a list of labels, or as a `vim.fn.confirm` string: buttons separated by a newline,
+  `&` before the letter that picks the button (`"&Delete\n&Cancel\nRe&name"`). The `&` is not
+  drawn, the letter is drawn with the accent, and the answer is the label without it. In a list
+  a `&` is text. Hotkeys are those letters (either case), `y`/`n` for the Yes/No default, and the
+  digits 1-9 for the first nine buttons. `h`, `l` and `q` stay navigation; a refused key (reserved,
+  or already taken by an earlier button) is reported once when the dialog opens.
+- `<C-c>` cancels like `<Esc>`. So does focus moving elsewhere (a click outside, another plugin
+  switching windows); `keep_on_focus_lost = true` keeps the dialog. `kit.ask` keeps it by default:
+  a question nobody asked for must not be answered "no" by a window change.
+- `kind = "danger" | "warn" | "info"` draws the border and the title in the status colour
+  (`KitError`, `KitWarn`, `KitInfo`).
+- `legend = true` adds a one-line key legend to the window's winbar.
+
 Every way a dialog ends answers it exactly once: a button, `<Esc>`/`q`, the float
 closed from outside (`:q`, `:only`), another dialog replacing it, or
 `confirm.close()`. The last three count as a cancel; the answer of an externally
