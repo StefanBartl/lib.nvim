@@ -144,9 +144,7 @@ return function(H)
     eq(submitted, "kit", "kit style: on_submit")
     dialog.input({
       prompt = "Kit style",
-      on_submit = function(v)
-        submitted = v
-      end,
+      on_submit = function() end,
       on_cancel = function()
         cancelled = true
       end,
@@ -322,7 +320,7 @@ return function(H)
         o.on_answer(false) -- what the kit does when its float cannot be created
         return nil
       end,
-      input = function(o)
+      input = function()
         return nil
       end,
     })
@@ -341,7 +339,6 @@ return function(H)
       return #got > 0
     end, "native answer arrives")
     same(got, { false }, "once (the kit's own 'no' was not delivered on top of it)")
-    seen_input = nil
     got = {}
     used = dialog.input({ prompt = "No float" }, function(v)
       got[#got + 1] = v
