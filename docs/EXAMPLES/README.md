@@ -67,6 +67,7 @@ that is meant to run headless at require-time).
   and view their contents side by side.
 - [kit-layout.lua](kit-layout.lua) — hand-build a coordinated multi-float
   layout with `compute`/`mount`, for UI shapes no ready-made template fits.
+- [kit-async.lua](kit-async.lua) — linear code over the callback components with `kit.async.run` (input, then confirm, `ask`, `choices`), without blocking Neovim; the replacement for `kit.sync`.
 - [kit-sync.lua](kit-sync.lua) — bridge an async kit component
   (input/form/live_input) back to a plain synchronous return value via
   `vim.wait()`.

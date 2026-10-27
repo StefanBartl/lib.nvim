@@ -1,5 +1,9 @@
 -- docs/EXAMPLES/kit-sync.lua
 --
+-- DEPRECATED. kit.sync waits in vim.wait(), and Neovim does not run typed keys during
+-- vim.wait: the dialog never sees them and the call returns when its timeout runs out (ten
+-- minutes by default). Use kit.async (kit-async.lua).
+--
 -- Module:   lib.nvim.ui.kit.sync (lib.nvim.ui.kit.sync)
 -- Scenario: bridge an async, callback-based kit component (input/form/
 --           live_input) back to a plain synchronous return value via

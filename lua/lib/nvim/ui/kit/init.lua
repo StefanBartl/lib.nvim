@@ -31,6 +31,7 @@ local prompt = require("lib.nvim.ui.kit.prompt")
 local form = require("lib.nvim.ui.kit.form")
 local sheet = require("lib.nvim.ui.kit.sheet")
 local sync = require("lib.nvim.ui.kit.sync")
+local async = require("lib.nvim.ui.kit.async")
 local chooser = require("lib.nvim.ui.kit.chooser")
 local compare = require("lib.nvim.ui.kit.compare")
 local shortlist = require("lib.nvim.ui.kit.shortlist")
@@ -209,6 +210,10 @@ end
 --- (input/form/live_input) resolves, returning its result as a plain value
 --- instead of via callback. Only
 --- safe to call from a normal call stack, never a fast-event context.
+---
+--- DEPRECATED: Neovim does not run typed keys while `vim.wait` waits, so the dialog never sees
+--- them and the call returns when its timeout runs out (ten minutes by default). Use
+--- `kit.async` (coroutines) instead; this stays only until the last caller is gone.
 ---@param open_fn fun(opts: table): any
 ---@param opts table
 ---@param timeout_ms? integer
@@ -218,6 +223,10 @@ end
 function M.sync(open_fn, opts, timeout_ms)
   return sync.open(open_fn, opts, timeout_ms)
 end
+
+--- Linear code over the callback components, without blocking: `kit.async.run(function() ... end)`,
+--- then `kit.async.confirm/ask/input/form/select` inside it. See `lib.nvim.ui.kit.async`.
+M.async = async
 
 --- Component dispatch table.
 local COMPONENTS = {
