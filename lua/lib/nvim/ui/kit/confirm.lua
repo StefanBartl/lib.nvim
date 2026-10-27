@@ -15,6 +15,10 @@
 ---   - custom `choices`         -> on_answer(choice_string)
 ---   - cancel (<Esc>/q)         -> on_answer(false) for the default case,
 ---                                 on_answer(nil) for a custom choice list.
+---
+--- Every way the dialog can end answers exactly once: a button, <Esc>/q, the float closed from
+--- outside (`:q`, `:only`), another dialog replacing it, or `close()`. The last three count as
+--- a cancel.
 
 local surface = require("lib.nvim.ui.kit.surface")
 local buttons = require("lib.nvim.ui.kit.buttons")
@@ -57,17 +61,55 @@ function M.is_open()
   return state.surf ~= nil and state.surf:is_valid()
 end
 
---- Close and reset (idempotent).
-function M.close()
-  if state.surf then
-    state.surf:close()
-  end
+---@internal
+--- Take the dialog's state and reset it, so whatever happens next (the float's `WinClosed`
+--- hook, a second `finish`) finds nothing left to answer. Returns what the answer needs.
+---@return Lib.UI.Kit.Surface|nil surf
+---@return function|nil cb
+---@return boolean custom
+---@return string[] labels
+---@return integer focus
+local function take_state()
+  local surf, cb, custom, labels, focus =
+    state.surf, state.on_answer, state.custom, state.labels, state.focus
   state.surf = nil
   state.labels = {}
   state.ranges = {}
   state.focus = 1
   state.custom = false
   state.on_answer = nil
+  return surf, cb, custom, labels, focus
+end
+
+---@internal
+--- End the dialog and answer it once: with the focused button when `confirmed`, with the
+--- cancel value otherwise (`false`, or `nil` for a custom choice list). Idempotent.
+---@param confirmed boolean
+local function finish(confirmed)
+  local surf, cb, custom, labels, focus = take_state()
+  if surf then
+    surf:close()
+  end
+  if not cb then
+    return
+  end
+  if confirmed then
+    if custom then
+      cb(labels[focus])
+    else
+      cb(focus == 1)
+    end
+  elseif custom then
+    cb(nil)
+  else
+    cb(false)
+  end
+end
+
+--- Close the dialog (idempotent). An open dialog is answered as cancelled: the module
+--- promises an answer on every path, and a `kit.ask` or a caller waiting on it relies on that.
+function M.close()
+  finish(false)
 end
 
 --- 1-based index of the currently focused button.
@@ -116,15 +158,7 @@ function M.confirm()
   if not M.is_open() then
     return
   end
-  local cb, custom, labels, focus = state.on_answer, state.custom, state.labels, state.focus
-  M.close()
-  if cb then
-    if custom then
-      cb(labels[focus])
-    else
-      cb(focus == 1)
-    end
-  end
+  finish(true)
 end
 
 --- Cancel the dialog (Esc/q), fire on_answer with the cancelled value, close.
@@ -132,15 +166,7 @@ function M.cancel()
   if not M.is_open() then
     return
   end
-  local cb, custom = state.on_answer, state.custom
-  M.close()
-  if cb then
-    if custom then
-      cb(nil)
-    else
-      cb(false)
-    end
-  end
+  finish(false)
 end
 
 --- How often a waiting `ask` looks again, and how long it waits at most.
@@ -323,6 +349,15 @@ function M.open(opts)
   state.custom = custom
   state.on_answer = opts.on_answer
   render_focus()
+
+  -- The float going away by any other route (`:q`, `<C-w>c`, `:only`) is a cancel: without
+  -- this the answer never came. Only for this dialog: a replaced one has already been taken
+  -- out of `state` by `open`'s own `M.close()` and its late `WinClosed` finds nothing to do.
+  surf:on_close(function()
+    if state.surf == surf then
+      finish(false)
+    end
+  end)
 
   -- Throwaway buffer-local keys: not recorded (see lib.nvim.ui.kit.chooser's `mo`).
   local mo = { buffer = surf.bufnr, nowait = true, record = false }
