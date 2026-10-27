@@ -383,7 +383,7 @@
 ---@field menu fun(opts: table): Lib.UI.Kit.Surface|nil       # cursor-anchored action list (label → callback)
 ---@field compare fun(opts: Lib.UI.Kit.CompareOpts): Lib.UI.Kit.CompareHandle|nil  # pick two items, view them side by side
 ---@field progress fun(opts: table): table                     # passthrough to lib.nvim.progress.create
----@field async table  # kit.async: coroutines over the callback components (run, await, confirm, ask, input, form, select); the non-blocking replacement for sync
+---@field async Lib.UI.Kit.AsyncModule  # kit.async: coroutines over the callback components, the non-blocking replacement for sync
 ---@field sync fun(open_fn: fun(opts: table): any, opts: table, timeout_ms: integer|nil): any  # DEPRECATED, blocks Neovim (typed keys do not reach the dialog): use async. vim.wait bridge for on_submit/on_cancel components; full signature (incl. the two boolean returns) is on lua/lib/nvim/ui/kit/init.lua's M.sync
 ---@field preview fun(): integer, integer                       # open the live theme playground (also :KitPreview)
 ---@field surface Lib.UI.Kit.SurfaceModule
@@ -450,3 +450,13 @@
 ---@field default fun(): string  # name of the currently active default preset
 
 return {}
+
+---@class Lib.UI.Kit.AsyncModule
+---@field run fun(fn: fun(...), ...: any): thread  # start a coroutine; the only place the calls below may suspend
+---@field await fun(start: fun(deliver: fun(...))): ...  # suspend until `deliver(...)` is called (first call counts)
+---@field confirm fun(opts: table): boolean|string|nil  # as kit.confirm; single-instance, use ask for overlapping flows
+---@field ask fun(opts: table): boolean|string|nil  # as kit.ask: waits behind open dialogs, always answers
+---@field submit fun(open_fn: fun(opts: table): any, opts: table): any, boolean?  # an on_submit/on_cancel component: value, or nil + true
+---@field input fun(opts: table): string|nil, boolean?
+---@field form fun(opts: table): table|nil, boolean?
+---@field select fun(opts: table): any, integer?  # item, index; nil when dismissed

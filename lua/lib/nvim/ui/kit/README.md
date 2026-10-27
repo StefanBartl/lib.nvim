@@ -402,7 +402,7 @@ field at once, a row each with its label. Use it when the answers belong
 together and the person should see — and be able to fix — all of them before
 committing; `kit.form` stays the right tool for a short chain of questions.
 Same callbacks (`on_submit(values)` / `on_cancel()`), same keyed result table,
-so `kit.sync(kit.sheet, opts)` works too.
+so `kit.sync(kit.sheet, opts)` works too (deprecated, see `kit.async`).
 
 ```lua
 kit.sheet({
@@ -583,7 +583,11 @@ kit.input({
 })
 ```
 
-### Sync bridge (blocking wrapper)
+### Sync bridge (blocking wrapper) -- deprecated, use `kit.async`
+
+> **Deprecated.** `vim.wait()` does not run typed keys, so a dialog opened this way never sees them
+> and the call returns when its timeout runs out. Use `kit.async` (see above). What follows stays
+> until the last caller is gone.
 
 `kit.input`/`kit.form`/`kit.live_input` are async — `on_submit`/`on_cancel`
 fire later, once the user responds. `kit.sync(open_fn, opts, timeout_ms?)`

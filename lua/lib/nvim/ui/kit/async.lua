@@ -20,8 +20,15 @@
 --- value the callback form gives: `false`/`nil` from a confirm, `nil` from input, select, form.
 ---
 --- A dialog that answers while it is being opened (a stub, a float that could not open and fell back
---- at once) is returned without suspending. An error in the coroutine is reported with its
---- traceback, not swallowed.
+--- at once) is returned without suspending; a component that cannot open at all counts as
+--- cancelled, so the coroutine never waits for an answer that cannot come. An error in the
+--- coroutine is reported with its traceback, not swallowed. The caller's own callbacks
+--- (`on_submit`, `on_cancel`, `on_select`, `on_answer`) still run, before the coroutine resumes; an
+--- error in one of them is raised after the answer has been delivered, never instead of it.
+---
+--- `kit.confirm` is single-instance: opening one answers the dialog it replaces as cancelled, which
+--- resumes that dialog's coroutine. When several coroutines may ask at overlapping moments (a timer,
+--- an event handler), use `kit.async.ask`: it waits its turn behind whatever dialog is open.
 
 local M = {}
 
@@ -90,39 +97,85 @@ function M.await(start)
     end
   end
 
-  start(deliver)
+  local started, start_err = pcall(start, deliver)
   if settled then
+    -- Answered already (while opening, or a callback raised after delivering): the answer wins,
+    -- the error is reported.
+    if not started then
+      report(co, start_err)
+    end
     return vim.F.unpack_len(result)
+  end
+  if not started then
+    error(start_err, 0)
   end
   suspended = true
   return co_yield()
 end
 
+--- A callback for a component: the caller's own `user` callback first (an error in it is raised
+--- afterwards), then `deliver`, so that no error can cost the coroutine its answer. When arguments
+--- follow `deliver` they are what is delivered (their count counts, `nil`s included); otherwise
+--- it is whatever the callback itself receives.
+---@param user function|nil
+---@param deliver fun(...)
+---@param ... any
+---@return fun(...)
+local function chain(user, deliver, ...)
+  local fixed = vim.F.pack_len(...)
+  return function(...)
+    local ok, err = true, nil
+    if user then
+      ok, err = pcall(user, ...)
+    end
+    if fixed.n > 0 then
+      deliver(vim.F.unpack_len(fixed))
+    else
+      deliver(...)
+    end
+    if not ok then
+      error(err, 0)
+    end
+  end
+end
+
 --- Open `kit.confirm` and wait for the answer: `true`/`false`, or the label (`nil` when dismissed)
---- for a `choices` list.
+--- for a `choices` list. Single-instance, see the header; `ask` is the call for overlapping flows.
 ---@param opts table  # as `kit.confirm`
 ---@return boolean|string|nil
 function M.confirm(opts)
   return M.await(function(deliver)
     local o = vim.tbl_extend("force", {}, opts or {})
-    o.on_answer = deliver
+    o.on_answer = chain(o.on_answer, deliver)
     require("lib.nvim.ui.kit.confirm").open(o)
   end)
 end
 
---- Open `kit.ask` (waits its turn behind open dialogs, always answers) and wait for the answer.
+--- Open `kit.ask` (waits its turn behind open dialogs, always answers) and wait for the answer. A
+--- question dropped because `abandoned()` turned true answers `nil`.
 ---@param opts table  # as `kit.ask`
 ---@return boolean|string|nil
 function M.ask(opts)
   return M.await(function(deliver)
     local o = vim.tbl_extend("force", {}, opts or {})
-    o.on_answer = deliver
+    o.on_answer = chain(o.on_answer, deliver)
+    local user_abandoned = o.abandoned
+    if user_abandoned then
+      o.abandoned = function()
+        local dropped = user_abandoned()
+        if dropped then
+          deliver(nil)
+        end
+        return dropped
+      end
+    end
     require("lib.nvim.ui.kit.confirm").ask(o)
   end)
 end
 
 --- Open an `on_submit`/`on_cancel`-shaped component (`kit.input`, `kit.form`, `kit.live_input`, ...)
---- and wait for it. Returns the submitted value, or `nil` and `true` when it was cancelled.
+--- and wait for it. Returns the submitted value, or `nil` and `true` when it was cancelled -- also
+--- when the component could not open at all (it returns nothing and calls neither callback).
 ---@param open_fn fun(opts: table): any
 ---@param opts table
 ---@return any value
@@ -130,20 +183,14 @@ end
 function M.submit(open_fn, opts)
   return M.await(function(deliver)
     local o = vim.tbl_extend("force", {}, opts or {})
-    local user_submit, user_cancel = o.on_submit, o.on_cancel
+    local user_submit = o.on_submit
     o.on_submit = function(value)
-      if user_submit then
-        user_submit(value)
-      end
-      deliver(value, false)
+      chain(user_submit, deliver, value, false)(value)
     end
-    o.on_cancel = function()
-      if user_cancel then
-        user_cancel()
-      end
+    o.on_cancel = chain(o.on_cancel, deliver, nil, true)
+    if open_fn(o) == nil then
       deliver(nil, true)
     end
-    open_fn(o)
   end)
 end
 
@@ -170,19 +217,11 @@ end
 function M.select(opts)
   return M.await(function(deliver)
     local o = vim.tbl_extend("force", {}, opts or {})
-    local user_select, user_cancel = o.on_select, o.on_cancel
+    local user_select = o.on_select
     o.on_select = function(item, idx)
-      if user_select then
-        user_select(item, idx)
-      end
-      deliver(item, idx)
+      chain(user_select, deliver, item, idx)(item, idx)
     end
-    o.on_cancel = function()
-      if user_cancel then
-        user_cancel()
-      end
-      deliver(nil, nil)
-    end
+    o.on_cancel = chain(o.on_cancel, deliver, nil, nil)
     require("lib.nvim.ui.kit.select").open(o)
   end)
 end
