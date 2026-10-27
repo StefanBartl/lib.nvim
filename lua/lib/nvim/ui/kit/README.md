@@ -289,6 +289,11 @@ kit.confirm({ question = "Pick", choices = { "Keep", "Discard", "Cancel" },
 `h`/`l`/arrows/`<Tab>` move focus (the focused button uses `KitSelection`),
 `<CR>` confirms, `<Esc>`/`q` cancels (default → `false`, custom → `nil`).
 
+A long question is wrapped and many or wide buttons are packed into several rows, so the
+dialog is never wider than the editor allows and the buttons stay in the window; a label
+wider than the window is cut with `…` (the answer is still the full label). A question taller
+than the editor is cut to leave the buttons visible.
+
 Every way a dialog ends answers it exactly once: a button, `<Esc>`/`q`, the float
 closed from outside (`:q`, `:only`), another dialog replacing it, or
 `confirm.close()`. The last three count as a cancel; the answer of an externally

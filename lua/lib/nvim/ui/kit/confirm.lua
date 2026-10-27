@@ -24,6 +24,7 @@ local surface = require("lib.nvim.ui.kit.surface")
 local buttons = require("lib.nvim.ui.kit.buttons")
 local map = require("lib.nvim.bindings.keymap")
 local nul_safe = require("lib.lua.strings.core").nul_safe
+local max_float_width = require("lib.nvim.window.max_float_width")
 
 local api = vim.api
 
@@ -39,6 +40,53 @@ local state = {
   on_answer = nil,
   ns = api.nvim_create_namespace("lib_kit_confirm"),
 }
+
+---@internal
+--- `line` cut into lines of at most `width` display cells: at spaces where there are some, inside
+--- a word that is wider than `width` itself. A line that fits is returned as it is (indent and
+--- repeated spaces kept); only a line that has to be cut is re-joined from its words.
+---@param line string
+---@param width integer
+---@return string[]
+local function wrap_line(line, width)
+  if vim.fn.strdisplaywidth(line) <= width then
+    return { line }
+  end
+  local out, cur = {}, ""
+  local function push_word(word)
+    local sep = cur == "" and "" or " "
+    if vim.fn.strdisplaywidth(cur .. sep .. word) <= width then
+      cur = cur .. sep .. word
+      return
+    end
+    if cur ~= "" then
+      out[#out + 1] = cur
+      cur = ""
+    end
+    -- A word wider than the width: break it between characters.
+    while vim.fn.strdisplaywidth(word) > width do
+      local piece, used = "", 0
+      for _, ch in ipairs(vim.fn.split(word, "\\zs")) do
+        local w = vim.fn.strdisplaywidth(ch)
+        if used + w > width and piece ~= "" then
+          break
+        end
+        piece = piece .. ch
+        used = used + w
+      end
+      out[#out + 1] = piece
+      word = word:sub(#piece + 1)
+    end
+    cur = word
+  end
+  for word in line:gmatch("%S+") do
+    push_word(word)
+  end
+  if cur ~= "" or #out == 0 then
+    out[#out + 1] = cur
+  end
+  return out
+end
 
 ---@internal
 ---@param s string
@@ -135,6 +183,13 @@ end
 --- promises an answer on every path, and a `kit.ask` or a caller waiting on it relies on that.
 function M.close()
   finish(false)
+end
+
+--- A copy of the open dialog's button ranges (`{ row, start_col, end_col }`, 0-based, byte
+--- columns), in button order. Empty when no dialog is open.
+---@return Lib.UI.Kit.ButtonRange[]
+function M.button_ranges()
+  return vim.deepcopy(state.ranges)
 end
 
 --- 1-based index of the currently focused button.
@@ -323,11 +378,16 @@ function M.open(opts)
   local custom = type(opts.choices) == "table" and #opts.choices > 0
   local labels = custom and opts.choices or { "Yes", "No" }
 
+  -- The float is never wider than the window `make_scratch` would clamp it to: sizing and
+  -- centering against a wider width pushed the buttons out of the visible window. The question is
+  -- wrapped to what fits, the buttons are packed into as many rows as it takes.
+  local max_w = max_float_width()
+  local wrap_w = math.max(10, max_w - 4)
   local qlines = {}
   for _, ql in ipairs(vim.split(tostring(opts.question or ""), "\n", { plain = true })) do
     -- A NUL byte in the question (a case title, say) would raise E976 out of the
     -- `strdisplaywidth()` that sizes and centers it: it is shown as the SOH that measures alike.
-    qlines[#qlines + 1] = nul_safe(ql)
+    vim.list_extend(qlines, wrap_line(nul_safe(ql), wrap_w))
   end
 
   -- Width: fit the wider of the question and the button row, plus margin.
@@ -336,7 +396,16 @@ function M.open(opts)
   for _, ql in ipairs(qlines) do
     q_w = math.max(q_w, vim.fn.strdisplaywidth(ql))
   end
-  local width = math.max(btn_w, q_w) + 4
+  local width = math.min(math.max(btn_w, q_w) + 4, max_w)
+
+  -- The buttons first: how many rows they take decides how much room the question has.
+  local button_lines, ranges = buttons.layout_rows(labels, width, 0)
+  local max_h = math.max(1, vim.o.lines - 4)
+  local room = math.max(1, max_h - #button_lines - 1)
+  if #qlines > room then
+    qlines = vim.list_slice(qlines, 1, room)
+    qlines[room] = wrap_line(qlines[room], wrap_w - 1)[1] .. "…"
+  end
 
   -- Compose lines: question (centered), blank, buttons.
   local lines = {}
@@ -344,9 +413,11 @@ function M.open(opts)
     lines[#lines + 1] = center(ql, width)
   end
   lines[#lines + 1] = ""
-  local button_row = #lines -- 0-based row of the button line (current #lines before append)
-  local button_line, ranges = buttons.layout(labels, width, button_row)
-  lines[#lines + 1] = button_line
+  local button_row = #lines -- 0-based row of the first button row
+  for _, r in ipairs(ranges) do
+    r.row = r.row + button_row
+  end
+  vim.list_extend(lines, button_lines)
 
   local surf = surface.open({
     lines = lines,

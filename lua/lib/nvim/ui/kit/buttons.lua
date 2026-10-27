@@ -70,6 +70,79 @@ function M.layout(labels, width, row)
   return line, ranges
 end
 
+--- A label cut so its box is at most `width` cells wide (`…` marks the cut). A label that already
+--- fits is returned unchanged. What a caller answers with is still its own, uncut label.
+---@param label string
+---@param width integer
+---@return string
+local function fit_label(label, width)
+  local overhead = vim.fn.strdisplaywidth(M.box(""))
+  local room = math.max(1, width - overhead)
+  local text = tostring(label):gsub("[\r\n]+", " ")
+  if vim.fn.strdisplaywidth(nul_safe(text)) <= room then
+    return label
+  end
+  local out, used = {}, 0
+  for _, ch in ipairs(vim.fn.split(text, "\\zs")) do
+    local w = vim.fn.strdisplaywidth(nul_safe(ch))
+    if used + w > room - 1 then
+      break
+    end
+    out[#out + 1] = ch
+    used = used + w
+  end
+  return table.concat(out) .. "…"
+end
+
+--- Like `layout`, for a row that may not fit: the buttons are packed into as many centered rows
+--- as it takes to keep each row within `width`, and a label wider than `width` is cut. With room
+--- for all of them it is the same single row `layout` builds. Ranges carry the row of their
+--- button, which is all `paint` and `hit` need.
+---@param labels string[]
+---@param width integer  # window width the rows are centered in
+---@param first_row integer  # 0-based buffer row of the first button row
+---@return string[] lines
+---@return Lib.UI.Kit.ButtonRange[] ranges
+function M.layout_rows(labels, width, first_row)
+  local boxes = {}
+  for i, l in ipairs(labels) do
+    boxes[i] = M.box(fit_label(l, width))
+  end
+
+  -- Greedy packing: a box goes on the current row while the row stays within `width`.
+  local rows, cur, cur_w = {}, {}, 0
+  for i, box in ipairs(boxes) do
+    local w = vim.fn.strdisplaywidth(box)
+    local extra = #cur > 0 and #GAP or 0
+    if #cur > 0 and cur_w + extra + w > width then
+      rows[#rows + 1] = cur
+      cur, cur_w, extra = {}, 0, 0
+    end
+    cur[#cur + 1] = i
+    cur_w = cur_w + extra + w
+  end
+  if #cur > 0 then
+    rows[#rows + 1] = cur
+  end
+
+  local lines, ranges = {}, {}
+  for r, idxs in ipairs(rows) do
+    local parts = {}
+    for _, i in ipairs(idxs) do
+      parts[#parts + 1] = boxes[i]
+    end
+    local joined = table.concat(parts, GAP)
+    local pad = math.max(0, math.floor((width - vim.fn.strdisplaywidth(joined)) / 2))
+    lines[r] = string.rep(" ", pad) .. joined
+    local col = pad
+    for _, i in ipairs(idxs) do
+      ranges[i] = { row = first_row + r - 1, start_col = col, end_col = col + #boxes[i] }
+      col = col + #boxes[i] + #GAP
+    end
+  end
+  return lines, ranges
+end
+
 --- Repaint the focus highlight: clear `ns` in `buf`, then mark the focused
 --- button with the theme's `KitSelection`. A nil or out-of-range `focus`
 --- leaves the row unmarked (an input whose focus is in the field, not on the
