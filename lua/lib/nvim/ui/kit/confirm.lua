@@ -82,14 +82,14 @@ local function take_state()
 end
 
 ---@internal
---- End the dialog and answer it once: with the focused button when `confirmed`, with the
---- cancel value otherwise (`false`, or `nil` for a custom choice list). Idempotent.
+--- Call `cb` with the answer: the focused button when `confirmed`, the cancel value otherwise
+--- (`false`, or `nil` for a custom choice list).
+---@param cb function|nil
+---@param custom boolean
+---@param labels string[]
+---@param focus integer
 ---@param confirmed boolean
-local function finish(confirmed)
-  local surf, cb, custom, labels, focus = take_state()
-  if surf then
-    surf:close()
-  end
+local function deliver(cb, custom, labels, focus, confirmed)
   if not cb then
     return
   end
@@ -104,6 +104,31 @@ local function finish(confirmed)
   else
     cb(false)
   end
+end
+
+---@internal
+--- Take the dialog's state, close its float and hand back what the answer needs. The state is
+--- already empty when the float's `WinClosed` hook runs, so it finds nothing to answer.
+---@return function|nil cb
+---@return boolean custom
+---@return string[] labels
+---@return integer focus
+local function retire()
+  local surf, cb, custom, labels, focus = take_state()
+  if surf then
+    -- A float that cannot be closed must not take the answer with it.
+    pcall(surf.close, surf)
+  end
+  return cb, custom, labels, focus
+end
+
+---@internal
+--- End the dialog and answer it once: with the focused button when `confirmed`, with the
+--- cancel value otherwise. Idempotent.
+---@param confirmed boolean
+local function finish(confirmed)
+  local cb, custom, labels, focus = retire()
+  deliver(cb, custom, labels, focus, confirmed)
 end
 
 --- Close the dialog (idempotent). An open dialog is answered as cancelled: the module
@@ -189,9 +214,10 @@ end
 
 --- Yes/no question that waits its turn and always answers, "no" included.
 ---
---- `open` is single-instance: opening a dialog closes the open one WITHOUT
---- answering it, so a question raised while another is showing (a stream
---- that ends minutes after the command was typed) would vanish unanswered.
+--- `open` is single-instance: opening a dialog closes the open one and answers it as
+--- cancelled, so a question raised while another is showing (a stream that ends minutes
+--- after the command was typed) would be dropped with a "no" nobody gave, and the
+--- user's open dialog would vanish under their hands.
 --- `ask` instead polls until no dialog is open, then shows its own. Anything
 --- that is not an explicit yes -- a dialog that stays open for `max_wait_ms`
 --- -- calls `on_answer(false)`, so callers treat an unanswered question as
@@ -286,7 +312,13 @@ end
 ---@return Lib.UI.Kit.Surface|nil
 function M.open(opts)
   opts = opts or {}
-  M.close()
+  -- A dialog this one replaces is answered as cancelled, but only once this one is in place: its
+  -- answer is user code and may open a dialog itself, which must not land in the middle of this
+  -- call and be overwritten by it.
+  local old_cb, old_custom, old_labels, old_focus = retire()
+  local function settle_old()
+    deliver(old_cb, old_custom, old_labels, old_focus, false)
+  end
 
   local custom = type(opts.choices) == "table" and #opts.choices > 0
   local labels = custom and opts.choices or { "Yes", "No" }
@@ -327,6 +359,7 @@ function M.open(opts)
     filetype = "lib-kit-confirm",
   })
   if not surf then
+    settle_old()
     -- `surface.open` failed to open the float -- a genuine break, not a
     -- user-driven cancel. Without this, on_answer never fires (despite the
     -- module's own "Answer contract" implying it always does) and a
@@ -352,11 +385,18 @@ function M.open(opts)
 
   -- The float going away by any other route (`:q`, `<C-w>c`, `:only`) is a cancel: without
   -- this the answer never came. Only for this dialog: a replaced one has already been taken
-  -- out of `state` by `open`'s own `M.close()` and its late `WinClosed` finds nothing to do.
+  -- out of `state` by `open`'s own `retire()` and its late `WinClosed` finds nothing to do.
+  -- The state is taken here, at once, so a dialog opened next is never answered by mistake; the
+  -- answer itself is scheduled: the surface runs this hook under `pcall` inside `WinClosed`,
+  -- where an error in the caller's `on_answer` would vanish and window changes are restricted.
   surf:on_close(function()
-    if state.surf == surf then
-      finish(false)
+    if state.surf ~= surf then
+      return
     end
+    local cb, custom, labels, focus = retire()
+    vim.schedule(function()
+      deliver(cb, custom, labels, focus, false)
+    end)
   end)
 
   -- Throwaway buffer-local keys: not recorded (see lib.nvim.ui.kit.chooser's `mo`).
@@ -376,6 +416,7 @@ function M.open(opts)
   map("n", "q", M.cancel, mo)
   map("n", "<LeftMouse>", M.click, mo)
 
+  settle_old()
   return surf
 end
 

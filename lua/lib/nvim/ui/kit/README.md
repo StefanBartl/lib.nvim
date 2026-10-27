@@ -289,8 +289,16 @@ kit.confirm({ question = "Pick", choices = { "Keep", "Discard", "Cancel" },
 `h`/`l`/arrows/`<Tab>` move focus (the focused button uses `KitSelection`),
 `<CR>` confirms, `<Esc>`/`q` cancels (default → `false`, custom → `nil`).
 
+Every way a dialog ends answers it exactly once: a button, `<Esc>`/`q`, the float
+closed from outside (`:q`, `:only`), another dialog replacing it, or
+`confirm.close()`. The last three count as a cancel; the answer of an externally
+closed float arrives a moment later (scheduled), so an error in `on_answer` is
+reported rather than swallowed. `confirm.close()` therefore calls `on_answer`
+(`false`/`nil`): do not use it as a silent teardown of a dialog whose answer
+handler does something on "no".
+
 **`kit.ask(opts)` — the yes/no question that always answers.** `kit.confirm` is
-single-instance: opening one closes the open dialog *without* answering it, so a
+single-instance: opening one closes the open dialog (answering it as cancelled), so a
 question raised at a moment the user did not pick (a stream ending minutes after
 the command) can swallow another. `kit.ask` waits until no dialog is open, then
 shows its own; anything that is not an explicit yes (the dialog stays open for
