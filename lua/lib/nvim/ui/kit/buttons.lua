@@ -31,6 +31,26 @@ function M.box(label)
   return "[ " .. nul_safe((tostring(label):gsub("[\r\n]+", " "))) .. " ]"
 end
 
+--- One centered row of already boxed buttons: the line, and the range of each box on it.
+--- The single place that knows how a row is padded and where a box starts, for `layout` and
+--- `layout_rows` alike (so a click lands on the drawn box in both).
+---@param boxes string[]  # the boxes of this row, in order
+---@param first_index integer  # index in `ranges` of the row's first box
+---@param width integer
+---@param row integer  # 0-based buffer row
+---@param ranges Lib.UI.Kit.ButtonRange[]  # filled in at `first_index ..`
+---@return string line
+local function place_row(boxes, first_index, width, row, ranges)
+  local joined = table.concat(boxes, GAP)
+  local pad = math.max(0, math.floor((width - vim.fn.strdisplaywidth(joined)) / 2))
+  local col = pad
+  for k, box in ipairs(boxes) do
+    ranges[first_index + k - 1] = { row = row, start_col = col, end_col = col + #box }
+    col = col + #box + #GAP
+  end
+  return string.rep(" ", pad) .. joined
+end
+
 --- Display width of the whole row, before any centering. What a caller sizes
 --- its window with so the row is never wider than the float that holds it.
 ---@param labels string[]
@@ -57,16 +77,8 @@ function M.layout(labels, width, row)
   for i, l in ipairs(labels) do
     boxes[i] = M.box(l)
   end
-  local joined = table.concat(boxes, GAP)
-  local pad = math.max(0, math.floor((width - vim.fn.strdisplaywidth(joined)) / 2))
-  local line = string.rep(" ", pad) .. joined
-
   local ranges = {}
-  local col = pad
-  for i, box in ipairs(boxes) do
-    ranges[i] = { row = row, start_col = col, end_col = col + #box }
-    col = col + #box + #GAP
-  end
+  local line = place_row(boxes, 1, width, row, ranges)
   return line, ranges
 end
 
@@ -126,19 +138,14 @@ function M.layout_rows(labels, width, first_row)
   end
 
   local lines, ranges = {}, {}
+  local first = 1
   for r, idxs in ipairs(rows) do
     local parts = {}
     for _, i in ipairs(idxs) do
       parts[#parts + 1] = boxes[i]
     end
-    local joined = table.concat(parts, GAP)
-    local pad = math.max(0, math.floor((width - vim.fn.strdisplaywidth(joined)) / 2))
-    lines[r] = string.rep(" ", pad) .. joined
-    local col = pad
-    for _, i in ipairs(idxs) do
-      ranges[i] = { row = first_row + r - 1, start_col = col, end_col = col + #boxes[i] }
-      col = col + #boxes[i] + #GAP
-    end
+    lines[r] = place_row(parts, first, width, first_row + r - 1, ranges)
+    first = first + #idxs
   end
   return lines, ranges
 end

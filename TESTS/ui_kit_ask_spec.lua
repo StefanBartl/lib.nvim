@@ -12,7 +12,6 @@ return function(H)
   local api = vim.api
 
   vim.o.showmode = false
-  confirm.ASK_POLL_MS = 10
 
   local function close_all()
     confirm.close()
@@ -22,6 +21,13 @@ return function(H)
       end
     end
   end
+
+  -- Another spec of a shared run may have left a modal float open: ask would rightly wait for it.
+  close_all()
+  -- ... or an answer still on its way (a dialog closed from outside answers on the next loop turn).
+  vim.wait(300, function()
+    return not require("lib.nvim.ui.kit.modal").busy()
+  end, 5)
 
   -- ---------------------------------------------------------------- idle: shows at once
   local a

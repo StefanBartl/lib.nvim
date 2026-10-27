@@ -1,9 +1,7 @@
 -- Test code: when something here comes back nil, this file must crash and
 -- name it rather than silently skip -- see TESTS/ui_kit_spec.lua's header.
 ---@diagnostic disable: need-check-nil
--- TESTS/ui_kit_confirm_layout_spec.lua -- lib.nvim.ui.kit.confirm keeps its buttons inside the
--- window: a long question is wrapped, many or wide buttons are packed into several rows, a label
--- wider than the window is cut (the answer is still the full label). Port of ui.nvim's spec.
+-- TESTS/ui_kit_confirm_layout_spec.lua -- lib.nvim.ui.kit.confirm keeps its buttons inside the window: wrapped question, buttons in several rows, cut labels. Port of ui.nvim's spec of the same name.
 
 return function(_)
   local kit = require("lib.nvim.ui.kit")
@@ -129,6 +127,24 @@ return function(_)
   )
   ok(buf_lines[#buf_lines]:find("%[ Yes %]"), "the buttons are the last line")
   restore()
+
+  -- the buttons alone fill a tiny editor: the question gives way, the buttons are what is shown
+  vim.o.columns, vim.o.lines = 30, 8
+  surf = open({
+    question = "Pick one of these",
+    choices = {
+      "Update all references",
+      "Inspect first",
+      "Leave as-is",
+      "Cancel the operation",
+      "Something else",
+    },
+  })
+  local tiny = api.nvim_buf_get_lines(surf.bufnr, 0, -1, false)
+  ok(not table.concat(tiny, "\n"):find("Pick one"), "the question made room for the buttons")
+  ok(tiny[1]:find("%["), "the first line is a button row")
+  restore()
+  vim.o.columns, vim.o.lines = 80, 30
 
   -- a short question is unchanged: one row, nothing cut
   surf = open({ question = "Delete?" })

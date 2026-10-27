@@ -6,6 +6,10 @@
 --- cause. `kit.ask` uses it to wait for a free moment without looking again every few hundred
 --- milliseconds: it subscribes once with `on_free` and is called when the last modal dialog went.
 ---
+--- A dialog that has gone but whose answer is still on its way (confirm answers an externally
+--- closed float on the next loop iteration) holds the registry busy with `hold()` until it has
+--- been delivered, so a waiting question never opens between the close and that answer.
+---
 --- Nothing here owns a window or a keymap. A float closed without `WinClosed` (never in practice)
 --- is dropped from `busy()` as soon as it is looked at, and the subscribers are woken by the next
 --- close.
@@ -15,7 +19,14 @@ local M = {}
 ---@type Lib.UI.Kit.Surface[]
 local open = {}
 
----@type (fun())[]
+--- Answers that are still on their way (see `hold`).
+local held = 0
+
+---@class Lib.UI.Kit.ModalListener
+---@field fn fun()
+---@field cancelled boolean
+
+---@type Lib.UI.Kit.ModalListener[]
 local listeners = {}
 
 --- Forget surfaces whose window is gone.
@@ -27,23 +38,38 @@ local function prune()
   end
 end
 
+--- Whether a modal dialog is open, or one has gone with its answer still to come.
+---@return boolean
+function M.busy()
+  prune()
+  return #open > 0 or held > 0
+end
+
 --- Wake the subscribers when nothing is open. Each is called once, in the order it subscribed, on
 --- the next loop iteration (a close runs inside `WinClosed`, where opening a float is restricted).
+--- The check is made again when they run: something may have opened or been held in between, and
+--- then they stay subscribed, ahead of anyone who subscribed since.
 local function wake()
-  prune()
-  if #open > 0 or #listeners == 0 then
+  if M.busy() or #listeners == 0 then
     return
   end
   local due = listeners
   listeners = {}
   vim.schedule(function()
-    for _, fn in ipairs(due) do
-      local ok, err = pcall(fn)
-      if not ok then
-        vim.notify(
-          "lib.nvim.ui.kit.modal: a waiting caller failed: " .. tostring(err),
-          vim.log.levels.ERROR
-        )
+    if M.busy() then
+      vim.list_extend(due, listeners)
+      listeners = due
+      return
+    end
+    for _, l in ipairs(due) do
+      if not l.cancelled then
+        local ok, err = pcall(l.fn)
+        if not ok then
+          vim.notify(
+            "lib.nvim.ui.kit.modal: a waiting caller failed: " .. tostring(err),
+            vim.log.levels.ERROR
+          )
+        end
       end
     end
   end)
@@ -69,26 +95,36 @@ function M.enter(surf)
   end)
 end
 
---- Whether a modal dialog is open.
----@return boolean
-function M.busy()
-  prune()
-  return #open > 0
+--- Keep `busy()` true until the returned function is called (once; more calls do nothing). For
+--- an answer that is delivered a moment after its dialog went.
+---@return fun() release
+function M.hold()
+  held = held + 1
+  local released = false
+  return function()
+    if released then
+      return
+    end
+    released = true
+    held = held - 1
+    wake()
+  end
 end
 
 --- Call `fn` once, after the next moment no modal dialog is open (not before the current call
 --- has returned: an `fn` registered while nothing is open is called on the next loop iteration).
---- Returns a function that withdraws it.
+--- Returns a function that withdraws it; that works until `fn` has been called, also when it is
+--- already scheduled.
 ---@param fn fun()
 ---@return fun() cancel
 function M.on_free(fn)
-  listeners[#listeners + 1] = fn
-  if #open == 0 then
-    wake()
-  end
+  local l = { fn = fn, cancelled = false }
+  listeners[#listeners + 1] = l
+  wake()
   return function()
-    for i, f in ipairs(listeners) do
-      if f == fn then
+    l.cancelled = true
+    for i, x in ipairs(listeners) do
+      if x == l then
         table.remove(listeners, i)
         return
       end

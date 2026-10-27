@@ -1,9 +1,7 @@
 -- Test code: when something here comes back nil, this file must crash and
 -- name it rather than silently skip -- see TESTS/ui_kit_spec.lua's header.
 ---@diagnostic disable: need-check-nil
--- TESTS/ui_kit_confirm_answers_spec.lua -- lib.nvim.ui.kit.confirm answers exactly once, whichever
--- way its float goes away: confirmed, cancelled, closed from outside (`nvim_win_close`, `:only`),
--- replaced by a second dialog, or `confirm.close()`. Port of ui.nvim's spec of the same name.
+-- TESTS/ui_kit_confirm_answers_spec.lua -- lib.nvim.ui.kit.confirm answers exactly once, whichever way its float goes away (button, <Esc>/q, closed from outside, replaced, close(), the new dialog raising). Port of ui.nvim's spec of the same name.
 
 return function(_)
   local kit = require("lib.nvim.ui.kit")
@@ -121,6 +119,21 @@ return function(_)
   confirm.confirm()
   eq(reopened, { true }, "it answers on its own")
   eq(confirm.is_open(), false, "and no float is left behind")
+
+  -- building the new dialog raises: the dialog it replaced is still answered
+  do
+    local old_calls = open({ question = "old" })
+    local buttons = require("lib.nvim.ui.kit.buttons")
+    local real = buttons.layout_rows
+    buttons.layout_rows = function()
+      error("boom")
+    end
+    local raised = pcall(kit.confirm, { question = "new", on_answer = function() end })
+    buttons.layout_rows = real
+    eq(raised, false, "the error surfaces")
+    eq(old_calls, { false }, "the replaced dialog was answered although the new one raised")
+    eq(confirm.is_open(), false, "and nothing is left open")
+  end
 
   -- confirm.close() ends the dialog and answers as cancelled
   calls = open()

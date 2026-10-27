@@ -455,6 +455,7 @@ function M.open(opts)
     -- `surfaces` holds open surfaces, and a half-filled mount is what the
     -- check below rejects.
     local prompt = surface.open(vim.tbl_extend("force", geo.prompt, {
+      modal = true,
       theme = theme,
       enter = true,
       modifiable = true,
@@ -498,6 +499,7 @@ function M.open(opts)
     unmount()
     local geo = geo_marked()
     local prompt = surface.open(vim.tbl_extend("force", geo.prompt, {
+      modal = true,
       theme = theme,
       enter = true,
       modifiable = true,

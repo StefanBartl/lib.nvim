@@ -250,8 +250,6 @@ function M.cancel()
 end
 
 --- How long a waiting `ask` waits for a free moment at most, before it is answered "no".
---- (`ASK_POLL_MS` is kept for callers that set it; nothing polls any more.)
-M.ASK_POLL_MS = 300
 M.ASK_MAX_WAIT_MS = 10 * 60 * 1000
 
 --- The questions `ask` is holding back, oldest first (a ticket each).
@@ -294,6 +292,7 @@ function M.ask(opts)
   local max_wait = opts.max_wait_ms or M.ASK_MAX_WAIT_MS
   local custom = type(opts.choices) == "table" and #opts.choices > 0
   local answered = false
+  local done = false -- left the queue: shown, abandoned or failed; the timer must not answer for it
   local ticket = {}
   waiting[#waiting + 1] = ticket
   local timer ---@type uv.uv_timer_t|nil
@@ -324,6 +323,7 @@ function M.ask(opts)
 
   --- Leave the queue for good: no more waiting, no timer.
   local function drop()
+    done = true
     leave_queue(ticket)
     stop_timer()
     if cancel_wait then
@@ -342,8 +342,18 @@ function M.ask(opts)
       drop()
       return
     end
-    if waiting[1] ~= ticket or modal.busy() then
+    if modal.busy() then
       cancel_wait = modal.on_free(attempt)
+      return
+    end
+    if waiting[1] ~= ticket then
+      -- An older question is first in line and is about to open: look again in a moment rather
+      -- than subscribing to a registry that is already free (which would wake at once, for ever).
+      local retry = vim.defer_fn(attempt, 20)
+      cancel_wait = function()
+        pcall(retry.stop, retry)
+        pcall(retry.close, retry)
+      end
       return
     end
     drop()
@@ -392,7 +402,7 @@ function M.ask(opts)
   -- One timer for the whole wait: a dialog that stays open for ever must not hold the question.
   timer = vim.defer_fn(function()
     timer = nil
-    if answered then
+    if answered or done then
       return
     end
     drop()
@@ -402,19 +412,12 @@ function M.ask(opts)
   attempt()
 end
 
---- Open a button-confirm dialog.
----@param opts table  # { question, choices?, theme?, on_answer }
+---@internal
+--- Build and install the dialog; see `M.open`.
+---@param opts table
+---@param settle_old fun()  # answers the dialog this one replaces, once this one is in place
 ---@return Lib.UI.Kit.Surface|nil
-function M.open(opts)
-  opts = opts or {}
-  -- A dialog this one replaces is answered as cancelled, but only once this one is in place: its
-  -- answer is user code and may open a dialog itself, which must not land in the middle of this
-  -- call and be overwritten by it.
-  local old_cb, old_custom, old_labels, old_focus = retire()
-  local function settle_old()
-    deliver(old_cb, old_custom, old_labels, old_focus, false)
-  end
-
+local function open_new(opts, settle_old)
   local custom = type(opts.choices) == "table" and #opts.choices > 0
   local labels = custom and opts.choices or { "Yes", "No" }
 
@@ -441,8 +444,11 @@ function M.open(opts)
   -- The buttons first: how many rows they take decides how much room the question has.
   local button_lines, ranges = buttons.layout_rows(labels, width, 0)
   local max_h = math.max(1, vim.o.lines - 4)
-  local room = math.max(1, max_h - #button_lines - 1)
-  if #qlines > room then
+  local room = max_h - #button_lines - 1
+  if room < 1 then
+    -- Buttons alone fill the editor: no question, no blank line (the rest is the editor's limit).
+    qlines = {}
+  elseif #qlines > room then
     qlines = vim.list_slice(qlines, 1, room)
     qlines[room] = wrap_line(qlines[room], wrap_w - 1)[1] .. "…"
   end
@@ -452,7 +458,9 @@ function M.open(opts)
   for _, ql in ipairs(qlines) do
     lines[#lines + 1] = center(ql, width)
   end
-  lines[#lines + 1] = ""
+  if #qlines > 0 then
+    lines[#lines + 1] = ""
+  end
   local button_row = #lines -- 0-based row of the first button row
   for _, r in ipairs(ranges) do
     r.row = r.row + button_row
@@ -505,9 +513,16 @@ function M.open(opts)
     if state.surf ~= surf then
       return
     end
+    -- Held until the answer is out: a question waiting in `kit.ask` must not open between the
+    -- close and the answer (whose handler may open a dialog of its own).
+    local release = require("lib.nvim.ui.kit.modal").hold()
     local cb, custom, labels, focus = retire()
     vim.schedule(function()
-      deliver(cb, custom, labels, focus, false)
+      local ok, err = pcall(deliver, cb, custom, labels, focus, false)
+      release()
+      if not ok then
+        error(err, 0)
+      end
     end)
   end)
 
@@ -530,6 +545,31 @@ function M.open(opts)
 
   settle_old()
   return surf
+end
+
+--- Open a button-confirm dialog.
+---@param opts table  # { question, choices?, theme?, on_answer }
+---@return Lib.UI.Kit.Surface|nil
+function M.open(opts)
+  opts = opts or {}
+  -- A dialog this one replaces is answered as cancelled, but only once this one is in place: its
+  -- answer is user code and may open a dialog itself, which must not land in the middle of this
+  -- call and be overwritten by it. If building the new one raises, the old one is still answered.
+  local old_cb, old_custom, old_labels, old_focus = retire()
+  local settled = false
+  local function settle_old()
+    if settled then
+      return
+    end
+    settled = true
+    deliver(old_cb, old_custom, old_labels, old_focus, false)
+  end
+  local ok, res = pcall(open_new, opts, settle_old)
+  if not ok then
+    settle_old()
+    error(res, 0)
+  end
+  return res
 end
 
 return M

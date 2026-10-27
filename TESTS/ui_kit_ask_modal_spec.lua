@@ -1,9 +1,7 @@
 -- Test code: when something here comes back nil, this file must crash and
 -- name it rather than silently skip -- see TESTS/ui_kit_spec.lua's header.
 ---@diagnostic disable: need-check-nil
--- TESTS/ui_kit_ask_modal_spec.lua -- lib.nvim.ui.kit.confirm.ask waits for ANY modal kit dialog
--- (input, select, ... not only a confirm), is woken by the close instead of polling, takes a
--- `choices` list and ends the wait with a single timer. Port of ui.nvim's spec of the same name.
+-- TESTS/ui_kit_ask_modal_spec.lua -- lib.nvim.ui.kit.confirm.ask waits for ANY modal kit dialog, is woken by its close instead of polling, takes a `choices` list, and ends the wait with one timer. Port of ui.nvim's spec of the same name.
 
 return function(_)
   local kit = require("lib.nvim.ui.kit")
@@ -167,6 +165,69 @@ return function(_)
   end, "and it still opens when the blocker goes")
   confirm.confirm()
   eq(waiting_answer, true, "answered")
+
+  -- an externally closed dialog whose answer opens another: a waiting question must not open
+  -- between the close and that answer (it would be replaced and answered "no" by it)
+  do
+    local follow_up
+    local x_surf = kit.confirm({
+      question = "X",
+      on_answer = function()
+        follow_up = kit.confirm({ question = "Z", on_answer = function() end })
+      end,
+    })
+    local asked_answer
+    kit.ask({
+      question = "Q",
+      on_answer = function(yes)
+        asked_answer = yes
+      end,
+    })
+    api.nvim_win_close(x_surf.winid, true)
+    wait_for(function()
+      return follow_up ~= nil
+    end, "the answer of the closed dialog ran")
+    idle(60)
+    eq(asked_answer, nil, "the waiting question was not answered by the follow-up dialog")
+    confirm.confirm() -- answer Z (the follow-up)
+    wait_for(function()
+      return confirm.is_open()
+    end, "the waiting question opens once the follow-up is gone")
+    confirm.confirm()
+    eq(asked_answer, true, "and gets its own answer")
+  end
+
+  -- on_free: a withdrawn listener is not called, also when it is already scheduled
+  do
+    local d = kit.input({ prompt = "busy", on_submit = function() end, on_cancel = function() end })
+    local called = false
+    local cancel = modal.on_free(function()
+      called = true
+    end)
+    d:close() -- schedules the wake
+    cancel()
+    idle(60)
+    eq(called, false, "a withdrawn on_free is not called, even once scheduled")
+    eq(modal.busy(), false, "and the registry is free")
+  end
+
+  -- hold(): the registry stays busy until released, then wakes the subscribers
+  do
+    local release = modal.hold()
+    eq(modal.busy(), true, "held: busy")
+    local woke = false
+    modal.on_free(function()
+      woke = true
+    end)
+    idle(40)
+    eq(woke, false, "a subscriber is not woken while a hold is on")
+    release()
+    release() -- a second release does nothing
+    wait_for(function()
+      return woke
+    end, "released: the subscriber is woken")
+    eq(modal.busy(), false, "and the registry is free")
+  end
 
   -- abandoned while waiting: dropped, the timer does not answer for it later
   local dropped_called = false
