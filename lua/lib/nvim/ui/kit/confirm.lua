@@ -140,8 +140,8 @@ local function take_state()
 end
 
 ---@internal
---- Call `cb` with the answer: the focused button when `confirmed`, the cancel value otherwise
---- (`false`, or `nil` for a custom choice list).
+--- Call `cb` with the answer: the focused button when `confirmed` (a label and its 1-based index
+--- for a custom choice list), the cancel value otherwise (`false`, or `nil` for a custom list).
 ---@param cb function|nil
 ---@param custom boolean
 ---@param labels string[]
@@ -153,7 +153,9 @@ local function deliver(cb, custom, labels, focus, confirmed)
   end
   if confirmed then
     if custom then
-      cb(labels[focus])
+      -- the index as well: a caller that needs the position must not search the labels for it
+      -- (two buttons can carry the same text)
+      cb(labels[focus], focus)
     else
       cb(focus == 1)
     end

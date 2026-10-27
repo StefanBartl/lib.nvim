@@ -295,6 +295,19 @@ return function(_)
     confirm.cancel()
     vim.o.lines = saved_lines
 
+    -- the position comes with the label: two buttons of the same text can be told apart
+    local picked_label, picked_index
+    kit.confirm({
+      question = "Same text",
+      choices = { "Keep", "Keep" },
+      on_answer = function(label, index)
+        picked_label, picked_index = label, index
+      end,
+    })
+    confirm.move(1)
+    confirm.confirm()
+    eq({ picked_label, picked_index }, { "Keep", 2 }, "on_answer gets the label and its index")
+
     -- kit.prompt (layout buttons) forwards the options
     kit.prompt({
       layout = "buttons",

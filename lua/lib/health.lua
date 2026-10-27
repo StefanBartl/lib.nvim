@@ -128,6 +128,10 @@ function M.check_dialog()
     return
   end
   local backend = dialog.backend()
+  -- A kit that is installed but raises when required is not an absent kit: say what it raised.
+  for name, err in pairs(dialog.load_errors()) do
+    h_warn(("%s is installed but failed to load: %s"):format(name, err))
+  end
   if backend == "ui.kit" then
     h_ok("questions are asked through ui.nvim's ui.kit (your preset applies)")
   elseif backend == "lib.nvim.ui.kit" then

@@ -12,14 +12,17 @@ The first that loads answers:
 2. `lib.nvim.ui.kit` -- the copy that ships with lib.nvim; looks the same
 3. native -- `vim.ui.select` / `vim.ui.input` (also where a float that cannot open lands)
 
-`dialog.backend()` says which, `:checkhealth lib` shows it, and every call returns the backend that
-took the question.
+The kit is chosen per function: a `ui.kit` without `ask` hands `ask` to the next one. `dialog.backend()`
+says which answers, `:checkhealth lib` shows it (and names a kit that is installed but fails to
+load, `dialog.load_errors()`), and every call returns the backend that took the question.
+An error the kit raises (a bad option, a throwing callback) is raised again: it is not a float that
+failed to open, and a second, native question would leave two on screen.
 
 ## Contract
 
 - The callback runs **exactly once**, and **never before the call has returned**: an answer given
   while the dialog is being opened (a native select that answers at once, a stub) is delivered on the
-  next loop turn.
+  next loop turn. `ask` with an `abandoned()` that turns true answers `nil` instead of asking.
 - A dismissed dialog answers `false` (yes/no), `nil` (a `choices` list, text) or index `0` (`choose`).
 - It is callback based and does not block. For straight-line code use `ui.kit`'s `kit.async` on top
   of it, not `vim.wait`.
@@ -57,8 +60,15 @@ dialog.ask({ question = "File the answer?", on_answer = function(yes) end })
 also `abandoned` and `max_wait_ms`). `input` takes those of `kit.input`; with a `secret` it uses the
 kit's masked prompt, natively `vim.fn.inputsecret`.
 
+With `choices` the answer is the label **and its 1-based position** (`on_answer(label, index)`): two
+buttons of the same text can be told apart. `choose` answers with that position.
+
 `confirm` shows at once and replaces an open confirm (answering it as cancelled). Use `ask` for
 anything a background event raises. See `ui.kit`'s README for the keys, hotkeys and focus rules.
+
+Natively (no kit): `vim.ui.select` cannot preselect, so the `default` button is **listed first** (what
+a lazy `<CR>` takes) and the position is mapped back to your order; there is no queue and no timeout
+for `ask`; a `secret` goes through `vim.fn.inputsecret`, where an empty line counts as cancelled.
 
 ## Migrating a native prompt
 

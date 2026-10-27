@@ -3,7 +3,7 @@
 ---
 --- Every plugin used to carry its own wrapper around `ui.kit.confirm` with its own fallback when
 --- ui.nvim is missing (`vim.ui.select`, `vim.fn.confirm`, nothing at all). This module is that
---- wrapper, once. The backend is the first that loads:
+--- wrapper, once. The backend is the first that loads and has the function asked for:
 ---
 ---   1. `ui.kit` (ui.nvim)           -- the user's themed kit, presets included
 ---   2. `lib.nvim.ui.kit`            -- the copy that ships with lib.nvim; looks the same
@@ -12,7 +12,8 @@
 ---
 --- Contract, whichever backend answers:
 ---   - the callback runs exactly once, and never before the call has returned (an answer given
----     while the dialog is being opened is delivered on the next loop turn);
+---     while the dialog is being opened is delivered on the next loop turn). The one exception is
+---     `ask` with an `abandoned()` that turns true: it is answered `nil`, never asked;
 ---   - a dismissed dialog answers `false` (yes/no), `nil` (choices, text) or index `0` (`choose`).
 ---
 ---   local dialog = require("lib.nvim.ui.dialog")
@@ -22,30 +23,66 @@
 ---
 --- `confirm` shows at once and replaces an open confirm (answering it as cancelled). `ask` waits
 --- behind whatever dialog is open and is the call for questions raised at a moment the user did not
---- pick (a stream that ends later): see `ui.kit.ask`.
+--- pick (a stream that ends later): see `ui.kit.ask`. Natively there is no queue and no timeout: the
+--- question is asked at once (an `abandoned()` that is true by then still drops it).
+---
+--- An error raised by the kit (a bad option, a throwing callback) is not a float that failed to
+--- open: it is raised again, not answered by a second, native question.
 
 require("lib.nvim.ui.dialog.@types")
 
 local M = {}
 
---- The kit that answers, and its name; `nil, "native"` when none loads.
+--- The kits in order of preference.
+local KITS = { "ui.kit", "lib.nvim.ui.kit" }
+
+--- Load errors of a kit that is installed but broken, by module name (a kit that is simply not
+--- there leaves none). `:checkhealth lib` shows them: a broken ui.nvim must not look like an absent
+--- one.
+---@type table<string, string>
+local load_errors = {}
+
+--- The kit that answers, and its name; `nil, "native"` when none loads with `need` in it.
+---@param need? string  # the kit function the call needs (default "confirm")
 ---@return table|nil kit
 ---@return Lib.UI.Dialog.Backend name
-local function resolve()
-  for _, name in ipairs({ "ui.kit", "lib.nvim.ui.kit" }) do
+local function resolve(need)
+  need = need or "confirm"
+  for _, name in ipairs(KITS) do
     local ok, kit = pcall(require, name)
-    if ok and type(kit) == "table" and type(kit.confirm) == "function" then
-      return kit, name
+    if ok and type(kit) == "table" then
+      load_errors[name] = nil
+      if type(kit[need]) == "function" then
+        return kit, name
+      end
+    elseif not ok then
+      local msg = tostring(kit)
+      if msg:find("module '" .. name .. "' not found", 1, true) then
+        load_errors[name] = nil -- simply not installed
+      elseif msg:find("loop or previous error loading module", 1, true) then
+        -- the runtime remembers a failed load and only says so on every later try: keep the
+        -- first message, it is the one that names the cause
+        load_errors[name] = load_errors[name] or msg
+      else
+        load_errors[name] = msg
+      end
     end
   end
   return nil, "native"
 end
 
---- The backend that would answer right now.
+--- The backend that would answer a `confirm` right now.
 ---@return Lib.UI.Dialog.Backend
 function M.backend()
   local _, name = resolve()
   return name
+end
+
+--- What failed to load, by module name: a kit that is installed but raises when required.
+---@return table<string, string>
+function M.load_errors()
+  resolve()
+  return vim.deepcopy(load_errors)
 end
 
 --- A callback that runs at most once and not before `settle()` has been called. An answer that
@@ -128,19 +165,44 @@ local function labels_of(choices)
   return #labels > 0 and labels or nil
 end
 
---- Ask through `vim.ui.select` (which cannot preselect a default).
+--- Ask through `vim.ui.select`. A plain select cannot preselect a button, so the default is listed
+--- first (the one a lazy <CR> takes) and the position is mapped back to the caller's order.
 ---@param opts table
 ---@param answer fun(...)
 local function native_confirm(opts, answer)
   local labels = labels_of(opts.choices)
   local custom = labels ~= nil
   local items = labels or { "Yes", "No" }
+
+  local default = tonumber(opts.default)
+  if not default and type(opts.default) == "string" then
+    for i, l in ipairs(items) do
+      if l == opts.default then
+        default = i
+      end
+    end
+  end
+  local order = {}
+  if default and items[default] then
+    order[1] = default
+  end
+  for i = 1, #items do
+    if i ~= order[1] then
+      order[#order + 1] = i
+    end
+  end
+  local shown = {}
+  for pos, i in ipairs(order) do
+    shown[pos] = items[i]
+  end
+
   vim.ui.select(
-    items,
+    shown,
     { prompt = tostring(opts.question or opts.title or "") },
-    function(choice, idx)
+    function(choice, pos)
+      local idx = pos and order[pos] or nil
       if custom then
-        answer(choice)
+        answer(choice, idx)
       else
         answer(idx == 1)
       end
@@ -150,19 +212,24 @@ end
 
 --- Show a question and call `opts.on_answer(answer)` once. The options are those of `kit.confirm`
 --- (`question`, `choices`, `default`, `kind`, `legend`, `title`, `theme`, `keep_on_focus_lost`).
---- The answer is `true`/`false`, or with `choices` the chosen label (`nil` when dismissed).
+--- The answer is `true`/`false`, or with `choices` the chosen label (`nil` when dismissed) and, as a
+--- second value, its 1-based position.
 ---@param opts Lib.UI.Dialog.ConfirmOpts
 ---@return Lib.UI.Dialog.Backend backend  # which backend took the question
 function M.confirm(opts)
   opts = opts or {}
-  local kit, name = resolve()
+  local kit, name = resolve("confirm")
   local answer, settle, discard = once(opts.on_answer)
 
   if kit then
     local o = copy(opts)
     o.on_answer = answer
     local ok, surf = pcall(kit.confirm, o)
-    if ok and surf ~= nil then
+    if not ok then
+      settle()
+      error(surf, 0)
+    end
+    if surf ~= nil then
       settle()
       return name
     end
@@ -177,22 +244,41 @@ end
 
 --- Like `confirm`, for a question raised at a moment the user did not pick: it waits behind the
 --- dialog that is open instead of replacing it, and a question that stays unanswered for
---- `max_wait_ms` is answered "no". Options as `kit.ask`.
+--- `max_wait_ms` is answered "no". Options as `kit.ask`. An `abandoned()` that turns true drops the
+--- question and answers `nil`.
 ---@param opts Lib.UI.Dialog.ConfirmOpts
 ---@return Lib.UI.Dialog.Backend backend
 function M.ask(opts)
   opts = opts or {}
-  local kit, name = resolve()
+  local kit, name = resolve("ask")
   local answer, settle = once(opts.on_answer)
-  if kit and type(kit.ask) == "function" then
+
+  local user_abandoned = opts.abandoned
+  local function abandoned()
+    local dropped = user_abandoned ~= nil and user_abandoned()
+    if dropped then
+      answer(nil)
+    end
+    return dropped
+  end
+
+  if kit then
     local o = copy(opts)
     o.on_answer = answer
-    if pcall(kit.ask, o) then
-      settle()
-      return name
+    if user_abandoned then
+      o.abandoned = abandoned
     end
+    local ok, err = pcall(kit.ask, o)
+    settle()
+    if not ok then
+      error(err, 0)
+    end
+    return name
   end
-  native_confirm(opts, answer)
+
+  if not abandoned() then
+    native_confirm(opts, answer)
+  end
   settle()
   return "native"
 end
@@ -201,38 +287,47 @@ end
 local KIND_OF_TYPE = { Error = "danger", Warning = "warn", Info = "info" }
 
 --- `vim.fn.confirm` as a callback: `cb(index)` with the 1-based number of the chosen button, `0`
---- when dismissed. `choices` is the `vim.fn.confirm` string (`"&Yes\n&No"`) or a list of labels;
---- `default` the button that starts focused (0 or nil: the first); `msg_type` is `Error`, `Warning`,
---- `Info`, `Question` or `Generic` and only colours the border.
+--- when dismissed. `choices` is the `vim.fn.confirm` string (`"&Yes\n&No"`) or a list of labels
+--- (nil or empty: a single "OK" button, as `vim.fn.confirm` shows); `default` the button that starts
+--- focused (0 or nil: the first); `msg_type` is `Error`, `Warning`, `Info`, `Question` or `Generic`
+--- and only colours the border.
 ---@param msg string
----@param choices string|string[]
+---@param choices string|string[]|nil
 ---@param default? integer
 ---@param cb fun(index: integer)
 ---@param msg_type? string
 ---@return Lib.UI.Dialog.Backend backend
 function M.choose(msg, choices, default, cb, msg_type)
-  local labels = labels_of(choices) or {}
+  local labels = labels_of(choices)
+  if not labels then
+    choices, labels = { "OK" }, { "OK" }
+  end
   return M.confirm({
     question = msg,
     choices = choices,
     default = (default and default > 0) and default or 1,
     kind = KIND_OF_TYPE[msg_type or ""],
-    on_answer = function(label)
-      local index = 0
-      for i, l in ipairs(labels) do
-        if l == label then
-          index = i
-          break
+    on_answer = function(label, index)
+      -- the kit says which button; searching the labels is for a backend that only says its text
+      -- (and cannot tell two buttons of the same text apart)
+      if not index and label ~= nil then
+        for i, l in ipairs(labels) do
+          if l == label then
+            index = i
+            break
+          end
         end
       end
-      cb(index)
+      cb(index or 0)
     end,
   })
 end
 
 --- Ask for a line of text. `cb(value)` is called once with the text, or `nil` when cancelled, the
 --- way `vim.ui.input` does; without `cb`, `opts.on_submit` / `opts.on_cancel` are called as in
---- `kit.input`. Options as `kit.input` (`prompt`, `default`, `completion`, `secret`, ...).
+--- `kit.input`. Options as `kit.input` (`prompt`, `default`, `completion`, `secret`, ...). Natively
+--- a `secret` goes through `vim.fn.inputsecret`, where an empty line counts as cancelled (Esc and an
+--- empty Enter cannot be told apart there).
 ---@param opts Lib.UI.Dialog.InputOpts
 ---@param cb? fun(value: string|nil)
 ---@return Lib.UI.Dialog.Backend backend
@@ -250,9 +345,9 @@ function M.input(opts, cb)
     end
   end
   local answer, settle, discard = once(deliver)
-  local kit, name = resolve()
+  local kit, name = resolve("input")
 
-  if kit and type(kit.input) == "function" then
+  if kit then
     local o = copy(opts)
     o.on_submit = function(value)
       answer(value)
@@ -261,7 +356,11 @@ function M.input(opts, cb)
       answer(nil)
     end
     local ok, surf = pcall(kit.input, o)
-    if ok and surf ~= nil then
+    if not ok then
+      settle()
+      error(surf, 0)
+    end
+    if surf ~= nil then
       settle()
       return name
     end
@@ -270,7 +369,8 @@ function M.input(opts, cb)
 
   if opts.secret then
     -- vim.ui.input has no masking: the prompt of the command line does.
-    local ok, text = pcall(vim.fn.inputsecret, tostring(opts.prompt or opts.title or ""))
+    local ok, text =
+      pcall(vim.fn.inputsecret, tostring(opts.prompt or opts.title or ""), opts.default or "")
     answer(ok and text ~= "" and text or nil)
   else
     vim.ui.input({

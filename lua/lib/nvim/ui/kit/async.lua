@@ -146,7 +146,10 @@ end
 function M.confirm(opts)
   return M.await(function(deliver)
     local o = vim.tbl_extend("force", {}, opts or {})
-    o.on_answer = chain(o.on_answer, deliver)
+    -- the answer only: the position that `on_answer` also receives is not this call's result
+    o.on_answer = chain(o.on_answer, function(answer)
+      deliver(answer)
+    end)
     require("lib.nvim.ui.kit.confirm").open(o)
   end)
 end
