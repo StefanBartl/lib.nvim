@@ -53,6 +53,11 @@ function M.open(opts)
       question = opts.question,
       choices = opts.choices,
       theme = opts.theme,
+      default = opts.default,
+      kind = opts.kind,
+      legend = opts.legend,
+      keep_on_focus_lost = opts.keep_on_focus_lost,
+      title = opts.title,
       on_answer = on_answer,
     })
   end

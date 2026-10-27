@@ -193,6 +193,119 @@ return function(_)
     eq(vim.wo[surf.winid].winbar, "", "no legend unless asked for")
     eq(vim.wo[surf.winid].winhighlight:find("KitError", 1, true), nil, "and no kind colour")
     confirm.cancel()
+
+    -- ---------------------------------------------------------------- review fixes
+    -- ask with a vim.fn.confirm string: custom choices, the label comes back
+    local got = "none"
+    kit.ask({
+      question = "Remove?",
+      choices = "&Delete\n&Cancel",
+      on_answer = function(v)
+        got = v
+      end,
+    })
+    ok(confirm.is_open(), "ask with a choices string shows its dialog")
+    type_keys("d")
+    eq(got, "Delete", "ask with a choices string answers the label, not false")
+    got = "none"
+    kit.ask({
+      question = "Remove?",
+      choices = "&Delete\n&Cancel",
+      on_answer = function(v)
+        got = v
+      end,
+    })
+    confirm.cancel()
+    eq(got, nil, "and nil when dismissed")
+
+    -- the accents survive moving the focus (the repaint clears only the focus highlight)
+    local function accent_count(buf)
+      local n = 0
+      for _, m in ipairs(api.nvim_buf_get_extmarks(buf, -1, 0, -1, { details = true })) do
+        if m[4].hl_group == "KitAccent" then
+          n = n + 1
+        end
+      end
+      return n
+    end
+    surf = select(2, open({ question = "Q?", choices = "&Delete\n&Cancel" }))
+    eq(accent_count(surf.bufnr), 2, "two accents on a fresh dialog")
+    confirm.move(1)
+    confirm.move(1)
+    eq(accent_count(surf.bufnr), 2, "and still two after the focus moved")
+    confirm.cancel()
+
+    -- focus that leaves and comes back in the same turn leaves the dialog alone
+    surf = select(2, open({ question = "Q?" }))
+    api.nvim_set_current_win(main)
+    api.nvim_set_current_win(surf.winid)
+    vim.wait(80, function()
+      return false
+    end, 5)
+    eq(confirm.is_open(), true, "a focus blip does not close the dialog")
+    confirm.cancel()
+    -- ... and its autocmd group is gone with it (asking for a deleted group raises)
+    eq(
+      pcall(api.nvim_get_autocmds, { group = "lib_kit_confirm_focus_" .. surf.winid }),
+      false,
+      "no hook left"
+    )
+
+    -- && is a literal ampersand and an empty piece is no button
+    calls, surf = open({ question = "Q?", choices = "Fish && Chips\n&Cancel\n" })
+    local text = table.concat(api.nvim_buf_get_lines(surf.bufnr, 0, -1, false), "\n")
+    ok(text:find("[ Fish & Chips ]", 1, true), "&& is drawn as one &")
+    ok(not text:find("[  ]", 1, true), "a trailing newline makes no empty button")
+    eq(#confirm.button_ranges(), 2, "two buttons")
+    type_keys("c")
+    eq(calls, { "Cancel" }, "the & that is not doubled is the hotkey")
+
+    -- a hotkey that is not ASCII, either case
+    calls = open({ question = "Q?", choices = "&Да\n&Нет" })
+    type_keys("д")
+    eq(calls, { "Да" }, "a Cyrillic hotkey")
+    calls = open({ question = "Q?", choices = "&Да\n&Нет" })
+    type_keys("Н")
+    eq(calls, { "Нет" }, "and its capital")
+
+    -- kind replaces the theme's entries instead of adding a second one
+    surf = select(2, open({ question = "Q?", kind = "danger" }))
+    local wh = vim.wo[surf.winid].winhighlight
+    eq(select(2, wh:gsub("FloatBorder:", "")), 1, "one FloatBorder entry: " .. wh)
+    eq(select(2, wh:gsub("FloatTitle:", "")), 1, "one FloatTitle entry: " .. wh)
+    confirm.cancel()
+    warnings = {}
+    open({ question = "Q?", kind = "loud" })
+    ok(warnings[1] and warnings[1]:find("unknown kind", 1, true), "an unknown kind is reported")
+    confirm.cancel()
+
+    -- a legend row is part of the height budget
+    local saved_lines = vim.o.lines
+    vim.o.lines = 12
+    local tall = {}
+    for i = 1, 30 do
+      tall[i] = "line " .. i
+    end
+    surf = select(2, open({ question = table.concat(tall, "\n"), legend = true }))
+    local rows_used = #api.nvim_buf_get_lines(surf.bufnr, 0, -1, false) + 1
+    ok(
+      rows_used <= math.max(1, vim.o.lines - 4),
+      "content plus the winbar fits the window: " .. rows_used
+    )
+    confirm.cancel()
+    vim.o.lines = saved_lines
+
+    -- kit.prompt (layout buttons) forwards the options
+    kit.prompt({
+      layout = "buttons",
+      question = "Q?",
+      choices = { "a", "b", "c" },
+      default = 3,
+      kind = "warn",
+      on_answer = function() end,
+    })
+    eq(confirm.current_focus(), 3, "default reaches the dialog through kit.prompt")
+    confirm.cancel()
   end)
   for i = #restores, 1, -1 do
     local r = restores[i]
