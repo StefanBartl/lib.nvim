@@ -118,6 +118,30 @@ function M.check_roots()
   end
 end
 
+---Which backend answers `lib.nvim.ui.dialog` (the one every plugin's yes/no, choice and text prompt
+---goes through): ui.nvim's `ui.kit`, the copy that ships here, or the native fallback.
+function M.check_dialog()
+  h_start("lib.nvim: dialogs")
+  local ok_dialog, dialog = pcall(require, "lib.nvim.ui.dialog")
+  if not ok_dialog then
+    h_error("lib.nvim.ui.dialog failed to load: " .. tostring(dialog))
+    return
+  end
+  local backend = dialog.backend()
+  if backend == "ui.kit" then
+    h_ok("questions are asked through ui.nvim's ui.kit (your preset applies)")
+  elseif backend == "lib.nvim.ui.kit" then
+    h_info(
+      "questions are asked through the kit copy in lib.nvim (the default theme); "
+        .. "install ui.nvim to use your own preset"
+    )
+  else
+    h_warn("no kit could be loaded: questions fall back to vim.ui.select / vim.ui.input", {
+      "lib.nvim.ui.kit failed to load; run :checkhealth lib for the module probe above.",
+    })
+  end
+end
+
 ---Deprecated Neovim calls still in the user's config (`lib.nvim.dev.deprecations`): the
 ---on-demand counterpart of its `watch()` save hook, which only sees the file just saved.
 function M.check_deprecations()
@@ -227,6 +251,7 @@ function M.check()
     end
   end
 
+  M.check_dialog()
   M.check_deprecations()
 end
 

@@ -1,0 +1,32 @@
+---@meta
+---@module 'lib.nvim.ui.dialog.@types'
+
+--- Which backend answered: `ui.kit` (ui.nvim), the copy in `lib.nvim.ui.kit`, or `native`
+--- (`vim.ui.select` / `vim.ui.input`).
+---@alias Lib.UI.Dialog.Backend "ui.kit"|"lib.nvim.ui.kit"|"native"
+
+--- Options of `dialog.confirm` / `dialog.ask`: those of `kit.confirm` / `kit.ask`.
+---@class Lib.UI.Dialog.ConfirmOpts
+---@field question string
+---@field on_answer? fun(answer: boolean|string|nil)  # `true`/`false`; with `choices` the label, `nil` when dismissed
+---@field choices? string|string[]  # labels, or a `vim.fn.confirm` string ("&Delete\nCan&cel"); default Yes/No
+---@field default? integer|string   # the button that starts focused (index or label)
+---@field kind? "danger"|"warn"|"info"
+---@field legend? boolean
+---@field title? string
+---@field theme? any
+---@field keep_on_focus_lost? boolean
+---@field abandoned? fun(): boolean   # `ask` only: a question no longer wanted when its turn comes
+---@field max_wait_ms? integer        # `ask` only
+
+--- Options of `dialog.input`: those of `kit.input`.
+---@class Lib.UI.Dialog.InputOpts
+---@field prompt? string
+---@field title? string
+---@field default? string
+---@field completion? string
+---@field secret? boolean
+---@field on_submit? fun(value: string)  # used when `dialog.input` is called without a callback
+---@field on_cancel? fun()
+---@field theme? any
+---@field width? integer
