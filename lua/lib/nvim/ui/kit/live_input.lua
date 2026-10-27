@@ -31,6 +31,7 @@ function M.open(opts)
   local title_width = title and vim.fn.strdisplaywidth(nul_safe(title)) or 0
 
   local surf = surface.open({
+    modal = true,
     lines = { opts.default or "" },
     theme = opts.theme,
     title = title,

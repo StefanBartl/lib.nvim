@@ -165,41 +165,36 @@ return function(H)
   eq(count, 1, "on_answer fires exactly once")
   close_all()
 
-  -- Waiting questions are shown in the order they were asked, whichever poll ticks first.
-  -- The timers are driven by hand: B's tick runs BEFORE A's, the order a free-running
-  -- poll can produce.
+  -- Waiting questions are shown in the order they were asked: the blocker's close wakes both,
+  -- and the younger one must not overtake the older.
   do
-    local timers = {}
-    local orig_defer = vim.defer_fn
-    vim.defer_fn = function(fn)
-      timers[#timers + 1] = fn
-    end
     local shown = {}
     confirm.open({ question = "blocker", on_answer = function() end })
-    kit.ask({ question = "A", on_answer = function() end })
-    local a_tick = timers[1]
-    kit.ask({ question = "B", on_answer = function() end })
-    local b_tick = timers[2]
-    confirm.close()
     local real_open = confirm.open
     confirm.open = function(o)
       shown[#shown + 1] = o.question
       return real_open(o)
     end
-    b_tick() -- B's poll fires first, with A still waiting
-    eq(#shown, 0, "a later question does not overtake the older one")
-    a_tick()
+    kit.ask({ question = "A", on_answer = function() end })
+    kit.ask({ question = "B", on_answer = function() end })
+    confirm.close() -- the blocker goes: both wake
+    ok(
+      vim.wait(500, function()
+        return #shown >= 1
+      end, 5),
+      "a waiting question is shown once the blocker is gone"
+    )
     eq(shown[1], "A", "the older question is shown first")
+    eq(#shown, 1, "the younger one does not open on top of it")
     confirm.confirm() -- answer A
-    vim.defer_fn = orig_defer
-    -- B asks again on its next tick: run the timers it left behind
-    for _, t in ipairs(timers) do
-      t()
-    end
-    ok(vim.tbl_contains(shown, "B"), "and the younger one follows")
+    ok(
+      vim.wait(500, function()
+        return vim.tbl_contains(shown, "B")
+      end, 5),
+      "and the younger one follows"
+    )
     confirm.open = real_open
     close_all()
-    vim.defer_fn = orig_defer
   end
 
   -- A question that raises must not block the ones behind it for ever.

@@ -632,6 +632,7 @@ function M.open(opts)
   local default = (tostring(opts.default or ""):gsub("[\r\n]+", " "))
 
   local surf = surface.open({
+    modal = true,
     lines = has_buttons and { default, "" } or { default },
     theme = opts.theme,
     title = title,

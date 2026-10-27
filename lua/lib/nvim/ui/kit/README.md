@@ -302,15 +302,18 @@ reported rather than swallowed. `confirm.close()` therefore calls `on_answer`
 (`false`/`nil`): do not use it as a silent teardown of a dialog whose answer
 handler does something on "no".
 
-**`kit.ask(opts)` — the yes/no question that always answers.** `kit.confirm` is
+**`kit.ask(opts)` — the question that waits its turn and always answers.** `kit.confirm` is
 single-instance: opening one closes the open dialog (answering it as cancelled), so a
 question raised at a moment the user did not pick (a stream ending minutes after
-the command) can swallow another. `kit.ask` waits until no dialog is open, then
-shows its own; anything that is not an explicit yes (the dialog stays open for
-`max_wait_ms`, default ten minutes) calls `on_answer(false)`, so "unanswered"
-is "no" with no second code path. If the float cannot open at all it falls back
-to `vim.ui.select` (Yes/No). `on_answer` fires at most once, and the optional
-`abandoned()` drops a question that is no longer wanted when its turn comes.
+the command) would drop it with a "no" nobody gave. `kit.ask` waits until no modal kit
+dialog is open (a confirm, but also an input, a select or a sheet), then shows its own.
+It subscribes to the close once; nothing polls. The wait lasts `max_wait_ms` (default ten
+minutes), then `on_answer` gets the cancel value: `false`, or `nil` for a `choices` list,
+so "unanswered" is "no" with no second code path. It takes the options of `kit.confirm`
+(`choices` included: the answer is the label). If the float cannot open at all it falls
+back to `vim.ui.select`. `on_answer` fires at most once, and the optional `abandoned()`
+drops a question that is no longer wanted when its turn comes. Several waiting questions
+are shown in the order they were asked.
 
 ```lua
 kit.ask({ question = "File the answer?", on_answer = function(yes) end })

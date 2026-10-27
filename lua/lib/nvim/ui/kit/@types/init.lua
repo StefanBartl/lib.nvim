@@ -13,6 +13,10 @@
 ---@field error     string|Lib.Highlight.Opts # error/destructive (default: link DiagnosticError)
 ---@field flash     string|Lib.Highlight.Opts # momentary pick feedback (default: link IncSearch)
 ---@field hover     string|Lib.Highlight.Opts # row under the mouse pointer (default: link Visual)
+---@field ok        string|Lib.Highlight.Opts # status: passed/healthy (default: link DiagnosticOk)
+---@field warn      string|Lib.Highlight.Opts # status: needs a look (default: link DiagnosticWarn)
+---@field info      string|Lib.Highlight.Opts # status: neutral information (default: link DiagnosticInfo)
+---@field dim       string|Lib.Highlight.Opts # status: skipped/inactive (default: link Comment)
 
 --- A resolved theme: design tokens read by every component.
 ---@class Lib.UI.Kit.Theme
@@ -31,6 +35,7 @@
 --- Options for `kit.surface.open`.
 ---@class Lib.UI.Kit.SurfaceOpts
 ---@field lines? string[]        # initial content
+---@field modal? boolean           # a dialog that takes the keyboard: registered in lib.nvim.ui.kit.modal while open (what kit.ask waits for)
 ---@field theme? Lib.UI.Kit.ThemeArg
 ---@field title? string
 ---@field title_pos? "left"|"center"|"right"  # overrides the theme
@@ -374,7 +379,7 @@
 ---@field prompt fun(opts: table): any                       # ask: confirm (yes/no) or text
 ---@field picker fun(opts: table): table|nil                 # interactive picker (prompt drives results)
 ---@field confirm fun(opts: table): Lib.UI.Kit.Surface|nil    # button-confirm dialog (horizontal buttons)
----@field ask fun(opts: table)                                 # yes/no that waits for an open dialog, answers false when unanswered, falls back to vim.ui.select
+---@field ask fun(opts: table)                                 # a question (yes/no or choices) that waits for every open modal dialog, answers false/nil when unanswered, falls back to vim.ui.select
 ---@field menu fun(opts: table): Lib.UI.Kit.Surface|nil       # cursor-anchored action list (label → callback)
 ---@field compare fun(opts: Lib.UI.Kit.CompareOpts): Lib.UI.Kit.CompareHandle|nil  # pick two items, view them side by side
 ---@field progress fun(opts: table): table                     # passthrough to lib.nvim.progress.create

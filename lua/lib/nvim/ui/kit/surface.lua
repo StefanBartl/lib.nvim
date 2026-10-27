@@ -237,6 +237,11 @@ function M.open(opts)
     _closed = false,
   }, Surface)
 
+  -- A dialog that takes the keyboard registers itself, so `kit.ask` can wait for a free moment.
+  if opts.modal then
+    require("lib.nvim.ui.kit.modal").enter(self)
+  end
+
   -- Fire on_close callbacks when the window closes for any reason.
   local autocmd = require("lib.nvim.bindings.autocmd")
   local group = autocmd.group("lib_ui_kit_surface_" .. winid, true)

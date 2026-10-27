@@ -249,7 +249,8 @@ function M.cancel()
   finish(false)
 end
 
---- How often a waiting `ask` looks again, and how long it waits at most.
+--- How long a waiting `ask` waits for a free moment at most, before it is answered "no".
+--- (`ASK_POLL_MS` is kept for callers that set it; nothing polls any more.)
 M.ASK_POLL_MS = 300
 M.ASK_MAX_WAIT_MS = 10 * 60 * 1000
 
@@ -267,82 +268,110 @@ local function leave_queue(ticket)
   end
 end
 
---- Yes/no question that waits its turn and always answers, "no" included.
+--- A question that waits its turn and always answers, "no" included.
 ---
 --- `open` is single-instance: opening a dialog closes the open one and answers it as
 --- cancelled, so a question raised while another is showing (a stream that ends minutes
---- after the command was typed) would be dropped with a "no" nobody gave, and the
---- user's open dialog would vanish under their hands.
---- `ask` instead polls until no dialog is open, then shows its own. Anything
---- that is not an explicit yes -- a dialog that stays open for `max_wait_ms`
---- -- calls `on_answer(false)`, so callers treat an unanswered question as
---- "no" without a second code path. When the float cannot be opened at all
---- it falls back to `vim.ui.select` (Yes/No).
+--- after the command was typed) would be dropped with a "no" nobody gave, and the user's open
+--- dialog would vanish under their hands. `ask` instead waits until no modal kit dialog is
+--- open (a confirm, but also an input, a select or a sheet: `lib.nvim.ui.kit.modal`), then shows its
+--- own. It subscribes once and is woken when the last one closes; nothing polls. Anything
+--- that is not an explicit answer -- the wait lasts `max_wait_ms` -- calls `on_answer` with the
+--- cancel value (`false`, or `nil` for a `choices` list), so callers treat an unanswered
+--- question as "no" without a second code path. When the float cannot be opened at all it
+--- falls back to `vim.ui.select` (Yes/No, or the choices).
 ---
---- Several waiting questions are shown in the order they were asked, whichever
---- of their polls happens to tick first.
+--- Takes the options of `open` (`question`, `choices`, `title`, `theme`, ...). Several waiting
+--- questions are shown in the order they were asked, whichever of them is woken first.
 ---
 --- `on_answer` fires at most once, and never when `abandoned()` is true by
 --- the time the question's turn comes.
----@param opts { question: string, on_answer: fun(yes: boolean), abandoned?: (fun(): boolean), theme?: any, title?: string, max_wait_ms?: integer }
+---@param opts { question: string, on_answer: fun(answer: boolean|string|nil), abandoned?: (fun(): boolean), choices?: string[], theme?: any, title?: string, max_wait_ms?: integer }
 ---@return nil
 function M.ask(opts)
   opts = opts or {}
-  local waited = 0
+  local modal = require("lib.nvim.ui.kit.modal")
   local max_wait = opts.max_wait_ms or M.ASK_MAX_WAIT_MS
+  local custom = type(opts.choices) == "table" and #opts.choices > 0
   local answered = false
   local ticket = {}
   waiting[#waiting + 1] = ticket
-  local function answer(yes)
+  local timer ---@type uv.uv_timer_t|nil
+  local cancel_wait ---@type (fun())|nil
+
+  local function stop_timer()
+    if timer then
+      pcall(timer.stop, timer)
+      pcall(timer.close, timer)
+      timer = nil
+    end
+  end
+
+  local function answer(value)
     if answered then
       return
     end
     answered = true
+    stop_timer()
     if opts.on_answer then
-      opts.on_answer(yes == true)
+      if custom then
+        opts.on_answer(value)
+      else
+        opts.on_answer(value == true)
+      end
+    end
+  end
+
+  --- Leave the queue for good: no more waiting, no timer.
+  local function drop()
+    leave_queue(ticket)
+    stop_timer()
+    if cancel_wait then
+      cancel_wait()
+      cancel_wait = nil
     end
   end
 
   local attempt
   local function step()
+    cancel_wait = nil
+    if answered then
+      return
+    end
     if opts.abandoned and opts.abandoned() then
-      leave_queue(ticket)
+      drop()
       return
     end
-    if waiting[1] ~= ticket or M.is_open() then
-      if waited >= max_wait then
-        leave_queue(ticket)
-        answer(false)
-        return
-      end
-      waited = waited + M.ASK_POLL_MS
-      vim.defer_fn(attempt, M.ASK_POLL_MS)
+    if waiting[1] ~= ticket or modal.busy() then
+      cancel_wait = modal.on_free(attempt)
       return
     end
-    leave_queue(ticket)
+    drop()
     -- `open` answers "no" synchronously and returns nil when the float cannot be
     -- created: a failure to show the question, not an answer, so it is not
     -- forwarded. A dialog that did open and answers at once (a stub, another
     -- implementation) is a real answer and counts.
+    local open_opts = vim.tbl_extend("force", {}, opts)
+    open_opts.abandoned, open_opts.max_wait_ms = nil, nil
     local opening = true
-    local sync_answer
-    local shown = M.open({
-      question = opts.question,
-      theme = opts.theme,
-      title = opts.title,
-      on_answer = function(yes)
-        if opening then
-          sync_answer = yes
-        else
-          answer(yes)
-        end
-      end,
-    })
+    local sync_answer, has_sync = nil, false
+    open_opts.on_answer = function(value)
+      if opening then
+        sync_answer, has_sync = value, true
+      else
+        answer(value)
+      end
+    end
+    local shown = M.open(open_opts)
     opening = false
     if shown then
-      if sync_answer ~= nil then
+      if has_sync then
         answer(sync_answer)
       end
+    elseif custom then
+      vim.ui.select(opts.choices, { prompt = tostring(opts.question or "") }, function(choice)
+        answer(choice)
+      end)
     else
       vim.ui.select({ "Yes", "No" }, { prompt = tostring(opts.question or "") }, function(choice)
         answer(choice == "Yes")
@@ -355,10 +384,21 @@ function M.ask(opts)
   attempt = function()
     local ok, err = pcall(step)
     if not ok then
-      leave_queue(ticket)
+      drop()
       error(err, 0)
     end
   end
+
+  -- One timer for the whole wait: a dialog that stays open for ever must not hold the question.
+  timer = vim.defer_fn(function()
+    timer = nil
+    if answered then
+      return
+    end
+    drop()
+    answer(nil)
+  end, max_wait)
+
   attempt()
 end
 
@@ -420,6 +460,7 @@ function M.open(opts)
   vim.list_extend(lines, button_lines)
 
   local surf = surface.open({
+    modal = true,
     lines = lines,
     theme = opts.theme,
     title = opts.title,

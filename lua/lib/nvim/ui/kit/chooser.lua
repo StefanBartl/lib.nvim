@@ -780,6 +780,7 @@ function M.open(opts)
   local entries, flat_lines = build_entries(opts.items)
 
   local surf = surface.open({
+    modal = true,
     lines = flat_lines,
     theme = opts.theme,
     title = opts.title,

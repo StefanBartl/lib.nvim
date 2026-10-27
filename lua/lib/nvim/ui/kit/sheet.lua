@@ -252,6 +252,7 @@ function M.open(opts)
 
   local relative = opts.relative or "editor"
   local surf = surface.open({
+    modal = true,
     lines = lines,
     theme = opts.theme,
     title = opts.title,
