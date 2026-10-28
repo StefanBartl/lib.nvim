@@ -365,14 +365,17 @@ local KIND_OF_TYPE = { Error = "danger", Warning = "warn", Info = "info" }
 --- when dismissed. `choices` is the `vim.fn.confirm` string (`"&Yes\n&No"`) or a list of labels
 --- (nil or empty: a single "OK" button, as `vim.fn.confirm` shows); `default` the button that starts
 --- focused (0 or nil: the first); `msg_type` is `Error`, `Warning`, `Info`, `Question` or `Generic`
---- and only colours the border.
+--- and only colours the border. `opts.title` is the window title; `opts.kind` overrides the kind
+--- `msg_type` implies.
 ---@param msg string
 ---@param choices string|string[]|nil
 ---@param default? integer
 ---@param cb fun(index: integer)
 ---@param msg_type? string
+---@param opts? { title?: string, kind?: "danger"|"warn"|"info" }
 ---@return Lib.UI.Dialog.Backend backend
-function M.choose(msg, choices, default, cb, msg_type)
+function M.choose(msg, choices, default, cb, msg_type, opts)
+  opts = opts or {}
   local labels = labels_of(choices)
   if not labels then
     choices, labels = { "OK" }, { "OK" }
@@ -381,7 +384,8 @@ function M.choose(msg, choices, default, cb, msg_type)
     question = msg,
     choices = choices,
     default = (default and default > 0) and default or 1,
-    kind = KIND_OF_TYPE[msg_type or ""],
+    kind = opts.kind or KIND_OF_TYPE[msg_type or ""],
+    title = opts.title,
     on_answer = function(label, index)
       -- the kit says which button; searching the labels is for a backend that only says its text
       -- (and cannot tell two buttons of the same text apart)

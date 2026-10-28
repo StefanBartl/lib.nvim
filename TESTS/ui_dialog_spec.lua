@@ -219,6 +219,18 @@ return function(H)
     same(got, { 0 }, "dismissed -> 0")
     eq(ui_kit.confirm_calls[#ui_kit.confirm_calls].default, 1, "default 0 starts on the first")
 
+    dialog.choose(
+      "Save?",
+      { "a", "b" },
+      1,
+      function() end,
+      nil,
+      { title = "Unsaved changes", kind = "danger" }
+    )
+    c = ui_kit.confirm_calls[#ui_kit.confirm_calls]
+    eq(c.title, "Unsaved changes", "choose: opts.title is the window title")
+    eq(c.kind, "danger", "choose: opts.kind is passed on")
+
     -- ------------------------------------------------------------ backend 2: the copy in lib.nvim
     without_ui_kit()
     eq(dialog.backend(), "lib.nvim.ui.kit", "without ui.nvim the copy of lib.nvim answers")
