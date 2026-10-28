@@ -3,7 +3,7 @@
 ---@diagnostic disable: need-check-nil
 -- TESTS/ui_kit_confirm_answers_spec.lua -- lib.nvim.ui.kit.confirm answers exactly once, whichever way its float goes away (button, <Esc>/q, closed from outside, replaced, close(), the new dialog raising). Port of ui.nvim's spec of the same name.
 
-return function(_)
+return function(H)
   local kit = require("lib.nvim.ui.kit")
   local confirm = require("lib.nvim.ui.kit.confirm")
   local api = vim.api
@@ -31,7 +31,7 @@ return function(_)
   end
 
   local function eq(actual, expected, msg)
-    assert(
+    H.ok(
       vim.deep_equal(actual, expected),
       ("%s: expected %s, got %s"):format(msg, vim.inspect(expected), vim.inspect(actual))
     )

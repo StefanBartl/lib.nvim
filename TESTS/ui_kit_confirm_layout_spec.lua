@@ -3,19 +3,19 @@
 ---@diagnostic disable: need-check-nil
 -- TESTS/ui_kit_confirm_layout_spec.lua -- lib.nvim.ui.kit.confirm keeps its buttons inside the window: wrapped question, buttons in several rows, cut labels. Port of ui.nvim's spec of the same name.
 
-return function(_)
+return function(H)
   local kit = require("lib.nvim.ui.kit")
   local confirm = require("lib.nvim.ui.kit.confirm")
   local api = vim.api
 
   local function eq(actual, expected, msg)
-    assert(
+    H.ok(
       vim.deep_equal(actual, expected),
       ("%s: expected %s, got %s"):format(msg, vim.inspect(expected), vim.inspect(actual))
     )
   end
   local function ok(cond, msg)
-    assert(cond, msg)
+    H.ok(cond, msg)
   end
 
   local saved_cols, saved_lines = vim.o.columns, vim.o.lines

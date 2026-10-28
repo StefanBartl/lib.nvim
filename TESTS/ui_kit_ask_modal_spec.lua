@@ -3,20 +3,20 @@
 ---@diagnostic disable: need-check-nil
 -- TESTS/ui_kit_ask_modal_spec.lua -- lib.nvim.ui.kit.confirm.ask waits for ANY modal kit dialog, is woken by its close instead of polling, takes a `choices` list, and ends the wait with one timer. Port of ui.nvim's spec of the same name.
 
-return function(_)
+return function(H)
   local kit = require("lib.nvim.ui.kit")
   local confirm = require("lib.nvim.ui.kit.confirm")
   local modal = require("lib.nvim.ui.kit.modal")
   local api = vim.api
 
   local function eq(actual, expected, msg)
-    assert(
+    H.ok(
       vim.deep_equal(actual, expected),
       ("%s: expected %s, got %s"):format(msg, vim.inspect(expected), vim.inspect(actual))
     )
   end
   local function ok(cond, msg)
-    assert(cond, msg)
+    H.ok(cond, msg)
   end
   local function wait_for(fn, msg)
     ok(vim.wait(800, fn, 5), msg)

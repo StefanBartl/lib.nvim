@@ -5,7 +5,7 @@
 -- (confirm, ask, input, form, select) without blocking Neovim. Port of ui.nvim's spec of the same
 -- name; the typed-keys spec of a child Neovim with a UI lives in ui.nvim only.
 
-return function(_)
+return function(H)
   local restores = {}
   --- Every stub is put back, also when the body fails: a later spec of this shared run must not
   --- find a stubbed component.
@@ -19,13 +19,13 @@ return function(_)
     local confirm = require("lib.nvim.ui.kit.confirm")
 
     local function eq(actual, expected, msg)
-      assert(
+      H.ok(
         vim.deep_equal(actual, expected),
         ("%s: expected %s, got %s"):format(msg, vim.inspect(expected), vim.inspect(actual))
       )
     end
     local function ok(cond, msg)
-      assert(cond, msg)
+      H.ok(cond, msg)
     end
 
     confirm.close()

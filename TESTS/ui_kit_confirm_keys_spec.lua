@@ -4,7 +4,7 @@
 -- TESTS/ui_kit_confirm_keys_spec.lua -- lib.nvim.ui.kit.confirm options: default focus, & hotkeys,
 -- <C-c>, focus loss, kind, legend. Port of ui.nvim's spec of the same name.
 
-return function(_)
+return function(H)
   local restores = {}
   --- Every stub is put back, also when the body fails (shared run of lib.nvim).
   local function stub(tbl, key, fn)
@@ -17,13 +17,13 @@ return function(_)
     local api = vim.api
 
     local function eq(actual, expected, msg)
-      assert(
+      H.ok(
         vim.deep_equal(actual, expected),
         ("%s: expected %s, got %s"):format(msg, vim.inspect(expected), vim.inspect(actual))
       )
     end
     local function ok(cond, msg)
-      assert(cond, msg)
+      H.ok(cond, msg)
     end
 
     confirm.close()
