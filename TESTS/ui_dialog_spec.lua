@@ -130,7 +130,7 @@ return function(H)
     end)
     ui_kit.input_calls[2].on_cancel()
     same(got, { "nil" }, "callback style: nil when cancelled")
-    local submitted, cancelled
+    local submitted, cancelled, backed
     dialog.input({
       prompt = "Kit style",
       on_submit = function(v)
@@ -151,6 +151,20 @@ return function(H)
     })
     ui_kit.input_calls[4].on_cancel()
     eq(cancelled, true, "kit style: on_cancel")
+
+    -- leaving through the caller's own "back" answers too, and the caller's on_back runs
+    got, backed = {}, false
+    dialog.input({
+      prompt = "Step 2",
+      on_back = function()
+        backed = true
+      end,
+    }, function(v)
+      got[#got + 1] = v == nil and "nil" or v
+    end)
+    ui_kit.input_calls[5].on_back()
+    same(got, { "nil" }, "on_back: the callback gets nil")
+    eq(backed, true, "and the caller's on_back ran")
 
     -- choose: the answer is the index, 0 when dismissed; the type colours the border
     ui_kit.confirm = fake_kit().confirm
@@ -313,6 +327,75 @@ return function(H)
       return #got > 0
     end, "native secret input answers")
     same(got, { "hunter2" }, "a secret goes through inputsecret")
+
+    local base_select, base_input = vim.ui.select, vim.ui.input
+    -- a provider that calls back with the choice only is read by its text
+    stub(vim.ui, "select", function(items, _, on_choice)
+      on_choice(items[1])
+    end)
+    got = {}
+    dialog.confirm({
+      question = "No index?",
+      on_answer = function(v)
+        got[#got + 1] = v
+      end,
+    })
+    wait_for(function()
+      return #got > 0
+    end, "an answer without a position arrives")
+    same(got, { true }, "Yes is Yes, not false")
+    got = {}
+    dialog.confirm({
+      question = "Which?",
+      choices = { "a", "b" },
+      on_answer = function(label, idx)
+        got = { label, idx }
+      end,
+    })
+    wait_for(function()
+      return #got > 0
+    end, "a choice without a position arrives")
+    same(got, { "a", 1 }, "the position is found by the label")
+
+    -- a NUL byte in a question is shown, not an E976 out of the provider
+    local prompts = {}
+    stub(vim.ui, "select", function(items, o, on_choice)
+      prompts[#prompts + 1] = o.prompt
+      on_choice(items[1], 1)
+    end)
+    local nul_ok = pcall(dialog.confirm, { question = "bad\0title?", on_answer = function() end })
+    ok(nul_ok and not prompts[1]:find("\0", 1, true), "a NUL in the question is made safe")
+
+    -- a provider that raises: the error is raised and the callback is not left waiting
+    stub(vim.ui, "select", function()
+      error("provider broke")
+    end)
+    got = {}
+    local raised, raised_err = pcall(dialog.confirm, {
+      question = "Raise?",
+      on_answer = function(v)
+        got[#got + 1] = v
+      end,
+    })
+    eq(raised, false, "the provider's error surfaces")
+    ok(tostring(raised_err):find("provider broke", 1, true), "with its message")
+
+    -- the native input expands what the kit would expand, and leaving through on_back answers nil
+    stub(vim.ui, "input", function(_, on_confirm)
+      on_confirm("~/x")
+    end)
+    got = {}
+    dialog.input({ prompt = "Path", expand_env = true }, function(v)
+      got[#got + 1] = v
+    end)
+    wait_for(function()
+      return #got > 0
+    end, "native input with expand_env answers")
+    ok(
+      got[1] ~= "~/x" and got[1]:find("/x$"),
+      "expand_env is honoured natively: " .. tostring(got[1])
+    )
+    vim.ui.select, vim.ui.input = base_select, base_input
 
     -- ------------------------------------------------------------ a float that cannot open
     stub(package.loaded, "lib.nvim.ui.kit", {

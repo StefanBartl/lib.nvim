@@ -8,13 +8,14 @@
 --- Options of `dialog.confirm` / `dialog.ask`: those of `kit.confirm` / `kit.ask`.
 ---@class Lib.UI.Dialog.ConfirmOpts
 ---@field question string
----@field on_answer? fun(answer: boolean|string|nil)  # `true`/`false`; with `choices` the label, `nil` when dismissed
+---@field on_answer? fun(answer: boolean|string|nil, index?: integer)  # `true`/`false`; with `choices` the label (and its 1-based position), `nil` when dismissed
 ---@field choices? string|string[]  # labels, or a `vim.fn.confirm` string ("&Delete\nCan&cel"); default Yes/No
 ---@field default? integer|string   # the button that starts focused (index or label)
 ---@field kind? "danger"|"warn"|"info"
 ---@field legend? boolean
 ---@field title? string
 ---@field theme? any
+---@field relative? "editor"|"cursor"|"win"
 ---@field keep_on_focus_lost? boolean
 ---@field abandoned? fun(): boolean   # `ask` only: a question no longer wanted when its turn comes
 ---@field max_wait_ms? integer        # `ask` only
@@ -30,3 +31,8 @@
 ---@field on_cancel? fun()
 ---@field theme? any
 ---@field width? integer
+---@field relative? "editor"|"cursor"|"win"
+---@field expand_env? boolean  # run the line through `expand_path` (also natively)
+---@field mask? string|boolean
+---@field buttons? any  # kit only: ignored by the native fallback
+---@field on_back? fun()  # leaving through "back" answers `nil` as a cancel does

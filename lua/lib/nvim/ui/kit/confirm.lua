@@ -465,7 +465,7 @@ end
 ---
 --- `on_answer` fires at most once, and never when `abandoned()` is true by
 --- the time the question's turn comes.
----@param opts { question: string, on_answer: fun(answer: boolean|string|nil), abandoned?: (fun(): boolean), choices?: string|string[], default?: integer|string, kind?: string, legend?: boolean, keep_on_focus_lost?: boolean, theme?: any, title?: string, max_wait_ms?: integer }
+---@param opts { question: string, on_answer: fun(answer: boolean|string|nil, index?: integer), abandoned?: (fun(): boolean), choices?: string|string[], default?: integer|string, kind?: string, legend?: boolean, keep_on_focus_lost?: boolean, theme?: any, title?: string, max_wait_ms?: integer }
 ---@return nil
 function M.ask(opts)
   opts = opts or {}
@@ -494,7 +494,7 @@ function M.ask(opts)
     end
   end
 
-  local function answer(value)
+  local function answer(value, index)
     if answered then
       return
     end
@@ -502,7 +502,7 @@ function M.ask(opts)
     stop_timer()
     if opts.on_answer then
       if custom then
-        opts.on_answer(value)
+        opts.on_answer(value, index)
       else
         opts.on_answer(value == true)
       end
@@ -574,23 +574,23 @@ function M.ask(opts)
       open_opts.keep_on_focus_lost = true
     end
     local opening = true
-    local sync_answer, has_sync = nil, false
-    open_opts.on_answer = function(value)
+    local sync_answer, sync_index, has_sync = nil, nil, false
+    open_opts.on_answer = function(value, index)
       if opening then
-        sync_answer, has_sync = value, true
+        sync_answer, sync_index, has_sync = value, index, true
       else
-        answer(value)
+        answer(value, index)
       end
     end
     local shown = M.open(open_opts)
     opening = false
     if shown then
       if has_sync then
-        answer(sync_answer)
+        answer(sync_answer, sync_index)
       end
     elseif custom then
-      vim.ui.select(labels, { prompt = tostring(opts.question or "") }, function(choice)
-        answer(choice)
+      vim.ui.select(labels, { prompt = tostring(opts.question or "") }, function(choice, index)
+        answer(choice, index)
       end)
     else
       vim.ui.select({ "Yes", "No" }, { prompt = tostring(opts.question or "") }, function(choice)

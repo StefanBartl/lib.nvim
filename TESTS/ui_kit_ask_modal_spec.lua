@@ -262,18 +262,18 @@ return function(_)
   -- a question its owner withdrew while the blocker stays open is not answered by the timeout either
   do
     confirm.open({ question = "stays", on_answer = function() end })
-    local gone, called = false, false
+    local withdrawn, called = false, false
     kit.ask({
       question = "withdrawn",
       max_wait_ms = 60,
       abandoned = function()
-        return gone
+        return withdrawn
       end,
       on_answer = function()
         called = true
       end,
     })
-    gone = true
+    withdrawn = true
     idle(200)
     eq(called, false, "a withdrawn question is not answered when its wait runs out")
     close_all()
@@ -285,11 +285,11 @@ return function(_)
     confirm.ASK_RECHECK_MS = 30
     local quiet =
       kit.input({ prompt = "quiet", on_submit = function() end, on_cancel = function() end })
-    local got
+    local quiet_answer
     kit.ask({
       question = "after a quiet close",
       on_answer = function(yes)
-        got = yes
+        quiet_answer = yes
       end,
     })
     local saved_ei = vim.o.eventignore
@@ -300,20 +300,36 @@ return function(_)
       return confirm.is_open()
     end, "the question opens although no close event woke it")
     confirm.confirm()
-    eq(got, true, "and gets its answer")
+    eq(quiet_answer, true, "and gets its answer")
     confirm.ASK_RECHECK_MS = saved
+    close_all()
+  end
+
+  -- ask with choices passes the position of the button as well: two buttons of one text differ
+  do
+    local label, index
+    kit.ask({
+      question = "which?",
+      choices = { "Keep", "Keep" },
+      on_answer = function(l, i)
+        label, index = l, i
+      end,
+    })
+    idle(60)
+    confirm.pick(2)
+    eq({ label, index }, { "Keep", 2 }, "ask answers the label and its position")
     close_all()
   end
 
   -- opening fails after the question waited: it is answered as cancelled, not left hanging
   do
-    local blocker =
+    local typing =
       kit.input({ prompt = "typing", on_submit = function() end, on_cancel = function() end })
-    local got = "none"
+    local boom_answer = "none"
     kit.ask({
       question = "boom",
       on_answer = function(yes)
-        got = yes
+        boom_answer = yes
       end,
     })
     local buttons = require("lib.nvim.ui.kit.buttons")
@@ -322,10 +338,10 @@ return function(_)
       error("boom")
     end
     vim.notify = function() end
-    blocker:close()
+    typing:close()
     idle(150)
     buttons.layout_rows, vim.notify = real_layout, real_notify
-    eq(got, false, "a question that could not be shown is answered as cancelled")
+    eq(boom_answer, false, "a question that could not be shown is answered as cancelled")
     close_all()
   end
 end

@@ -31,6 +31,8 @@
 
 require("lib.nvim.ui.dialog.@types")
 
+local nul_safe = require("lib.lua.strings.core").nul_safe
+
 local M = {}
 
 --- The kits in order of preference.
@@ -71,10 +73,12 @@ local function resolve(need)
   return nil, "native"
 end
 
---- The backend that would answer a `confirm` right now.
+--- The backend that would answer right now: for a `confirm` by default, or for the call `need`
+--- names (`"ask"`, `"input"`): the kit is chosen per function.
+---@param need? string
 ---@return Lib.UI.Dialog.Backend
-function M.backend()
-  local _, name = resolve()
+function M.backend(need)
+  local _, name = resolve(need)
   return name
 end
 
@@ -179,6 +183,7 @@ local function native_confirm(opts, answer)
     for i, l in ipairs(items) do
       if l == opts.default then
         default = i
+        break -- the first of equal labels, as the kit does
       end
     end
   end
@@ -193,16 +198,26 @@ local function native_confirm(opts, answer)
   end
   local shown = {}
   for pos, i in ipairs(order) do
-    shown[pos] = items[i]
+    shown[pos] = nul_safe(items[i])
   end
 
+  -- A NUL byte reaches `vim.fn` as a Blob (E976): the text is shown with the SOH that measures alike.
   vim.ui.select(
     shown,
-    { prompt = tostring(opts.question or opts.title or "") },
+    { prompt = nul_safe(tostring(opts.question or opts.title or "")) },
     function(choice, pos)
+      -- a provider that calls back with the choice only is read by its text
+      if not pos and choice ~= nil then
+        for p, l in ipairs(shown) do
+          if l == choice then
+            pos = p
+            break
+          end
+        end
+      end
       local idx = pos and order[pos] or nil
       if custom then
-        answer(choice, idx)
+        answer(items[idx or 0], idx)
       else
         answer(idx == 1)
       end
@@ -237,8 +252,12 @@ function M.confirm(opts)
     discard()
   end
 
-  native_confirm(opts, answer)
+  -- an error of the provider must not leave the callback waiting for a turn that never comes
+  local asked, err = pcall(native_confirm, opts, answer)
   settle()
+  if not asked then
+    error(err, 0)
+  end
   return "native"
 end
 
@@ -276,10 +295,15 @@ function M.ask(opts)
     return name
   end
 
-  if not abandoned() then
-    native_confirm(opts, answer)
-  end
+  local asked, err = pcall(function()
+    if not abandoned() then
+      native_confirm(opts, answer)
+    end
+  end)
   settle()
+  if not asked then
+    error(err, 0)
+  end
   return "native"
 end
 
@@ -355,6 +379,17 @@ function M.input(opts, cb)
     o.on_cancel = function()
       answer(nil)
     end
+    if opts.on_back then
+      -- leaving through the caller's "back" is leaving too: the callback must not wait for ever
+      o.on_back = function(...)
+        local back = opts.on_back
+        local ok_back, err_back = pcall(back, ...)
+        answer(nil)
+        if not ok_back then
+          error(err_back, 0)
+        end
+      end
+    end
     local ok, surf = pcall(kit.input, o)
     if not ok then
       settle()
@@ -367,19 +402,31 @@ function M.input(opts, cb)
     discard()
   end
 
-  if opts.secret then
-    -- vim.ui.input has no masking: the prompt of the command line does.
-    local ok, text =
-      pcall(vim.fn.inputsecret, tostring(opts.prompt or opts.title or ""), opts.default or "")
-    answer(ok and text ~= "" and text or nil)
-  else
-    vim.ui.input({
-      prompt = opts.prompt or opts.title,
-      default = opts.default,
-      completion = opts.completion,
-    }, answer)
+  -- the kit runs a submitted line through `expand_path` on request; the value must not depend on the backend
+  local function native_answer(value)
+    if value ~= nil and opts.expand_env then
+      value = require("lib.nvim.cross.fs.expand_path")(value)
+    end
+    answer(value)
   end
+  local prompt = nul_safe(tostring(opts.prompt or opts.title or ""))
+  local asked, err = pcall(function()
+    if opts.secret then
+      -- vim.ui.input has no masking: the prompt of the command line does.
+      local ok, text = pcall(vim.fn.inputsecret, prompt, opts.default or "")
+      native_answer(ok and text ~= "" and text or nil)
+    else
+      vim.ui.input({
+        prompt = (opts.prompt or opts.title) and prompt or nil,
+        default = opts.default,
+        completion = opts.completion,
+      }, native_answer)
+    end
+  end)
   settle()
+  if not asked then
+    error(err, 0)
+  end
   return "native"
 end
 

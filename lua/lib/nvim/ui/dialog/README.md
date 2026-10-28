@@ -60,6 +60,11 @@ dialog.ask({ question = "File the answer?", on_answer = function(yes) end })
 also `abandoned` and `max_wait_ms`). `input` takes those of `kit.input`; with a `secret` it uses the
 kit's masked prompt, natively `vim.fn.inputsecret`.
 
+The value does not depend on the backend: `expand_env` is applied natively too, and leaving `input` through
+its `on_back` answers `nil` (after the caller's own `on_back` ran). Options only a float can honour
+(`buttons`, `theme`, `mask`) are dropped by the native fallback. An error of the kit or of a native
+provider is raised, and the callback is not left waiting. A NUL byte in a native prompt is made safe.
+
 With `choices` the answer is the label **and its 1-based position** (`on_answer(label, index)`): two
 buttons of the same text can be told apart. `choose` answers with that position.
 

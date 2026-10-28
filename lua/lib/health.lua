@@ -127,22 +127,37 @@ function M.check_dialog()
     h_error("lib.nvim.ui.dialog failed to load: " .. tostring(dialog))
     return
   end
-  local backend = dialog.backend()
   -- A kit that is installed but raises when required is not an absent kit: say what it raised.
-  for name, err in pairs(dialog.load_errors()) do
-    h_warn(("%s is installed but failed to load: %s"):format(name, err))
+  local errors = dialog.load_errors()
+  local names = vim.tbl_keys(errors)
+  table.sort(names)
+  for _, name in ipairs(names) do
+    h_warn(("%s is installed but failed to load: %s"):format(name, errors[name]))
   end
-  if backend == "ui.kit" then
-    h_ok("questions are asked through ui.nvim's ui.kit (your preset applies)")
-  elseif backend == "lib.nvim.ui.kit" then
-    h_info(
-      "questions are asked through the kit copy in lib.nvim (the default theme); "
-        .. "install ui.nvim to use your own preset"
+  -- The kit is chosen per function, so each is reported: an older ui.nvim may lack one of them.
+  local native = {}
+  for _, fn in ipairs({ "confirm", "ask", "input" }) do
+    local backend = dialog.backend(fn)
+    if backend == "ui.kit" then
+      h_ok(("%s: asked through ui.nvim's ui.kit (your preset applies)"):format(fn))
+    elseif backend == "lib.nvim.ui.kit" then
+      h_info(
+        ("%s: asked through the kit copy in lib.nvim (the default theme); "):format(fn)
+          .. "install or update ui.nvim to use your own preset"
+      )
+    else
+      native[#native + 1] = fn
+    end
+  end
+  if #native > 0 then
+    h_warn(
+      ("no kit provides %s: those fall back to vim.ui.select / vim.ui.input"):format(
+        table.concat(native, ", ")
+      ),
+      {
+        "Neither ui.kit nor lib.nvim.ui.kit loaded; run :checkhealth lib for the module probe above.",
+      }
     )
-  else
-    h_warn("no kit could be loaded: questions fall back to vim.ui.select / vim.ui.input", {
-      "lib.nvim.ui.kit failed to load; run :checkhealth lib for the module probe above.",
-    })
   end
 end
 
