@@ -146,6 +146,19 @@ return function(_)
   restore()
   vim.o.columns, vim.o.lines = 80, 30
 
+  -- one huge unbroken line (minified JSON, base64): cut before it is wrapped, not quadratic in its length
+  local started = vim.uv.hrtime()
+  surf = open({ question = "Send " .. string.rep("x", 60000) .. "?" })
+  local took = (vim.uv.hrtime() - started) / 1e9
+  ok(took < 1, ("a 60k-character question opens in %.2f s"):format(took))
+  assert_inside(surf, "huge question")
+  ok(
+    table.concat(api.nvim_buf_get_lines(surf.bufnr, 0, -1, false), "\n"):find("…", 1, true),
+    "and says it was cut"
+  )
+  restore()
+  vim.o.columns, vim.o.lines = 80, 30
+
   -- a short question is unchanged: one row, nothing cut
   surf = open({ question = "Delete?" })
   local _, short_lines, short_ranges = assert_inside(surf, "short question")

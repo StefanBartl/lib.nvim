@@ -163,6 +163,32 @@ return function(_)
     eq(got[1], nil, "-> nil")
     eq(got[2], true, "and cancelled")
 
+    -- leaving through the caller's own "back" resumes the coroutine too (and the caller's callback runs)
+    local back_called = false
+    stub(package.loaded["lib.nvim.ui.kit.form"], "open", function(o)
+      vim.schedule(function()
+        o.on_back()
+      end)
+      return {}
+    end)
+    got = nil
+    async.run(function()
+      got = {
+        async.form({
+          fields = {},
+          on_back = function()
+            back_called = true
+          end,
+        }),
+      }
+    end)
+    vim.wait(200, function()
+      return got ~= nil
+    end, 5)
+    ok(got ~= nil, "a form left through on_back does not leave the coroutine waiting")
+    eq(got, { nil, true }, "-> nil, cancelled")
+    ok(back_called, "and the caller's on_back ran")
+
     -- form goes through the same path
     stub(package.loaded["lib.nvim.ui.kit.form"], "open", function(o)
       o.on_submit({ a = 1 })

@@ -141,11 +141,14 @@ return function(_)
   eq(starved_yes, false, "a starved yes/no ask answers false")
   close_all()
 
-  -- nothing polls: while it waits an ask arms exactly one timer (its wait limit)
-  local orig_defer, calls = vim.defer_fn, 0
+  -- nothing polls: while it waits an ask arms its wait limit and one slow re-check, none quicker
+  local orig_defer, calls, quick = vim.defer_fn, 0, 0
   ---@diagnostic disable-next-line: duplicate-set-field
   vim.defer_fn = function(fn, ms)
     calls = calls + 1
+    if ms < confirm.ASK_RECHECK_MS then
+      quick = quick + 1
+    end
     return orig_defer(fn, ms)
   end
   confirm.open({ question = "blocker", on_answer = function() end })
@@ -158,7 +161,8 @@ return function(_)
   })
   idle(120)
   vim.defer_fn = orig_defer
-  eq(calls, 1, "one timer for the whole wait, no polling")
+  eq(calls, 2, "a wait limit and a slow re-check for the whole wait")
+  eq(quick, 0, "no polling")
   confirm.close()
   wait_for(function()
     return confirm.is_open()
@@ -254,4 +258,74 @@ return function(_)
   )
   eq(confirm.is_open(), false, "and nothing is shown")
   close_all()
+
+  -- a question its owner withdrew while the blocker stays open is not answered by the timeout either
+  do
+    confirm.open({ question = "stays", on_answer = function() end })
+    local gone, called = false, false
+    kit.ask({
+      question = "withdrawn",
+      max_wait_ms = 60,
+      abandoned = function()
+        return gone
+      end,
+      on_answer = function()
+        called = true
+      end,
+    })
+    gone = true
+    idle(200)
+    eq(called, false, "a withdrawn question is not answered when its wait runs out")
+    close_all()
+  end
+
+  -- a dialog that goes without the event that wakes the subscribers does not strand the question
+  do
+    local saved = confirm.ASK_RECHECK_MS
+    confirm.ASK_RECHECK_MS = 30
+    local quiet =
+      kit.input({ prompt = "quiet", on_submit = function() end, on_cancel = function() end })
+    local got
+    kit.ask({
+      question = "after a quiet close",
+      on_answer = function(yes)
+        got = yes
+      end,
+    })
+    local saved_ei = vim.o.eventignore
+    vim.o.eventignore = "WinClosed"
+    api.nvim_win_close(quiet.winid, true)
+    vim.o.eventignore = saved_ei
+    wait_for(function()
+      return confirm.is_open()
+    end, "the question opens although no close event woke it")
+    confirm.confirm()
+    eq(got, true, "and gets its answer")
+    confirm.ASK_RECHECK_MS = saved
+    close_all()
+  end
+
+  -- opening fails after the question waited: it is answered as cancelled, not left hanging
+  do
+    local blocker =
+      kit.input({ prompt = "typing", on_submit = function() end, on_cancel = function() end })
+    local got = "none"
+    kit.ask({
+      question = "boom",
+      on_answer = function(yes)
+        got = yes
+      end,
+    })
+    local buttons = require("lib.nvim.ui.kit.buttons")
+    local real_layout, real_notify = buttons.layout_rows, vim.notify
+    buttons.layout_rows = function()
+      error("boom")
+    end
+    vim.notify = function() end
+    blocker:close()
+    idle(150)
+    buttons.layout_rows, vim.notify = real_layout, real_notify
+    eq(got, false, "a question that could not be shown is answered as cancelled")
+    close_all()
+  end
 end

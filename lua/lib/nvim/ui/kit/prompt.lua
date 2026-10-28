@@ -48,7 +48,8 @@ function M.open(opts)
   -- horizontal button dialog; the default is a vertical list chooser. on_answer
   -- receives a boolean for the default two-choice case, or the chosen string
   -- when `choices` is set.
-  if opts.layout == "buttons" then
+  -- a `vim.fn.confirm` string of choices ("&Yes\n&No") is the button dialog's: the list has no hotkeys
+  if opts.layout == "buttons" or type(opts.choices) == "string" then
     return confirm.open({
       question = opts.question,
       choices = opts.choices,

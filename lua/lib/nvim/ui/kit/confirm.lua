@@ -39,6 +39,10 @@ local api = vim.api
 
 local M = {}
 
+--- A question longer than this is cut (with an ellipsis) before it is wrapped: the window shows a few
+--- dozen lines at most, and wrapping what cannot be shown is wasted time on a huge text.
+local MAX_QUESTION_CHARS = 4000
+
 --- Single active confirm dialog (mirrors the chooser's single-instance model).
 local state = {
   surf = nil,
@@ -73,19 +77,20 @@ local function wrap_line(line, width)
       out[#out + 1] = cur
       cur = ""
     end
-    -- A word wider than the width: break it between characters.
-    while vim.fn.strdisplaywidth(word) > width do
-      local piece, used = "", 0
+    -- A word wider than the width: break it between characters, in one pass over them (a long
+    -- unbroken line must not cost time quadratic in its length).
+    if vim.fn.strdisplaywidth(word) > width then
+      local piece, used = {}, 0
       for _, ch in ipairs(vim.fn.split(word, "\\zs")) do
         local w = vim.fn.strdisplaywidth(ch)
-        if used + w > width and piece ~= "" then
-          break
+        if used + w > width and #piece > 0 then
+          out[#out + 1] = table.concat(piece)
+          piece, used = {}, 0
         end
-        piece = piece .. ch
+        piece[#piece + 1] = ch
         used = used + w
       end
-      out[#out + 1] = piece
-      word = word:sub(#piece + 1)
+      word = table.concat(piece)
     end
     cur = word
   end
@@ -421,6 +426,13 @@ end
 --- How long a waiting `ask` waits for a free moment at most, before it is answered "no".
 M.ASK_MAX_WAIT_MS = 10 * 60 * 1000
 
+--- How often a waiting `ask` looks again whether the dialog in front of it is still there.
+M.ASK_RECHECK_MS = 1000
+
+--- A question that pops up on its own ignores letter and digit hotkeys for this long after it
+--- opens: keys typed ahead for the editor must not answer a question nobody saw coming.
+M.ASK_HOTKEY_GRACE_MS = 500
+
 --- The questions `ask` is holding back, oldest first (a ticket each).
 ---@type table[]
 local waiting = {}
@@ -466,6 +478,7 @@ function M.ask(opts)
   local ticket = {}
   waiting[#waiting + 1] = ticket
   local timer ---@type uv.uv_timer_t|nil
+  local recheck ---@type uv.uv_timer_t|nil
   local cancel_wait ---@type (fun())|nil
 
   local function stop_timer()
@@ -473,6 +486,11 @@ function M.ask(opts)
       pcall(timer.stop, timer)
       pcall(timer.close, timer)
       timer = nil
+    end
+    if recheck then
+      pcall(recheck.stop, recheck)
+      pcall(recheck.close, recheck)
+      recheck = nil
     end
   end
 
@@ -514,6 +532,24 @@ function M.ask(opts)
     end
     if modal.busy() then
       cancel_wait = modal.on_free(attempt)
+      -- A dialog can go without the event that wakes the subscribers (a close made with
+      -- `eventignore` or `:noautocmd`): look again now and then, slowly, so the question is
+      -- not left waiting behind a window that is no longer there.
+      if recheck then
+        pcall(recheck.stop, recheck)
+        pcall(recheck.close, recheck)
+      end
+      recheck = vim.defer_fn(function()
+        recheck = nil
+        if answered or done then
+          return
+        end
+        if cancel_wait then
+          cancel_wait()
+          cancel_wait = nil
+        end
+        attempt()
+      end, M.ASK_RECHECK_MS)
       return
     end
     if waiting[1] ~= ticket then
@@ -533,6 +569,7 @@ function M.ask(opts)
     -- implementation) is a real answer and counts.
     local open_opts = vim.tbl_extend("force", {}, opts)
     open_opts.abandoned, open_opts.max_wait_ms = nil, nil
+    open_opts.hotkey_grace_ms = M.ASK_HOTKEY_GRACE_MS
     if open_opts.keep_on_focus_lost == nil then
       open_opts.keep_on_focus_lost = true
     end
@@ -568,6 +605,9 @@ function M.ask(opts)
     local ok, err = pcall(step)
     if not ok then
       drop()
+      -- the question was not shown: it is answered as cancelled rather than left hanging (the
+      -- caller may be a coroutine that waits for the answer), and the failure is still raised
+      pcall(answer, nil)
       error(err, 0)
     end
   end
@@ -579,6 +619,10 @@ function M.ask(opts)
       return
     end
     drop()
+    -- a question its owner has withdrawn is not answered, not even with "no"
+    if opts.abandoned and opts.abandoned() then
+      return
+    end
     answer(nil)
   end, max_wait)
 
@@ -602,10 +646,14 @@ local function open_new(opts, settle_old)
   local max_w = max_float_width()
   local wrap_w = math.max(10, max_w - 4)
   local qlines = {}
-  for _, ql in ipairs(vim.split(tostring(opts.question or ""), "\n", { plain = true })) do
+  local question = nul_safe(tostring(opts.question or ""))
+  if vim.fn.strchars(question) > MAX_QUESTION_CHARS then
+    question = vim.fn.strcharpart(question, 0, MAX_QUESTION_CHARS) .. "…"
+  end
+  for _, ql in ipairs(vim.split(question, "\n", { plain = true, trimempty = false })) do
     -- A NUL byte in the question (a case title, say) would raise E976 out of the
     -- `strdisplaywidth()` that sizes and centers it: it is shown as the SOH that measures alike.
-    vim.list_extend(qlines, wrap_line(nul_safe(ql), wrap_w))
+    vim.list_extend(qlines, wrap_line(ql, wrap_w))
   end
 
   -- Width: fit the wider of the question and the button row, plus margin.
@@ -792,8 +840,13 @@ local function open_new(opts, settle_old)
   map("n", "<C-c>", M.cancel, mo)
   map("n", "q", M.cancel, mo)
   map("n", "<LeftMouse>", M.click, mo)
+  local opened_at = vim.uv.now()
+  local grace = tonumber(opts.hotkey_grace_ms) or 0
   for key, index in pairs(keys) do
     local pick = function()
+      if grace > 0 and vim.uv.now() - opened_at < grace then
+        return
+      end
       M.pick(index)
     end
     map("n", key, pick, mo)
@@ -827,7 +880,20 @@ function M.open(opts)
       return
     end
     settled = true
-    deliver(old_cb, old_custom, old_labels, old_focus, false)
+    if not old_cb then
+      return
+    end
+    -- On the next loop turn, not inside this call: the answer is user code, and one that opens a
+    -- dialog (a coroutine that asks again) would replace the dialog this call is still handing
+    -- back. `modal.hold` keeps a waiting `ask` from opening in the gap.
+    local release = require("lib.nvim.ui.kit.modal").hold()
+    vim.schedule(function()
+      local delivered, err = pcall(deliver, old_cb, old_custom, old_labels, old_focus, false)
+      release()
+      if not delivered then
+        error(err, 0)
+      end
+    end)
   end
   local ok, res = pcall(open_new, opts, settle_old)
   if not ok then

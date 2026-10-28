@@ -205,8 +205,26 @@ return function(_)
       end,
     })
     ok(confirm.is_open(), "ask with a choices string shows its dialog")
+    -- keys typed ahead for the editor must not answer a question that popped up on its own
+    type_keys("d")
+    eq(got, "none", "a hotkey right after an ask opens is ignored")
+    ok(confirm.is_open(), "and the question is still there")
+    vim.wait(confirm.ASK_HOTKEY_GRACE_MS + 100)
     type_keys("d")
     eq(got, "Delete", "ask with a choices string answers the label, not false")
+
+    -- kit.prompt with a choices string uses the button dialog too, not a Yes/No list
+    local prompted = "none"
+    kit.prompt({
+      question = "Remove?",
+      choices = "&Delete\n&Keep",
+      on_answer = function(v)
+        prompted = v
+      end,
+    })
+    ok(confirm.is_open(), "a choices string in kit.prompt shows the button dialog")
+    confirm.pick(2)
+    eq(prompted, "Keep", "and answers the label")
     got = "none"
     kit.ask({
       question = "Remove?",
@@ -282,18 +300,21 @@ return function(_)
     -- a legend row is part of the height budget
     local saved_lines = vim.o.lines
     vim.o.lines = 12
-    local tall = {}
-    for i = 1, 30 do
-      tall[i] = "line " .. i
-    end
-    surf = select(2, open({ question = table.concat(tall, "\n"), legend = true }))
-    local rows_used = #api.nvim_buf_get_lines(surf.bufnr, 0, -1, false) + 1
-    ok(
-      rows_used <= math.max(1, vim.o.lines - 4),
-      "content plus the winbar fits the window: " .. rows_used
-    )
-    confirm.cancel()
+    local fits_ok, fits_err = pcall(function()
+      local tall = {}
+      for i = 1, 30 do
+        tall[i] = "line " .. i
+      end
+      surf = select(2, open({ question = table.concat(tall, "\n"), legend = true }))
+      local rows_used = #api.nvim_buf_get_lines(surf.bufnr, 0, -1, false) + 1
+      ok(
+        rows_used <= math.max(1, vim.o.lines - 4),
+        "content plus the winbar fits the window: " .. rows_used
+      )
+      confirm.cancel()
+    end)
     vim.o.lines = saved_lines
+    assert(fits_ok, fits_err)
 
     -- the position comes with the label: two buttons of the same text can be told apart
     local picked_label, picked_index

@@ -191,6 +191,10 @@ function M.submit(open_fn, opts)
       chain(user_submit, deliver, value, false)(value)
     end
     o.on_cancel = chain(o.on_cancel, deliver, nil, true)
+    -- leaving through the caller's "back" is leaving too: the coroutine must not wait for ever
+    if o.on_back then
+      o.on_back = chain(o.on_back, deliver, nil, true)
+    end
     if open_fn(o) == nil then
       deliver(nil, true)
     end
