@@ -107,10 +107,16 @@ local function bind_cancel_on_escape(bufnr, spec, request_cancel)
     if label == "" then
       label = "This operation"
     end
-    local choice = vim.fn.confirm(label .. " is still running. Abort it?", "&Yes\n&No", 2)
-    if choice == 1 then
-      request_cancel()
-    end
+    require("lib.nvim.ui.dialog").yesno(
+      label .. " is still running. Abort it?",
+      "abort",
+      function(yes)
+        if yes then
+          request_cancel()
+        end
+      end,
+      { kind = "danger" }
+    )
   end, { buffer = bufnr, nowait = true, silent = true, desc = "lib.nvim.progress: cancel" })
 end
 

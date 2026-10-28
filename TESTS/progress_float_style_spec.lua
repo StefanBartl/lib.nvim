@@ -50,10 +50,11 @@ return function(H)
     end
     local function prompt_for(title)
       local seen
-      local orig_confirm = vim.fn.confirm
-      vim.fn.confirm = function(msg)
+      local dialog = require("lib.nvim.ui.dialog")
+      local orig_yesno = dialog.yesno
+      dialog.yesno = function(msg, _, cb)
         seen = msg
-        return 2
+        cb(false)
       end
       local state = float_style.start(
         { title = title, text = "", current = nil, total = nil },
@@ -61,7 +62,7 @@ return function(H)
         function() end
       )
       local ok, err = pcall(esc_callback(state.bufnr))
-      vim.fn.confirm = orig_confirm
+      dialog.yesno = orig_yesno
       pcall(vim.api.nvim_win_close, state.winid, true)
       H.ok(ok, "float style: the <Esc> handler runs (" .. tostring(err) .. ")")
       return seen

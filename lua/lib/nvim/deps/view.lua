@@ -296,17 +296,15 @@ local function install_under_cursor(tool, opts, ui, rerender, is_valid)
     return
   end
 
-  local choice = vim.fn.confirm(
+  require("lib.nvim.ui.dialog").yesno(
     "Install " .. tool.bin .. "?\n\n  " .. pm.render(one_plan.commands[1]),
-    "&Install\n&Cancel",
-    1,
-    "Question"
+    "install",
+    function(yes)
+      if yes then
+        run_inline(tool, one_plan, ui, rerender, is_valid)
+      end
+    end
   )
-  if choice ~= 1 then
-    return
-  end
-
-  run_inline(tool, one_plan, ui, rerender, is_valid)
 end
 
 ---Show `plugin_name`'s declared tools in a popup (or a scratch split when

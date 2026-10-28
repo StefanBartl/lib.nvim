@@ -193,10 +193,11 @@ return function(H)
     end
     local function prompt_for(title)
       local seen
-      local orig_confirm = vim.fn.confirm
-      vim.fn.confirm = function(msg)
+      local dialog = require("lib.nvim.ui.dialog")
+      local orig_yesno = dialog.yesno
+      dialog.yesno = function(msg, _, cb)
         seen = msg
-        return 2
+        cb(false)
       end
       local surf = kit_style.start(
         { title = title, text = "", current = nil, total = nil },
@@ -204,7 +205,7 @@ return function(H)
         function() end
       )
       local ok, err = pcall(esc_callback(surf.bufnr))
-      vim.fn.confirm = orig_confirm
+      dialog.yesno = orig_yesno
       surf:close()
       H.ok(ok, "kit style: the <Esc> handler runs (" .. tostring(err) .. ")")
       return seen
