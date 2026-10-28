@@ -748,13 +748,7 @@ local function open_new(opts, settle_old)
     -- module's own "Answer contract" implying it always does) and a
     -- kit.sync caller blocked on it stalls silently. Same "no answer" value
     -- as M.cancel() uses.
-    if opts.on_answer then
-      if custom then
-        opts.on_answer(nil)
-      else
-        opts.on_answer(false)
-      end
-    end
+    deliver(opts.on_answer, custom, {}, 1, false)
     return nil
   end
 
@@ -843,21 +837,20 @@ local function open_new(opts, settle_old)
     -- `keep_on_focus_lost = true` keeps it; `kit.ask` does by default, since a question nobody
     -- asked for must not be answered "no" by a window change.
     if not opts.keep_on_focus_lost then
-      local autocmd = require("lib.nvim.bindings.autocmd")
-      local group = autocmd.group("lib_kit_confirm_focus_" .. surf.winid, true)
-      autocmd.create(
-        "WinLeave",
-        function()
-          vim.schedule(function()
-            if state.surf == surf and api.nvim_get_current_win() ~= surf.winid then
-              finish(false)
-            end
-          end)
+      local group = require("lib.nvim.window.close_on_focus_lost")(surf.winid, {
+        events = { "WinLeave" },
+        recheck = true,
+        -- the answer is the cancel, and closes the float with it
+        close = function()
+          if state.surf == surf then
+            finish(false)
+          end
         end,
-        { group = group, buffer = surf.bufnr, record = false, desc = "lib.nvim.ui.kit: focus lost" }
-      )
+      })
       surf:on_close(function()
-        pcall(api.nvim_del_augroup_by_id, group)
+        if group then
+          pcall(api.nvim_del_augroup_by_id, group)
+        end
       end)
     end
   end

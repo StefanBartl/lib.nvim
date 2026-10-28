@@ -5,6 +5,11 @@
 ---that closes `winid` when the user moves away from it — the usual dismiss
 ---behaviour for hover popups and transient panels. Returns the augroup id so
 ---callers can cancel it again via `nvim_del_augroup_by_id`.
+---
+---`opts.recheck` looks again on the next loop turn and leaves the window alone when it is the current
+---one again (focus that went and came back at once, as a plugin that switches windows does); the
+---autocmd then stays armed (not `once`). `opts.close` replaces the plain window close, for an overlay
+---whose dismissal also has to answer something.
 
 require("lib.nvim.window.@types")
 
@@ -39,14 +44,22 @@ local function close_on_focus_lost(winid, opts)
   autocmd.create(events, function()
     -- Defer: closing a window from inside its own WinLeave is unsafe.
     vim.schedule(function()
-      if api.nvim_win_is_valid(winid) then
+      if not api.nvim_win_is_valid(winid) then
+        return
+      end
+      if opts.recheck and api.nvim_get_current_win() == winid then
+        return
+      end
+      if opts.close then
+        opts.close(winid)
+      else
         pcall(api.nvim_win_close, winid, force)
       end
     end)
   end, {
     group = augroup,
     buffer = bufnr,
-    once = true,
+    once = not opts.recheck,
     -- A throwaway hook of one overlay: its group is named after the window id,
     -- new for every overlay, so a record would outlive it for good.
     record = false,

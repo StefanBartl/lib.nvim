@@ -11,6 +11,8 @@
 ---@class Lib.Window.CloseOnFocusLostOpts
 ---@field events? string[] Autocmd events that count as focus loss (default `{ "WinLeave", "BufLeave" }`)
 ---@field force? boolean Discard unsaved changes when closing (default `true`)
+---@field recheck? boolean Look again on the next loop turn and keep the window when it is current again; the autocmd stays armed (default `false`: one shot)
+---@field close? fun(winid: integer) Dismiss the window instead of `nvim_win_close` (it must close the window itself)
 
 ---@class Lib.Window.OpenScratchSplitOpts
 ---@field filetype? string Buffer `filetype`
