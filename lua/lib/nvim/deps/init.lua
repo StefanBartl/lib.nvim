@@ -105,7 +105,7 @@ end
 ---Offer to install whatever `plugin_name` declares and this host is missing.
 ---Confirmation-gated; see `lib.nvim.deps.install.run`.
 ---@param plugin_name string
----@return boolean started
+---@return boolean|nil started nil while the question is open
 function M.install_for(plugin_name)
   local result = resolve(plugin_name)
   if not result then

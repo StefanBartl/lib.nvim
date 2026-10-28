@@ -104,6 +104,7 @@
 ---@class Lib.Deps.Project.InstallOpts
 ---@field confirm? boolean false: skip the question (callers that asked in their own UI, and tests); the terminal command is still only typed, never submitted
 ---@field manager? Lib.Deps.Manager package manager override, as for `deps.install.plan`
+---@field on_done? fun(started: { parsers: string[], mason: string[], terminal: boolean }|nil) how the (possibly asked) install ended; nil: nothing was started
 
 ---@class Lib.Deps.Project.SetupOpts
 ---@field auto? boolean scan the current directory now and on every `DirChanged`, and notify once per root when something is missing. Default false.

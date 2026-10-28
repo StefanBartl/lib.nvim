@@ -914,9 +914,9 @@ return function(H)
                 runs[#runs + 1] = { plan = plan, opts = opts }
                 return true
               end, function()
-                H.with_patched(vim.fn, "confirm", function(text)
+                H.with_patched(require("lib.nvim.ui.dialog"), "yesno", function(text, _, cb)
                   asked[#asked + 1] = text
-                  return answer
+                  cb(answer == 1)
                 end, body)
               end)
             end)
@@ -925,7 +925,15 @@ return function(H)
 
         -- Cancel: asked, nothing started.
         recorders(2, function()
-          local started = project.install(report, { manager = pm.get("brew") })
+          local ended, started = false, "unset"
+          local returned = project.install(report, {
+            manager = pm.get("brew"),
+            on_done = function(result)
+              ended, started = true, result
+            end,
+          })
+          eq(returned, nil, "install: the question is open when the call returns -> nil")
+          eq(ended, true, "install: on_done says how it ended")
           eq(started, nil, "install: cancelled -> nil")
         end)
         eq(#asked, 1, "install: asks exactly once before doing anything")
@@ -935,7 +943,13 @@ return function(H)
         -- Yes: all three ways, with the terminal one unconfirmed a second time.
         asked = {}
         recorders(1, function()
-          local started = project.install(report, { manager = pm.get("brew") })
+          local started
+          project.install(report, {
+            manager = pm.get("brew"),
+            on_done = function(result)
+              started = result
+            end,
+          })
           eq(table.concat(started.parsers, ","), "zzra", "install: parsers started")
           eq(table.concat(started.mason, ","), "rust-analyzer", "install: Mason packages started")
           eq(started.terminal, true, "install: terminal handoff started")
@@ -1163,9 +1177,8 @@ return function(H)
       project.forget()
       with_module("mason-registry", fresh_registry, function()
         local asked = {}
-        H.with_patched(vim.fn, "confirm", function(text)
+        H.with_patched(require("lib.nvim.ui.dialog"), "yesno", function(text)
           asked[#asked + 1] = text
-          return 2
         end, function()
           project.run(root, "install", opts_for("rust-analyzer"))
           ok(
@@ -1399,9 +1412,8 @@ return function(H)
       end
       ok(install_map and install_map.callback, "run: the view maps I")
       local asked = {}
-      H.with_patched(vim.fn, "confirm", function(question)
+      H.with_patched(require("lib.nvim.ui.dialog"), "yesno", function(question)
         asked[#asked + 1] = question
-        return 2
       end, function()
         install_map.callback()
       end)
@@ -1418,9 +1430,8 @@ return function(H)
     project.forget()
     with_module("nvim-treesitter", fake_ts({}, { "zzra" }), function()
       local asked = {}
-      H.with_patched(vim.fn, "confirm", function(text)
+      H.with_patched(require("lib.nvim.ui.dialog"), "yesno", function(text)
         asked[#asked + 1] = text
-        return 2
       end, function()
         project.run(root, "install", { registered = false })
         ok(

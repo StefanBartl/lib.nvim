@@ -131,16 +131,30 @@ end
 ---prompt — it does **not** submit the command, which stays the user's
 ---keystroke either way; it exists for callers that already asked in their own
 ---UI, and for tests.
+---
+---The question is the shared dialog (`lib.nvim.ui.dialog.yesno`, "No" first and
+---focused), so the answer comes on a later loop turn: the return value is `nil`
+---while it is open and `opts.on_done(started)` says how it ended. When nothing is
+---asked, the result is the return value and `on_done` runs before this returns.
 ---@param plan Lib.Deps.Plan
----@param opts? { confirm?: boolean }
----@return boolean started true when a terminal was opened
+---@param opts? { confirm?: boolean, on_done?: fun(started: boolean) }
+---@return boolean|nil started true when a terminal was opened; nil while the question is open
 function M.run(plan, opts)
   opts = opts or {}
   local notify = require("lib.nvim.notify").create("[lib.nvim.deps]")
 
+  ---@param started boolean
+  ---@return boolean
+  local function done(started)
+    if opts.on_done then
+      opts.on_done(started)
+    end
+    return started
+  end
+
   if not plan.manager then
     notify.warn("No supported package manager found on this host — install the tools manually.")
-    return false
+    return done(false)
   end
   if #plan.commands == 0 then
     if #plan.missing == 0 then
@@ -152,29 +166,36 @@ function M.run(plan, opts)
         )
       )
     end
-    return false
+    return done(false)
+  end
+
+  local function start()
+    local parts = {}
+    for _, argv in ipairs(plan.commands) do
+      parts[#parts + 1] = pm.render(argv)
+    end
+    -- `&&` rather than `;`: a failed first install shouldn't be followed by the
+    -- rest running against a half-set-up system.
+    local text = table.concat(parts, " && ")
+
+    if not open_terminal_with(text) then
+      notify.error("Could not open a terminal; run manually:  " .. text)
+      return done(false)
+    end
+    return done(true)
   end
 
   if opts.confirm ~= false then
-    local choice = vim.fn.confirm(confirm_text(plan), "&Open terminal\n&Cancel", 2, "Question")
-    if choice ~= 1 then
-      return false
-    end
+    require("lib.nvim.ui.dialog").yesno(confirm_text(plan), "open terminal", function(yes)
+      if yes then
+        start()
+      else
+        done(false)
+      end
+    end)
+    return nil
   end
-
-  local parts = {}
-  for _, argv in ipairs(plan.commands) do
-    parts[#parts + 1] = pm.render(argv)
-  end
-  -- `&&` rather than `;`: a failed first install shouldn't be followed by the
-  -- rest running against a half-set-up system.
-  local text = table.concat(parts, " && ")
-
-  if not open_terminal_with(text) then
-    notify.error("Could not open a terminal; run manually:  " .. text)
-    return false
-  end
-  return true
+  return start()
 end
 
 ---@type Lib.Deps.Install

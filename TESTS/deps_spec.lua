@@ -612,6 +612,50 @@ pkg:
       false,
       "install.run: nothing installable under this manager -> returns false"
     )
+
+    -- The question is the shared dialog: the terminal opens only after a yes, the return value is
+    -- nil while the question is open and on_done says how it ended.
+    do
+      local dialog = require("lib.nvim.ui.dialog")
+      local terminal = require("lib.nvim.terminal")
+      local orig_yesno, orig_spawn = dialog.yesno, terminal.spawn
+      local answer, asked, spawned = nil, nil, 0
+      dialog.yesno = function(question, label, cb)
+        asked = { question = question, label = label }
+        answer = cb
+      end
+      terminal.spawn = function()
+        spawned = spawned + 1
+        return { bufnr = 1 }
+      end
+      local installable = deps_install.plan({
+        { bin = "a-missing-bin-three", required = false, why = "x", pkg = { brew = "pkg-three" } },
+      }, { manager = brew })
+
+      local ended = {}
+      local function on_done(started)
+        ended[#ended + 1] = started
+      end
+      eq(deps_install.run(installable, { on_done = on_done }), nil, "install.run: nil while asking")
+      eq(spawned, 0, "install.run: nothing is opened before the answer")
+      eq(asked.label, "open terminal", "install.run: the yes answer names the action")
+      answer(false)
+      eq(spawned, 0, "install.run: no opens nothing")
+      eq(ended[1], false, "install.run: on_done(false) after a no")
+
+      deps_install.run(installable, { on_done = on_done })
+      answer(true)
+      eq(spawned, 1, "install.run: yes opens the terminal once")
+      eq(ended[2], true, "install.run: on_done(true) after a yes")
+
+      eq(
+        deps_install.run(installable, { confirm = false, on_done = on_done }),
+        true,
+        "install.run: without a question the result is the return value"
+      )
+      eq(ended[3], true, "install.run: ...and on_done ran before it returned")
+      dialog.yesno, terminal.spawn = orig_yesno, orig_spawn
+    end
   end
 
   -- ---------------------------------------------------------------------- view

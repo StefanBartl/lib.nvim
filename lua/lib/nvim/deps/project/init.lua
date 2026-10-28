@@ -772,6 +772,11 @@ end
 ---Ask once, then start everything `install_plan` lists. Returns what was
 ---started, or nil when there was nothing to do or the user said no.
 ---
+---The question is the shared dialog (`lib.nvim.ui.dialog.yesno`, "No" first and
+---focused), so the answer comes on a later loop turn: the return value is `nil`
+---while it is open, and `opts.on_done(started)` says how it ended (`nil` for
+---nothing to do or a no). When nothing is asked, `on_done` runs before this returns.
+---
 ---  * parsers   -> `parser_policy.install` (nvim-treesitter, background)
 ---  * Mason     -> the registry API, headless (see `deps.project.mason`)
 ---  * `bin`     -> `deps.install.run`: a terminal with the command typed and
@@ -782,44 +787,61 @@ end
 function M.install(report, opts)
   opts = opts or {}
   local plan = M.install_plan(report, opts)
+
+  ---@param started { parsers: string[], mason: string[], terminal: boolean }|nil
+  ---@return { parsers: string[], mason: string[], terminal: boolean }|nil
+  local function done(started)
+    if opts.on_done then
+      opts.on_done(started)
+    end
+    return started
+  end
+
   if plan.empty then
     notify().info("Nothing to install for " .. report.root .. ".")
-    return nil
+    return done(nil)
+  end
+
+  local function start()
+    local started = { parsers = {}, mason = {}, terminal = false }
+
+    local policy = require("lib.nvim.treesitter.parser_policy")
+    for _, lang in ipairs(plan.parsers) do
+      if policy.install(lang) then
+        started.parsers[#started.parsers + 1] = lang
+      end
+    end
+
+    if #plan.mason > 0 then
+      started.mason = vim.deepcopy(plan.mason)
+      require("lib.nvim.deps.project.mason").install(plan.mason, function(name, ok, err)
+        if ok then
+          notify().info(("Mason package '%s' installed"):format(name))
+        else
+          notify().warn(("Mason package '%s' not installed: %s"):format(name, tostring(err)))
+        end
+      end)
+    end
+
+    -- Last: it opens a split and starts insert mode.
+    if plan.plan and #plan.plan.commands > 0 then
+      started.terminal = require("lib.nvim.deps.install").run(plan.plan, { confirm = false })
+    end
+
+    return done(started)
   end
 
   if opts.confirm ~= false then
-    local choice = vim.fn.confirm(plan.text, "&Install\n&Cancel", 2, "Question")
-    if choice ~= 1 then
-      return nil
-    end
-  end
-
-  local started = { parsers = {}, mason = {}, terminal = false }
-
-  local policy = require("lib.nvim.treesitter.parser_policy")
-  for _, lang in ipairs(plan.parsers) do
-    if policy.install(lang) then
-      started.parsers[#started.parsers + 1] = lang
-    end
-  end
-
-  if #plan.mason > 0 then
-    started.mason = vim.deepcopy(plan.mason)
-    require("lib.nvim.deps.project.mason").install(plan.mason, function(name, ok, err)
-      if ok then
-        notify().info(("Mason package '%s' installed"):format(name))
+    require("lib.nvim.ui.dialog").yesno(plan.text, "install", function(yes)
+      if yes then
+        start()
       else
-        notify().warn(("Mason package '%s' not installed: %s"):format(name, tostring(err)))
+        done(nil)
       end
     end)
+    return nil
   end
-
-  -- Last: it opens a split and starts insert mode.
-  if plan.plan and #plan.plan.commands > 0 then
-    started.terminal = require("lib.nvim.deps.install").run(plan.plan, { confirm = false })
-  end
-
-  return started
+  return start()
 end
 
 -- ---------------------------------------------------------------- surfaces

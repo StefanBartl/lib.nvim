@@ -103,7 +103,7 @@
 ---`lib.nvim.deps.install` module surface: plan computation + confirmed terminal handoff.
 ---@class Lib.Deps.Install
 ---@field plan fun(tools: Lib.Deps.Tool[], opts?: Lib.Deps.ManagerOpts): Lib.Deps.Plan
----@field run fun(plan: Lib.Deps.Plan, opts?: { confirm?: boolean }): boolean
+---@field run fun(plan: Lib.Deps.Plan, opts?: { confirm?: boolean, on_done?: fun(started: boolean) }): boolean|nil nil while the question is open
 
 ---Live install state for one tool, keyed by `tool.bin` in `deps.view`'s
 ---`ui` tables.
@@ -182,7 +182,7 @@
 ---@field require_tool fun(plugin_name: string, bin: string, opts?: Lib.Deps.RequireTool.Opts): string|nil is this tool here — and if not, report it usefully
 ---@field plugins fun(): string[] every plugin on runtimepath shipping a deps spec
 ---@field show fun(plugin_name: string): boolean render one plugin's tool report in a scratch split
----@field install_for fun(plugin_name: string): boolean plan + confirm + hand off to a terminal
+---@field install_for fun(plugin_name: string): boolean|nil plan + confirm + hand off to a terminal (nil while the question is open)
 ---@field routes fun(): table[] the `:Lib deps …` routes, for `lib.nvim_usrcmds` to merge into the `:Lib` verb
 
 return {}
