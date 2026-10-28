@@ -200,23 +200,131 @@ return function(H)
     )
   end
 
-  -- (e) POSIX: kill() escalates to SIGKILL for a child that ignores SIGTERM (Windows: taskkill /F is final)
+  -- (e) POSIX: kill() sends SIGTERM first, SIGKILL after the grace period to a child that ignores it
+  -- (Windows: taskkill /F is final)
   if vim.fn.has("win32") == 0 and vim.fn.executable("sh") == 1 then
+    local ready = false
     local handle = job.start({
       command = "sh",
       args = { "-c", "trap '' TERM; echo ready; while :; do sleep 1; done" },
       kill_tree = true,
-      on_stdout = function() end,
+      on_stdout = function(_, line)
+        ready = ready or line == "ready"
+      end,
     })
-    vim.wait(5000, function()
-      return false
-    end, 200)
+    ok(
+      vim.wait(10000, function()
+        return ready
+      end, 20),
+      "escalation: the trap is installed"
+    )
     local t0 = uv.hrtime()
     handle.kill()
     local r = handle.wait(15000)
+    local ms = (uv.hrtime() - t0) / 1e6
     ok(r ~= nil, "escalation: a child that ignores SIGTERM still ends")
     eq(r and r.signal, 9, "escalation: by SIGKILL")
-    ok((uv.hrtime() - t0) / 1e6 < 10000, "escalation: within the grace period")
+    eq(r and r.code, 137, "escalation: exit code 128 + 9")
+    ok(
+      ms >= 1200,
+      "escalation: SIGTERM first, SIGKILL only after the grace period (" .. ms .. " ms)"
+    )
+    ok(ms < 8000, "escalation: within the grace period (" .. ms .. " ms)")
+
+    -- a killed run is not a success: 128 + 15, not the 0 libuv reports for a signalled child
+    local plain = job.start({ command = "sh", args = { "-c", "sleep 30" }, kill_tree = true })
+    vim.wait(300, function()
+      return false
+    end, 50)
+    plain:kill()
+    local pr = plain:wait(10000)
+    eq(pr and pr.signal, 15, "kill: SIGTERM ended it")
+    eq(pr and pr.code, 143, "kill: exit code 128 + 15, never 0")
+
+    -- the leader dies of the SIGTERM, a descendant ignores it and holds the pipes: the follow-up SIGKILL
+    -- still reaches the process group, the run ends and the descendant is gone
+    local stubborn
+    local h2 = job.start({
+      command = "sh",
+      args = { "-c", "sh -c 'trap \"\" TERM; echo ready $$; exec sleep 30' & wait" },
+      kill_tree = true,
+      on_stdout = function(_, line)
+        stubborn = stubborn or tonumber(line:match("^ready (%d+)$"))
+      end,
+    })
+    ok(
+      vim.wait(10000, function()
+        return stubborn ~= nil
+      end, 20),
+      "stubborn: the descendant runs"
+    )
+    h2.kill()
+    local r2 = h2.wait(10000)
+    ok(r2 ~= nil, "stubborn: the run ends although the leader died first")
+    expect_dead(stubborn, "stubborn: the descendant that ignored SIGTERM is killed")
+  end
+
+  -- `handle:wait()` without a limit (the vim.SystemObj idiom) returns the result instead of raising
+  do
+    local h = job.start({
+      command = nvim,
+      args = { "--headless", "-u", "NONE", "-i", "NONE", "-l", script({ "os.exit(0)" }) },
+      kill_tree = true,
+    })
+    local okw, r = pcall(h.wait, h)
+    ok(okw, "wait(): no error (" .. tostring(r) .. ")")
+    eq(type(r) == "table" and r.code, 0, "wait(): the result")
+  end
+
+  -- lines that arrive after the run was reported are dropped, and kill() after the end is no kill
+  do
+    local saved = package.loaded["lib.nvim.cross.run_argv"]
+    package.loaded["lib.nvim.cross.run_argv"] = {
+      run_async_captured = function(_, on_done, _, o)
+        local finished = false
+        -- the order of the real runner: the taps run in the pipe callback, on_done is scheduled
+        -- (`settle`), a descendant's output can still come after it
+        vim.schedule(function()
+          o.on_stdout(nil, "early\n")
+          finished = true
+          -- kill() in the window where the run has ended but on_done is still on its way
+          if _G.__job_spec_kill then
+            _G.__job_spec_kill()
+          end
+          vim.schedule(function()
+            on_done(true, "", 0, "", 0)
+            o.on_stdout(nil, "late\n")
+            o.on_stdout(nil, nil)
+          end)
+        end)
+        return {
+          stop = function() end,
+          is_finished = function()
+            return finished
+          end,
+        }
+      end,
+    }
+    local seen = {}
+    local h = job.start({
+      command = "x",
+      kill_tree = true,
+      on_stdout = function(_, line)
+        seen[#seen + 1] = line
+      end,
+    })
+    _G.__job_spec_kill = function()
+      h.kill()
+    end
+    local r = h.wait(5000)
+    vim.wait(200, function()
+      return false
+    end, 10)
+    _G.__job_spec_kill = nil
+    package.loaded["lib.nvim.cross.run_argv"] = saved
+    eq(#seen, 1, "late lines: only the line before on_exit")
+    eq(seen[1], "early", "late lines: ... the early one")
+    eq(r and r.killed, false, "kill() after the end, before on_exit: not killed")
   end
 
   -- (d) a command that cannot start: code -1, on_exit still once

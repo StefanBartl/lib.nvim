@@ -6,15 +6,20 @@
 --- cannot read Windows script paths and fails without one installed. A caller
 --- that wants to run `scripts/ci.sh` needs Git Bash. Candidates, in order:
 ---
----   1. `$ProgramFiles/Git/bin/bash.exe`
----   2. `$ProgramW6432/Git/bin/bash.exe` (a 32-bit process sees the x86 folder above)
+---   1. `$ProgramFiles/Git/bin/bash.exe`, `$ProgramW6432/Git/bin/bash.exe` (a 32-bit
+---      process sees the x86 folder in the first), `C:/Program Files/Git/bin/bash.exe`
+---   2. beside the `git.exe` on PATH (`<root>/cmd`, `<root>/bin`, `<root>/mingw64/bin`
+---      -> `<root>/bin/bash.exe`): portable and custom installs, no process
 ---   3. derived from `git --exec-path` (`<root>/<mingw64|clangarm64|...>/libexec/git-core`
----      -> `<root>/bin/bash.exe`, else `<root>/usr/bin/bash.exe`; covers scoop,
----      portable, ARM64, MSYS2 and custom installs)
----   4. `C:/Program Files/Git/bin/bash.exe`
----   5. `bash` on PATH, unless it is the WSL launcher
+---      -> `<root>/bin/bash.exe`; a scoop shim): one process
+---   4. `bash` on PATH: an absolute `.exe` that is not in the current directory and not
+---      the WSL launcher (checked on its real path too, so an 8.3 name does not hide it)
 ---
---- Elsewhere the answer is `bash` when it is on PATH.
+--- Only `<root>/bin/bash.exe` is taken: Git for Windows' wrapper that puts `usr/bin` (sed,
+--- grep, ...) on PATH. A bare `usr/bin/bash.exe` (MSYS2) runs scripts without coreutils
+--- unless `usr/bin` is on PATH already, and then tier 4 finds it.
+---
+--- Elsewhere the answer is the absolute path of `bash` on PATH.
 ---
 --- The result (also a miss) is memoized; `clear()` drops it. `locate(io)` is the
 --- pure lookup with every system access injected (specs fake it).
@@ -29,6 +34,8 @@ local M = {}
 ---@field is_file fun(path: string): boolean
 ---@field git_exec_path fun(): string|nil  `git --exec-path`, nil when git is missing or fails
 ---@field exepath fun(name: string): string|nil  PATH lookup, nil when not found
+---@field realpath? fun(path: string): string|nil  resolve 8.3 names and links (the launcher check)
+---@field cwd? fun(): string  the current directory (a `bash.exe` there is never taken)
 
 ---@param path string
 ---@return string
@@ -58,9 +65,14 @@ end
 ---@return string|nil path
 ---@return string|nil reason
 function M.locate(io)
+  local realpath = io.realpath or function(p)
+    return p
+  end
   if not io.is_windows() then
-    if io.exepath("bash") then
-      return "bash"
+    -- the absolute path: a bare name is looked up again at spawn time, where an empty PATH entry is `./`
+    local p = io.exepath("bash")
+    if p and p:sub(1, 1) == "/" then
+      return p
     end
     return nil, "bash is not on PATH"
   end
@@ -80,12 +92,15 @@ function M.locate(io)
     end
     seen[key] = true
     tried[#tried + 1] = candidate
-    if not M.is_wsl_launcher(candidate) and io.is_file(candidate) then
+    if
+      io.is_file(candidate) and not M.is_wsl_launcher(slashes(realpath(candidate) or candidate))
+    then
       return candidate
     end
     return nil
   end
 
+  -- 1. the installer's places and the fixed default: one stat each, no process
   for _, var in ipairs({ "ProgramFiles", "ProgramW6432" }) do
     local base = io.getenv(var)
     local hit = base and base ~= "" and try(slashes(base):gsub("/+$", "") .. "/Git/bin/bash.exe")
@@ -93,26 +108,49 @@ function M.locate(io)
       return hit
     end
   end
+  local hit = try("C:/Program Files/Git/bin/bash.exe")
+  if hit then
+    return hit
+  end
 
+  -- 2. beside the git on PATH (`<root>/cmd/git.exe`, `<root>/bin/git.exe`, `<root>/mingw64/bin/git.exe`):
+  -- portable and custom installs, still without starting a process
+  local git = io.exepath("git")
+  local git_dir = git and slashes(git):match("^(%a:/.+)/[^/]+$")
+  local root = git_dir
+    and (
+      git_dir:match("^(.+)/cmd$")
+      or git_dir:match("^(.+)/[%w_]+/bin$")
+      or git_dir:match("^(.+)/bin$")
+    )
+  hit = root and try(root .. "/bin/bash.exe")
+  if hit then
+    return hit
+  end
+
+  -- 3. `git --exec-path` (a scoop shim on PATH points nowhere useful): one process
   local exec_path = io.git_exec_path()
-  local root = exec_path and git_root(exec_path)
-  -- Git for Windows has `<root>/bin/bash.exe`; an MSYS2 install only `<root>/usr/bin/bash.exe`.
-  local hit = root and (try(root .. "/bin/bash.exe") or try(root .. "/usr/bin/bash.exe"))
+  root = exec_path and git_root(exec_path)
+  hit = root and try(root .. "/bin/bash.exe")
   if hit then
     return hit
   end
 
-  hit = try("C:/Program Files/Git/bin/bash.exe")
-  if hit then
-    return hit
-  end
-
+  -- 4. `bash` on PATH: only an absolute `.exe` (a `.bat`/`.cmd` would run through cmd.exe, whose
+  -- quoting libuv does not do), not in the current directory, never the WSL launcher
   local on_path = io.exepath("bash")
   if on_path then
-    if M.is_wsl_launcher(on_path) then
-      tried[#tried + 1] = slashes(on_path) .. " (WSL launcher, skipped)"
+    local p = slashes(on_path)
+    local cwd = io.cwd and io.cwd()
+    local dir = p:match("^(.+)/[^/]+$")
+    if M.is_wsl_launcher(slashes(realpath(p) or p)) then
+      tried[#tried + 1] = p .. " (WSL launcher, skipped)"
+    elseif not p:lower():match("%.exe$") or not p:match("^%a:/") then
+      tried[#tried + 1] = p .. " (not an absolute .exe, skipped)"
+    elseif cwd and dir and dir:lower() == slashes(cwd):gsub("/+$", ""):lower() then
+      tried[#tried + 1] = p .. " (in the current directory, skipped)"
     else
-      hit = try(on_path)
+      hit = try(p)
       if hit then
         return hit
       end
@@ -132,6 +170,12 @@ local system_io = {
   is_file = function(path)
     local st = (vim.uv or vim.loop).fs_stat(path)
     return st ~= nil and st.type == "file"
+  end,
+  realpath = function(path)
+    return (vim.uv or vim.loop).fs_realpath(path)
+  end,
+  cwd = function()
+    return (vim.uv or vim.loop).cwd()
   end,
   git_exec_path = function()
     if not executable.exists("git") then

@@ -74,8 +74,17 @@ for the result; with `max_output_bytes` the stdout tap sees only what fitted.
 `lib.nvim.system.lines.buffered(fn)` turns a tap into scheduled line callbacks;
 that is what `lib.nvim.system.job.start({ kill_tree = true })` does.
 `keep_stdout = false` (with an `on_stdout` tap) collects nothing for the
-result, for a long streaming run. The async handle's `stop(signal?)` takes
-`"sigkill"` as well as the default `"sigterm"`.
+result, for a long streaming run. A tap that raises is reported on the main loop
+and the run still ends (it runs in the pipe callback: a raise there would keep the
+pipe open for good).
+
+The async handle: `stop(signal?, opts?)` (also `handle:stop(...)`) takes `"sigterm"`
+(default) or `"sigkill"`, anything else is an error. `opts.escalate_ms` sends SIGKILL
+that long after the SIGTERM if the run has not ended; like the deadline's, that
+SIGTERM owes the follow-up SIGKILL to the process group, so a descendant that ignores
+SIGTERM is reached even when the leader died of it. `is_finished()` tells whether the
+run has ended (its outcome may still be on its way to `on_done`). The tree kill on
+Windows starts `%SystemRoot%/System32/taskkill.exe` by its full path.
 
 ```lua
 local ok, out = run_argv.run_blocking_captured(

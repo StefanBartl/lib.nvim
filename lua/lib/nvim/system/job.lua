@@ -74,15 +74,21 @@ local function start_tree(opts)
       if code == -1 then
         stdout, stderr = "", (stdout ~= "" and stdout or stderr or "")
       end
+      signal = signal or 0
+      -- libuv reports a child that a signal ended as exit code 0 plus the signal (POSIX): a killed run
+      -- must not read as a success; the shell convention, as `run_blocking_result` does
+      if code == 0 and signal ~= 0 then
+        code = 128 + signal
+      end
       ---@type Lib.System.Job.TreeResult
       local result = {
         code = code,
-        signal = signal or 0,
+        signal = signal,
         stdout = stdout,
         stderr = stderr or "",
         -- run_argv's own deadline: exit code 124 with the signal it sent (a process that exits 124 by
         -- itself has signal 0)
-        timed_out = code == 124 and (signal or 0) ~= 0,
+        timed_out = code == 124 and signal ~= 0,
         killed = state.killed,
       }
       state.done, state.result = true, result
@@ -105,27 +111,27 @@ local function start_tree(opts)
   -- Methods work with `.` and with `:` (`vim.SystemObj` is used as `obj:wait(ms)`).
   ---@type Lib.System.Job.TreeHandle
   local handle = {}
-  local escalation
   function handle.kill()
-    if state.done or state.killed then
+    -- (a run that ended already, its outcome still on the way to on_exit, is not "killed")
+    if state.done or state.killed or (runner.is_finished and runner.is_finished()) then
       return
     end
     state.killed = true
-    runner.stop("sigterm")
-    -- whatever ignores the SIGTERM gets SIGKILL after the same grace period as the deadline's
-    escalation = (vim.uv or vim.loop).new_timer()
-    escalation:start(KILL_GRACE_MS, 0, function()
-      escalation:close()
-      if not state.done then
-        runner.stop("sigkill")
-      end
-    end)
+    -- whatever ignores the SIGTERM gets SIGKILL after the same grace period as the deadline's; run_argv
+    -- owes that SIGKILL to the whole process group, also when the leader died of the SIGTERM
+    runner.stop("sigterm", { escalate_ms = KILL_GRACE_MS })
   end
   function handle.is_done()
     return state.done
   end
   function handle.wait(a, b)
-    local timeout_ms = type(a) == "table" and b or a
+    -- `handle.wait(ms)` or `handle:wait(ms)`; `handle:wait()` waits without a limit
+    local timeout_ms
+    if type(a) == "table" then
+      timeout_ms = b
+    else
+      timeout_ms = a
+    end
     vim.wait(timeout_ms or 2 ^ 31 - 1, function()
       return state.done
     end, 10)

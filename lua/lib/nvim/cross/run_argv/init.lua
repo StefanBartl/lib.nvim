@@ -82,6 +82,26 @@ local MAX_STDERR = 64 * 1024
 --- reaped before it reports the timeout itself.
 local GRACE_MS = 1500
 
+---@type string|nil
+local taskkill_path
+
+---@internal
+--- `%SystemRoot%\System32\taskkill.exe`, not the bare name: on Neovim <= 0.11 a bare name is also
+--- looked up in the current directory, where a repository could put its own `taskkill.exe`.
+---@return string
+local function taskkill()
+  if not taskkill_path then
+    local root = uv.os_getenv("SystemRoot") or uv.os_getenv("windir") or "C:/Windows"
+    local full = root .. "/System32/taskkill.exe"
+    taskkill_path = uv.fs_stat(full) and full or "taskkill"
+  end
+  return taskkill_path
+end
+
+---@internal
+--- The `taskkill` that the tree kill starts (specs).
+M._taskkill = taskkill
+
 --- Options of the `*_captured` and `*_result` runners.
 ---@class Lib.RunArgv.Opts
 ---@field binary? boolean Deliver stdout byte for byte (`vim.system` `text = false`): no `\r\n` -> `\n` rewriting, `NUL` and non-UTF-8 bytes intact. Needs Neovim 0.10+ (`vim.system`); the legacy fallback ignores it.
@@ -185,7 +205,7 @@ local function kill_job(job, signal, owe_follow_up)
   if IS_WIN and job.pid then
     local started = pcall(
       vim.system,
-      { "taskkill", "/PID", tostring(job.pid), "/T", "/F" },
+      { taskkill(), "/PID", tostring(job.pid), "/T", "/F" },
       { text = true },
       function()
         -- `taskkill` may finish late (a loop that did not iterate for a while): the job can have exited
@@ -226,7 +246,7 @@ local function kill_tree(job)
   end
   pcall(
     vim.system,
-    { "taskkill", "/PID", tostring(job.pid), "/T", "/F" },
+    { taskkill(), "/PID", tostring(job.pid), "/T", "/F" },
     { text = true },
     function() end
   )
@@ -241,6 +261,22 @@ end
 ---@return boolean
 local function is_limit(value)
   return type(value) == "number" and value == value and value >= 0
+end
+
+---@internal
+--- Call an output tap. It runs in the libuv callback of the pipe: if it raised there, `vim.system`
+--- would never close the pipe and the run would never be reported. The error is reported on the
+--- main loop instead, and the chunk is still accounted for.
+---@param tap fun(err: string|nil, data: string|nil)
+---@param err string|nil
+---@param data string|nil
+local function call_tap(tap, err, data)
+  local ok, e = pcall(tap, err, data)
+  if not ok then
+    vim.schedule(function()
+      error(("lib.nvim.cross.run_argv: an output tap raised: %s"):format(tostring(e)), 0)
+    end)
+  end
 end
 
 ---@internal
@@ -267,9 +303,10 @@ local function new_sink(opts, kill)
       -- the part that fits the cap, nothing beyond it; `nil` (EOF) always passes through so a
       -- line buffer can flush
       if not data then
-        tap(err, nil)
+        call_tap(tap, err, nil)
       elseif not sink.over then
-        tap(err, cap == math.huge and data or data:sub(1, cap - sink.size))
+        local room = cap - sink.size
+        call_tap(tap, err, #data <= room and data or data:sub(1, room))
       end
     end
     if not data or sink.over then
@@ -278,7 +315,7 @@ local function new_sink(opts, kill)
     local room = cap - sink.size
     if #data > room then
       sink.over = true
-      if room > 0 then
+      if room > 0 and keep then
         sink.chunks[#sink.chunks + 1] = data:sub(1, room)
       end
       sink.size = cap
@@ -339,7 +376,7 @@ local function new_errsink(opts)
   local errs = { chunks = {}, size = 0, over = false }
   errs.handler = function(err, data)
     if tap then
-      tap(err, data)
+      call_tap(tap, err, data)
     end
     if not data or errs.over then
       return
@@ -710,9 +747,11 @@ end
 --- The child of this runner is always started detached on POSIX (see `DETACH`):
 --- in a process group of its own, without a controlling terminal.
 ---
---- The returned handle has a `stop()` method that sends SIGTERM to the process
---- group of the child (on Windows it kills the process tree). It is a no-op on the
---- legacy fallback path (Neovim < 0.10), where there is no job to kill.
+--- The returned handle has a `stop(signal?, opts?)` method that sends SIGTERM (or
+--- `"sigkill"`) to the process group of the child (on Windows it kills the process
+--- tree); `opts.escalate_ms` adds the SIGKILL after that long. `is_finished()` says
+--- whether the run has ended. Both are no-ops on the legacy fallback path (Neovim <
+--- 0.10), where there is no job to kill.
 ---
 --- Text vs. bytes: see `run_blocking_captured` -- `opts.binary` delivers stdout
 --- exactly as the process wrote it.
@@ -733,7 +772,7 @@ end
 ---@param on_done fun(ok: boolean, output: string, code: integer, stderr: string|nil, signal: integer|nil) `signal` (5th) is the terminating signal, `0` if none, `nil` on the legacy fallback. `ok` is the exit code alone, as it always was -- a process killed by a signal still reads `ok = true`, `code = 0`; a caller that must tell checks `signal`.
 ---@param input? string
 ---@param opts? Lib.RunArgv.Opts
----@return { stop: fun() } handle
+---@return { stop: fun(signal?: "sigterm"|"sigkill", opts?: { escalate_ms?: integer }), is_finished?: fun(): boolean } handle
 function M.run_async_captured(cmd, on_done, input, opts)
   if not vim.system then
     -- Legacy fallback: no async process API, and no separate stderr stream
@@ -831,13 +870,44 @@ function M.run_async_captured(cmd, on_done, input, opts)
   )
 
   return {
-    ---@param signal? string  `"sigterm"` (default) or `"sigkill"`; POSIX: to the process group
-    stop = function(signal)
+    --- `stop(signal?, opts?)`, also `handle:stop(...)`. `signal`: `"sigterm"` (default) or
+    --- `"sigkill"`, anything else is an error. `opts.escalate_ms`: SIGKILL that long after the
+    --- SIGTERM if the run has not ended. Like the deadline's, that SIGTERM owes the follow-up
+    --- SIGKILL to the process group (POSIX): it reaches a descendant that ignores SIGTERM and
+    --- holds the pipes even after the leader died of the SIGTERM.
+    stop = function(a, b, c)
+      local signal, o = a, b
+      if type(a) == "table" then
+        signal, o = b, c
+      end
+      signal = signal or "sigterm"
+      if signal ~= "sigterm" and signal ~= "sigkill" then
+        error(
+          ("run_argv stop(): unknown signal %s (sigterm or sigkill)"):format(vim.inspect(signal)),
+          2
+        )
+      end
       -- (a finished run's pid may belong to somebody else by now)
       if finished then
         return
       end
-      kill_job(job, signal or "sigterm")
+      local escalate = o and o.escalate_ms
+      if signal == "sigterm" and is_limit(escalate) then
+        kill_job(job, "sigterm", true)
+        local t = uv.new_timer()
+        t:start(escalate, 0, function()
+          t:close()
+          if not finished then
+            kill_job(job, "sigkill")
+          end
+        end)
+        return
+      end
+      kill_job(job, signal)
+    end,
+    --- Whether the run has ended (its outcome may still be on its way to `on_done`).
+    is_finished = function()
+      return finished
     end,
   }
 end

@@ -113,7 +113,7 @@
 
 --- Outcome of a `start({ kill_tree = true })` run.
 ---@class Lib.System.Job.TreeResult
----@field code integer # Exit code; `124` after `timeout_ms`, `-1` when the command could not be started.
+---@field code integer # Exit code; `124` after `timeout_ms`, `128 + signal` for a run a signal ended (`kill()`: 143, or 137 after the escalation; never 0), `-1` when the command could not be started.
 ---@field signal integer # Terminating signal, `0` if none.
 ---@field stdout string # What the process wrote to stdout, or `""` when `on_stdout` is set (the lines went there; nothing is collected twice).
 ---@field stderr string # Up to 64 KiB of stderr; the reason when `code == -1`.

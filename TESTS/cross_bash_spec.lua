@@ -5,7 +5,7 @@ return function(H)
   local bash = require("lib.nvim.cross.bash")
 
   --- A fake system: `files` are the paths that exist, `env` the variables.
-  ---@param o { windows?: boolean, env?: table<string,string>, files?: string[], exec_path?: string, path_bash?: string }
+  ---@param o { windows?: boolean, env?: table<string,string>, files?: string[], exec_path?: string, path_bash?: string, path_git?: string, real?: table<string,string>, cwd?: string, on_exec_path?: fun() }
   ---@return Lib.Cross.Bash.Io
   local function fake(o)
     local files = {}
@@ -23,10 +23,22 @@ return function(H)
         return files[path] == true
       end,
       git_exec_path = function()
+        if o.on_exec_path then
+          o.on_exec_path()
+        end
         return o.exec_path
       end,
       exepath = function(name)
+        if name == "git" then
+          return o.path_git
+        end
         return name == "bash" and o.path_bash or nil
+      end,
+      realpath = function(path)
+        return (o.real or {})[path] or path
+      end,
+      cwd = function()
+        return o.cwd or "C:/somewhere/else"
       end,
     }
   end
@@ -127,8 +139,17 @@ return function(H)
     "ProgramFiles comes before PATH"
   )
 
-  -- not Windows: plain `bash` when it is on PATH
-  eq(bash.locate(fake({ windows = false, path_bash = "/usr/bin/bash" })), "bash", "POSIX: bash")
+  -- not Windows: the absolute path of bash (a bare name would be looked up again, `./` included)
+  eq(
+    bash.locate(fake({ windows = false, path_bash = "/usr/bin/bash" })),
+    "/usr/bin/bash",
+    "POSIX: the absolute path"
+  )
+  eq(
+    bash.locate(fake({ windows = false, path_bash = "bash" })),
+    nil,
+    "POSIX: a relative hit is refused"
+  )
   local p, r = bash.locate(fake({ windows = false }))
   eq(p, nil, "POSIX without bash -> nil")
   eq(type(r), "string", "POSIX without bash -> reason")
@@ -149,14 +170,66 @@ return function(H)
     "D:/PortableGit/bin/bash.exe",
     "clangarm64 exec-path"
   )
+  -- MSYS2 has only usr/bin/bash.exe, which runs scripts without coreutils on PATH: not taken from exec-path
   eq(
     bash.locate(fake({
       exec_path = "C:/msys64/mingw64/libexec/git-core",
       files = { "C:/msys64/usr/bin/bash.exe" },
     })),
-    "C:/msys64/usr/bin/bash.exe",
-    "MSYS2 layout falls back to usr/bin"
+    nil,
+    "MSYS2: a bare usr/bin/bash.exe is not taken"
   )
+
+  -- tier 2: beside the git.exe on PATH (portable install), without starting a process
+  local spawned = 0
+  eq(
+    bash.locate(fake({
+      path_git = [[E:\PortableGit\cmd\git.exe]],
+      files = { "E:/PortableGit/bin/bash.exe" },
+      exec_path = "E:/Other/mingw64/libexec/git-core",
+      on_exec_path = function()
+        spawned = spawned + 1
+      end,
+    })),
+    "E:/PortableGit/bin/bash.exe",
+    "beside git.exe (cmd/)"
+  )
+  eq(spawned, 0, "... without `git --exec-path`")
+  eq(
+    bash.locate(fake({ path_git = "E:/G/mingw64/bin/git.exe", files = { "E:/G/bin/bash.exe" } })),
+    "E:/G/bin/bash.exe",
+    "beside git.exe (mingw64/bin/)"
+  )
+  -- the fixed default is a stat, so it comes before the process
+  spawned = 0
+  bash.locate(fake({
+    files = { "C:/Program Files/Git/bin/bash.exe" },
+    on_exec_path = function()
+      spawned = spawned + 1
+    end,
+  }))
+  eq(spawned, 0, "the fixed default is found without `git --exec-path`")
+
+  -- tier 4: only an absolute .exe, not in the current directory, not the launcher behind an 8.3 name
+  eq(
+    bash.locate(fake({ path_bash = "C:/tools/bash.bat", files = { "C:/tools/bash.bat" } })),
+    nil,
+    "PATH: a .bat is not taken (it would run through cmd.exe)"
+  )
+  local in_cwd, why_cwd = bash.locate(fake({
+    path_bash = "C:/repo/bash.exe",
+    files = { "C:/repo/bash.exe" },
+    cwd = [[C:\repo\]],
+  }))
+  eq(in_cwd, nil, "PATH: a bash.exe in the current directory is not taken")
+  eq(why_cwd:find("current directory", 1, true) ~= nil, true, "... and said so")
+  local short, short_why = bash.locate(fake({
+    path_bash = "C:/PROGRA~1/WINDOW~1/bash.exe",
+    files = { "C:/PROGRA~1/WINDOW~1/bash.exe" },
+    real = { ["C:/PROGRA~1/WINDOW~1/bash.exe"] = [[C:\Program Files\WindowsApps\bash.exe]] },
+  }))
+  eq(short, nil, "PATH: the WindowsApps launcher behind an 8.3 name is recognised on its real path")
+  eq(short_why:find("WSL launcher, skipped", 1, true) ~= nil, true, "... and named as the launcher")
 
   -- the same folder from ProgramFiles, ProgramW6432 and the default is searched once
   local stats = 0
@@ -205,6 +278,16 @@ return function(H)
     true,
     "fast event: reason"
   )
+  -- ... and the miss was not memoized: the next call from the main loop locates
+  local after_fast = 0
+  bash.locate = function()
+    after_fast = after_fast + 1
+    return "Y"
+  end
+  eq(bash.find(), "Y", "after a fast event the main loop locates")
+  eq(after_fast, 1, "... once")
+  bash.locate = orig
+  bash.clear()
 
   local a = bash.find()
 

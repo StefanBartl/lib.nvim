@@ -947,7 +947,8 @@ return function(H)
     local callbacks, kills = {}, {}
     local closing = false
     vim.system = function(cmd, _, on_exit)
-      if cmd[1] == "taskkill" then
+      -- (started by its full path, %SystemRoot%/System32/taskkill.exe)
+      if vim.fs.basename(cmd[1]):lower():gsub("%.exe$", "") == "taskkill" then
         callbacks[#callbacks + 1] = on_exit
         return {
           pid = 0,

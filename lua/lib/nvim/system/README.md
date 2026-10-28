@@ -319,6 +319,7 @@ h.kill()            -- the tree: SIGTERM, SIGKILL 1.5 s later; no-op once the ru
 h.is_done()
 local r = h:wait(5000)   -- `.` or `:`; vim.wait until done; nil when 5 s passed first
 -- r = { code, signal, stdout, stderr, timed_out, killed }
+-- code: 124 after the deadline, 128 + signal after kill() (never 0 for a killed run)
 ```
 
 With `on_stdout` set, `r.stdout` is `""`: the lines went to the callback, and a
