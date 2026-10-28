@@ -121,3 +121,32 @@ osc.send(osc.wrap(seq))               -- wrap = tmux passthrough envelope when $
 - `send(payload)` writes through `nvim_ui_send` (Neovim 0.12+) in **one** call and returns `ok, err`
   instead of raising. Everything that belongs together must be one `payload`, or Neovim's own
   redraw can land in between. `available()` tells whether the API exists.
+
+## `lib.nvim.terminal.ask` and `bin/nvim-ask`
+
+A program in a Neovim terminal asks the Neovim it runs under. Meant for programs that have no
+terminal to ask on, above all git hooks: Git for Windows starts hooks without any `/dev/tty`, so a
+hook run from lazygit or a Neovim terminal cannot prompt. `$NVIM` (the server address Neovim sets
+in its terminals) still reaches the hook, and `bin/nvim-ask` uses it:
+
+```sh
+choice="$(nvim-ask --title " pre-commit " --timeout 120 \
+  "2 staged files above 5 MB" "Commit anyway" "Compress to .zip" "Abort")"
+case $? in
+  0) echo "chosen: $choice" ;;
+  1) echo "dismissed in Neovim (or not answered within --timeout there)" ;;
+  2) echo "no answer in time here, question withdrawn" ;;
+  3) echo "no Neovim to ask (no \$NVIM, not reachable, no lib.nvim there)" ;;
+esac
+```
+
+- The question is shown with `lib.nvim.ui.dialog.ask`: it waits behind a dialog that is open, and
+  Neovim keeps running; the script fetches the answer with short `--remote-expr` polls (each one an
+  `nvim --clean` client, about half a second on Windows).
+- Question and choices travel as Vimscript string literals and reach the dialog as data, never as
+  Ex text. A question with newlines is sent line by line.
+- `$NVIM_ASK_SERVER` overrides `$NVIM`, `$NVIM_ASK_BIN` the `nvim` executable.
+- A caller that is not on `PATH` finds the script through Neovim itself:
+  `nvim --clean --headless --server "$NVIM" --remote-expr "luaeval('require(\"lib.nvim.terminal.ask\").script()')"`.
+- A question whose asker stops polling for `STALE_MS` (15 s) is dropped, so a killed hook leaves no
+  dialog behind.

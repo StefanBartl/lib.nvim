@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# nvim-ask -- ask the Neovim this program runs under, from a terminal inside it.
+#
+#   nvim-ask [--timeout SECONDS] [--title TEXT] [--default N] QUESTION CHOICE [CHOICE ...]
+#
+# Prints the chosen CHOICE on stdout. Meant for programs that have no terminal to ask on,
+# above all git hooks (Git for Windows starts them without /dev/tty) run from lazygit or a
+# Neovim terminal. The Neovim half is lib.nvim.terminal.ask: the question is shown there as a
+# dialog, Neovim keeps running, this script polls for the answer.
+#
+# Server: $NVIM_ASK_SERVER, else $NVIM (set by Neovim in its terminals).
+# Exit:   0  answered (choice on stdout)
+#         1  dismissed in Neovim, or not answered within --timeout there
+#         2  timed out here (the question is withdrawn)
+#         3  no Neovim to ask: no server address, not reachable, or no lib.nvim there
+#         64 wrong usage
+#
+# QUESTION and CHOICEs are passed as Vimscript string literals, so they arrive as data, never as
+# Ex text. A QUESTION with newlines is sent line by line.
+
+timeout=120
+title=""
+default=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --timeout) timeout="$2"; shift 2 ;;
+    --title) title="$2"; shift 2 ;;
+    --default) default="$2"; shift 2 ;;
+    --) shift; break ;;
+    -*) echo "nvim-ask: unknown option $1" >&2; exit 64 ;;
+    *) break ;;
+  esac
+done
+case "$timeout" in '' | *[!0-9]*) echo "nvim-ask: --timeout wants whole seconds" >&2; exit 64 ;; esac
+case "$default" in *[!0-9]*) echo "nvim-ask: --default wants a number" >&2; exit 64 ;; esac
+if [ $# -lt 2 ]; then
+  echo "usage: nvim-ask [--timeout S] [--title T] [--default N] QUESTION CHOICE [CHOICE ...]" >&2
+  exit 64
+fi
+
+server="${NVIM_ASK_SERVER:-${NVIM:-}}"
+if [ -z "$server" ]; then
+  echo "nvim-ask: not inside Neovim (no \$NVIM)" >&2
+  exit 3
+fi
+nvim_bin="${NVIM_ASK_BIN:-nvim}"
+
+# 'text' with every ' doubled: a Vimscript literal carries anything else unchanged.
+lit() {
+  local q="'"
+  printf "'%s'" "${1//$q/$q$q}"
+}
+
+# One RPC round trip; --clean keeps the client from loading a whole config each time.
+remote() {
+  "$nvim_bin" --clean --headless --server "$server" --remote-expr "$1" 2>&1
+}
+
+mod='require("lib.nvim.terminal.ask")'
+question="$1"
+shift
+
+lines=""
+while IFS= read -r line || [ -n "$line" ]; do
+  lines="${lines:+$lines, }$(lit "$line")"
+done <<<"$question"
+choices=""
+for c in "$@"; do
+  choices="${choices:+$choices, }$(lit "$c")"
+done
+
+spec="{'question': [$lines], 'choices': [$choices], 'timeout_ms': $((timeout * 1000))"
+[ -n "$title" ] && spec="$spec, 'title': $(lit "$title")"
+[ -n "$default" ] && spec="$spec, 'default': $default"
+spec="$spec}"
+
+id="$(remote "luaeval('$mod.start(_A)', $spec)")"
+case "$id" in
+  '' | *[!0-9]*)
+    echo "nvim-ask: Neovim did not take the question: $id" >&2
+    exit 3
+    ;;
+esac
+
+deadline=$(($(date +%s) + timeout + 5))
+while :; do
+  state="$(remote "luaeval('$mod.poll(_A)', $(lit "$id"))")"
+  case "$state" in
+    =*)
+      printf '%s\n' "${state#=}"
+      exit 0
+      ;;
+    '!cancel') exit 1 ;;
+    '!gone')
+      echo "nvim-ask: the question is gone (Neovim restarted?)" >&2
+      exit 3
+      ;;
+    '') ;;
+    *)
+      echo "nvim-ask: lost Neovim: $state" >&2
+      exit 3
+      ;;
+  esac
+  if [ "$(date +%s)" -ge "$deadline" ]; then
+    remote "luaeval('$mod.cancel(_A)', $(lit "$id"))" >/dev/null
+    echo "nvim-ask: no answer within ${timeout}s" >&2
+    exit 2
+  fi
+  sleep 0.3
+done
