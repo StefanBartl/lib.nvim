@@ -325,12 +325,15 @@ single-instance: opening one closes the open dialog (answering it as cancelled),
 question raised at a moment the user did not pick (a stream ending minutes after
 the command) would drop it with a "no" nobody gave. `kit.ask` waits until no modal kit
 dialog is open (a confirm, but also an input, a select or a sheet), then shows its own.
-It subscribes to the close once; nothing polls. The wait lasts `max_wait_ms` (default ten
+It subscribes to the close once and looks again once a second in case a window went without the close
+event (`ASK_RECHECK_MS`); nothing polls faster. The dialog it shows ignores letter and digit hotkeys for half a
+second (`ASK_HOTKEY_GRACE_MS`), so keys typed ahead for the editor cannot answer a question nobody saw coming. The wait lasts `max_wait_ms` (default ten
 minutes), then `on_answer` gets the cancel value: `false`, or `nil` for a `choices` list,
 so "unanswered" is "no" with no second code path. It takes the options of `kit.confirm`
 (`choices` included: the answer is the label). If the float cannot open at all it falls
 back to `vim.ui.select`. `on_answer` fires at most once, and the optional `abandoned()`
-drops a question that is no longer wanted when its turn comes. Several waiting questions
+drops a question that is no longer wanted -- when its turn comes, and when its wait runs out (it is then
+not answered at all). A question whose dialog cannot be built is answered as cancelled and the error raised. Several waiting questions
 are shown in the order they were asked.
 
 ```lua
