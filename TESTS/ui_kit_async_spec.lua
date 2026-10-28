@@ -105,7 +105,7 @@ return function(_)
     eq(second, { "first" }, "a second delivery is ignored")
 
     -- select: the item and its index, nil on dismiss
-    local stub_select = package.loaded["lib.nvim.ui.kit.select"]
+    local stub_select = require("lib.nvim.ui.kit.select")
     stub(stub_select, "open", function(o)
       o.on_select(o.items[2], 2)
     end)
@@ -123,7 +123,7 @@ return function(_)
     eq(picked, {}, "select dismissed -> nil")
 
     -- input / form: value, or nil and true when cancelled; the caller's own callbacks still run
-    local input_mod = package.loaded["lib.nvim.ui.kit.input"]
+    local input_mod = require("lib.nvim.ui.kit.input")
     local user_called
     stub(input_mod, "open", function(o)
       o.on_submit("typed")
@@ -165,7 +165,7 @@ return function(_)
 
     -- leaving through the caller's own "back" resumes the coroutine too (and the caller's callback runs)
     local back_called = false
-    stub(package.loaded["lib.nvim.ui.kit.form"], "open", function(o)
+    stub(require("lib.nvim.ui.kit.form"), "open", function(o)
       vim.schedule(function()
         o.on_back()
       end)
@@ -190,7 +190,7 @@ return function(_)
     ok(back_called, "and the caller's on_back ran")
 
     -- form goes through the same path
-    stub(package.loaded["lib.nvim.ui.kit.form"], "open", function(o)
+    stub(require("lib.nvim.ui.kit.form"), "open", function(o)
       o.on_submit({ a = 1 })
       return {}
     end)

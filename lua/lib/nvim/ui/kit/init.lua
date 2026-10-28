@@ -12,76 +12,43 @@
 require("lib.nvim.ui.kit.@types")
 
 local notify = require("lib.nvim.notify").create("[lib.nvim.ui.kit]")
-local theme = require("lib.nvim.ui.kit.theme")
-local surface = require("lib.nvim.ui.kit.surface")
-local layout = require("lib.nvim.ui.kit.layout")
-local picker = require("lib.nvim.ui.kit.picker")
-local confirm = require("lib.nvim.ui.kit.confirm")
-local menu = require("lib.nvim.ui.kit.menu")
-local preview = require("lib.nvim.ui.kit.preview")
-local note = require("lib.nvim.ui.kit.note")
-local viewer = require("lib.nvim.ui.kit.viewer")
-local message_log = require("lib.nvim.ui.kit.message_log")
-local toast = require("lib.nvim.ui.kit.toast")
-local chip = require("lib.nvim.ui.kit.chip")
-local input = require("lib.nvim.ui.kit.input")
-local live_input = require("lib.nvim.ui.kit.live_input")
-local select = require("lib.nvim.ui.kit.select")
-local prompt = require("lib.nvim.ui.kit.prompt")
-local form = require("lib.nvim.ui.kit.form")
-local sheet = require("lib.nvim.ui.kit.sheet")
-local sync = require("lib.nvim.ui.kit.sync")
-local async = require("lib.nvim.ui.kit.async")
-local chooser = require("lib.nvim.ui.kit.chooser")
-local compare = require("lib.nvim.ui.kit.compare")
-local shortlist = require("lib.nvim.ui.kit.shortlist")
+
+--- The component `name` (loaded on the first use: requiring the kit costs a table, not twenty modules).
+---@param name string
+---@return table
+local function component(name)
+  return require("lib.nvim.ui.kit." .. name)
+end
 
 local M = {}
-
-M.theme = theme
-M.surface = surface
---- The native chooser `kit.select` delegates to, exposed directly for a
---- consumer building a persistent multi-action list on top of a picker (e.g.
---- extra keymaps that read the highlighted item without submitting/closing)
---- rather than a one-shot pick-and-close flow. `kit.select` covers the
---- common case; reach for this only when you need `current_item()`/
---- `current_index()`/`move()` outside of `on_select`. Single active
---- instance, same as `kit.select` itself (they share one chooser).
-M.chooser = chooser
-M.layout = layout
-M.chip = chip
---- Winbar legend and cheatsheet for keys a view binds itself (also outside
---- `kit.viewer`, e.g. two plain splits): `legend`, `cheatsheet_lines`,
---- `cheatsheet`. Only this copy of the kit has it (see `viewer_keys.lua`).
-M.keys = require("lib.nvim.ui.kit.viewer_keys")
 
 --- Register user presets / set the active default preset.
 ---@param opts? Lib.UI.Kit.SetupOpts
 function M.setup(opts)
-  theme.setup(opts)
+  component("theme").setup(opts)
   -- Requiring the kit registers nothing (LUA-92); `:KitPreview` appears once
   -- the host calls `setup()` (here) or opens the playground via `preview()`.
-  pcall(preview.ensure_command)
+  pcall(component("preview").ensure_command)
 end
 
 --- Open the live theme playground (config buffer + live-updating gallery).
 ---@return integer config_buf, integer preview_buf
 function M.preview()
-  return preview.open()
+  return component("preview").open()
 end
 
 --- Open a note popup (title + message).
 ---@param opts Lib.UI.Kit.NoteOpts
 ---@return Lib.UI.Kit.Surface|nil
 function M.note(opts)
-  return note.open(opts)
+  return component("note").open(opts)
 end
 
 --- Open a read-only info panel (auto-sized, q/<Esc> closes, closes on focus loss).
 ---@param opts Lib.UI.Kit.ViewerOpts
 ---@return Lib.UI.Kit.Surface|nil
 function M.viewer(opts)
-  return viewer.open(opts)
+  return component("viewer").open(opts)
 end
 
 --- Open a scrollable, time-ordered, paginated, collapsible entry list popup
@@ -91,14 +58,14 @@ end
 ---@param opts Lib.UI.Kit.MessageLog.Opts
 ---@return Lib.UI.Kit.MessageLog.Handle|nil
 function M.message_log(opts)
-  return message_log.open(opts)
+  return component("message_log").open(opts)
 end
 
 --- Show an ephemeral corner toast.
 ---@param opts table
 ---@return Lib.UI.Kit.Surface|nil
 function M.toast(opts)
-  return toast.open(opts)
+  return component("toast").open(opts)
 end
 
 --- Open a single-line input. `opts.secret = true` masks it as you type (a
@@ -109,7 +76,7 @@ end
 ---@param opts Lib.UI.Kit.InputOpts
 ---@return Lib.UI.Kit.Surface|nil
 function M.input(opts)
-  return input.open(opts)
+  return component("input").open(opts)
 end
 
 --- Open a sequential multi-field form (chained `kit.input` prompts, one
@@ -117,7 +84,7 @@ end
 ---@param opts Lib.UI.Kit.FormOpts
 ---@return Lib.UI.Kit.Surface|nil
 function M.form(opts)
-  return form.open(opts)
+  return component("form").open(opts)
 end
 
 --- Open ONE float with every field of a form at once (one labelled row each,
@@ -126,7 +93,7 @@ end
 ---@param opts Lib.UI.Kit.SheetOpts
 ---@return Lib.UI.Kit.Sheet|nil
 function M.sheet(opts)
-  return sheet.open(opts)
+  return component("sheet").open(opts)
 end
 
 --- Open a live-incremental input: like `kit.input`, but also debounces
@@ -134,26 +101,26 @@ end
 ---@param opts table
 ---@return Lib.UI.Kit.Surface|nil
 function M.live_input(opts)
-  return live_input.open(opts)
+  return component("live_input").open(opts)
 end
 
 --- Open a native themed list chooser (single/multi-select).
 ---@param opts table
 function M.select(opts)
-  return select.open(opts)
+  return component("select").open(opts)
 end
 
 --- Ask a question (confirm / text).
 ---@param opts table
 function M.prompt(opts)
-  return prompt.open(opts)
+  return component("prompt").open(opts)
 end
 
 --- Open an interactive picker (prompt drives the results/preview slots).
 ---@param opts table
 ---@return table|nil
 function M.picker(opts)
-  return picker.open(opts)
+  return component("picker").open(opts)
 end
 
 --- Open a promptless, stacked list+preview for a short list (a handful of
@@ -166,7 +133,7 @@ end
 ---@param opts table
 ---@return table|nil
 function M.shortlist(opts)
-  return shortlist.open(opts)
+  return component("shortlist").open(opts)
 end
 
 --- Pick two items out of one picker and view them side by side (a text diff
@@ -176,14 +143,14 @@ end
 ---@param opts Lib.UI.Kit.CompareOpts
 ---@return Lib.UI.Kit.CompareHandle|nil
 function M.compare(opts)
-  return compare.open(opts)
+  return component("compare").open(opts)
 end
 
 --- Open a button-confirm dialog (horizontal buttons, h/l to move, <CR> confirm).
 ---@param opts table
 ---@return Lib.UI.Kit.Surface|nil
 function M.confirm(opts)
-  return confirm.open(opts)
+  return component("confirm").open(opts)
 end
 
 --- Yes/no question that waits for an open dialog instead of replacing it, and
@@ -191,14 +158,14 @@ end
 --- `vim.ui.select` when the float cannot open. See `lib.nvim.ui.kit.confirm.ask`.
 ---@param opts { question: string, on_answer: fun(yes: boolean), abandoned?: (fun(): boolean), theme?: any, title?: string, max_wait_ms?: integer }
 function M.ask(opts)
-  return confirm.ask(opts)
+  return component("confirm").ask(opts)
 end
 
 --- Open a cursor-anchored action menu (label → callback).
 ---@param opts table
 ---@return Lib.UI.Kit.Surface|nil
 function M.menu(opts)
-  return menu.open(opts)
+  return component("menu").open(opts)
 end
 
 --- Progress indicator. Thin passthrough to the dedicated `lib.nvim.progress`
@@ -225,12 +192,8 @@ end
 ---@return boolean cancelled
 ---@return boolean timed_out
 function M.sync(open_fn, opts, timeout_ms)
-  return sync.open(open_fn, opts, timeout_ms)
+  return component("sync").open(open_fn, opts, timeout_ms)
 end
-
---- Linear code over the callback components, without blocking: `kit.async.run(function() ... end)`,
---- then `kit.async.confirm/ask/input/form/select` inside it. See `lib.nvim.ui.kit.async`.
-M.async = async
 
 --- Set the dialog hook: a function `(kind, opts) -> handled, value` that is offered every modal dialog
 --- (`confirm`, `ask`, `input`, `select`, `form`, `sheet`) before it opens, and may answer it without a
@@ -248,21 +211,51 @@ end
 
 --- Component dispatch table.
 local COMPONENTS = {
-  note = note.open,
-  viewer = viewer.open,
-  message_log = message_log.open,
-  toast = toast.open,
-  input = input.open,
-  live_input = live_input.open,
-  form = form.open,
-  sheet = sheet.open,
-  select = select.open,
-  prompt = prompt.open,
-  picker = picker.open,
-  confirm = confirm.open,
-  menu = menu.open,
-  compare = compare.open,
-  shortlist = shortlist.open,
+  note = function(opts)
+    return component("note").open(opts)
+  end,
+  viewer = function(opts)
+    return component("viewer").open(opts)
+  end,
+  message_log = function(opts)
+    return component("message_log").open(opts)
+  end,
+  toast = function(opts)
+    return component("toast").open(opts)
+  end,
+  input = function(opts)
+    return component("input").open(opts)
+  end,
+  live_input = function(opts)
+    return component("live_input").open(opts)
+  end,
+  form = function(opts)
+    return component("form").open(opts)
+  end,
+  sheet = function(opts)
+    return component("sheet").open(opts)
+  end,
+  select = function(opts)
+    return component("select").open(opts)
+  end,
+  prompt = function(opts)
+    return component("prompt").open(opts)
+  end,
+  picker = function(opts)
+    return component("picker").open(opts)
+  end,
+  confirm = function(opts)
+    return component("confirm").open(opts)
+  end,
+  menu = function(opts)
+    return component("menu").open(opts)
+  end,
+  compare = function(opts)
+    return component("compare").open(opts)
+  end,
+  shortlist = function(opts)
+    return component("shortlist").open(opts)
+  end,
   progress = function(opts)
     return require("lib.nvim.progress").create(opts)
   end,
@@ -285,6 +278,41 @@ function M.popup(opts)
   notify.error(("unknown popup type %q"):format(tostring(t)))
   return nil
 end
+
+--- Module fields, loaded on the first access (and then kept on `M`):
+---   * `theme`, `surface`, `layout`, `chip` -- the building blocks
+---   * `chooser` -- the native chooser `kit.select` delegates to, exposed directly for a consumer building a
+---     persistent multi-action list on top of a picker (extra keymaps that read the highlighted item without
+---     submitting/closing). `kit.select` covers the common case; reach for this only when you need
+---     `current_item()`/`current_index()`/`move()` outside of `on_select`. Single active instance, same as
+---     `kit.select` itself (they share one chooser).
+---   * `keys` -- winbar legend and cheatsheet for keys a view binds itself (also outside `kit.viewer`, e.g. two
+---     plain splits): `legend`, `cheatsheet_lines`, `cheatsheet`. Only this copy of the kit has it
+---     (see `viewer_keys.lua`).
+---   * `async` -- linear code over the callback components, without blocking: `kit.async.run(function() ... end)`,
+---     then `kit.async.confirm/ask/input/form/select` inside it. See `lib.nvim.ui.kit.async`.
+---@type table<string, string>
+local LAZY_FIELDS = {
+  theme = "theme",
+  surface = "surface",
+  layout = "layout",
+  chip = "chip",
+  chooser = "chooser",
+  keys = "viewer_keys",
+  async = "async",
+}
+
+setmetatable(M, {
+  __index = function(t, key)
+    local name = LAZY_FIELDS[key]
+    if not name then
+      return nil
+    end
+    local mod = component(name)
+    rawset(t, key, mod)
+    return mod
+  end,
+})
 
 ---@type Lib.UI.Kit
 return M
