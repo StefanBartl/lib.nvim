@@ -655,6 +655,7 @@ M.upstream(opts?: {dir?}, git_cmd?: string): string|nil        -- "origin/main"-
 M.ahead_behind(opts?: {dir?}, git_cmd?: string): boolean ahead, boolean behind   -- vs @{u}
 M.head_hash(opts?: {dir?}, git_cmd?: string): string|nil        -- full SHA
 M.head_short_hash(opts?: {dir?}, git_cmd?: string): string|nil
+M.tree_hash(opts?: {dir?}, git_cmd?: string): string|nil        -- HEAD^{tree}, same across a message-only amend
 M.describe(opts?: {dir?}, git_cmd?: string): string|nil         -- nearest tag, or the short hash (--always)
 M.info(dir: string, git_cmd?: string): { branch, version, commit }
 M.status_porcelain(opts?: {dir?, ignored?}, git_cmd?: string): table<string, {code, orig_path}>|nil, err?   -- `-z`, exact paths

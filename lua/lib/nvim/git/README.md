@@ -32,6 +32,7 @@ git.toggle_skip_worktree("session.vim")  --> state after the flip | nil, err
 git.upstream()             --> "origin/main"-style string, or nil (no upstream)
 git.head_hash()            --> full hash string, or nil
 git.head_short_hash()      --> short hash string, or nil
+git.tree_hash()            --> tree id of HEAD (stable across amend), or nil
 git.describe()             --> nearest tag, or the short hash (--always), or nil
 git.ahead_behind()         --> boolean ahead, boolean behind (vs. @{u})
 ```

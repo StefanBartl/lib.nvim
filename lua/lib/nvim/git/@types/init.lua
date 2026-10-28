@@ -15,6 +15,7 @@
 ---@field upstream fun(opts?: Lib.Git.Opts, git_cmd?: string): string|nil # Get the upstream branch of the current branch.
 ---@field ahead_behind fun(opts?: Lib.Git.Opts, git_cmd?: string): (boolean, boolean) # Check whether the current branch is ahead or behind its upstream.
 ---@field head_hash fun(opts?: Lib.Git.Opts, git_cmd?: string): string|nil # Get the full hash of HEAD.
+---@field tree_hash fun(opts?: Lib.Git.Opts, git_cmd?: string): string|nil # Get the tree id of HEAD (`HEAD^{tree}`); stable across message-only amends.
 ---@field head_short_hash fun(opts?: Lib.Git.Opts, git_cmd?: string): string|nil # Get the short hash of HEAD.
 ---@field describe fun(opts?: Lib.Git.Opts, git_cmd?: string): string|nil # Nearest reachable tag (`git describe --tags`), or the short hash if there is none (`--always`).
 ---@field info fun(dir: string, git_cmd?: string): { branch: string|nil, version: string|nil, commit: string|nil } # One-shot repo identity snapshot for an arbitrary directory (`git -C <dir> ...`).

@@ -82,12 +82,24 @@ return function(H)
     "...still names the tag it is counted from"
   )
 
+  -- tree_hash: identifies content, not history.
+  local tree = git_run(repo, { "rev-parse", "HEAD^{tree}" })
+  H.eq(git.tree_hash({ dir = repo }), tree, "tree_hash({dir}): the HEAD tree id")
+  git_run(repo, { "commit", "-q", "--amend", "-m", "reworded" })
+  H.eq(git.tree_hash({ dir = repo }), tree, "tree_hash: unchanged after a message-only amend")
+  H.ok(git.head_hash({ dir = repo }) ~= full, "...although the commit hash changed")
+  vim.fn.writefile({ "z" }, repo .. "/a.txt")
+  git_run(repo, { "add", "-A" })
+  git_run(repo, { "commit", "-q", "-m", "content" })
+  H.ok(git.tree_hash({ dir = repo }) ~= tree, "tree_hash: differs after a content change")
+
   -- Failure shape: both return nil outside a repo, same as their siblings
   -- (repo_root, current_branch, ...) -- no error string, by the existing
   -- convention of the read-cwd helpers this module predates.
   local not_repo = tmpdir("-not-a-repo")
   H.eq(git.head_hash({ dir = not_repo }), nil, "head_hash({dir}): nil outside a repo")
   H.eq(git.describe({ dir = not_repo }), nil, "describe({dir}): nil outside a repo")
+  H.eq(git.tree_hash({ dir = not_repo }), nil, "tree_hash({dir}): nil outside a repo")
 
   for _, dir in ipairs(created) do
     pcall(vim.fn.delete, dir, "rf")

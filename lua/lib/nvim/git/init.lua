@@ -227,6 +227,16 @@ function M.head_hash(opts, git_cmd)
   return git_system(git_argv(git_cmd or "git", opts, { "rev-parse", "HEAD" }))
 end
 
+--- Get the tree id of HEAD (`git rev-parse HEAD^{tree}`). Unlike the commit
+--- hash it survives a message-only amend or a rebase without content change,
+--- so it identifies "this exact content" (used by `testing ci verify`).
+---@param opts? Lib.Git.Opts
+---@param git_cmd? string
+---@return string|nil # nil outside a repo or without commits
+function M.tree_hash(opts, git_cmd)
+  return git_system(git_argv(git_cmd or "git", opts, { "rev-parse", "HEAD^{tree}" }))
+end
+
 --- Get the short hash of HEAD.
 ---@param opts? Lib.Git.Opts
 ---@param git_cmd? string
