@@ -9,6 +9,7 @@
 ---@field is_linux fun(): boolean
 ---@field is fun(platform?: Lib.Cross.Platform.PlatformName): boolean|Lib.Cross.Platform.PlatformName
 ---@field executable Lib.Cross.Executable # PATH / Mason binary lookup: exists / path / find / mason_bin / clear.
+---@field bash fun(): string|nil, string|nil # Git Bash on Windows (never the WSL launcher), `bash` elsewhere; nil + reason when missing. Memoized (`lib.nvim.cross.bash`.clear()).
 ---@field run Lib.Cross.Run
 ---@field fs Lib.Cross.Fs
 ---@field separators Lib.Cross.Separators

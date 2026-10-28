@@ -13,6 +13,9 @@ M.is = require("lib.nvim.cross.platform.is")
 
 M.executable = require("lib.nvim.cross.executable")
 
+-- Git Bash on Windows (never the WSL launcher), `bash` elsewhere; memoized.
+M.bash = require("lib.nvim.cross.bash").find
+
 -- Filesystem
 M.fs = {
   cwd = require("lib.nvim.cross.fs._cwd"),

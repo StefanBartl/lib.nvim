@@ -21,6 +21,9 @@ cross.executable.path("rg")
 cross.executable.find({ "rg", "grep" })
 cross.executable.mason_bin("stylua")
 
+cross.bash()              -- lib.nvim.cross.bash.find: Git Bash path on Windows, "bash" elsewhere,
+                          -- nil + reason when missing; never the WSL launcher (System32/WindowsApps)
+
 cross.fs.cwd()                          -- lib.nvim.cross.fs._cwd
 cross.fs.expand_path("~/foo/$HOME/bar")
 cross.fs.mutate.rename_file(old, new)   -- see lib.nvim.cross.fs.mutate
