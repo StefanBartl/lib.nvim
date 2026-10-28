@@ -105,6 +105,31 @@ function M.open(opts)
     return nil
   end
 
+  local sel = ui_select_fn()
+  if opts.respect_override and not delegating and sel and is_overridden(sel) then
+    delegating = true
+    -- pcall so the guard is always cleared, even if the override throws.
+    local ok, err = pcall(sel, items, {
+      prompt = title,
+      format_item = opts.format_item,
+    }, function(item, idx)
+      -- vim.ui.select signals cancellation as `nil`; translate it so both
+      -- paths route cancellation to on_cancel and never hand on_select nil.
+      if item == nil then
+        cancel()
+      elseif on_select then
+        on_select(item, idx)
+      end
+    end)
+    delegating = false
+    if not ok then
+      error(err, 0)
+    end
+    return nil
+  end
+
+  -- A call that is delegated to another picker above never reaches this kit's own dialog: the dialog hook
+  -- (for tests) comes after that decision, so a provider that sits in `vim.ui.select` is answered inside it.
   local hooked = hook.intercept("select", opts, function(value)
     if value == nil then
       cancel()
@@ -131,29 +156,6 @@ function M.open(opts)
   end)
   if hooked then
     return hooked
-  end
-
-  local sel = ui_select_fn()
-  if opts.respect_override and not delegating and sel and is_overridden(sel) then
-    delegating = true
-    -- pcall so the guard is always cleared, even if the override throws.
-    local ok, err = pcall(sel, items, {
-      prompt = title,
-      format_item = opts.format_item,
-    }, function(item, idx)
-      -- vim.ui.select signals cancellation as `nil`; translate it so both
-      -- paths route cancellation to on_cancel and never hand on_select nil.
-      if item == nil then
-        cancel()
-      elseif on_select then
-        on_select(item, idx)
-      end
-    end)
-    delegating = false
-    if not ok then
-      error(err, 0)
-    end
-    return nil
   end
 
   -- The chooser displays plain strings, pre-rendered here so the chosen row
