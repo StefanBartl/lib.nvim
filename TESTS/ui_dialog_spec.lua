@@ -264,13 +264,13 @@ return function(H)
       end,
     })
     eq(used, "native", "native backend")
-    same(asked[1].items, { "Yes", "No" }, "Yes/No")
+    same(asked[1].items, { "No", "Yes" }, "No first: a stray <CR> is the safe answer")
     eq(asked[1].prompt, "Native yes/no?", "the question is the prompt")
     same(got, {}, "native select answered at once, still not before confirm() returned")
     wait_for(function()
       return #got > 0
     end, "and it arrives")
-    same(got, { false }, "picking No -> false, once")
+    same(got, { true }, "picking the last item (Yes) -> true, once")
 
     -- the labels of a vim.fn.confirm string, cleaned the way the kit cleans them
     asked = {}
@@ -331,7 +331,7 @@ return function(H)
     local base_select, base_input = vim.ui.select, vim.ui.input
     -- a provider that calls back with the choice only is read by its text
     stub(vim.ui, "select", function(items, _, on_choice)
-      on_choice(items[1])
+      on_choice(vim.tbl_contains(items, "Yes") and "Yes" or items[1])
     end)
     got = {}
     dialog.confirm({
@@ -435,7 +435,7 @@ return function(H)
     wait_for(function()
       return #got > 0
     end, "native answer arrives")
-    same(got, { false }, "once (the kit's own 'no' was not delivered on top of it)")
+    same(got, { true }, "once (the kit's own 'no' was not delivered on top of it)")
     got = {}
     used = dialog.input({ prompt = "No float" }, function(v)
       got[#got + 1] = v

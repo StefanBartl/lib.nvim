@@ -80,7 +80,7 @@ for `ask`; a `secret` goes through `vim.fn.inputsecret`, where an empty line cou
 | Before | After |
 |---|---|
 | `vim.fn.confirm(msg, "&Yes\n&No", 2) == 1` | `dialog.choose(msg, "&Yes\n&No", 2, function(i) if i == 1 then ... end end)` |
-| `vim.ui.select({ "Yes", "No" }, ...)` as a question | `dialog.confirm({ question = msg, on_answer = ... })` |
+| `vim.ui.select({ "Yes", "No" }, ...)` as a question (natively "No" is listed first) | `dialog.confirm({ question = msg, on_answer = ... })` |
 | `vim.ui.input({ prompt = p }, cb)` | `dialog.input({ prompt = p }, cb)` (or keep it: a provider can route it to the kit) |
 | a plugin-local `confirm.lua` wrapper | `dialog.confirm` / `dialog.ask` |
 

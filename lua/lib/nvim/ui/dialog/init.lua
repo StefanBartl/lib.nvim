@@ -201,6 +201,10 @@ local function native_confirm(opts, answer)
   local items = labels or { "Yes", "No" }
 
   local default = tonumber(opts.default)
+  if not default and not custom and opts.default == nil then
+    -- A plain question has no focused button natively: "No" goes first, so a stray <CR> is the safe answer.
+    default = 2
+  end
   if not default and type(opts.default) == "string" then
     for i, l in ipairs(items) do
       if l == opts.default then
