@@ -318,24 +318,6 @@ return function(_)
     confirm.confirm()
     eq(got, { true }, "ask behind a dialog -> true")
 
-    -- kit.sync is deprecated: one warning per session names kit.async
-    local warned = 0
-    local warn_text
-    stub(vim, "notify", function(msg)
-      warned = warned + 1
-      warn_text = msg
-    end)
-    stub(vim, "notify_once", function(msg, level)
-      warned = warned + 1
-      warn_text = msg
-      return level
-    end)
-    local v = kit.sync(function(o)
-      o.on_submit("x")
-    end, {}, 50)
-    eq(v, "x", "kit.sync still works for the callers that are left")
-    ok(warned >= 1 and warn_text:find("kit.async", 1, true), "and warns, naming kit.async")
-
     confirm.close()
   end)
   for i = #restores, 1, -1 do

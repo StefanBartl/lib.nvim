@@ -18,7 +18,7 @@ return function(H)
     "local missing = {}",
     'for _, name in ipairs({ "setup", "popup", "note", "viewer", "message_log", "toast", "input", "live_input", "form",',
     '  "sheet", "select", "prompt", "picker", "shortlist", "confirm", "set_dialog_hook", "get_dialog_hook", "ask",',
-    '  "menu", "compare", "progress", "async", "sync", "preview", "surface", "theme", "layout", "chooser", "chip",',
+    '  "menu", "compare", "progress", "async", "preview", "surface", "theme", "layout", "chooser", "chip",',
     '  "keys" }) do',
     "  if kit[name] == nil then",
     "    missing[#missing + 1] = name",

@@ -47,7 +47,7 @@ function M.open(opts)
   if not surf then
     -- `surface.open` failed to open the float -- a genuine break, not a
     -- user-driven cancel. Without this, on_cancel never fires and a
-    -- kit.sync caller blocked on it stalls silently.
+    -- caller waiting on it stalls silently.
     if opts.on_cancel then
       opts.on_cancel()
     end

@@ -346,8 +346,6 @@ open the dialog, suspend the coroutine and return the answer when the user gives
 keeps running. A dismissed dialog gives what its callback form gives (`false` / `nil`; input and form
 return `nil, true`). `kit.async.await(start)` is the building block for anything else. The functions
 raise outside a coroutine that `run` started; an error inside it is reported with its traceback.
-`kit.sync` is deprecated: it waits in `vim.wait`, and Neovim does not run typed keys during
-`vim.wait`, so the dialog never sees them and the call returns when its timeout runs out.
 
 ```lua
 kit.async.run(function()
@@ -423,7 +421,7 @@ field at once, a row each with its label. Use it when the answers belong
 together and the person should see — and be able to fix — all of them before
 committing; `kit.form` stays the right tool for a short chain of questions.
 Same callbacks (`on_submit(values)` / `on_cancel()`), same keyed result table,
-so `kit.sync(kit.sheet, opts)` works too (deprecated, see `kit.async`).
+so `kit.async.form`-style code works over it too.
 
 ```lua
 kit.sheet({
@@ -602,31 +600,6 @@ kit.input({
   completion = "file",
   on_submit = function(path) end,
 })
-```
-
-### Sync bridge (blocking wrapper) -- deprecated, use `kit.async`
-
-> **Deprecated.** `vim.wait()` does not run typed keys, so a dialog opened this way never sees them
-> and the call returns when its timeout runs out. Use `kit.async` (see above). What follows stays
-> until the last caller is gone.
-
-`kit.input`/`kit.form`/`kit.live_input` are async — `on_submit`/`on_cancel`
-fire later, once the user responds. `kit.sync(open_fn, opts, timeout_ms?)`
-bridges one of them back to a plain return value via `vim.wait()`, for call
-chains built around a blocking `vim.fn.input()` that can't easily be recast
-to callback style. Only safe to call from a normal call stack (a command
-handler, keymap callback, ...) — never from a fast-event/libuv callback
-context, the same restriction `vim.wait()` itself has.
-
-```lua
-local values, cancelled, timed_out = kit.sync(kit.form, {
-  fields = {
-    { name = "condition", label = "Condition", default = "condition" },
-  },
-}) -- default timeout: 10 minutes (a safety net, not the expected path)
-if not cancelled and values then
-  vim.notify(values.condition)
-end
 ```
 
 ### Dialog hook (answer dialogs in tests)

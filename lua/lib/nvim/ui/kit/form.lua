@@ -157,7 +157,7 @@ function M.open(opts)
     -- `input.open` returns nil when the float itself could not be opened
     -- (surface.open failure) -- a genuine break, not a user-driven skip.
     -- Without this, neither on_submit nor on_cancel ever fires and the
-    -- chain (and any kit.sync caller blocked on it) stalls silently.
+    -- chain (and any caller waiting on it) stalls silently.
     if not surf and opts.on_cancel then
       opts.on_cancel()
     end

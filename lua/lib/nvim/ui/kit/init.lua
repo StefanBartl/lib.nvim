@@ -177,24 +177,6 @@ function M.progress(opts)
   return require("lib.nvim.progress").create(opts)
 end
 
---- Block (via vim.wait) until an on_submit/on_cancel-shaped async component
---- (input/form/live_input) resolves, returning its result as a plain value
---- instead of via callback. Only
---- safe to call from a normal call stack, never a fast-event context.
----
---- DEPRECATED: Neovim does not run typed keys while `vim.wait` waits, so the dialog never sees
---- them and the call returns when its timeout runs out (ten minutes by default). Use
---- `kit.async` (coroutines) instead; this stays only until the last caller is gone.
----@param open_fn fun(opts: table): any
----@param opts table
----@param timeout_ms? integer
----@return any result
----@return boolean cancelled
----@return boolean timed_out
-function M.sync(open_fn, opts, timeout_ms)
-  return component("sync").open(open_fn, opts, timeout_ms)
-end
-
 --- Set the dialog hook: a function `(kind, opts) -> handled, value` that is offered every modal dialog
 --- (`confirm`, `ask`, `input`, `select`, `form`, `sheet`) before it opens, and may answer it without a
 --- window (`nil` removes it). For tests; see `lib.nvim.ui.kit.hook`.

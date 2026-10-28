@@ -194,11 +194,8 @@ kit.form({ fields = { { name = "name", label = "Name", required = true } },
            on_submit = function(values) end })
 ```
 
-`kit`'s components are async (`on_submit`/`on_cancel` fire later); if your
-call site is a synchronous chain that can't easily be recast to callback
-style, `kit.sync(open_fn, opts)` bridges one call back to a plain return
-value via `vim.wait()` — but never call it from a fast-event context, the
-same restriction `vim.wait()` itself has.
+`kit`'s components are async (`on_submit`/`on_cancel` fire later); for a chain of questions use
+`kit.async.run` (coroutines, below) instead of nesting callbacks.
 
 ## Soft dependencies and graceful degradation
 

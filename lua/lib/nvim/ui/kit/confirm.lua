@@ -746,7 +746,7 @@ local function open_new(opts, settle_old)
     -- `surface.open` failed to open the float -- a genuine break, not a
     -- user-driven cancel. Without this, on_answer never fires (despite the
     -- module's own "Answer contract" implying it always does) and a
-    -- kit.sync caller blocked on it stalls silently. Same "no answer" value
+    -- caller (a coroutine, a chain) waiting on it stalls silently. Same "no answer" value
     -- as M.cancel() uses.
     deliver(opts.on_answer, custom, {}, 1, false)
     return nil

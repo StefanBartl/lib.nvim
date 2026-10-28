@@ -3,8 +3,8 @@
 -- Module:   lib.nvim.ui.kit.async (ui.kit.async in ui.nvim)
 -- Scenario: ask the user several things in a row as plain linear code -- an input, then a
 --           confirm that uses the answer -- without nesting callbacks and without blocking
---           Neovim. This replaces kit.sync (see kit-sync.lua), which waits in vim.wait: typed
---           keys are not run during vim.wait, so the dialog never sees them.
+--           Neovim. (A blocking `vim.wait` bridge cannot work: typed keys are not run during
+--           vim.wait, so the dialog would never see them.)
 --
 -- Every kit.async.* call must be made inside kit.async.run(function() ... end); outside it there
 -- is nothing to suspend and the call raises. A cancelled dialog gives what its callback form

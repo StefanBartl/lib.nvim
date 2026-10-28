@@ -36,8 +36,8 @@ function M.open(opts)
     })
 
     -- `input.open` returns nil when the float itself could not be opened
-    -- (surface.open failure) -- on_answer must still fire so a kit.sync
-    -- caller blocked on it learns immediately instead of stalling.
+    -- (surface.open failure) -- on_answer must still fire so a caller
+    -- waiting on it learns immediately instead of stalling.
     if not surf then
       on_answer(nil)
     end

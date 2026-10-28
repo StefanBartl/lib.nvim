@@ -169,21 +169,3 @@ whose prompt slot the caller wires themselves. `compare` walks
 SEARCH → MARKED → COMPARE, letting a user pick exactly two items from one
 picker and see them side by side.
 
-## Synchronous bridge for async components
-
-`kit.input`/`kit.form`/`kit.live_input`/`kit.picker` are inherently
-async — `on_submit`/`on_cancel` fire later. `kit.sync` bridges one of them
-back to a plain return value via `vim.wait()`, for a call chain built
-around a blocking `vim.fn.input()` that can't easily be recast to callback
-style.
-
-- **Module:** `lib.nvim.ui.kit.sync` (`open`, exposed as `kit.sync`)
-
-```lua
-local values, cancelled, timed_out = kit.sync(kit.form, { fields = { ... } })
-```
-
-Only safe from a normal call stack (a command handler, a keymap callback) —
-never from a fast-event/libuv callback context, the same restriction
-`vim.wait()` itself has. Default timeout 10 minutes (a safety net, not the
-expected path).

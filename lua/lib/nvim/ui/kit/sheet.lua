@@ -286,7 +286,7 @@ function M.open(opts)
   })
   if not surf then
     -- `surface.open` failed -- a genuine break, not a user-driven cancel.
-    -- Without this neither callback ever fires and a `kit.sync` caller stalls.
+    -- Without this neither callback ever fires and a caller waiting on it stalls.
     if opts.on_cancel then
       opts.on_cancel()
     end

@@ -1,8 +1,8 @@
 ---@module 'lib.nvim.ui.kit.async'
 --- Linear code over kit's callback components, without blocking Neovim.
 ---
---- `kit.sync` waits with `vim.wait()`, and Neovim does not run typed keys while it waits: the
---- dialog never sees them and the call returns after its timeout (ten minutes by default). A
+--- A blocking bridge (`vim.wait()`) cannot work: Neovim does not run typed keys while it waits, so the
+--- dialog never sees them and the call returns after its timeout. A
 --- coroutine does not have that problem: `kit.async.run` starts one, a call such as
 --- `kit.async.input` opens the dialog and suspends the coroutine, and the dialog's callback resumes
 --- it with the answer while the editor stays responsive.

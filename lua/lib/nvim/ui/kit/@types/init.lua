@@ -385,8 +385,7 @@
 ---@field menu fun(opts: table): Lib.UI.Kit.Surface|nil       # cursor-anchored action list (label → callback)
 ---@field compare fun(opts: Lib.UI.Kit.CompareOpts): Lib.UI.Kit.CompareHandle|nil  # pick two items, view them side by side
 ---@field progress fun(opts: table): table                     # passthrough to lib.nvim.progress.create
----@field async Lib.UI.Kit.AsyncModule  # kit.async: coroutines over the callback components, the non-blocking replacement for sync
----@field sync fun(open_fn: fun(opts: table): any, opts: table, timeout_ms: integer|nil): any  # DEPRECATED, blocks Neovim (typed keys do not reach the dialog): use async. vim.wait bridge for on_submit/on_cancel components; full signature (incl. the two boolean returns) is on lua/lib/nvim/ui/kit/init.lua's M.sync
+---@field async Lib.UI.Kit.AsyncModule  # kit.async: coroutines over the callback components, coroutines instead of callbacks
 ---@field preview fun(): integer, integer                       # open the live theme playground (also :KitPreview)
 ---@field surface Lib.UI.Kit.SurfaceModule
 ---@field theme Lib.UI.Kit.ThemeModule
