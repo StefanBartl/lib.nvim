@@ -32,9 +32,20 @@ return function(H)
   local TEN_KB = child({ "io.stdout:write(string.rep('x', 10000))" })
 
   -- a tap that raises does not hang the run (the pipe must still close), and the output is still counted;
-  -- the error is reported on the main loop (the "vim.schedule callback" line in the output is that report)
+  -- the error is reported on the main loop: caught here for the duration of the case, so it is asserted and
+  -- does not leak as a stray scheduled error (a runner's guard would rightly count it against this spec)
   do
-    local r = run(TEN_KB, {
+    local real_schedule = vim.schedule
+    local reported = {}
+    vim.schedule = function(fn)
+      return real_schedule(function()
+        local okf, e = pcall(fn)
+        if not okf then
+          reported[#reported + 1] = tostring(e)
+        end
+      end)
+    end
+    local okr, r = pcall(run, TEN_KB, {
       on_stdout = function(_, data)
         if data == nil then
           error("tap boom")
@@ -42,11 +53,15 @@ return function(H)
       end,
     })
     vim.wait(300, function()
-      return false
+      return #reported > 0
     end, 10)
+    vim.schedule = real_schedule
+    ok(okr, "a raising tap: the run itself does not raise (" .. tostring(r) .. ")")
     ok(r.done, "a raising tap: on_done still comes")
     eq(r.code, 0, "a raising tap: the run's exit code")
     eq(#(r.out or ""), 10000, "a raising tap: the output is still collected")
+    eq(#reported, 1, "a raising tap: the error is reported once, on the main loop")
+    ok(reported[1]:find("tap boom", 1, true) ~= nil, "a raising tap: ... with its message")
   end
 
   -- keep_stdout = false with a cap: nothing is kept, also not the piece that fitted the cap
