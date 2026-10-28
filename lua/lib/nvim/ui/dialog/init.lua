@@ -329,6 +329,35 @@ function M.ask(opts)
   return "native"
 end
 
+--- A yes/no question whose answer is a boolean, the safe one first: "No" is the first button and the
+--- focused one (so `<CR>` is never the destructive answer), "Yes, <yes_label>" the second; `n` and `y`
+--- are keys. `cb(accepted)` is called once, `false` when dismissed. Options (all optional):
+--- `unprompted` (a question the user did not pick, e.g. raised by a file watcher: asked through `ask`,
+--- which waits behind an open dialog and ignores typed-ahead keys), `kind`, `title`, `max_wait_ms`.
+---@param question string
+---@param yes_label? string  # "delete" is shown as "Yes, delete"; nil: "Yes"
+---@param cb fun(accepted: boolean)
+---@param opts? { unprompted?: boolean, kind?: "danger"|"warn"|"info", title?: string, max_wait_ms?: integer }
+---@return Lib.UI.Dialog.Backend backend
+function M.yesno(question, yes_label, cb, opts)
+  opts = opts or {}
+  local yes = yes_label and ("Yes, " .. yes_label) or "Yes"
+  local ask = opts.unprompted and M.ask or M.confirm
+  return ask({
+    question = question,
+    -- `&` marks the hotkeys; `&&` is a literal ampersand in the label
+    choices = "&No\n&" .. yes:gsub("&", "&&"),
+    default = 1,
+    kind = opts.kind,
+    title = opts.title,
+    max_wait_ms = opts.max_wait_ms,
+    on_answer = function(choice)
+      -- the label, or `true` from a kit old enough to show its plain Yes/No for a choices string
+      cb(choice == yes or choice == true)
+    end,
+  })
+end
+
 --- Map `vim.fn.confirm`'s fifth argument to a kit `kind`.
 local KIND_OF_TYPE = { Error = "danger", Warning = "warn", Info = "info" }
 

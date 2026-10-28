@@ -86,3 +86,8 @@ for `ask`; a `secret` goes through `vim.fn.inputsecret`, where an empty line cou
 
 A prompt whose caller needs the answer **synchronously** (a documented return value) cannot move: it
 stays a native call and is listed in the exception list of the rule against native prompts.
+
+
+## `yesno`
+
+`dialog.yesno(question, yes_label, cb, opts)`: "No" is the first and focused button, `Yes, <label>` the second, `n`/`y` are keys, `cb(accepted)` once (`false` when dismissed). `opts.unprompted` asks through `ask` (waits behind an open dialog, ignores typed-ahead keys); `kind`, `title`, `max_wait_ms` are passed on.

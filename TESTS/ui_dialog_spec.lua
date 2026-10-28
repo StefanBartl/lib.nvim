@@ -114,6 +114,32 @@ return function(H)
     ui_kit.ask_calls[1].on_answer(false)
     same(got, { false }, "and its answer")
 
+    -- yesno: No first and focused, the label accepts, a dismissal declines, `unprompted` goes through ask
+    local accepted_list = {}
+    local function push_accepted(v)
+      accepted_list[#accepted_list + 1] = v
+    end
+    local yn
+    ui_kit.confirm = function(o)
+      yn = o
+      return {}
+    end
+    dialog.yesno("Delete it?", "delete & go", push_accepted)
+    eq(yn.choices, "&No\n&Yes, delete && go", "No first, the label's ampersand escaped")
+    eq(yn.default, 1, "No is focused")
+    yn.on_answer("Yes, delete & go", 2)
+    dialog.yesno("Delete it?", "delete & go", push_accepted)
+    yn.on_answer(nil)
+    same(accepted_list, { true, false }, "the label accepts, a dismissal declines")
+    dialog.yesno("All ticked?", "finish", push_accepted, { unprompted = true })
+    eq(
+      #ui_kit.ask_calls > 0 and ui_kit.ask_calls[#ui_kit.ask_calls].choices,
+      "&No\n&Yes, finish",
+      "unprompted -> ask"
+    )
+    ui_kit.ask_calls[#ui_kit.ask_calls].on_answer("Yes, finish", 2)
+    eq(accepted_list[3], true, "and it answers")
+
     -- input: callback style (vim.ui.input) and kit style
     got = {}
     used = dialog.input({ prompt = "Name", default = "x" }, function(v)
