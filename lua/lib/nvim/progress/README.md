@@ -64,7 +64,7 @@ vim.keymap.set("n", "<Esc>", function() h:request_cancel() end, { buffer = bufnr
 ```
 
 The `"float"` style wires this up for you: it opens a small, non-focus-stealing
-window and only asks to cancel — via a short `vim.fn.confirm` — when *that*
+window and only asks to cancel — via `lib.nvim.ui.dialog.yesno`, not modal — when *that*
 window is the current buffer and `<Esc>` is pressed in normal mode. Any other
 window stays completely unaffected, so the operation runs in the background
 exactly like any other style, but is one buffer-focus + `<Esc>` away from a

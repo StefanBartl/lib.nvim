@@ -82,5 +82,61 @@ return function(H)
       "This operation is still running. Abort it?",
       "float style: an empty title falls back to 'This operation'"
     )
+
+    -- the answer decides: yes aborts exactly once (the label and the colour come with the question),
+    -- no leaves the operation alone
+    local dialog = require("lib.nvim.ui.dialog")
+    local orig_yesno = dialog.yesno
+    local function answer_with(yes)
+      local cancels, asked = 0, nil
+      dialog.yesno = function(_, label, cb, opts)
+        asked = { label = label, kind = opts and opts.kind }
+        cb(yes)
+      end
+      local state = float_style.start(
+        { title = "[p] ", text = "", current = nil, total = nil },
+        {},
+        function()
+          cancels = cancels + 1
+        end
+      )
+      local ok = pcall(esc_callback(state.bufnr))
+      dialog.yesno = orig_yesno
+      pcall(vim.api.nvim_win_close, state.winid, true)
+      H.ok(ok, "float style: the <Esc> handler runs")
+      return cancels, asked
+    end
+    local cancels, asked = answer_with(true)
+    H.eq(cancels, 1, "float style: yes asks to cancel exactly once")
+    H.eq(asked.label, "abort", "float style: the yes answer reads 'Yes, abort'")
+    H.eq(asked.kind, "danger", "float style: ...in the danger colour")
+    H.eq((answer_with(false)), 0, "float style: no cancels nothing")
+  end
+
+  -- An answer that comes after the operation has ended has nothing left to stop: the question is no
+  -- longer modal, so the operation can finish while it is open.
+  do
+    local progress = require("lib.nvim.progress")
+    local h = progress.create({ style = "echo", delay_ms = 0 })
+    local stopped = 0
+    h:on_cancel(function()
+      stopped = stopped + 1
+    end)
+    h:finish()
+    h:request_cancel()
+    H.eq(stopped, 0, "progress: a cancel requested after finish() calls no on_cancel callback")
+    H.eq(
+      h.cancelled,
+      false,
+      "progress: ...and does not turn a finished operation into a cancelled one"
+    )
+
+    local h2 = progress.create({ style = "echo", delay_ms = 0 })
+    h2:on_cancel(function()
+      stopped = stopped + 1
+    end)
+    h2:request_cancel()
+    h2:request_cancel()
+    H.eq(stopped, 1, "progress: a running operation is cancelled once, however often it is asked")
   end
 end

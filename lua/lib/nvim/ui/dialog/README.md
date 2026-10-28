@@ -40,10 +40,11 @@ dialog.confirm({
   on_answer = function(yes) if yes then delete() end end,
 })
 
--- vim.fn.confirm as a callback: & marks the hotkey, the answer is the 1-based index, 0 = dismissed
+-- vim.fn.confirm as a callback: & marks the hotkey, the answer is the 1-based index, 0 = dismissed;
+-- the sixth argument sets the window title and the kind (it beats the kind the message type implies)
 dialog.choose("Save changes?", "&Save\n&Discard\n&Cancel", 1, function(i)
   if i == 1 then save() elseif i == 2 then discard() end
-end, "Warning")
+end, "Warning", { title = "Unsaved changes", kind = "warn" })
 
 -- a line of text, the way vim.ui.input calls back (nil when cancelled)
 dialog.input({ prompt = "Name", default = "untitled", completion = "file" }, function(name)

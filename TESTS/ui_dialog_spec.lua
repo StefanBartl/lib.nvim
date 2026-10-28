@@ -231,6 +231,14 @@ return function(H)
     eq(c.title, "Unsaved changes", "choose: opts.title is the window title")
     eq(c.kind, "danger", "choose: opts.kind is passed on")
 
+    -- opts.kind wins over the kind the message type implies; without opts nothing changes
+    dialog.choose("Save?", { "a", "b" }, 1, function() end, "Warning", { kind = "info" })
+    eq(ui_kit.confirm_calls[#ui_kit.confirm_calls].kind, "info", "choose: opts.kind beats msg_type")
+    dialog.choose("Save?", { "a", "b" }, 1, function() end, "Warning", {})
+    c = ui_kit.confirm_calls[#ui_kit.confirm_calls]
+    eq(c.kind, "warn", "choose: an opts without kind keeps the kind of msg_type")
+    eq(c.title, nil, "choose: ...and has no title")
+
     -- ------------------------------------------------------------ backend 2: the copy in lib.nvim
     without_ui_kit()
     eq(dialog.backend(), "lib.nvim.ui.kit", "without ui.nvim the copy of lib.nvim answers")

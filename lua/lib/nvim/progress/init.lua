@@ -264,7 +264,8 @@ function M.create(opts)
     end,
 
     request_cancel = function(self)
-      if self.cancelled then
+      -- a cancel that comes after the end (the abort question was answered late) has nothing left to stop
+      if self.cancelled or done then
         return
       end
       self.cancelled = true
