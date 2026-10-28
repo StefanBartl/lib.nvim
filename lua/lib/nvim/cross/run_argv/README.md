@@ -67,6 +67,16 @@ The `*_captured` and `*_result` runners take one options table:
 
 All three need `vim.system` (Neovim 0.10+); the legacy fallback ignores them.
 
+Two more options tap the output streams: `on_stdout(err, chunk)` and
+`on_stderr(err, chunk)` get every chunk as libuv read it (`nil` at EOF), inside
+the libuv callback (not scheduled, no `vim.fn`). The output is still collected
+for the result; with `max_output_bytes` the stdout tap sees only what fitted.
+`lib.nvim.system.lines.buffered(fn)` turns a tap into scheduled line callbacks;
+that is what `lib.nvim.system.job.start({ kill_tree = true })` does.
+`keep_stdout = false` (with an `on_stdout` tap) collects nothing for the
+result, for a long streaming run. The async handle's `stop(signal?)` takes
+`"sigkill"` as well as the default `"sigterm"`.
+
 ```lua
 local ok, out = run_argv.run_blocking_captured(
   { "git", "fetch" }, nil, { timeout_ms = 60000, env = { GIT_TERMINAL_PROMPT = "0" } }

@@ -94,6 +94,7 @@ local specs = {
   "async_map_limit_spec.lua",
   "wslpath_spec.lua",
   "system_job_spec.lua",
+  "system_job_kill_tree_spec.lua",
   "system_lines_spec.lua",
   "system_rpc_pipe_spec.lua",
   "ui_kit_spec.lua",

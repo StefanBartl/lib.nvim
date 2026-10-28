@@ -89,6 +89,9 @@ local GRACE_MS = 1500
 ---@field max_output_bytes? integer Stop the process once its stdout exceeds this many bytes: the run then ends with exit code `125` (`M.OUTPUT_LIMIT_CODE`), `stdout` holds what fitted and `stderr` says why. A process whose output is the data (`git log` of a repository somebody else wrote) can print gigabytes from a tiny input; without a cap all of it is collected in memory. The kill (SIGKILL) goes to the whole process group on POSIX while the child is still running, like the timeout's (and the run is detached then). Needs `vim.system`; the legacy fallback ignores it.
 ---@field env? table<string, string> Extra environment variables, merged over the inherited environment (an unset name stays inherited). Needs `vim.system`; the legacy fallback ignores it.
 ---@field cwd? string Working directory of the child. Needs `vim.system`; the legacy fallback ignores it.
+---@field on_stdout? fun(err: string|nil, data: string|nil) Tap: every stdout chunk as libuv read it (`nil` at EOF), in the libuv callback (not scheduled; `vim.fn` is not allowed there -- `lib.nvim.system.lines.buffered` turns it into scheduled lines). The output is collected for the result all the same; with `max_output_bytes` the tap sees what fitted. Needs `vim.system`; the legacy fallback ignores it.
+---@field on_stderr? fun(err: string|nil, data: string|nil) Tap: every stderr chunk, like `on_stdout` (the whole stream, also beyond the 64 KiB kept for the result).
+---@field keep_stdout? boolean With an `on_stdout` tap: `false` keeps nothing for the result (`stdout` is `""`), so a long streaming run does not grow without bound. Default `true`.
 
 --- The result of `run_blocking_result`.
 ---@class Lib.RunArgv.Result
@@ -242,17 +245,33 @@ end
 
 ---@internal
 --- Collect stdout ourselves when a cap is set, so that a runaway process is
---- stopped instead of being read to the end.
+--- stopped instead of being read to the end, or when the caller taps the stream
+--- (`opts.on_stdout`: `vim.system` collects nothing once stdout is a function).
 ---@param opts Lib.RunArgv.Opts|nil
 ---@param kill fun()
 ---@return table|nil sink
 local function new_sink(opts, kill)
   local cap = opts and opts.max_output_bytes
+  local tap = opts and opts.on_stdout
   if not is_limit(cap) then
-    return nil
+    if not tap then
+      return nil
+    end
+    cap = math.huge
   end
+  -- a streaming caller that reads the tap need not hold the whole output as well
+  local keep = not (tap and opts and opts.keep_stdout == false)
   local sink = { chunks = {}, size = 0, over = false, cap = cap }
-  sink.handler = function(_, data)
+  sink.handler = function(err, data)
+    if tap then
+      -- the part that fits the cap, nothing beyond it; `nil` (EOF) always passes through so a
+      -- line buffer can flush
+      if not data then
+        tap(err, nil)
+      elseif not sink.over then
+        tap(err, cap == math.huge and data or data:sub(1, cap - sink.size))
+      end
+    end
     if not data or sink.over then
       return
     end
@@ -265,7 +284,9 @@ local function new_sink(opts, kill)
       sink.size = cap
       kill()
     else
-      sink.chunks[#sink.chunks + 1] = data
+      if keep then
+        sink.chunks[#sink.chunks + 1] = data
+      end
       sink.size = sink.size + #data
     end
   end
@@ -311,10 +332,15 @@ end
 --- otherwise hold ALL of it in memory before `bound_stderr` could cut the text,
 --- and a hostile process can print gigabytes there. The rest is read and thrown
 --- away (no kill: stderr is not what the caller asked for).
+---@param opts? Lib.RunArgv.Opts  `opts.on_stderr` taps the whole stream.
 ---@return table errs
-local function new_errsink()
+local function new_errsink(opts)
+  local tap = opts and opts.on_stderr
   local errs = { chunks = {}, size = 0, over = false }
-  errs.handler = function(_, data)
+  errs.handler = function(err, data)
+    if tap then
+      tap(err, data)
+    end
     if not data or errs.over then
       return
     end
@@ -521,7 +547,7 @@ function M.run_blocking_captured(cmd, input, opts)
         kill_job(job, "sigkill")
       end
     end)
-    local errs = new_errsink() -- stderr is not returned here, only kept out of memory
+    local errs = new_errsink(opts) -- stderr is not returned here, only kept out of memory
     local ok, res = pcall(function()
       job = spawn(cmd, system_opts(input, opts, sink, errs, has_kill_path(opts)))
       deadline = start_deadline(function()
@@ -584,7 +610,7 @@ function M.run_blocking_result(cmd, input, opts)
   -- vim.system raises synchronously when cmd[1] cannot be spawned at all
   -- (e.g. ENOENT): the same guard as in the other runners, reported as a
   -- failed result instead of an error escaping to the caller.
-  local errs = new_errsink()
+  local errs = new_errsink(opts)
   local ok, res = pcall(function()
     job = spawn(cmd, system_opts(input, opts, sink, errs, has_kill_path(opts)))
     deadline = start_deadline(function()
@@ -749,7 +775,7 @@ function M.run_async_captured(cmd, on_done, input, opts)
   -- (e.g. ENOENT) rather than delivering a failed SystemCompleted -- guard it
   -- so that case reaches on_done like every other failure, instead of an
   -- uncaught error escaping into the caller's stack.
-  local errs = new_errsink()
+  local errs = new_errsink(opts)
   local ok_spawn, spawned = pcall(
     spawn,
     cmd,
@@ -805,12 +831,13 @@ function M.run_async_captured(cmd, on_done, input, opts)
   )
 
   return {
-    stop = function()
+    ---@param signal? string  `"sigterm"` (default) or `"sigkill"`; POSIX: to the process group
+    stop = function(signal)
       -- (a finished run's pid may belong to somebody else by now)
       if finished then
         return
       end
-      kill_job(job, "sigterm")
+      kill_job(job, signal or "sigterm")
     end,
   }
 end

@@ -296,6 +296,44 @@ require("lib.nvim.system.job").start({
 once per complete line (trailing `\r` stripped), already inside
 `vim.schedule` — safe to touch buffers/windows directly.
 
+### `job.start({ kill_tree = true, ... }) -> Lib.System.Job.TreeHandle`
+
+A plain `start` hands back `vim.system`'s handle, whose `kill()` reaches the
+direct child only: a `.sh` script's tools or a child editor's language servers
+keep running and keep files open. With `kill_tree = true` the run goes through
+[`lib.nvim.cross.run_argv`](../cross/run_argv/README.md)'s async runner, which
+ends the whole tree on the deadline and on `kill()` (POSIX: the process group
+of the child, SIGTERM then SIGKILL after 1.5 s; Windows: `taskkill /T`). One
+implementation of the tree kill, shared with every `run_argv` caller.
+
+```lua
+local h = require("lib.nvim.system.job").start({
+  command = "bash", args = { "scripts/ci.sh" },
+  kill_tree = true,
+  timeout_ms = 120000,             -- exit code 124, result.timed_out
+  cwd = root, env = { CI = "1" }, stdin = nil,
+  on_stdout = function(_, line) ... end,  -- lines, scheduled, as above
+  on_exit = function(result) ... end,     -- once, after the last line
+})
+h.kill()            -- the tree: SIGTERM, SIGKILL 1.5 s later; no-op once the run ended
+h.is_done()
+local r = h:wait(5000)   -- `.` or `:`; vim.wait until done; nil when 5 s passed first
+-- r = { code, signal, stdout, stderr, timed_out, killed }
+```
+
+With `on_stdout` set, `r.stdout` is `""`: the lines went to the callback, and a
+long streaming run is not collected a second time. A spawn failure is `code = -1`
+with the reason in `r.stderr`. `on_exit` comes after the last line; lines a
+surviving descendant writes after the run was reported are dropped.
+
+Limits are `run_argv`'s, for the deadline and for `kill()` alike: on POSIX a
+descendant that left the group with `setsid()` is not reached, nor the
+descendants of a child that has already exited (`sh -c 'server & exit 0'`: the
+server keeps the pipes open, the run does not end, and `kill()` has no live
+leader to signal); on Windows `taskkill /T` finds descendants through a live
+parent. Set `timeout_ms` for such commands: the deadline reports the run at
+`timeout_ms` plus 1.5 s in any case.
+
 ### `job.start_blocking(opts) -> vim.SystemCompleted`
 
 Runs a command to completion, blocking the caller, and returns the full

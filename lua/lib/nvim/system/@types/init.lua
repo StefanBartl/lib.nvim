@@ -104,14 +104,33 @@
 ---@field args? string[] # Argv, excluding `command` itself.
 ---@field on_stdout? fun(err: nil, line: string) # Called once per stdout line, already vim.schedule-wrapped. Ignored by `start_blocking`/`chain` (raw-capture tier).
 ---@field on_stderr? fun(err: nil, line: string) # Called once per stderr line, already vim.schedule-wrapped. Ignored by `start_blocking`/`chain` (raw-capture tier).
----@field timeout_ms? integer # `start_blocking`/`chain` only: passed to `vim.system`'s `timeout` / `wait(timeout)`.
----@field stdin? string # `start_blocking`/`chain` only: raw stdin text. In `chain`, defaults to the previous step's captured stdout unless set explicitly.
+---@field timeout_ms? integer # `start_blocking`/`chain`: passed to `vim.system`'s `timeout` / `wait(timeout)`. `start` with `kill_tree`: the deadline after which the process TREE is killed (exit code 124, `timed_out`). Ignored by a plain `start`.
+---@field stdin? string # `start_blocking`/`chain`/`start` with `kill_tree`: raw stdin text. In `chain`, defaults to the previous step's captured stdout unless set explicitly.
+---@field kill_tree? boolean # `start` only: timeout and `kill()` end the whole process tree (POSIX process group, Windows `taskkill /T`) through `lib.nvim.cross.run_argv`; `start` then returns a `Lib.System.Job.TreeHandle`.
+---@field cwd? string # `start` with `kill_tree` only: working directory of the child.
+---@field env? table<string, string> # `start` with `kill_tree` only: variables merged over the inherited environment.
+---@field on_exit? fun(result: Lib.System.Job.TreeResult) # `start` with `kill_tree` only: called once on the main loop, after the last line callback (lines a surviving descendant writes after the run was reported are dropped).
+
+--- Outcome of a `start({ kill_tree = true })` run.
+---@class Lib.System.Job.TreeResult
+---@field code integer # Exit code; `124` after `timeout_ms`, `-1` when the command could not be started.
+---@field signal integer # Terminating signal, `0` if none.
+---@field stdout string # What the process wrote to stdout, or `""` when `on_stdout` is set (the lines went there; nothing is collected twice).
+---@field stderr string # Up to 64 KiB of stderr; the reason when `code == -1`.
+---@field timed_out boolean # The deadline killed the tree.
+---@field killed boolean # `kill()` was called before the run ended.
+
+--- Handle of a `start({ kill_tree = true })` run. Methods work with `.` and `:`.
+---@class Lib.System.Job.TreeHandle
+---@field kill fun() # End the process tree: SIGTERM, SIGKILL 1.5 s later (Windows: `taskkill /T /F`). No-op once the run ended (its pid may be reused) and, like the deadline, blind to descendants of a child that has exited already.
+---@field is_done fun(): boolean
+---@field wait fun(timeout_ms?: integer): Lib.System.Job.TreeResult|nil # Block (vim.wait) until the run ended; nil when `timeout_ms` passed first.
 
 --- `lib.nvim.system.job` module surface: a `vim.system` wrapper with
 --- plenary.job-style line-buffered, schedule-safe callbacks, plus a
 --- raw-capture blocking/chaining tier.
 ---@class Lib.System.Job
----@field start fun(opts: Lib.System.Job.Opts): vim.SystemObj
+---@field start fun(opts: Lib.System.Job.Opts): vim.SystemObj|Lib.System.Job.TreeHandle
 ---@field start_blocking fun(opts: Lib.System.Job.Opts): vim.SystemCompleted
 ---@field chain fun(job_specs: Lib.System.Job.Opts[], on_done: fun(ok: boolean, results: vim.SystemCompleted[]))
 
