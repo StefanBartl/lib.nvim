@@ -31,7 +31,7 @@ while [ $# -gt 0 ]; do
     *) break ;;
   esac
 done
-case "$timeout" in '' | *[!0-9]*) echo "nvim-ask: --timeout wants whole seconds" >&2; exit 64 ;; esac
+case "$timeout" in '' | *[!0-9]* | 0) echo "nvim-ask: --timeout wants a whole number of seconds, at least 1" >&2; exit 64 ;; esac
 case "$default" in *[!0-9]*) echo "nvim-ask: --default wants a number" >&2; exit 64 ;; esac
 if [ $# -lt 2 ]; then
   echo "usage: nvim-ask [--timeout S] [--title T] [--default N] QUESTION CHOICE [CHOICE ...]" >&2

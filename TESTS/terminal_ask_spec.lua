@@ -170,4 +170,6 @@ return function(H)
   eq(r.code, 3, "no address at all: exit 3")
   r = client(nil, { "only a question" })
   eq(r.code, 64, "a question without choices: usage, 64")
+  r = client(nil, { "--timeout", "0", "Question?", "Yes" })
+  eq(r.code, 64, "--timeout 0 is rejected (would auto-cancel the dialog at once)")
 end
