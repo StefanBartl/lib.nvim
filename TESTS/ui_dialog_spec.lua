@@ -385,13 +385,13 @@ return function(H)
       error("provider broke")
     end)
     got = {}
-    local raised, raised_err = pcall(dialog.confirm, {
+    local provider_raised, raised_err = pcall(dialog.confirm, {
       question = "Raise?",
       on_answer = function(v)
         got[#got + 1] = v
       end,
     })
-    eq(raised, false, "the provider's error surfaces")
+    eq(provider_raised, false, "the provider's error surfaces")
     ok(tostring(raised_err):find("provider broke", 1, true), "with its message")
 
     -- the native input expands what the kit would expand, and leaving through on_back answers nil
