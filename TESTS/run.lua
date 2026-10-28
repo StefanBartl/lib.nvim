@@ -112,6 +112,7 @@ local specs = {
   "ui_kit_confirm_layout_spec.lua",
   "ui_kit_confirm_keys_spec.lua",
   "ui_kit_ask_modal_spec.lua",
+  "ui_kit_dialog_hook_spec.lua",
   "ui_dialog_spec.lua",
   "ui_kit_async_spec.lua",
   "ui_kit_viewer_keys_spec.lua",

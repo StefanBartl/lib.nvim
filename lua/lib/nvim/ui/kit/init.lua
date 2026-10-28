@@ -232,6 +232,20 @@ end
 --- then `kit.async.confirm/ask/input/form/select` inside it. See `lib.nvim.ui.kit.async`.
 M.async = async
 
+--- Set the dialog hook: a function `(kind, opts) -> handled, value` that is offered every modal dialog
+--- (`confirm`, `ask`, `input`, `select`, `form`, `sheet`) before it opens, and may answer it without a
+--- window (`nil` removes it). For tests; see `lib.nvim.ui.kit.hook`.
+---@param fn Lib.UI.Kit.DialogHook|nil
+function M.set_dialog_hook(fn)
+  require("lib.nvim.ui.kit.hook").set(fn)
+end
+
+--- The dialog hook that is set, if any.
+---@return Lib.UI.Kit.DialogHook|nil
+function M.get_dialog_hook()
+  return require("lib.nvim.ui.kit.hook").get()
+end
+
 --- Component dispatch table.
 local COMPONENTS = {
   note = note.open,

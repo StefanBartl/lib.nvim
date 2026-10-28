@@ -61,6 +61,7 @@
 
 local surface = require("lib.nvim.ui.kit.surface")
 local buttons = require("lib.nvim.ui.kit.buttons")
+local hook = require("lib.nvim.ui.kit.hook")
 local input = require("lib.nvim.ui.kit.input")
 local select = require("lib.nvim.ui.kit.select")
 local autocmd = require("lib.nvim.bindings.autocmd")
@@ -197,6 +198,19 @@ end
 ---@return Lib.UI.Kit.Sheet|nil  # nil when there are no fields or the float could not be opened
 function M.open(opts)
   opts = opts or {}
+
+  local hooked = hook.intercept("sheet", opts, function(value)
+    if type(value) == "table" then
+      if opts.on_submit then
+        opts.on_submit(value)
+      end
+    elseif opts.on_cancel then
+      opts.on_cancel()
+    end
+  end)
+  if hooked then
+    return hooked
+  end
 
   local fields = {}
   for _, raw in ipairs(opts.fields or {}) do

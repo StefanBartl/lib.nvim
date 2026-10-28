@@ -30,6 +30,7 @@
 ---     calling its single callback with `nil`.
 
 local chooser = require("lib.nvim.ui.kit.chooser")
+local hook = require("lib.nvim.ui.kit.hook")
 
 local M = {}
 
@@ -102,6 +103,34 @@ function M.open(opts)
   if type(items) ~= "table" or #items == 0 then
     cancel()
     return nil
+  end
+
+  local hooked = hook.intercept("select", opts, function(value)
+    if value == nil then
+      cancel()
+    elseif multi then
+      -- a list of indexes or of items
+      local picked, at = {}, {}
+      for _, v in ipairs(type(value) == "table" and value or { value }) do
+        local idx = type(v) == "number" and v or vim.fn.index(items, v) + 1
+        if items[idx] ~= nil then
+          picked[#picked + 1], at[#at + 1] = items[idx], idx
+        end
+      end
+      if on_select then
+        on_select(picked, at)
+      end
+    else
+      local idx = type(value) == "number" and value or vim.fn.index(items, value) + 1
+      if items[idx] == nil then
+        cancel()
+      elseif on_select then
+        on_select(items[idx], idx)
+      end
+    end
+  end)
+  if hooked then
+    return hooked
   end
 
   local sel = ui_select_fn()

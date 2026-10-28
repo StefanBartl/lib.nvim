@@ -379,6 +379,8 @@
 ---@field prompt fun(opts: table): any                       # ask: confirm (yes/no) or text
 ---@field picker fun(opts: table): table|nil                 # interactive picker (prompt drives results)
 ---@field confirm fun(opts: table): Lib.UI.Kit.Surface|nil    # button-confirm dialog (horizontal buttons)
+---@field set_dialog_hook fun(fn: Lib.UI.Kit.DialogHook|nil)  # answer the modal dialogs (confirm, ask, input, select, form, sheet) without a window, for tests
+---@field get_dialog_hook fun(): Lib.UI.Kit.DialogHook|nil
 ---@field ask fun(opts: table)                                 # a question (yes/no or choices) that waits for every open modal dialog, answers false/nil when unanswered, falls back to vim.ui.select
 ---@field menu fun(opts: table): Lib.UI.Kit.Surface|nil       # cursor-anchored action list (label → callback)
 ---@field compare fun(opts: Lib.UI.Kit.CompareOpts): Lib.UI.Kit.CompareHandle|nil  # pick two items, view them side by side

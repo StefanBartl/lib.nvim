@@ -71,6 +71,7 @@
 
 local surface = require("lib.nvim.ui.kit.surface")
 local buttons = require("lib.nvim.ui.kit.buttons")
+local hook = require("lib.nvim.ui.kit.hook")
 local expand_path = require("lib.nvim.cross.fs.expand_path")
 local is_windows = require("lib.nvim.cross.platform.is_windows")
 -- A NUL in caller text raises E976 out of `vim.fn.strdisplaywidth()` and `split()`: text that is
@@ -599,6 +600,19 @@ end
 ---@return Lib.UI.Kit.Surface|nil
 function M.open(opts)
   opts = opts or {}
+
+  local hooked = hook.intercept("input", opts, function(value)
+    if value == nil then
+      if opts.on_cancel then
+        opts.on_cancel()
+      end
+    elseif opts.on_submit then
+      opts.on_submit(tostring(value))
+    end
+  end)
+  if hooked then
+    return hooked
+  end
 
   local title = opts.title or opts.prompt
   -- A float's title is drawn within its content width; a title longer than

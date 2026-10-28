@@ -34,6 +34,7 @@ local buttons = require("lib.nvim.ui.kit.buttons")
 local map = require("lib.nvim.bindings.keymap")
 local nul_safe = require("lib.lua.strings.core").nul_safe
 local max_float_width = require("lib.nvim.window.max_float_width")
+local hook = require("lib.nvim.ui.kit.hook")
 
 local api = vim.api
 
@@ -368,6 +369,32 @@ local function parse_choices(choices)
 end
 
 ---@internal
+--- Hand a dialog hook's answer (`kit.set_dialog_hook`) to `opts.on_answer` the way the dialog would:
+--- with `choices` an index or a label picks the button (`nil`: dismissed), a plain question takes
+--- `true` / `1` as yes and anything else as no.
+---@param opts table
+---@param value any
+local function answer_hooked(opts, value)
+  local labels = parse_choices(opts.choices)
+  local focus ---@type integer|nil
+  if labels then
+    if type(value) == "number" and labels[value] then
+      focus = value
+    elseif type(value) == "string" then
+      for i, label in ipairs(labels) do
+        if label == value then
+          focus = i
+          break
+        end
+      end
+    end
+  elseif value == true or value == 1 then
+    focus = 1
+  end
+  deliver(opts.on_answer, labels ~= nil, labels or {}, focus or 1, focus ~= nil)
+end
+
+---@internal
 --- 1-based index of the button `default` names (an index, or a label), 1 when it names none.
 ---@param default integer|string|nil
 ---@param labels string[]
@@ -476,6 +503,11 @@ end
 ---@return nil
 function M.ask(opts)
   opts = opts or {}
+  if hook.intercept("ask", opts, function(value)
+    answer_hooked(opts, value)
+  end) then
+    return
+  end
   local modal = require("lib.nvim.ui.kit.modal")
   local max_wait = opts.max_wait_ms or M.ASK_MAX_WAIT_MS
   local labels = parse_choices(opts.choices)
@@ -877,6 +909,12 @@ end
 ---@return Lib.UI.Kit.Surface|nil
 function M.open(opts)
   opts = opts or {}
+  local hooked = hook.intercept("confirm", opts, function(value)
+    answer_hooked(opts, value)
+  end)
+  if hooked then
+    return hooked
+  end
   -- A dialog this one replaces is answered as cancelled, but only once this one is in place: its
   -- answer is user code and may open a dialog itself, which must not land in the middle of this
   -- call and be overwritten by it. If building the new one raises, the old one is still answered.

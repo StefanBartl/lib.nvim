@@ -46,6 +46,7 @@
 --- answers as `default`s. Neither `on_submit` nor `on_cancel` fires then.
 
 local input = require("lib.nvim.ui.kit.input")
+local hook = require("lib.nvim.ui.kit.hook")
 
 local M = {}
 
@@ -74,6 +75,18 @@ end
 ---@return Lib.UI.Kit.Surface|nil  # the first field's input surface (nil if `fields` is empty)
 function M.open(opts)
   opts = opts or {}
+  local hooked = hook.intercept("form", opts, function(value)
+    if type(value) == "table" then
+      if opts.on_submit then
+        opts.on_submit(value)
+      end
+    elseif opts.on_cancel then
+      opts.on_cancel()
+    end
+  end)
+  if hooked then
+    return hooked
+  end
   local fields = opts.fields or {}
   local values = {}
   local back = opts.back == true

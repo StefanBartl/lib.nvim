@@ -628,3 +628,16 @@ if not cancelled and values then
   vim.notify(values.condition)
 end
 ```
+
+### Dialog hook (answer dialogs in tests)
+
+`kit.set_dialog_hook(fn)` offers every modal dialog (`confirm`, `ask`, `input`, `select`, `form`, `sheet`) to
+`fn(kind, opts)` before it opens. `return true, value` answers it: nothing opens, the caller's callback gets
+`value` on the next loop turn (as a real answer does) and the call returns an already closed stand-in surface.
+`return false` passes the dialog on. `kit.set_dialog_hook(nil)` removes the hook; without one it costs a table
+access. An error the hook raises is raised in the caller.
+
+`value` is what the user would have said: `confirm`/`ask` an index or a label of `choices` (a plain question:
+`true`/`false`, or 1 yes / 2 no), `input` the text, `select` an index or an item (a list of them with `multi`),
+`form`/`sheet` the keyed table of values; `nil` dismisses. testing.nvim's prompt guard sets this hook for the
+case that is open (`h:answer_prompts{ confirm = 2 }`).
