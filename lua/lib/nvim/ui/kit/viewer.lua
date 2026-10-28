@@ -64,6 +64,12 @@ function M.open(opts)
     close_on_focus_lost(surf.winid)
   end
 
+  -- Keys with a winbar legend and a `?` cheatsheet, a table view and a
+  -- decoration hook: ui.nvim only, see `lib.nvim.ui.kit.viewer_keys`.
+  if opts.keys or opts.table_view or opts.on_lines then
+    require("lib.nvim.ui.kit.viewer_keys").attach(surf, opts)
+  end
+
   return surf
 end
 

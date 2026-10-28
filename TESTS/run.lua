@@ -114,6 +114,7 @@ local specs = {
   "ui_kit_ask_modal_spec.lua",
   "ui_dialog_spec.lua",
   "ui_kit_async_spec.lua",
+  "ui_kit_viewer_keys_spec.lua",
   "ui_kit_conceal_spec.lua",
   "ui_kit_secret_buffer_spec.lua",
   "ui_kit_prompt_hooks_spec.lua",

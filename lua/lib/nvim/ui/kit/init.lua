@@ -50,6 +50,10 @@ M.surface = surface
 M.chooser = chooser
 M.layout = layout
 M.chip = chip
+--- Winbar legend and cheatsheet for keys a view binds itself (also outside
+--- `kit.viewer`, e.g. two plain splits): `legend`, `cheatsheet_lines`,
+--- `cheatsheet`. Only this copy of the kit has it (see `viewer_keys.lua`).
+M.keys = require("lib.nvim.ui.kit.viewer_keys")
 
 --- Register user presets / set the active default preset.
 ---@param opts? Lib.UI.Kit.SetupOpts

@@ -43,6 +43,13 @@ local BASE = {
     -- `Visual` reads as "about to act on this" without borrowing the
     -- keyboard-selection group's own identity.
     hover = "Visual",
+    -- Status tokens, for a list whose rows have a state (test results, tasks, health): a caller uses
+    -- `KitOk`/`KitWarn`/`KitInfo`/`KitDim` instead of inventing groups of its own. They link to the
+    -- diagnostic groups every colorscheme defines (`Comment` for `dim`).
+    ok = "DiagnosticOk",
+    warn = "DiagnosticWarn",
+    info = "DiagnosticInfo",
+    dim = "Comment",
   },
 }
 
@@ -115,6 +122,10 @@ local BUILTIN = {
       error = { fg = "#ff5555" },
       flash = { fg = "#7cffa0", bold = true },
       hover = { fg = "#16c60c", underline = true },
+      ok = { fg = "#33ff66" },
+      warn = { fg = "#ffcc33" },
+      info = { fg = "#7cffa0" },
+      dim = { fg = "#1f7a1f" },
     },
   },
 }
@@ -135,6 +146,10 @@ local GROUPS = {
   error = "KitError",
   flash = "KitFlash",
   hover = "KitHover",
+  ok = "KitOk",
+  warn = "KitWarn",
+  info = "KitInfo",
+  dim = "KitDim",
 }
 
 --- Resolve a theme argument to a full token table.
