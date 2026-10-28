@@ -366,6 +366,20 @@ return function(H)
     local nul_ok = pcall(dialog.confirm, { question = "bad\0title?", on_answer = function() end })
     ok(nul_ok and not prompts[1]:find("\0", 1, true), "a NUL in the question is made safe")
 
+    -- a long line is cut to the screen, a long list to a few lines; the last short line survives
+    prompts = {}
+    local many = {}
+    for i = 1, 40 do
+      many[i] = "name " .. i
+    end
+    dialog.confirm({
+      question = string.rep("x", 500) .. "\n" .. table.concat(many, "\n"),
+      on_answer = function() end,
+    })
+    local first_line, line_count = prompts[1]:match("^[^\n]*"), #vim.split(prompts[1], "\n")
+    ok(vim.fn.strdisplaywidth(first_line) <= math.max(40, vim.o.columns - 12), "a long line is cut")
+    ok(line_count <= 13, "and the number of lines is capped: " .. line_count)
+
     -- a provider that raises: the error is raised and the callback is not left waiting
     stub(vim.ui, "select", function()
       error("provider broke")

@@ -32,6 +32,7 @@
 require("lib.nvim.ui.dialog.@types")
 
 local nul_safe = require("lib.lua.strings.core").nul_safe
+local truncate = require("lib.lua.strings.width").truncate
 
 local M = {}
 
@@ -129,6 +130,27 @@ local function once(cb)
   return answer, settle, discard
 end
 
+--- A text for a native prompt, which neither wraps nor scrolls: no NUL byte (E976), every line cut
+--- to the width of the screen, at most `NATIVE_MAX_LINES` of them (a long list of names must not
+--- push the choices off the screen).
+local NATIVE_MAX_LINES = 12
+
+---@param text any
+---@return string
+local function native_text(text)
+  local width = math.max(40, vim.o.columns - 12)
+  local lines = vim.split(nul_safe(tostring(text or "")), "\n", { plain = true })
+  local out = {}
+  for i, line in ipairs(lines) do
+    if i > NATIVE_MAX_LINES then
+      out[#out + 1] = "…"
+      break
+    end
+    out[#out + 1] = (truncate(line, width, { ellipsis = "…" }))
+  end
+  return table.concat(out, "\n")
+end
+
 ---@param t table|nil
 ---@return table
 local function copy(t)
@@ -202,27 +224,23 @@ local function native_confirm(opts, answer)
   end
 
   -- A NUL byte reaches `vim.fn` as a Blob (E976): the text is shown with the SOH that measures alike.
-  vim.ui.select(
-    shown,
-    { prompt = nul_safe(tostring(opts.question or opts.title or "")) },
-    function(choice, pos)
-      -- a provider that calls back with the choice only is read by its text
-      if not pos and choice ~= nil then
-        for p, l in ipairs(shown) do
-          if l == choice then
-            pos = p
-            break
-          end
+  vim.ui.select(shown, { prompt = native_text(opts.question or opts.title) }, function(choice, pos)
+    -- a provider that calls back with the choice only is read by its text
+    if not pos and choice ~= nil then
+      for p, l in ipairs(shown) do
+        if l == choice then
+          pos = p
+          break
         end
       end
-      local idx = pos and order[pos] or nil
-      if custom then
-        answer(items[idx or 0], idx)
-      else
-        answer(idx == 1)
-      end
     end
-  )
+    local idx = pos and order[pos] or nil
+    if custom then
+      answer(items[idx or 0], idx)
+    else
+      answer(idx == 1)
+    end
+  end)
 end
 
 --- Show a question and call `opts.on_answer(answer)` once. The options are those of `kit.confirm`
@@ -409,7 +427,7 @@ function M.input(opts, cb)
     end
     answer(value)
   end
-  local prompt = nul_safe(tostring(opts.prompt or opts.title or ""))
+  local prompt = native_text(opts.prompt or opts.title)
   local asked, err = pcall(function()
     if opts.secret then
       -- vim.ui.input has no masking: the prompt of the command line does.

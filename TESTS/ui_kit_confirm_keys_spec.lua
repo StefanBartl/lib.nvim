@@ -213,6 +213,28 @@ return function(_)
     type_keys("d")
     eq(got, "Delete", "ask with a choices string answers the label, not false")
 
+    -- a button labelled with a digit owns that digit, whatever its position (a 1-5 scale after "Skip"/"Stop")
+    local scale = "none"
+    kit.confirm({
+      question = "Value?",
+      choices = { "Skip", "Stop", "1", "2", "3", "4", "5" },
+      on_answer = function(v)
+        scale = v
+      end,
+    })
+    type_keys("5")
+    eq(scale, "5", "the key 5 picks the button 5, not the fifth button")
+    scale = "none"
+    kit.confirm({
+      question = "Value?",
+      choices = { "Skip", "Stop", "1", "2", "3", "4", "5" },
+      on_answer = function(v)
+        scale = v
+      end,
+    })
+    type_keys("2")
+    eq(scale, "2", "and 2 the button 2, not Stop")
+
     -- kit.prompt with a choices string uses the button dialog too, not a Yes/No list
     local prompted = "none"
     kit.prompt({

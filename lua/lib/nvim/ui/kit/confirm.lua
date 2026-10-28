@@ -417,6 +417,13 @@ local function hotkeys(labels, marks, custom)
     take("y", 1)
     take("n", 2)
   end
+  -- A button labelled with a single digit owns that digit (a 1-5 scale: `5` is the button "5"),
+  -- whatever its position; the other digits count the buttons.
+  for i, label in ipairs(labels) do
+    if type(label) == "string" and label:match("^[1-9]$") and not keys[label] then
+      keys[label] = i
+    end
+  end
   for i = 1, math.min(#labels, 9) do
     keys[tostring(i)] = keys[tostring(i)] or i
   end
