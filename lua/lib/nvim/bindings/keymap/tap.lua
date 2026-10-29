@@ -79,6 +79,13 @@ local layers = {}
 ---recording grows; `0` or `math.huge` for no limit.
 M.max_events = 50000
 
+---Lua patterns for source paths that are not callers: instrumentation that wraps a function and
+---calls it on (a telemetry hook around lib.nvim's `register`) would otherwise be named as the
+---place every binding came from. A frame whose file matches one is looked past, like Neovim's own.
+---Paths use forward slashes. Empty by default; a config that has such a hook adds its pattern.
+---@type string[]
+M.skip = {}
+
 ---@type table<string, function>|nil
 local originals
 ---@type table<string, function>|nil
@@ -116,6 +123,21 @@ local function is_vim_keymap(src)
 end
 
 ---@internal
+---@param path string|nil  # A source path with forward slashes, nil for a chunk without a file.
+---@return boolean
+local function skipped(path)
+  if not path then
+    return false
+  end
+  for _, pattern in ipairs(M.skip) do
+    if path:find(pattern) then
+      return true
+    end
+  end
+  return false
+end
+
+---@internal
 --- Where the binding call really came from: the first stack frame that is
 --- neither this file, nor Neovim's `vim/keymap.lua`, nor lib.nvim's own keymap
 --- wrappers (those only report `via = "lib"`).
@@ -139,8 +161,8 @@ local function origin()
     local src = info.source
     if src ~= SELF and src ~= WRAPPER and src ~= "=[C]" then
       local path = src:sub(1, 1) == "@" and src:sub(2):gsub("\\", "/") or nil
-      if is_vim_keymap(src) then
-        -- Neovim's own wrapper: look further out.
+      if is_vim_keymap(src) or skipped(path) then
+        -- Neovim's own wrapper, or instrumentation listed in `M.skip`: look further out.
       elseif path and path:find("/lua/lib/nvim/bindings/keymap/[%w_]+%.lua$") then
         via = "lib"
         last_lib = level

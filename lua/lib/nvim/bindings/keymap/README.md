@@ -412,6 +412,16 @@ mode and buffer scope with no deletion in between. What is not:
   deleted it is **not** benign, however alike the descriptions are: it is dead,
   and the plugin it stands for is never lazy-loaded through that key.
 
+The source of a binding is the first frame after lib.nvim's own keymap frames
+(for a plain `vim.keymap.set`, the first outside Neovim's). Instrumentation that
+wraps a function and calls it on -- a telemetry hook around `register` -- would
+be named as the caller of everything; list its file in `tap.skip` (Lua patterns
+on the forward-slash path, empty by default) and the tap looks past it:
+
+```lua
+tap.skip = { "/runtime%-analysis%.nvim/lua/runtime%-analysis/telemetry/" }
+```
+
 The recording stops at `tap.max_events` (default 50000, about 25 MB; a long
 session binds buffer-local maps on every attach). `tap.truncated()` says so, and
 `conflicts({ scope = "full" })` adds a note: a clean answer after that proves

@@ -488,6 +488,45 @@ return function(H)
     end
   end
 
+  -- Instrumentation that wraps lib.nvim's own API and calls it on (so it sits *outside* lib's frames,
+  -- where no rule can tell it from a real caller) is named as the source unless `tap.skip` lists it.
+  do
+    local dir = vim.fn.tempname()
+    vim.fn.mkdir(dir, "p")
+    local path = dir .. "/outer_hook.lua"
+    local f = assert(io.open(path, "w"))
+    f:write(
+      "local target = ...\nreturn function(...)\n  local res = target(...)\n  return res\nend\n"
+    )
+    f:close()
+    local hooked = assert(loadfile(path))(keymap.set)
+    local passed, err = pcall(function()
+      with_tap(function()
+        hooked("n", "<M-h>", noop, { record = false }, "lib one")
+        local e = tap.log()[1]
+        ok(
+          e.source:find("outer_hook.lua", 1, true) ~= nil,
+          "without a skip pattern the wrapper is the caller: " .. tostring(e.source)
+        )
+
+        tap.clear()
+        tap.skip = { "/outer_hook%.lua$" }
+        hooked("n", "<M-h>", function() end, { record = false }, "lib two")
+        e = tap.log()[1]
+        ok(
+          e.source:find("keymap_tap_spec.lua", 1, true) ~= nil,
+          "with its pattern in tap.skip the real caller is: " .. tostring(e.source)
+        )
+        unbind("n", "<M-h>")
+      end)
+    end)
+    tap.skip = {}
+    vim.fn.delete(dir, "rf")
+    if not passed then
+      error(err, 0)
+    end
+  end
+
   -- ---------------------------------------------- pure over a given list
 
   do
