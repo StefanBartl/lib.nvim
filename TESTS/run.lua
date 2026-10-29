@@ -65,6 +65,8 @@ local specs = {
   "usercmd_registry_spec.lua",
   "bindings_audit_spec.lua",
   "keymap_portability_spec.lua",
+  "keymap_tap_spec.lua",
+  "keymap_runtime_spec.lua",
   "dev_duplicates_spec.lua",
   "dev_notify_scan_spec.lua",
   "dev_deprecations_spec.lua",

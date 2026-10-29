@@ -80,12 +80,27 @@
 ---@field direct? boolean                 # Came from a plain `set()` rather than `register()`.
 ---@field buffer? integer|boolean         # Buffer-local scope: the real buffer number (`true`/`0` are resolved when recorded), nil/false = global.
 ---@field src? string                     # "file:line" of the call, for a direct entry.
+---@field source? string                  # "file:line" of the call, for an entry the keymap tap recorded.
+---@field via? Lib.Keymap.Via             # How the tap saw it set: through lib.nvim, lazy.nvim, or a raw call.
 
 --- One `lhs` claimed by more than one registered plugin.
 ---@class Lib.Keymap.Conflict
 ---@field mode string
 ---@field lhs string
 ---@field claimants Lib.Keymap.Registered[]
+---@field benign? string                  # Set by the tap for a collision in form only (`"lazy-stub"`).
+
+---Options for `conflicts()`.
+---@class Lib.Keymap.ConflictsOpts
+---@field scope? "registered"|"full"      # Default "registered": only what lib.nvim bound. "full" adds the tap's recording.
+---@field benign? boolean                 # "full" only: also list the benign ones (lazy.nvim placeholders).
+
+---How a `conflicts()` answer was reached.
+---@class Lib.Keymap.ConflictsInfo
+---@field scope "registered"|"full"
+---@field tap_installed? boolean          # "full" only.
+---@field benign_hidden integer           # Benign collisions left out of the list.
+---@field notes string[]                  # Caveats the reader must not miss (e.g. the tap was not installed).
 
 ---@class Lib.Keymap : Lib.Map
 ---@field set fun(modes: string|string[], lhs: string, rhs: string|function, opts: Lib.Map.Opts|nil, desc: string?): nil
@@ -94,9 +109,10 @@
 --- surface is the overloaded `registered` in `bindings.keymap`, which is
 --- what `require()` resolves to.
 ---@field registered fun(plugin: string|nil): table<string, Lib.Keymap.Registered[]>|Lib.Keymap.Registered[] # Fresh list(s); the entries are the live records shared with the registry (read-only by contract).
----@field conflicts fun(): Lib.Keymap.Conflict[]
----@field conflict_lines fun(): string[]
----@field create_usercmd fun(name: string|nil): nil
+---@field conflicts fun(opts?: Lib.Keymap.ConflictsOpts): Lib.Keymap.Conflict[], Lib.Keymap.ConflictsInfo
+---@field conflict_lines fun(opts?: Lib.Keymap.ConflictsOpts): string[]
+---@field runtime_lines fun(what?: "defaults"|"duplicates"): string[]
+---@field create_usercmd fun(name: string|nil, runtime_name: string|nil): nil
 ---@field forget fun(plugin: string|nil): integer
 ---@field cheatsheet fun(plugin: string, opts?: Lib.Keymap.CheatsheetOpts): Lib.Keymap.Cheatsheet # `g?` lines + highlight spans from what the plugin really has bound (see `cheatsheet.lua`).
 

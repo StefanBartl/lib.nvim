@@ -1,0 +1,509 @@
+-- TESTS/keymap_tap_spec.lua — lib.nvim.bindings.keymap.tap / .lhs, and conflicts({ scope = "full" })
+---@diagnostic disable: need-check-nil
+
+return function(H)
+  local eq, ok = H.eq, H.ok
+
+  local tap = require("lib.nvim.bindings.keymap.tap")
+  local lhs = require("lib.nvim.bindings.keymap.lhs")
+  local keymap = require("lib.nvim.bindings.keymap")
+  local registry = require("lib.nvim.bindings.keymap.registry")
+
+  local api = vim.api
+  -- What the API looked like before this spec touched anything: the last line of
+  -- defence, because the runner shares one Neovim between all specs.
+  local pristine = {
+    nvim_set_keymap = api.nvim_set_keymap,
+    nvim_buf_set_keymap = api.nvim_buf_set_keymap,
+    nvim_del_keymap = api.nvim_del_keymap,
+    nvim_buf_del_keymap = api.nvim_buf_del_keymap,
+  }
+  ok(not tap.is_installed(), "the tap is not installed when the spec starts")
+
+  ---Run `fn` with the tap installed and an empty recording; always put the API
+  ---back and drop the recording, whatever `fn` does.
+  ---@param fn fun()
+  local function with_tap(fn)
+    tap.clear()
+    tap.install()
+    local passed, err = pcall(fn)
+    tap.uninstall()
+    tap.clear()
+    for name, f in pairs(pristine) do
+      api[name] = f
+    end
+    if not passed then
+      error(err, 0)
+    end
+  end
+
+  ---@param mode string|string[]
+  ---@param key string
+  ---@param buf? integer
+  local function unbind(mode, key, buf)
+    pcall(vim.keymap.del, mode, key, { buffer = buf })
+  end
+
+  local function noop() end
+
+  -- ------------------------------------------------------------- lhs.lua
+
+  eq(lhs.normalize("<M-h>"), lhs.normalize("<A-h>"), "<M-h> and <A-h> are one key")
+  eq(lhs.normalize("<C-K>"), lhs.normalize("<C-k>"), "<C-K> and <C-k> are one key")
+  ok(lhs.normalize("<M-h>") ~= lhs.normalize("<M-j>"), "different keys stay different")
+  eq(lhs.normalize(42), "42", "a non-string lhs does not raise")
+  eq(table.concat(lhs.modes(""), ""), "nxso", [[mode "" stands for n, x, s, o]])
+  eq(table.concat(lhs.modes("v"), ""), "xs", [[mode "v" stands for x, s]])
+  eq(table.concat(lhs.modes("!"), ""), "ic", [[mode "!" stands for i, c]])
+  eq(table.concat(lhs.modes({ "n", "v" }), ""), "nxs", "a list is expanded without duplicates")
+  eq(lhs.scope(nil), "*", "global scope")
+  eq(lhs.scope(7), "7", "buffer scope")
+
+  -- --------------------------------------------- one call, one event (guard)
+  --
+  -- `vim.keymap.set` ends in `nvim_set_keymap`; a tap that wrapped both levels
+  -- counted every binding twice (505 of 520 keys were false alarms).
+
+  with_tap(function()
+    vim.keymap.set("n", "<M-F9>", noop, { desc = "one" })
+    local log = tap.log()
+    eq(#log, 1, "one vim.keymap.set is exactly one event")
+    eq(log[1].op, "set", "it is a set")
+    eq(log[1].mode, "n", "with its mode")
+    eq(log[1].rhs_kind, "function", "a callback is recorded as a function")
+    eq(log[1].desc, "one", "and its description")
+    ok(
+      log[1].source:find("keymap_tap_spec.lua:%d+$") ~= nil,
+      "the source is this spec, not vim/keymap.lua: " .. tostring(log[1].source)
+    )
+    eq(log[1].via, "raw", "a plain vim.keymap.set is raw")
+    unbind("n", "<M-F9>")
+
+    tap.clear()
+    vim.keymap.set({ "n", "x" }, "<M-F9>", noop)
+    eq(#tap.log(), 2, "a list of two modes is two events")
+    vim.keymap.del({ "n", "x" }, "<M-F9>")
+    eq(#tap.log(), 4, "and the delete of two modes is two more")
+
+    tap.clear()
+    vim.keymap.set("", "<M-F9>", ":echo<CR>")
+    eq(#tap.log(), 4, [[mode "" is n, x, s, o]])
+    vim.keymap.del("", "<M-F9>")
+  end)
+
+  -- Neovim stamps a Lua mapping with the script that set it. The tap's wrapper
+  -- must not become that script.
+  with_tap(function()
+    vim.keymap.set("n", "<M-F3>", noop, { desc = "provenance" })
+    api.nvim_set_keymap("n", "<M-F2>", ":echo<CR>", { desc = "provenance, api" })
+    for _, key in ipairs({ "<M-F3>", "<M-F2>" }) do
+      local found
+      for _, e in ipairs(require("lib.nvim.bindings.keymap.runtime").snapshot()) do
+        if e.key == key then
+          found = e
+        end
+      end
+      ok(found ~= nil, key .. " is live")
+      ok(
+        found.source ~= nil and found.source:find("keymap_tap_spec.lua", 1, true) ~= nil,
+        key .. " is attributed to the spec, not to the tap: " .. tostring(found.source)
+      )
+    end
+    unbind("n", "<M-F3>")
+    unbind("n", "<M-F2>")
+  end)
+
+  -- ----------------------------------------------------------- collisions
+  --
+  -- Positive case first: each check below is proven to fire on a known
+  -- collision before its negative twin is believed.
+
+  with_tap(function()
+    vim.keymap.set("n", "<M-h>", noop, { desc = "first" })
+    vim.keymap.set("n", "<M-h>", function() end, { desc = "second" })
+    local c = tap.collisions()
+    eq(#c, 1, "two raw vim.keymap.set on one key and mode are one collision")
+    eq(c[1].mode, "n", "in mode n")
+    eq(c[1].lhs, "<M-h>", "on <M-h>")
+    eq(#c[1].claimants, 2, "with two claimants")
+    eq(c[1].claimants[1].desc, "first", "the earlier binding first")
+    eq(c[1].claimants[2].desc, "second", "the winner last")
+    eq(c[1].claimants[1].via, "raw", "each says how it was set")
+    ok(c[1].claimants[1].source ~= c[1].claimants[2].source, "and from where")
+    eq(c[1].benign, nil, "a real collision is not benign")
+    unbind("n", "<M-h>")
+  end)
+
+  with_tap(function()
+    vim.keymap.set("n", "<M-h>", noop, { desc = "via keymap.set" })
+    api.nvim_set_keymap("n", "<M-h>", ":echo 1<CR>", { desc = "via the api" })
+    eq(#tap.collisions(), 1, "vim.keymap.set and nvim_set_keymap on one key are one collision")
+    unbind("n", "<M-h>")
+  end)
+
+  with_tap(function()
+    local buf = api.nvim_create_buf(false, true)
+    api.nvim_buf_set_keymap(buf, "n", "<M-h>", ":echo 1<CR>", {})
+    api.nvim_buf_set_keymap(buf, "n", "<M-h>", ":echo 2<CR>", {})
+    eq(#tap.collisions(), 1, "nvim_buf_set_keymap twice in one buffer collides")
+    api.nvim_buf_delete(buf, { force = true })
+  end)
+
+  with_tap(function()
+    vim.keymap.set("n", "<M-h>", noop, { desc = "alt" })
+    vim.keymap.set("n", "<A-h>", noop, { desc = "alt, spelled differently" })
+    local c = tap.collisions()
+    eq(#c, 1, "<M-h> and <A-h> are the same key")
+    eq(c[1].lhs, "<M-h>", "reported under the canonical spelling")
+    eq(c[1].claimants[2].lhs, "<A-h>", "while each claimant keeps its own")
+    unbind("n", "<M-h>")
+  end)
+
+  with_tap(function()
+    vim.keymap.set("n", "<C-K>", noop)
+    vim.keymap.set("n", "<C-k>", noop, { desc = "x" })
+    eq(#tap.collisions(), 1, "<C-K> and <C-k> are the same key")
+    unbind("n", "<C-k>")
+  end)
+
+  with_tap(function()
+    vim.keymap.set("n", "<M-h>", noop)
+    vim.keymap.set("x", "<M-h>", noop)
+    vim.keymap.set("i", "<M-h>", noop)
+    eq(#tap.collisions(), 0, "the same key in another mode is not a collision")
+    unbind({ "n", "x", "i" }, "<M-h>")
+  end)
+
+  with_tap(function()
+    vim.keymap.set("n", "<M-h>", noop, { desc = "old" })
+    vim.keymap.del("n", "<M-h>")
+    vim.keymap.set("n", "<M-h>", function() end, { desc = "new" })
+    eq(#tap.collisions(), 0, "a delete in between is a re-bind")
+    vim.keymap.set("n", "<M-h>", function() end, { desc = "newer" })
+    eq(#tap.collisions(), 1, "but binding again after that collides with the re-bind")
+    unbind("n", "<M-h>")
+
+    tap.clear()
+    api.nvim_set_keymap("n", "<M-h>", ":echo 1<CR>", {})
+    api.nvim_del_keymap("n", "<M-h>")
+    api.nvim_set_keymap("n", "<M-h>", ":echo 2<CR>", {})
+    eq(#tap.collisions(), 0, "nvim_del_keymap in between counts as well")
+    unbind("n", "<M-h>")
+  end)
+
+  with_tap(function()
+    local a = api.nvim_create_buf(false, true)
+    local b = api.nvim_create_buf(false, true)
+    vim.keymap.set("n", "<M-h>", noop, { desc = "global" })
+    vim.keymap.set("n", "<M-h>", noop, { buffer = a, desc = "local a" })
+    vim.keymap.set("n", "<M-h>", function() end, { buffer = b, desc = "local b" })
+    eq(#tap.collisions(), 0, "buffer-local and global, or two buffers, do not meet")
+    vim.keymap.set("n", "<M-h>", function() end, { buffer = a, desc = "local a again" })
+    eq(#tap.collisions(), 1, "two bindings in one buffer do")
+    unbind("n", "<M-h>")
+    api.nvim_buf_delete(a, { force = true })
+    api.nvim_buf_delete(b, { force = true })
+  end)
+
+  with_tap(function()
+    local buf = api.nvim_create_buf(false, true)
+    api.nvim_set_current_buf(buf)
+    vim.keymap.set("n", "<M-h>", noop, { buffer = true, desc = "true" })
+    vim.keymap.set("n", "<M-h>", function() end, { buffer = 0, desc = "zero" })
+    eq(#tap.collisions(), 1, "buffer = true and buffer = 0 both mean the current buffer")
+    eq(tap.collisions()[1].claimants[1].buffer, buf, "recorded as the real buffer number")
+    api.nvim_buf_delete(buf, { force = true })
+  end)
+
+  -- The same call site binding the same thing again is a re-bind (a FileType
+  -- autocmd firing twice, a :source), whatever new closure it creates.
+  with_tap(function()
+    local function bind(desc)
+      vim.keymap.set("n", "<M-h>", function() end, { desc = desc })
+    end
+    bind("same")
+    bind("same")
+    eq(#tap.collisions(), 0, "the same site, description and function definition is a re-bind")
+    bind("other")
+    eq(#tap.collisions(), 1, "another description from the same helper is a collision")
+    unbind("n", "<M-h>")
+  end)
+
+  -- ----------------------------------------------------------- lazy stubs
+
+  do
+    local dir = vim.fn.tempname() .. "/lazy/core/handler"
+    vim.fn.mkdir(dir, "p")
+    local path = dir .. "/keys.lua"
+    local f = assert(io.open(path, "w"))
+    f:write(
+      "return function(mode, key, desc)\n  vim.keymap.set(mode, key, function() end, { desc = desc })\nend\n"
+    )
+    f:close()
+    local lazy_set = assert(loadfile(path))()
+
+    with_tap(function()
+      lazy_set("n", "<M-h>", "Find files")
+      vim.keymap.set("n", "<M-h>", function() end, { desc = "Find files" })
+      local c = tap.collisions()
+      eq(#c, 1, "a lazy placeholder followed by the real mapping still shows up in the raw list")
+      eq(c[1].benign, "lazy-stub", "but flagged as benign")
+      eq(c[1].claimants[1].via, "lazy", "the placeholder is recognised by its source file")
+      unbind("n", "<M-h>")
+    end)
+
+    with_tap(function()
+      lazy_set("n", "<M-h>", "[plug.nvim] Find files")
+      vim.keymap.set("n", "<M-h>", function() end, { desc = "plug: [plug.nvim] Find files" })
+      local c = tap.collisions()
+      eq(#c, 1, "a lazy placeholder and a register()-style mapping with a plugin prefix")
+      eq(c[1].benign, "lazy-stub", "are the same description")
+      unbind("n", "<M-h>")
+    end)
+
+    with_tap(function()
+      lazy_set("n", "<M-h>", "Find files")
+      vim.keymap.set("n", "<M-h>", function() end, { desc = "Something else entirely" })
+      local c = tap.collisions()
+      eq(#c, 1, "a lazy mapping and an unrelated one collide")
+      eq(c[1].benign, nil, "and that is not benign: the descriptions differ")
+      unbind("n", "<M-h>")
+    end)
+
+    vim.fn.delete(vim.fn.fnamemodify(dir, ":h:h:h"), "rf")
+  end
+
+  -- ---------------------------------------------------- errors pass through
+
+  do
+    local function fail(f, ...)
+      local passed, err = pcall(f, ...)
+      eq(passed, false, "the call must fail")
+      return err
+    end
+
+    local plain_set = fail(vim.keymap.set, "zz", "<M-h>", "x")
+    local plain_api = fail(api.nvim_set_keymap, "zz", "<M-h>", "x", {})
+    local plain_del = fail(vim.keymap.del, "n", "<M-F8>")
+
+    with_tap(function()
+      eq(
+        fail(vim.keymap.set, "zz", "<M-h>", "x"),
+        plain_set,
+        "vim.keymap.set raises the same message"
+      )
+      eq(
+        fail(api.nvim_set_keymap, "zz", "<M-h>", "x", {}),
+        plain_api,
+        "nvim_set_keymap raises the same message"
+      )
+      eq(
+        fail(vim.keymap.del, "n", "<M-F8>"),
+        plain_del,
+        "deleting a missing mapping raises the same message"
+      )
+      eq(#tap.log(), 0, "a call that failed leaves no event")
+      vim.keymap.set("n", "<M-h>", noop)
+      vim.keymap.set("n", "<M-h>", function() end, { desc = "b" })
+      eq(#tap.collisions(), 1, "the tap still works after the failures")
+      unbind("n", "<M-h>")
+    end)
+  end
+
+  -- -------------------------------------------------- install / uninstall
+
+  do
+    tap.clear()
+    eq(tap.install(), true, "the first install installs")
+    eq(tap.install(), false, "the second one does nothing")
+    ok(tap.is_installed(), "installed")
+    ok(api.nvim_set_keymap ~= pristine.nvim_set_keymap, "and the API is wrapped")
+    local restored, left = tap.uninstall()
+    eq(restored, true, "uninstall restores")
+    eq(#left, 0, "everything")
+    ok(not tap.is_installed(), "no longer installed")
+    for name, f in pairs(pristine) do
+      ok(api[name] == f, name .. " is the original function again")
+    end
+    vim.keymap.set("n", "<M-F9>", noop)
+    eq(#tap.log(), 0, "nothing is recorded after uninstall")
+    unbind("n", "<M-F9>")
+
+    -- A foreign wrapper on top is not torn out; the tap steps aside.
+    tap.install()
+    local ours = api.nvim_set_keymap
+    local calls = 0
+    api.nvim_set_keymap = function(...)
+      calls = calls + 1
+      return ours(...)
+    end
+    local foreign = api.nvim_set_keymap
+    local restored2, left2 = tap.uninstall()
+    eq(restored2, false, "uninstall reports what it could not restore")
+    eq(left2[1], "nvim_set_keymap", "naming it")
+    ok(api.nvim_set_keymap == foreign, "and leaves the other wrapper in place")
+    vim.keymap.set("n", "<M-F9>", noop)
+    ok(calls > 0, "which keeps working")
+    eq(#tap.log(), 0, "while the stopped tap records nothing")
+    unbind("n", "<M-F9>")
+    for name, f in pairs(pristine) do
+      api[name] = f
+    end
+    tap.clear()
+  end
+
+  -- ------------------------------------------------------------------ via
+
+  with_tap(function()
+    keymap.set("n", "<M-h>", noop, { record = false }, "lib one")
+    keymap("n", "<M-h>", function() end, { record = false }, "lib two")
+    local c = tap.collisions()
+    eq(#c, 1, "two lib.nvim keymap.set calls on one key collide")
+    eq(c[1].claimants[1].via, "lib", "recognised as coming through lib.nvim")
+    ok(
+      c[1].claimants[1].source:find("keymap_tap_spec.lua", 1, true) ~= nil,
+      "with the caller as source, not lib.nvim's wrapper"
+    )
+    unbind("n", "<M-h>")
+  end)
+
+  -- ---------------------------------------------- pure over a given list
+
+  do
+    local function ev(op, desc, key, fp)
+      return {
+        op = op,
+        mode = "n",
+        lhs = key,
+        key = key,
+        desc = desc,
+        rhs_kind = "none",
+        source = "x:1",
+        via = "raw",
+        fp = fp or (op .. (desc or "")),
+      }
+    end
+    eq(#tap.collisions({}), 0, "an empty recording has no collisions")
+    eq(
+      #tap.collisions({ ev("set", "a", "q"), ev("set", "b", "q"), ev("set", "c", "q") }),
+      1,
+      "three bindings are one collision with three claimants"
+    )
+    local with_delete = { ev("set", "a", "q"), ev("set", "b", "q") }
+    with_delete[#with_delete + 1] = ev("del", nil, "q")
+    with_delete[#with_delete + 1] = ev("set", "c", "q")
+    eq(#tap.collisions(with_delete), 1, "a delete ends a run, it does not erase it")
+    eq(
+      #tap.collisions({ ev("set", "a", "q"), ev("del", nil, "q"), ev("set", "b", "q") }),
+      0,
+      "set, delete, set is nothing"
+    )
+  end
+
+  -- ------------------------------------- conflicts({ scope = "full" })
+
+  do
+    keymap.forget()
+    -- Default scope: the tap's recording is not consulted at all.
+    with_tap(function()
+      vim.keymap.set("n", "<M-h>", noop, { desc = "raw 1" })
+      vim.keymap.set("n", "<M-h>", function() end, { desc = "raw 2" })
+      local registered_only, info = registry.conflicts()
+      local found = false
+      for _, c in ipairs(registered_only) do
+        found = found or c.lhs == "<M-h>"
+      end
+      ok(not found, "scope registered does not see raw bindings")
+      eq(info.scope, "registered", "and says which scope it answered")
+
+      local full, finfo = registry.conflicts({ scope = "full" })
+      local hit
+      for _, c in ipairs(full) do
+        if c.lhs == "<M-h>" and c.mode == "n" then
+          hit = c
+        end
+      end
+      ok(hit ~= nil, "scope full reports the raw collision")
+      eq(finfo.tap_installed, true, "knowing the tap was there")
+      eq(#finfo.notes, 0, "so there is nothing to caveat")
+      ok(hit.claimants[1].source ~= nil, "each claimant says where it came from")
+      unbind("n", "<M-h>")
+    end)
+
+    -- Without the tap the answer must say it cannot see overwritten mappings.
+    tap.clear()
+    vim.keymap.set("n", "<M-h>", noop, { desc = "raw 1" })
+    vim.keymap.set("n", "<M-h>", function() end, { desc = "raw 2" })
+    local full, finfo = registry.conflicts({ scope = "full" })
+    eq(finfo.tap_installed, false, "without the tap, the answer says so")
+    ok(#finfo.notes >= 1 and finfo.notes[1]:find("not installed", 1, true) ~= nil, "in a note")
+    for _, c in ipairs(full) do
+      ok(not (c.lhs == "<M-h>" and c.mode == "n"), "and the overwritten raw mapping is not found")
+    end
+    unbind("n", "<M-h>")
+
+    -- A lib.nvim collision is listed once, not once per source of knowledge.
+    with_tap(function()
+      keymap("n", "<M-h>", noop, {}, "lib one")
+      keymap("n", "<M-h>", function() end, {}, "lib two")
+      local both = registry.conflicts({ scope = "full" })
+      local n = 0
+      for _, c in ipairs(both) do
+        if c.lhs == "<M-h>" and c.mode == "n" then
+          n = n + 1
+        end
+      end
+      eq(n, 1, "a collision known to registry and tap is one row")
+      unbind("n", "<M-h>")
+    end)
+    keymap.forget()
+
+    -- Benign collisions are counted, and shown on request.
+    with_tap(function()
+      local dir = vim.fn.tempname() .. "/lazy/core/handler"
+      vim.fn.mkdir(dir, "p")
+      local f = assert(io.open(dir .. "/keys.lua", "w"))
+      f:write(
+        "return function(mode, key, desc)\n  vim.keymap.set(mode, key, function() end, { desc = desc })\nend\n"
+      )
+      f:close()
+      assert(loadfile(dir .. "/keys.lua"))()("n", "<M-h>", "Find files")
+      vim.keymap.set("n", "<M-h>", function() end, { desc = "Find files" })
+      local hidden, hinfo = registry.conflicts({ scope = "full" })
+      for _, c in ipairs(hidden) do
+        ok(not (c.lhs == "<M-h>" and c.mode == "n"), "the lazy placeholder is left out")
+      end
+      eq(hinfo.benign_hidden, 1, "but counted")
+      local shown = registry.conflicts({ scope = "full", benign = true })
+      local seen = false
+      for _, c in ipairs(shown) do
+        seen = seen or (c.lhs == "<M-h>" and c.benign == "lazy-stub")
+      end
+      ok(seen, "and listed with opts.benign")
+      unbind("n", "<M-h>")
+      vim.fn.delete(vim.fn.fnamemodify(dir, ":h:h:h"), "rf")
+    end)
+  end
+
+  -- ------------------------------------------------- the report lines
+
+  with_tap(function()
+    vim.keymap.set("n", "<M-h>", noop, { desc = "raw 1" })
+    vim.keymap.set("n", "<M-h>", function() end, { desc = "raw 2" })
+    local text = table.concat(keymap.conflict_lines({ scope = "full" }), "\n")
+    ok(text:find("<M-h>", 1, true) ~= nil, "the full report names the key")
+    ok(text:find("[raw]", 1, true) ~= nil, "and how each binding was made")
+    ok(text:find("keymap_tap_spec.lua", 1, true) ~= nil, "and where")
+    unbind("n", "<M-h>")
+  end)
+
+  do
+    local text = table.concat(keymap.conflict_lines({ scope = "full" }), "\n")
+    ok(text:find("not installed", 1, true) ~= nil, "the full report without a tap says so")
+  end
+
+  eq(tap.is_installed(), false, "the spec leaves the tap uninstalled")
+  for name, f in pairs(pristine) do
+    ok(api[name] == f, name .. " is original at the end of the spec")
+  end
+end

@@ -320,3 +320,110 @@ Buffer scope is part of the identity. A buffer-local binding and a global one on
 the same key are not a conflict — the local one shadows the global one inside
 its buffer, and that is the point of it. Bucketing them together would report
 every buffer-local preset, and a report that cries wolf is one nobody reads.
+
+## The two scopes of `conflicts()`
+
+`conflicts()` answers for what lib.nvim bound, because that is all it can
+know. A raw `vim.keymap.set`, an `nvim_set_keymap`, a lazy.nvim `keys` entry
+never passed through `register`/`set`, and `nvim_get_keymap()` cannot fill the
+gap: it reports the **winner** of a key, so a mapping that was overwritten is
+simply gone. Two bindings on `<M-h>` in the same mode look like one.
+
+So there are two scopes:
+
+| scope | sees | needs |
+| --- | --- | --- |
+| `"registered"` (default) | only bindings made with `keymap.set` / `register` | nothing |
+| `"full"` | those, plus raw and lazy.nvim bindings, **including overwritten ones**; and a live image of the effective mappings (Neovim's own defaults included) | the **tap**, installed early |
+
+```lua
+keymap.conflicts()                      -- registered, as ever
+keymap.conflicts({ scope = "full" })    -- + whatever the tap recorded
+```
+
+The second result describes how the answer was reached:
+
+```lua
+local conflicts, info = keymap.conflicts({ scope = "full" })
+-- info.scope, info.tap_installed, info.notes (caveats), info.benign_hidden
+```
+
+`full` without an installed tap still answers, from the registry and the live
+state, but says so in `info.notes` — a clean result then means "nothing I could
+see", and overwritten mappings are invisible.
+
+Commands (put `keymap.create_usercmd()` in **your own config**):
+
+| command | |
+| --- | --- |
+| `:LibKeymapConflicts` | scope `registered` |
+| `:LibKeymapConflicts!` | scope `full` |
+| `:LibKeymapRuntime [defaults]` | Neovim's default mappings that were overridden or removed in this session |
+| `:LibKeymapRuntime duplicates` | one action on several keys (by description or target) — candidates only |
+
+### The tap: `keymap.tap`
+
+`require("lib.nvim.bindings.keymap.tap")` wraps the four `vim.api` keymap
+functions and records every call that succeeded: mode, key, buffer, `desc`, and
+the `file:line` it came from (`via = "lib" | "lazy" | "raw"`). It is **opt-in**:
+requiring lib.nvim never installs it.
+
+```lua
+local tap = require("lib.nvim.bindings.keymap.tap")
+tap.install()        -- idempotent; true when this call installed it
+tap.collisions()     -- Lib.Keymap.Conflict[]  (claimants carry source/via, `benign` is set when it is a placeholder)
+tap.log()            -- the raw events;  tap.clear()  forgets them
+tap.uninstall()      -- restores the originals
+```
+
+**It has to be installed before the plugins bind their keys.** Calls made
+earlier are not in the recording, and a plugin that cached
+`vim.api.nvim_set_keymap` in a local before `install()` is not seen at all.
+From the command line, before any config runs:
+
+```sh
+nvim --cmd "lua require('lib.nvim.bindings.keymap.tap').install()"
+```
+
+(with lib.nvim already on the `runtimepath`, e.g. through a `--cmd "set rtp+=…"` first),
+or as the first lines of `init.lua`.
+
+Only the `vim.api` level is wrapped. `vim.keymap.set` ends in exactly these
+calls, so wrapping both would count every binding twice, and wrapping the lower
+level also catches a `vim.keymap.set` that was cached in a local earlier.
+Errors of the original (an invalid mode, a missing mapping) come out unchanged,
+and nothing is recorded for a call that failed.
+
+What is a collision: the same key (compared through Neovim's own canonical
+spelling, so `<M-h>` = `<A-h>` and `<C-K>` = `<C-k>`) bound twice in the same
+mode and buffer scope with no deletion in between. What is not:
+
+- a `del` between the two bindings — that is a re-bind;
+- the same call site binding the same thing again (a `FileType` autocmd firing
+  twice, a `:source`) — a re-bind;
+- a buffer-local and a global mapping, or two buffers — different scopes;
+- lazy.nvim's placeholder for a `keys` entry followed by the real mapping with
+  the same description (a `plugin: ` prefix is ignored): reported with `benign = "lazy-stub"`, and left out of
+  `conflicts({ scope = "full" })` unless `opts.benign` is set (counted in
+  `info.benign_hidden`).
+
+### The live image: `keymap.runtime`
+
+`require("lib.nvim.bindings.keymap.runtime")`:
+
+| function | |
+| --- | --- |
+| `snapshot(opts)` | every effective mapping of n, x, s, o, i, c, t, l: mode, key, `rhs` / callback, `desc`, `sid`/`lnum`, `source` (file of the script that set it), `origin` (`builtin` = Neovim's defaults, `lib` = lib.nvim's registry, `other`); `opts.buffers = true` adds loaded buffers |
+| `pristine_defaults(opts)` | the defaults of a clean `nvim --clean` child, cached per Neovim version under `stdpath("cache")`; `nil, err` when the child cannot run (never raises, never notifies) |
+| `diff_defaults(pristine, live)` | `{ overridden, removed, unchanged }`: a default bound to something else now, or not bound at all (deleted, or set to `false` in a plugin's spec) |
+| `action_duplicates(live)` | candidates for one action on several keys: same normalized description (`[plugin] ` and `plugin: ` prefixes dropped) or same string target in one mode; `<Nop>` and Neovim's own defaults are skipped |
+
+### What none of this covers
+
+- Neovim's **built-in Normal-mode commands** (`dd`, `<C-w>`, `gg`, …) are not
+  mappings. They are neither listed nor compared: `nvim_get_keymap()` does not
+  know them, and neither does this.
+- A mapping overwritten **before the tap was installed**.
+- Buffer-local mappings of buffers that are **not loaded**.
+- `action_duplicates` is a list of candidates; two keys for one action is often
+  intended.

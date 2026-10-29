@@ -424,8 +424,30 @@ end
 ---Not called during registration: a plugin cannot know what a later one will
 ---bind, so the answer is only meaningful once everything has loaded. Meant for
 ---`:checkhealth` and for the config's own drift report.
+---
+---Two scopes:
+---
+--- - `"registered"` (default): only what went through lib.nvim's `register` /
+---   `set`. Unchanged behaviour.
+--- - `"full"`: that, plus every collision the keymap `tap` recorded -- raw
+---   `vim.keymap.set` / `nvim_set_keymap` calls and lazy.nvim `keys` included,
+---   overwritten mappings too. Without an installed tap this has nothing but
+---   the registry to go on, and says so in the second result (`notes`):
+---   `nvim_get_keymap()` only shows the winner of a key, so an overwritten
+---   mapping cannot be found after the fact. lazy.nvim's placeholder for a
+---   `keys` entry is flagged `benign = "lazy-stub"` and left out unless
+---   `opts.benign` is set (the count is in `info.benign_hidden`).
+---
+---The first result is the same list shape as ever; the second describes how
+---the answer was reached.
+---@param opts? Lib.Keymap.ConflictsOpts
 ---@return Lib.Keymap.Conflict[]
-function M.conflicts()
+---@return Lib.Keymap.ConflictsInfo
+function M.conflicts(opts)
+  opts = opts or {}
+  local which = opts.scope or "registered"
+  ---@type Lib.Keymap.ConflictsInfo
+  local info = { scope = which, notes = {}, benign_hidden = 0 }
   ---@type table<string, Lib.Keymap.Registered[]>
   local by_lhs = {}
   -- Over `M.registered()`, not the raw table: a collision between two plain
@@ -463,7 +485,44 @@ function M.conflicts()
   table.sort(out, function(a, b)
     return (a.lhs .. a.mode) < (b.lhs .. b.mode)
   end)
-  return out
+
+  if which == "full" then
+    local tap = require("lib.nvim.bindings.keymap.tap")
+    local lhs_mod = require("lib.nvim.bindings.keymap.lhs")
+    info.tap_installed = tap.is_installed()
+    if not info.tap_installed then
+      if #tap.log() > 0 then
+        info.notes[#info.notes + 1] =
+          "the keymap tap is stopped: collisions up to that point are included, later ones are not seen."
+      else
+        info.notes[#info.notes + 1] = "the keymap tap was not installed: only what lib.nvim bound and "
+          .. "the live state are known, and a mapping that was overwritten is invisible. Install it "
+          .. "before the plugins load: nvim --cmd \"lua require('lib.nvim.bindings.keymap.tap').install()\""
+      end
+    end
+
+    -- A collision the registry already reports is not listed twice; the
+    -- registry's entry names the plugin and action, which is the richer one.
+    ---@type table<string, true>
+    local known = {}
+    for _, c in ipairs(out) do
+      local buffer = c.claimants[1] and c.claimants[1].buffer
+      known[table.concat({ c.mode, lhs_mod.scope(buffer), lhs_mod.normalize(c.lhs) }, "\0")] = true
+    end
+    for _, c in ipairs(tap.collisions()) do
+      local buffer = c.claimants[1] and c.claimants[1].buffer
+      local key = table.concat({ c.mode, lhs_mod.scope(buffer), c.lhs }, "\0")
+      if c.benign and not opts.benign then
+        info.benign_hidden = info.benign_hidden + 1
+      elseif not known[key] then
+        out[#out + 1] = c
+      end
+    end
+    table.sort(out, function(a, b)
+      return (a.lhs .. a.mode) < (b.lhs .. b.mode)
+    end)
+  end
+  return out, info
 end
 
 return M
