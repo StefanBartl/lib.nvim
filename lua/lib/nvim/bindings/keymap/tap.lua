@@ -68,6 +68,17 @@ local wrappers
 local FUNCS = { "nvim_set_keymap", "nvim_buf_set_keymap", "nvim_del_keymap", "nvim_buf_del_keymap" }
 
 ---@internal
+--- Neovim's own `vim/keymap.lua`. Its chunk name depends on the build: a file
+--- (`@.../runtime/lua/vim/keymap.lua`) where the runtime is read from disk, a
+--- bare `vim/keymap` where it is compiled into the binary.
+---@param src string  # `debug.getinfo(...).source`
+---@return boolean
+local function is_vim_keymap(src)
+  local name = src:gsub("^[@=]", ""):gsub("\\", "/")
+  return name == "vim/keymap" or name == "vim/keymap.lua" or name:find("/vim/keymap%.lua$") ~= nil
+end
+
+---@internal
 --- Where the binding call really came from: the first stack frame that is
 --- neither this file, nor Neovim's `vim/keymap.lua`, nor lib.nvim's own keymap
 --- wrappers (those only report `via = "lib"`).
@@ -83,7 +94,7 @@ local function origin()
     local src = info.source
     if src ~= SELF and src ~= WRAPPER and src ~= "=[C]" then
       local path = src:sub(1, 1) == "@" and src:sub(2):gsub("\\", "/") or nil
-      if path and (path == "vim/keymap.lua" or path:find("/vim/keymap%.lua$")) then
+      if is_vim_keymap(src) then
         -- Neovim's own wrapper: look further out.
       elseif path and path:find("/lua/lib/nvim/bindings/keymap/[%w_]+%.lua$") then
         via = "lib"

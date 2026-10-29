@@ -113,6 +113,28 @@ return function(H)
     unbind("n", "<M-F2>")
   end)
 
+  -- Neovim's own keymap code is a file where the runtime sits on disk and a
+  -- bare `vim/keymap` chunk where it is compiled into the binary. Either way it
+  -- is not the caller.
+  with_tap(function()
+    for _, chunkname in ipairs({ "@vim/keymap.lua", "vim/keymap", "=vim/keymap" }) do
+      local inner = assert(
+        load(
+          "return function() vim.api.nvim_set_keymap('n', '<M-F4>', ':echo<CR>', {}) end",
+          chunkname
+        )
+      )()
+      tap.clear()
+      inner()
+      local ev = tap.log()[1]
+      ok(
+        ev ~= nil and ev.source:find("keymap_tap_spec.lua:%d+$") ~= nil,
+        chunkname .. " is skipped as Neovim's own: " .. tostring(ev and ev.source)
+      )
+      unbind("n", "<M-F4>")
+    end
+  end)
+
   -- ----------------------------------------------------------- collisions
   --
   -- Positive case first: each check below is proven to fire on a known
