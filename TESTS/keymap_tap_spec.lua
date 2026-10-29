@@ -264,17 +264,34 @@ return function(H)
     f:close()
     local lazy_set = assert(loadfile(path))()
 
+    -- lazy.nvim binds a placeholder, deletes it before it loads the plugin, binds the real
+    -- mapping, and the plugin then binds its own: the run that follows the deletion is benign.
     with_tap(function()
+      lazy_set("n", "<M-h>", "Find files")
+      unbind("n", "<M-h>")
       lazy_set("n", "<M-h>", "Find files")
       vim.keymap.set("n", "<M-h>", function() end, { desc = "Find files" })
       local c = tap.collisions()
-      eq(#c, 1, "a lazy placeholder followed by the real mapping still shows up in the raw list")
+      eq(#c, 1, "lazy's real mapping followed by the plugin's own still shows up in the raw list")
       eq(c[1].benign, "lazy-stub", "but flagged as benign")
-      eq(c[1].claimants[1].via, "lazy", "the placeholder is recognised by its source file")
+      eq(c[1].claimants[1].via, "lazy", "lazy's mapping is recognised by its source file")
       unbind("n", "<M-h>")
     end)
 
+    -- A placeholder that is overwritten without lazy having deleted it is dead: the plugin it
+    -- stands for is never lazy-loaded through that key. Alike descriptions do not make it benign.
     with_tap(function()
+      lazy_set("n", "<M-j>", "Find files")
+      vim.keymap.set("n", "<M-j>", function() end, { desc = "Find files" })
+      local c = tap.collisions()
+      eq(#c, 1, "a placeholder overwritten by another plugin collides")
+      eq(c[1].benign, nil, "and is not benign, even with the same description")
+      unbind("n", "<M-j>")
+    end)
+
+    with_tap(function()
+      lazy_set("n", "<M-h>", "[plug.nvim] Find files")
+      unbind("n", "<M-h>")
       lazy_set("n", "<M-h>", "[plug.nvim] Find files")
       vim.keymap.set("n", "<M-h>", function() end, { desc = "plug: [plug.nvim] Find files" })
       local c = tap.collisions()
@@ -372,6 +389,53 @@ return function(H)
       api[name] = f
     end
     tap.clear()
+  end
+
+  -- Installing again over the foreign wrapper that blocked the last uninstall: the layer
+  -- that stays in the chain below must stay quiet, or one binding is recorded per layer.
+  do
+    tap.clear()
+    tap.install()
+    local ours = api.nvim_set_keymap
+    api.nvim_set_keymap = function(...)
+      return ours(...)
+    end
+    tap.uninstall()
+    tap.install()
+    tap.clear()
+    vim.keymap.set("n", "<M-F9>", noop)
+    eq(#tap.log(), 1, "one binding is one event after a reinstall over a foreign wrapper")
+    unbind("n", "<M-F9>")
+    tap.uninstall()
+    for name, f in pairs(pristine) do
+      api[name] = f
+    end
+    tap.clear()
+  end
+
+  -- The recording stops at `max_events` and says so (a long session binds buffer-local maps on
+  -- every attach, and 18000 events cost about 9 MB).
+  do
+    local limit = tap.max_events
+    tap.max_events = 3
+    with_tap(function()
+      for i = 1, 5 do
+        vim.keymap.set("n", "<M-F" .. (5 + i) .. ">", noop)
+      end
+      eq(#tap.log(), 3, "the recording stops at max_events")
+      ok(tap.truncated(), "and says so")
+      local _, info = registry.conflicts({ scope = "full" })
+      local told = false
+      for _, note in ipairs(info.notes) do
+        told = told or note:find("stopped recording", 1, true) ~= nil
+      end
+      ok(told, "conflicts() warns that a clean answer proves nothing")
+      for i = 1, 5 do
+        unbind("n", "<M-F" .. (5 + i) .. ">")
+      end
+    end)
+    tap.max_events = limit
+    ok(not tap.truncated(), "clear() lets the recording grow again")
   end
 
   -- ------------------------------------------------------------------ via
@@ -480,6 +544,54 @@ return function(H)
     end)
     keymap.forget()
 
+    ---@param key string
+    ---@param rows Lib.Keymap.Conflict[]
+    ---@return Lib.Keymap.Conflict[]
+    local function rows_of(key, rows)
+      local found = {}
+      for _, c in ipairs(rows) do
+        if c.lhs == key then
+          found[#found + 1] = c
+        end
+      end
+      return found
+    end
+
+    -- Mode shorthands: the registry keeps `""` (n/x/s/o) and `"v"` (x/s) as bound, the tap records
+    -- real modes. `""` used to crash the merge, `"v"` was listed once per real mode on top of the
+    -- registry's own row.
+    with_tap(function()
+      keymap("", "<M-l>", noop, {}, "lib one")
+      keymap("", "<M-l>", function() end, {}, "lib two")
+      local called, rows = pcall(function()
+        return (registry.conflicts({ scope = "full" }))
+      end)
+      ok(called, "the full check survives a collision in the empty mode: " .. tostring(rows))
+      if called then
+        eq(#rows_of("<M-l>", rows), 1, "a collision in mode '' is one row, not one per real mode")
+      end
+      unbind("", "<M-l>")
+
+      keymap("v", "<M-j>", noop, {}, "lib one")
+      keymap("v", "<M-j>", function() end, {}, "lib two")
+      eq(#rows_of("<M-j>", (registry.conflicts({ scope = "full" }))), 1, "and so is one in mode v")
+      unbind("v", "<M-j>")
+    end)
+    keymap.forget()
+
+    -- Two lib.nvim bindings and then a raw one that overwrites both: the registry knows the key
+    -- already, but only the tap has the winner, so its row (three claimants) must not be dropped.
+    with_tap(function()
+      keymap("n", "<M-h>", noop, {}, "lib one")
+      keymap("n", "<M-h>", function() end, {}, "lib two")
+      vim.keymap.set("n", "<M-h>", function() end, { desc = "raw winner" })
+      local rows = rows_of("<M-h>", (registry.conflicts({ scope = "full" })))
+      eq(#rows, 1, "one row for the key")
+      eq(#rows[1].claimants, 3, "and it has the raw mapping that overwrote both")
+      unbind("n", "<M-h>")
+    end)
+    keymap.forget()
+
     -- Benign collisions are counted, and shown on request.
     with_tap(function()
       local dir = vim.fn.tempname() .. "/lazy/core/handler"
@@ -489,7 +601,10 @@ return function(H)
         "return function(mode, key, desc)\n  vim.keymap.set(mode, key, function() end, { desc = desc })\nend\n"
       )
       f:close()
-      assert(loadfile(dir .. "/keys.lua"))()("n", "<M-h>", "Find files")
+      local lazy_set = assert(loadfile(dir .. "/keys.lua"))()
+      lazy_set("n", "<M-h>", "Find files")
+      unbind("n", "<M-h>")
+      lazy_set("n", "<M-h>", "Find files")
       vim.keymap.set("n", "<M-h>", function() end, { desc = "Find files" })
       local hidden, hinfo = registry.conflicts({ scope = "full" })
       for _, c in ipairs(hidden) do

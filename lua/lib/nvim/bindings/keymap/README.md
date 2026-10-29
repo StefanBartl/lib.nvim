@@ -402,10 +402,20 @@ mode and buffer scope with no deletion in between. What is not:
 - the same call site binding the same thing again (a `FileType` autocmd firing
   twice, a `:source`) — a re-bind;
 - a buffer-local and a global mapping, or two buffers — different scopes;
-- lazy.nvim's placeholder for a `keys` entry followed by the real mapping with
-  the same description (a `plugin: ` prefix is ignored): reported with `benign = "lazy-stub"`, and left out of
+- lazy.nvim's own mapping for a `keys` entry followed by the plugin's mapping
+  with the same description (a `plugin: ` prefix is ignored). lazy binds a
+  placeholder, **deletes** it before loading the plugin, binds the real mapping,
+  and the plugin then binds its own, so only a run that *starts right after a
+  deletion* qualifies: reported with `benign = "lazy-stub"`, and left out of
   `conflicts({ scope = "full" })` unless `opts.benign` is set (counted in
-  `info.benign_hidden`).
+  `info.benign_hidden`). A placeholder that is overwritten without lazy having
+  deleted it is **not** benign, however alike the descriptions are: it is dead,
+  and the plugin it stands for is never lazy-loaded through that key.
+
+The recording stops at `tap.max_events` (default 50000, about 25 MB; a long
+session binds buffer-local maps on every attach). `tap.truncated()` says so, and
+`conflicts({ scope = "full" })` adds a note: a clean answer after that proves
+nothing. `tap.clear()` lets it grow again.
 
 ### The live image: `keymap.runtime`
 
@@ -424,6 +434,13 @@ mode and buffer scope with no deletion in between. What is not:
   mappings. They are neither listed nor compared: `nvim_get_keymap()` does not
   know them, and neither does this.
 - A mapping overwritten **before the tap was installed**.
+- Mappings made with **Ex commands** (`:nnoremap`, `:nunmap`, `:nmapclear`,
+  `mapset()`): a Vimscript plugin is invisible to the tap, and an `:nunmap`
+  between two lua bindings is not seen as the re-bind it is.
+- Keys that Neovim 0.12 keeps in **separate slots** although a terminal sends the
+  same byte (`<Tab>`/`<C-i>`, `<CR>`/`<C-m>`, `<Esc>`/`<C-[>`, `<C-@>`/`<Nul>`):
+  they are compared as one key, so the tap may call "overwritten" what Neovim
+  holds as two live mappings.
 - Buffer-local mappings of buffers that are **not loaded**.
 - `action_duplicates` is a list of candidates; two keys for one action is often
   intended.

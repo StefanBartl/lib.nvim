@@ -450,6 +450,10 @@ function M.conflicts(opts)
   local info = { scope = which, notes = {}, benign_hidden = 0 }
   ---@type table<string, Lib.Keymap.Registered[]>
   local by_lhs = {}
+  -- Mode and lhs of each bucket, kept as they were bound: parsing them back out of the bucket key
+  -- loses the empty mode (`""`, the `:map` family), which is a perfectly valid one.
+  ---@type table<string, { mode: string, lhs: string }>
+  local meta = {}
   -- Over `M.registered()`, not the raw table: a collision between two plain
   -- `set()` keymaps was previously invisible here *in principle*, and those
   -- are the majority.
@@ -468,6 +472,7 @@ function M.conflicts(opts)
         do
           local key = mode .. " " .. scope .. " " .. e.lhs
           by_lhs[key] = by_lhs[key] or {}
+          meta[key] = meta[key] or { mode = mode, lhs = e.lhs }
           table.insert(by_lhs[key], e)
         end
       end
@@ -478,8 +483,7 @@ function M.conflicts(opts)
   local out = {}
   for key, entries in pairs(by_lhs) do
     if #entries > 1 then
-      local mode, lhs = key:match("^(%S+) %S+ (.*)$")
-      out[#out + 1] = { mode = mode, lhs = lhs, claimants = entries }
+      out[#out + 1] = { mode = meta[key].mode, lhs = meta[key].lhs, claimants = entries }
     end
   end
   table.sort(out, function(a, b)
@@ -500,22 +504,42 @@ function M.conflicts(opts)
           .. "before the plugins load: nvim --cmd \"lua require('lib.nvim.bindings.keymap.tap').install()\""
       end
     end
+    if tap.truncated() then
+      info.notes[#info.notes + 1] = (
+        "the keymap tap stopped recording at %d events (tap.max_events): bindings after that "
+        .. "point are not in the answer, so a clean result proves nothing."
+      ):format(#tap.log())
+    end
 
     -- A collision the registry already reports is not listed twice; the
     -- registry's entry names the plugin and action, which is the richer one.
-    ---@type table<string, true>
+    -- The registry keeps the modes as bound (`""` stands for n/x/s/o, `"v"` for
+    -- x/s) while the tap records real ones, so a row is known under each real
+    -- mode it stands for.
+    ---@type table<string, { index: integer, same_mode: boolean }>
     local known = {}
-    for _, c in ipairs(out) do
+    for i, c in ipairs(out) do
       local buffer = c.claimants[1] and c.claimants[1].buffer
-      known[table.concat({ c.mode, lhs_mod.scope(buffer), lhs_mod.normalize(c.lhs) }, "\0")] = true
+      for _, m in ipairs(lhs_mod.modes(c.mode)) do
+        known[table.concat({ m, lhs_mod.scope(buffer), lhs_mod.normalize(c.lhs) }, "\0")] = {
+          index = i,
+          same_mode = m == c.mode,
+        }
+      end
     end
     for _, c in ipairs(tap.collisions()) do
       local buffer = c.claimants[1] and c.claimants[1].buffer
       local key = table.concat({ c.mode, lhs_mod.scope(buffer), c.lhs }, "\0")
+      local seen = known[key]
       if c.benign and not opts.benign then
         info.benign_hidden = info.benign_hidden + 1
-      elseif not known[key] then
+      elseif not seen then
         out[#out + 1] = c
+      elseif seen.same_mode and #c.claimants > #out[seen.index].claimants then
+        -- The tap saw a later binding the registry did not (a raw `vim.keymap.set`
+        -- over two lib.nvim ones): that row has the winner, so it replaces the
+        -- registry's.
+        out[seen.index] = c
       end
     end
     table.sort(out, function(a, b)

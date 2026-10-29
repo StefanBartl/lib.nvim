@@ -35,10 +35,16 @@
 --- **Not a collision.** A deletion between two bindings of a key is a re-bind.
 --- The same call site binding the same thing twice (a `FileType` autocmd
 --- firing again, a `:source`) is a re-bind. A buffer-local and a global
---- mapping never meet. And lazy.nvim's placeholder for a `keys` entry,
---- followed by the real mapping with the same description, is a collision in
---- form only: it is reported with `benign = "lazy-stub"` so a caller can
---- filter it.
+--- mapping never meet. And lazy.nvim's own mapping for a `keys` entry,
+--- followed by the plugin's mapping with the same description, is a collision
+--- in form only: it is reported with `benign = "lazy-stub"` so a caller can
+--- filter it. That needs lazy's deletion of its placeholder in between; a
+--- placeholder overwritten without one is dead, and stays a real collision.
+---
+--- **Not seen.** Mappings made with Ex commands (`:nnoremap`, `:nunmap`,
+--- `mapset()`), so a Vimscript plugin is invisible and an `:nunmap` between two
+--- bindings does not count as the re-bind it is. The recording stops at
+--- `M.max_events`; `truncated()` says whether it did.
 ---
 --- Opt-in and never automatic: requiring lib.nvim installs nothing.
 ---@see lib.nvim.bindings.keymap.registry
@@ -56,9 +62,22 @@ local WRAPPER = "=lib.nvim.bindings.keymap.tap"
 ---@type Lib.Keymap.TapEvent[]
 local log = {}
 
----Read by the wrappers (which live in their own chunk, see `make_wrapper`).
----@type { active: boolean }
-local state = { active = false }
+---@type { active: boolean, truncated: boolean }
+local state = { active = false, truncated = false }
+
+---One switch per installed wrapper layer, read by that layer's wrapper (which lives
+---in its own chunk, see `make_wrapper`). A layer that `uninstall()` could not take
+---off the API -- a foreign wrapper sits on top of it -- stays in the call chain
+---for good, and its switch must stay off when a later `install()` puts a new layer
+---on top, or every call would be recorded once per layer.
+---@type { active: boolean }[]
+local layers = {}
+
+---How many events are kept. A long session binds buffer-local maps on every
+---attach (an LSP client alone sets dozens); 18000 events cost about 9 MB. Past
+---the limit the recording stops and `truncated()` says so. Set before the
+---recording grows; `0` or `math.huge` for no limit.
+M.max_events = 50000
 
 ---@type table<string, function>|nil
 local originals
@@ -128,6 +147,18 @@ local function origin()
 end
 
 ---@internal
+--- Whether the recording has reached `max_events` (and remembers that it did).
+---@return boolean
+local function full()
+  local limit = M.max_events
+  if type(limit) == "number" and limit > 0 and #log >= limit then
+    state.truncated = true
+    return true
+  end
+  return false
+end
+
+---@internal
 --- Resolve `0`/`true` ("the current buffer") to the real number at the moment
 --- of binding, so events compare with `==` later.
 ---@param buf integer|boolean|nil
@@ -169,6 +200,9 @@ end
 ---@param opts table|nil
 ---@param buffer integer|nil
 local function on_set(mode, lhs, rhs, opts, buffer)
+  if full() then
+    return
+  end
   opts = type(opts) == "table" and opts or {}
   local src, via = origin()
   local key = lhs_mod.normalize(lhs)
@@ -197,6 +231,9 @@ end
 ---@param lhs string
 ---@param buffer integer|nil
 local function on_del(mode, lhs, buffer)
+  if full() then
+    return
+  end
   local src, via = origin()
   local key = lhs_mod.normalize(lhs)
   for _, m in ipairs(lhs_mod.modes(mode)) do
@@ -284,8 +321,10 @@ end
 ---@param orig function
 ---@return function
 local function make_wrapper(name, orig)
+  local layer = { active = true }
+  layers[#layers + 1] = layer
   local chunk = assert(load(WRAPPER_CODE, WRAPPER))
-  return chunk(orig, HANDLERS[name], state, raise)
+  return chunk(orig, HANDLERS[name], layer, raise)
 end
 
 ---Start recording. Idempotent.
@@ -325,6 +364,11 @@ end
 function M.uninstall()
   local left = {}
   state.active = false
+  -- Every layer goes quiet for good, also the ones that stay in the chain below.
+  for _, layer in ipairs(layers) do
+    layer.active = false
+  end
+  layers = {}
   if not originals or not wrappers then
     return true, left
   end
@@ -352,12 +396,21 @@ function M.log()
   return vim.list_extend({}, log)
 end
 
----Forget the recording (the tap stays installed).
+---Forget the recording (the tap stays installed) and let it grow again if it had
+---stopped at `max_events`.
 ---@return integer removed
 function M.clear()
   local n = #log
   log = {}
+  state.truncated = false
   return n
+end
+
+---Whether the recording stopped at `max_events`: bindings after that point are
+---not in it, so a clean `collisions()` is not evidence of anything.
+---@return boolean
+function M.truncated()
+  return state.truncated
 end
 
 ---@internal
@@ -380,13 +433,21 @@ local function claimant(e)
 end
 
 ---@internal
---- `"lazy-stub"` for lazy.nvim's placeholder followed by the real mapping of
+--- `"lazy-stub"` for lazy.nvim's own mapping followed by the plugin's mapping of
 --- the same description (a `plugin: ` prefix in front of either is ignored);
 --- nil otherwise.
+---
+--- lazy.nvim first binds a placeholder for a `keys` entry, **deletes** it before
+--- it loads the plugin, binds the real mapping, and the plugin then binds its own.
+--- So the benign run is the one that *starts right after a deletion*. A
+--- placeholder that something overwrites without lazy having deleted it is not
+--- benign -- it is dead, and the plugin it stands for is never lazy-loaded
+--- through that key -- however alike the descriptions are.
 ---@param claimants Lib.Keymap.Registered[]
+---@param restarted boolean|nil  # The run began after a deletion of the key.
 ---@return string|nil
-local function benign_kind(claimants)
-  if #claimants ~= 2 then
+local function benign_kind(claimants, restarted)
+  if not restarted or #claimants ~= 2 then
     return nil
   end
   local first, second = claimants[1], claimants[2]
@@ -432,18 +493,27 @@ function M.collisions(events)
         mode = run[1].mode,
         lhs = run[1].key,
         claimants = claimants,
-        benign = benign_kind(claimants),
+        benign = benign_kind(claimants, run.restarted),
       }
     end
   end
+
+  ---Keys whose last event was a deletion: the next run starts after one.
+  ---@type table<string, true>
+  local deleted = {}
 
   for _, e in ipairs(events) do
     local key = table.concat({ e.mode, lhs_mod.scope(e.buffer), e.key }, "\0")
     if e.op == "del" then
       flush(key)
+      deleted[key] = true
     else
-      local run = runs[key] or {}
-      runs[key] = run
+      local run = runs[key]
+      if not run then
+        run = { restarted = deleted[key] }
+        deleted[key] = nil
+        runs[key] = run
+      end
       for i, prev in ipairs(run) do
         if prev.fp == e.fp then
           table.remove(run, i)
