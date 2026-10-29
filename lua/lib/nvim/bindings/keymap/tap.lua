@@ -123,7 +123,15 @@ end
 ---@return Lib.Keymap.Via via
 local function origin()
   local via = "raw"
-  for level = 2, 60 do
+  ---@type { level: integer, source: string, lazy: boolean }[]
+  local callers = {}
+  local last_lib = 0
+  for level = 2, 40 do
+    -- A caller after the last lib.nvim frame, and a few frames of nothing from lib.nvim since:
+    -- the chain of its own frames is over, no need to walk the rest of the stack.
+    if level - last_lib > 8 and callers[#callers] and callers[#callers].level > last_lib then
+      break
+    end
     local info = debug.getinfo(level, "Sl")
     if not info then
       break
@@ -135,12 +143,23 @@ local function origin()
         -- Neovim's own wrapper: look further out.
       elseif path and path:find("/lua/lib/nvim/bindings/keymap/[%w_]+%.lua$") then
         via = "lib"
+        last_lib = level
       else
-        if via ~= "lib" and path and path:find("/lazy/core/handler/keys%.lua$") then
-          via = "lazy"
-        end
-        return ("%s:%d"):format(path or info.short_src, info.currentline or -1), via
+        callers[#callers + 1] = {
+          level = level,
+          source = ("%s:%d"):format(path or info.short_src, info.currentline or -1),
+          lazy = path ~= nil and path:find("/lazy/core/handler/keys%.lua$") ~= nil,
+        }
       end
+    end
+  end
+  -- Raw binding: the first frame outside Neovim and lib.nvim is the caller. Through lib.nvim the
+  -- caller of its public API is wanted, and a wrapper that something put around `vim.keymap.set`
+  -- (a telemetry hook) sits *inside* lib's frames and must not pass for it: the first frame after
+  -- the last one of lib's.
+  for _, c in ipairs(callers) do
+    if c.level > last_lib then
+      return c.source, (via ~= "lib" and c.lazy) and "lazy" or via
     end
   end
   return "?", via

@@ -453,6 +453,41 @@ return function(H)
     unbind("n", "<M-h>")
   end)
 
+  -- A hook that something put around `vim.keymap.set` (a telemetry wrapper) sits inside lib.nvim's
+  -- own frames: lib.nvim's `set` calls the wrapper, which calls Neovim's. It must not pass for the
+  -- caller; the caller is the first frame after the last of lib.nvim's.
+  do
+    local dir = vim.fn.tempname()
+    vim.fn.mkdir(dir, "p")
+    local path = dir .. "/telemetry_hook.lua"
+    local f = assert(io.open(path, "w"))
+    -- Not `return orig(...)`: a tail call drops the wrapper's frame from the stack, and the frame is
+    -- the whole point of this case.
+    f:write(
+      "local orig = vim.keymap.set\nreturn function(...)\n  local res = orig(...)\n  return res\nend\n"
+    )
+    f:close()
+    local original = vim.keymap.set
+    vim.keymap.set = assert(loadfile(path))()
+    local passed, err = pcall(function()
+      with_tap(function()
+        keymap("n", "<M-h>", noop, { record = false }, "lib one")
+        local e = tap.log()[1]
+        eq(e.via, "lib", "still recognised as coming through lib.nvim")
+        ok(
+          e.source:find("keymap_tap_spec.lua", 1, true) ~= nil,
+          "the caller, not the telemetry hook: " .. tostring(e.source)
+        )
+        unbind("n", "<M-h>")
+      end)
+    end)
+    vim.keymap.set = original
+    vim.fn.delete(dir, "rf")
+    if not passed then
+      error(err, 0)
+    end
+  end
+
   -- ---------------------------------------------- pure over a given list
 
   do
