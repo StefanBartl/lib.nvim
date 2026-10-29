@@ -18,7 +18,9 @@
 ---@field desc? string
 ---@field sid? integer                # Script id that set it (1 = Neovim's defaults).
 ---@field lnum? integer               # Line in that script.
----@field source? string              # File of `sid`, when Neovim knows one.
+---@field source? string              # File of `sid`, when Neovim knows one; the tap's recorded file when `source_from` is "tap".
+---@field source_from? "tap"          # `source`/`lnum` come from the keymap tap, not from the script stamp.
+---@field via? "lib"|"lazy"|"raw"     # How it was bound (only known with `source_from == "tap"`).
 ---@field origin Lib.Keymap.Origin
 ---@field buffer? integer             # Buffer-local scope; nil = global.
 ---@field expr boolean

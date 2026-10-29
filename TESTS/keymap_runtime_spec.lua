@@ -113,6 +113,55 @@ return function(H)
     vim.keymap.del("n", "<M-F6>")
   end
 
+  -- With the keymap tap installed, `source`/`lnum` are the call site the tap recorded. The script
+  -- stamp is the script being sourced when the key was bound, which for a plugin spec that runs in
+  -- the middle of init.lua is `init.lua:0`. A chunk with no file behind it shows the difference:
+  -- Neovim cannot name it, the tap can ("viachunk:1").
+  do
+    local tap = require("lib.nvim.bindings.keymap.tap")
+    local api = vim.api
+    local pristine = {
+      nvim_set_keymap = api.nvim_set_keymap,
+      nvim_buf_set_keymap = api.nvim_buf_set_keymap,
+      nvim_del_keymap = api.nvim_del_keymap,
+      nvim_buf_del_keymap = api.nvim_buf_del_keymap,
+    }
+    local code = "vim.keymap.set('n', '<M-F3>', function() end, { desc = 'chunk probe' })"
+
+    assert(load(code, "=viachunk"))()
+    local plain = find(rt.snapshot(), "n", "<M-F3>")
+    eq(plain.source_from, nil, "without the tap the source is the script stamp")
+    vim.keymap.del("n", "<M-F3>")
+
+    tap.clear()
+    tap.install()
+    local passed, err = pcall(function()
+      assert(load(code, "=viachunk"))()
+      local e = find(rt.snapshot(), "n", "<M-F3>")
+      eq(e.source_from, "tap", "with the tap the source comes from its recording")
+      eq(e.source, "viachunk", "naming the call site")
+      eq(e.lnum, 1, "and the line")
+      eq(e.via, "raw", "and how it was bound")
+
+      -- Neovim's own defaults keep their stamp, whatever the tap has seen.
+      for _, m in ipairs(rt.snapshot()) do
+        if m.origin == "builtin" then
+          ok(m.source_from == nil, "a builtin default is not relabelled by the tap")
+          break
+        end
+      end
+    end)
+    tap.uninstall()
+    tap.clear()
+    for name, f in pairs(pristine) do
+      api[name] = f
+    end
+    pcall(vim.keymap.del, "n", "<M-F3>")
+    if not passed then
+      error(err, 0)
+    end
+  end
+
   -- -------------------------------------------------------- diff_defaults
   --
   -- Synthetic tables: a default that is overridden, one that was removed, one

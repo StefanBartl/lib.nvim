@@ -210,6 +210,50 @@ local function entry_of(km, mode, buffer, lib, defaults)
   return entry
 end
 
+---@internal
+--- The last recorded binding of each key, from the keymap tap, as `mode \0 scope \0 key`; nil
+--- when the tap has recorded nothing. A key whose last event is a deletion is not live and is left out.
+---@return table<string, Lib.Keymap.TapEvent>|nil
+local function tap_index()
+  local ok, tap = pcall(require, "lib.nvim.bindings.keymap.tap")
+  if not ok then
+    return nil
+  end
+  local events = tap.log()
+  if #events == 0 then
+    return nil
+  end
+  local last = {}
+  for _, e in ipairs(events) do
+    last[table.concat({ e.mode, lhs_mod.scope(e.buffer), e.key }, "\0")] = e.op == "set" and e
+      or nil
+  end
+  return last
+end
+
+---@internal
+--- Put the tap's source on an entry. The script stamp (`sid`/`lnum`) names the script that was
+--- being sourced when the key was bound, which for everything bound from a plugin spec during
+--- startup is `init.lua:0`; the tap read the real call site off the stack. Neovim's own defaults
+--- keep their stamp, and an event without a `file:line` source changes nothing.
+---@param entry Lib.Keymap.RuntimeEntry
+---@param tapped table<string, Lib.Keymap.TapEvent>|nil
+local function overlay_source(entry, tapped)
+  if not tapped or entry.origin == "builtin" then
+    return
+  end
+  local ev = tapped[table.concat({ entry.mode, lhs_mod.scope(entry.buffer), entry.key }, "\0")]
+  if not ev or not ev.source then
+    return
+  end
+  local file, line = ev.source:match("^(.*):(%d+)$")
+  if not file then
+    return
+  end
+  entry.source, entry.lnum, entry.via, entry.source_from =
+    slashes(file), tonumber(line), ev.via, "tap"
+end
+
 ---Every mapping in effect right now.
 ---
 ---Global mappings of the modes n, x, s, o, i, c, t and l (abbreviations are not
@@ -220,11 +264,17 @@ end
 ---Neovim's own defaults are recognised by their script id; on a build that does
 ---not stamp them, by content against `opts.defaults` (default: the cached
 ---`pristine_defaults()`, never started just for this).
+---
+---`source`/`lnum` are Neovim's script stamp. With the keymap tap installed they are
+---the call site the tap recorded instead (`source_from == "tap"`, plus `via`): the
+---stamp is the script being sourced at the time, which is not where a plugin spec
+---that ran in the middle of `init.lua` bound its key.
 ---@param opts? { buffers?: boolean, defaults?: Lib.Keymap.RuntimeEntry[] }
 ---@return Lib.Keymap.RuntimeEntry[]
 function M.snapshot(opts)
   opts = opts or {}
   local lib = lib_index()
+  local tapped = tap_index()
   ---@type table<string, true>
   local defaults = {}
   for _, d in ipairs(opts.defaults or M.cached_defaults() or {}) do
@@ -258,6 +308,9 @@ function M.snapshot(opts)
         end
       end
     end
+  end
+  for _, entry in ipairs(out) do
+    overlay_source(entry, tapped)
   end
   return out
 end
