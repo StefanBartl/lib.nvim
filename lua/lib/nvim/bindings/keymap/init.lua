@@ -212,7 +212,7 @@ function M.runtime_lines(what)
   if not pristine then
     return { "cannot read the pristine Neovim defaults: " .. tostring(err) }
   end
-  local diff = rt.diff_defaults(pristine, rt.snapshot())
+  local diff = rt.diff_defaults(pristine, rt.snapshot({ defaults = pristine }))
   return rt.defaults_lines(diff, { version = rt.version_tag(), total = #pristine })
 end
 

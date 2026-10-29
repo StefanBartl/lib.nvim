@@ -67,6 +67,21 @@ local wrappers
 
 local FUNCS = { "nvim_set_keymap", "nvim_buf_set_keymap", "nvim_del_keymap", "nvim_buf_del_keymap" }
 
+--- The chunk name `vim.keymap.set` was compiled under when this module loaded.
+--- On a build whose Lua is stripped that is a bare `?`, with nothing to match
+--- by name; the function itself still knows. Only trusted when it is not a
+--- file path (a plugin that wrapped `vim.keymap.set` before us would otherwise
+--- make *its* file count as Neovim's).
+---@type string|nil
+local KEYMAP_SRC = (function()
+  local info = debug.getinfo(vim.keymap.set, "S")
+  local src = info and info.source
+  if type(src) == "string" and src:sub(1, 1) ~= "@" then
+    return src
+  end
+  return nil
+end)()
+
 ---@internal
 --- Neovim's own `vim/keymap.lua`. Its chunk name depends on the build: a file
 --- (`@.../runtime/lua/vim/keymap.lua`) where the runtime is read from disk, a
@@ -74,6 +89,9 @@ local FUNCS = { "nvim_set_keymap", "nvim_buf_set_keymap", "nvim_del_keymap", "nv
 ---@param src string  # `debug.getinfo(...).source`
 ---@return boolean
 local function is_vim_keymap(src)
+  if src == KEYMAP_SRC then
+    return true
+  end
   local name = src:gsub("^[@=]", ""):gsub("\\", "/")
   return name == "vim/keymap" or name == "vim/keymap.lua" or name:find("/vim/keymap%.lua$") ~= nil
 end

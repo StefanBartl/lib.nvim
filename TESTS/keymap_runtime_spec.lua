@@ -45,13 +45,57 @@ return function(H)
     eq(lib.origin, "lib", "a mapping lib.nvim recorded is marked as such")
     keymap.forget()
 
-    local builtin = 0
-    for _, m in ipairs(snap) do
-      if m.origin == "builtin" then
-        builtin = builtin + 1
+    -- Neovim's own defaults: by script id where it stamps them, by content
+    -- against the pristine list where it does not (a build with its Lua
+    -- compiled in).
+    local pristine = rt.pristine_defaults()
+    if not pristine then
+      H.skipped("builtin origin", "no pristine defaults to compare with")
+    else
+      local builtin = 0
+      for _, m in ipairs(rt.snapshot({ defaults = pristine })) do
+        if m.origin == "builtin" then
+          builtin = builtin + 1
+        end
       end
+      ok(builtin > 0, "Neovim's own default mappings are recognised (" .. builtin .. ")")
     end
-    ok(builtin > 0, "Neovim's own default mappings are recognised (" .. builtin .. ")")
+
+    -- The content fallback itself: a mapping from a script that is not a real
+    -- file, identical to a default, is that default; one from a real file is
+    -- not, whatever it says.
+    load(
+      "vim.keymap.set('n', '<M-F1>', ':echo fallback<CR>', { desc = 'fallback probe' })",
+      "@vim/fake_defaults.lua"
+    )()
+    local fake_default = {
+      mode = "n",
+      lhs = "<M-F1>",
+      key = "<M-F1>",
+      rhs = ":echo fallback<CR>",
+      desc = "fallback probe",
+    }
+    eq(
+      find(rt.snapshot({ defaults = {} }), "n", "<M-F1>").origin,
+      "other",
+      "without a matching default it is not builtin"
+    )
+    eq(
+      find(rt.snapshot({ defaults = { fake_default } }), "n", "<M-F1>").origin,
+      "builtin",
+      "with one, a mapping from no real file is"
+    )
+    vim.keymap.set("n", "<M-F4>", ":echo fallback<CR>", { desc = "fallback probe" })
+    local real = find(
+      rt.snapshot({
+        defaults = { vim.tbl_extend("force", fake_default, { lhs = "<M-F4>", key = "<M-F4>" }) },
+      }),
+      "n",
+      "<M-F4>"
+    )
+    eq(real.origin, "other", "while the same content from a real file stays the user's")
+    vim.keymap.del("n", "<M-F1>")
+    vim.keymap.del("n", "<M-F4>")
 
     local buf = vim.api.nvim_create_buf(false, true)
     vim.keymap.set("n", "<M-F5>", noop, { buffer = buf, desc = "local" })

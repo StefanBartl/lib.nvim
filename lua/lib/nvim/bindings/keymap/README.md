@@ -413,7 +413,7 @@ mode and buffer scope with no deletion in between. What is not:
 
 | function | |
 | --- | --- |
-| `snapshot(opts)` | every effective mapping of n, x, s, o, i, c, t, l: mode, key, `rhs` / callback, `desc`, `sid`/`lnum`, `source` (file of the script that set it), `origin` (`builtin` = Neovim's defaults, `lib` = lib.nvim's registry, `other`); `opts.buffers = true` adds loaded buffers |
+| `snapshot(opts)` | every effective mapping of n, x, s, o, i, c, t, l: mode, key, `rhs` / callback, `desc`, `sid`/`lnum`, `source` (file of the script that set it), `origin` (`builtin` = Neovim's defaults — by script id, or by content against the cached pristine list on a build that does not stamp them; `lib` = lib.nvim's registry; `other`); `opts.buffers = true` adds loaded buffers |
 | `pristine_defaults(opts)` | the defaults of a clean `nvim --clean` child, cached per Neovim version under `stdpath("cache")`; `nil, err` when the child cannot run (never raises, never notifies) |
 | `diff_defaults(pristine, live)` | `{ overridden, removed, unchanged }`: a default bound to something else now, or not bound at all (deleted, or set to `false` in a plugin's spec) |
 | `action_duplicates(live)` | candidates for one action on several keys: same normalized description (`[plugin] ` and `plugin: ` prefixes dropped) or same string target in one mode; `<Nop>` and Neovim's own defaults are skipped |
