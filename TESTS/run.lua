@@ -139,6 +139,7 @@ local specs = {
   "ui_kit_confirm_answers_spec.lua",
   "ui_kit_confirm_layout_spec.lua",
   "ui_kit_confirm_keys_spec.lua",
+  "ui_kit_confirm_hotkeys_spec.lua",
   "ui_kit_ask_modal_spec.lua",
   "ui_kit_dialog_hook_spec.lua",
   "ui_kit_lazy_spec.lua",

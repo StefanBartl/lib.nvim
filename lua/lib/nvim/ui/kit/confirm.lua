@@ -19,8 +19,9 @@
 --- Options beyond `question`/`choices`/`title`/`theme`:
 ---   - `default`: the button that starts focused (index or label; default the first).
 ---   - `choices` as a list of labels, or as a `vim.fn.confirm` string ("&Delete\n&Cancel": buttons
----     separated by a newline, `&` before the letter that picks the button). Hotkeys: those
----     letters, `y`/`n` for the Yes/No default, the digits 1-9. h, l and q stay navigation.
+---     separated by a newline, `&` before the letter that picks the button). Every button has a
+---     hotkey, marked in its label: `y`/`n` for Yes/No, the `&` letters, else the first free letter
+---     of the label, and the digits 1-9 (see `hotkeys`). h, l and q stay navigation.
 ---   - `<C-c>` cancels like <Esc>; so does focus moving elsewhere, unless `keep_on_focus_lost`.
 ---   - `kind = "danger" | "warn" | "info"`: border and title in the status colour.
 ---   - `legend = true`: a one-line key legend in the window's winbar.
@@ -414,47 +415,137 @@ local function default_index(default, labels)
 end
 
 ---@internal
---- Which key picks which button: the `&` letters, `y`/`n` for the Yes/No default, the digits
---- 1-9 for the first nine. Navigation keys are never taken; a key that two buttons ask for goes to
---- the first, and what was refused is returned for a warning.
+--- Whether `ch` (one character) is a letter: it has an upper and a lower case. Digits and
+--- punctuation are not, and neither is a letter of a script without case (those can still be
+--- given with `&`).
+---@param ch string
+---@return boolean
+local function is_letter(ch)
+  return ch ~= "" and vim.fn.tolower(ch) ~= vim.fn.toupper(ch)
+end
+
+---@internal
+--- The answer word a label starts with: "yes" for "Yes" / "Yes, delete", "no" for "No" /
+--- "No, keep", nil otherwise ("Nope" and "Not now" are neither).
+---@param label string
+---@return "yes"|"no"|nil
+local function answer_word(label)
+  -- a NUL byte is E976 to `tolower()`; the SOH `nul_safe` puts in its place is as long
+  local lower = vim.fn.tolower(nul_safe(tostring(label)))
+  if lower:match("^yes%f[%A]") then
+    return "yes"
+  end
+  if lower:match("^no%f[%A]") then
+    return "no"
+  end
+  return nil
+end
+
+--- Superscript digits, drawn after the label of a button that has no letter key.
+local SUPERSCRIPT = { "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹" }
+
+---@internal
+--- Which key picks which button, and where each button shows its key. Deterministic, in this
+--- order (a key goes to the first claim; nothing later takes it away):
+---
+---   1. `y` / `n`: the Yes and No buttons -- the Yes/No default, or the first button whose label
+---      starts with the word "Yes" / "No" ("Yes, delete") -- as in the `more` prompt.
+---   2. The `&` letters of a `vim.fn.confirm` string, in button order. One that is reserved (`h`,
+---      `l`, `q` move or cancel) or already taken is refused and reported.
+---   3. Every button still without a letter: the first letter of its label, else the next letter of
+---      the label that is still free, left to right; buttons earlier in the row choose first.
+---   4. Digits: a button labelled with a single digit owns that digit (a 1-5 scale), the other
+---      digits 1-9 pick the button at that position -- every button, with a letter or without.
+---
+--- Keys are lower-case here; the dialog maps the capital too.
 ---@param labels string[]
----@param marks table<integer, { key: string, col: integer }>
+---@param marks table<integer, { key: string, col: integer }>  # the `&` letters of `parse_choices`
 ---@param custom boolean
 ---@return table<string, integer> keys  # lower-case key -> button index
----@return string[] refused
+---@return string[] refused  # the `&` letters that could not be used, for a warning
+---@return table<integer, { col: integer, text: string }[]> shown  # per button: the label letters to mark (byte column, text)
+---@return table<integer, string> digits  # per button without a letter key: the digit to show next to its label
 local function hotkeys(labels, marks, custom)
-  local keys, refused = {}, {}
-  local function take(key, i, why)
+  local keys, refused, shown = {}, {}, {}
+  local function show(i, col, text)
+    shown[i] = shown[i] or {}
+    shown[i][#shown[i] + 1] = { col = col, text = text }
+  end
+  --- Claim `key` for button `i`; `col`/`text` mark the letter in the label (nil: not in it).
+  ---@return boolean taken
+  local function claim(key, i, col, text)
     local k = vim.fn.tolower(key)
-    if RESERVED_KEYS[k] then
-      refused[#refused + 1] = ("%q of %q (%s)"):format(key, tostring(labels[i]), "moves or cancels")
-    elseif keys[k] and keys[k] ~= i then
-      refused[#refused + 1] = ("%q of %q (%s)"):format(key, tostring(labels[i]), why or "taken")
-    else
-      keys[k] = i
+    if RESERVED_KEYS[k] or (keys[k] and keys[k] ~= i) then
+      return false
     end
-  end
-  -- in button order, so the first button that asks for a key gets it
-  for i = 1, #labels do
-    if marks[i] then
-      take(marks[i].key, i)
+    keys[k] = i
+    if col then
+      show(i, col, text)
     end
+    return true
   end
+
+  -- 1. y/n on the Yes/No buttons
   if not custom then
-    take("y", 1)
-    take("n", 2)
+    claim("y", 1, 0, "Y")
+    claim("n", 2, 0, "N")
+  else
+    for i, label in ipairs(labels) do
+      local word = answer_word(label)
+      local key = word and word:sub(1, 1)
+      if key and not keys[key] then
+        claim(key, i, 0, tostring(label):sub(1, 1))
+      end
+    end
   end
-  -- A button labelled with a single digit owns that digit (a 1-5 scale: `5` is the button "5"),
-  -- whatever its position; the other digits count the buttons.
+
+  -- 2. the `&` letters, in button order, so the first button that asks for a key gets it
+  for i = 1, #labels do
+    local m = marks[i]
+    if m then
+      local k = vim.fn.tolower(m.key)
+      if keys[k] == i then
+        -- already this button's (`&Yes`): the `&` says where the letter is
+        shown[i] = { { col = m.col, text = m.key } }
+      elseif not claim(m.key, i, m.col, m.key) then
+        local why = RESERVED_KEYS[k] and "moves or cancels" or "taken"
+        refused[#refused + 1] = ("%q of %q (%s)"):format(m.key, tostring(labels[i]), why)
+      end
+    end
+  end
+
+  -- 3. a letter of the label for every button that has none yet
+  for i, label in ipairs(labels) do
+    if not shown[i] then
+      local text = nul_safe(tostring(label))
+      local col = 0
+      for _, ch in ipairs(vim.fn.split(text, "\\zs")) do
+        if is_letter(ch) and claim(ch, i, col, ch) then
+          break
+        end
+        col = col + #ch
+      end
+    end
+  end
+
+  -- 4. digits
   for i, label in ipairs(labels) do
     if type(label) == "string" and label:match("^[1-9]$") and not keys[label] then
       keys[label] = i
+      if not shown[i] then
+        show(i, 0, label)
+      end
     end
   end
+  local digits = {}
   for i = 1, math.min(#labels, 9) do
-    keys[tostring(i)] = keys[tostring(i)] or i
+    local d = tostring(i)
+    keys[d] = keys[d] or i
+    if not shown[i] and keys[d] == i then
+      digits[i] = SUPERSCRIPT[i]
+    end
   end
-  return keys, refused
+  return keys, refused, shown, digits
 end
 
 --- How long a waiting `ask` waits for a free moment at most, before it is answered "no".
@@ -783,21 +874,40 @@ local function open_new(opts, settle_old)
     end)
   end)
 
-  local keys, refused = hotkeys(labels, marks, custom)
+  local keys, refused, shown, digits = hotkeys(labels, marks, custom)
 
   -- The decoration (accents, kind colour, legend, focus hook) is cosmetic: whatever raises in it
   -- must not leave a dialog on screen without keys and without a way to answer.
   local function decorate()
-    -- The hotkey letters of a `&` choice are drawn with the accent, where the label is shown whole.
-    -- Their own namespace: the focus highlight clears `state.ns` on every repaint.
-    for i, m in pairs(marks) do
+    -- Every button shows its key. A letter of the label is drawn with the accent and underlined
+    -- (`KitHotkey`: the underline survives the focus highlight, which recolours the letter), where
+    -- the label is shown whole -- a label cut to fit loses the mark of a letter that was cut. A
+    -- button without a letter key gets its digit as a small superscript in the space before `]`,
+    -- so the box keeps its size and a click still lands where it is drawn. Their own namespace:
+    -- the focus highlight clears `state.ns` on every repaint.
+    for i, list in pairs(shown) do
       local r = ranges[i]
-      local line = lines[r.row + 1]
-      local col = r.start_col + 2 + m.col -- "[ " in front of the label
-      if line and line:sub(col + 1, col + #m.key) == m.key then
-        api.nvim_buf_set_extmark(surf.bufnr, state.hot_ns, r.row, col, {
-          end_col = col + #m.key,
-          hl_group = "KitAccent",
+      local line = r and lines[r.row + 1]
+      for _, m in ipairs(line and list or {}) do
+        local col = r.start_col + 2 + m.col -- "[ " in front of the label
+        if line:sub(col + 1, col + #m.text) == m.text and col + #m.text <= r.end_col - 2 then
+          for _, group in ipairs({ "KitAccent", "KitHotkey" }) do
+            api.nvim_buf_set_extmark(surf.bufnr, state.hot_ns, r.row, col, {
+              end_col = col + #m.text,
+              hl_group = group,
+              priority = group == "KitAccent" and 90 or 91,
+            })
+          end
+        end
+      end
+    end
+    for i, digit in pairs(digits) do
+      local r = ranges[i]
+      if r then
+        api.nvim_buf_set_extmark(surf.bufnr, state.hot_ns, r.row, r.end_col - 2, {
+          virt_text = { { digit, "KitMuted" } },
+          virt_text_pos = "overlay",
+          hl_mode = "combine",
           priority = 90,
         })
       end
@@ -817,7 +927,7 @@ local function open_new(opts, settle_old)
 
     if opts.legend then
       local entries = { { lhs = "←/→", legend = "move" }, { lhs = "⏎", legend = "select" } }
-      if not custom then
+      if keys.y and keys.n then
         entries[#entries + 1] = { lhs = "y/n", legend = "answer" }
       end
       entries[#entries + 1] = { lhs = "q", legend = "cancel" }

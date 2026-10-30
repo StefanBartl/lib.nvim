@@ -17,6 +17,7 @@
 ---@field warn      string|Lib.Highlight.Opts # status: needs a look (default: link DiagnosticWarn)
 ---@field info      string|Lib.Highlight.Opts # status: neutral information (default: link DiagnosticInfo)
 ---@field dim       string|Lib.Highlight.Opts # status: skipped/inactive (default: link Comment)
+---@field hotkey    string|Lib.Highlight.Opts # the key that picks a dialog button, over its accent (default: { underline = true })
 
 --- A resolved theme: design tokens read by every component.
 ---@class Lib.UI.Kit.Theme

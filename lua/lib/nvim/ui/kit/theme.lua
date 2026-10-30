@@ -50,6 +50,10 @@ local BASE = {
     warn = "DiagnosticWarn",
     info = "DiagnosticInfo",
     dim = "Comment",
+    -- The key that picks a button (`kit.confirm`), drawn over the `accent` colour of its letter.
+    -- Only an underline, no colour: it composes with the accent and survives the focus highlight,
+    -- which recolours the letter of the focused button.
+    hotkey = { underline = true },
   },
 }
 
@@ -150,6 +154,7 @@ local GROUPS = {
   warn = "KitWarn",
   info = "KitInfo",
   dim = "KitDim",
+  hotkey = "KitHotkey",
 }
 
 --- Resolve a theme argument to a full token table.

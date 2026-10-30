@@ -77,6 +77,11 @@ them (a list in a plain split or a statusline needs no kit surface to have opene
 new `default` recolours them at once, and a surface opened with its own `theme` sets
 them to that theme until the next one.
 
+**Hotkey token.** `KitHotkey` (token `hotkey`, default `{ underline = true }`, no colour) marks
+the key that picks a `kit.confirm` button. It is drawn over the letter's `KitAccent`, so it
+composes with any colour and the underline stays visible on the focused button; an override table
+adds to it (`hl = { hotkey = { bold = true } }`).
+
 ```lua
 require("lib.nvim.ui.kit").setup({
   default = "rounded",
@@ -167,7 +172,7 @@ kit.popup({ type = "prompt", question = "Delete?", answer_type = "confirm", on_a
 | `sheet`  | every field of a form at once in ONE float — a labelled row each, inline validation (`required`, `validate`) shown under the field, `[ Submit ] [ Cancel ]` buttons; see [Sheet](#sheet-every-field-at-once) |
 | `select` | native themed list chooser (single/multi; `j`/`k`, `<CR>`, `<Tab>` mark) |
 | `prompt` | ask: `answer_type = "confirm"` (yes/no → boolean) or `"text"` |
-| `confirm` | button dialog — horizontal buttons, `h`/`l`/arrows move, `<CR>` confirm, `<Esc>` cancel, left click confirms a button directly (the button row is `lib.nvim.ui.kit.buttons`, shared with the form's) |
+| `confirm` | button dialog — horizontal buttons, `h`/`l`/arrows move, `<CR>` confirm, `<Esc>` cancel, one key per button picks it directly (`y`/`n`, the first free letter, else its digit; marked in the button), left click confirms a button directly (the button row is `lib.nvim.ui.kit.buttons`, shared with the form's) |
 | `menu`    | anchored action list — `{ label, action }` items; picking runs the action. Also renders [`lib.nvim.contextmenu`](../../contextmenu/README.md) tables (`name`/`cmd`, `{ name = "separator" }`, `rtxt`, `icon`, nested `items`) and takes `mouse = true` to anchor at the pointer. A row is a set of **fixed-width columns** measured across the whole level — icon, label, fly-out marker, `rtxt` — so entries line up whichever section they sit in; `icon` is a field, never a prefix on `label`. The marker follows the *label* column rather than the row, so it stays beside the list instead of against the frame, and the hint column keeps the right edge. Named groups (`contextmenu.heading`) are drawn as titled frames (`group_style` = `"box"` \| `"header"` \| `"plain"`; a menu that names nothing keeps the plain divider look). The block cursor is hidden while it is open, one left click picks, and a click or focus change elsewhere dismisses it (`hide_cursor` / `single_click` / `close_on_focus_lost` turn those off). A pick is acknowledged before it is acted on: the row lights up (`KitFlash`) for `flash_ms` (default 100) and the action follows, the way a button shows its press — the delay is the point, since a leaf action closes the menu and a flash painted at that moment would never be seen. A menu dismissed while a row is lit runs nothing (`flash_on_select = false` turns it off). Defaults to the `menu` preset, so the frame is coloured. Drilling into a submenu and walking back swap the list **inside the same window** — no flash, and the menu stays put |
 | `progress`| passthrough to [`lib.nvim.progress`](../../progress/README.md) (`:update`/`:finish`/`:cancel`) |
 | `compare` | pick two items out of one picker, then view them side by side — see [Compare](#compare-pick-two-view-side-by-side) below |
@@ -347,10 +352,26 @@ Options of `kit.confirm` / `kit.ask`:
   lands on the safe answer.
 - `choices` as a list of labels, or as a `vim.fn.confirm` string: buttons separated by a newline,
   `&` before the letter that picks the button (`"&Delete\n&Cancel\nRe&name"`). The `&` is not
-  drawn, the letter is drawn with the accent, and the answer is the label without it. In a list
-  a `&` is text. Hotkeys are those letters (either case), `y`/`n` for the Yes/No default, and the
-  digits 1-9 for the first nine buttons. `h`, `l` and `q` stay navigation; a refused key (reserved,
-  or already taken by an earlier button) is reported once when the dialog opens.
+  drawn, and the answer is the label without it. In a list a `&` is text.
+- **Hotkeys.** Every button can be picked with one key, without moving the focus (either case;
+  the focus still starts on `default`, and `<CR>` still confirms the focused button). Who gets
+  which key is decided in a fixed order, so the same labels always get the same keys:
+  1. `y` / `n` go to Yes and No, as in the `more` prompt: the Yes/No default, or the first button
+     whose label starts with the word "Yes" / "No" (`"Yes, delete"`, not `"Nope"`).
+  2. The `&` letters of a `vim.fn.confirm` string, in button order.
+  3. Every other button takes the first letter of its label; when that one is taken, the next free
+     letter of the label, left to right. Buttons earlier in the row choose first: `Cancel`, `Close`,
+     `Copy` get `c`, `o`, `p`.
+  4. The digits 1-9 pick the button at that position (every button, with a letter or without); a
+     button labelled with a single digit owns that digit (a `1`..`5` scale after `Skip`).
+
+  `h`, `l` and `q` stay navigation and are never a hotkey. The key is marked in the button: its
+  letter in the accent colour and underlined (`KitHotkey`; the underline stays on the focused
+  button), or, for a button without a free letter (`"?!"`), its digit as a small superscript before
+  the `]` (`[ ?!³]`), so the box keeps its size. An `&` letter that is reserved or already taken is
+  reported once when the dialog opens, and its button falls back to step 3. Only the button dialog
+  has letter keys: a text field (`kit.input`, `kit.form`, `kit.sheet`) keeps every letter for
+  typing.
 - `<C-c>` cancels like `<Esc>`. So does focus moving elsewhere (a click outside, another plugin
   switching windows); `keep_on_focus_lost = true` keeps the dialog. `kit.ask` keeps it by default:
   a question nobody asked for must not be answered "no" by a window change.

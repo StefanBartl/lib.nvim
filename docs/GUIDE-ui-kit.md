@@ -136,7 +136,9 @@ vim.api.nvim_buf_set_extmark(buf, ns, row, 0, { line_hl_group = "KitDim" }) -- a
 **confirm** — `kit.confirm({ question, choices?, on_answer })`. Default
 `Yes`/`No` yields a boolean; a custom `choices` list yields the chosen string
 (cancel → `nil`). `h`/`l`/arrows move focus, `<CR>` confirms, `<Esc>`/`q`
-cancels. A left click on a button focuses and confirms it directly (needs
+cancels. One key picks a button directly: `y`/`n` for Yes/No, else the first
+free letter of the label (`Cancel`, `Close`, `Copy` → `c`, `o`, `p`), else its
+digit; the key is underlined in the button (see the kit README for the rules). A left click on a button focuses and confirms it directly (needs
 `mouse=a`); clicking blank space in the dialog is a no-op, not a cancel.
 
 
@@ -282,3 +284,4 @@ parens); override them per theme via the `hl` keys:
 | `KitWarn`      | `DiagnosticWarn`   | status: needs a look   |
 | `KitInfo`      | `DiagnosticInfo`   | status: neutral information |
 | `KitDim`       | `Comment`          | status: skipped / inactive |
+| `KitHotkey`    | `{ underline = true }` | the key that picks a dialog button |
