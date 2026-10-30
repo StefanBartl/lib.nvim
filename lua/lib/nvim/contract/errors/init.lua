@@ -18,7 +18,8 @@
 --- `conflict` (the file is not the version the caller saw), `exists` (the name is taken), `forbidden` (a link where a
 --- file belongs), `locked` (another writer holds it right now; `retryable`), `lock_stuck` (a lock nobody will release),
 --- `unsupported_schema`, `payload_too_large`, `rollback_incomplete` (a failed write could not be fully undone: the
---- message names the files), `io`, `internal`.
+--- message names the files), `io`, `internal`. The list is enforced: any other code (in `fail`, an error table,
+--- `info.code`, a pattern) is answered as `internal` with a message that names it, never raised.
 ---
 --- Not its job: building the error document (`contract.doc` of the plugin), the plugin's own message patterns.
 
@@ -43,12 +44,43 @@ M.CODES = {
   "unsupported_schema",
 }
 
----@param code string
+---@type table<string, true>
+local KNOWN = {}
+for _, code in ipairs(M.CODES) do
+  KNOWN[code] = true
+end
+
+---Whether `code` is one of `M.CODES`.
+---@param code any
+---@return boolean
+function M.is_code(code)
+  return type(code) == "string" and KNOWN[code] == true
+end
+
+---A code that is not one of `M.CODES` (a typo, a plugin's own word) is answered as `internal`, never raised: the
+---contract has a fixed list, and a wrong code must not take the host down from its error path. The message says
+---which code was given, so the slip is found.
+---@param code any
+---@param message any
+---@return string code
+---@return any message
+---@return boolean known
+local function checked(code, message)
+  if M.is_code(code) then
+    return code, message, true
+  end
+  local given = type(code) == "string" and ("%q"):format(code) or ("of type " .. type(code))
+  return "internal", ("unknown error code %s: %s"):format(given, M.text(message)), false
+end
+
+---@param code string  # one of `M.CODES`; any other is made `internal` (the message names it)
 ---@param message string
 ---@param retryable? boolean
 ---@return Lib.Contract.Error
 function M.fail(code, message, retryable)
-  return { code = code, message = message, retryable = retryable == true }
+  local known
+  code, message, known = checked(code, message)
+  return { code = code, message = message, retryable = known and retryable == true }
 end
 
 ---A token without everything up to its last `/lua/`. One search per token, on purpose: the single pattern
@@ -169,6 +201,9 @@ function M.check_patterns(patterns)
     if type(rule.code) ~= "string" then
       return ("patterns[%d].code must be a string"):format(i)
     end
+    if not M.is_code(rule.code) then
+      return ("patterns[%d].code %q is not one of errors.CODES"):format(i, rule.code)
+    end
     local find = rule.find
     local texts = type(find) == "table" and vim.islist(find)
     for _, needle in ipairs(texts and find or {}) do
@@ -191,7 +226,12 @@ end
 ---@return Lib.Contract.Error
 function M.classify(err, info, opts)
   if type(err) == "table" and err.code then
-    return err
+    if M.is_code(err.code) then
+      return err
+    end
+    local failed = M.fail(err.code, err.message)
+    failed.details = err.details
+    return failed
   end
   local text = M.text(err)
   if type(info) == "table" and info.code then
@@ -201,10 +241,11 @@ function M.classify(err, info, opts)
         details[key] = info[key]
       end
     end
+    local code, message, known = checked(info.code, text)
     return {
-      code = info.code,
-      message = text,
-      retryable = info.retryable == true or info.code == "locked",
+      code = code,
+      message = message,
+      retryable = known and (info.retryable == true or code == "locked"),
       details = next(details) ~= nil and details or nil,
     }
   end

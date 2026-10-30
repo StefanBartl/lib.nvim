@@ -33,6 +33,47 @@ return function(H)
     "only the boolean true counts"
   )
 
+  -- ── a code that is not one of CODES becomes internal, never raises; the message names the code ──
+  eq(errors.is_code("io"), true)
+  eq(errors.is_code("lockd"), false)
+  eq(errors.is_code(5), false)
+  eq(
+    errors.fail("lockd", "busy", true),
+    { code = "internal", message = 'unknown error code "lockd": busy', retryable = false },
+    "a typo in fail"
+  )
+  eq(
+    errors.classify({ code = "nope", message = "m", details = { id = "x" } }),
+    {
+      code = "internal",
+      message = 'unknown error code "nope": m',
+      retryable = false,
+      details = { id = "x" },
+    },
+    "an error table with an unknown code"
+  )
+  local unknown_info = errors.classify("m", { code = "busy", retryable = true, id = "a" })
+  eq(
+    unknown_info,
+    {
+      code = "internal",
+      message = 'unknown error code "busy": m',
+      retryable = false,
+      details = { id = "a" },
+    },
+    "info with an unknown code"
+  )
+  eq(
+    errors.classify("m", { code = "nope" }, { patterns = {} }).code,
+    "internal",
+    "and the same through opts"
+  )
+  eq(
+    errors.classify("custom thing", nil, { patterns = { { code = "oops", find = { "custom" } } } }),
+    { code = "internal", message = 'unknown error code "oops": custom thing', retryable = false },
+    "a pattern with an unknown code (check_patterns tells it at make)"
+  )
+
   -- ── scrub: the install path up to lua/ (known limit: a space) ──
   eq(
     errors.scrub("/home/me/.local/share/nvim/lazy/x.nvim/lua/x_nvim/a.lua:12: boom"),
@@ -111,7 +152,7 @@ return function(H)
   -- every key of DETAIL_KEYS reaches the document (a key dropped from the list drops its detail without a sound)
   eq(
     errors.classify("m", {
-      code = "x",
+      code = "io",
       id = 1,
       key = 2,
       expected = 3,
@@ -131,10 +172,10 @@ return function(H)
     { {}, "error value of type table" },
     { function() end, "error value of type function" },
   }) do
-    local coded = errors.classify(case[1], { code = "x" })
+    local coded = errors.classify(case[1], { code = "io" })
     eq(type(coded.message), "string", "a text for " .. type(case[1]))
     eq(coded.message, case[2], "the text of a " .. type(case[1]))
-    eq(coded.code, "x")
+    eq(coded.code, "io")
   end
   eq(errors.classify("busy", { code = "locked" }).retryable, true, "locked is always retryable")
   eq(
@@ -342,6 +383,10 @@ return function(H)
     "patterns[1].find must be a list of strings"
   )
   eq(errors.check_patterns({ {} }), "patterns[1].code must be a string")
+  eq(
+    errors.check_patterns({ { code = "lockd", find = { "x" } } }),
+    'patterns[1].code "lockd" is not one of errors.CODES'
+  )
   eq(errors.check_patterns({ 1 }), "patterns[1] must be a table")
   for _, bad in ipairs({ "oops", 5, true, { a = 1 } }) do
     eq(errors.check_patterns(bad), "patterns must be a list", vim.inspect(bad))

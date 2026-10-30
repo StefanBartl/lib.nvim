@@ -210,6 +210,14 @@ return function(H)
   has(unknown.message, "big, boom, hello, list", "it lists the methods, sorted")
   has(refused(42, nil, "not_found", "a method that is no text").message, "unknown method '42'")
   refused("list", "{nope", "invalid_argument", "bad JSON")
+  -- a leading byte order mark: refused, and the message says why (not "not valid JSON")
+  local bom = refused("list", "\239\187\191{}", "invalid_argument", "a request with a BOM")
+  has(bom.message, "byte order mark", "the message names the BOM")
+  eq(
+    bom.message:find("not valid JSON", 1, true),
+    nil,
+    "and does not send the client after a syntax error"
+  )
   refused("list", "[1,2]", "invalid_argument", "a request that is a list")
   refused("list", "5", "invalid_argument", "a request that is a number")
   refused("list", '"text"', "invalid_argument", "a request that is a string")
@@ -660,7 +668,7 @@ return function(H)
     no_message = { "not_found", "not_found" },
     number_message = { "io", "5" },
     text_details = { "io", "m" },
-    number_code = { "internal", "m" },
+    number_code = { "internal", "unknown error code of type number: m" },
   }
   for name, want in pairs(expected_error) do
     for _, with_root in ipairs({ true, false }) do
@@ -1141,6 +1149,40 @@ return function(H)
   refused_make({ methods = {} }, "doc must be")
   refused_make({ doc = {}, methods = {} }, "doc must be")
   refused_make({ doc = d }, "methods must be a table")
+  -- the other fields are checked where the contract is made too, not first in `call`
+  refused_make({ doc = d, methods = {}, types = "x" }, "types must be a table")
+  refused_make(
+    { doc = d, methods = {}, types = { id = "string" } },
+    "types['id'] must be a function"
+  )
+  refused_make({ doc = d, methods = {}, types = { [""] = function() end } }, "types[''] must be")
+  refused_make({ doc = d, methods = {}, types = { function() end } }, "types['1'] must be")
+  refused_make({ doc = d, methods = {}, root_of = "root" }, "root_of must be a function")
+  refused_make({ doc = d, methods = {}, engine_opts = "root" }, "engine_opts must be a list")
+  refused_make(
+    { doc = d, methods = {}, engine_opts = { root = true } },
+    "engine_opts must be a list"
+  )
+  refused_make({ doc = d, methods = {}, engine_opts = { "root", 5 } }, "engine_opts must be a list")
+  refused_make({ doc = d, methods = {}, engine_opts = { "" } }, "engine_opts must be a list")
+  for _, bad in ipairs({ "1024", 0, -5, 1.5, math.huge, 0 / 0 }) do
+    refused_make({ doc = d, methods = {}, max_request_bytes = bad }, "max_request_bytes must be")
+  end
+  ok(
+    pcall(capi.make, {
+      doc = d,
+      methods = {},
+      types = {
+        id = function()
+          return true
+        end,
+      },
+      root_of = function() end,
+      engine_opts = {},
+      max_request_bytes = 1,
+    }),
+    "well-formed fields are taken"
+  )
   refused_make({ doc = d, methods = { x = {} } }, "method 'x' needs params and run")
   refused_make({ doc = d, methods = { x = { params = {} } } }, "method 'x' needs params and run")
   refused_make(
@@ -1159,8 +1201,12 @@ return function(H)
   -- the patterns are checked where they are handed in, not when a message falls through to a bad one
   local good_rule = { code = "not_found", find = { "unknown area" } }
   refused_make(
-    { doc = d, methods = {}, patterns = { good_rule, { code = "x", find = "y" } } },
+    { doc = d, methods = {}, patterns = { good_rule, { code = "io", find = "y" } } },
     "contract.api.make: patterns[2].find must be a list of strings"
+  )
+  refused_make(
+    { doc = d, methods = {}, patterns = { good_rule, { code = "x", find = { "y" } } } },
+    'contract.api.make: patterns[2].code "x" is not one of errors.CODES'
   )
   refused_make(
     { doc = d, methods = {}, patterns = { good_rule, { find = { "y" } } } },

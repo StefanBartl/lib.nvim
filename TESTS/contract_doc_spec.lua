@@ -243,6 +243,15 @@ return function(H)
   end
 
   -- ── engine_info: the commit of the plugin checkout ──
+  local is_win_or_mac = vim.fn.has("win32") == 1 or vim.fn.has("mac") == 1
+  ---What git prints for `rev-parse --show-toplevel --short HEAD`: the top level (the folder of `-C`, unless the step
+  ---names another as `top`) and then the step's text.
+  ---@param argv string[]
+  ---@param step table
+  ---@return string
+  local function top_and(argv, step)
+    return step[3] and ((step.top or argv[3]) .. "\n" .. step[3]) or ""
+  end
   ---Run `fn(git, calls)` with an instance whose plugin_root is set and a scripted `vim.system`.
   ---@param script (table|string)[]  per call: `{ code, signal, stdout }`, or a string = the start fails with it
   ---@param fn function
@@ -259,7 +268,7 @@ return function(H)
           if type(step) == "string" then
             error(step)
           end
-          return { code = step[1], signal = step[2], stdout = step[3] or "" }
+          return { code = step[1], signal = step[2], stdout = top_and(argv, step) }
         end,
       }
     end
@@ -282,7 +291,7 @@ return function(H)
     eq(#calls, 2, "no third look")
     eq(
       argvs[1],
-      { "git", "-C", "/opt/plugins/tasks.nvim", "rev-parse", "--short", "HEAD" },
+      { "git", "-C", "/opt/plugins/tasks.nvim", "rev-parse", "--show-toplevel", "--short", "HEAD" },
       "the checkout, slash-cleaned"
     )
   end)
@@ -346,7 +355,7 @@ return function(H)
       eq(git(), "abc1234")
       eq(
         argvs[1],
-        { "git", "-C", case[2], "rev-parse", "--short", "HEAD" },
+        { "git", "-C", case[2], "rev-parse", "--show-toplevel", "--short", "HEAD" },
         "plugin_root " .. case[1]
       )
     end, case[1])
@@ -367,6 +376,52 @@ return function(H)
     eq(started, 0, "no checkout named: no process")
   end
 
+  -- a plugin_root that is no checkout of its own: `-C` walks up, git names the top level of the repo above it,
+  -- and the commit of that repo is not the plugin's
+  with_script({ { 0, 0, "abc1234", top = "/opt/plugins" } }, function(git, calls)
+    eq(git(), "unknown", "the top level is another folder")
+    eq(git(), "unknown")
+    eq(#calls, 1, "that is an answer: kept")
+  end)
+  -- the same folder in another spelling is the same top level (git prints forward slashes, Windows has any case)
+  with_script({ { 0, 0, "abc1234", top = "C:/Opt/P" } }, function(git)
+    eq(
+      git(),
+      is_win_or_mac and "abc1234" or "unknown",
+      "case decides only where the disk ignores it"
+    )
+  end, "C:\\opt\\p\\")
+
+  -- the real git: the checkout of this repo, a folder inside it, and an inherited GIT_DIR that would win over -C
+  local repo = vim.fs.normalize(vim.fn.getcwd())
+  local probe = vim
+    .system({ "git", "-C", repo, "rev-parse", "--show-toplevel", "--short", "HEAD" }, { text = true })
+    :wait(10000)
+  local top_line, sha_line = (probe.stdout or ""):match("^([^\r\n]*)\r?\n(%x+)")
+  if probe.code == 0 and top_line and vim.fs.normalize(top_line):lower() == repo:lower() then
+    local function real_git(root)
+      return doc.new({ plugin = "tasks.nvim", schema = 1, plugin_root = root }).engine_info().git
+    end
+    eq(real_git(repo), sha_line, "the checkout itself: its commit")
+    eq(
+      real_git(repo .. "/lua"),
+      "unknown",
+      "a folder inside the checkout is no checkout of its own"
+    )
+    local saved = { vim.env.GIT_DIR, vim.env.GIT_WORK_TREE }
+    vim.env.GIT_DIR = repo .. "/no-such-git-dir"
+    vim.env.GIT_WORK_TREE = repo .. "/lua"
+    local ran, inherited = pcall(real_git, repo)
+    vim.env.GIT_DIR, vim.env.GIT_WORK_TREE = saved[1], saved[2]
+    eq(
+      { ran, inherited },
+      { true, sha_line },
+      "an inherited GIT_DIR / GIT_WORK_TREE does not reach git"
+    )
+  else
+    H.skipped("contract_doc: real git", "the suite does not run from a git checkout of lib.nvim")
+  end
+
   -- ── prewarm: the lookup in the background, the callback fired later by the spec ──
   ---Run `fn(inst, async, waits)` with a stubbed `vim.system`: a call with a callback is recorded in `async`
   ---(`{ argv, opts, cb }`, fired by the spec), a synchronous `:wait(ms)` answers from `sync_script` and records `ms`.
@@ -384,7 +439,7 @@ return function(H)
         wait = function(_, ms)
           waits[#waits + 1] = ms
           local step = sync_script[#waits]
-          return { code = step[1], signal = step[2], stdout = step[3] or "" }
+          return { code = step[1], signal = step[2], stdout = top_and(argv, step) }
         end,
       }
     end, function()
@@ -400,14 +455,22 @@ return function(H)
   with_async({}, function(inst, async, waits)
     inst.prewarm()
     eq(#async, 1, "one background lookup")
-    eq(async[1].argv, { "git", "-C", "/opt/plugins/tasks.nvim", "rev-parse", "--short", "HEAD" })
-    eq(async[1].opts, { text = true, timeout = 2000 }, "the first look gets 2 s")
+    eq(
+      async[1].argv,
+      { "git", "-C", "/opt/plugins/tasks.nvim", "rev-parse", "--show-toplevel", "--short", "HEAD" }
+    )
+    eq(async[1].opts.timeout, 2000, "the first look gets 2 s")
+    eq(
+      { async[1].opts.text, async[1].opts.clear_env },
+      { true, true },
+      "text, in an environment of its own"
+    )
     inst.prewarm()
     eq(#async, 1, "a second prewarm while it runs starts nothing")
     eq(inst.head("k", "/r").engine.git, "unknown", "while it runs: no wait")
     eq(inst.engine_info().git, "unknown")
     eq(#waits, 0, "nothing synchronous while the lookup runs")
-    async[1].cb({ code = 0, signal = 0, stdout = "abc1234\n" })
+    async[1].cb({ code = 0, signal = 0, stdout = "/opt/plugins/tasks.nvim\nabc1234\n" })
     eq(inst.engine_info().git, "abc1234", "the callback fills the cache: unknown was not pinned")
     inst.prewarm()
     eq(#async, 1, "a known answer: prewarm does nothing")
@@ -416,7 +479,7 @@ return function(H)
   -- `new{ prewarm = true }` starts it right away
   with_async({}, function(inst, async)
     eq(#async, 1, "started by new")
-    async[1].cb({ code = 0, signal = 0, stdout = "bcd2345\n" })
+    async[1].cb({ code = 0, signal = 0, stdout = "/opt/plugins/tasks.nvim\nbcd2345\n" })
     eq(inst.engine_info().git, "bcd2345")
   end, { prewarm = true })
   -- a timeout of the background lookup is one of the three tries; the retry is synchronous and quick
@@ -666,6 +729,23 @@ return function(H)
   eq(d.safe_path("/", "/etc/passwd"), "etc/passwd", "the file system root is still a root")
   eq(d.safe_path("/v", "/"), "<external>/", "a bare slash has no name")
   eq(d.safe_path("C:\\Users\\me\\vault\\", "C:/Users/me/vault/a.md"), "a.md", "a backslash root")
+
+  -- `.` and `..` are resolved before the root is compared: a path that starts with the root and then climbs out of
+  -- it is outside, and the document names it `<external>/<name>`
+  eq(d.relative("/v", "/v/../etc/passwd"), nil, "climbing out of the root is outside")
+  eq(d.relative("/v", "/v/a/../../w/x.md"), nil, "also further down")
+  eq(d.relative("/v", "/v/a/../b.md"), "b.md", "a '..' that stays inside")
+  eq(d.relative("/v", "/v/./a//b.md"), "a/b.md", "'.' and doubled slashes")
+  eq(d.relative("/v/sub/..", "/v/a.md"), "a.md", "dots in the root too")
+  eq(d.relative("C:/Users/me/vault", "C:/Users/me/vault/../other/x.md"), nil, "a drive path")
+  eq(d.safe_path("/v", "/v/../etc/passwd"), "<external>/passwd", "safe_path: outside")
+  eq(d.safe_path("/v", "/v/a/.."), "<external>/v", "the name of the folder it lands in")
+  eq(d.safe_path("/v", "/v/a/./b.md"), "a/b.md", "safe_path: inside")
+  eq(
+    d.safe_path("/v", "docs/../x.md"),
+    "docs/../x.md",
+    "a relative text is not a path of this machine"
+  )
 
   -- case beyond ASCII: NTFS treats Ö and ö as one letter, so a name with an umlaut must match whatever its case
   eq(d.relative("C:/Users/Jörg/vault", "C:/USERS/JÖRG/vault/x"), "x", "Ö and ö")

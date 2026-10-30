@@ -41,6 +41,18 @@ parameter the method does not know is `invalid_argument`**: a request that is
 silently half-understood is worse than one that is refused. A top-level `null`
 is the same as leaving the field out.
 
+The text is **UTF-8 without a byte order mark**. A request that starts with a
+BOM (U+FEFF) is `invalid_argument` with a message that names the BOM (not "not
+valid JSON", which would send the client after a syntax error it does not
+have); it is not stripped silently.
+
+What a method sees after decoding: an empty `[]` and an empty `{}` are both an
+empty Lua table, so a parameter that may be either cannot tell them apart (the
+types `object`, `string_list` and `object_list` all accept `{}`). Without
+`keep_null` a `null` inside an object or a list is `nil`: a trailing one
+shortens a list, one in the middle leaves a hole, so the list is no list any
+more and a list type refuses it. With `keep_null` it is `vim.NIL`, in lists too.
+
 The checks run in a fixed order: the **schema first** (a request of a newer
 schema is always `unsupported_schema`, also when it carries a field or, for a
 flat method, a parameter this engine does not know: that is version skew, not a
@@ -66,11 +78,16 @@ The names of a request that a refusal repeats (an unknown method, field or param
 |---|---|---|
 | `doc` | required | A `contract.doc` instance (schema, plugin, error kind, `encode`, `error_doc`). |
 | `methods` | required | `name -> method`. Checked where it is made: a wrong shape, an unknown type or a `required` without a parameter raises at once (position of the caller). |
-| `engine_opts` | `{ "root" }` | Keys of `call`'s opts that `run` receives. |
-| `root_of(engine_opts, opts)` | `engine_opts.root` | The root to hide in an error message. The plugin resolves it the way its engine does (a source that cannot be found is named in the message, and the path the caller gave is still a path of this machine). The root may be spelled with either slash and a trailing slash (`C:\Users\me\vault`, `C:/Users/me/vault/`): `contract.doc` hides and names it alike, so the default needs no normalising. |
+| `engine_opts` | `{ "root" }` | Keys of `call`'s opts that `run` receives. A list of non-empty texts, checked where it is made. |
+| `root_of(engine_opts, opts)` | `engine_opts.root` | A function (checked where it is made). The root to hide in an error message. The plugin resolves it the way its engine does (a source that cannot be found is named in the message, and the path the caller gave is still a path of this machine). The root may be spelled with either slash and a trailing slash (`C:\Users\me\vault`, `C:/Users/me/vault/`): `contract.doc` hides and names it alike, so the default needs no normalising. |
 | `patterns` | none | The plugin's own message patterns for `classify`. The shape is checked where `make` is called (`errors.check_patterns`): a rule that is not `{ code = string, find = string[] }` raises at once, with the position of the caller, instead of failing later when a message reaches it. `nil` and `false` mean none. |
-| `types` | none | `name -> function(value) -> boolean`. |
-| `max_request_bytes` | 256 KiB | Also the field `api.MAX_REQUEST_BYTES`, read at call time. |
+| `types` | none | `name -> function(value) -> boolean`, names not empty; checked where it is made. |
+| `max_request_bytes` | 256 KiB | A whole number of 1 or more, checked where it is made. Also the field `api.MAX_REQUEST_BYTES`, read at call time. |
+
+Every key of the config is checked where `make` is called, and a wrong one
+raises with the position of the caller. What is changed **afterwards** is not:
+a method added to `api.METHODS` later (or a `MAX_REQUEST_BYTES` set later) is
+taken as it is at call time, and a malformed one answers `internal`.
 
 ## The instance
 

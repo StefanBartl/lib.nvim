@@ -13,7 +13,8 @@
 --- one is `unsupported_schema`; `params` may be left out too. A parameter the method does not know is
 --- `invalid_argument`: a request that is silently half-understood is worse than one that is refused. A request is
 --- at most 256 KiB. A method with `flat = true` carries its parameters as the request's own fields (a write door),
---- and `keep_null = true` keeps a JSON `null` as `vim.NIL` (it means "remove" in a patch).
+--- and `keep_null = true` keeps a JSON `null` as `vim.NIL` (it means "remove" in a patch). The text is UTF-8 without
+--- a byte order mark: a leading BOM is `invalid_argument`, with a message that names it.
 ---
 --- A method is `{ params = { name = type }, run = function, flat? = boolean, keep_null? = boolean,
 --- required? = { name } }`. `run(params, opts)` answers a document table, or `nil` and an error: a `contract.errors`
@@ -157,6 +158,47 @@ function M.make(cfg)
   if type(cfg.methods) ~= "table" then
     error("contract.api.make: methods must be a table", 2)
   end
+  -- the other fields are checked here too: a wrong one would only show in `call`, as `internal` on every request
+  -- (or not at all: a `max_request_bytes` that is a text raises inside the comparison)
+  if cfg.types ~= nil then
+    if type(cfg.types) ~= "table" then
+      error("contract.api.make: types must be a table of name -> function", 2)
+    end
+    for name, check in pairs(cfg.types) do
+      if type(name) ~= "string" or name == "" or type(check) ~= "function" then
+        error(
+          ("contract.api.make: types['%s'] must be a function under a name that is not empty"):format(
+            tostring(name)
+          ),
+          2
+        )
+      end
+    end
+  end
+  if cfg.root_of ~= nil and type(cfg.root_of) ~= "function" then
+    error("contract.api.make: root_of must be a function", 2)
+  end
+  if cfg.engine_opts ~= nil then
+    local list = type(cfg.engine_opts) == "table" and vim.islist(cfg.engine_opts)
+    for _, key in ipairs(list and cfg.engine_opts or {}) do
+      if type(key) ~= "string" or key == "" then
+        list = false
+        break
+      end
+    end
+    if not list then
+      error(
+        "contract.api.make: engine_opts must be a list of option names (texts that are not empty)",
+        2
+      )
+    end
+  end
+  local max = cfg.max_request_bytes
+  if
+    max ~= nil and (type(max) ~= "number" or max < 1 or max ~= math.floor(max) or max == math.huge)
+  then
+    error("contract.api.make: max_request_bytes must be a whole number of 1 or more", 2)
+  end
   local types = vim.tbl_extend("force", TYPES, cfg.types or {})
   for name, method in pairs(cfg.methods) do
     if
@@ -263,6 +305,15 @@ function M.make(cfg)
       if #request > api.MAX_REQUEST_BYTES then
         return nil,
           fail("payload_too_large", ("a request is at most %d bytes"):format(api.MAX_REQUEST_BYTES))
+      end
+      if request:sub(1, 3) == "\239\187\191" then
+        -- vim.json.decode refuses it as "not valid JSON", which sends a client looking for a syntax error it does
+        -- not have; the contract is UTF-8 without a byte order mark, and the message says so
+        return nil,
+          fail(
+            "invalid_argument",
+            "the request starts with a byte order mark (U+FEFF): send UTF-8 without a BOM"
+          )
       end
       if vim.trim(request) == "" then
         req = {}

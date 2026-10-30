@@ -67,7 +67,15 @@ metadata (`0.12.2+v0.12.2`; a nightly looks like `0.13.0-dev+g<hash>`). Like all
 `engine.git` is the short commit of `plugin_root`. A definite answer is kept for
 the life of the instance; a lookup that did not finish in time is asked again,
 three times at most (the first look waits 2 s, a retry 0.5 s); git saying there
-is no commit stays `unknown`. The lookup is synchronous: the first `head()` (or
+is no commit stays `unknown`. Only the commit of `plugin_root` **itself** counts:
+git is asked for `--show-toplevel` too, and a `plugin_root` that is no checkout
+of its own (a folder inside another repo: `git -C` walks up) is `unknown`, not
+the commit of the repo above it (both sides resolved with `fs_realpath`, case
+ignored on Windows and macOS). Git runs without the variables that would point
+it at another repository (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_COMMON_DIR`,
+`GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`, `GIT_ALTERNATE_OBJECT_DIRECTORIES`,
+`GIT_NAMESPACE`): a host started from a git hook inherits them, and they win
+over `-C`. The lookup is synchronous: the first `head()` (or
 `engine_info()`) of an instance waits for git, usually about 100 ms on a warm
 machine, up to 2 s on a loaded one. A command-line tool does not notice.
 
@@ -106,8 +114,8 @@ document is built from foreign values.
 
 | | |
 |---|---|
-| `relative(root, path)` | `path` relative to the root with `/`, or `nil` when not inside (case-insensitive, either slash). An empty root is no root: nothing is inside it. |
-| `safe_path(root, s)` | Inside the root: relative. Absolute (`/x`, `C:/x`) or `~`: `<external>/<name>`. Else as it is. With an empty root every absolute path is external. |
+| `relative(root, path)` | `path` relative to the root with `/`, or `nil` when not inside (case-insensitive, either slash). `.` and `..` segments and doubled slashes are resolved as text first (root and path): `<root>/../x` is **not** inside. No disk access, so a symlink is not followed. An empty root is no root: nothing is inside it. |
+| `safe_path(root, s)` | Inside the root: relative. Absolute (`/x`, `C:/x`, resolved like `relative`) or `~`: `<external>/<name>` (`<root>/a/..` is `<external>/<name of the root>`). Else as it is. With an empty root every absolute path is external. |
 | `redact(root, s)` | The root in a message, in any slash spelling (either slash, mixed) and any case, becomes the placeholder. A root without a name (`""`, `/`) hides nothing. One pass: the cost follows the length of the text, not the number of hits. |
 
 The root may be spelled with either slash, mixed, and with a trailing slash

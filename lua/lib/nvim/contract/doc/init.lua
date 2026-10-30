@@ -14,7 +14,7 @@
 ---  - **no path of this machine**: `relative`, `safe_path` and `redact` turn paths into source-relative ones, an
 ---    absolute one into `<external>/<name>`, the root inside a message into the placeholder (`<vault>`). The root
 ---    may be spelled with either slash and a trailing slash, an empty one is no root; case does not matter (Unicode
----    letters included);
+---    letters included); `.`/`..` segments are resolved as text, so a path that climbs out of the root is outside;
 ---  - **a document is at most `MAX_DOC_BYTES`** (8 MiB); a bigger one is the error `payload_too_large`, never a
 ---    cut-off document; an error document is exempt (the limit must never keep a client from being told why);
 ---  - the bytes are canonical (`lib.nvim.json.canonical`): same document, same bytes.
@@ -41,6 +41,10 @@ require("lib.nvim.contract.doc.@types")
 local json = require("lib.nvim.json.canonical")
 local etag = require("lib.nvim.fs.etag")
 local errors = require("lib.nvim.contract.errors")
+local collapse_dots = require("lib.nvim.cross.fs.separators.collapse_dots")
+local is_windows = require("lib.nvim.cross.platform.is_windows")
+
+local uv = vim.uv or vim.loop
 
 local M = {}
 
@@ -94,6 +98,40 @@ local function scope_id(root)
     return ""
   end
   return name:match("[^/]*$")
+end
+
+---The variables that make git look at another repository than the one `-C` names (they win over `-C`).
+---@type table<string, true>
+local GIT_REDIRECTS = {
+  GIT_DIR = true,
+  GIT_WORK_TREE = true,
+  GIT_COMMON_DIR = true,
+  GIT_INDEX_FILE = true,
+  GIT_OBJECT_DIRECTORY = true,
+  GIT_ALTERNATE_OBJECT_DIRECTORIES = true,
+  GIT_NAMESPACE = true,
+}
+
+---Disks that compare names without case by default (NTFS, APFS). Asked once: `same_folder` runs in the callback of
+---`prewarm`, a fast-event context, where `vim.fn.has` cannot be called.
+local FOLD_CASE = is_windows() or uv.os_uname().sysname == "Darwin"
+
+---Whether git's top level (`--show-toplevel`, forward slashes) is the folder `root` names: both resolved
+---(`fs_realpath`: a symlink, a short 8.3 name, another case of the name on Windows) when they exist, compared as text
+---otherwise (case-insensitive on Windows and macOS, whose disks are by default).
+---@param top string
+---@param root string
+---@return boolean
+local function same_folder(top, root)
+  local function norm(p)
+    local real = uv.fs_realpath(p)
+    local text = bare(real or p)
+    if FOLD_CASE then
+      text = fold(text)
+    end
+    return text
+  end
+  return norm(top) == norm(root)
 end
 
 ---A document is never bigger than this unless the plugin says so.
@@ -202,7 +240,24 @@ function M.new(cfg)
 
   ---@return string[]
   local function git_argv()
-    return { "git", "-C", plugin_root, "rev-parse", "--short", "HEAD" }
+    -- `--show-toplevel` too: `-C` walks UP to the next repository, and a `plugin_root` that is no checkout of its own
+    -- (a plugin copied into the folder of another repo) would be stamped with the commit of that repo
+    return { "git", "-C", plugin_root, "rev-parse", "--show-toplevel", "--short", "HEAD" }
+  end
+
+  ---The options of the git process: the environment of this one without the variables that point git at another
+  ---repository (`GIT_DIR`, `GIT_WORK_TREE`, ...). A host started from inside a git hook or by `git rebase --exec`
+  ---inherits them, and they win over `-C`.
+  ---@param extra table
+  ---@return table
+  local function git_opts(extra)
+    local env = {}
+    for key, value in pairs(uv.os_environ()) do
+      if not GIT_REDIRECTS[key:upper()] then
+        env[key] = value
+      end
+    end
+    return vim.tbl_extend("force", { text = true, env = env, clear_env = true }, extra)
   end
 
   ---The wait of the next look: the first one gets the full 2 s, a retry 0.5 s.
@@ -219,8 +274,8 @@ function M.new(cfg)
   ---@return string
   local function git_settle(ok, res)
     if ok and res and res.code == 0 then
-      local sha = vim.trim(res.stdout or "")
-      if sha:match("^%x+$") then
+      local top, sha = vim.trim(res.stdout or ""):match("^([^\n]-)\r?\n%s*(%x+)$")
+      if top and same_folder(top, plugin_root) then
         git_cache = sha
         return git_cache
       end
@@ -234,7 +289,8 @@ function M.new(cfg)
     return "unknown"
   end
 
-  ---Short commit of the plugin checkout; "unknown" when there is no git, no checkout or no `plugin_root`. A definite
+  ---Short commit of the plugin checkout; "unknown" when there is no git, no checkout, a `plugin_root` that is no
+  ---checkout of its own (git's top level is another folder) or no `plugin_root`. A definite
   ---answer is kept for the life of the process. A lookup that did not finish in time (a loaded machine, a slow start
   ---of git) is not: it is asked again, three times at most, so a long-lived host does not stay "unknown" because of
   ---one slow moment. Only the first look gets the full wait; a retry is quick (a warm git answers in about 100 ms),
@@ -254,7 +310,7 @@ function M.new(cfg)
     end
     local wait_ms = git_wait()
     local ok, res = pcall(function()
-      return vim.system(git_argv(), { text = true }):wait(wait_ms)
+      return vim.system(git_argv(), git_opts({})):wait(wait_ms)
     end)
     return git_settle(ok, res)
   end
@@ -276,7 +332,7 @@ function M.new(cfg)
       git_running = false
       git_settle(true, res)
     end
-    if not pcall(vim.system, git_argv(), { text = true, timeout = git_wait() }, on_exit) then
+    if not pcall(vim.system, git_argv(), git_opts({ timeout = git_wait() }), on_exit) then
       git_running = false
       git_settle(false) -- an error of the start: one try, asked again on a later look
     end
@@ -317,7 +373,9 @@ function M.new(cfg)
 
   ---`path` relative to the root, with `/`; `nil` when it is not inside it (case-insensitive: a Windows path). The
   ---root may end in a slash or use backslashes. An empty root is no root: nothing is inside it (`/` is the root of
-  ---the file system and everything absolute is inside that).
+  ---the file system and everything absolute is inside that). `.` and `..` segments (and doubled slashes) are resolved
+  ---as text first, in the root and in the path: `<root>/../x` starts with the root but is NOT inside it. (As text:
+  ---a symlink inside the root that points out of it is not followed; the document only must not show the path.)
   ---@param root string
   ---@param path string
   ---@return string|nil
@@ -325,8 +383,8 @@ function M.new(cfg)
     if root == "" then
       return nil
     end
-    local p = lower_slash(path)
-    local r = bare(root)
+    local p = collapse_dots(path)
+    local r = bare(collapse_dots(root))
     if fold(p:sub(1, #r + 1)) == fold(r) .. "/" then
       return p:sub(#r + 2)
     end
@@ -340,6 +398,10 @@ function M.new(cfg)
   ---@return string
   function d.safe_path(root, s)
     local text = lower_slash(s)
+    if text:find("^%a:/") or text:find("^/") then
+      -- an absolute path is resolved before its name is taken: `<root>/a/..` is `<external>/<root's name>`, not `..`
+      text = collapse_dots(text)
+    end
     local rel = d.relative(root, text)
     if rel then
       return rel

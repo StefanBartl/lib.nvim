@@ -21,6 +21,7 @@
 ---@field CODES string[]
 ---@field DETAIL_KEYS string[]
 ---@field fail fun(code: string, message: string, retryable?: boolean): Lib.Contract.Error
+---@field is_code fun(code: any): boolean   Whether `code` is one of `CODES` (any other is answered as `internal`).
 ---@field scrub fun(text: string): string
 ---@field text fun(value: any): string
 ---@field check_patterns fun(patterns: any): string|nil
