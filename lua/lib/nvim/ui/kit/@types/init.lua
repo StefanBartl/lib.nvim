@@ -469,7 +469,7 @@
 ---@class Lib.UI.Kit.History
 ---@field go fun(self: Lib.UI.Kit.History, state: table, changes: table): boolean  # record, apply, push; false = no stop made
 ---@field push fun(self: Lib.UI.Kit.History, state: table): boolean  # new stop after the current one, forward history dropped
----@field step fun(self: Lib.UI.Kit.History, state: table, delta: integer): boolean  # restore the entry `delta` away; false = out of range
+---@field step fun(self: Lib.UI.Kit.History, state: table, delta: integer): boolean  # restore the entry `delta` away; false = out of range, error = not an integer
 ---@field back fun(self: Lib.UI.Kit.History, state: table, count?: integer): boolean
 ---@field forward fun(self: Lib.UI.Kit.History, state: table, count?: integer): boolean
 ---@field record fun(self: Lib.UI.Kit.History, state: table)  # overwrite the current entry from `state`
