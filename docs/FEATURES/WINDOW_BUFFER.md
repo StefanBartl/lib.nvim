@@ -216,6 +216,17 @@ Narrow shell-escaping for building terminal commands, terminal-buffer
 detection and forced cleanup, and Kitty-terminal detection for
 Kitty-specific integrations (image protocol, remote control).
 
+## Companion window
+
+- **Module:** `lib.nvim.companion` (`open`, `handle:update`/`set_title`/`close`,
+  `handles`, `close_all`)
+
+A second Neovim in its own terminal window (a second monitor), fed over
+msgpack-RPC: the main instance pushes read-only content and highlights, keys in
+the companion run named actions in the main instance. Logic and state stay in
+the main instance. First consumer: the dap.nvim memory view. See
+[`lua/lib/nvim/companion/README.md`](../../lua/lib/nvim/companion/README.md).
+
 ## Buffer-content helpers
 
 - **Module:** `lib.nvim.buffer.*` — `insert_lines`, `get_alternate`,

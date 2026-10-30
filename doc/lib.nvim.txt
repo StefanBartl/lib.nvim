@@ -196,6 +196,10 @@ Neovim adapters.
     lib.nvim.normalize     path / value normalization
     lib.nvim.git           git helpers
     lib.nvim.terminal      terminal-buffer helpers
+    lib.nvim.companion     a second Neovim in its own terminal window, fed
+                           over msgpack-RPC: read-only content pushed from
+                           here, keys there run actions here (see
+                           lua/lib/nvim/companion/README.md)
     lib.nvim.require       safe / dir / lazy require
     lib.nvim.lua_ls        LuaLS: module path, @module annotation
     lib.nvim.core          misc Neovim helpers (has_exec, simple_echo)

@@ -2,8 +2,8 @@
 
 Part of the [lib.nvim API reference](README.md). Covers
 `lib.nvim.buf_win_tab.*`, `lib.nvim.window.*`, `lib.nvim.ui.*`,
-`lib.nvim.notify.*`, `lib.nvim.selection`, `lib.nvim.terminal`, and
-`lib.nvim.buffer.*`.
+`lib.nvim.notify.*`, `lib.nvim.selection`, `lib.nvim.terminal`,
+`lib.nvim.companion`, and `lib.nvim.buffer.*`.
 
 ---
 
@@ -485,6 +485,33 @@ M.escape(path: string): string          -- narrow ad-hoc shell escaping, not ful
 M.is_terminal_buf(bufnr: integer): boolean|nil
 M.delete_terminal_buf(bufnr: integer): boolean|nil   -- force-deletes; does NOT check is_terminal_buf first
 M.is_kitty(): boolean
+```
+
+---
+
+## `lib.nvim.companion` (see README)
+
+A second Neovim in its own terminal window, fed over msgpack-RPC: one read-only
+buffer whose content the main instance pushes, keys there run named actions in
+the main instance. First consumer: the dap.nvim memory view.
+
+```
+M.open(opts: Lib.Companion.OpenOpts): Lib.Companion.Handle|nil, string|nil
+  -- opts: title, lines, highlights, filetype, actions (name -> fn, run HERE),
+  --       keys (lhs -> name | { name, args... , prompt? }), on_close, terminal (argv
+  --       template with {cmd}; false = headless, no window), attach_timeout (ms,
+  --       default 15000; false = no limit), env (tests)
+handle:update(lines: string[], highlights?: Lib.Companion.Highlight[]): boolean, string|nil
+handle:set_title(title: string): boolean
+handle:close()                       -- idempotent; on_close once; the quit is a notification
+handle:is_open(): boolean
+handle:is_attached(): boolean
+M.handles(): Lib.Companion.Handle[]
+M.close_all()
+-- launch (pure): inner_argv(opts), default_terminal(env), terminal_template(term),
+--                expand(template, inner, title), argv(...)
+-- protocol: new(transport, clock?) -> registry (create/attach/connect/action/detach/check/close_all),
+--           messages, ATTACH_TIMEOUT_MS; the transport has no blocking request (deadlock)
 ```
 
 ---

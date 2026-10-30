@@ -242,6 +242,9 @@ local specs = {
   "contract_host_spec.lua",
   "terminal_host_osc_spec.lua",
   "shell_quote_spec.lua",
+  "companion_launch_spec.lua",
+  "companion_protocol_spec.lua",
+  "companion_headless_spec.lua",
 }
 
 --- Straight to stdout rather than through `print`.

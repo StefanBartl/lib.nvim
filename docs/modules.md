@@ -80,6 +80,7 @@ aggregator exists for convenience, not as the entry point.
 | `lib.nvim.normalize`   | path / value normalization                          |
 | `lib.nvim.git`         | git helpers                                         |
 | `lib.nvim.terminal`    | terminal-buffer helpers (typing a quoted line into one: [`cross.shell_quote`](../lua/lib/nvim/cross/shell_quote/README.md)); `terminal.host` (which terminal, tmux, OSC 1337) and `terminal.osc` (safe sequence builders, tmux passthrough, one-call writer) |
+| [`lib.nvim.companion`](../lua/lib/nvim/companion/README.md) | a companion window: a second Neovim in its own terminal window (Windows Terminal / `$TERMINAL` / Terminal.app / xterm family, or an argv template) that connects back over msgpack-RPC and shows one read-only buffer the main instance pushes (`open`, `handle:update`/`set_title`/`close`); keys there run named actions in the main instance (fixed arguments or a prompted text); `on_close` when it is gone, every companion closed on `VimLeavePre`, no orphans either way. Protocol layer testable with a fake transport, argv choice pure. First consumer: the dap.nvim memory view |
 | `lib.nvim.require`     | safe / dir / lazy require                           |
 | `lib.nvim.lua_ls`      | LuaLS: module path, `@module` annotation            |
 | `lib.nvim.core`        | misc Neovim helpers (`has_exec`, `simple_echo`)     |
@@ -152,6 +153,7 @@ and are generated on install by your plugin manager (see [Help docs](help.md)).
 - [`lib.nvim.fs.create_exclusive`](../lua/lib/nvim/fs/create_exclusive/README.md) · [`lib.nvim.fs.with_lock`](../lua/lib/nvim/fs/with_lock/README.md) · [`lib.nvim.fs.etag`](../lua/lib/nvim/fs/etag/README.md)
 - [`lib.nvim.markdown.frontmatter`](../lua/lib/nvim/markdown/frontmatter/README.md)
 - [`lib.nvim.cache`](../lua/lib/nvim/cache/README.md)
+- [`lib.nvim.companion`](../lua/lib/nvim/companion/README.md)
 
 ### `:help` pages
 
