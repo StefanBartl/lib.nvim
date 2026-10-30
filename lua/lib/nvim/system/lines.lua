@@ -65,17 +65,32 @@ end
 ---means anything is the caller's question, not this module's.
 ---@return Lib.System.Lines.Collector
 function M.collector()
-  local buffered = ""
+  -- The unterminated tail, kept as the chunks it arrived in and joined only
+  -- once its newline shows up. Concatenating it with every chunk and
+  -- splitting the whole buffer again made a stream that never sends a
+  -- newline (a `\r` progress bar, minified JSON) cost O(n^2) in its length.
+  local pending = {}
 
   return {
     feed = function(data)
-      buffered = buffered .. data
-      local parts = vim.split(buffered, "\n", { plain = true })
-      -- The last part is either a partial line or "" (the chunk ended on a
-      -- newline). Either way it is not complete, so it stays buffered -- which
-      -- is also why a CRLF torn across two chunks still works: the pair is
-      -- only ever examined once both halves are in `buffered`.
-      buffered = table.remove(parts) or ""
+      if not data:find("\n", 1, true) then
+        if data ~= "" then
+          pending[#pending + 1] = data
+        end
+        return {}
+      end
+      -- Only the new chunk is split. Its first part continues the pending
+      -- tail; its last part is either a partial line or "" (the chunk ended
+      -- on a newline) and becomes the new tail. A CRLF torn across two chunks
+      -- still strips because the CR is only examined once the joined line is
+      -- complete.
+      local parts = vim.split(data, "\n", { plain = true })
+      if #pending > 0 then
+        pending[#pending + 1] = parts[1]
+        parts[1] = table.concat(pending)
+      end
+      local tail = table.remove(parts)
+      pending = tail ~= "" and { tail } or {}
       for i = 1, #parts do
         parts[i] = strip_cr(parts[i])
       end
@@ -88,8 +103,8 @@ function M.collector()
       -- emptiness first returned it as "", which is truthy in Lua, so a
       -- caller writing `if last then ...` emitted a blank line at the end of
       -- every such stream.
-      local last = strip_cr(buffered)
-      buffered = ""
+      local last = strip_cr(table.concat(pending))
+      pending = {}
       if last == "" then
         return nil
       end
@@ -129,9 +144,15 @@ function M.buffered(cb)
       return
     end
 
-    for _, line in ipairs(collector.feed(data)) do
+    -- One scheduled callback per chunk, not per line: a chunk of thousands of
+    -- short lines would otherwise queue thousands of closures. The caller
+    -- still sees one call per line, in order.
+    local got = collector.feed(data)
+    if #got > 0 then
       vim.schedule(function()
-        cb(nil, line)
+        for _, line in ipairs(got) do
+          cb(nil, line)
+        end
       end)
     end
   end

@@ -91,6 +91,61 @@ return function(H)
     eq(table.concat(out.feed("\n"), "|"), "foo", "collector: stdout is completed by stdout")
   end
 
+  -- collector: cost on a long line with no newline ------------------------
+  do
+    -- 2 MB with no newline in 64 KiB chunks (a `\r` progress bar on stderr,
+    -- minified JSON). The collector used to concatenate the whole tail with
+    -- every chunk and split it again: 32 chunks cost ~20x one 2 MB chunk.
+    -- Linear work keeps the two close; the bound is generous so a noisy
+    -- runner does not flake, and best-of-5 removes one-off stalls.
+    local chunk = string.rep("x", 64 * 1024)
+    local whole = string.rep(chunk, 32)
+    local function best_ms(fn)
+      local best = math.huge
+      for _ = 1, 5 do
+        local t = vim.uv.hrtime()
+        fn()
+        best = math.min(best, (vim.uv.hrtime() - t) / 1e6)
+      end
+      return best
+    end
+    local line_len
+    local chunked = best_ms(function()
+      local c = lines.collector()
+      for _ = 1, 32 do
+        c.feed(chunk)
+      end
+      line_len = #c.feed("\n")[1]
+    end)
+    local single = best_ms(function()
+      local c = lines.collector()
+      c.feed(whole)
+      c.feed("\n")
+    end)
+    eq(line_len, #whole, "collector: 32 newline-free chunks rejoin into one line")
+    ok(
+      chunked < math.max(single, 0.5) * 8,
+      string.format(
+        "collector: chunked feed is linear (%.2f ms vs %.2f ms in one chunk)",
+        chunked,
+        single
+      )
+    )
+  end
+
+  do
+    -- Split chunks still rejoin when the tail spans several of them.
+    local c = lines.collector()
+    eq(#c.feed("ab"), 0, "collector: first piece waits")
+    eq(#c.feed("cd"), 0, "collector: second piece waits")
+    eq(
+      table.concat(c.feed("ef\r\ngh\n"), "|"),
+      "abcdef|gh",
+      "collector: a multi-chunk tail is joined once"
+    )
+    eq(c.flush(), nil, "collector: nothing left after it")
+  end
+
   -- buffered: the vim.system handler shape --------------------------------
   eq(lines.buffered(nil), nil, "buffered: a nil callback yields no handler")
 
@@ -108,6 +163,28 @@ return function(H)
       return #got >= 2
     end, 10)
     eq(table.concat(got, "|"), "alpha|beta", "buffered: lines arrive whole, CR stripped")
+  end
+
+  do
+    -- One scheduled callback per chunk, still one cb call per line, in order.
+    local got = {}
+    local handler = lines.buffered(function(_, line)
+      got[#got + 1] = line
+    end)
+    local scheduled = 0
+    local real_schedule = vim.schedule
+    vim.schedule = function(fn) ---@diagnostic disable-line: duplicate-set-field
+      scheduled = scheduled + 1
+      return real_schedule(fn)
+    end
+    local ok_call, call_err = pcall(handler, nil, "a\nb\nc\nd\n")
+    vim.schedule = real_schedule
+    ok(ok_call, "buffered: handler ran: " .. tostring(call_err))
+    vim.wait(200, function()
+      return #got >= 4
+    end, 10)
+    eq(scheduled, 1, "buffered: a chunk of four lines schedules once")
+    eq(table.concat(got, "|"), "a|b|c|d", "buffered: ...and each line still gets its own call")
   end
 
   do
