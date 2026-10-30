@@ -442,7 +442,18 @@ local function answer_word(label)
 end
 
 --- Superscript digits, drawn after the label of a button that has no letter key.
-local SUPERSCRIPT = { "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹" }
+local SUPERSCRIPT = {
+  ["0"] = "⁰",
+  ["1"] = "¹",
+  ["2"] = "²",
+  ["3"] = "³",
+  ["4"] = "⁴",
+  ["5"] = "⁵",
+  ["6"] = "⁶",
+  ["7"] = "⁷",
+  ["8"] = "⁸",
+  ["9"] = "⁹",
+}
 
 ---@internal
 --- Which key picks which button, and where each button shows its key. Deterministic, in this
@@ -454,8 +465,10 @@ local SUPERSCRIPT = { "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"
 ---      `l`, `q` move or cancel) or already taken is refused and reported.
 ---   3. Every button still without a letter: the first letter of its label, else the next letter of
 ---      the label that is still free, left to right; buttons earlier in the row choose first.
----   4. Digits: a button labelled with a single digit owns that digit (a 1-5 scale), the other
+---   4. Digits: a button labelled with a single digit owns that digit (a 0-5 scale), the other
 ---      digits 1-9 pick the button at that position -- every button, with a letter or without.
+---      A button still without any key then takes the first free digit (1-9, then 0); one past
+---      that (more than ten buttons without a free letter) is reached with h/l only.
 ---
 --- Keys are lower-case here; the dialog maps the capital too.
 ---@param labels string[]
@@ -464,7 +477,7 @@ local SUPERSCRIPT = { "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"
 ---@return table<string, integer> keys  # lower-case key -> button index
 ---@return string[] refused  # the `&` letters that could not be used, for a warning
 ---@return table<integer, { col: integer, text: string }[]> shown  # per button: the label letters to mark (byte column, text)
----@return table<integer, string> digits  # per button without a letter key: the digit to show next to its label
+---@return table<integer, string> digits  # per button without a letter key: its digit key ("0"-"9"), shown next to its label
 local function hotkeys(labels, marks, custom)
   local keys, refused, shown = {}, {}, {}
   local function show(i, col, text)
@@ -530,7 +543,7 @@ local function hotkeys(labels, marks, custom)
 
   -- 4. digits
   for i, label in ipairs(labels) do
-    if type(label) == "string" and label:match("^[1-9]$") and not keys[label] then
+    if type(label) == "string" and label:match("^[0-9]$") and not keys[label] then
       keys[label] = i
       if not shown[i] then
         show(i, 0, label)
@@ -542,7 +555,23 @@ local function hotkeys(labels, marks, custom)
     local d = tostring(i)
     keys[d] = keys[d] or i
     if not shown[i] and keys[d] == i then
-      digits[i] = SUPERSCRIPT[i]
+      digits[i] = d
+    end
+  end
+  -- a button still without any key (its place digit went to a digit label, or it is past the
+  -- ninth) takes the first free digit, 1-9 then 0; past that it is reached with h/l only
+  local has_key = {}
+  for _, i in pairs(keys) do
+    has_key[i] = true
+  end
+  for i = 1, #labels do
+    if not has_key[i] then
+      for _, d in ipairs({ "1", "2", "3", "4", "5", "6", "7", "8", "9", "0" }) do
+        if not keys[d] then
+          keys[d], has_key[i], digits[i] = i, true, d
+          break
+        end
+      end
     end
   end
   return keys, refused, shown, digits
@@ -905,7 +934,7 @@ local function open_new(opts, settle_old)
       local r = ranges[i]
       if r then
         api.nvim_buf_set_extmark(surf.bufnr, state.hot_ns, r.row, r.end_col - 2, {
-          virt_text = { { digit, "KitMuted" } },
+          virt_text = { { SUPERSCRIPT[digit], "KitMuted" } },
           virt_text_pos = "overlay",
           hl_mode = "combine",
           priority = 90,

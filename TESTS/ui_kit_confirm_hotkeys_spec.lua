@@ -162,6 +162,41 @@ return function(H)
     type_keys("2")
     eq(calls, { "Ko" }, "2 picks the second button")
 
+    -- a 0-5 scale: every digit label owns its digit, 0 included
+    local scale = { "0", "1", "2", "3", "4", "5" }
+    for _, want in ipairs(scale) do
+      calls = open({ question = "Rate?", choices = scale })
+      type_keys(want)
+      eq(calls, { want }, want .. " picks the button labelled " .. want)
+    end
+    surf = select(2, open({ question = "Rate?", choices = scale }))
+    eq(marked(surf.bufnr, "KitHotkey"), scale, "every digit label is marked")
+    confirm.cancel()
+    -- a letterless button whose place digit a digit label owns takes the first free digit
+    calls, surf = open({ question = "Q?", choices = { "-", "1" } })
+    sup = superscripts(surf.bufnr)
+    eq(#sup, 1, "the letterless button shows a digit")
+    eq(sup[1].text, "³", "the first free one (1 is the label's, 2 is the place of button 2)")
+    type_keys("3")
+    eq(calls, { "-" }, "and answers to it")
+    calls = open({ question = "Q?", choices = { "-", "1" } })
+    type_keys("1")
+    eq(calls, { "1" }, "1 still picks the button labelled 1")
+    -- past the ninth: the tenth letterless button gets 0, the eleventh only h/l
+    local many = {}
+    for i = 1, 11 do
+      many[i] = "#" .. i
+    end
+    calls, surf = open({ question = "Q?", choices = many })
+    sup = superscripts(surf.bufnr)
+    eq(#sup, 10, "ten buttons show a digit")
+    local texts = vim.tbl_map(function(s)
+      return s.text
+    end, sup)
+    ok(vim.tbl_contains(texts, "⁰"), "the tenth shows 0")
+    type_keys("0")
+    eq(calls, { many[10] }, "0 picks the tenth button")
+
     -- the marks survive moving the focus
     surf = select(2, open({ question = "Q?", choices = { "Ok", "Ko", "?!" } }))
     confirm.move(1)

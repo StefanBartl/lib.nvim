@@ -363,7 +363,9 @@ Options of `kit.confirm` / `kit.ask`:
      letter of the label, left to right. Buttons earlier in the row choose first: `Cancel`, `Close`,
      `Copy` get `c`, `o`, `p`.
   4. The digits 1-9 pick the button at that position (every button, with a letter or without); a
-     button labelled with a single digit owns that digit (a `1`..`5` scale after `Skip`).
+     button labelled with a single digit owns that digit (a `0`..`5` scale after `Skip`). A button
+     that still has no key takes the first free digit (1-9, then 0); buttons past the tenth without
+     a free letter are reached with `h`/`l` only.
 
   `h`, `l` and `q` stay navigation and are never a hotkey. The key is marked in the button: its
   letter in the accent colour and underlined (`KitHotkey`; the underline stays on the focused
