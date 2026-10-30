@@ -96,6 +96,9 @@ local function decorate(self)
     relativenumber = false,
     signcolumn = "no",
     foldcolumn = "0",
+    -- A split copies the fold settings too: `foldmethod=indent` would close a tree's children.
+    foldenable = false,
+    foldmethod = "manual",
     statuscolumn = "",
     spell = false,
     list = false,
