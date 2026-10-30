@@ -451,6 +451,17 @@ nothing. `tap.clear()` lets it grow again.
   same byte (`<Tab>`/`<C-i>`, `<CR>`/`<C-m>`, `<Esc>`/`<C-[>`, `<C-@>`/`<Nul>`):
   they are compared as one key, so the tap may call "overwritten" what Neovim
   holds as two live mappings.
+- Two bindings from **the same call site** with the same description whose
+  functions are closures over different values (`bind(make(1)); bind(make(2))`
+  on one key) count as a re-bind: a function is identified by where it is
+  defined, because that is what a `FileType` autocmd firing again produces too,
+  and the two cannot be told apart without comparing upvalues.
+- A call site that is a helper of your own config (`local function map(...)`)
+  is named as the source of everything bound through it; add its file to
+  `tap.skip`.
+- The error position of a failed call carries one more `file:line` than without
+  the tap when the function underneath is itself a Lua function that raises
+  with a position (cosmetic; the message and the type stay the same).
 - Buffer-local mappings of buffers that are **not loaded**.
 - `action_duplicates` is a list of candidates; two keys for one action is often
   intended.
