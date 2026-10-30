@@ -58,6 +58,9 @@ active default: setup() defines them, a new default recolours them at once,
 and a surface opened with its own theme sets them to that theme until the
 next one.
 
+KitHotkey (hl key hotkey, default { underline = true }) marks the key that
+picks a kit.confirm button; an override table adds to it.
+
 Register presets / choose the active default: >lua
 
     require("lib.nvim.ui.kit").setup({
@@ -145,6 +148,9 @@ progress. >lua
   confirm button dialog: horizontal buttons, h/l/arrows move focus, <CR>
           confirms, <Esc>/q cancels, left click confirms a button directly
           (needs 'mouse'=a; click on blank space is a no-op, not a cancel).
+          One key per button picks it directly (y/n on Yes/No, else the
+          first free letter of the label, else its digit), marked in the
+          button; the focus still starts on the default.
           Default Yes/No -> boolean; custom `choices` -> chosen string
           (cancel -> nil).
   menu    cursor-anchored action list: items = { { label, action }, … };
