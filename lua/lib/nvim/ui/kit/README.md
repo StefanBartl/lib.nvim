@@ -202,7 +202,8 @@ h:patch(st, { filter = f })                      -- change state without a stop 
   nil value, so `{ sha = nil }` is the empty table. `history.apply(t, patch)` is the
   same patch logic on its own.
 - `step(state, delta)` / `back` / `forward` write the target entry's `keys` into `state`
-  (a key the entry lacks becomes `nil`) and return whether they moved. `max` caps the
+  (a key the entry lacks becomes `nil`) and return whether they moved; a `delta`/count
+  that is not an integer raises before anything moves. `max` caps the
   trail, oldest first. Also: `push`, `record`, `reset`, `current`, `index`, `len`,
   `can_back`, `can_forward`, `entries`.
 - Snapshots are shallow: a table value is shared between state and entries, so treat

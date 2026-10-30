@@ -93,6 +93,22 @@ return function(H)
     eq(h:index(), 2, "...and the index too")
   end
 
+  -- a fractional count is an argument error raised before anything moves, not a broken index
+  do
+    local st, h = fresh()
+    h:go(st, { id = "a" })
+    local good, err = pcall(h.back, h, st, 0.5)
+    ok(
+      not good and tostring(err):find("must be an integer", 1, true),
+      "a fractional count is rejected"
+    )
+    eq(h:index(), 2, "...the index is unchanged")
+    eq(h:current().id, "a", "...the current entry too")
+    ok(not pcall(h.step, h, st, "1"), "a non-number delta is rejected")
+    eq(h:back(st), true, "the history still works afterwards")
+    eq(st.id, "root", "...and restores the first entry")
+  end
+
   -- dedupe: a move that changes no tracked key makes no stop and keeps forward history
   do
     local st, h = fresh()

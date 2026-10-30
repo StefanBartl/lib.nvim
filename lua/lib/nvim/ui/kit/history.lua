@@ -208,13 +208,22 @@ end
 --- Move `delta` entries (negative = back) and write that entry's keys into
 --- `state` (a key the entry does not hold becomes nil). The position being
 --- left is `record`ed first. A target outside the trail changes nothing and
---- returns false.
+--- returns false; a `delta` that is not an integer raises before anything moves.
 ---@param state table
 ---@param delta integer
 ---@return boolean moved
 function History:step(state, delta)
   check_state(state, "step")
-  local target = self._index + (delta or 0)
+  delta = delta or 0
+  if type(delta) ~= "number" or delta % 1 ~= 0 then
+    -- Checked before anything moves: a fractional target passes the bounds check, and the
+    -- record/index update would then leave the trail pointing at no entry.
+    error(
+      ("lib.nvim.ui.kit.history: step: delta must be an integer, got %s"):format(tostring(delta)),
+      2
+    )
+  end
+  local target = self._index + delta
   if target == self._index or target < 1 or target > #self._entries then
     return false
   end
