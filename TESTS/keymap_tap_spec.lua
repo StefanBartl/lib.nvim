@@ -682,6 +682,18 @@ return function(H)
       eq(#rows, 1, "one row for the key")
       eq(#rows[1].claimants, 3, "and it has the raw mapping that overwrote both")
       unbind("n", "<M-F12>")
+
+      -- The same over a registry row in mode '': the raw binding in n is a real mode of that row,
+      -- not the row itself, and must not be dropped with it.
+      keymap("", "<M-F11>", noop, {}, "lib one")
+      keymap("", "<M-F11>", function() end, {}, "lib two")
+      vim.keymap.set("n", "<M-F11>", function() end, { desc = "raw winner" })
+      local winner = false
+      for _, c in ipairs(rows_of("<M-F11>", (registry.conflicts({ scope = "full" })))) do
+        winner = winner or (c.mode == "n" and #c.claimants == 3)
+      end
+      ok(winner, "a raw binding over a collision in mode '' is reported with its winner")
+      unbind("", "<M-F11>")
     end)
     forget_ours()
 
@@ -782,6 +794,29 @@ return function(H)
       for fname, f in pairs(pristine) do
         ok(api[fname] == f, fname .. " is the original function again")
       end
+    end)
+    restore_module(old)
+    if not passed then
+      error(err, 0)
+    end
+  end
+
+  -- A recording that stopped at max_events still says so after a reload: the copy that takes it
+  -- over must not present a cut-off log as complete.
+  do
+    local old = package.loaded[modname]
+    local passed, err = pcall(function()
+      tap.clear()
+      tap.max_events = 1
+      tap.install()
+      vim.keymap.set("n", "<M-F9>", noop, { desc = "kept" })
+      vim.keymap.set("n", "<M-F8>", noop, { desc = "past the limit" })
+      ok(tap.truncated(), "the old copy stopped at the limit")
+
+      package.loaded[modname] = nil
+      local fresh = require(modname)
+      ok(fresh.truncated(), "the new copy reports the recording as cut off")
+      fresh.uninstall()
     end)
     restore_module(old)
     if not passed then

@@ -246,6 +246,12 @@ local function overlay_source(entry, tapped)
   if not ev or not ev.source then
     return
   end
+  -- The tap's last event must be the mapping in effect. One bound while the tap was not
+  -- recording (stopped, past `max_events`, an Ex command) would otherwise inherit the call
+  -- site of the binding it overwrote.
+  if ev.desc ~= entry.desc or (ev.rhs_kind == "string") ~= (entry.rhs ~= nil) then
+    return
+  end
   local file, line = ev.source:match("^(.*):(%d+)$")
   if not file then
     return

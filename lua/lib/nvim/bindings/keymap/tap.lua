@@ -603,6 +603,10 @@ if type(prior) == "table" and prior ~= M and type(prior.uninstall) == "function"
   for _, e in ipairs(events) do
     log[#log + 1] = e
   end
+  -- A recording cut off at `max_events` stays marked as such.
+  if type(prior.truncated) == "function" and prior.truncated() then
+    state.truncated = true
+  end
   if was_active then
     M.install()
   end

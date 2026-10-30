@@ -535,11 +535,16 @@ function M.conflicts(opts)
         info.benign_hidden = info.benign_hidden + 1
       elseif not seen then
         out[#out + 1] = c
-      elseif seen.same_mode and #c.claimants > #out[seen.index].claimants then
+      elseif #c.claimants > #out[seen.index].claimants then
         -- The tap saw a later binding the registry did not (a raw `vim.keymap.set`
-        -- over two lib.nvim ones): that row has the winner, so it replaces the
-        -- registry's.
-        out[seen.index] = c
+        -- over two lib.nvim ones): that row has the winner. In the registry row's
+        -- own mode it replaces that row; in one real mode of a `""`/`"v"` row it is
+        -- added, since the registry row still stands for the other modes.
+        if seen.same_mode then
+          out[seen.index] = c
+        else
+          out[#out + 1] = c
+        end
       end
     end
     table.sort(out, function(a, b)

@@ -150,6 +150,12 @@ return function(H)
           break
         end
       end
+
+      -- A binding made while the tap was not recording is not relabelled with an older event.
+      tap.uninstall()
+      assert(load("vim.keymap.set('n', '<M-F3>', function() end, { desc = 'unseen' })", "=unseen"))()
+      local later = find(rt.snapshot(), "n", "<M-F3>")
+      eq(later.source_from, nil, "a binding the tap did not see keeps the script stamp")
     end)
     tap.uninstall()
     tap.clear()
