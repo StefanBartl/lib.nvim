@@ -1565,21 +1565,24 @@ return function(H)
       return false
     end
     local got
+    local opened
     local function open_list(number_keys)
       got = nil
-      return assert(
+      opened = assert(
         kit.shortlist({
           items = { "a", "b", "c" },
           render = function(item, surface)
             surface:set_lines({ item })
           end,
           on_submit = function(item, idx)
-            got = { item, idx }
+            -- Whether the popup is still up at call time: it must close first.
+            got = { item, idx, opened.results:is_valid() }
           end,
           number_keys = number_keys,
         }),
         "shortlist opens"
       )
+      return opened
     end
 
     local unnumbered = open_list(nil)
@@ -1600,6 +1603,7 @@ return function(H)
     vim.api.nvim_feedkeys("3", "mx", false)
     eq(got and got[1], "c", "shortlist number_keys: `3` submits the third entry")
     eq(got and got[2], 3, "shortlist number_keys: on_submit gets the index")
+    eq(got and got[3], false, "shortlist number_keys: the popup closed before on_submit")
     ok(not h.results:is_valid(), "shortlist number_keys: the popup closed on submit")
   end
 
