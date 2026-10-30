@@ -194,6 +194,26 @@ return function(H)
     eq(vim.fn.isdirectory(root .. "/bad"), 0, "bad name: no parent directory left behind")
     eq(notified[1] and notified[1].level, vim.log.levels.ERROR, "bad name: told as an error")
 
+    -- an open that raises: still created, the error in err and told, on_done exactly once
+    notified = {}
+    H.with_patched(vim, "notify", function(msg, level)
+      notified[#notified + 1] = { msg = msg, level = level }
+    end, function()
+      res, calls = run(root .. "/raise.txt", com.CREATE, {
+        open = function()
+          error("boom")
+        end,
+      })
+    end)
+    eq(calls, 1, "open raises: on_done once")
+    eq(res.action, "created", "open raises: still created")
+    eq(vim.fn.filereadable(root .. "/raise.txt"), 1, "open raises: the file exists")
+    ok(
+      res.err and res.err:find("boom", 1, true),
+      "open raises: err names it: " .. tostring(res.err)
+    )
+    eq(notified[1] and notified[1].level, vim.log.levels.ERROR, "open raises: told as an error")
+
     -- filetree: no filetree.nvim -> no button
     package.loaded["filetree"] = nil
     eq(com.filetree_available(), false, "no filetree loaded: not available")
@@ -231,6 +251,18 @@ return function(H)
       res = run(root .. "/a/zz.txt", com.FILETREE)
     end)
     eq(res.action, "error", "failed reveal: an error")
+
+    -- a reveal that raises is an error too, reported exactly once
+    H.with_patched(vim, "notify", function() end, function()
+      res, calls = run(root .. "/a/zz.txt", com.FILETREE, {
+        filetree = function()
+          error("x")
+        end,
+      })
+    end)
+    eq(calls, 1, "raising reveal: on_done once")
+    eq(res.action, "error", "raising reveal: an error")
+    ok(res.err and res.err:find("x", 1, true), "raising reveal: err names it")
 
     -- a caller's own reveal function: offered without filetree.nvim, called with the ancestor
     package.loaded["filetree"] = nil
