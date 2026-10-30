@@ -236,6 +236,19 @@ local function run(H)
       { " * [new branch]      feat       -> origin/feat\n", true, "a new branch" },
       { " - [deleted]         (none)     -> origin/gone\n", true, "a pruned ref" },
       { " t [tag update]      v1         -> v1\n", true, "a tag update" },
+      -- A push-mirror remote (no fetch refspec) has its HEAD fetched into FETCH_HEAD on
+      -- every `--all`: that line repeats on each fetch and moves no ref.
+      {
+        "From ../backup\n * branch            HEAD       -> FETCH_HEAD\n",
+        false,
+        "a FETCH_HEAD-only line",
+      },
+      {
+        "From ../backup\n * branch            HEAD       -> FETCH_HEAD\n"
+          .. "From ../origin\n   5c5dd38..658128f  main       -> origin/main\n",
+        true,
+        "a FETCH_HEAD line next to a fast-forward",
+      },
     }
     for _, case in ipairs(cases) do
       local changed = "unset"
@@ -254,6 +267,25 @@ local function run(H)
       end)
       H.eq(changed, case[2], "fetch_async: changed for " .. case[3])
     end
+  end
+
+  -- ── fetch_async: a push-mirror remote is no change on every fetch (real git) ──
+  do
+    local _, add_ok = git_run(b, { "remote", "add", "--mirror=push", "backup", bare })
+    H.ok(add_ok, "fixture: push-mirror remote added to repo b")
+    local done, ok, changed
+    git.fetch_async({ dir = b }, function(ok_, _, changed_)
+      done, ok, changed = true, ok_, changed_
+    end)
+    H.ok(
+      wait_for(function()
+        return done
+      end),
+      "fetch_async(push mirror): on_done fires"
+    )
+    git_run(b, { "remote", "remove", "backup" })
+    H.eq(ok, true, "fetch_async(push mirror): succeeds")
+    H.eq(changed, false, "fetch_async(push mirror): FETCH_HEAD alone reports changed = false")
   end
 
   -- ── fetch_async: failure surfaces a real error, not a silent nil ────────

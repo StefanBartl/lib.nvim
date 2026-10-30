@@ -371,7 +371,8 @@ remote.
   N)" when git wrote nothing. A `pull_async` that cannot fast-forward (diverged history, local
   changes the pull would overwrite) fails with git's reason instead of creating a merge commit.
 - **`changed`** is what the verb moved: for `fetch_async` a remote-tracking ref (read off git's
-  stderr; `nil` — unknown — on a Neovim without `vim.system`, which cannot separate the streams),
+  ref-update lines on stderr; a warning, an auto-gc note or a push mirror's `-> FETCH_HEAD` line
+  is no change; `nil` — unknown — on a Neovim without `vim.system`, which cannot separate the streams),
   for `pull_async` whether `HEAD` is a different commit afterwards (compared by hash, never by
   git's translatable message), for `update_async` the pull's. `nil` also when the answer could not
   be read, never a guess.

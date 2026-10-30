@@ -2002,11 +2002,16 @@ end
 --- and anything else git writes to stderr -- the `From <url>` header, a `warning:` or
 --- `hint:` line, a background auto-gc note -- is not a ref update: "stderr is not empty"
 --- reported `changed = true` for a fetch that brought nothing as soon as git warned.
+---
+--- A line whose target is `FETCH_HEAD` moves no ref either: a remote without a fetch
+--- refspec (a push mirror, `git remote add --mirror=push`) gets its `HEAD` fetched into
+--- `FETCH_HEAD` on every `--all`, printed as ` * branch HEAD -> FETCH_HEAD` each time.
 ---@param stderr string
 ---@return boolean
 local function fetch_moved_ref(stderr)
   for line in stderr:gmatch("[^\r\n]+") do
-    if line:match("^ [ %+%-t%*] .*%->") then
+    local to = line:match("^ [ %+%-t%*] .*%->%s*(%S+)")
+    if to and to ~= "FETCH_HEAD" then
       return true
     end
   end
