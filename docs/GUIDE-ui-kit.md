@@ -87,9 +87,20 @@ kit.note({ message = "…" })                                          -- nil �
 ```
 
 Highlights **link to standard groups** by default (`NormalFloat`, `FloatBorder`,
-`FloatTitle`, `PmenuSel`, `Special`, `Comment`, `DiagnosticError`), so the look
-is correct in any colorscheme. Override any of the seven semantic keys:
-`normal`, `border`, `title`, `selection`, `accent`, `muted`, `error`.
+`FloatTitle`, `PmenuSel`, `Special`, `Comment`, `DiagnosticError`, …), so the look
+is correct in any colorscheme. Override any of the semantic keys:
+`normal`, `border`, `title`, `selection`, `accent`, `muted`, `error`, `flash`,
+`hover`, and the status tokens `ok`, `warn`, `info`, `dim`.
+
+**Status tokens.** A list whose rows have a state (test results, tasks, health)
+uses the groups `KitOk`, `KitWarn`, `KitInfo` and `KitDim` rather than groups of
+its own. They link to `DiagnosticOk`, `DiagnosticWarn`, `DiagnosticInfo` and
+`Comment`, and a preset or an override table sets them like any other key:
+
+```lua
+kit.setup({ presets = { mine = { hl = { ok = "String", warn = { fg = "#e0af68" } } } } })
+vim.api.nvim_buf_set_extmark(buf, ns, row, 0, { line_hl_group = "KitDim" }) -- a skipped row
+```
 
 ## 4. Components
 
@@ -259,3 +270,8 @@ parens); override them per theme via the `hl` keys:
 | `KitMuted`     | `Comment`          | hints / secondary text |
 | `KitError`     | `DiagnosticError`  | errors                 |
 | `KitFlash`     | `IncSearch`        | the row a pick just landed on |
+| `KitHover`     | `Visual`           | the row under the mouse pointer |
+| `KitOk`        | `DiagnosticOk`     | status: passed / healthy |
+| `KitWarn`      | `DiagnosticWarn`   | status: needs a look   |
+| `KitInfo`      | `DiagnosticInfo`   | status: neutral information |
+| `KitDim`       | `Comment`          | status: skipped / inactive |

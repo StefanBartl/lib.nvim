@@ -55,6 +55,7 @@ local REFERENCE = {
   "-- …or the override table above (merged over the active default).",
   "--   border : none | single | double | rounded | solid | ascii",
   "--   hl.*   : normal border title selection accent muted error",
+  "--            flash hover   status: ok warn info dim",
   "--            (each is a HIGHLIGHT GROUP name to link to, or",
   '--             { fg=, bg=, bold=true }; e.g. hl.title = "ErrorMsg")',
   "-- <Tab>   cycles presets",

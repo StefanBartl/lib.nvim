@@ -68,6 +68,12 @@ Highlights link to standard groups (`NormalFloat` / `FloatBorder` /
 `FloatTitle` / `PmenuSel` / …), so the default look is correct in any
 colorscheme.
 
+**Status tokens.** A list whose rows have a state (test results, tasks, health) uses
+the groups `KitOk`, `KitWarn`, `KitInfo` and `KitDim` rather than groups of its own.
+They link to `DiagnosticOk`, `DiagnosticWarn`, `DiagnosticInfo` and `Comment`, and a
+preset or an override table sets them like any other token (`hl = { ok = "String" }`,
+or a highlight spec).
+
 ```lua
 require("lib.nvim.ui.kit").setup({
   default = "rounded",
