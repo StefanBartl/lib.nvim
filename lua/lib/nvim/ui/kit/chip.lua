@@ -976,13 +976,13 @@ function M.refresh(id)
       local applied = entry.applied_colors
       -- `themed` is compared too, not just the rendered fg/bg: switching
       -- `entry.color` between a table and a highlight-group name can resolve
-      -- to identical pixels (e.g. a custom fg that happens to match a
-      -- group's fg on a transparent chip, where bg is always `window_bg()`
-      -- either way). Comparing fg/bg alone would then skip `apply_colors`
-      -- and leave `applied_colors.themed` stale -- and the `ColorScheme`
-      -- handler above gates its re-tint on exactly that field, so a chip
-      -- that just became (or stopped being) theme-linked would silently
-      -- keep the wrong behaviour on every future colorscheme change.
+      -- to identical pixels (e.g. a complete `{ fg, bg }` pair on an opaque
+      -- shape that equals a group's fg and its tinted bg). Comparing fg/bg
+      -- alone would then skip `apply_colors` and leave `applied_colors.themed`
+      -- stale -- and the `ColorScheme` handler above gates its re-tint on
+      -- exactly that field, so a chip that just became (or stopped being)
+      -- theme-linked would silently keep the wrong behaviour on every future
+      -- colorscheme change.
       if
         not applied
         or applied.fg ~= colors.fg
