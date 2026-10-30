@@ -355,6 +355,12 @@ function M.setup(opts)
     end
   end
 
+  -- Define the global Kit* groups for the active default right away: a status
+  -- list outside any kit surface (a split, a statusline) links to KitOk & co.
+  -- and must not stay uncoloured until the first surface opens, and a new
+  -- `default` must reach those groups now, not on the next surface.
+  pcall(materialize, M.resolve(nil))
+
   -- Re-materialize the active default so links refresh after a colorscheme
   -- change (set up once).
   if not M._colorscheme_hook then

@@ -74,6 +74,33 @@ return function(H)
     )
   end
 
+  -- setup() defines the global groups itself, so a status list outside any kit surface is
+  -- coloured without one having opened first, and a new default reaches them right away.
+  for _, group in pairs(GROUPS) do
+    vim.api.nvim_set_hl(0, group, {})
+  end
+  local kit = require("lib.nvim.ui.kit")
+  local done, err = pcall(function()
+    kit.setup()
+    for token, group in pairs(GROUPS) do
+      eq(
+        link_of(group),
+        DEFAULTS[token],
+        "after setup(): " .. group .. " links to " .. DEFAULTS[token]
+      )
+    end
+    kit.setup({ default = "hacker" })
+    eq(
+      string.format("#%06x", vim.api.nvim_get_hl(0, { name = "KitOk" }).fg or -1),
+      hacker.ok.fg,
+      "setup({ default = 'hacker' }) recolours KitOk at once"
+    )
+  end)
+  pcall(theme.setup, { default = before })
+
   -- Leave the shared instance with the default groups again.
   theme.materialize(theme.resolve(nil))
+  if not done then
+    error(err, 0)
+  end
 end
