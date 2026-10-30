@@ -157,7 +157,7 @@ line-splitting) plus async and batch variants and atomic JSON read/write.
 
 `write.to_file` creates the parent directory, truncates, writes binary, and
 appends a trailing newline if missing. `fs.json.write` is atomic (writes to
-a sibling `.tmp` file, then `fs_rename`), so a crash mid-write never leaves
+a sibling temp file unique per write, then `fs_rename`), so a crash mid-write never leaves
 a half-written JSON file where a caller expects a complete one.
 
 ## Cross-platform trash (not permanent delete)

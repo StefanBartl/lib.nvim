@@ -425,7 +425,11 @@ return function(H)
   local jdata = json.read(jp)
   eq(jdata.a, 1, "fs.json: scalar round-trips")
   eq(jdata.b[2], "y", "fs.json: nested array round-trips")
-  eq(uv.fs_stat(jp .. ".tmp"), nil, "fs.json.write: the atomic .tmp file is cleaned up")
+  eq(
+    #vim.fn.glob(tmp .. "/data*.tmp", false, true),
+    0,
+    "fs.json.write: the atomic temp file is cleaned up"
+  )
   local jl_target = tmp .. "/json_link_target.json"
   local jl = tmp .. "/json_link.json"
   assert(json.write(jl_target, { v = 1 }))

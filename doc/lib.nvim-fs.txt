@@ -525,8 +525,8 @@ callback when all have finished. `results` is index-aligned with
 ------------------------------------------------------------------------------
 json                                                       *lib.nvim-fs-json*
 
-Table `M`. Read/write JSON files; writes are atomic (`path .. ".tmp"` then
-rename). >lua
+Table `M`. Read/write JSON files; writes are atomic (a sibling temp file
+unique per write, `state.<pid>-<n>-<hrtime>.json.tmp`, then rename). >lua
 
     local json = require("lib.nvim.fs.json")
     local ok, err = json.write("/tmp/state.json", { count = 1 })

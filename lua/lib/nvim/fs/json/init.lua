@@ -2,7 +2,8 @@
 --- Read/write JSON files, built on `lib.nvim.json` (encode/decode) plus
 --- `lib.nvim.fs.read` and `lib.nvim.fs.write.to_file`.
 ---
---- Writes are atomic: the encoded content is written to `path .. ".tmp"`
+--- Writes are atomic: the encoded content is written to a sibling temp file
+--- unique per write (`<stem>.<pid>-<n>-<hrtime><ext>.tmp`, see `M.tmp_path`)
 --- first, then renamed over `path` — atomic on POSIX, best-effort on
 --- Windows (see `M.write` for details).
 ---
@@ -23,6 +24,26 @@ local uv = vim.uv or vim.loop
 
 local M = {}
 
+-- Per-process counter: two writes in the same nanosecond still get different names.
+local seq = 0
+
+---The temp file `M.write` stages `path` in: same directory (so the rename stays atomic), unique per process and
+---call (so two writers never share one), and ending in `<ext>.tmp` like the old fixed `<path>.tmp` did, so a
+---sweeper matching `*.json.tmp` still finds a write a crash left behind.
+---`/d/state.json` -> `/d/state.<pid>-<n>-<hrtime>.json.tmp`; `/d/state` -> `/d/state.<pid>-<n>-<hrtime>.tmp`.
+---@param path string
+---@return string
+function M.tmp_path(path)
+  seq = seq + 1
+  local unique = ("%d-%d-%d"):format(uv.os_getpid(), seq, uv.hrtime())
+  -- The extension of the file name only: a dot in a directory name or a leading-dot name has none.
+  local stem, ext = path:match("^(.*[^/\\])(%.[^./\\]+)$")
+  if not stem then
+    return ("%s.%s.tmp"):format(path, unique)
+  end
+  return ("%s.%s%s.tmp"):format(stem, unique, ext)
+end
+
 ---Read and JSON-decode the file at `path`.
 ---@param path string
 ---@return table|nil decoded
@@ -37,7 +58,7 @@ function M.read(path)
 end
 
 ---JSON-encode `tbl` and write it to `path` atomically: write to a sibling
----`.tmp` file first, then rename it over `path`. Renaming is atomic on
+---temp file unique to this call (`M.tmp_path`) first, then rename it over `path`. Renaming is atomic on
 ---POSIX filesystems; on Windows `fs_rename` is best-effort (it can fail if
 ---`path` is open elsewhere) but still avoids leaving a half-written file.
 ---A symlink `path` is written through (the link stays a link); a dangling link is replaced.
@@ -57,7 +78,7 @@ function M.write(path, tbl)
     path = uv.fs_realpath(path) or path
   end
 
-  local tmp_path = path .. ".tmp"
+  local tmp_path = M.tmp_path(path)
   local ok_write, write_err = write_to_file(tmp_path, encoded)
   if not ok_write then
     return false, "write failed: " .. tostring(write_err)

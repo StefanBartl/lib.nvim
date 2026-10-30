@@ -4,5 +4,6 @@
 ---@class Lib.Fs.Json
 ---@field read fun(path: string): table|nil, string|nil Read and JSON-decode `path`.
 ---@field write fun(path: string, tbl: table): boolean, string|nil JSON-encode `tbl` and write it to `path` atomically.
+---@field tmp_path fun(path: string): string A fresh temp path next to `path`, unique per call, as `write` uses.
 
 return {}

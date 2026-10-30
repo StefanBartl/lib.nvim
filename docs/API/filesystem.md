@@ -367,8 +367,8 @@ return function(entries: {path: string, content: string}[], cb: fun(all_ok: bool
 
 ### `lib.nvim.fs.json` (see README)
 Read/write JSON files. Encoding via `lib.lua.json.encode`; decoding via
-`vim.json.decode`. Writes are atomic (write to sibling `.tmp`, then
-`fs_rename`).
+`vim.json.decode`. Writes are atomic (write to a sibling temp file unique per
+write, `M.tmp_path(path)`, then `fs_rename`).
 
 ```
 M.read(path: string): table|nil decoded, string|nil err

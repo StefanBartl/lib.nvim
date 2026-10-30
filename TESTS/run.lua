@@ -204,6 +204,7 @@ local specs = {
   "json_canonical_spec.lua",
   "contract_errors_spec.lua",
   "fs_create_exclusive_spec.lua",
+  "fs_json_write_spec.lua",
   "fs_etag_spec.lua",
   "fs_latest_file_spec.lua",
   "clipboard_image_spec.lua",
