@@ -197,6 +197,22 @@ return function(H)
     type_keys("0")
     eq(calls, { many[10] }, "0 picks the tenth button")
 
+    -- 'ambiwidth' = double makes ¹ ² ³ ⁴ two cells: the plain digit keeps the `]` uncovered
+    local ambiwidth = vim.o.ambiwidth
+    vim.o.ambiwidth = "double"
+    local ok_aw, err_aw = pcall(function()
+      surf = select(2, open({ question = "Q?", choices = { "Ok", "Ko", "?!" } }))
+      sup = superscripts(surf.bufnr)
+      eq(#sup, 1, "one digit with ambiwidth=double")
+      eq(vim.fn.strdisplaywidth(sup[1].text), 1, "it is one cell wide")
+      eq(sup[1].text, "3", "the plain digit")
+      confirm.cancel()
+    end)
+    vim.o.ambiwidth = ambiwidth
+    if not ok_aw then
+      error(err_aw, 0)
+    end
+
     -- the marks survive moving the focus
     surf = select(2, open({ question = "Q?", choices = { "Ok", "Ko", "?!" } }))
     confirm.move(1)

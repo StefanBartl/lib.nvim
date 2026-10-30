@@ -455,6 +455,15 @@ local SUPERSCRIPT = {
   ["9"] = "⁹",
 }
 
+--- The one-cell glyph for digit `d`: its superscript, or the plain digit where the superscript
+--- is wider ('ambiwidth' = double makes ¹ ² ³ two cells, which would cover the `]`).
+---@param d string
+---@return string
+local function digit_glyph(d)
+  local sup = SUPERSCRIPT[d]
+  return (sup and vim.fn.strdisplaywidth(sup) == 1) and sup or d
+end
+
 ---@internal
 --- Which key picks which button, and where each button shows its key. Deterministic, in this
 --- order (a key goes to the first claim; nothing later takes it away):
@@ -934,7 +943,7 @@ local function open_new(opts, settle_old)
       local r = ranges[i]
       if r then
         api.nvim_buf_set_extmark(surf.bufnr, state.hot_ns, r.row, r.end_col - 2, {
-          virt_text = { { SUPERSCRIPT[digit], "KitMuted" } },
+          virt_text = { { digit_glyph(digit), "KitMuted" } },
           virt_text_pos = "overlay",
           hl_mode = "combine",
           priority = 90,
