@@ -11,6 +11,27 @@
 -- Make the repo importable whether invoked via -l (cwd) or luafile.
 vim.opt.rtp:append(vim.fn.getcwd())
 
+-- A headless runner never writes the developer's system clipboard: `+` and `*` are two stores in
+-- this process. Without a `g:clipboard` the editor finds a tool on the first register access
+-- (`win32yank.exe` ships with the Windows build) and every clipboard spec below (copy_to_clipboard_spec
+-- writes "lib_spec_copy_to_clipboard_marker_b") lands on the user's clipboard -- seen on two machines
+-- while suites ran in the background. The same provider testing.nvim installs in its children
+-- (`testing.child.clipboard`); an editor with a UI keeps its clipboard.
+if vim.g.clipboard == nil and #vim.api.nvim_list_uis() == 0 then
+  local store = { ["+"] = { {}, "v" }, ["*"] = { {}, "v" } }
+  local copy, paste = {}, {}
+  for _, reg in ipairs({ "+", "*" }) do
+    copy[reg] = function(lines, regtype)
+      store[reg] = { vim.deepcopy(lines), type(regtype) == "string" and regtype or "v" }
+    end
+    paste[reg] = function()
+      return { vim.deepcopy(store[reg][1]), store[reg][2] }
+    end
+  end
+  vim.g.clipboard =
+    { name = "lib-spec-fake-clipboard", copy = copy, paste = paste, cache_enabled = 0 }
+end
+
 -- runtime-analysis.nvim is a runtime dependency of telemetry_wrap_spec.lua
 -- only (the thin caller instrumenting `require("lib")` now lives there) —
 -- the same three-candidate search runtime-analysis.nvim's own run.lua uses
