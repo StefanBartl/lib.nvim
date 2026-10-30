@@ -1995,6 +1995,24 @@ function M.blame_porcelain_async(path, opts, on_done, git_cmd)
   end)
 end
 
+---@internal
+--- Whether `git fetch`'s stderr reports a moved ref. Only git's ref-update lines count
+--- (` <flag> <summary> <from> -> <to>`): flag ` ` fast-forward, `+` forced, `-` pruned,
+--- `t` tag update, `*` new ref. A rejected (`!`) or up-to-date (`=`) line moves nothing,
+--- and anything else git writes to stderr -- the `From <url>` header, a `warning:` or
+--- `hint:` line, a background auto-gc note -- is not a ref update: "stderr is not empty"
+--- reported `changed = true` for a fetch that brought nothing as soon as git warned.
+---@param stderr string
+---@return boolean
+local function fetch_moved_ref(stderr)
+  for line in stderr:gmatch("[^\r\n]+") do
+    if line:match("^ [ %+%-t%*] .*%->") then
+      return true
+    end
+  end
+  return false
+end
+
 --- Fetch every remote's tracking refs and prune deleted ones
 --- (`git fetch --all --prune`). Does not touch the working tree or `HEAD`.
 ---
@@ -2005,8 +2023,8 @@ end
 --- this one.
 ---
 --- `changed` reports whether the fetch actually moved a remote-tracking ref:
---- git writes ref updates (`<old>..<new> main -> origin/main`) to stderr and
---- stays silent there when nothing was new. A failed fetch never reaches this
+--- git writes ref updates (`<old>..<new> main -> origin/main`) to stderr, and only
+--- those lines count; warnings and other notes on stderr do not. A failed fetch never reaches this
 --- branch (`on_done` returns early on `ok == false`), so a present `changed`
 --- always means the call actually succeeded.
 ---
@@ -2037,7 +2055,7 @@ function M.fetch_async(opts, on_done, git_cmd)
     -- result into "unknown" too.
     local changed
     if stderr ~= nil then
-      changed = stderr:match("%S") ~= nil
+      changed = fetch_moved_ref(stderr)
     end
     on_done(true, nil, changed)
   end, nil, ropts)

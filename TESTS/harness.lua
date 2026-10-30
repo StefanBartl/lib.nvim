@@ -104,4 +104,15 @@ function H.with_stdpath_config(link, fn)
   end, fn)
 end
 
+--- The runner's closing line for a failed run: the count AND the names of the failed specs.
+---
+--- The per-spec `FAIL` lines scroll away in a long run, and a run that is read through `tail`
+--- (or a truncated CI log) only keeps the end -- "1 spec(s) failed" alone then cannot be traced
+--- back to the spec that failed once and never again.
+---@param failed string[] names of the failed specs, in run order
+---@return string
+function H.summary(failed)
+  return ("%d spec(s) failed: %s"):format(#failed, table.concat(failed, ", "))
+end
+
 return H

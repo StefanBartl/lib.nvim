@@ -228,20 +228,20 @@ local function say(s)
   io.stdout:write(s, "\n")
 end
 
-local failed = 0
+local failed = {}
 for _, name in ipairs(specs) do
   local run = dofile(dir .. name)
   local ok, err = pcall(run, H)
   if ok then
     say(("ok    %s"):format(name))
   else
-    failed = failed + 1
+    failed[#failed + 1] = name
     say(("FAIL  %s\n      %s"):format(name, tostring(err)))
   end
 end
 
-if failed > 0 then
-  say(("\n%d spec(s) failed"):format(failed))
+if #failed > 0 then
+  say("\n" .. H.summary(failed))
   -- `cquit`, not `os.exit`: only a regular exit lets Neovim delete its per-instance temp
   -- directory, and every `tempname()` fixture of every spec lives in it -- `os.exit(1)` left
   -- all of them behind. Same exit code.

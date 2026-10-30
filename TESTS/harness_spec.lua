@@ -44,4 +44,17 @@ return function(H)
     H.eq(target.extra, 1, "with_patched: a new key is set while fn runs")
   end)
   H.eq(target.extra, nil, "with_patched: a key that was absent is absent again")
+
+  -- The runner's last line names the failed specs: a run read through `tail` keeps only that line,
+  -- and a one-off failure must stay traceable to its spec.
+  H.eq(
+    H.summary({ "keymap_tap_spec.lua" }),
+    "1 spec(s) failed: keymap_tap_spec.lua",
+    "summary: one failed spec is named"
+  )
+  H.eq(
+    H.summary({ "a_spec.lua", "b_spec.lua" }),
+    "2 spec(s) failed: a_spec.lua, b_spec.lua",
+    "summary: every failed spec is named, in run order"
+  )
 end

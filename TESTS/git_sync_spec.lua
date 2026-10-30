@@ -208,6 +208,54 @@ local function run(H)
     H.eq(changed, nil, "pull_async(rejected): no changed flag on failure")
   end
 
+  -- ── fetch_async: only ref-update lines count as a change ────────────────
+  -- A successful fetch that brought nothing can still write to stderr (a `warning:`, a
+  -- background auto-gc note). "stderr not empty" read that as changed = true -- the run
+  -- that once failed "nothing new upstream reports changed = false" above.
+  do
+    local run_argv = require("lib.nvim.cross.run_argv")
+    local cases = {
+      { "warning: some config warning\n", false, "a warning alone" },
+      { "From /some/remote\n", false, "the From header alone" },
+      {
+        "Auto packing the repository in background for optimum performance.\n",
+        false,
+        "an auto-gc note",
+      },
+      {
+        "From /r\n ! [rejected]        main       -> origin/main  (would clobber existing tag)\n",
+        false,
+        "a rejected ref",
+      },
+      { "From /r\n   5c5dd38..658128f  main       -> origin/main\n", true, "a fast-forward" },
+      {
+        "warning: x\r\n + 1111111...2222222 main -> origin/main  (forced update)\r\n",
+        true,
+        "a forced update (CRLF)",
+      },
+      { " * [new branch]      feat       -> origin/feat\n", true, "a new branch" },
+      { " - [deleted]         (none)     -> origin/gone\n", true, "a pruned ref" },
+      { " t [tag update]      v1         -> v1\n", true, "a tag update" },
+    }
+    for _, case in ipairs(cases) do
+      local changed = "unset"
+      H.with_patched(run_argv, "run_async_captured", function(_, on_done)
+        vim.schedule(function()
+          on_done(true, "", 0, case[1])
+        end)
+        return { stop = function() end }
+      end, function()
+        git.fetch_async({ dir = b }, function(_, _, changed_)
+          changed = changed_
+        end)
+        wait_for(function()
+          return changed ~= "unset"
+        end)
+      end)
+      H.eq(changed, case[2], "fetch_async: changed for " .. case[3])
+    end
+  end
+
   -- ── fetch_async: failure surfaces a real error, not a silent nil ────────
   do
     local not_repo = tmpdir("-git-sync-not-a-repo")
