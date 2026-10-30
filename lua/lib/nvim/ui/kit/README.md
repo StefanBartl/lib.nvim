@@ -172,6 +172,42 @@ kit.popup({ type = "prompt", question = "Delete?", answer_type = "confirm", on_a
 | `progress`| passthrough to [`lib.nvim.progress`](../../progress/README.md) (`:update`/`:finish`/`:cancel`) |
 | `compare` | pick two items out of one picker, then view them side by side — see [Compare](#compare-pick-two-view-side-by-side) below |
 
+## History stack (back/forward trail, no UI)
+
+`kit.history` is the data structure behind a Back/Forward pair (`<C-o>`/`<C-i>`) in a
+view that moves between positions — a browser over modules, a drill-down list. No
+window, no keymap: the view keeps its own state table and the history snapshots the
+`keys` it names out of it. Generalised from documentation.nvim's browser.
+
+```lua
+local history = require("lib.nvim.ui.kit.history") -- or kit.history
+local st = { mode = "structure", id = "root", cursor = 1 }
+local h = history.new({ state = st, keys = { "mode", "id", "fn", "cursor" }, max = 200 })
+
+h:go(st, { id = "child", fn = "setup" })        -- a move: a new stop
+h:go(st, { fn = history.CLEAR })                -- CLEAR removes a field; `fn = nil` would keep it
+h:back(st)                                       -- st.fn == "setup" again; false at the start
+h:forward(st, vim.v.count1)                      -- counts; a step past either end is refused
+h:patch(st, { filter = f })                      -- change state without a stop (needs "filter" in keys to travel along)
+```
+
+- The trail holds every position **including the current one**; a new history has one
+  entry, so `index()` always addresses a real entry.
+- `go(state, changes)` records the position being left (the row the user moved to comes
+  back with it), applies `changes`, and makes a stop; a new move drops any forward
+  history, like a browser. A move that changes none of the `keys` makes no stop and
+  returns `false` (`dedupe = false` turns that off): a Back that visibly does nothing
+  reads as a broken history.
+- `CLEAR` exists because a patch cannot say "clear" with `nil` — `pairs` never yields a
+  nil value, so `{ sha = nil }` is the empty table. `history.apply(t, patch)` is the
+  same patch logic on its own.
+- `step(state, delta)` / `back` / `forward` write the target entry's `keys` into `state`
+  (a key the entry lacks becomes `nil`) and return whether they moved. `max` caps the
+  trail, oldest first. Also: `push`, `record`, `reset`, `current`, `index`, `len`,
+  `can_back`, `can_forward`, `entries`.
+- Snapshots are shallow: a table value is shared between state and entries, so treat
+  such values as immutable (replace them, do not mutate them).
+
 ## Layout engine (Phase 3, partial)
 
 Turn a declarative region spec into aligned `nvim_open_win` geometry for several

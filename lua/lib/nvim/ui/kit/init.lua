@@ -273,6 +273,8 @@ end
 ---     (see `viewer_keys.lua`).
 ---   * `async` -- linear code over the callback components, without blocking: `kit.async.run(function() ... end)`,
 ---     then `kit.async.confirm/ask/input/form/select` inside it. See `lib.nvim.ui.kit.async`.
+---   * `history` -- a back/forward trail of positions with a `CLEAR` sentinel for patches (pure data, no UI):
+---     `kit.history.new({ state = st, keys = { ... } })`, then `:go`/`:back`/`:forward`. See `lib.nvim.ui.kit.history`.
 ---@type table<string, string>
 local LAZY_FIELDS = {
   theme = "theme",
@@ -282,6 +284,7 @@ local LAZY_FIELDS = {
   chooser = "chooser",
   keys = "viewer_keys",
   async = "async",
+  history = "history",
 }
 
 setmetatable(M, {
