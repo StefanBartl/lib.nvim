@@ -151,6 +151,12 @@ return function(H)
         end
       end
 
+      -- `<Nop>` is reported by nvim_get_keymap with an empty rhs; it is still the tapped mapping.
+      assert(load("vim.keymap.set('n', '<M-F4>', '<Nop>')", "=nopchunk"))()
+      local nop = find(rt.snapshot(), "n", "<M-F4>")
+      eq(nop and nop.source_from, "tap", "a <Nop> mapping gets the tap's call site")
+      pcall(vim.keymap.del, "n", "<M-F4>")
+
       -- A binding made while the tap was not recording is not relabelled with an older event.
       tap.uninstall()
       assert(load("vim.keymap.set('n', '<M-F3>', function() end, { desc = 'unseen' })", "=unseen"))()

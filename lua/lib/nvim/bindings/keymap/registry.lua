@@ -518,6 +518,9 @@ function M.conflicts(opts)
     -- mode it stands for.
     ---@type table<string, { index: integer, same_mode: boolean }>
     local known = {}
+    -- How many of its real modes a `""`/`"v"` row lost to a tap row with a later winner.
+    ---@type table<integer, integer>
+    local superseded = {}
     for i, c in ipairs(out) do
       local buffer = c.claimants[1] and c.claimants[1].buffer
       for _, m in ipairs(lhs_mod.modes(c.mode)) do
@@ -544,7 +547,15 @@ function M.conflicts(opts)
           out[seen.index] = c
         else
           out[#out + 1] = c
+          superseded[seen.index] = (superseded[seen.index] or 0) + 1
         end
+      end
+    end
+    -- A shorthand row overwritten in every real mode it stands for wins nowhere any more; the
+    -- tap rows tell the whole story, the registry row would only add a stale winner.
+    for i = #out, 1, -1 do
+      if superseded[i] and superseded[i] >= #lhs_mod.modes(out[i].mode) then
+        table.remove(out, i)
       end
     end
     table.sort(out, function(a, b)

@@ -694,6 +694,20 @@ return function(H)
       end
       ok(winner, "a raw binding over a collision in mode '' is reported with its winner")
       unbind("", "<M-F11>")
+
+      -- Overwritten raw in *every* mode of the '' row: that row wins nowhere any more and must
+      -- not stand next to the tap rows with a stale winner.
+      keymap("", "<M-F10>", noop, {}, "lib one")
+      keymap("", "<M-F10>", function() end, {}, "lib two")
+      vim.keymap.set("", "<M-F10>", function() end, { desc = "raw everywhere" })
+      local stale, modes = false, 0
+      for _, c in ipairs(rows_of("<M-F10>", (registry.conflicts({ scope = "full" })))) do
+        stale = stale or c.mode == ""
+        modes = modes + ((#c.claimants == 3) and 1 or 0)
+      end
+      ok(not stale, "the registry row overwritten in all its modes is gone")
+      eq(modes, 4, "one row with the raw winner per real mode")
+      unbind("", "<M-F10>")
     end)
     forget_ours()
 

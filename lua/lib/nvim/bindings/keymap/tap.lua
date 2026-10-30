@@ -254,8 +254,9 @@ local function on_set(mode, lhs, rhs, opts, buffer)
   opts = type(opts) == "table" and opts or {}
   local src, via = origin()
   local key = lhs_mod.normalize(lhs)
+  -- `<Nop>` maps to nothing: Neovim reports it with an empty rhs, and so does the tap.
   local kind = type(opts.callback) == "function" and "function"
-    or (type(rhs) == "string" and rhs ~= "") and "string"
+    or (type(rhs) == "string" and rhs ~= "" and rhs:lower() ~= "<nop>") and "string"
     or "none"
   for _, m in ipairs(lhs_mod.modes(mode)) do
     log[#log + 1] = {
