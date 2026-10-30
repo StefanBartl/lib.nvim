@@ -126,6 +126,7 @@ local specs = {
   "ui_kit_preview_command_spec.lua",
   "ui_kit_message_log_spec.lua",
   "ui_kit_history_spec.lua",
+  "ui_kit_create_on_missing_spec.lua",
   "ui_kit_form_back_spec.lua",
   "ui_kit_sheet_spec.lua",
   "ui_kit_winfixbuf_spec.lua",

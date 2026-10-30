@@ -384,6 +384,7 @@
 ---@field set_dialog_hook fun(fn: Lib.UI.Kit.DialogHook|nil)  # answer the modal dialogs (confirm, ask, input, select, form, sheet) without a window, for tests
 ---@field get_dialog_hook fun(): Lib.UI.Kit.DialogHook|nil
 ---@field ask fun(opts: table)                                 # a question (yes/no or choices) that waits for every open modal dialog, answers false/nil when unanswered, falls back to vim.ui.select
+---@field create_on_missing fun(opts: Lib.UI.Kit.CreateOnMissingOpts): Lib.UI.Kit.Surface|nil  # missing path: Create (with parents) / Open in filetree / Cancel
 ---@field menu fun(opts: table): Lib.UI.Kit.Surface|nil       # cursor-anchored action list (label → callback)
 ---@field compare fun(opts: Lib.UI.Kit.CompareOpts): Lib.UI.Kit.CompareHandle|nil  # pick two items, view them side by side
 ---@field progress fun(opts: table): table                     # passthrough to lib.nvim.progress.create
@@ -482,6 +483,30 @@
 ---@field can_back fun(self: Lib.UI.Kit.History): boolean
 ---@field can_forward fun(self: Lib.UI.Kit.History): boolean
 ---@field entries fun(self: Lib.UI.Kit.History): table[]
+
+--- Options for `kit.create_on_missing`.
+---@class Lib.UI.Kit.CreateOnMissingOpts
+---@field path string  # the path that was not found (relative to the cwd or absolute); a trailing `/` or `\` asks for a directory
+---@field on_done? fun(result: Lib.UI.Kit.CreateOnMissingResult)  # called exactly once, however the dialog ends
+---@field open? boolean|fun(path: string, kind: "file"|"directory")  # after Create (or for a path that exists): true (default) `:edit`s a file, false opens nothing, a function is called instead
+---@field filetree? boolean|fun(path: string): boolean  # nil/true: filetree.nvim when loaded and set up; false: no such button; a function reveals the existing ancestor itself (false = failed)
+---@field title? string  # default "Create file?" / "Create directory?"
+---@field theme? Lib.UI.Kit.ThemeArg
+
+--- What `kit.create_on_missing` did.
+---@class Lib.UI.Kit.CreateOnMissingResult
+---@field action "created"|"exists"|"filetree"|"cancelled"|"error"
+---@field path string  # created: the new path; exists: the path; filetree: the existing ancestor revealed; cancelled: the missing path; error: the path that failed
+---@field kind? "file"|"directory"  # created / exists
+---@field err? string  # error: why; created / exists: set when opening the file failed
+
+--- `kit.create_on_missing`'s module (`lib.nvim.ui.kit.create_on_missing`).
+---@class Lib.UI.Kit.CreateOnMissingModule
+---@field open fun(opts: Lib.UI.Kit.CreateOnMissingOpts): Lib.UI.Kit.Surface|nil
+---@field filetree_available fun(): boolean  # filetree.nvim loaded, set up, and able to reveal a path
+---@field CREATE string    # button labels, also what a dialog hook answers with
+---@field FILETREE string
+---@field CANCEL string
 
 return {}
 

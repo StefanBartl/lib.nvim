@@ -176,6 +176,7 @@ kit.popup({ type = "prompt", question = "Delete?", answer_type = "confirm", on_a
 | `menu`    | anchored action list — `{ label, action }` items; picking runs the action. Also renders [`lib.nvim.contextmenu`](../../contextmenu/README.md) tables (`name`/`cmd`, `{ name = "separator" }`, `rtxt`, `icon`, nested `items`) and takes `mouse = true` to anchor at the pointer. A row is a set of **fixed-width columns** measured across the whole level — icon, label, fly-out marker, `rtxt` — so entries line up whichever section they sit in; `icon` is a field, never a prefix on `label`. The marker follows the *label* column rather than the row, so it stays beside the list instead of against the frame, and the hint column keeps the right edge. Named groups (`contextmenu.heading`) are drawn as titled frames (`group_style` = `"box"` \| `"header"` \| `"plain"`; a menu that names nothing keeps the plain divider look). The block cursor is hidden while it is open, one left click picks, and a click or focus change elsewhere dismisses it (`hide_cursor` / `single_click` / `close_on_focus_lost` turn those off). A pick is acknowledged before it is acted on: the row lights up (`KitFlash`) for `flash_ms` (default 100) and the action follows, the way a button shows its press — the delay is the point, since a leaf action closes the menu and a flash painted at that moment would never be seen. A menu dismissed while a row is lit runs nothing (`flash_on_select = false` turns it off). Defaults to the `menu` preset, so the frame is coloured. Drilling into a submenu and walking back swap the list **inside the same window** — no flash, and the menu stays put |
 | `progress`| passthrough to [`lib.nvim.progress`](../../progress/README.md) (`:update`/`:finish`/`:cancel`) |
 | `compare` | pick two items out of one picker, then view them side by side — see [Compare](#compare-pick-two-view-side-by-side) below |
+| `create_on_missing` | a path that does not exist: Create (with its parent directories) / Open in filetree / Cancel — see [Create on missing](#create-on-missing-a-path-that-does-not-exist) below (`kit.create_on_missing(opts)`, not a `popup` type) |
 
 ## History stack (back/forward trail, no UI)
 
@@ -670,6 +671,45 @@ kit.input({
   on_submit = function(path) end,
 })
 ```
+
+### Create on missing (a path that does not exist)
+
+`kit.create_on_missing({ path = p, on_done = fn })` is the question a plugin asks when the user
+wants to open a file that is not there (gopath.nvim's `gf`, a path pasted into images.nvim). A
+`kit.confirm` with three buttons:
+
+| Button | Does |
+| ------ | ---- |
+| `Create` | [`lib.nvim.fs.create_entry`](../../fs/create_entry/README.md) makes the file — or, for a path ending in `/` or `\`, the directory — with every missing parent directory, then opens the file (`:edit`) |
+| `Open in filetree` | filetree.nvim reveals the deepest directory of the path that does exist (`adapter().open_reveal`); nothing is created |
+| `Cancel` | nothing (also `<Esc>`/`q`, or the dialog closed any other way) |
+
+```lua
+local kit = require("lib.nvim.ui.kit")
+kit.create_on_missing({
+  path = "docs/notes/today.md",      -- relative to the cwd, or absolute
+  on_done = function(res)            -- exactly once, however the dialog ends
+    -- res.action: "created" | "exists" | "filetree" | "cancelled" | "error"
+    -- res.path, res.kind ("file"/"directory"), res.err
+  end,
+})
+```
+
+- **filetree.nvim is optional.** The button is offered only when filetree.nvim is loaded *and*
+  set up and its adapter can reveal a path; the kit reads `package.loaded["filetree"]` and never
+  `require`s it, so asking does not pull a lazy-loaded tree in. `filetree = false` hides the
+  button, `filetree = function(dir) ... return true end` offers it with a reveal of your own
+  (return `false` for a failure). `require("lib.nvim.ui.kit.create_on_missing").filetree_available()`
+  says whether the default would show it.
+- `open = false` creates without opening; `open = function(path, kind) end` replaces `:edit`
+  (a directory is opened only by such a function).
+- A path that **exists** asks nothing: it is opened and reported as `"exists"`.
+- A refused name (`create_entry` rejects `\/:*?"<>|` in a segment) or a failed reveal is reported
+  with `notify` and as `"error"`; a refused name creates nothing (it is checked before any
+  directory is made).
+- The question names the missing parent directories, so the user sees that `Create` makes more
+  than one entry. The button labels are `M.CREATE`, `M.FILETREE`, `M.CANCEL` on the module — a
+  [dialog hook](#dialog-hook-answer-dialogs-in-tests) answers with one of them (or the index).
 
 ### Dialog hook (answer dialogs in tests)
 

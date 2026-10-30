@@ -161,6 +161,16 @@ function M.ask(opts)
   return component("confirm").ask(opts)
 end
 
+--- Ask what to do about a path that does not exist: Create (the file or directory with every
+--- missing parent, via `lib.nvim.fs.create_entry`, then open it), Open in filetree (only when
+--- filetree.nvim is loaded and set up, or `opts.filetree` is a function) or Cancel. `opts.on_done`
+--- gets one result table. See `lib.nvim.ui.kit.create_on_missing`.
+---@param opts Lib.UI.Kit.CreateOnMissingOpts
+---@return Lib.UI.Kit.Surface|nil
+function M.create_on_missing(opts)
+  return component("create_on_missing").open(opts)
+end
+
 --- Open a cursor-anchored action menu (label → callback).
 ---@param opts table
 ---@return Lib.UI.Kit.Surface|nil
