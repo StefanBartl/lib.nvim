@@ -70,8 +70,13 @@ return function(H)
       end,
       adapter = function()
         return {
+          -- like filetree.nvim's oil / mini.files / netrw backends: open_reveal reveals a file
+          -- and shows the directory fnamemodify(path, ":h") names
           open_reveal = function(path, levels)
-            fake_ft.revealed[#fake_ft.revealed + 1] = { path = path, levels = levels }
+            fake_ft.revealed[#fake_ft.revealed + 1] = {
+              shown = vim.fs.normalize(vim.fn.fnamemodify(path, ":h")),
+              levels = levels,
+            }
             return reveal_ok ~= false
           end,
         }
@@ -198,7 +203,7 @@ return function(H)
     eq(res.action, "filetree", "filetree: reported")
     eq(res.path, root .. "/a/b", "filetree: the deepest existing directory")
     eq(#fake_ft.revealed, 1, "filetree: revealed once")
-    eq(fake_ft.revealed[1].path, root .. "/a/b", "filetree: open_reveal got that directory")
+    eq(fake_ft.revealed[1].shown, root .. "/a/b", "filetree: the tree shows that directory")
     eq(vim.fn.isdirectory(root .. "/a/b/c"), 0, "filetree: nothing created")
 
     -- the dialog hook may also answer by button index

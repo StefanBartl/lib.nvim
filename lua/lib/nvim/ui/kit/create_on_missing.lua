@@ -67,7 +67,10 @@ local function filetree_reveal()
     return nil
   end
   return function(path)
-    return adapter.open_reveal(path, 0) == true
+    -- open_reveal reveals a FILE: oil, mini.files and netrw show `fnamemodify(path, ":h")`,
+    -- which for a bare directory is its parent. A trailing separator makes ":h" the directory.
+    local dir = path:sub(-1) == "/" and path or path .. "/"
+    return adapter.open_reveal(dir, 0) == true
   end
 end
 

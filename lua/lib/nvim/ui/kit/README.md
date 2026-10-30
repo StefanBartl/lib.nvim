@@ -681,7 +681,7 @@ wants to open a file that is not there (gopath.nvim's `gf`, a path pasted into i
 | Button | Does |
 | ------ | ---- |
 | `Create` | [`lib.nvim.fs.create_entry`](../../fs/create_entry/README.md) makes the file — or, for a path ending in `/` or `\`, the directory — with every missing parent directory, then opens the file (`:edit`) |
-| `Open in filetree` | filetree.nvim reveals the deepest directory of the path that does exist (`adapter().open_reveal`); nothing is created |
+| `Open in filetree` | filetree.nvim shows the deepest directory of the path that does exist (`adapter().open_reveal` with that directory plus a trailing `/`, so a backend that reveals a file shows the directory itself, not its parent); nothing is created |
 | `Cancel` | nothing (also `<Esc>`/`q`, or the dialog closed any other way) |
 
 ```lua
