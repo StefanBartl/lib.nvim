@@ -43,7 +43,7 @@ return function(H)
     keymap("n", "<M-F6>", noop, { record = true }, "lib probe")
     local lib = find(rt.snapshot(), "n", "<M-F6>")
     eq(lib.origin, "lib", "a mapping lib.nvim recorded is marked as such")
-    keymap.forget()
+    keymap.forget("(unknown)")
 
     -- Neovim's own defaults: by script id where it stamps them, by content
     -- against the pristine list where it does not (a build with its Lua

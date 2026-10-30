@@ -46,6 +46,13 @@ return function(H)
 
   local function noop() end
 
+  ---Drop the direct records this spec made, not those of every plugin in the shared editor. The
+  ---plain `keymap(mode, lhs, rhs, opts, "lib one")` calls here have no plugin: their records are
+  ---filed under "(unknown)" ("lib one" is only the description).
+  local function forget_ours()
+    keymap.forget("(unknown)")
+  end
+
   -- ------------------------------------------------------------- lhs.lua
 
   eq(lhs.normalize("<M-h>"), lhs.normalize("<A-h>"), "<M-h> and <A-h> are one key")
@@ -352,43 +359,55 @@ return function(H)
   -- -------------------------------------------------- install / uninstall
 
   do
-    tap.clear()
-    eq(tap.install(), true, "the first install installs")
-    eq(tap.install(), false, "the second one does nothing")
-    ok(tap.is_installed(), "installed")
-    ok(api.nvim_set_keymap ~= pristine.nvim_set_keymap, "and the API is wrapped")
-    local restored, left = tap.uninstall()
-    eq(restored, true, "uninstall restores")
-    eq(#left, 0, "everything")
-    ok(not tap.is_installed(), "no longer installed")
-    for name, f in pairs(pristine) do
-      ok(api[name] == f, name .. " is the original function again")
-    end
-    vim.keymap.set("n", "<M-F9>", noop)
-    eq(#tap.log(), 0, "nothing is recorded after uninstall")
-    unbind("n", "<M-F9>")
+    -- Whatever fails in here, the API is put back below: the specs after this one share the editor.
+    local block_ok, block_err = pcall(function()
+      tap.clear()
+      eq(tap.install(), true, "the first install installs")
+      eq(tap.install(), false, "the second one does nothing")
+      ok(tap.is_installed(), "installed")
+      ok(api.nvim_set_keymap ~= pristine.nvim_set_keymap, "and the API is wrapped")
+      local restored, left = tap.uninstall()
+      eq(restored, true, "uninstall restores")
+      eq(#left, 0, "everything")
+      ok(not tap.is_installed(), "no longer installed")
+      for name, f in pairs(pristine) do
+        ok(api[name] == f, name .. " is the original function again")
+      end
+      vim.keymap.set("n", "<M-F9>", noop)
+      eq(#tap.log(), 0, "nothing is recorded after uninstall")
+      unbind("n", "<M-F9>")
 
-    -- A foreign wrapper on top is not torn out; the tap steps aside.
-    tap.install()
-    local ours = api.nvim_set_keymap
-    local calls = 0
-    api.nvim_set_keymap = function(...)
-      calls = calls + 1
-      return ours(...)
-    end
-    local foreign = api.nvim_set_keymap
-    local restored2, left2 = tap.uninstall()
-    eq(restored2, false, "uninstall reports what it could not restore")
-    eq(left2[1], "nvim_set_keymap", "naming it")
-    ok(api.nvim_set_keymap == foreign, "and leaves the other wrapper in place")
-    vim.keymap.set("n", "<M-F9>", noop)
-    ok(calls > 0, "which keeps working")
-    eq(#tap.log(), 0, "while the stopped tap records nothing")
-    unbind("n", "<M-F9>")
+      -- A foreign wrapper on top is not torn out; the tap steps aside.
+      tap.install()
+      local ours = api.nvim_set_keymap
+      local calls = 0
+      api.nvim_set_keymap = function(...)
+        calls = calls + 1
+        return ours(...)
+      end
+      local foreign = api.nvim_set_keymap
+      local restored2, left2 = tap.uninstall()
+      eq(restored2, false, "uninstall reports what it could not restore")
+      eq(left2[1], "nvim_set_keymap", "naming it")
+      ok(api.nvim_set_keymap == foreign, "and leaves the other wrapper in place")
+      vim.keymap.set("n", "<M-F9>", noop)
+      ok(calls > 0, "which keeps working")
+      eq(#tap.log(), 0, "while the stopped tap records nothing")
+      unbind("n", "<M-F9>")
+      for name, f in pairs(pristine) do
+        api[name] = f
+      end
+      tap.clear()
+    end)
+    tap.uninstall()
+    tap.clear()
     for name, f in pairs(pristine) do
       api[name] = f
     end
-    tap.clear()
+    pcall(vim.keymap.del, "n", "<M-F9>")
+    if not block_ok then
+      error(block_err, 0)
+    end
   end
 
   -- Installing again over the foreign wrapper that blocked the last uninstall: the layer
@@ -563,15 +582,15 @@ return function(H)
   -- ------------------------------------- conflicts({ scope = "full" })
 
   do
-    keymap.forget()
+    forget_ours()
     -- Default scope: the tap's recording is not consulted at all.
     with_tap(function()
-      vim.keymap.set("n", "<M-h>", noop, { desc = "raw 1" })
-      vim.keymap.set("n", "<M-h>", function() end, { desc = "raw 2" })
+      vim.keymap.set("n", "<M-F12>", noop, { desc = "raw 1" })
+      vim.keymap.set("n", "<M-F12>", function() end, { desc = "raw 2" })
       local registered_only, info = registry.conflicts()
       local found = false
       for _, c in ipairs(registered_only) do
-        found = found or c.lhs == "<M-h>"
+        found = found or c.lhs == "<M-F12>"
       end
       ok(not found, "scope registered does not see raw bindings")
       eq(info.scope, "registered", "and says which scope it answered")
@@ -579,7 +598,7 @@ return function(H)
       local full, finfo = registry.conflicts({ scope = "full" })
       local hit
       for _, c in ipairs(full) do
-        if c.lhs == "<M-h>" and c.mode == "n" then
+        if c.lhs == "<M-F12>" and c.mode == "n" then
           hit = c
         end
       end
@@ -587,36 +606,36 @@ return function(H)
       eq(finfo.tap_installed, true, "knowing the tap was there")
       eq(#finfo.notes, 0, "so there is nothing to caveat")
       ok(hit.claimants[1].source ~= nil, "each claimant says where it came from")
-      unbind("n", "<M-h>")
+      unbind("n", "<M-F12>")
     end)
 
     -- Without the tap the answer must say it cannot see overwritten mappings.
     tap.clear()
-    vim.keymap.set("n", "<M-h>", noop, { desc = "raw 1" })
-    vim.keymap.set("n", "<M-h>", function() end, { desc = "raw 2" })
+    vim.keymap.set("n", "<M-F12>", noop, { desc = "raw 1" })
+    vim.keymap.set("n", "<M-F12>", function() end, { desc = "raw 2" })
     local full, finfo = registry.conflicts({ scope = "full" })
     eq(finfo.tap_installed, false, "without the tap, the answer says so")
     ok(#finfo.notes >= 1 and finfo.notes[1]:find("not installed", 1, true) ~= nil, "in a note")
     for _, c in ipairs(full) do
-      ok(not (c.lhs == "<M-h>" and c.mode == "n"), "and the overwritten raw mapping is not found")
+      ok(not (c.lhs == "<M-F12>" and c.mode == "n"), "and the overwritten raw mapping is not found")
     end
-    unbind("n", "<M-h>")
+    unbind("n", "<M-F12>")
 
     -- A lib.nvim collision is listed once, not once per source of knowledge.
     with_tap(function()
-      keymap("n", "<M-h>", noop, {}, "lib one")
-      keymap("n", "<M-h>", function() end, {}, "lib two")
+      keymap("n", "<M-F12>", noop, {}, "lib one")
+      keymap("n", "<M-F12>", function() end, {}, "lib two")
       local both = registry.conflicts({ scope = "full" })
       local n = 0
       for _, c in ipairs(both) do
-        if c.lhs == "<M-h>" and c.mode == "n" then
+        if c.lhs == "<M-F12>" and c.mode == "n" then
           n = n + 1
         end
       end
       eq(n, 1, "a collision known to registry and tap is one row")
-      unbind("n", "<M-h>")
+      unbind("n", "<M-F12>")
     end)
-    keymap.forget()
+    forget_ours()
 
     ---@param key string
     ---@param rows Lib.Keymap.Conflict[]
@@ -651,20 +670,20 @@ return function(H)
       eq(#rows_of("<M-j>", (registry.conflicts({ scope = "full" }))), 1, "and so is one in mode v")
       unbind("v", "<M-j>")
     end)
-    keymap.forget()
+    forget_ours()
 
     -- Two lib.nvim bindings and then a raw one that overwrites both: the registry knows the key
     -- already, but only the tap has the winner, so its row (three claimants) must not be dropped.
     with_tap(function()
-      keymap("n", "<M-h>", noop, {}, "lib one")
-      keymap("n", "<M-h>", function() end, {}, "lib two")
-      vim.keymap.set("n", "<M-h>", function() end, { desc = "raw winner" })
-      local rows = rows_of("<M-h>", (registry.conflicts({ scope = "full" })))
+      keymap("n", "<M-F12>", noop, {}, "lib one")
+      keymap("n", "<M-F12>", function() end, {}, "lib two")
+      vim.keymap.set("n", "<M-F12>", function() end, { desc = "raw winner" })
+      local rows = rows_of("<M-F12>", (registry.conflicts({ scope = "full" })))
       eq(#rows, 1, "one row for the key")
       eq(#rows[1].claimants, 3, "and it has the raw mapping that overwrote both")
-      unbind("n", "<M-h>")
+      unbind("n", "<M-F12>")
     end)
-    keymap.forget()
+    forget_ours()
 
     -- Benign collisions are counted, and shown on request.
     with_tap(function()
@@ -676,22 +695,22 @@ return function(H)
       )
       f:close()
       local lazy_set = assert(loadfile(dir .. "/keys.lua"))()
-      lazy_set("n", "<M-h>", "Find files")
-      unbind("n", "<M-h>")
-      lazy_set("n", "<M-h>", "Find files")
-      vim.keymap.set("n", "<M-h>", function() end, { desc = "Find files" })
+      lazy_set("n", "<M-F12>", "Find files")
+      unbind("n", "<M-F12>")
+      lazy_set("n", "<M-F12>", "Find files")
+      vim.keymap.set("n", "<M-F12>", function() end, { desc = "Find files" })
       local hidden, hinfo = registry.conflicts({ scope = "full" })
       for _, c in ipairs(hidden) do
-        ok(not (c.lhs == "<M-h>" and c.mode == "n"), "the lazy placeholder is left out")
+        ok(not (c.lhs == "<M-F12>" and c.mode == "n"), "the lazy placeholder is left out")
       end
       eq(hinfo.benign_hidden, 1, "but counted")
       local shown = registry.conflicts({ scope = "full", benign = true })
       local seen = false
       for _, c in ipairs(shown) do
-        seen = seen or (c.lhs == "<M-h>" and c.benign == "lazy-stub")
+        seen = seen or (c.lhs == "<M-F12>" and c.benign == "lazy-stub")
       end
       ok(seen, "and listed with opts.benign")
-      unbind("n", "<M-h>")
+      unbind("n", "<M-F12>")
       vim.fn.delete(vim.fn.fnamemodify(dir, ":h:h:h"), "rf")
     end)
   end
@@ -711,6 +730,94 @@ return function(H)
   do
     local text = table.concat(keymap.conflict_lines({ scope = "full" }), "\n")
     ok(text:find("not installed", 1, true) ~= nil, "the full report without a tap says so")
+  end
+
+  -- ------------------------------------------------ reload and stripped chunk
+
+  local modname = "lib.nvim.bindings.keymap.tap"
+  local handover = "__lib_nvim_keymap_tap"
+
+  ---Put this spec's own copy of the module back, whatever a case did to the loaded one.
+  ---@param old table
+  local function restore_module(old)
+    package.loaded[modname] = old
+    rawset(_G, handover, old)
+    tap.uninstall()
+    tap.clear()
+    tap.skip = {}
+    tap.max_events = 50000
+    for fname, f in pairs(pristine) do
+      api[fname] = f
+    end
+    pcall(vim.keymap.del, "n", "<M-F9>")
+    pcall(vim.keymap.del, "n", "<M-F8>")
+  end
+
+  -- A reload (package.loaded cleared, the module required again) used to leave the old copy's
+  -- wrappers next to the new one's: every call recorded twice, and an uninstall of the new copy
+  -- that restored nothing. The new copy takes over the recording and the settings and silences the old.
+  do
+    local old = package.loaded[modname]
+    local passed, err = pcall(function()
+      tap.clear()
+      tap.install()
+      tap.skip = { "/marker_skip%.lua$" }
+      tap.max_events = 1234
+      vim.keymap.set("n", "<M-F9>", noop, { desc = "before the reload" })
+
+      package.loaded[modname] = nil
+      local fresh = require(modname)
+      ok(fresh ~= tap, "a reload gives a new module table")
+      ok(fresh.is_installed(), "which carries on recording")
+      ok(not tap.is_installed(), "while the old copy is stopped")
+      eq(fresh.max_events, 1234, "keeps the settings")
+      eq(fresh.skip[1], "/marker_skip%.lua$", "including the skip patterns")
+      eq(#fresh.log(), 1, "and what was recorded")
+
+      vim.keymap.set("n", "<M-F8>", noop, { desc = "after the reload" })
+      eq(#fresh.log(), 2, "one binding is one event, not one per copy")
+
+      local restored = fresh.uninstall()
+      ok(restored, "the new copy's uninstall restores the API")
+      for fname, f in pairs(pristine) do
+        ok(api[fname] == f, fname .. " is the original function again")
+      end
+    end)
+    restore_module(old)
+    if not passed then
+      error(err, 0)
+    end
+  end
+
+  -- On a Lua without line info Neovim's own keymap.lua is a chunk named `?`; its frame is still
+  -- recognised, by the function that was `vim.keymap.set` when the module loaded.
+  do
+    local old = package.loaded[modname]
+    local real_set = vim.keymap.set
+    local stripped = assert(
+      load(
+        "local orig = ...\nreturn function(...)\n  local res = orig(...)\n  return res\nend",
+        "=?"
+      )
+    )(real_set)
+    vim.keymap.set = stripped
+    local passed, err = pcall(function()
+      package.loaded[modname] = nil
+      local fresh = require(modname)
+      fresh.install()
+      vim.keymap.set("n", "<M-F9>", noop)
+      local e = fresh.log()[1]
+      ok(
+        e ~= nil and e.source:find("keymap_tap_spec.lua", 1, true) ~= nil,
+        "the stripped frame is looked past: " .. tostring(e and e.source)
+      )
+      fresh.uninstall()
+    end)
+    vim.keymap.set = real_set
+    restore_module(old)
+    if not passed then
+      error(err, 0)
+    end
   end
 
   eq(tap.is_installed(), false, "the spec leaves the tap uninstalled")
