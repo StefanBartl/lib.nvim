@@ -160,7 +160,7 @@ return function(H)
     local st, h = fresh()
     h:go(st, { id = "a" })
     local list = h:entries()
-    list[1] = nil
+    list[#list + 1] = {}
     eq(h:len(), 2, "entries() returns a copy of the list")
     st.id = "z"
     h:reset(st)
@@ -190,6 +190,6 @@ return function(H)
     local h2 = history.new({ state = { a = 1, b = 1 }, keys = keys })
     keys[2] = "b"
     local s2 = { a = 1, b = 2 }
-    eq(h2:go(s2, {}), false, "a key added to the caller's list afterwards is not tracked")
+    eq(h2:push(s2), false, "a key added to the caller's list afterwards is not tracked")
   end
 end
