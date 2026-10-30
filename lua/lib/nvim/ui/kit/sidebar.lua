@@ -99,6 +99,9 @@ local function decorate(self)
     -- A split copies the fold settings too: `foldmethod=indent` would close a tree's children.
     foldenable = false,
     foldmethod = "manual",
+    -- A split copies the fold settings too: `foldmethod=indent` would close a tree's children.
+    foldenable = false,
+    foldmethod = "manual",
     statuscolumn = "",
     spell = false,
     list = false,
@@ -454,11 +457,15 @@ function M.open(opts)
 end
 
 --- Hide the sidebar `opts.name` when it is visible, else show it (opening it with `opts` the
---- first time). The handle, or nil when nothing could be opened.
+--- first time). The handle, or nil when nothing could be opened. `opts.name` is required:
+--- without it nothing could be hidden again.
 ---@param opts Lib.UI.Kit.SidebarOpts
 ---@return Lib.UI.Kit.Sidebar|nil
 function M.toggle(opts)
-  local existing = opts.name and state.get(opts.name)
+  if type(opts) ~= "table" or opts.name == nil then
+    error("kit.sidebar.toggle: opts.name is required", 2)
+  end
+  local existing = state.get(opts.name)
   if existing and existing:is_visible() then
     existing:hide()
     return existing

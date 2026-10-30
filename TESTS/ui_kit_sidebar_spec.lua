@@ -242,6 +242,26 @@ return function(H)
   t:focus()
   eq(api.nvim_get_current_win(), t.winid, "focus() shows a hidden sidebar and enters it")
   reset()
+  ok(not pcall(sidebar.toggle, {}), "toggle without a name raises")
+  eq(#sidebar.list(), 0, "and opens nothing")
+
+  -- ---------------------------------------------------------------- folds of the code window
+  -- A split copies the window's fold settings; a tree's indented lines must stay open.
+  vim.wo[main].foldmethod = "indent"
+  vim.wo[main].foldlevel = 0
+  vim.wo[main].foldenable = true
+  local f = sidebar.open({ name = "f", lines = { "dir", "  a", "  b" }, bo = { shiftwidth = 2 } })
+  eq(wo(f.winid, "foldenable"), false, "folds off in the sidebar")
+  eq(
+    api.nvim_win_call(f.winid, function()
+      return vim.fn.foldclosed(2)
+    end),
+    -1,
+    "the indented lines are not folded"
+  )
+  vim.wo[main].foldmethod = "manual"
+  vim.wo[main].foldenable = false
+  reset()
 
   -- ---------------------------------------------------------------- folds of the code window
   -- A split copies the window's fold settings; a tree's indented lines must stay open.
