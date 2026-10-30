@@ -49,6 +49,15 @@ presets differ mainly in border strength: >
 Highlights link to standard groups (NormalFloat / FloatBorder / FloatTitle /
 PmenuSel / …) so the default look is correct in any colorscheme.
 
+Status tokens: a list whose rows have a state (test results, tasks, health)
+uses the groups KitOk, KitWarn, KitInfo and KitDim rather than groups of its
+own. They link to DiagnosticOk, DiagnosticWarn, DiagnosticInfo and Comment;
+a preset or an override table sets them through the hl keys ok, warn, info
+and dim (a group name or a highlight spec). The global groups follow the
+active default: setup() defines them, a new default recolours them at once,
+and a surface opened with its own theme sets them to that theme until the
+next one.
+
 Register presets / choose the active default: >lua
 
     require("lib.nvim.ui.kit").setup({

@@ -95,10 +95,17 @@ is correct in any colorscheme. Override any of the semantic keys:
 **Status tokens.** A list whose rows have a state (test results, tasks, health)
 uses the groups `KitOk`, `KitWarn`, `KitInfo` and `KitDim` rather than groups of
 its own. They link to `DiagnosticOk`, `DiagnosticWarn`, `DiagnosticInfo` and
-`Comment`, and a preset or an override table sets them like any other key:
+`Comment`, and a preset or an override table sets them like any other key. The
+global groups follow the active default: `kit.setup()` defines them, so a list in a
+plain split or a statusline is coloured before any kit surface opens, and a new
+`default` recolours them at once (a surface opened with its own `theme` sets them to
+that theme until the next one):
 
 ```lua
-kit.setup({ presets = { mine = { hl = { ok = "String", warn = { fg = "#e0af68" } } } } })
+kit.setup({
+  default = "mine",
+  presets = { mine = { hl = { ok = "String", warn = { fg = "#e0af68" } } } },
+})
 vim.api.nvim_buf_set_extmark(buf, ns, row, 0, { line_hl_group = "KitDim" }) -- a skipped row
 ```
 

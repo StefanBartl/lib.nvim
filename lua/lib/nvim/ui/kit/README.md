@@ -72,7 +72,10 @@ colorscheme.
 the groups `KitOk`, `KitWarn`, `KitInfo` and `KitDim` rather than groups of its own.
 They link to `DiagnosticOk`, `DiagnosticWarn`, `DiagnosticInfo` and `Comment`, and a
 preset or an override table sets them like any other token (`hl = { ok = "String" }`,
-or a highlight spec).
+or a highlight spec). These global groups follow the active default: `setup()` defines
+them (a list in a plain split or a statusline needs no kit surface to have opened), a
+new `default` recolours them at once, and a surface opened with its own `theme` sets
+them to that theme until the next one.
 
 ```lua
 require("lib.nvim.ui.kit").setup({
