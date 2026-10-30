@@ -147,12 +147,12 @@ function M.open(opts)
   end
   choices[#choices + 1] = M.CANCEL
 
-  local shown = vim.fn.fnamemodify(abs, ":~:.") .. (want_dir and "/" or "")
+  -- one separator style in the question (":~:." gives backslashes on Windows); not
+  -- vim.fs.normalize, which would expand the "~" again
+  local shown = vim.fn.fnamemodify(abs, ":~:."):gsub("\\", "/") .. (want_dir and "/" or "")
   local lines = { shown .. " does not exist." }
+  -- the missing PARENT directories: for a directory target the target itself is not one of them
   local missing_dir = vim.fs.dirname(rest)
-  if want_dir then
-    missing_dir = rest
-  end
   if missing_dir and missing_dir ~= "." and missing_dir ~= "" then
     lines[#lines + 1] = "Missing directories are created too: " .. missing_dir .. "/"
   end

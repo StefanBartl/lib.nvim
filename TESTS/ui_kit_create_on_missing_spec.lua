@@ -133,9 +133,20 @@ return function(H)
     eq(vim.fn.isdirectory(root .. "/d1/d2"), 1, "dir: exists")
     eq(vim.api.nvim_get_current_buf(), buf_before, "dir: nothing opened")
     eq(seen[1].title, "Create directory?", "dir: its own title")
-    ok(
-      seen[1].question:find("Missing directories are created too: d1/d2/", 1, true),
-      "dir: names the directories"
+    eq(
+      seen[1].question:match("created too: ([^\n]*)"),
+      "d1/",
+      "dir: names the missing parent, not the target"
+    )
+    eq(seen[1].question:find("\\", 1, true), nil, "dir: one separator style in the question")
+
+    -- a directory directly in an existing one: no parent is missing, so no directory line
+    run(root .. "/newdir/", com.CREATE)
+    eq(vim.fn.isdirectory(root .. "/newdir"), 1, "newdir: created")
+    eq(
+      seen[1].question:find("Missing directories", 1, true),
+      nil,
+      "newdir: the target is not a missing parent: " .. seen[1].question
     )
 
     -- a path through a symlinked directory is reported and opened as the caller spelled it
