@@ -38,6 +38,12 @@
 --- All of it is on by default and switchable: `preview_keys = false` drops the
 --- keys, a group set to `false` (or a list of your own) changes one,
 --- `close_on_leave = false` and `hints = false` the other two.
+---
+--- `number_keys = true` (off by default) adds harpoon-style digits: `1`..`9` in
+--- the list submit the first nine entries the way `<CR>` does
+--- (`on_submit(item, idx)`), and each of those lines starts with its digit.
+--- `number_keys = { label = false }` keeps the keys but leaves drawing the digit
+--- to the caller's `format_item`, which gets the index as its third argument.
 
 local layout = require("lib.nvim.ui.kit.layout")
 local chooser = require("lib.nvim.ui.kit.chooser")
@@ -60,6 +66,15 @@ local M = {}
 ---@field cycle? string[]|string|false        # window-cycle keys, kept inside the popup
 ---@field close? string[]|string|false        # close the popup, from the preview and from the list (`q`/`<Esc>` on the list are the chooser's own and always there); add a key that also opens the popup to make it a toggle
 ---@field submit? string[]|string|false       # submit at the cursor line (preview only)
+
+---@class Lib.UI.Kit.ShortlistNumberKeys
+---@field label? boolean  # draw the digit before the entry (default true); false = the caller's `format_item(item, width, idx)` shows it itself
+
+--- How many entries get a digit key: `1`..`9`.
+local MAX_DIGIT = 9
+
+--- The cells the digit label takes in front of an entry: the digit and a space.
+local LABEL_WIDTH = 2
 
 --- The keys of the preview pane. `<C-p>` scrolls up on purpose although Vim
 --- means "one line up" by it: it pairs with `<C-f>`, and `<C-b>` stays as the
@@ -141,6 +156,22 @@ local function resolve_keys(given)
 end
 
 ---@internal
+--- The caller's `number_keys` as a table, or nil when the option is off. Only
+--- `true` and a table turn it on; anything else (a typo'd string, a number)
+--- leaves the list as it was rather than guessing.
+---@param given any
+---@return { label: boolean }|nil
+local function resolve_number_keys(given)
+  if given == true then
+    return { label = true }
+  end
+  if type(given) == "table" then
+    return { label = given.label ~= false }
+  end
+  return nil
+end
+
+---@internal
 --- Point the `FloatBorder` entry of a window's 'winhighlight' at `group`, leaving
 --- every other entry alone (the chooser adds its own `CursorLine` mapping).
 ---@param winid integer
@@ -170,8 +201,9 @@ end
 --- group that is off leaves its hint out.
 ---@param keys table<string, string[]>
 ---@param in_preview boolean
+---@param digits integer  # how many entries have a digit key (0 = none)
 ---@return string
-local function hint_text(keys, in_preview)
+local function hint_text(keys, in_preview, digits)
   local parts = {}
   if keys.scroll_down and keys.scroll_up then
     parts[#parts + 1] = keys.scroll_down[1] .. "/" .. keys.scroll_up[1] .. " scroll"
@@ -193,6 +225,11 @@ local function hint_text(keys, in_preview)
     end
     -- The list's own keys: the chooser binds these itself.
     parts[#parts + 1] = "<CR> open"
+    if digits == 1 then
+      parts[#parts + 1] = "1 open"
+    elseif digits > 1 then
+      parts[#parts + 1] = ("1-%d open"):format(digits)
+    end
     parts[#parts + 1] = "q close"
   end
   return " " .. table.concat(parts, "  ") .. " "
@@ -223,7 +260,11 @@ end
 --- after the popup has closed; `pos` is `{ row = <1-based>, col = <0-based> }`,
 --- the preview cursor, so a file preview can open the file at that line. Without
 --- it, <CR> in the preview falls back to `on_submit(item, idx)`.
----@param opts table  # { items, format_item?(item, width)->string, render(item, surface), on_submit?(item, idx), on_preview_submit?(item, idx, pos), on_close?(), title?, preview_title?, preview_filetype?, preview_bo?, theme?, initial_index?, spec?, preview_keys?: Lib.UI.Kit.ShortlistKeys|false, close_on_leave?: boolean, hints?: boolean }
+---
+--- `opts.number_keys` (see the module doc): `true` binds `1`..`9` in the list to
+--- the first nine entries and labels them; `{ label = false }` binds without
+--- labelling, for a `format_item` that draws the digit itself.
+---@param opts table  # { items, format_item?(item, width, idx)->string, render(item, surface), on_submit?(item, idx), on_preview_submit?(item, idx, pos), on_close?(), title?, preview_title?, preview_filetype?, preview_bo?, theme?, initial_index?, spec?, preview_keys?: Lib.UI.Kit.ShortlistKeys|false, close_on_leave?: boolean, hints?: boolean, number_keys?: boolean|Lib.UI.Kit.ShortlistNumberKeys }
 ---@return table|nil handle  # { close(), current_item(), current_index(), results, preview }
 function M.open(opts)
   opts = opts or {}
@@ -237,8 +278,27 @@ function M.open(opts)
     notify.error("shortlist: opts.render(item, surface) is required")
     return nil
   end
-  local format_item = opts.format_item or function(item, _width)
-    return tostring(item)
+  local format_item = opts.format_item
+    or function(item, _width, _idx)
+      return tostring(item)
+    end
+  local number_keys = resolve_number_keys(opts.number_keys)
+  local digits = number_keys and math.min(MAX_DIGIT, #items) or 0
+
+  --- One results line: the caller's text, behind its digit when the shortlist
+  --- draws the labels (entries past the ninth get blanks, so the text lines up).
+  --- The caller's width budget shrinks by the label, so a path it truncates to
+  --- fit still fits.
+  ---@param idx integer
+  ---@param raw any
+  ---@param width integer
+  ---@return string
+  local function format_line(idx, raw, width)
+    if not (number_keys and number_keys.label) then
+      return format_item(raw, width, idx)
+    end
+    local label = idx <= MAX_DIGIT and tostring(idx) or " "
+    return label .. " " .. format_item(raw, math.max(1, width - LABEL_WIDTH), idx)
   end
   --- Also the fallback for `<CR>` in the preview, which adds the cursor position.
   ---@type fun(item: any, idx: integer, pos?: { row: integer, col: integer })
@@ -274,7 +334,7 @@ function M.open(opts)
 
   local chooser_items = {}
   for i, raw in ipairs(items) do
-    chooser_items[i] = { lines = { format_item(raw, geo.slots.results.width) }, data = raw }
+    chooser_items[i] = { lines = { format_line(i, raw, geo.slots.results.width) }, data = raw }
   end
 
   local results_surf = chooser.open({
@@ -357,8 +417,8 @@ function M.open(opts)
     if not (hints and alive()) then
       return
     end
-    set_footer(results_surf.winid, hint_text(keys, false))
-    set_footer(preview_surf.winid, hint_text(keys, true))
+    set_footer(results_surf.winid, hint_text(keys, false, digits))
+    set_footer(preview_surf.winid, hint_text(keys, true, digits))
   end
 
   local function update_focus()
@@ -390,7 +450,7 @@ function M.open(opts)
       -- bookkeeping or the current selection.
       local new_lines = {}
       for i, raw in ipairs(items) do
-        new_lines[i] = format_item(raw, g.slots.results.width)
+        new_lines[i] = format_line(i, raw, g.slots.results.width)
       end
       results_surf:set_lines(new_lines)
     end
@@ -549,6 +609,19 @@ function M.open(opts)
       view_map,
       "lib.nvim.ui.kit.shortlist: open at the cursor line"
     )
+  end
+
+  -- Digits in the list only: in the preview they stay counts (`5j`).
+  for idx = 1, digits do
+    map("n", tostring(idx), function()
+      if not results_surf:is_valid() then
+        return
+      end
+      -- Closed first, the way the chooser closes before `on_select`: a handler
+      -- that opens a file must not land it in the popup.
+      results_surf:close()
+      on_submit(items[idx], idx)
+    end, list_map, ("lib.nvim.ui.kit.shortlist: open entry %d"):format(idx))
   end
 
   results_surf:on_close(function()

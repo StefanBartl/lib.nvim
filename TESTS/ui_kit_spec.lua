@@ -1553,6 +1553,56 @@ return function(H)
     ok(not h.results:is_valid(), "closing the preview pane directly also closes the results window")
   end
 
+  -- kit.shortlist's opt-in number_keys: `1`..`9` submit the first nine entries
+  -- like <CR>, each labelled with its digit; without the option, neither.
+  do
+    local function digit_mapped(bufnr, lhs)
+      for _, m in ipairs(vim.api.nvim_buf_get_keymap(bufnr, "n")) do
+        if m.lhs == lhs then
+          return true
+        end
+      end
+      return false
+    end
+    local got
+    local function open_list(number_keys)
+      got = nil
+      return assert(
+        kit.shortlist({
+          items = { "a", "b", "c" },
+          render = function(item, surface)
+            surface:set_lines({ item })
+          end,
+          on_submit = function(item, idx)
+            got = { item, idx }
+          end,
+          number_keys = number_keys,
+        }),
+        "shortlist opens"
+      )
+    end
+
+    local unnumbered = open_list(nil)
+    eq(
+      table.concat(vim.api.nvim_buf_get_lines(unnumbered.results.bufnr, 0, -1, false), ","),
+      "a,b,c",
+      "shortlist without number_keys: no labels"
+    )
+    ok(not digit_mapped(unnumbered.results.bufnr, "1"), "shortlist without number_keys: no `1` map")
+    unnumbered.close()
+
+    local h = open_list(true)
+    eq(
+      table.concat(vim.api.nvim_buf_get_lines(h.results.bufnr, 0, -1, false), ","),
+      "1 a,2 b,3 c",
+      "shortlist number_keys: each entry carries its digit once"
+    )
+    vim.api.nvim_feedkeys("3", "mx", false)
+    eq(got and got[1], "c", "shortlist number_keys: `3` submits the third entry")
+    eq(got and got[2], 3, "shortlist number_keys: on_submit gets the index")
+    ok(not h.results:is_valid(), "shortlist number_keys: the popup closed on submit")
+  end
+
   -- make_scratch used to widen any resolved width <= 2 to 60 columns, even one
   -- the caller asked for. The kit passes widths straight through, so these are
   -- the degenerate sizes that change meaning: an explicit 1 or 2, and a layout
