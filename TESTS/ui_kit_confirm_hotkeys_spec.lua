@@ -111,6 +111,13 @@ return function(H)
     surf = select(2, open({ question = "Q?", choices = { "Yes", "No" }, legend = true }))
     ok(vim.wo[surf.winid].winbar:find("y/n", 1, true), "the legend shows y/n for Yes/No labels")
     confirm.cancel()
+    surf = select(2, open({ question = "Q?", choices = { "No", "Yes, delete" }, legend = true }))
+    ok(vim.wo[surf.winid].winbar:find("y/n", 1, true), "and for the safe answer first")
+    confirm.cancel()
+    -- y and n as plain first letters are no yes/no answer
+    surf = select(2, open({ question = "Q?", choices = { "Yank", "Next" }, legend = true }))
+    ok(not vim.wo[surf.winid].winbar:find("y/n", 1, true), "no y/n legend for Yank/Next")
+    confirm.cancel()
 
     -- ------------------------------------------------- collisions
     -- Cancel takes c; Close: c taken, l moves focus, o is free; Copy: c and o taken, p is free.

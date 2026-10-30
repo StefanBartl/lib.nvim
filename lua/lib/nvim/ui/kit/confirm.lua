@@ -487,6 +487,7 @@ end
 ---@return string[] refused  # the `&` letters that could not be used, for a warning
 ---@return table<integer, { col: integer, text: string }[]> shown  # per button: the label letters to mark (byte column, text)
 ---@return table<integer, string> digits  # per button without a letter key: its digit key ("0"-"9"), shown next to its label
+---@return boolean answers  # y and n both went to Yes/No buttons in step 1
 local function hotkeys(labels, marks, custom)
   local keys, refused, shown = {}, {}, {}
   local function show(i, col, text)
@@ -520,6 +521,8 @@ local function hotkeys(labels, marks, custom)
       end
     end
   end
+  -- only a y/n pair that answers Yes/No is worth the legend's "y/n answer" (not Yank/Next)
+  local answers = keys.y ~= nil and keys.n ~= nil
 
   -- 2. the `&` letters, in button order, so the first button that asks for a key gets it
   for i = 1, #labels do
@@ -583,7 +586,7 @@ local function hotkeys(labels, marks, custom)
       end
     end
   end
-  return keys, refused, shown, digits
+  return keys, refused, shown, digits, answers
 end
 
 --- How long a waiting `ask` waits for a free moment at most, before it is answered "no".
@@ -912,7 +915,7 @@ local function open_new(opts, settle_old)
     end)
   end)
 
-  local keys, refused, shown, digits = hotkeys(labels, marks, custom)
+  local keys, refused, shown, digits, answers = hotkeys(labels, marks, custom)
 
   -- The decoration (accents, kind colour, legend, focus hook) is cosmetic: whatever raises in it
   -- must not leave a dialog on screen without keys and without a way to answer.
@@ -965,7 +968,7 @@ local function open_new(opts, settle_old)
 
     if opts.legend then
       local entries = { { lhs = "←/→", legend = "move" }, { lhs = "⏎", legend = "select" } }
-      if keys.y and keys.n then
+      if answers then
         entries[#entries + 1] = { lhs = "y/n", legend = "answer" }
       end
       entries[#entries + 1] = { lhs = "q", legend = "cancel" }
