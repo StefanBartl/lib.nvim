@@ -263,44 +263,95 @@ return function(H)
   vim.wo[main].foldenable = false
   reset()
 
-  ok(not pcall(sidebar.toggle, {}), "toggle without a name raises")
-  eq(#sidebar.list(), 0, "and opens nothing")
-
-  -- ---------------------------------------------------------------- folds of the code window
-  -- A split copies the window's fold settings; a tree's indented lines must stay open.
-  vim.wo[main].foldmethod = "indent"
-  vim.wo[main].foldlevel = 0
-  vim.wo[main].foldenable = true
-  local f = sidebar.open({ name = "f", lines = { "dir", "  a", "  b" }, bo = { shiftwidth = 2 } })
-  eq(wo(f.winid, "foldenable"), false, "folds off in the sidebar")
-  eq(
-    api.nvim_win_call(f.winid, function()
-      return vim.fn.foldclosed(2)
-    end),
-    -1,
-    "the indented lines are not folded"
-  )
-  vim.wo[main].foldmethod = "manual"
-  vim.wo[main].foldenable = false
+  -- ---------------------------------------------------------------- UI-54 edge cases
+  -- A sidebar the user brought back and hid again is not restored by a stale record.
+  a = sidebar.open({ name = "a" })
+  b = sidebar.open({ name = "b" })
+  ok(a:show(), "a shown by hand")
+  ok(not b:is_visible(), "a displaces b")
+  ok(a:hide(), "a hidden by hand")
+  settle()
+  ok(b:is_visible(), "hiding a brings b back")
+  b:close()
+  settle()
+  ok(not a:is_visible(), "closing b does not bring back the a the user hid")
   reset()
 
-  -- ---------------------------------------------------------------- folds of the code window
-  -- A split copies the window's fold settings; a tree's indented lines must stay open.
-  vim.wo[main].foldmethod = "indent"
-  vim.wo[main].foldlevel = 0
-  vim.wo[main].foldenable = true
-  local f = sidebar.open({ name = "f", lines = { "dir", "  a", "  b" }, bo = { shiftwidth = 2 } })
-  eq(wo(f.winid, "foldenable"), false, "folds off in the sidebar")
-  eq(
-    api.nvim_win_call(f.winid, function()
-      return vim.fn.foldclosed(2)
-    end),
-    -1,
-    "the indented lines are not folded"
-  )
-  vim.wo[main].foldmethod = "manual"
-  vim.wo[main].foldenable = false
+  -- Showing the middle of a chain a <- b <- c keeps a: c, then a come back in turn.
+  a = sidebar.open({ name = "a" })
+  b = sidebar.open({ name = "b" })
+  c = sidebar.open({ name = "c" })
+  ok(b:show(), "b shown by hand")
+  ok(b:is_visible() and not c:is_visible() and not a:is_visible(), "b displaces c")
+  b:close()
+  settle()
+  ok(c:is_visible() and not a:is_visible(), "closing b brings c back")
+  c:close()
+  settle()
+  ok(a:is_visible(), "closing c brings a back (not lost)")
   reset()
+
+  -- A restore that finds an occupant with its own record waits at the end of that chain.
+  a = sidebar.open({ name = "a" })
+  b = sidebar.open({ name = "b" })
+  b:close()
+  d = sidebar.open({ name = "d" })
+  local e = sidebar.open({ name = "e" })
+  settle()
+  ok(e:is_visible() and not d:is_visible() and not a:is_visible(), "e holds the slot")
+  e:close()
+  settle()
+  ok(d:is_visible() and not a:is_visible(), "d comes back first")
+  d:close()
+  settle()
+  ok(a:is_visible(), "then a (it waited behind d)")
+  reset()
+
+  -- An exclusive sidebar displaces every sidebar at its position; they come back together.
+  a = sidebar.open({ name = "a" })
+  b = sidebar.open({ name = "b", exclusive = false })
+  c = sidebar.open({ name = "c" })
+  ok(c:is_visible() and not a:is_visible() and not b:is_visible(), "c displaces a and b")
+  c:close()
+  settle()
+  settle()
+  ok(a:is_visible() and b:is_visible(), "a and b share the slot again")
+  reset()
+
+  -- ---------------------------------------------------------------- tabpages
+  -- The displacing sidebar closed from another tabpage: the displaced one comes back there.
+  a = sidebar.open({ name = "a" })
+  b = sidebar.open({ name = "b" })
+  vim.cmd("tabnew")
+  local tab2 = api.nvim_get_current_tabpage()
+  b:close()
+  settle()
+  ok(a:is_visible(), "a restored in its own tabpage")
+  eq(api.nvim_win_get_tabpage(a.winid), tab, "a is back in the first tabpage")
+  eq(api.nvim_get_current_tabpage(), tab2, "without switching tabpages")
+  api.nvim_set_current_tabpage(tab)
+  reset()
+
+  -- toggle and open by name work on the current tabpage, never jump to another one.
+  t = sidebar.open({ name = "t", enter = false })
+  api.nvim_set_current_tabpage(tab2)
+  sidebar.toggle({ name = "t" })
+  ok(t:is_visible(), "toggle shows t ...")
+  eq(api.nvim_win_get_tabpage(t.winid), tab2, "... in the current tabpage")
+  eq(api.nvim_get_current_tabpage(), tab2, "and stays there")
+  eq(#api.nvim_tabpage_list_wins(tab), 1, "t left the first tabpage")
+  sidebar.toggle({ name = "t" })
+  ok(not t:is_visible(), "the second toggle hides it")
+  api.nvim_set_current_tabpage(tab)
+  sidebar.toggle({ name = "t" })
+  api.nvim_set_current_tabpage(tab2)
+  eq(sidebar.open({ name = "t", enter = false }), t, "open by name from the other tabpage")
+  eq(api.nvim_get_current_tabpage(), tab2, "does not jump to the first tabpage")
+  eq(api.nvim_win_get_tabpage(t.winid), tab2, "it moves t here")
+  reset()
+  api.nvim_set_current_tabpage(tab2)
+  vim.cmd("tabclose")
+  api.nvim_set_current_win(main)
 
   -- ---------------------------------------------------------------- UI-52: close_all
   local closed = 0
@@ -352,6 +403,7 @@ return function(H)
     :wait()
   eq(child.code, 0, "child ran: " .. tostring(child.stderr))
   eq(vim.trim(child.stdout), "true false |", "the window stays, without the sidebar's options")
+
   if api.nvim_tabpage_is_valid(tab) then
     vim.cmd("tabclose")
   end

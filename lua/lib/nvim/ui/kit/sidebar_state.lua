@@ -59,21 +59,31 @@ function M.get(name)
   return nil
 end
 
---- The sidebar visible at `position` in tabpage `tab`, other than `except`.
+--- Every sidebar visible at `position` in tabpage `tab` other than `except`, newest first.
+---@param tab integer
+---@param position string
+---@param except? Lib.UI.Kit.Sidebar
+---@return Lib.UI.Kit.Sidebar[]
+function M.all_visible_at(tab, position, except)
+  local found = {}
+  for i = #handles, 1, -1 do
+    local h = handles[i]
+    if h ~= except and h.position == position and h:is_visible() then
+      if api.nvim_win_get_tabpage(h.winid) == tab then
+        found[#found + 1] = h
+      end
+    end
+  end
+  return found
+end
+
+--- The newest sidebar visible at `position` in tabpage `tab`, other than `except`.
 ---@param tab integer
 ---@param position string
 ---@param except? Lib.UI.Kit.Sidebar
 ---@return Lib.UI.Kit.Sidebar|nil
 function M.visible_at(tab, position, except)
-  for i = #handles, 1, -1 do
-    local h = handles[i]
-    if h ~= except and h.position == position and h:is_visible() then
-      if api.nvim_win_get_tabpage(h.winid) == tab then
-        return h
-      end
-    end
-  end
-  return nil
+  return M.all_visible_at(tab, position, except)[1]
 end
 
 --- Record that `handle` displaced `other` (nil clears it).
@@ -90,6 +100,39 @@ function M.take_displaced(handle)
   local other = displaced[handle]
   displaced[handle] = nil
   return other
+end
+
+--- Forget every record that would bring `handle` back: it is on screen again by other means
+--- (`show`, `toggle`, `open` by name, `focus`), so a later restore must not undo a later hide.
+---@param handle Lib.UI.Kit.Sidebar
+function M.release(handle)
+  for other, target in pairs(displaced) do
+    if target == handle then
+      displaced[other] = nil
+    end
+  end
+end
+
+--- Let `other` wait behind `handle`: at the end of the chain that starts at `handle` (so it
+--- comes back after everything already waiting there). A no-op for `other == handle` or an
+--- `other` already in that chain.
+---@param handle Lib.UI.Kit.Sidebar
+---@param other Lib.UI.Kit.Sidebar
+function M.append_displaced(handle, other)
+  local seen = {}
+  local tail = handle
+  while true do
+    if tail == other or seen[tail] then
+      return
+    end
+    seen[tail] = true
+    local nxt = displaced[tail]
+    if not nxt then
+      break
+    end
+    tail = nxt
+  end
+  displaced[tail] = other
 end
 
 --- The handle `handle` displaced, without taking it.

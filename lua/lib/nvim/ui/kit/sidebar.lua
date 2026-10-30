@@ -193,11 +193,34 @@ local function unwatch(self)
   end
 end
 
-local finish
+local finish, open_window
+
+--- Is the sidebar on screen in the current tabpage? (Exclusivity, `toggle` and `show` work
+--- per tabpage; `is_visible` is true for a window in any tabpage.)
+---@param self Lib.UI.Kit.Sidebar
+---@return boolean
+local function visible_here(self)
+  return self:is_visible()
+    and api.nvim_win_get_tabpage(self.winid) == api.nvim_get_current_tabpage()
+end
+
+--- A non-floating window of `tab`, to run code in that tabpage.
+---@param tab integer
+---@return integer|nil
+local function window_of(tab)
+  for _, w in ipairs(api.nvim_tabpage_list_wins(tab)) do
+    if api.nvim_win_get_config(w).relative == "" then
+      return w
+    end
+  end
+  return nil
+end
 
 --- Bring `target` back after the sidebar that displaced it went away (once: the caller took
---- it out of the state). A slot taken again in the meantime keeps its occupant; `target`
---- then waits behind it.
+--- it out of the state), in the tabpage it was displaced from, without taking the cursor.
+--- A slot taken again in the meantime by an exclusive sidebar keeps its occupant; `target`
+--- then waits at the end of that occupant's chain. Sidebars that shared the slot with
+--- `target` (`exclusive = false`) come back with it.
 ---@param target Lib.UI.Kit.Sidebar
 local function restore(target)
   defer_twice(function()
@@ -207,15 +230,30 @@ local function restore(target)
     if not api.nvim_tabpage_is_valid(target._tab) then
       return
     end
-    local occupant = state.visible_at(target._tab, target.position, target)
-    if occupant then
-      if not state.displaced(occupant) then
-        state.set_displaced(occupant, target)
+    for _, occupant in ipairs(state.all_visible_at(target._tab, target.position, target)) do
+      if occupant.exclusive then
+        state.append_displaced(occupant, target)
+        return
       end
-      return
+    end
+    local function bring_back()
+      open_window(target, false, false)
     end
     if target._tab == api.nvim_get_current_tabpage() then
-      target:show(false)
+      bring_back()
+    else
+      local win = window_of(target._tab)
+      if not win then
+        return
+      end
+      api.nvim_win_call(win, bring_back)
+    end
+    -- A non-exclusive sidebar displaces nothing itself: what waits behind it shared the slot.
+    if not target.exclusive and target:is_visible() then
+      local next_target = state.take_displaced(target)
+      if next_target then
+        restore(next_target)
+      end
     end
   end)
 end
@@ -317,33 +355,26 @@ function Sidebar:set_title(title)
   end
 end
 
---- Move the cursor into the sidebar, showing it first when it is hidden.
+--- Move the cursor into the sidebar, showing it first (in the current tabpage) when needed.
 function Sidebar:focus()
-  if not self:is_visible() and not self:show(false) then
-    return
-  end
-  api.nvim_set_current_win(self.winid)
+  self:show(true)
 end
 
---- Show a hidden sidebar again (same buffer, last size). A visible sidebar at the same
---- position is displaced and remembered (unless this one is not `exclusive`).
----@param enter? boolean  # move the cursor into it (default true)
----@return boolean shown  # false for a closed sidebar or when the split could not be made
-function Sidebar:show(enter)
-  if self._closed then
-    return false
-  end
-  if self:is_visible() then
-    if enter ~= false then
-      api.nvim_set_current_win(self.winid)
-    end
-    return true
-  end
+--- Open the window of a hidden sidebar in the current tabpage (same buffer, last size).
+--- With `displace`, an exclusive sidebar takes every sidebar visible at its position off the
+--- screen and remembers them (the newest first, the rest waiting behind it).
+---@param self Lib.UI.Kit.Sidebar
+---@param enter boolean|nil
+---@param displace boolean
+---@return boolean shown
+function open_window(self, enter, displace)
   local tab = api.nvim_get_current_tabpage()
-  if self.exclusive then
-    local occupant = state.visible_at(tab, self.position, self)
-    if occupant and take_off_screen(occupant) then
-      state.set_displaced(self, occupant)
+  local taken = {}
+  if displace and self.exclusive then
+    for _, occupant in ipairs(state.all_visible_at(tab, self.position, self)) do
+      if take_off_screen(occupant) then
+        taken[#taken + 1] = occupant
+      end
     end
   end
   local config = { split = SPLIT[self.position], win = -1 }
@@ -354,13 +385,52 @@ function Sidebar:show(enter)
   end
   local ok, win = pcall(api.nvim_open_win, self.bufnr, enter ~= false, config)
   if not ok then
+    for _, occupant in ipairs(taken) do
+      open_window(occupant, false, false)
+    end
     return false
   end
   self.winid = win
   self._tab = tab
   decorate(self)
   watch(self)
+  -- On screen again: no older record may bring it back after a later hide (UI-54, once).
+  state.release(self)
+  if taken[1] then
+    -- What this one had displaced before waits behind what it displaces now.
+    local before = state.take_displaced(self)
+    state.set_displaced(self, taken[1])
+    for i = 2, #taken do
+      state.append_displaced(taken[1], taken[i])
+    end
+    if before then
+      state.append_displaced(taken[1], before)
+    end
+  end
   return true
+end
+
+--- Show a hidden sidebar again (same buffer, last size). A visible sidebar at the same
+--- position is displaced and remembered (unless this one is not `exclusive`). A sidebar
+--- visible in another tabpage moves here (hidden there, which restores what it displaced
+--- there).
+---@param enter? boolean  # move the cursor into it (default true)
+---@return boolean shown  # false for a closed sidebar, when the split could not be made, or
+---                         when it is the last window of another tabpage
+function Sidebar:show(enter)
+  if self._closed then
+    return false
+  end
+  if visible_here(self) then
+    if enter ~= false then
+      api.nvim_set_current_win(self.winid)
+    end
+    return true
+  end
+  if self:is_visible() and not self:hide() then
+    return false
+  end
+  return open_window(self, enter, true)
 end
 
 --- Take the sidebar off the screen and keep it (buffer, content, handle, size) for `show`.
@@ -478,9 +548,9 @@ function M.open(opts)
   return self
 end
 
---- Hide the sidebar `opts.name` when it is visible, else show it (opening it with `opts` the
---- first time). The handle, or nil when nothing could be opened. `opts.name` is required:
---- without it nothing could be hidden again.
+--- Hide the sidebar `opts.name` when it is visible in the current tabpage, else show it here
+--- (opening it with `opts` the first time). The handle, or nil when nothing could be opened.
+--- `opts.name` is required: without it nothing could be hidden again.
 ---@param opts Lib.UI.Kit.SidebarOpts
 ---@return Lib.UI.Kit.Sidebar|nil
 function M.toggle(opts)
@@ -488,7 +558,7 @@ function M.toggle(opts)
     error("kit.sidebar.toggle: opts.name is required", 2)
   end
   local existing = state.get(opts.name)
-  if existing and existing:is_visible() then
+  if existing and visible_here(existing) then
     existing:hide()
     return existing
   end
