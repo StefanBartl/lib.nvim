@@ -31,7 +31,10 @@
 --- `CHIP_TINT`, the same mix `ui.context`'s chip style uses, so it reads as
 --- the same family and re-tints itself on `ColorScheme`), or an explicit
 --- `{ fg, bg }` pair (`"#rrggbb"` strings or 24-bit numbers) that stays fixed
---- across colorschemes. `nil` uses `DEFAULT_HL_GROUP` ("Special"). `color`
+--- across colorschemes -- as far as it is the caller's own: a missing `fg`
+--- (taken from `DEFAULT_HL_GROUP`), a missing `bg` or a transparent shape
+--- (both taking the window background) come from the colorscheme, so such a
+--- chip re-resolves on `ColorScheme` like a group-name colour. `nil` uses `DEFAULT_HL_GROUP` ("Special"). `color`
 --- may also be a zero-arg function returning either shape, re-called fresh
 --- on every `refresh` (same as `text`/`visible`) -- for a colour with no
 --- single stable source, e.g. a host statusline that switches *which*
@@ -168,9 +171,15 @@ local function resolve_colors(color, transparent)
     resolved_color = ok and out or nil
   end
   if type(resolved_color) == "table" then
-    local fg = as_color_number(resolved_color.fg) or resolve_hl(DEFAULT_HL_GROUP).fg or 0xc0caf5
-    local bg = transparent and window_bg() or (as_color_number(resolved_color.bg) or window_bg())
-    return { fg = fg, bg = bg, themed = false }
+    -- Only the caller's own fields are fixed: a missing `fg` comes from
+    -- `DEFAULT_HL_GROUP`, a missing `bg` (or any bg on a transparent shape)
+    -- from the window background -- both read from the current colorscheme,
+    -- so such a chip is theme-linked and the ColorScheme handler re-tints it.
+    local own_fg = as_color_number(resolved_color.fg)
+    local own_bg = not transparent and as_color_number(resolved_color.bg) or nil
+    local fg = own_fg or resolve_hl(DEFAULT_HL_GROUP).fg or 0xc0caf5
+    local bg = own_bg or window_bg()
+    return { fg = fg, bg = bg, themed = own_fg == nil or own_bg == nil }
   end
   local group = type(resolved_color) == "string" and resolved_color or DEFAULT_HL_GROUP
   local fg = resolve_hl(group).fg or resolve_hl("Normal").fg or 0xc0caf5

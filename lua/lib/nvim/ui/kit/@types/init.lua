@@ -324,12 +324,13 @@
 
 --- A `kit.chip` colour: a highlight-group name to tint from (theme-linked,
 --- re-tints on `ColorScheme`), an explicit fixed pair (`"#rrggbb"` strings
---- or 24-bit numbers), or a zero-arg function returning either -- re-called
+--- or 24-bit numbers; a missing field, or `bg` on a transparent shape, is
+--- filled from the colorscheme and re-tints too), or a zero-arg function returning either -- re-called
 --- fresh on every `refresh`, same as `text`/`visible`. For a colour with no
 --- single stable source (e.g. a statusline that switches *which* highlight
 --- group it references as the mode changes, rather than one group whose own
 --- colour changes). `nil` uses the chip's own default group.
----@alias Lib.UI.Kit.ChipColor string|{ fg: string|integer, bg?: string|integer }|fun():(string|{ fg: string|integer, bg?: string|integer }|nil)
+---@alias Lib.UI.Kit.ChipColor string|{ fg?: string|integer, bg?: string|integer }|fun():(string|{ fg?: string|integer, bg?: string|integer }|nil)
 
 --- Options for `kit.chip.mount`.
 ---@class Lib.UI.Kit.ChipOpts
