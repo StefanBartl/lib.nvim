@@ -307,7 +307,8 @@ local function shape(t, where, depth)
         local fixed = scrub(k)
         if fixed ~= k then
           source = source or {}
-          if source[fixed] ~= nil or t[fixed] ~= nil then
+          -- rawget: a metatable is kept now (a class instance), and its __index must not invent a second key
+          if source[fixed] ~= nil or rawget(t, fixed) ~= nil then
             error(
               ("json: %s has two keys that both read %s once invalid UTF-8 is replaced"):format(
                 where(depth),

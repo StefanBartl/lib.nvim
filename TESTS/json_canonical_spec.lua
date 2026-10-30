@@ -137,6 +137,23 @@ return function(H)
     "two keys",
     "an invalid key repaired to the name of a valid one"
   )
+  -- the clash is asked of the table itself: a metatable now stays (see above), and its __index must not invent a key
+  local defaulted = setmetatable({ ["a\255"] = 1 }, {
+    __index = function()
+      return 0
+    end,
+  })
+  eq(
+    json.encode(defaulted),
+    '{"a\239\191\189":1}',
+    "an __index that answers every key is no second key"
+  )
+  local strict = setmetatable({ ["b\255"] = 2 }, {
+    __index = function(_, k)
+      error("no field " .. k)
+    end,
+  })
+  eq(json.encode(strict), '{"b\239\191\189":2}', "an __index that raises is not asked")
 
   -- Neovim's own empty-object marker is an object here too: decode -> encode must not turn {} into [].
   eq(json.encode(vim.empty_dict()), "{}", "vim.empty_dict() is an object")
