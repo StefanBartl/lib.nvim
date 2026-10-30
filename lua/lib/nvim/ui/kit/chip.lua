@@ -612,7 +612,7 @@ local function ensure_hooks()
     group = group,
     desc = "lib.nvim.ui.kit.chip: follow the user onto the new tabpage",
   })
-  autocmd.create("ColorScheme", function()
+  local function retint()
     for _, entry in pairs(chips) do
       if
         entry.win
@@ -627,6 +627,19 @@ local function ensure_hooks()
         apply_colors(entry, resolve_colors(entry.color, is_transparent_shape(entry.shape)))
       end
     end
+  end
+  autocmd.create("ColorScheme", function()
+    retint()
+    -- Once more after every other ColorScheme handler has run: a colour may
+    -- read a group that another plugin re-defines in its OWN ColorScheme
+    -- handler (this host's session chip reads the statusline's
+    -- `St_<Mode>Mode`, re-applied by `ui.statusline.highlights`). Handlers
+    -- fire in creation order, so when this one was created first it sees
+    -- that group still cleared by the colorscheme's `:hi clear` (or holding
+    -- the old scheme's colours) and the chip would keep the fallback colour
+    -- until the next refresh. The synchronous pass above stays so a group
+    -- the colorscheme itself defines is right without waiting a tick.
+    vim.schedule(retint)
   end, {
     group = group,
     desc = "lib.nvim.ui.kit.chip: re-tint theme-linked and function-coloured chips",
