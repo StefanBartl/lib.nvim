@@ -81,6 +81,9 @@ function M.write(path, tbl)
   local tmp_path = M.tmp_path(path)
   local ok_write, write_err = write_to_file(tmp_path, encoded)
   if not ok_write then
+    -- A write that failed after opening (full disk, error on close) leaves partial bytes behind; with a name unique
+    -- to this call no later write would ever overwrite them, so they are removed here.
+    pcall(os.remove, tmp_path)
     return false, "write failed: " .. tostring(write_err)
   end
 

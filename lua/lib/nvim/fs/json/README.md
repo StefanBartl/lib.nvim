@@ -33,6 +33,7 @@ Neovim instances writing the same file never share one temp file, and a sweeper
 matching `*.json.tmp` still finds a write a crash left behind), then renames the
 temp file over `path` via `fs_rename`. This is atomic on POSIX filesystems; on
 Windows `fs_rename` is best-effort (it can fail if `path` is open elsewhere).
-On rename failure, the `.tmp` file is cleaned up and `M.write` returns
+On a failed write of the temp file (full disk, error on close) or a failed
+rename, the temp file is cleaned up and `M.write` returns
 `false, err`. If `path` is a symlink, the link target is written through (resolved with
 `fs_realpath`) and the link stays a link; a dangling link is replaced like any other entry.

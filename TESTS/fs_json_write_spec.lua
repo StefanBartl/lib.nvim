@@ -121,6 +121,24 @@ return function(H)
   )
   ok(read(foreign) ~= nil, "rename failure: the foreign temp file is untouched")
 
+  -- A write that fails after opening (full disk, error on close) removes its partial temp file: a unique name is
+  -- never overwritten by a later write, so every such failure would otherwise leave one more file behind.
+  local wfail_dir = vim.fn.tempname()
+  vim.fn.mkdir(wfail_dir, "p")
+  with_writer(function(path, content)
+    assert(real(path, content:sub(1, 3)))
+    return false, "close failed: disk full"
+  end, function(fresh)
+    local wf_ok, wf_err = fresh.write(wfail_dir .. "/state.json", { v = 1 })
+    eq(wf_ok, false, "write failure: write reports false")
+    ok(
+      tostring(wf_err):find("write failed: close failed", 1, true) ~= nil,
+      "write failure: names the step: " .. tostring(wf_err)
+    )
+    eq(#temps(wfail_dir), 0, "write failure: the partial temp file is removed")
+  end)
+
   vim.fn.delete(dir, "rf")
   vim.fn.delete(fail_dir, "rf")
+  vim.fn.delete(wfail_dir, "rf")
 end
