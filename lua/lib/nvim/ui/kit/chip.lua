@@ -623,17 +623,23 @@ local function ensure_hooks()
   })
   local function retint()
     for _, entry in pairs(chips) do
-      if
-        entry.win
-        and api.nvim_win_is_valid(entry.win)
-        and entry.applied_colors
-        -- A function-valued `color` is re-evaluated too: it may pick a
-        -- different (or differently coloured) group per call, and its last
-        -- result says nothing about whether the next one is theme-linked.
-        and (entry.applied_colors.themed or type(entry.color) == "function")
-        and not entry.pulse_active
-      then
-        apply_colors(entry, resolve_colors(entry.color, is_transparent_shape(entry.shape)))
+      if entry.win and api.nvim_win_is_valid(entry.win) and entry.applied_colors then
+        if
+          -- A function-valued `color` is re-evaluated too: it may pick a
+          -- different (or differently coloured) group per call, and its last
+          -- result says nothing about whether the next one is theme-linked.
+          (entry.applied_colors.themed or type(entry.color) == "function")
+          and not entry.pulse_active
+        then
+          apply_colors(entry, resolve_colors(entry.color, is_transparent_shape(entry.shape)))
+        else
+          -- A fixed colour (and a running pulse's) is re-applied as it is:
+          -- `:colorscheme` runs `:hi clear`, which empties every
+          -- `UiKitChip_<id>` group too, and `refresh()` never repaints it
+          -- (its fg/bg still match what it resolves to), so the chip lost
+          -- its colours for good.
+          apply_colors(entry, entry.applied_colors)
+        end
       end
     end
   end
