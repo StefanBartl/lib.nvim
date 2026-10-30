@@ -575,4 +575,30 @@ function M.collisions(events)
   return out
 end
 
+-- A reload (`package.loaded` cleared and the module required again, as a dev reload does) would
+-- leave the old copy's wrappers on the API next to the new copy's: two taps recording every call,
+-- and an `uninstall()` of the new one that restores nothing. The copies find each other through a
+-- global: the new one takes over the recording and the settings, silences the old one and, if the
+-- old one was recording, goes on recording itself.
+local HANDOVER = "__lib_nvim_keymap_tap"
+local prior = rawget(_G, HANDOVER)
+rawset(_G, HANDOVER, M)
+if type(prior) == "table" and prior ~= M and type(prior.uninstall) == "function" then
+  local was_active = type(prior.is_installed) == "function" and prior.is_installed()
+  local events = type(prior.log) == "function" and prior.log() or {}
+  if type(prior.max_events) == "number" then
+    M.max_events = prior.max_events
+  end
+  if type(prior.skip) == "table" then
+    M.skip = prior.skip
+  end
+  pcall(prior.uninstall)
+  for _, e in ipairs(events) do
+    log[#log + 1] = e
+  end
+  if was_active then
+    M.install()
+  end
+end
+
 return M
