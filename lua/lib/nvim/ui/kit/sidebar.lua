@@ -9,11 +9,14 @@
 --- * Theme: `winhighlight` maps `Normal`, `NormalNC`, `EndOfBuffer`, `SignColumn` to the kit's
 ---   `normal` token, `WinSeparator` to `border`, `WinBar` to `title` and `CursorLine` to
 ---   `KitSelection`, from the same `theme` argument every kit component takes.
---- * Exclusive slots (UI-54): a sidebar opened at a position where another one is visible in
----   the same tabpage hides that one and remembers it; when the newer one is closed or hidden,
----   the displaced one comes back, exactly once, two `vim.schedule` ticks later (a window
----   created on `WinEnter` can still report the previous window's buffer for a moment).
----   `exclusive = false` lets a sidebar share its slot instead.
+--- * Exclusive slots (UI-54): a sidebar opened at a position where others are visible in the
+---   same tabpage hides them and remembers them; when the newer one is closed or hidden, the
+---   displaced ones come back in their own tabpage, exactly once, two `vim.schedule` ticks
+---   later (a window created on `WinEnter` can still report the previous window's buffer for
+---   a moment). A sidebar shown again by hand drops its record. `exclusive = false` lets a
+---   sidebar share its slot instead.
+--- * Per tabpage: `toggle` hides only a sidebar visible in the current tabpage; `show` (and
+---   `open` by name, `focus`) moves one visible in another tabpage here.
 --- * Handles live in `lib.nvim.ui.kit.sidebar_state` (UI-51); `close_all()` is the one cleanup
 ---   (UI-52); a window is found again through its buffer variable `ui_kit_sidebar` (UI-31) --
 ---   the buffer survives `hide()`, a window-local variable would not.

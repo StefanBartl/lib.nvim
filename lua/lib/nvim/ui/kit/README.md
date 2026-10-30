@@ -158,27 +158,36 @@ local tree = sidebar.open({
 })
 tree:hide()              -- off screen, kept (buffer, content, size)
 tree:show()              -- back; tree:focus() shows it too
-sidebar.toggle({ name = "tests" })
+sidebar.toggle({ name = "tests" }) -- name required; hides only a sidebar shown in this tabpage
 sidebar.find("tests")    -- its window, found by the buffer variable `ui_kit_sidebar`
 sidebar.close_all()      -- the one cleanup: every sidebar, visible or hidden
 ```
 
 - **Fixed size**: `winfixwidth` (left/right) or `winfixheight` (bottom), so `<C-w>=` and new
-  splits leave the panel alone; `winfixbuf`, no numbers, signs or folds, `cursorline` on.
+  splits leave the panel alone; `winfixbuf`, no numbers, signs or folds (`foldenable` off,
+  so the code window's `foldmethod` does not close a tree's children), `cursorline` on.
   `wo` / `bo` override any of it.
 - **Theme**: `winhighlight` maps `Normal`, `NormalNC`, `EndOfBuffer` and `SignColumn` to the
   theme's `normal` token, `WinSeparator` to `border`, `WinBar` to `title` and `CursorLine`
   to `KitSelection`. It is set from scratch: a split would otherwise copy the mappings of
   the code window it was made from.
-- **One sidebar per slot**: opening (or showing) a sidebar where another one is visible
-  in the same tabpage hides that one and remembers it. When the newer one is closed or
-  hidden, the older one comes back -- once, two `vim.schedule` ticks later, and only if
-  the slot is still free (otherwise it waits behind the new occupant). Chains work: in
-  A <- B <- C, closing B while it is hidden hands A on to C. `exclusive = false` shares the
-  slot instead; different positions never displace each other.
+- **One sidebar per slot**: opening (or showing) a sidebar where others are visible in
+  the same tabpage hides them all and remembers them. When the newer one is closed or
+  hidden, the older ones come back in their own tabpage -- once, two `vim.schedule` ticks
+  later, and only if no exclusive sidebar took the slot meanwhile (otherwise they wait
+  behind it). Chains work: in A <- B <- C, closing B while it is hidden hands A on to C,
+  and showing B by hand keeps A waiting behind C. A sidebar the user shows again by hand
+  is no longer brought back by an old record, so a later `hide()` sticks.
+  `exclusive = false` shares the slot instead; different positions never displace each
+  other.
+- **Per tabpage**: `toggle` hides a sidebar only when it is visible in the current
+  tabpage; `show`, `focus` and `open` by name move a sidebar visible in another tabpage
+  here (`show` returns false when it is that tabpage's last window).
 - **Lifecycle**: `close()`, `:q` on the window or `<C-w>o` close the sidebar for good (its
   buffer is wiped, `on_close` runs once, what it displaced comes back); `hide()` keeps it.
-  The tabpage's last window cannot hide. `close_all()` closes everything and restores
+  The tabpage's last window cannot hide; closing it closes that tabpage, or, in the
+  last tabpage, leaves the window showing another buffer with the sidebar's window
+  options reset. `close_all()` closes everything and restores
   nothing -- call it from a `teardown()` or an error path.
 
 ## Components
