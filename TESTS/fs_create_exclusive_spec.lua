@@ -212,6 +212,8 @@ return function(H)
     { "number content", bad, 42 },
     { "table content", bad, {} },
     { "number path", 12, "x" },
+    -- libuv cuts the path at the NUL: without the check this would create `bad` itself
+    { "NUL in path", bad .. "\0.tail", "x" },
   }
   local opens, closes = 0, 0
   local real_fs_open, real_fs_close = uv.fs_open, uv.fs_close

@@ -33,7 +33,9 @@ end
 - A `path` that ends in a slash names a folder, not a file: `open failed: ...`,
   and no folder is made.
 - A `path` or `content` that is not a string is answered as `invalid arguments`
-  before anything is created (no empty file is left behind as a claim).
+  before anything is created (no empty file is left behind as a claim). So is
+  a `path` with a **NUL byte**: libuv cuts a path at the first NUL and would
+  create another file than the one named.
 - A failed or short write removes the file again, so no half-written file is
   left that the next caller would read as `exists`.
 - It never raises.

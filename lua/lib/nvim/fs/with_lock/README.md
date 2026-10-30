@@ -57,13 +57,20 @@ end
   platform) is `lock_stuck`; nothing is created at its target.
 - A `path` that names no file (empty, or ending in a slash) is an `io` failure
   with `info.lock = ""`: no lock is made and no folder is created. (The original
-  `tasks_nvim.fsio.with_lock` raised on it.)
+  `tasks_nvim.fsio.with_lock` raised on it.) So is a `path` with a **NUL
+  byte**: libuv cuts a path there, and the lock (and the caller's write) would be
+  for another file.
 
 ## Limits
 
-- **Keyed by the spelling of the path** (its folder and file name): a hard link
-  or a symlink to the same file takes a different lock, so cooperating writers
-  must agree on one path for a file.
+- **Keyed by the file the path resolves to** (`fs_realpath`): a symlink to the
+  file, a symlinked folder (a junction), `.`/`..` segments and another case of
+  an existing name on a case-insensitive disk all take the same lock, beside the
+  real file. A **hard link** is a second name with nothing to resolve and takes
+  another lock; a file that does not exist yet is keyed by its resolved folder
+  and the name as spelled. The original `tasks_nvim.fsio.with_lock`
+  (tasks.nvim@6bc8d99) keys by the spelling: switch all writers of a file at
+  once.
 - **Not re-entrant.** The lock is per path, not per caller: a nested `with_lock`
   on the same path from inside `fn` (a save hook that writes again) waits
   `wait_ms` and answers `locked`, even though the lock file holds your own pid.

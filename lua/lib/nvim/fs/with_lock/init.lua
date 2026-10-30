@@ -15,8 +15,11 @@
 --- below `stale_s`. Waiting is bounded (`opts.wait_ms`, 2 s), then `nil, err, info`.
 ---
 --- Limits of the lock:
---- - It is keyed by the SPELLING of the path (its folder and file name): a hard link or a symlink to the same file
----   takes a different lock, so cooperating writers must agree on one path for a file.
+--- - It is keyed by the file the path RESOLVES to (`fs_realpath`): a symlink to the file, a symlinked folder, `..`
+---   segments, another case of an existing name on a case-insensitive disk take the same lock, beside the real file.
+---   A HARD link is a second name without a resolution to the first and takes another lock; so does a name that
+---   does not exist yet spelled in another case. (`tasks_nvim.fsio.with_lock` of tasks.nvim@6bc8d99 keys by the
+---   spelling: switch all writers of a file at once, never run both side by side on a symlinked path.)
 --- - It is not re-entrant: it is per path, not per caller. A `with_lock` on the same path from inside `fn` (a save
 ---   hook that writes again) waits `wait_ms` and answers `locked`, although the lock file holds your own pid.
 --- - The folder of the lock is created when it is missing (`create_exclusive` makes the parent) and it stays: a
@@ -31,7 +34,8 @@
 --- age and not deletable, or a folder or link where the lock file should be, a dangling one included; remove it by
 --- hand) or `io` (the lock file could not be made, among them a refusal that no writer explains (a read-only folder, a
 --- denied ACL), or `path` names no file: it is empty or ends in a slash, and `info.lock` is `""`). What `fn` answers
---- (up to three values) is handed back; an error of `fn` is raised again after the lock is released. The codes are
+--- (up to three values) is handed back; an error of `fn` is raised again after the lock is released. A `path` that is
+--- not a string or holds a NUL byte (libuv would cut it there) is an `io` failure with `info.lock = ""`. The codes are
 --- those of `lib.nvim.contract.errors`.
 ---
 --- Moved here from `tasks_nvim.fsio.with_lock` (tasks.nvim@6bc8d99). Not to be confused with
@@ -122,6 +126,33 @@ local function release(lock, token)
   end
 end
 
+---Folder and name of `slashed` (forward slashes, names a file).
+---@param slashed string
+---@return string dir
+---@return string name
+local function split(slashed)
+  return slashed:match("^(.*)/[^/]*$") or ".", slashed:match("([^/]+)$")
+end
+
+---The lock file of a path. It is keyed by the file the path RESOLVES to (`fs_realpath`), not by its spelling: a
+---symlink to the file, a symlinked folder, `..` segments, another case of the name on a case-insensitive disk or an
+---8.3 short name all take the same lock. A file that does not exist yet (or a dangling link) is keyed by the resolved
+---folder and the name as given; a folder that does not exist yet by the spelling (it is made by the create).
+---@param slashed string
+---@return string
+local function lock_path(slashed)
+  local real = uv.fs_realpath(slashed)
+  if real then
+    local dir, name = split(unify_slashes(real))
+    if name then
+      return dir .. "/." .. name .. ".lock"
+    end
+  end
+  local dir, name = split(slashed)
+  local real_dir = uv.fs_realpath(dir)
+  return (real_dir and unify_slashes(real_dir):gsub("/$", "") or dir) .. "/." .. name .. ".lock"
+end
+
 ---@generic R
 ---@param path string
 ---@param fn fun(): R, string|nil, table|nil
@@ -132,16 +163,22 @@ end
 return function(path, fn, opts)
   opts = opts or {}
   local create = opts.create_exclusive or create_exclusive
+  if type(path) ~= "string" or path:find("\0", 1, true) then
+    -- libuv cuts a path at its first NUL: the lock would be made for (and the caller would write) another file
+    return nil,
+      ("cannot lock %s: invalid arguments: path must be a string without NUL bytes"):format(
+        type(path) == "string" and ("%q"):format(path) or tostring(path)
+      ),
+      { code = "io", retryable = false, lock = "" }
+  end
   local slashed = unify_slashes(path)
-  local name = slashed:match("([^/]+)$")
-  if not name then
+  if not slashed:match("([^/]+)$") then
     -- a folder path ("dir/sub/") or "": nothing to name the lock after, and a made-up name would create folders
     return nil,
       ("cannot lock %s: the path names no file"):format(path),
       { code = "io", retryable = false, lock = "" }
   end
-  local dir = slashed:match("^(.*)/[^/]*$") or "."
-  local lock = dir .. "/." .. name .. ".lock"
+  local lock = lock_path(slashed)
   local deadline = uv.hrtime() + (opts.wait_ms or 2000) * 1000000
   local stale_s = opts.stale_s or 10
   -- the pid, then a token no other acquisition has: what the release looks for before it deletes the file

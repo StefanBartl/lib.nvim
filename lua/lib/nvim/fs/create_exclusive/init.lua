@@ -8,7 +8,8 @@
 --- (`lib.nvim.fs.mkdirp`) when the open answers `ENOENT`, not before every call. Bytes are written as given. A failed or short write removes the file again, so no
 --- half-written file is left that the next caller would read as "exists".
 ---
---- It never raises: a `path` or `content` that is not a string, and a `path` that names a folder (ends in a
+--- It never raises: a `path` or `content` that is not a string, a `path` with a NUL byte (libuv would cut it there
+--- and create another file) and a `path` that names a folder (ends in a
 --- slash), are answered as an error before anything is created.
 ---
 --- Moved here from `tasks_nvim.fsio.create_exclusive` (tasks.nvim@6bc8d99), where it is the claim of a new task
@@ -47,6 +48,10 @@ local function create_exclusive(path, content)
   -- close and the cleanup, and leave a permanent "exists" claim behind
   if type(path) ~= "string" or type(content) ~= "string" then
     return false, "invalid arguments: path and content must be strings"
+  end
+  if path:find("\0", 1, true) then
+    -- libuv cuts a path at its first NUL: the file made would be another one than the caller named
+    return false, "invalid arguments: the path holds a NUL byte: " .. ("%q"):format(path)
   end
   local slashed = unify_slashes(path)
   if slashed:sub(-1) == "/" then

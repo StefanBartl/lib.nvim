@@ -561,7 +561,8 @@ Callable table. Create a file with {content}, failing with `"exists"` when
 the name is already taken (by anything: a folder, a symlink, a dangling one
 too). The exclusive open (`O_CREAT|O_EXCL`) is the atomic part: two writers
 never both believe they made the file. A missing parent folder is made when
-the open answers `ENOENT`. Bytes are written as given; a failed or short
+the open answers `ENOENT`. A path with a NUL byte is refused (libuv would cut
+it there). Bytes are written as given; a failed or short
 write removes the file again. Returns `true, nil` or `false, err`; never
 raises. Compare the error with `is_exists(err)`, not with the word. >lua
 
@@ -583,8 +584,9 @@ error of {fn} is raised again after the lock is released. A lock older than
 by `opts.wait_ms` (2000). A failed lock answers `nil, message, info` with
 `info.code` `locked` (retryable), `lock_stuck` (remove it by hand) or `io`.
 
-Limits: keyed by the spelling of the path (a hard link or symlink takes
-another lock); not re-entrant; a missing folder is created and stays; a
+Limits: keyed by the resolved path (`fs_realpath`: a symlink, `..` or another
+case of an existing name takes the same lock, a hard link another one); a
+path with a NUL byte is refused as `io`; not re-entrant; a missing folder is created and stays; a
 contended call blocks the editor loop and raises `E5560` in a fast-event
 context. >lua
 

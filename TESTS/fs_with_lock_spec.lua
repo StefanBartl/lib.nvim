@@ -65,6 +65,8 @@ return function(H)
 
   local dir = vim.fn.tempname()
   vim.fn.mkdir(dir, "p")
+  -- the lock is keyed by the RESOLVED path: macOS' temp folder lies behind the /var -> /private/var link
+  dir = assert(uv.fs_realpath(dir))
   local target = dir .. "/locked.md"
   write(target, "x")
   local lock = dir .. "/.locked.md.lock"
@@ -586,7 +588,62 @@ return function(H)
   eq(ninfo and ninfo.code, "locked", "it answers locked although the holder is the caller itself")
   ok(not exists(lock), "and the outer lock is released as usual")
 
-  -- ── the lock is keyed by the spelling of the path: a hard link takes another lock (documented) ──
+  -- ── the lock is keyed by the file the path resolves to: other spellings of the same file take the SAME lock ──
+  ---Whether a `with_lock` on `outer` keeps a `with_lock` on `inner` out (the inner one answers `locked`).
+  local function same_lock(outer, inner, what, expect_lock)
+    expect_lock = expect_lock or lock_slashed
+    local inner_res, _, inner_info = with_lock(outer, function()
+      return with_lock(inner, function()
+        return "inner"
+      end, { wait_ms = 50 })
+    end)
+    eq(inner_res, nil, what .. ": the second spelling waits for the first")
+    eq(inner_info and inner_info.code, "locked", what)
+    eq(inner_info and inner_info.lock, expect_lock, what .. ": the lock beside the real file")
+    ok(not exists(expect_lock), what .. ": and the lock is released")
+  end
+  vim.fn.mkdir(dir .. "/sibling", "p")
+  same_lock(target, dir .. "/sibling/../locked.md", "a '..' segment")
+  same_lock(target, dir .. "/./locked.md", "a '.' segment")
+  if vim.fn.has("win32") == 1 or vim.fn.has("mac") == 1 then
+    -- case-insensitive by default on both (NTFS, APFS): another case of an existing name is the same file
+    same_lock(target, dir .. "/LOCKED.MD", "another case of the name")
+  end
+  local file_link = dir .. "/link-to-locked.md"
+  if uv.fs_symlink(target, file_link) then
+    same_lock(file_link, target, "a symlink to the file")
+    ok(not exists(dir .. "/.link-to-locked.md.lock"), "no lock beside the link")
+    uv.fs_unlink(file_link)
+  else
+    H.skipped("fs_with_lock: symlink to the file", "this host cannot create symbolic links")
+  end
+  local dir_link = dir .. "-dirlink"
+  if uv.fs_symlink(dir, dir_link, { junction = true }) then
+    same_lock(dir_link .. "/locked.md", target, "a linked folder (junction on Windows)")
+    same_lock(
+      dir_link .. "/not-yet.md",
+      dir .. "/not-yet.md",
+      "a file that does not exist yet, in a linked folder",
+      (dir:gsub("\\", "/")) .. "/.not-yet.md.lock"
+    )
+    uv.fs_unlink(dir_link)
+  else
+    H.skipped("fs_with_lock: linked folder", "this host cannot create folder links")
+  end
+
+  -- ── a NUL byte in the path: libuv would cut it there and lock (and the caller write) another file ──
+  local nul_ran = false
+  local nul_res, nul_msg, nul_info = with_lock(target .. "\0.tail", function()
+    nul_ran = true
+    return "never"
+  end, { wait_ms = 50 })
+  eq(nul_res, nil, "a NUL path is refused")
+  has(nul_msg, "invalid arguments")
+  eq(nul_info, { code = "io", retryable = false, lock = "" })
+  eq(nul_ran, false, "the function did not run")
+  ok(not exists(lock), "and no lock was made for the cut-off name")
+
+  -- ── a hard link is another file name with no resolution to the first: it takes another lock (documented) ──
   local alias = dir .. "/alias.md"
   if uv.fs_link(target, alias) then
     local alias_in = with_lock(target, function()
