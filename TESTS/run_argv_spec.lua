@@ -666,16 +666,24 @@ return function(H)
 
     --- argv of a leader that exits on the SIGTERM (its trap leaves `marker` behind)
     --- while its grandchild ignores the SIGTERM and keeps running and holding the pipes.
+    --- The grandchild writes its own pid file, and only once it ignores SIGTERM: a pid
+    --- file written by the leader right after the fork (`$!`) can show up while the
+    --- subshell still has the default disposition, so a `stop()` sent as soon as the
+    --- file exists killed the grandchild, the pipes closed and the run ended with the
+    --- leader's code 0 instead of at the deadline (seen on macOS CI). The `sleep 0.1`
+    --- before the trap keeps that window open on every host, so a pid file that is
+    --- written too early again fails (e2) every time instead of now and then.
     ---@param file string  The pid file of the grandchild
     ---@param marker string  Written by the leader's TERM trap
     ---@return string[]
     local function stubborn_grandchild(file, marker)
-      return sh_script(
-        file,
-        "(trap '' TERM; exec sleep 60)",
-        "wait",
-        ('trap "echo t > %s; exit 0" TERM'):format(vim.fn.shellescape(marker))
-      )
+      local text = [[trap "echo t > %s; exit 0" TERM; ]]
+        .. [[(sleep 0.1; trap '' TERM; exec sh -c 'echo $$ > "$0"; exec sleep 60' %s) & wait]]
+      return {
+        "sh",
+        "-c",
+        text:format(vim.fn.shellescape(marker), vim.fn.shellescape(file)),
+      }
     end
 
     -- (c2) the shell exits on the SIGTERM (and is reaped) while its grandchild
