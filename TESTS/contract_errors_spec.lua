@@ -42,27 +42,19 @@ return function(H)
     { code = "internal", message = 'unknown error code "lockd": busy', retryable = false },
     "a typo in fail"
   )
-  eq(
-    errors.classify({ code = "nope", message = "m", details = { id = "x" } }),
-    {
-      code = "internal",
-      message = 'unknown error code "nope": m',
-      retryable = false,
-      details = { id = "x" },
-    },
-    "an error table with an unknown code"
-  )
+  eq(errors.classify({ code = "nope", message = "m", details = { id = "x" } }), {
+    code = "internal",
+    message = 'unknown error code "nope": m',
+    retryable = false,
+    details = { id = "x" },
+  }, "an error table with an unknown code")
   local unknown_info = errors.classify("m", { code = "busy", retryable = true, id = "a" })
-  eq(
-    unknown_info,
-    {
-      code = "internal",
-      message = 'unknown error code "busy": m',
-      retryable = false,
-      details = { id = "a" },
-    },
-    "info with an unknown code"
-  )
+  eq(unknown_info, {
+    code = "internal",
+    message = 'unknown error code "busy": m',
+    retryable = false,
+    details = { id = "a" },
+  }, "info with an unknown code")
   eq(
     errors.classify("m", { code = "nope" }, { patterns = {} }).code,
     "internal",
