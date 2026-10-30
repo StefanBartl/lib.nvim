@@ -38,7 +38,9 @@
 --- highlight group it references as the mode changes rather than one group
 --- whose own colour changes. Pair with `opts.track_mode = true` so the chip
 --- actually repaints *when* the mode changes, not just at the next
---- incidental `refresh()`.
+--- incidental `refresh()`. A function `color` is also re-called on
+--- `ColorScheme`, so the chip follows a colorscheme change without waiting
+--- for the next mode change or `refresh()`.
 ---
 --- Each mounted chip gets its own highlight group (`UiKitChip_<id>`) rather
 --- than the shared `Kit*` groups `lib.nvim.ui.kit.theme` materializes -- several
@@ -616,7 +618,10 @@ local function ensure_hooks()
         entry.win
         and api.nvim_win_is_valid(entry.win)
         and entry.applied_colors
-        and entry.applied_colors.themed
+        -- A function-valued `color` is re-evaluated too: it may pick a
+        -- different (or differently coloured) group per call, and its last
+        -- result says nothing about whether the next one is theme-linked.
+        and (entry.applied_colors.themed or type(entry.color) == "function")
         and not entry.pulse_active
       then
         apply_colors(entry, resolve_colors(entry.color, is_transparent_shape(entry.shape)))
@@ -624,7 +629,7 @@ local function ensure_hooks()
     end
   end, {
     group = group,
-    desc = "lib.nvim.ui.kit.chip: re-tint theme-linked chips",
+    desc = "lib.nvim.ui.kit.chip: re-tint theme-linked and function-coloured chips",
   })
 
   -- `reflow()`'s own row/col arithmetic (`bottom_statusline_rows()`,
