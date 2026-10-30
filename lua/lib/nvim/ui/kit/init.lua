@@ -285,6 +285,9 @@ end
 ---     then `kit.async.confirm/ask/input/form/select` inside it. See `lib.nvim.ui.kit.async`.
 ---   * `history` -- a back/forward trail of positions with a `CLEAR` sentinel for patches (pure data, no UI):
 ---     `kit.history.new({ state = st, keys = { ... } })`, then `:go`/`:back`/`:forward`. See `lib.nvim.ui.kit.history`.
+---   * `sidebar` -- a themed split panel (left, right or bottom) with the surface handle's methods, exclusive
+---     slots that restore what they displaced, and one cleanup: `kit.sidebar.open({ name = "tree" })`,
+---     `kit.sidebar.close_all()`. See `lib.nvim.ui.kit.sidebar`.
 ---@type table<string, string>
 local LAZY_FIELDS = {
   theme = "theme",
@@ -295,6 +298,7 @@ local LAZY_FIELDS = {
   keys = "viewer_keys",
   async = "async",
   history = "history",
+  sidebar = "sidebar",
 }
 
 setmetatable(M, {

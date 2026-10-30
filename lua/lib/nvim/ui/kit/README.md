@@ -139,6 +139,48 @@ closes. A group shared by every prompt and cleared at each open took the hooks o
 prompt that was already open away (its `on_change` was never called again, a secret
 typed after that showed in clear text).
 
+## Sidebar (themed split panel)
+
+`kit.sidebar` is the split counterpart of `kit.surface`: a panel on the left, the right
+or the bottom of the tabpage -- a file tree, a test explorer, an output pane. The handle
+has the surface methods (`set_lines`, `set_last_line`, `append_lines`, `on_close`,
+`focus`, `close`) plus `show`/`hide`.
+
+```lua
+local sidebar = require("lib.nvim.ui.kit.sidebar") -- or kit.sidebar
+local tree = sidebar.open({
+  name = "tests",        -- identity: a second open() with this name shows this sidebar again
+  position = "left",     -- "left" (default), "right" or "bottom"
+  size = 32,             -- width, or height for "bottom"; 0 < size < 1 is a share of the editor
+  title = "Tests",       -- in the window bar, themed with the `title` token
+  lines = { "..." },
+  theme = "rounded",     -- any kit theme argument
+})
+tree:hide()              -- off screen, kept (buffer, content, size)
+tree:show()              -- back; tree:focus() shows it too
+sidebar.toggle({ name = "tests" })
+sidebar.find("tests")    -- its window, found by the buffer variable `ui_kit_sidebar`
+sidebar.close_all()      -- the one cleanup: every sidebar, visible or hidden
+```
+
+- **Fixed size**: `winfixwidth` (left/right) or `winfixheight` (bottom), so `<C-w>=` and new
+  splits leave the panel alone; `winfixbuf`, no numbers, signs or folds, `cursorline` on.
+  `wo` / `bo` override any of it.
+- **Theme**: `winhighlight` maps `Normal`, `NormalNC`, `EndOfBuffer` and `SignColumn` to the
+  theme's `normal` token, `WinSeparator` to `border`, `WinBar` to `title` and `CursorLine`
+  to `KitSelection`. It is set from scratch: a split would otherwise copy the mappings of
+  the code window it was made from.
+- **One sidebar per slot**: opening (or showing) a sidebar where another one is visible
+  in the same tabpage hides that one and remembers it. When the newer one is closed or
+  hidden, the older one comes back -- once, two `vim.schedule` ticks later, and only if
+  the slot is still free (otherwise it waits behind the new occupant). Chains work: in
+  A <- B <- C, closing B while it is hidden hands A on to C. `exclusive = false` shares the
+  slot instead; different positions never displace each other.
+- **Lifecycle**: `close()`, `:q` on the window or `<C-w>o` close the sidebar for good (its
+  buffer is wiped, `on_close` runs once, what it displaced comes back); `hide()` keeps it.
+  The tabpage's last window cannot hide. `close_all()` closes everything and restores
+  nothing -- call it from a `teardown()` or an error path.
+
 ## Components
 
 `kit.popup(opts)` dispatches on `opts.type` (convenience aliases: `kit.note`,

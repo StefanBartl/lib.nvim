@@ -1,7 +1,8 @@
 ---@module 'lib.nvim.ui.kit.surface'
 --- A surface is one themed floating window plus a lifecycle handle. It hands
 --- geometry/buffer creation to lib.nvim.window.make_scratch and then applies the
---- resolved theme; it does not re-implement float creation.
+--- resolved theme; it does not re-implement float creation. A themed split (left, right or
+--- bottom panel) is `lib.nvim.ui.kit.sidebar`, which reuses this handle's methods.
 
 local make_scratch = require("lib.nvim.window.make_scratch")
 local set_title = require("lib.nvim.window.set_title")
@@ -133,6 +134,11 @@ function Surface:close()
 end
 
 local M = {}
+
+--- The handle class (its methods), for a module that builds another kind of surface on the same
+--- methods: `lib.nvim.ui.kit.sidebar` (a themed split) inherits `set_lines`, `append_lines`,
+--- `on_close`, ... from it and overrides what differs for a split.
+M.Handle = Surface
 
 --- The buffer variable that marks a buffer as one a secret is typed into (`kit.input` with
 --- `secret = true`, a `kit.sheet` with a secret field). Anything that records or shows the

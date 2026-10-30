@@ -125,6 +125,7 @@ vim.api.nvim_buf_set_extmark(buf, ns, row, 0, { line_hl_group = "KitDim" }) -- a
 | `menu`     | cursor-anchored action list (`{ label, action }`) | |
 | `picker`   | interactive prompt + results + preview (see §5) | ↓ |
 | `compare`  | pick two items out of one picker, view them side by side (see §5) | |
+| `sidebar`  | themed split panel on the left, right or bottom (`kit.sidebar.open`, not a `popup` type) | ↓ |
 | `progress` | passthrough to [`lib.nvim.progress`](../lua/lib/nvim/progress/README.md) | |
 
 **note** — `kit.note({ title, message, timeout? })`
@@ -145,6 +146,21 @@ digit; the key is underlined in the button (see the kit README for the rules). A
 ```lua
 kit.confirm({ question = "Pick", choices = { "Keep", "Discard", "Cancel" },
               on_answer = function(choice) end })
+```
+
+**sidebar** — `kit.sidebar.open({ name, position?, size?, title?, lines?, theme? })`.
+A split instead of a float: fixed width (or height at the bottom), the theme through
+`winhighlight`, one sidebar per position (a newer one hides the older and brings it
+back when it closes), `hide`/`show`/`toggle`, and `kit.sidebar.close_all()` as the one
+cleanup. Details in the [kit README](../lua/lib/nvim/ui/kit/README.md#sidebar-themed-split-panel).
+
+```
+┌──────────┬───────────────────────────┐
+│ Tests    │                           │
+│ ✓ a_spec │   code window             │
+│ ✗ b_spec │                           │
+│          │                           │
+└──────────┴───────────────────────────┘
 ```
 
 ## 5. Layouts & templates
