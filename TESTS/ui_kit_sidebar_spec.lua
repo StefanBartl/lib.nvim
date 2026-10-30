@@ -263,6 +263,27 @@ return function(H)
   vim.wo[main].foldenable = false
   reset()
 
+  ok(not pcall(sidebar.toggle, {}), "toggle without a name raises")
+  eq(#sidebar.list(), 0, "and opens nothing")
+
+  -- ---------------------------------------------------------------- folds of the code window
+  -- A split copies the window's fold settings; a tree's indented lines must stay open.
+  vim.wo[main].foldmethod = "indent"
+  vim.wo[main].foldlevel = 0
+  vim.wo[main].foldenable = true
+  local f = sidebar.open({ name = "f", lines = { "dir", "  a", "  b" }, bo = { shiftwidth = 2 } })
+  eq(wo(f.winid, "foldenable"), false, "folds off in the sidebar")
+  eq(
+    api.nvim_win_call(f.winid, function()
+      return vim.fn.foldclosed(2)
+    end),
+    -1,
+    "the indented lines are not folded"
+  )
+  vim.wo[main].foldmethod = "manual"
+  vim.wo[main].foldenable = false
+  reset()
+
   -- ---------------------------------------------------------------- folds of the code window
   -- A split copies the window's fold settings; a tree's indented lines must stay open.
   vim.wo[main].foldmethod = "indent"
@@ -310,6 +331,27 @@ return function(H)
   ok(last:is_closed(), "the last window's sidebar closes")
   ok(not api.nvim_buf_is_valid(last_buf), "and its buffer is gone")
 
+  -- In the last tabpage the window stays and shows the user's buffer again: without the
+  -- sidebar's winfixwidth (later splits would copy it). A child Neovim: this run has more
+  -- tabpages than one.
+  local script = vim.fn.tempname() .. ".lua"
+  vim.fn.writefile({
+    "vim.opt.rtp:append(" .. vim.inspect(vim.fn.getcwd()) .. ")",
+    "vim.cmd('edit ' .. vim.fn.fnameescape(vim.fn.tempname() .. '.txt'))",
+    "local main = vim.api.nvim_get_current_win()",
+    "local l = require('lib.nvim.ui.kit.sidebar').open({ name = 'l' })",
+    "local win = l.winid",
+    "vim.api.nvim_win_close(main, true)",
+    "l:close()",
+    "io.stdout:write(tostring(vim.api.nvim_win_is_valid(win)), ' ',",
+    "  tostring(vim.wo[win].winfixwidth), ' ', vim.wo[win].winbar, '|\\n')",
+    "vim.cmd('qa!')",
+  }, script)
+  local child = vim
+    .system({ vim.v.progpath, "--headless", "-n", "-i", "NONE", "-u", "NONE", "-l", script })
+    :wait()
+  eq(child.code, 0, "child ran: " .. tostring(child.stderr))
+  eq(vim.trim(child.stdout), "true false |", "the window stays, without the sidebar's options")
   if api.nvim_tabpage_is_valid(tab) then
     vim.cmd("tabclose")
   end

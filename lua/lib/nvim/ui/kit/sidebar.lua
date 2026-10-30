@@ -85,20 +85,17 @@ local function winbar_text(title)
   return " " .. title:gsub("%%", "%%%%")
 end
 
---- Window options, theme and title onto the sidebar's (new) window.
+--- The window options a sidebar sets (its own defaults with `opts.wo` over them).
 ---@param self Lib.UI.Kit.Sidebar
-local function decorate(self)
-  local win = self.winid
+---@return table<string, any>
+local function window_options(self)
   local fixed = self.position == "bottom" and "winfixheight" or "winfixwidth"
-  local wo = vim.tbl_extend("force", {
+  return vim.tbl_extend("force", {
     winfixbuf = true,
     number = false,
     relativenumber = false,
     signcolumn = "no",
     foldcolumn = "0",
-    -- A split copies the fold settings too: `foldmethod=indent` would close a tree's children.
-    foldenable = false,
-    foldmethod = "manual",
     -- A split copies the fold settings too: `foldmethod=indent` would close a tree's children.
     foldenable = false,
     foldmethod = "manual",
@@ -110,6 +107,13 @@ local function decorate(self)
     winbar = self.title and winbar_text(self.title) or "",
     [fixed] = true,
   }, self._wo)
+end
+
+--- Window options, theme and title onto the sidebar's (new) window.
+---@param self Lib.UI.Kit.Sidebar
+local function decorate(self)
+  local win = self.winid
+  local wo = window_options(self)
 
   -- A split copies the options of the window it was made from: set every one of them
   -- (`winhighlight` from scratch, not merged into a code window's own mappings).
@@ -130,6 +134,20 @@ local function decorate(self)
   )
   for name, value in pairs(wo) do
     pcall(api.nvim_set_option_value, name, value, { scope = "local", win = win })
+  end
+end
+
+--- Set every option `decorate` set on the sidebar's window back to its global value.
+---@param self Lib.UI.Kit.Sidebar
+local function reset_window(self)
+  local win = self.winid --[[@as integer]]
+  local names = vim.tbl_keys(window_options(self))
+  names[#names + 1] = "winhighlight"
+  for _, name in ipairs(names) do
+    local ok, value = pcall(api.nvim_get_option_value, name, { scope = "global" })
+    if ok then
+      pcall(api.nvim_set_option_value, name, value, { scope = "local", win = win })
+    end
   end
 end
 
@@ -369,7 +387,11 @@ function Sidebar:close()
     unwatch(self)
     -- The tabpage's last window is not closed here (E444 in the last tabpage); deleting the
     -- buffer below then does what `:bwipeout` does there.
-    if not is_last_window(self.winid) then
+    if is_last_window(self.winid) then
+      -- The window stays and shows another buffer: hand it back without the sidebar's
+      -- options (a kept `winfixwidth` would be copied into every later split).
+      reset_window(self)
+    else
       pcall(api.nvim_win_close, self.winid, true)
     end
   end
