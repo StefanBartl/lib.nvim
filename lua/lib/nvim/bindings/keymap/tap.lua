@@ -111,7 +111,11 @@ end)()
 ---@internal
 --- Neovim's own `vim/keymap.lua`. Its chunk name depends on the build: a file
 --- (`@.../runtime/lua/vim/keymap.lua`) where the runtime is read from disk, a
---- bare `vim/keymap` where it is compiled into the binary.
+--- bare `vim/keymap` where it is compiled into the binary, and a bare `?` where
+--- that binary's Lua carries no names at all (a Windows build does). Nothing
+--- written by a person is ever called `?`, so the last one is safe to read as
+--- Neovim's -- also when a wrapper over `vim.keymap.set` was there before this
+--- module loaded and `KEYMAP_SRC` is therefore the wrapper's.
 ---@param src string  # `debug.getinfo(...).source`
 ---@return boolean
 local function is_vim_keymap(src)
@@ -119,7 +123,10 @@ local function is_vim_keymap(src)
     return true
   end
   local name = src:gsub("^[@=]", ""):gsub("\\", "/")
-  return name == "vim/keymap" or name == "vim/keymap.lua" or name:find("/vim/keymap%.lua$") ~= nil
+  return name == "?"
+    or name == "vim/keymap"
+    or name == "vim/keymap.lua"
+    or name:find("/vim/keymap%.lua$") ~= nil
 end
 
 ---@internal

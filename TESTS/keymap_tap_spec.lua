@@ -789,18 +789,26 @@ return function(H)
     end
   end
 
-  -- On a Lua without line info Neovim's own keymap.lua is a chunk named `?`; its frame is still
-  -- recognised, by the function that was `vim.keymap.set` when the module loaded.
-  do
+  -- On a Lua without line info Neovim's own keymap.lua is a chunk named `?` (a Windows build has
+  -- that for real). Its frame must not pass for the caller. Two ways to know it, tried separately:
+  -- by the name `?` -- nothing written by a person is called that -- and by being the function
+  -- that was `vim.keymap.set` when the module loaded, whatever its chunk is called. The wrapper
+  -- below sits over `vim.keymap.set` before the module reloads, as a hook installed early does.
+  ---@param chunknames string[]  # Wrappers over vim.keymap.set, innermost first.
+  ---@param label string
+  local function stripped_case(chunknames, label)
     local old = package.loaded[modname]
     local real_set = vim.keymap.set
-    local stripped = assert(
-      load(
-        "local orig = ...\nreturn function(...)\n  local res = orig(...)\n  return res\nend",
-        "=?"
-      )
-    )(real_set)
-    vim.keymap.set = stripped
+    local chain = real_set
+    for _, chunkname in ipairs(chunknames) do
+      chain = assert(
+        load(
+          "local orig = ...\nreturn function(...)\n  local res = orig(...)\n  return res\nend",
+          chunkname
+        )
+      )(chain)
+    end
+    vim.keymap.set = chain
     local passed, err = pcall(function()
       package.loaded[modname] = nil
       local fresh = require(modname)
@@ -809,7 +817,7 @@ return function(H)
       local e = fresh.log()[1]
       ok(
         e ~= nil and e.source:find("keymap_tap_spec.lua", 1, true) ~= nil,
-        "the stripped frame is looked past: " .. tostring(e and e.source)
+        label .. " is looked past: " .. tostring(e and e.source)
       )
       fresh.uninstall()
     end)
@@ -819,6 +827,15 @@ return function(H)
       error(err, 0)
     end
   end
+
+  stripped_case({ "=?" }, "a frame of a chunk named `?`")
+  stripped_case(
+    { "=keymap_set_without_a_name_rule" },
+    "the function that was vim.keymap.set at load"
+  )
+  -- Only the name can know this one: the outer wrapper is what `vim.keymap.set` was at load, so the
+  -- `?` chunk below it is nobody's but its name.
+  stripped_case({ "=?", "=outer_hook_named_by_hand" }, "a `?` frame under a named wrapper")
 
   eq(tap.is_installed(), false, "the spec leaves the tap uninstalled")
   for name, f in pairs(pristine) do
