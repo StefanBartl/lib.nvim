@@ -328,7 +328,8 @@ local KIND_GROUPS = { danger = "KitError", warn = "KitWarn", info = "KitInfo" }
 ---@internal
 --- Choices given as a `vim.fn.confirm` string -- buttons separated by a newline, `&` in front of
 --- the letter that is the button's hotkey -- as labels and hotkeys. A list of labels is taken as
---- it is (a `&` in a list is part of the text): hotkeys are the digits then.
+--- it is (a `&` in a list is part of the text); its hotkeys come from `hotkeys` (y/n, first free
+--- letter, digits).
 ---@param choices string|string[]|nil
 ---@return string[]|nil labels  # nil: use the Yes/No default
 ---@return table<integer, { key: string, col: integer }> marks  # per button: its `&` key and the byte column of that letter in the label
