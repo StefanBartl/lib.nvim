@@ -22,6 +22,16 @@ return function(H)
   local root = vim.fs.normalize(vim.fn.tempname())
   vim.fn.mkdir(root, "p")
 
+  --- The file a path names, symlinks resolved: Neovim itself may name a buffer opened through a
+  --- symlinked directory by its real path, so a buffer is compared by the file it shows.
+  local function real(path)
+    return vim.fs.normalize(vim.uv.fs_realpath(path) or path)
+  end
+  --- The file the current window shows.
+  local function current_file()
+    return real(vim.api.nvim_buf_get_name(0))
+  end
+
   --- The questions the hook saw, and the answer it gives next.
   local seen, answer = {}, nil
   kit.set_dialog_hook(function(kind, opts)
@@ -78,11 +88,7 @@ return function(H)
     eq(res.kind, "file", "create: a file")
     eq(res.path, target, "create: the new path, normalized")
     eq(vim.fn.filereadable(target), 1, "create: the file exists")
-    eq(
-      vim.fs.normalize(vim.api.nvim_buf_get_name(0)),
-      target,
-      "create: the file is open in the window"
-    )
+    eq(current_file(), real(target), "create: the file is open in the window")
     eq(seen[1].kind, "confirm", "the question is a kit.confirm")
     ok(seen[1].question:find("new.txt does not exist", 1, true), "the question names the path")
     ok(
@@ -127,6 +133,19 @@ return function(H)
       "dir: names the directories"
     )
 
+    -- a path through a symlinked directory is reported and opened as the caller spelled it
+    -- (create_entry resolves symlinks on Unix: macOS' tempname() lives below /var -> /private/var)
+    vim.fn.mkdir(root .. "/real", "p")
+    if vim.uv.fs_symlink(root .. "/real", root .. "/link", { dir = true, junction = true }) then
+      local via_link = root .. "/link/sub/new.txt"
+      res = run(via_link, com.CREATE)
+      eq(res.action, "created", "symlink: created")
+      eq(res.path, via_link, "symlink: the caller's spelling, not the resolved one")
+      eq(vim.fn.filereadable(root .. "/real/sub/new.txt"), 1, "symlink: made in the real dir")
+      eq(current_file(), real(via_link), "symlink: the file is opened")
+      vim.cmd("enew!")
+    end
+
     -- Cancel and a dismissal (nil) create nothing
     for _, v in ipairs({ com.CANCEL, false }) do
       local p = root .. "/x/cancel.txt"
@@ -141,7 +160,7 @@ return function(H)
     eq(#seen, 0, "exists: no question")
     eq(res.action, "exists", "exists: reported")
     eq(res.kind, "file", "exists: a file")
-    eq(vim.fs.normalize(vim.api.nvim_buf_get_name(0)), target, "exists: opened")
+    eq(current_file(), real(target), "exists: opened")
     vim.cmd("enew!")
 
     -- create_entry refuses a bad name: an error result, nothing made

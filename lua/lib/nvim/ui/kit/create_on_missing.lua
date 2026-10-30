@@ -169,8 +169,10 @@ function M.open(opts)
           return
         end
         ---@cast kind "file"|"directory"
-        ---@cast path_or_err string
-        local created = vim.fs.normalize(path_or_err)
+        -- create_entry made resolve(abs) and reports that spelling (symlinks resolved: macOS'
+        -- /var/... becomes /private/var/...). Report and open the caller's spelling instead,
+        -- like every other result does; it names the same file.
+        local created = abs
         local err = open_path(opts.open, created, kind)
         if err then
           notify.error(("created %s, but could not open it: %s"):format(shown, err))
