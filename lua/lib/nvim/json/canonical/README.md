@@ -20,7 +20,9 @@ does, cuts a float to 16 digits and is only sometimes an error on `NaN`.
   strings with `strcoll` (the locale's collation), so the encoder sorts with its
   own bytewise comparator (`bytes_less`) and LuaJIT output is unchanged. An
   object that may be empty is made with `object({})`; an array that may be empty
-  is just `{}` (or `array({})`). `vim.NIL` is `null`.
+  is just `{}` (or `array({})`). `vim.NIL` is `null`. A mark is kept beside the
+  table (a weak-keyed set), not as its metatable: `object(instance)` leaves a
+  class instance and its `__index` as they were. The last mark wins.
 - Neovim's own empty-object marker counts as an object: `vim.empty_dict()` and
   every `{}` that `vim.json.decode` returns are written as `{}`, so decode
   followed by encode keeps `{}` and `[]` apart. `array(vim.empty_dict())` is
@@ -33,7 +35,11 @@ does, cuts a float to 16 digits and is only sometimes an error on `NaN`.
 - Strings: valid UTF-8 (every bad byte, overlong form, surrogate and value above
   U+10FFFF becomes U+FFFD); every control byte (the C1 controls U+0080 to U+009F
   too), `"`, `\`, U+2028, U+2029 and `<` are escaped, so the text can sit in a
-  `<script>` block and be printed to a terminal as it is.
+  `<script>` block and be printed to a terminal as it is. An object **key**
+  that is not valid UTF-8 is repaired the same way *before* the keys are
+  sorted (it is sorted under the name it is written with); two keys that read
+  the same once repaired **raise** with the path, since a decoder would keep
+  only one of the values.
 - No whitespace (the form that is hashed). `indent` writes the same document
   readable.
 - A table that is neither a list nor an object (holes, mixed keys) raises; the
@@ -69,8 +75,8 @@ local entries = json.memo(big_list)              -- must not change afterwards
 | Function | Meaning |
 |---|---|
 | `encode(value, opts?)` | The canonical text. `opts.indent` (spaces per level) gives the readable form. Raises on a value JSON cannot hold. |
-| `object(t?)` | Mark `t` as an object even when empty. |
-| `array(t?)` | Mark `t` as an array even when empty (the default for an empty table). |
+| `object(t?)` | Mark `t` as an object even when empty. `t` is handed back unchanged (its metatable stays). |
+| `array(t?)` | Mark `t` as an array even when empty (the default for an empty table). `t` is handed back unchanged. |
 | `memo(t)` | Remember the compact text of `t`; the readable form ignores the mark. |
 | `bytes_less(a, b)` | `a < b` by byte value, never by the locale. For `table.sort` of a list whose order is hashed (`contract.doc`'s `rev_of` uses it). |
 | `scrub_utf8(s)` | `s` as `encode` writes it: valid UTF-8, every bad byte (overlong form, surrogate, value above U+10FFFF) replaced by U+FFFD. `scrub_utf8(s) ~= s` says that `s` is not valid UTF-8 (`contract.ops.has_control` uses it). |

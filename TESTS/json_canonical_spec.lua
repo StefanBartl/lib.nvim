@@ -98,6 +98,46 @@ return function(H)
   eq(json.encode(json.object({ a = 1 })), '{"a":1}')
   eq(vim.json.encode({}), "[]", "(the reason this module exists)")
 
+  -- ── a mark does not touch the table: a class instance keeps its metatable (and its __index) ──
+  local Class = {}
+  Class.__index = Class
+  function Class.name()
+    return "instance"
+  end
+  local instance = setmetatable({}, Class)
+  eq(json.object(instance) == instance, true, "object() hands back the same table")
+  eq(getmetatable(instance) == Class, true, "object() keeps the metatable")
+  eq(instance.name(), "instance", "and the methods still resolve")
+  eq(json.encode(instance), "{}", "while the empty instance is written as an object")
+  local listed = setmetatable({}, Class)
+  json.array(listed)
+  eq(getmetatable(listed) == Class, true, "array() keeps the metatable too")
+  eq(json.encode(listed), "[]")
+  eq(json.encode(json.array(json.object({}))), "[]", "the last mark wins")
+  local dict = json.object(vim.empty_dict())
+  eq(
+    getmetatable(dict) == getmetatable(vim.empty_dict()),
+    true,
+    "the empty-dict marker stays as well"
+  )
+
+  -- ── keys that are not valid UTF-8 are written repaired; two keys that would read the same are an error ──
+  eq(
+    json.encode({ ["\255"] = 1, ["\239\191\189x"] = 2 }),
+    '{"\239\191\189":1,"\239\191\189x":2}',
+    "a repaired key is sorted under the name it is written with"
+  )
+  has(
+    fails({ inner = { ["a\255"] = 1, ["a\254"] = 2 } }),
+    "$.inner has two keys",
+    "two invalid keys that are both repaired to the same name"
+  )
+  has(
+    fails({ ["a\255"] = 1, ["a\239\191\189"] = 2 }),
+    "two keys",
+    "an invalid key repaired to the name of a valid one"
+  )
+
   -- Neovim's own empty-object marker is an object here too: decode -> encode must not turn {} into [].
   eq(json.encode(vim.empty_dict()), "{}", "vim.empty_dict() is an object")
   local roundtrip = '{"a":{},"b":[],"c":{"d":{}},"e":[{}],"params":{}}'

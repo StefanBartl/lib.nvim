@@ -10,14 +10,16 @@
 --- time. A document that is hashed (`digest`, `etag`, golden files) needs a writer with rules:
 ---
 ---  - object keys sorted by byte value (on plain Lua 5.1 too, where the language's own `<` follows the locale); an
----    object that may be empty is made with `M.object({})`, an array that may be empty is just `{}` (the default for
----    an empty table) or `M.array({})`; `vim.NIL` is `null`; Neovim's own empty-object marker (`vim.empty_dict()`, and
----    every `{}` that `vim.json.decode` returns) counts as an object, so decode followed by encode keeps `{}` and `[]`
----    apart (a deliberate addition to `tasks_nvim.json`, which did not know the marker)
+---    object that may be empty is made with `M.object({})` (a mark beside the table, its metatable is not touched),
+---    an array that may be empty is just `{}` (the default for an empty table) or `M.array({})`; `vim.NIL` is `null`;
+---    Neovim's own empty-object marker (`vim.empty_dict()`, and every `{}` that `vim.json.decode` returns) counts as
+---    an object, so decode followed by encode keeps `{}` and `[]` apart (a deliberate addition to `tasks_nvim.json`,
+---    which did not know the marker)
 ---  - numbers: a whole number below 2^53 is written without a fraction, any other number with the fewest digits that
 ---    read back as the same number; `NaN`, `inf` and a whole number of 2^53 or more are an ERROR (a silent loss of
 ---    digits is the worst answer a contract can give); `-0` is `0`
----  - strings: valid UTF-8 (a bad byte becomes U+FFFD), every control byte (the C1 controls U+0080 to U+009F too),
+---  - strings: valid UTF-8 (a bad byte becomes U+FFFD; in an object key before the keys are sorted, and two keys that
+---    read the same once repaired are an ERROR), every control byte (the C1 controls U+0080 to U+009F too),
 ---    `"`, `\`, U+2028, U+2029 and `<` escaped: the text can sit inside a `<script>` block and be printed to a terminal
 ---    as it is
 ---  - no whitespace (the form that is hashed); `indent` gives the same document readable (golden files)
@@ -29,12 +31,14 @@ require("lib.nvim.json.canonical.@types")
 
 local M = {}
 
----Marks a table as a JSON object even when it is empty or has no string keys yet.
-local OBJECT = { "lib.nvim.json.canonical.object" }
-local ARRAY = { "lib.nvim.json.canonical.array" }
+---What `M.object` / `M.array` made of a table: a JSON object or array even when it is empty. Kept beside the table
+---(weak keys: a table that goes away takes its mark with it), never as its metatable: a class instance keeps its
+---`__index`, and marking it changes nothing about it but how it is written.
+---@type table<table, "object"|"array">
+local marks = setmetatable({}, { __mode = "k" })
 
 ---Neovim's own empty-object marker: the metatable of `vim.empty_dict()` and of every `{}` that `vim.json.decode`
----returns. `M.array` still wins over it (it replaces the metatable).
+---returns. `M.array` still wins over it (a mark is asked first).
 local EMPTY_DICT = getmetatable(vim.empty_dict())
 
 local byte = string.byte
@@ -60,20 +64,24 @@ end
 ---before a longer one it is a prefix of. For every list of strings whose order ends up in a hash.
 M.bytes_less = bytes_less
 
----A table that is an OBJECT, empty or not.
+---A table that is an OBJECT, empty or not. The table itself is not changed (its metatable stays); the last mark wins.
 ---@generic T: table
 ---@param t? T
 ---@return T
 function M.object(t)
-  return setmetatable(t or {}, OBJECT)
+  t = t or {}
+  marks[t] = "object"
+  return t
 end
 
----A table that is an ARRAY, empty or not (an empty unmarked table is one too).
+---A table that is an ARRAY, empty or not (an empty unmarked table is one too). The table itself is not changed.
 ---@generic T: table
 ---@param t? T
 ---@return T
 function M.array(t)
-  return setmetatable(t or {}, ARRAY)
+  t = t or {}
+  marks[t] = "array"
+  return t
 end
 
 ---Tables whose compact text is remembered (`M.memo`). Weak: a table that goes away takes its text with it.
@@ -279,11 +287,12 @@ end
 ---@param where Lib.Json.CanonicalWhere
 ---@param depth integer
 ---@return "object"|"array"
----@return string[]|integer keys  # the sorted keys of an object, the length of a list
+---@return string[]|integer keys  # the sorted keys of an object as they are written, the length of a list
+---@return table<string, string>|nil source  # written key -> key of `t`, for the keys that are not valid UTF-8
 local function shape(t, where, depth)
-  local mt = getmetatable(t)
+  local mark = marks[t]
   local count, max, strings = 0, 0, 0
-  local keys = {}
+  local keys, source = {}, nil
   for k in pairs(t) do
     count = count + 1
     if type(k) == "number" and k >= 1 and k == math.floor(k) then
@@ -292,17 +301,36 @@ local function shape(t, where, depth)
       end
     elseif type(k) == "string" then
       strings = strings + 1
+      -- A key that is not valid UTF-8 is written repaired (U+FFFD): it is sorted under that name, and two keys that
+      -- end up with the same name are an error, since a decoder keeps only one of their values.
+      if k:find("[\128-\255]") then
+        local fixed = scrub(k)
+        if fixed ~= k then
+          source = source or {}
+          if source[fixed] ~= nil or t[fixed] ~= nil then
+            error(
+              ("json: %s has two keys that both read %s once invalid UTF-8 is replaced"):format(
+                where(depth),
+                string_(fixed)
+              ),
+              0
+            )
+          end
+          source[fixed] = k
+          k = fixed
+        end
+      end
       keys[strings] = k
     else
       error(("json: %s has a key of type %s"):format(where(depth), type(k)), 0)
     end
   end
-  if mt == OBJECT or mt == EMPTY_DICT or (mt ~= ARRAY and strings > 0) then
+  if mark == "object" or (mark ~= "array" and (getmetatable(t) == EMPTY_DICT or strings > 0)) then
     if count ~= strings then
       error(("json: %s mixes list and object keys"):format(where(depth)), 0)
     end
     table.sort(keys, bytes_less)
-    return "object", keys
+    return "object", keys, source
   end
   if strings > 0 or max ~= count then
     error(
@@ -365,7 +393,7 @@ local function render(value, indent, path0, bypass, depth0)
         out[n] = text
         return
       end
-      local kind, keys = shape(v, where, depth)
+      local kind, keys, source = shape(v, where, depth)
       local inner = depth + 1
       local pad = indent and ("\n" .. string.rep(" ", indent * inner)) or nil
       if kind == "object" then
@@ -394,7 +422,7 @@ local function render(value, indent, path0, bypass, depth0)
             out[n] = colon
           end
           steps[inner] = k
-          put(v[k], inner)
+          put(v[source and source[k] or k], inner)
         end
       else
         ---@cast keys integer
