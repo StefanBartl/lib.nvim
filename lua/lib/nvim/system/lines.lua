@@ -146,12 +146,22 @@ function M.buffered(cb)
 
     -- One scheduled callback per chunk, not per line: a chunk of thousands of
     -- short lines would otherwise queue thousands of closures. The caller
-    -- still sees one call per line, in order.
+    -- still sees one call per line, in order. A cb that throws must not take
+    -- the rest of its chunk down with it (with one closure per line an error
+    -- only ever cost its own line), so every line is delivered first and the
+    -- first error is raised afterwards, where vim.schedule still reports it.
     local got = collector.feed(data)
     if #got > 0 then
       vim.schedule(function()
+        local first_err
         for _, line in ipairs(got) do
-          cb(nil, line)
+          local ok, err = xpcall(cb, debug.traceback, nil, line)
+          if not ok and first_err == nil then
+            first_err = err
+          end
+        end
+        if first_err ~= nil then
+          error(first_err, 0)
         end
       end)
     end

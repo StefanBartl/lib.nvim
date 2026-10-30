@@ -188,6 +188,34 @@ return function(H)
   end
 
   do
+    -- A cb that throws on one line does not swallow the rest of its chunk,
+    -- and the error still surfaces from the scheduled callback.
+    local got = {}
+    local handler = lines.buffered(function(_, line)
+      if line == "b" then
+        error("boom on b")
+      end
+      got[#got + 1] = line
+    end)
+    local queued = {}
+    local real_schedule = vim.schedule
+    vim.schedule = function(fn) ---@diagnostic disable-line: duplicate-set-field
+      queued[#queued + 1] = fn
+    end
+    local ok_call, call_err = pcall(handler, nil, "a\nb\nc\n")
+    vim.schedule = real_schedule
+    ok(ok_call, "buffered: throwing cb: handler ran: " .. tostring(call_err))
+    eq(#queued, 1, "buffered: throwing cb: one callback queued")
+    local ran, run_err = pcall(queued[1])
+    eq(table.concat(got, "|"), "a|c", "buffered: lines after a throwing cb are still delivered")
+    ok(not ran, "buffered: the cb error is re-raised")
+    ok(
+      tostring(run_err):find("boom on b", 1, true) ~= nil,
+      "buffered: the re-raised error is the cb's: " .. tostring(run_err)
+    )
+  end
+
+  do
     -- EOF flushes output that never got its newline.
     local got = {}
     local handler = lines.buffered(function(_, line)
