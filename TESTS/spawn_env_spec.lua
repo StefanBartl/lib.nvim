@@ -166,19 +166,31 @@ return function(H)
 
   -- The dict -> array conversion raw uv.spawn's opts.env needs: extracted
   -- from pdfport.nvim's and reposcope.nvim's byte-identical copies.
-  local arr = env.array({ LIB_NVIM_SPEC_ARRAY = "yes" })
+  --
+  -- Windows keeps hidden variables whose name starts with `=` (`=C:` holds
+  -- the per-drive cwd, `=ExitCode` the last exit code; cmd.exe sets them and
+  -- `vim.fn.environ()` reports them when Neovim runs under cmd). They are
+  -- passed through like any other entry, as native process inheritance does,
+  -- and libuv hands them to the child intact. The `=LIB_NVIM_SPEC_HIDDEN:`
+  -- entry injects that shape on every host, so the KEY=VALUE check below
+  -- cannot depend on the shell this spec happens to run under.
+  local arr = env.array({ LIB_NVIM_SPEC_ARRAY = "yes", ["=LIB_NVIM_SPEC_HIDDEN:"] = "X:\\cwd" })
   eq(type(arr), "table", "array: returns a table")
-  local found_entry, path_entries = false, 0
+  local found_entry, found_hidden, path_entries = false, false, 0
   for _, kv in ipairs(arr) do
-    ok(kv:match("^[^=]+=") ~= nil, "array: every entry is KEY=VALUE — got " .. kv)
+    ok(kv:match("^=?[^=]+=") ~= nil, "array: every entry is KEY=VALUE — got " .. kv)
     if kv == "LIB_NVIM_SPEC_ARRAY=yes" then
       found_entry = true
+    end
+    if kv == "=LIB_NVIM_SPEC_HIDDEN:=X:\\cwd" then
+      found_hidden = true
     end
     if kv:match("^[Pp][Aa][Tt][Hh]=") then
       path_entries = path_entries + 1
     end
   end
   ok(found_entry, "array: vars override lands as one KEY=VALUE entry")
+  ok(found_hidden, "array: a Windows hidden `=NAME` entry is passed through unchanged")
   eq(path_entries, 1, "array: exactly one PATH entry, no case-duplicate on Windows")
 
   -- ------------------------------------------------------------ login_shell_env

@@ -449,6 +449,10 @@ end
 ---dict (the shape `vim.system`/`jobstart` want), so this is the one place
 ---that does the dict -> array conversion instead of every `uv.spawn` caller
 ---hand-rolling it.
+---
+---Windows hidden variables (name starting with `=`, e.g. `=C:` for the
+---per-drive cwd, set by cmd.exe) are kept as `=C:=C:\dir`: native process
+---inheritance passes them on too, and libuv forwards them intact.
 ---@param vars? table<string, string> Explicit overrides, applied last
 ---@return string[]
 function M.array(vars)
