@@ -191,8 +191,37 @@ its `run.lua` entry. `run.lua` is the authority for what runs.
 | `companion_protocol_spec.lua` | `lib.nvim.companion.protocol` against a fake transport that records every message: option validation, pending content kept until attach, attach -> connect -> first render, keys on the wire as `{ name, args, prompt }` (no mixed table over msgpack), update / set_title pushes, actions with fixed and prompted arguments, close (the quit as a NOTIFICATION -- the fake transport has no `request`, a blocking request across the two channels deadlocks both instances --, channel closed, `on_close` once, idempotent; also from state `attaching`, where the channel back is opened first so the companion is told), a dead channel on push, an unreachable companion, detach, drop, the liveness check (a dead channel, and the attach timeout with a fake clock: default, explicit, `false`, an attached handle unaffected, the direct process stopped, the warning), `attach_timeout` validation, a throwing `on_close`, `close_all`. No process. |
 | `companion_headless_spec.lua` | `lib.nvim.companion` end to end with a REAL headless companion (`terminal = false`, `vim.system`, no window): `is_runnable` (a program on PATH, a missing one, a path is never looked up as an alias), attach within 10 s, the buffer (nofile, read-only, no swap, filetype, name, title, the highlight extmark, `q`/keys bound), an update that keeps and clamps the cursor, a key action arriving in the main (the client's `send`, and the prompted key through `feedkeys`), `set_title`, close (channel gone, `on_close` once, no handle left), a companion that quits by itself (its `_detach` arrives as a notification: the companion's `vim.rpcrequest` is made to raise first, and a counter on `companion._detach` proves it was told rather than found by the liveness check), the deadlock case (the companion leaves while the main is in a 300 ms synchronous stretch, then the main closes the handle: `close` returns, `on_close` once), a handle closed before attach, and a terminal that never runs the inner nvim (an `nvim -l <empty script> {cmd}`, `attach_timeout = 500`: closed by the liveness check, `on_close` once, the warning). ~2 s on Windows. |
 | `data_classes_spec.lua` | `lib.nvim.data_classes`: the tests of tasks-desktop's `classes.rs` (missing file, `default`, unclassified and private release nothing, the refusals of schema 1 and 2, a huge file, one class per vault), the config path per OS and its variable, a repository by its folder (the strictest of the areas naming it, across vaults or in one), an unreadable file, and the edges where a lenient JSON parser would release an area (a field twice, `1.0`, a byte order mark, a lone surrogate, a struct written as a list, a class written as a map `{"public":null}`, 1000/1001 areas), the exact 256 KiB limit, the vault names of the `vaults` rules, no vault taking main's default, a non-text area never getting a default, `policy:entry`/`policy:areas`, an area named like a repository without a `repo` field, and a name that is not UTF-8. |
-| `data_classes_cases_spec.lua` | `lib.nvim.data_classes` against tasks-desktop's shared case list (`ui/web/classes-cases-dump.mjs`, the list its Rust hub and web reader are held to). Needs a tasks-desktop checkout (`TASKS_DESKTOP_DIR` or a sibling) and `node`, else `[SKIPPED]`. |
+| `data_classes_cases_spec.lua` | `lib.nvim.data_classes` against tasks-desktop's shared case list (`ui/web/classes-cases-dump.mjs`, the list its Rust hub and web reader are held to), read from the vendored fixture `fixtures/data_classes_cases.json` (runs in CI, no checkout, no node); the fixture's sidecar (source commit, case count, sha256) must match; the hex runs expand byte for byte. The comparison with a checkout and the regenerate step run on throwaway repositories with a fake dump (an older, a diverged, a dirty checkout, a dump that fails, an unknown commit). With a local tasks-desktop checkout (`TASKS_DESKTOP_DIR` or a sibling) that contains the fixture's commit, and `node`, it also fails when the fixture lags behind the list committed at that checkout's HEAD; otherwise that part is `[SKIPPED]` with the reason. See "Vendored fixtures" below. |
 | `run.lua`         | Runner: loads every spec, reports results, sets the exit code.  |
+
+## Vendored fixtures
+
+`fixtures/data_classes_cases.json` is tasks-desktop's shared `areas.json` case
+list (`ui/web/classes-cases.mjs`, dumped by `ui/web/classes-cases-dump.mjs`),
+one case per line with a fixed key order. In the `hex` field a run of 16 or
+more equal bytes is written `<pair>*<count>;` (e.g. `20*262099;`), so the
+256 KiB cases stay small; the reader expands it byte for byte. Its sidecar
+`fixtures/data_classes_cases.source.json` names the source commit, the case
+count and the sha256 of the fixture; the spec checks all three, so the fixture
+is regenerated, never edited by hand. The shared reader/encoder is
+`support/data_classes_cases.lua`.
+
+When tasks-desktop's list changes (the spec says the fixture lags behind your
+checkout), regenerate (needs `node`):
+
+```sh
+nvim -n -i NONE --headless -u NONE -l scripts/regen_data_classes_cases.lua [--force] [tasks-desktop dir]
+```
+
+The directory defaults to `TASKS_DESKTOP_DIR`, else a sibling `tasks-desktop`.
+Both the spec and the script read `ui/web` as committed at the checkout's HEAD
+(exported with `git cat-file` into a temporary directory), so uncommitted or
+untracked work of another session in that shared checkout neither turns the
+suite red nor ends up in the fixture; the sidecar records that commit. The
+script refuses a checkout that does not contain the commit of the current
+sidecar (older, or on a diverged branch), since that would quietly take the
+fixture back to an older list; `--force` overrides. The spec compares only when
+HEAD contains the fixture's commit. Commit fixture and sidecar together.
 
 ## Adding a spec
 

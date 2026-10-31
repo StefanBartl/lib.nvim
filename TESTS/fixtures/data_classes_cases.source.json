@@ -1,0 +1,8 @@
+{
+  "repo": "tasks-desktop",
+  "commit": "f9ab14267b07ee817920df3006d6f8dbb04be65a",
+  "generator": "ui/web/classes-cases-dump.mjs",
+  "cases": 190,
+  "sha256": "71ccc802212d009172a4829555b7091ab8b8f066b6f9f3e68e3a244586b99f1b",
+  "regenerate": "nvim -n -i NONE --headless -u NONE -l scripts/regen_data_classes_cases.lua [--force] [tasks-desktop dir]"
+}
