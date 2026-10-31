@@ -77,6 +77,14 @@ return function(H)
   eq(table.concat(held, ","), "lead", "cancel drops the held calls (only the leading call ran)")
   c.call("again")
   eq(held[#held], "again", "after cancel the next call is leading again")
+  vim.wait(150, function()
+    return false
+  end)
+  eq(
+    table.concat(held, ","),
+    "lead,again",
+    "a held call dropped by cancel does not come back after the next pause"
+  )
   c.cancel()
   ok(true, "done")
 end
