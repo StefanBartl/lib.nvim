@@ -50,15 +50,18 @@ function M.run(task, opts)
 
   local function attempt_n(n)
     local settled = false
-    local function done(ok, res)
-      if settled then
-        return
-      end
-      settled = true
+    local in_task = true
+    local deferred_err
+    local function complete(ok, res)
       if ok then
         return finish(true, res, n)
       end
-      local retry_ok = n < max and (not opts.should_retry or opts.should_retry(res, n))
+      local retry_ok = n < max
+      if retry_ok and opts.should_retry then
+        -- a raising should_retry means "do not retry", never "wait forever"
+        local rok, verdict = pcall(opts.should_retry, res, n)
+        retry_ok = rok and verdict and true or false
+      end
       if not retry_ok then
         return finish(false, res, n)
       end
@@ -66,7 +69,27 @@ function M.run(task, opts)
         attempt_n(n + 1)
       end)
     end
+    local function done(ok, res)
+      if settled then
+        return
+      end
+      settled = true
+      local cok, cerr = pcall(complete, ok, res)
+      if not cok then
+        -- an error of the completion path (on_done, sleep) is not a task failure: while the task is
+        -- still on the stack it is re-raised after the task returned, otherwise to whoever called done()
+        if in_task then
+          deferred_err = cerr
+        else
+          error(cerr, 0)
+        end
+      end
+    end
     local ok, err = pcall(task, n, done)
+    in_task = false
+    if deferred_err ~= nil then
+      error(deferred_err, 0)
+    end
     if not ok then
       done(false, err)
     end

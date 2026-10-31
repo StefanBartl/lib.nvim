@@ -64,14 +64,17 @@ function C:call(method, ...)
   for _, child in ipairs(self.items) do
     local group = type(child) == "table" and child.is_composite
     if group or (type(child) == "table" and type(child[method]) == "function") then
-      local ok, res
+      local ok, res, child_errors
       if group then
-        ok, res = pcall(child.call, child, method, ...)
+        ok, res, child_errors = pcall(child.call, child, method, ...)
       else
         ok, res = pcall(child[method], child, ...)
       end
       if ok then
         results[#results + 1] = res
+        for _, e in ipairs(child_errors or {}) do
+          errors[#errors + 1] = e
+        end
       else
         errors[#errors + 1] = res
       end

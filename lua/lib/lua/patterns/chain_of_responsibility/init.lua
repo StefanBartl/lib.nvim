@@ -74,7 +74,12 @@ end
 ---@return any[] errors
 function C:handle(request, ...)
   local errors = {}
-  for _, h in ipairs(self.handlers) do
+  -- iterate a snapshot: a handler may add or remove handlers while the request is being handled
+  local snapshot = {}
+  for i, h in ipairs(self.handlers) do
+    snapshot[i] = h
+  end
+  for _, h in ipairs(snapshot) do
     local ok, handled, result = pcall(h.fn, request, ...)
     if not ok then
       errors[#errors + 1] = handled

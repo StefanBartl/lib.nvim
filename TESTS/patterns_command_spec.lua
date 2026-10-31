@@ -68,6 +68,43 @@ return function(H)
     "arguments (with nil holes) reach undo"
   )
 
+  -- a raising undo / redo must not lose the command from the history
+  local flaky_undo = true
+  local fragile = {
+    name = "fragile",
+    run = function() end,
+    undo = function()
+      if flaky_undo then
+        error("undo broke", 0)
+      end
+    end,
+  }
+  local fh = command.history()
+  fh:run(fragile)
+  ok(not pcall(fh.undo, fh), "a raising undo raises")
+  ok(fh:can_undo() and not fh:can_redo(), "and the entry stays on the undo stack")
+  flaky_undo = false
+  eq(fh:undo(), "fragile", "a later undo works")
+
+  local flaky_run = false
+  local fragile_run = {
+    name = "fragile-run",
+    run = function()
+      if flaky_run then
+        error("run broke", 0)
+      end
+    end,
+    undo = function() end,
+  }
+  local rh = command.history()
+  rh:run(fragile_run)
+  rh:undo()
+  flaky_run = true
+  ok(not pcall(rh.redo, rh), "a raising redo raises")
+  ok(rh:can_redo() and not rh:can_undo(), "and the entry stays on the redo stack")
+  flaky_run = false
+  eq(rh:redo(), "fragile-run", "a later redo works")
+
   hh:run({ run = function() end }, 1)
   eq(hh:undo(), nil, "a command without name and undo can be undone without error")
   hh:clear()

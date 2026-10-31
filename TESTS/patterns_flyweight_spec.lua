@@ -22,6 +22,15 @@ return function(H)
   end)
   ok(pair:get("a", "bc") ~= pair:get("ab", "c"), "key parts do not run together")
 
+  -- type and nil must not collapse into the same key
+  local typed = flyweight.new(function(...)
+    return { ... }
+  end)
+  ok(typed:get(1) ~= typed:get("1"), "number and string keys differ")
+  ok(typed:get(nil) ~= typed:get("nil"), "nil and the string 'nil' differ")
+  ok(typed:get("a\31b") ~= typed:get("a", "b"), "an embedded separator does not collide")
+  ok(typed:get(1) == typed:get(1), "equal arguments still share")
+
   local custom = flyweight.new(function(t)
     return { name = t.name }
   end, {

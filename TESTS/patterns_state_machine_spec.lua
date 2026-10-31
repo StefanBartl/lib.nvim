@@ -81,6 +81,28 @@ return function(H)
   )
   ok(not pcall(state_machine.new, {}), "initial is required")
 
+  -- a fire() made inside on_enter reports its change after the outer one
+  local seq = {}
+  local nested
+  nested = state_machine.new({
+    initial = "a",
+    transitions = {
+      { from = "a", event = "go", to = "b" },
+      { from = "b", event = "next", to = "c" },
+    },
+    on_enter = {
+      b = function()
+        nested:fire("next")
+      end,
+    },
+  })
+  nested:on_change(function(new, old)
+    seq[#seq + 1] = old .. ">" .. new
+  end)
+  nested:fire("go")
+  eq(table.concat(seq, ","), "a>b,b>c", "change listeners see nested transitions in order")
+  eq(nested:state(), "c", "and the nested transition took effect")
+
   -- several guarded transitions for one event: the first whose guard passes wins
   local multi = state_machine.new({
     initial = "idle",

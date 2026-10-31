@@ -61,6 +61,27 @@ return function(H)
   ok(not h2 and #errs2 == 1, "all handlers failing: not handled, errors returned")
   ok(not pcall(chain.add, chain, "bad", 5), "handler must be a function")
 
+  -- removing a handler while handling must not skip the next one
+  local visited = {}
+  local mutating = cor.new()
+  mutating:add("a", function()
+    visited[#visited + 1] = "a"
+    mutating:remove("a")
+  end)
+  mutating:add("b", function()
+    visited[#visited + 1] = "b"
+  end)
+  mutating:add("c", function()
+    visited[#visited + 1] = "c"
+    return true
+  end)
+  mutating:handle("x")
+  eq(
+    table.concat(visited, ","),
+    "a,b,c",
+    "handlers removed during handle() do not skip the next one"
+  )
+
   local seen
   cor
     .new()

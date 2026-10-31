@@ -34,6 +34,15 @@ return function(H)
   eq(#r2, 1, "a failing child does not stop the others")
   eq(e2[1], "x broke", "its error is returned")
 
+  local nested = composite.new({
+    leaf("p"),
+    composite.new({ leaf("q", true), leaf("r") }),
+  })
+  local rn, en = nested:call("refresh")
+  eq(rn[1], "p", "plain child result")
+  eq(rn[2][1], "r", "nested group result")
+  eq(en[1], "q broke", "an error inside a nested group reaches the top-level errors")
+
   local none = composite.new({ { other = true } })
   eq(#none:call("refresh"), 0, "children without the method are skipped")
 

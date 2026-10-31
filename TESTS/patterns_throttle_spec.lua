@@ -60,11 +60,23 @@ return function(H)
   f.call("y")
   f.flush()
   eq(table.concat(fl, ","), "x,y", "flush runs the pending call now")
-  f.call("z")
   f.cancel()
-  vim.wait(50, function()
+
+  -- cancel while calls are held inside a pause: they must never run
+  local held = {}
+  local c = throttle.new(function(x)
+    held[#held + 1] = x
+  end, 40)
+  c.call("lead")
+  c.call("held-1")
+  c.call("held-2")
+  c.cancel()
+  vim.wait(150, function()
     return false
   end)
-  eq(#fl, 3, "cancel drops the pending call (z ran as leading, nothing after)")
+  eq(table.concat(held, ","), "lead", "cancel drops the held calls (only the leading call ran)")
+  c.call("again")
+  eq(held[#held], "again", "after cancel the next call is leading again")
+  c.cancel()
   ok(true, "done")
 end

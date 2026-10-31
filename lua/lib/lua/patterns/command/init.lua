@@ -67,13 +67,15 @@ end
 ---Take the last command back. Returns its name or `nil` when there is nothing to undo.
 ---@return string|nil
 function H:undo()
-  local entry = table.remove(self.undo_stack)
+  local entry = self.undo_stack[#self.undo_stack]
   if not entry then
     return nil
   end
+  -- a raising undo leaves the entry on the undo stack, so history stays consistent
   if entry.cmd.undo then
     entry.cmd.undo(entry.state, unpack(entry.args, 1, entry.args.n))
   end
+  table.remove(self.undo_stack)
   self.redo_stack[#self.redo_stack + 1] = entry
   return entry.cmd.name
 end
@@ -81,11 +83,13 @@ end
 ---Run the last undone command again. Returns its name or `nil`.
 ---@return string|nil
 function H:redo()
-  local entry = table.remove(self.redo_stack)
+  local entry = self.redo_stack[#self.redo_stack]
   if not entry then
     return nil
   end
+  -- a raising run leaves the entry on the redo stack
   entry.state = entry.cmd.run(unpack(entry.args, 1, entry.args.n))
+  table.remove(self.redo_stack)
   self.undo_stack[#self.undo_stack + 1] = entry
   return entry.cmd.name
 end

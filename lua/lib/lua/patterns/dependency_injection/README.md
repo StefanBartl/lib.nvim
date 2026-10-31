@@ -43,3 +43,7 @@ test:value("config", { root = "/tmp" })
 ## Tests
 
 `TESTS/patterns_dependency_injection_spec.lua`: caching, transient, child overlay, cycles, failing factories.
+
+## Note on child containers
+
+A child resolves names it does not hold through its parent, and the parent's factories run against the parent. To change what a parent-provided service sees, provide that service again in the child (as the usage example does for `config` and `scanner`); overriding only `config` in the child does not rewire a `scanner` the parent already built.

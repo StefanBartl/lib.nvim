@@ -26,7 +26,7 @@ off()
 | --- | --- |
 | `new()` | an empty bus |
 | `b:on(topic, fn)` / `b:once(topic, fn)` | subscribe; return unsubscribe |
-| `b:emit(topic, ...)` | `called, errors`; a listener may unsubscribe during emit |
+| `b:emit(topic, ...)` | `called, errors`; a listener unsubscribed during the emit (also by a nested emit) is skipped; `"*"` listeners always get `(topic, ...)` |
 | `b:count(topic)` / `b:clear(topic?)` | inspect / drop |
 
 ## When it helps / when it does not (Lua view)

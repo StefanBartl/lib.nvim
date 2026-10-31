@@ -2,7 +2,7 @@
 --- Repository: hide storage behind a collection-like API.
 ---
 --- A repository sits on a store with four primitives: `get(id)`, `put(id, value)`, `delete(id)` and
---- `all()` (a list of `{ id, value }` or an `id -> value` table). Code works with `get`, `save`, `remove`,
+--- `all()` (a list of `{ id, value }` entries, in a stable order). Code works with `get`, `save`, `remove`,
 --- `find(predicate)`, `count()`; where the data lives (a table, a JSON file, `lib.nvim.store`) is the
 --- store's business. `repository.memory()` is an in-memory store for tests and small cases.
 ---

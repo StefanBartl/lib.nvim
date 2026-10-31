@@ -111,6 +111,9 @@ function SM:can(event)
 end
 
 ---Fire an event. Returns `true, new_state` or `false, reason`.
+---Order: `on_exit` of the old state, the transition `action`, the state switches, change listeners,
+---`on_enter` of the new state. A hook or action that raises propagates; the state only switches after
+---the action returned, but an `on_exit` that already ran is not undone.
 ---@param event string
 ---@param ... any # passed to the transition action
 ---@return boolean ok
@@ -129,16 +132,17 @@ function SM:fire(event, ...)
     t.action(self.ctx, from, to, ...)
   end
   self.current = to
-  local enter = (self.spec.on_enter or {})[to]
-  if enter then
-    enter(from, event, self.ctx)
-  end
+  -- listeners run before on_enter, so a fire() made inside on_enter reports its change after this one
   local snapshot = {}
   for i, l in ipairs(self.listeners) do
     snapshot[i] = l
   end
   for _, l in ipairs(snapshot) do
     pcall(l, to, from, event)
+  end
+  local enter = (self.spec.on_enter or {})[to]
+  if enter then
+    enter(from, event, self.ctx)
   end
   return true, to
 end

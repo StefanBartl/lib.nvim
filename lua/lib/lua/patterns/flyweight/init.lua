@@ -25,7 +25,11 @@ F.__index = F
 local function default_key(...)
   local parts = {}
   for i = 1, select("#", ...) do
-    parts[i] = tostring((select(i, ...)))
+    -- type tag and length prefix: get(1) and get("1"), get(nil) and get("nil"), get("a\31b") and
+    -- get("a", "b") must not collide
+    local v = (select(i, ...))
+    local s = tostring(v)
+    parts[i] = type(v):sub(1, 1) .. #s .. ":" .. s
   end
   return table.concat(parts, "\31")
 end

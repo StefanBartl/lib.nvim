@@ -38,6 +38,7 @@ function B:on(topic, fn)
   local entry = { fn = fn }
   list[#list + 1] = entry
   return function()
+    entry.removed = true
     for i, e in ipairs(list) do
       if e == entry then
         table.remove(list, i)
@@ -76,19 +77,22 @@ function B:emit(topic, ...)
       snapshot[i] = e
     end
     for _, e in ipairs(snapshot) do
-      called = called + 1
-      local ok, err
-      if with_topic then
-        ok, err = pcall(e.fn, topic, ...)
-      else
-        ok, err = pcall(e.fn, ...)
-      end
-      if not ok then
-        errors[#errors + 1] = err
+      -- a listener removed earlier in this emit (even by a nested emit) is not called any more
+      if not e.removed then
+        called = called + 1
+        local ok, err
+        if with_topic then
+          ok, err = pcall(e.fn, topic, ...)
+        else
+          ok, err = pcall(e.fn, ...)
+        end
+        if not ok then
+          errors[#errors + 1] = err
+        end
       end
     end
   end
-  run(self.topics[topic], false, ...)
+  run(self.topics[topic], topic == "*", ...)
   if topic ~= "*" then
     run(self.topics["*"], true, ...)
   end

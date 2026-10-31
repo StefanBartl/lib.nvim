@@ -30,7 +30,7 @@ end, {
 | `run(task, opts)` | `task(attempt, done)`; `opts`: `max_attempts` (5), `base_ms` (100), `factor` (2), `max_ms` (10000), `jitter`, `should_retry(err, attempt)`, `on_done(ok, res, attempts)`, `sleep(ms, cb)` |
 | `delay(attempt, opts)` | the wait after failed attempt `attempt` |
 
-A task that raises counts as a failure; a second `done` call is ignored.
+A task that raises counts as a failure; a second `done` call is ignored. A raising `should_retry` means "do not retry" (`on_done` still gets the failure); an error raised by `on_done` or `sleep` is re-raised to the caller, never swallowed.
 
 ## When it helps / when it does not (Lua view)
 

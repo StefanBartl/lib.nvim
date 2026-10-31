@@ -54,6 +54,47 @@ return function(H)
   bus:emit("self")
   eq(runs, 11, "unsubscribing during emit does not skip the next listener")
 
+  -- once must fire once even when an earlier listener emits the same topic again
+  local fresh = event_bus.new()
+  local o_runs = 0
+  local reentered = false
+  fresh:on("t", function()
+    if not reentered then
+      reentered = true
+      fresh:emit("t")
+    end
+  end)
+  fresh:once("t", function()
+    o_runs = o_runs + 1
+  end)
+  fresh:emit("t")
+  eq(o_runs, 1, "once fires once on a re-entrant emit")
+
+  -- a listener removed by an earlier listener in the same emit is not called
+  local kill = event_bus.new()
+  local seen_b = false
+  local off_b
+  kill:on("t", function()
+    off_b()
+  end)
+  off_b = kill:on("t", function()
+    seen_b = true
+  end)
+  kill:emit("t")
+  ok(not seen_b, "a listener removed during the emit is skipped")
+
+  -- the wildcard always receives the topic first, also when the emitted topic is "*"
+  local star = event_bus.new()
+  local star_args
+  star:on("*", function(...)
+    star_args = { ... }
+  end)
+  star:emit("*", "payload")
+  ok(
+    star_args[1] == "*" and star_args[2] == "payload",
+    "wildcard listeners get (topic, ...) always"
+  )
+
   eq(
     select(1, bus:emit("nobody")),
     1,

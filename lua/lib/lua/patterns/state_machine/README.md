@@ -31,7 +31,7 @@ sm:can("start")  --> false
 | Function | Does |
 | --- | --- |
 | `new(spec)` | `initial`, `transitions`, `on_enter`, `on_exit`, `ctx`; unknown states in hooks raise |
-| `sm:fire(event, ...)` | `true, new_state` or `false, reason`; order: exit, action, enter |
+| `sm:fire(event, ...)` | `true, new_state` or `false, reason`; order: exit, action, switch, change listeners, enter (a raising action leaves the state unchanged, an `on_exit` that already ran is not undone) |
 | `sm:can(event)` / `sm:is(s)` / `sm:state()` | inspect |
 | `sm:on_change(fn)` | subscribe `fn(new, old, event)`, returns unsubscribe |
 

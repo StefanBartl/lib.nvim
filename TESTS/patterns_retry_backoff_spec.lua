@@ -70,6 +70,32 @@ return function(H)
   })
   ok(not result[1] and result[2] == "task blew up", "a raising task counts as a failure")
 
+  -- an error of the completion path must neither hang the retry nor vanish
+  local done_called = false
+  retry.run(function(_, done)
+    done(false, "x")
+  end, {
+    max_attempts = 3,
+    sleep = sleep,
+    should_retry = function()
+      error("boom")
+    end,
+    on_done = function(o)
+      done_called = not o
+    end,
+  })
+  ok(done_called, "a raising should_retry means: do not retry, on_done still gets the failure")
+
+  local raised, rerr = pcall(retry.run, function(_, done)
+    done(true, 1)
+  end, {
+    sleep = sleep,
+    on_done = function()
+      error("on_done broke", 0)
+    end,
+  })
+  ok(not raised and rerr == "on_done broke", "an error raised by on_done is not swallowed")
+
   -- done called twice must not double-run
   local runs = 0
   retry.run(function(_, done)

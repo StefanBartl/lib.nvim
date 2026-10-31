@@ -24,7 +24,7 @@ chain:handle("a.lua") --> true, "lua file", "lua", {}
 | `new()` | empty chain |
 | `c:add(name, fn, opts)` | append (`opts.first = true`: prepend); same name replaces and moves to the end |
 | `c:remove(name)` / `c:names()` | manage / list |
-| `c:handle(request, ...)` | `handled, result, handler_name, errors` |
+| `c:handle(request, ...)` | `handled, result, handler_name, errors`; iterates a snapshot, so handlers added or removed during `handle` take effect for the next request |
 
 ## When it helps / when it does not (Lua view)
 

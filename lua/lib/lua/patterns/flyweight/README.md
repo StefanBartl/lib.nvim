@@ -7,7 +7,7 @@ Share identical immutable objects: `get(...)` returns the one instance per key.
 
 ## The pattern in one paragraph
 
-When very many objects are equal in their intrinsic state, keep one and hand it out by key. The factory runs once per key. The default key joins the arguments with a separator; `opts.key` overrides it; `opts.weak` lets unused instances be collected.
+When very many objects are equal in their intrinsic state, keep one and hand it out by key. The factory runs once per key. The default key tags each argument with its type and length (so `1` and `"1"`, `nil` and `"nil"` stay apart); `opts.key` overrides it; `opts.weak` lets unused instances be collected.
 
 ## Usage
 
