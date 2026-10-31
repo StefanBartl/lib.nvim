@@ -37,7 +37,7 @@ with worked examples.
   and the **`composer`** subsystem (the most widely-used module in the
   library — 30+ consuming plugins), plus `autocmd` (incl. `autocmd.dispatcher`),
   `map`, `dotrepeat`, `debounce`, `deps`, `treesitter`, `store`, `logger`, `progress`,
-  `harvest`, `git`, `net.curl`, `lua_ls`, `cache`, `core`, `normalize`,
+  `harvest`, `git`, `net.curl`, `net.github`, `lua_ls`, `cache`, `core`, `normalize`,
   `require`, `safe_api`, `system`, `token`, `neotree`.
 
 ## Conventions used throughout

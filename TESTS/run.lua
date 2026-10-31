@@ -197,6 +197,7 @@ local specs = {
   "git_remote_spec.lua",
   "curl_spec.lua",
   "curl_cached_spec.lua",
+  "net_github_spec.lua",
   "deps_spec.lua",
   "deps_project_spec.lua",
   "contextmenu_spec.lua",

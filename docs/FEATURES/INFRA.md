@@ -148,6 +148,16 @@ line instead of trusting the exit code.
 - **Module:** `lib.nvim.net.curl` (`fetch_raw`, `fetch_raw_blocking`,
   `fetch_json`, `fetch_json_blocking`)
 
+## GitHub REST API
+
+The shared GitHub client on top of `net.curl`: the GitHub headers, a bearer
+token kept off argv, conditional requests (`etag` -> `304`), the rate limit
+from the response headers, and one error contract for 4xx/5xx, `200` error
+bodies and an exhausted rate limit. `token` resolves a token from a variable
+the caller names, else `gh auth token` -- never `GITHUB_TOKEN` implicitly.
+
+- **Module:** `lib.nvim.net.github` (`request`, `request_blocking`, `token`)
+
 ## Config-boundary normalization and validation
 
 A strict coercion toolkit for the exact place a plugin's user-facing config

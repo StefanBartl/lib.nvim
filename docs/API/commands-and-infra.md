@@ -3,7 +3,7 @@
 Part of the [lib.nvim API reference](README.md). Covers `lib.nvim.bindings.usercmd`
 (including the `composer` subsystem), `autocmd`, `map`, `dotrepeat`,
 `debounce`, `hooks`, `deps`, `treesitter`, `store`, `logger`, `progress`, `harvest`,
-`git`, `net.curl`, `lua_ls`, `cache`, `core`, `normalize`, `require`,
+`git`, `net.curl`, `net.github`, `lua_ls`, `cache`, `core`, `normalize`, `require`,
 `safe_api`, `system`, `token`, and `neotree`.
 
 ---
@@ -723,6 +723,22 @@ M.fetch_raw(url, opts: Lib.Net.Curl.FetchOpts|nil, cb: fun(ok, response_or_err, 
 M.fetch_raw_blocking(url, opts?): boolean ok, response_or_err, raw_obj
 M.fetch_json(url, opts, cb: fun(ok, data_or_err, raw_obj))                                          -- async, JSON-decoded
 M.fetch_json_blocking(url, opts?): boolean ok, data_or_err, raw_obj
+```
+
+## `lib.nvim.net.github` (see README)
+
+GitHub REST API on top of `net.curl`: `Accept`/`X-GitHub-Api-Version` headers,
+bearer token off argv, `If-None-Match` from `opts.etag`. 304 is a result
+(`not_modified`); 4xx/5xx, a 200 `{message}` error body and an exhausted rate
+limit (the error says when it resets) are `nil, err`. `opts.transport` replaces
+the curl call (specs). `token` reads `opts.env_var`, then `gh auth token`;
+`GITHUB_TOKEN` only when named, and it is stripped from gh's environment.
+
+```
+M.request(path_or_url, opts: Lib.Net.Github.RequestOpts|nil, cb: fun(result|nil, err|nil))   -- async, cb on the main loop
+M.request_blocking(path_or_url, opts?): Lib.Net.Github.Response|nil, string|nil
+  -- Response = { status, etag, data, not_modified, rate_limit = { remaining, reset }, headers }
+M.token(opts?: { env_var?, timeout_ms?, runner? }): string|nil token, string source_or_reason
 ```
 
 ---
