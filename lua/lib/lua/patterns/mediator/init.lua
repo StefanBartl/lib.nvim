@@ -90,7 +90,7 @@ function D:broadcast(from, message, ...)
       reached = reached + 1
       local ok, err = pcall(comp.handle, from, message, ...)
       if not ok then
-        errors[#errors + 1] = err
+        errors[#errors + 1] = err == nil and "nil error" or err
       end
     end
   end

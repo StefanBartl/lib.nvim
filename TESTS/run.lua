@@ -198,6 +198,7 @@ local specs = {
   "patterns_reducer_spec.lua",
   "patterns_unit_of_work_spec.lua",
   "patterns_saga_spec.lua",
+  "patterns_hardening_spec.lua",
   "nvim_helpers_spec.lua",
   "window_spec.lua",
   "focus_helpers_spec.lua",

@@ -13,6 +13,7 @@
 ---@field destroy (fun(obj: any))|nil
 ---@field max integer
 ---@field idle any[]
+---@field is_idle table<any, boolean>
 ---@field created integer
 ---@field reused integer
 ---@field acquire fun(self: Lib.Patterns.ObjectPool): any

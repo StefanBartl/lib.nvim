@@ -7,7 +7,7 @@ A collection-like API (`get`, `save`, `remove`, `find`, `filter`, `count`) over 
 
 ## The pattern in one paragraph
 
-Code asks a repository for entries and never touches the storage. Any table with `get(id)`, `put(id, value)`, `delete(id)` and `all()` works as store, so the data can live in a table, a JSON file or `lib.nvim.store`, and tests use `memory()`.
+Code asks a repository for entries and never touches the storage. Any table with `get(id)`, `put(id, value)`, `delete(id)` and `all()` works as store (optional `count()` and `each(fn)`, where `fn(id, value)` returns true to stop, make `count`, `find` and `filter` skip the copy of the whole store; `memory()` has both), so the data can live in a table, a JSON file or `lib.nvim.store`, and tests use `memory()`.
 
 ## Usage
 

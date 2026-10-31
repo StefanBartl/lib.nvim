@@ -33,6 +33,9 @@ end
 ---@param opts Lib.Patterns.Throttle.Opts|nil
 ---@return Lib.Patterns.Throttle.Handle
 function M.new(fn, ms, opts)
+  if type(ms) ~= "number" or ms ~= ms or ms < 0 or ms == math.huge then
+    error("throttle.new: ms must be a finite number >= 0", 2)
+  end
   opts = opts or {}
   local leading = opts.leading ~= false
   local trailing = opts.trailing ~= false
@@ -74,9 +77,13 @@ function M.new(fn, ms, opts)
     if not timer then
       return
     end
-    timer:start(ms, 0, function()
+    local started = pcall(timer.start, timer, ms, 0, function()
       on_pause_end(my_gen)
     end)
+    if not started then
+      -- never keep a handle that never started: it would hold the throttle in "paused" forever
+      close_timer()
+    end
   end
 
   ---@param ... any

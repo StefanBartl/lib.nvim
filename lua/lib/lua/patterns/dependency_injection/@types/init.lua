@@ -4,6 +4,7 @@
 ---@class Lib.Patterns.Container
 ---@field entries table<string, table>
 ---@field cache table<string, any>
+---@field built table<string, boolean>
 ---@field parent Lib.Patterns.Container|nil
 ---@field resolving table<string, boolean>
 ---@field provide fun(self: Lib.Patterns.Container, name: string, factory: fun(c: Lib.Patterns.Container): any, opts: { transient: boolean|nil }|nil): Lib.Patterns.Container

@@ -38,6 +38,9 @@ function F:register(kind, ctor)
   if type(ctor) ~= "function" then
     error("factory_method.register: ctor must be a function", 2)
   end
+  if type(kind) ~= "string" then
+    error("factory_method.register: kind must be a string", 2)
+  end
   if not self.ctors[kind] then
     self.order[#self.order + 1] = kind
   end

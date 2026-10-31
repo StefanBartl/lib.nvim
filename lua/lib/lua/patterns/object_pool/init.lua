@@ -18,11 +18,13 @@ require("lib.lua.patterns.object_pool.@types")
 
 local M = {}
 
-local unpack = table.unpack or unpack
-
----`table.pack` is missing on plain LuaJIT.
-local function pack(...)
-  return { n = select("#", ...), ... }
+---Release `obj`, then return the results of the protected call or re-raise its error.
+local function finish_with(self, obj, ok, ...)
+  self:release(obj)
+  if not ok then
+    error((...), 0)
+  end
+  return ...
 end
 
 ---@class Lib.Patterns.ObjectPool
@@ -35,12 +37,20 @@ function M.new(opts)
   if type(opts) ~= "table" or type(opts.create) ~= "function" then
     error("object_pool.new: opts.create (function) is required", 2)
   end
+  local max = opts.max
+  if max == nil then
+    max = 16
+  end
+  if type(max) ~= "number" or max ~= max or max < 0 then
+    error("object_pool.new: opts.max must be a number >= 0", 2)
+  end
   return setmetatable({
     create = opts.create,
     reset = opts.reset,
     destroy = opts.destroy,
-    max = opts.max or 16,
+    max = math.floor(max),
     idle = {},
+    is_idle = {},
     created = 0,
     reused = 0,
   }, P)
@@ -50,17 +60,20 @@ end
 function P:acquire()
   local obj = table.remove(self.idle)
   if obj ~= nil then
+    self.is_idle[obj] = nil
     self.reused = self.reused + 1
     return obj
   end
+  local fresh = self.create()
   self.created = self.created + 1
-  return self.create()
+  return fresh
 end
 
 ---Return an object. It is reset and kept if there is room, otherwise destroyed.
 ---@param obj any
 function P:release(obj)
-  if obj == nil then
+  if obj == nil or self.is_idle[obj] then
+    -- nil, or an object that is already idle: handing it out twice would alias two users
     return
   end
   if #self.idle >= self.max then
@@ -79,6 +92,7 @@ function P:release(obj)
     end
   end
   self.idle[#self.idle + 1] = obj
+  self.is_idle[obj] = true
 end
 
 ---Acquire, run `fn(obj)`, release even if `fn` raises (the error is re-raised after the release).
@@ -86,12 +100,7 @@ end
 ---@return ...
 function P:with(fn)
   local obj = self:acquire()
-  local res = pack(pcall(fn, obj))
-  self:release(obj)
-  if not res[1] then
-    error(res[2], 0)
-  end
-  return unpack(res, 2, res.n)
+  return finish_with(self, obj, pcall(fn, obj))
 end
 
 ---Destroy every idle object.
@@ -102,6 +111,7 @@ function P:clear()
     end
   end
   self.idle = {}
+  self.is_idle = {}
 end
 
 ---@return { idle: integer, created: integer, reused: integer }

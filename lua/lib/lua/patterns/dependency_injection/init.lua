@@ -31,7 +31,7 @@ K.__index = K
 ---@param parent Lib.Patterns.Container|nil
 ---@return Lib.Patterns.Container
 function M.new(parent)
-  return setmetatable({ entries = {}, cache = {}, parent = parent, resolving = {} }, K)
+  return setmetatable({ entries = {}, cache = {}, built = {}, parent = parent, resolving = {} }, K)
 end
 
 ---@param name string
@@ -44,6 +44,7 @@ function K:provide(name, factory, opts)
   end
   self.entries[name] = { factory = factory, transient = opts and opts.transient or false }
   self.cache[name] = nil
+  self.built[name] = nil
   return self
 end
 
@@ -53,6 +54,7 @@ end
 function K:value(name, value)
   self.entries[name] = { value = value, is_value = true }
   self.cache[name] = nil
+  self.built[name] = nil
   return self
 end
 
@@ -75,7 +77,7 @@ function K:resolve(name)
   if entry.is_value then
     return entry.value
   end
-  if not entry.transient and self.cache[name] ~= nil then
+  if not entry.transient and self.built[name] then
     return self.cache[name]
   end
   if self.resolving[name] then
@@ -89,6 +91,7 @@ function K:resolve(name)
   end
   if not entry.transient then
     self.cache[name] = built
+    self.built[name] = true
   end
   return built
 end

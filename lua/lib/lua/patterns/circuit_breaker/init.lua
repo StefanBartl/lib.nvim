@@ -33,9 +33,19 @@ B.__index = B
 ---@return Lib.Patterns.CircuitBreaker
 function M.new(opts)
   opts = opts or {}
+  local function number(key, default, min)
+    local v = opts[key]
+    if v == nil then
+      return default
+    end
+    if type(v) ~= "number" or v ~= v or v < min then
+      error(("circuit_breaker.new: opts.%s must be a number >= %s"):format(key, min), 3)
+    end
+    return v
+  end
   return setmetatable({
-    threshold = opts.threshold or 5,
-    reset_ms = opts.reset_ms or 30000,
+    threshold = number("threshold", 5, 1),
+    reset_ms = number("reset_ms", 30000, 0),
     now = opts.now or default_now,
     on_change = opts.on_change,
     failures = 0,

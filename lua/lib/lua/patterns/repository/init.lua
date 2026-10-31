@@ -23,32 +23,72 @@ local M = {}
 ---An in-memory store.
 ---@return Lib.Patterns.Store
 function M.memory()
-  local data, order = {}, {}
+  local data, order, pos = {}, {}, {}
+  local live, dead = 0, 0
+  -- deleting leaves a hole (false) in order; the holes are squeezed out when they are half of the list
+  local function compact()
+    local j = 0
+    for k = 1, #order do
+      local id = order[k]
+      if id ~= false then
+        j = j + 1
+        order[j] = id
+        pos[id] = j
+      end
+    end
+    for k = j + 1, #order do
+      order[k] = nil
+    end
+    dead = 0
+  end
   return {
     get = function(id)
       return data[id]
     end,
+    count = function()
+      return live
+    end,
+    each = function(fn)
+      for k = 1, #order do
+        local id = order[k]
+        if id ~= false and fn(id, data[id]) then
+          return
+        end
+      end
+    end,
     put = function(id, value)
+      if id == nil or id ~= id then
+        error("repository.memory: id must not be nil or NaN", 2)
+      end
+      if value == nil then
+        error("repository.memory: value must not be nil (use delete)", 2)
+      end
       if data[id] == nil then
         order[#order + 1] = id
+        pos[id] = #order
+        live = live + 1
       end
       data[id] = value
     end,
     delete = function(id)
       if data[id] ~= nil then
         data[id] = nil
-        for i, k in ipairs(order) do
-          if k == id then
-            table.remove(order, i)
-            break
-          end
+        order[pos[id]] = false
+        pos[id] = nil
+        live = live - 1
+        dead = dead + 1
+        if dead * 2 > #order then
+          compact()
         end
       end
     end,
     all = function()
       local out = {}
-      for i, id in ipairs(order) do
-        out[i] = { id = id, value = data[id] }
+      for k = 1, #order do
+        local id = order[k]
+        if id ~= false then
+          out[#out + 1] = { id = id, value = data[id] }
+        end
       end
       return out
     end,
@@ -99,7 +139,18 @@ end
 ---@param predicate fun(value: any, id: any): boolean
 ---@return { id: any, value: any }|nil
 function R:find(predicate)
-  for _, e in ipairs(self.store.all()) do
+  local store = self.store
+  if store.each then
+    local found
+    store.each(function(id, value)
+      if predicate(value, id) then
+        found = { id = id, value = value }
+        return true
+      end
+    end)
+    return found
+  end
+  for _, e in ipairs(store.all()) do
     if predicate(e.value, e.id) then
       return e
     end
@@ -112,7 +163,16 @@ end
 ---@return { id: any, value: any }[]
 function R:filter(predicate)
   local out = {}
-  for _, e in ipairs(self.store.all()) do
+  local store = self.store
+  if store.each then
+    store.each(function(id, value)
+      if predicate(value, id) then
+        out[#out + 1] = { id = id, value = value }
+      end
+    end)
+    return out
+  end
+  for _, e in ipairs(store.all()) do
     if predicate(e.value, e.id) then
       out[#out + 1] = e
     end
@@ -122,6 +182,9 @@ end
 
 ---@return integer
 function R:count()
+  if self.store.count then
+    return self.store.count()
+  end
   return #self.store.all()
 end
 

@@ -26,17 +26,35 @@ local M = {}
 function M.delay(attempt, opts)
   opts = opts or {}
   local d = (opts.base_ms or 100) * (opts.factor or 2) ^ (attempt - 1)
+  if d ~= d then
+    d = 0 -- math.min(NaN, cap) would return the cap
+  end
   d = math.min(d, opts.max_ms or 10000)
   if opts.jitter then
     d = d * (0.5 + math.random() * 0.5)
   end
+  -- a negative or NaN delay would never fire; a retry must always be scheduled
+  if d ~= d or d < 0 then
+    d = 0
+  end
   return d
+end
+
+local function check_number(opts, key, min)
+  local v = opts[key]
+  if v ~= nil and (type(v) ~= "number" or v ~= v or v < min) then
+    error(("retry_backoff.run: opts.%s must be a number >= %s"):format(key, min), 3)
+  end
 end
 
 ---@param task fun(attempt: integer, done: fun(ok: boolean, value_or_err: any))
 ---@param opts Lib.Patterns.RetryBackoff.Opts|nil
 function M.run(task, opts)
   opts = opts or {}
+  check_number(opts, "max_attempts", 1)
+  check_number(opts, "base_ms", 0)
+  check_number(opts, "factor", 0)
+  check_number(opts, "max_ms", 0)
   local max = opts.max_attempts or 5
   local sleep = opts.sleep or function(ms, cb)
     vim.defer_fn(cb, ms)
@@ -65,9 +83,13 @@ function M.run(task, opts)
       if not retry_ok then
         return finish(false, res, n)
       end
-      sleep(M.delay(n, opts), function()
+      -- a sleep that cannot be scheduled ends the retry with that error instead of stalling
+      local sok, serr = pcall(sleep, M.delay(n, opts), function()
         attempt_n(n + 1)
       end)
+      if not sok then
+        return finish(false, serr, n)
+      end
     end
     local function done(ok, res)
       if settled then

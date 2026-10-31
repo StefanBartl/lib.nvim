@@ -77,9 +77,11 @@ end
 function U:commit()
   local applied = {}
   for i, op in ipairs(self.queue) do
-    local before = self.store.get(op.id)
+    local gok, before = pcall(self.store.get, op.id)
     local ok, err
-    if op.kind == "put" then
+    if not gok then
+      ok, err = false, before
+    elseif op.kind == "put" then
       ok, err = pcall(self.store.put, op.id, op.value)
     else
       ok, err = pcall(self.store.delete, op.id)

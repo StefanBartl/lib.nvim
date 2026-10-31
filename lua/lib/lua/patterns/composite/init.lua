@@ -61,7 +61,12 @@ end
 ---@return any[] errors
 function C:call(method, ...)
   local results, errors = {}, {}
-  for _, child in ipairs(self.items) do
+  -- iterate a snapshot: a child may add or remove children (itself included) while being called
+  local snapshot = {}
+  for i, c in ipairs(self.items) do
+    snapshot[i] = c
+  end
+  for _, child in ipairs(snapshot) do
     local group = type(child) == "table" and child.is_composite
     if group or (type(child) == "table" and type(child[method]) == "function") then
       local ok, res, child_errors

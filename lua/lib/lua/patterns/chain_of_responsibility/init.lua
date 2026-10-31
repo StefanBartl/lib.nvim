@@ -22,7 +22,22 @@ C.__index = C
 
 ---@return Lib.Patterns.Chain
 function M.new()
-  return setmetatable({ handlers = {} }, C)
+  return setmetatable({ handlers = {}, index = {}, handling = 0 }, C)
+end
+
+---The handler list a mutation may change. While a `handle` is walking the list it keeps its own
+---reference, so a mutation made by a handler works on a copy (handle itself never copies).
+---@param self Lib.Patterns.Chain
+---@return table[]
+local function writable(self)
+  if self.handling > 0 then
+    local copy = {}
+    for i, h in ipairs(self.handlers) do
+      copy[i] = h
+    end
+    self.handlers = copy
+  end
+  return self.handlers
 end
 
 ---Append a handler; `opts.first = true` puts it at the front. A handler with the same name is replaced.
@@ -34,22 +49,31 @@ function C:add(name, fn, opts)
   if type(fn) ~= "function" then
     error("chain_of_responsibility.add: handler must be a function", 2)
   end
-  self:remove(name)
+  if self.index[name] then
+    self:remove(name)
+  end
+  local handlers = writable(self)
   local entry = { name = name, fn = fn }
   if opts and opts.first then
-    table.insert(self.handlers, 1, entry)
+    table.insert(handlers, 1, entry)
   else
-    self.handlers[#self.handlers + 1] = entry
+    handlers[#handlers + 1] = entry
   end
+  self.index[name] = true
   return self
 end
 
 ---@param name string
 ---@return boolean
 function C:remove(name)
-  for i, h in ipairs(self.handlers) do
+  if not self.index[name] then
+    return false
+  end
+  local handlers = writable(self)
+  for i, h in ipairs(handlers) do
     if h.name == name then
-      table.remove(self.handlers, i)
+      table.remove(handlers, i)
+      self.index[name] = nil
       return true
     end
   end
@@ -73,21 +97,23 @@ end
 ---@return string|nil handler_name
 ---@return any[] errors
 function C:handle(request, ...)
-  local errors = {}
-  -- iterate a snapshot: a handler may add or remove handlers while the request is being handled
-  local snapshot = {}
-  for i, h in ipairs(self.handlers) do
-    snapshot[i] = h
-  end
-  for _, h in ipairs(snapshot) do
+  local errors
+  -- no copy: the list this call walks is never mutated in place while handling > 0 (see writable)
+  local handlers = self.handlers
+  self.handling = self.handling + 1
+  for i = 1, #handlers do
+    local h = handlers[i]
     local ok, handled, result = pcall(h.fn, request, ...)
     if not ok then
-      errors[#errors + 1] = handled
+      errors = errors or {}
+      errors[#errors + 1] = handled == nil and "nil error" or handled
     elseif handled then
-      return true, result, h.name, errors
+      self.handling = self.handling - 1
+      return true, result, h.name, errors or {}
     end
   end
-  return false, nil, nil, errors
+  self.handling = self.handling - 1
+  return false, nil, nil, errors or {}
 end
 
 return M

@@ -45,17 +45,38 @@ end
 ---@return Lib.Patterns.Iterator
 function M.range(first, last, step)
   step = step or 1
+  for _, v in ipairs({ first, last, step }) do
+    if type(v) ~= "number" or v ~= v or v == math.huge or v == -math.huge then
+      error("iterator.range: first, last and step must be finite numbers", 2)
+    end
+  end
   if step == 0 then
     error("iterator.range: step must not be 0", 2)
   end
-  local cur = first - step
+  -- the number of values is fixed up front and each value is first + i * step: summing a float step
+  -- drifts (0.1 + 0.1 + 0.1 ~= 0.3) and at 2^53 `cur + 1 == cur` would never end
+  local count = math.floor((last - first) / step + 1e-9) + 1
+  local i = -1
   return M.from_fn(function()
-    cur = cur + step
-    if (step > 0 and cur > last) or (step < 0 and cur < last) then
+    i = i + 1
+    if i >= count then
       return nil
     end
-    return cur
+    return first + i * step
   end)
+end
+
+---@param n any
+---@param name string
+---@return integer
+local function count_arg(n, name)
+  if type(n) ~= "number" or n ~= n then
+    error(("iterator.%s: n must be a number"):format(name), 3)
+  end
+  if n < 0 then
+    return 0
+  end
+  return math.floor(n)
 end
 
 ---The next value or `nil`.
@@ -115,6 +136,7 @@ end
 ---@param n integer
 ---@return Lib.Patterns.Iterator
 function I:take(n)
+  n = count_arg(n, "take")
   local taken = 0
   return M.from_fn(function()
     if taken >= n then
@@ -128,6 +150,7 @@ end
 ---@param n integer
 ---@return Lib.Patterns.Iterator
 function I:drop(n)
+  n = count_arg(n, "drop")
   local dropped = false
   return M.from_fn(function()
     if not dropped then

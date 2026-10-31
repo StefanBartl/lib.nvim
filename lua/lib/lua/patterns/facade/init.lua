@@ -27,6 +27,20 @@ function M.new(spec)
   if spec.names ~= nil or spec.loaded ~= nil then
     error("facade.new: 'names' and 'loaded' are reserved entry names", 2)
   end
+  for name, entry in pairs(spec) do
+    if type(entry) ~= "function" then
+      if type(entry) ~= "string" or entry == "" then
+        error(
+          ("facade.new: entry %q must be a function or a module path string"):format(tostring(name)),
+          2
+        )
+      end
+      local _, colons = entry:gsub(":", "")
+      if colons > 1 then
+        error(("facade.new: entry %q: use 'module' or 'module:function'"):format(tostring(name)), 2)
+      end
+    end
+  end
   local cache = {}
   local api = {}
 
@@ -37,7 +51,11 @@ function M.new(spec)
     end
     local mod, fn = entry:match("^([^:]+):(.+)$")
     if mod then
-      return require(mod)[fn]
+      local target = require(mod)[fn]
+      if target == nil then
+        error(("facade: module %q has no %q"):format(mod, fn), 0)
+      end
+      return target
     end
     return require(entry)
   end

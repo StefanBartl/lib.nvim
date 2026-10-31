@@ -131,6 +131,12 @@ function SM:fire(event, ...)
   if t.action then
     t.action(self.ctx, from, to, ...)
   end
+  if self.current ~= from then
+    error(
+      "state_machine: the state changed during the transition (fire() inside on_exit or an action is not allowed, use on_enter)",
+      2
+    )
+  end
   self.current = to
   -- listeners run before on_enter, so a fire() made inside on_enter reports its change after this one
   local snapshot = {}

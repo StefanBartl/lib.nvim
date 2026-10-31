@@ -53,9 +53,8 @@ end
 function M.after(hook)
   return function(fn)
     return function(...)
-      local res = pack(...)
       local out = pack(fn(...))
-      hook(out, unpack(res, 1, res.n))
+      hook(out, ...)
       return unpack(out, 1, out.n)
     end
   end
@@ -88,7 +87,8 @@ function M.timed(sink, clock)
     return function(...)
       local t0 = clock()
       local out = pack(pcall(fn, ...))
-      sink((clock() - t0) * 1000, ...)
+      -- a failing sink must never replace the result or the original error
+      pcall(sink, (clock() - t0) * 1000, ...)
       if not out[1] then
         error(out[2], 0)
       end

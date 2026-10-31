@@ -36,8 +36,12 @@ end
 
 local function merge(into, from)
   for k, v in pairs(from) do
-    if type(v) == "table" and type(into[k]) == "table" then
-      merge(into[k], v)
+    -- rawget: an __index on the copy's metatable must not hand out a table shared with other objects
+    local base = rawget(into, k)
+    if type(v) == "table" and type(base) == "table" then
+      -- copy before merging: the nested table may be aliased elsewhere in the copy
+      local own = M.deepcopy(base)
+      into[k] = merge(own, v)
     else
       into[k] = M.deepcopy(v)
     end

@@ -2,7 +2,7 @@
 ---@module 'lib.lua.patterns.event_bus.@types'
 
 ---@class Lib.Patterns.EventBus
----@field topics table<string, { fn: function }[]>
+---@field topics table<string, { items: table[], live: integer, dead: integer, emitting: integer }>
 ---@field on fun(self: Lib.Patterns.EventBus, topic: string, fn: function): fun()
 ---@field once fun(self: Lib.Patterns.EventBus, topic: string, fn: function): fun()
 ---@field emit fun(self: Lib.Patterns.EventBus, topic: string, ...: any): integer, any[]

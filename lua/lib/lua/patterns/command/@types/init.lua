@@ -8,7 +8,9 @@
 
 ---@class Lib.Patterns.CommandHistory
 ---@field limit integer
----@field undo_stack table[]
+---@field undo_stack table<integer, table>
+---@field first integer
+---@field last integer
 ---@field redo_stack table[]
 ---@field run fun(self: Lib.Patterns.CommandHistory, cmd: Lib.Patterns.Command, ...: any): any
 ---@field can_undo fun(self: Lib.Patterns.CommandHistory): boolean

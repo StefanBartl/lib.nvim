@@ -39,7 +39,12 @@ function M.new(families)
       keys[#keys + 1] = product
     end
     table.sort(keys)
-    local sig = table.concat(keys, ",")
+    -- length-prefixed join: product names containing "," cannot make two different sets look equal
+    local parts = {}
+    for i, k in ipairs(keys) do
+      parts[i] = #k .. ":" .. k
+    end
+    local sig = table.concat(parts, ",")
     if products == nil then
       products = sig
     elseif products ~= sig then
