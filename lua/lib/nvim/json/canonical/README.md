@@ -21,8 +21,11 @@ does, cuts a float to 16 digits and is only sometimes an error on `NaN`.
   own bytewise comparator (`bytes_less`) and LuaJIT output is unchanged. An
   object that may be empty is made with `object({})`; an array that may be empty
   is just `{}` (or `array({})`). `vim.NIL` is `null`. A mark is kept beside the
-  table (a weak-keyed set), not as its metatable: `object(instance)` leaves a
-  class instance and its `__index` as they were. The last mark wins.
+  table (a weak-keyed set): `object(instance)` leaves a class instance and its
+  `__index` as they were. A plain table (no metatable) also gets the mark as its
+  metatable, so a `vim.deepcopy` of it keeps the mark (`{}` stays `{}`); a copy
+  of a table with a foreign metatable (a class instance, `array(vim.empty_dict())`)
+  loses the mark and must be marked again. The last mark wins.
 - Neovim's own empty-object marker counts as an object: `vim.empty_dict()` and
   every `{}` that `vim.json.decode` returns are written as `{}`, so decode
   followed by encode keeps `{}` and `[]` apart. `array(vim.empty_dict())` is
@@ -75,8 +78,8 @@ local entries = json.memo(big_list)              -- must not change afterwards
 | Function | Meaning |
 |---|---|
 | `encode(value, opts?)` | The canonical text. `opts.indent` (spaces per level) gives the readable form. Raises on a value JSON cannot hold. |
-| `object(t?)` | Mark `t` as an object even when empty. `t` is handed back unchanged (its metatable stays). |
-| `array(t?)` | Mark `t` as an array even when empty (the default for an empty table). `t` is handed back unchanged. |
+| `object(t?)` | Mark `t` as an object even when empty and hand it back. A foreign metatable stays; a table without one gets the mark as its metatable (kept by `vim.deepcopy`). |
+| `array(t?)` | Mark `t` as an array even when empty (the default for an empty table) and hand it back; metatable as for `object`. |
 | `memo(t)` | Remember the compact text of `t`; the readable form ignores the mark. |
 | `bytes_less(a, b)` | `a < b` by byte value, never by the locale. For `table.sort` of a list whose order is hashed (`contract.doc`'s `rev_of` uses it). |
 | `scrub_utf8(s)` | `s` as `encode` writes it: valid UTF-8, every bad byte (overlong form, surrogate, value above U+10FFFF) replaced by U+FFFD. `scrub_utf8(s) ~= s` says that `s` is not valid UTF-8 (`contract.ops.has_control` uses it). |

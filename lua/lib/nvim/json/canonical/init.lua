@@ -10,7 +10,8 @@
 --- time. A document that is hashed (`digest`, `etag`, golden files) needs a writer with rules:
 ---
 ---  - object keys sorted by byte value (on plain Lua 5.1 too, where the language's own `<` follows the locale); an
----    object that may be empty is made with `M.object({})` (a mark beside the table, its metatable is not touched),
+---    object that may be empty is made with `M.object({})` (a mark beside the table; a foreign metatable is not
+---    touched, a plain table also gets the mark as its metatable so that `vim.deepcopy` keeps it),
 ---    an array that may be empty is just `{}` (the default for an empty table) or `M.array({})`; `vim.NIL` is `null`;
 ---    Neovim's own empty-object marker (`vim.empty_dict()`, and every `{}` that `vim.json.decode` returns) counts as
 ---    an object, so decode followed by encode keeps `{}` and `[]` apart (a deliberate addition to `tasks_nvim.json`,
@@ -32,10 +33,28 @@ require("lib.nvim.json.canonical.@types")
 local M = {}
 
 ---What `M.object` / `M.array` made of a table: a JSON object or array even when it is empty. Kept beside the table
----(weak keys: a table that goes away takes its mark with it), never as its metatable: a class instance keeps its
----`__index`, and marking it changes nothing about it but how it is written.
+---(weak keys: a table that goes away takes its mark with it), so a class instance keeps its metatable and its
+---`__index`: marking it changes nothing about it but how it is written.
 ---@type table<table, "object"|"array">
 local marks = setmetatable({}, { __mode = "k" })
+
+---The same mark as a metatable, for a plain table (one with no metatable, or with one of these two): `vim.deepcopy`
+---copies a metatable but not the weak mark, so a copy of `object({})` is still written `{}`. A table with a foreign
+---metatable (a class instance, `vim.empty_dict()`) is never given one; its copy keeps only what its own metatable says.
+local OBJECT = { "lib.nvim.json.canonical.object" }
+local ARRAY = { "lib.nvim.json.canonical.array" }
+
+---@param t table
+---@param kind "object"|"array"
+---@return table
+local function set_mark(t, kind)
+  marks[t] = kind
+  local mt = getmetatable(t)
+  if mt == nil or mt == OBJECT or mt == ARRAY then
+    setmetatable(t, kind == "object" and OBJECT or ARRAY)
+  end
+  return t
+end
 
 ---Neovim's own empty-object marker: the metatable of `vim.empty_dict()` and of every `{}` that `vim.json.decode`
 ---returns. `M.array` still wins over it (a mark is asked first).
@@ -64,24 +83,21 @@ end
 ---before a longer one it is a prefix of. For every list of strings whose order ends up in a hash.
 M.bytes_less = bytes_less
 
----A table that is an OBJECT, empty or not. The table itself is not changed (its metatable stays); the last mark wins.
+---A table that is an OBJECT, empty or not. A foreign metatable stays; a plain table gets the mark as its metatable as
+---well (so `vim.deepcopy` keeps it). The last mark wins.
 ---@generic T: table
 ---@param t? T
 ---@return T
 function M.object(t)
-  t = t or {}
-  marks[t] = "object"
-  return t
+  return set_mark(t or {}, "object")
 end
 
----A table that is an ARRAY, empty or not (an empty unmarked table is one too). The table itself is not changed.
+---A table that is an ARRAY, empty or not (an empty unmarked table is one too). A foreign metatable stays, as above.
 ---@generic T: table
 ---@param t? T
 ---@return T
 function M.array(t)
-  t = t or {}
-  marks[t] = "array"
-  return t
+  return set_mark(t or {}, "array")
 end
 
 ---Tables whose compact text is remembered (`M.memo`). Weak: a table that goes away takes its text with it.
@@ -290,7 +306,8 @@ end
 ---@return string[]|integer keys  # the sorted keys of an object as they are written, the length of a list
 ---@return table<string, string>|nil source  # written key -> key of `t`, for the keys that are not valid UTF-8
 local function shape(t, where, depth)
-  local mark = marks[t]
+  local mt = getmetatable(t)
+  local mark = marks[t] or (mt == OBJECT and "object") or (mt == ARRAY and "array") or nil
   local count, max, strings = 0, 0, 0
   local keys, source = {}, nil
   for k in pairs(t) do
@@ -326,7 +343,7 @@ local function shape(t, where, depth)
       error(("json: %s has a key of type %s"):format(where(depth), type(k)), 0)
     end
   end
-  if mark == "object" or (mark ~= "array" and (getmetatable(t) == EMPTY_DICT or strings > 0)) then
+  if mark == "object" or (mark ~= "array" and (mt == EMPTY_DICT or strings > 0)) then
     if count ~= strings then
       error(("json: %s mixes list and object keys"):format(where(depth)), 0)
     end

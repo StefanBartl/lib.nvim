@@ -121,6 +121,24 @@ return function(H)
     "the empty-dict marker stays as well"
   )
 
+  -- ── a copy keeps the mark of a plain table: vim.deepcopy copies the metatable, not the weak mark ──
+  eq(
+    json.encode(vim.deepcopy(json.object({}))),
+    "{}",
+    "a copy of an empty object is still an object"
+  )
+  eq(
+    json.encode(vim.deepcopy({ a = json.object({}), b = json.array({}) })),
+    '{"a":{},"b":[]}',
+    "and so is a marked table inside a copied document"
+  )
+  eq(json.encode(vim.deepcopy(json.array(json.object({})))), "[]", "the copy keeps the last mark")
+  eq(
+    json.encode(vim.deepcopy(json.object(setmetatable({}, Class)))),
+    "[]",
+    "a class instance is never given a metatable, so its copy is unmarked (mark it again)"
+  )
+
   -- ── keys that are not valid UTF-8 are written repaired; two keys that would read the same are an error ──
   eq(
     json.encode({ ["\255"] = 1, ["\239\191\189x"] = 2 }),
