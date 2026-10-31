@@ -729,8 +729,9 @@ M.fetch_json_blocking(url, opts?): boolean ok, data_or_err, raw_obj
 
 GitHub REST API on top of `net.curl`: `Accept`/`X-GitHub-Api-Version` headers,
 bearer token off argv, `If-None-Match` from `opts.etag`. 304 is a result
-(`not_modified`); 4xx/5xx, a 200 `{message}` error body and an exhausted rate
-limit (the error says when it resets) are `nil, err`. `opts.transport` replaces
+(`not_modified`); any other 3xx, 4xx/5xx, a 200 `{message}` error body and an exhausted rate
+limit (the error says when it resets) are `nil, err`; `cb` always runs once. The token
+goes only to `api_base`'s origin, never over plain http off loopback. `opts.transport` replaces
 the curl call (specs). `token` reads `opts.env_var`, then `gh auth token`;
 `GITHUB_TOKEN` only when named, and it is stripped from gh's environment.
 

@@ -138,6 +138,31 @@ return function(H)
     )
   end
 
+  -- 3xx other than 304: curl follows no redirect, so a renamed repository's
+  -- 301 `{message, url}` object is an error, never data.
+  do
+    local res, err = github.request_blocking("/repos/old/name", {
+      transport = fake(
+        response(
+          301,
+          { location = "https://api.github.com/repositories/42" },
+          '{"message":"Moved Permanently","url":"https://api.github.com/repositories/42","documentation_url":"d"}'
+        )
+      ),
+    })
+    eq(res, nil, "github: a 301 is no result")
+    eq(
+      err,
+      "GitHub API error: HTTP 301: Moved Permanently (location: https://api.github.com/repositories/42)",
+      "github: a 301 names status, message and location"
+    )
+
+    local raw = response(302)
+    raw.status_text = "Found"
+    local _, err2 = github.request_blocking("/x", { transport = fake(raw) })
+    eq(err2, "GitHub API error: HTTP 302: Found", "github: a bodyless 3xx names the reason phrase")
+  end
+
   -- 403 with an exhausted rate limit: an error that says when it resets.
   do
     local reset = os.time() + 600
@@ -219,6 +244,135 @@ return function(H)
       "GitHub API error: HTTP 500: boom",
       "github.request: errors delivered as err"
     )
+  end
+
+  ---Run `github.request` and wait for its callback.
+  ---@return table|nil got `{ res, err, calls }`, nil when cb never ran
+  local function request_and_wait(path, opts)
+    local got
+    local ok_call, call_err = pcall(github.request, path, opts, function(res, err)
+      got = got or { calls = 0 }
+      got.res, got.err, got.calls = res, err, got.calls + 1
+    end)
+    ok(ok_call, "github.request: does not throw: " .. tostring(call_err))
+    vim.wait(1000, function()
+      return got ~= nil
+    end, 5)
+    vim.wait(20)
+    return got
+  end
+
+  -- A transport that throws synchronously: an error, never a throw, cb once.
+  do
+    local function throwing()
+      error("ENOENT: no such file or directory (cmd): 'curl'")
+    end
+    local res, err = github.request_blocking("/x", { transport = throwing })
+    eq(res, nil, "github: a throwing transport is no result")
+    ok(
+      err and err:find("^GitHub request failed: .*ENOENT"),
+      "github: ... but a request error: " .. tostring(err)
+    )
+
+    local got = request_and_wait("/x", { transport = throwing })
+    ok(
+      got and got.err and got.err:find("^GitHub request failed: .*ENOENT"),
+      "github.request: ditto"
+    )
+    eq(got and got.calls, 1, "github.request: cb runs exactly once")
+
+    -- Answering, then throwing: the answer counts, cb still runs once.
+    local got2 = request_and_wait("/x", {
+      transport = function(_, _, done)
+        done(true, response(200, {}, '{"a":2}'))
+        error("late")
+      end,
+    })
+    eq(got2 and got2.res and got2.res.data.a, 2, "github.request: an answer before a throw wins")
+    eq(got2 and got2.calls, 1, "github.request: ... and cb runs once")
+  end
+
+  -- curl itself throwing (no curl on PATH): the default path reports it too.
+  do
+    local curl = require("lib.nvim.net.curl")
+    local orig_raw, orig_blocking = curl.fetch_raw, curl.fetch_raw_blocking
+    curl.fetch_raw = function()
+      error("ENOENT: curl", 0)
+    end
+    curl.fetch_raw_blocking = curl.fetch_raw
+    local success, failure = pcall(function()
+      local _, err = github.request_blocking("/x", {})
+      eq(err, "GitHub request failed: " .. "ENOENT: curl", "github (curl): a throw is an error")
+      local got = request_and_wait("/x", {})
+      ok(got and got.err and got.err:find("ENOENT: curl", 1, true), "github.request (curl): ditto")
+    end)
+    curl.fetch_raw, curl.fetch_raw_blocking = orig_raw, orig_blocking
+    if not success then
+      error(failure, 0)
+    end
+  end
+
+  -- A malformed response (no status) reaches cb as an error, not a throw in
+  -- the scheduled callback that would leave cb unanswered.
+  do
+    local got = request_and_wait("/x", { transport = fake({ headers = {}, body = "" }) })
+    ok(
+      got and got.err and got.err:find("^GitHub request failed: "),
+      "github.request: a response without status is an error: " .. vim.inspect(got)
+    )
+    local _, err = github.request_blocking("/x", { transport = fake({ headers = {}, body = "" }) })
+    ok(err and err:find("^GitHub request failed: "), "github: ditto, blocking")
+  end
+
+  -- The token goes only to the API's own origin, never over plain http.
+  do
+    local transport, seen = fake(response(200, {}, "{}"))
+    github.request_blocking(
+      "https://api.github.com/x?page=2",
+      { token = "t", transport = transport }
+    )
+    eq(seen.opts.bearer_token, "t", "github: same-origin absolute URL carries the token")
+
+    for _, url in ipairs({
+      "https://evil.example/x",
+      "http://api.github.com/x",
+      "https://api.github.com:8443/x",
+      "https://api.github.com.evil.example/x",
+      "https://api.github.com@evil.example/x",
+    }) do
+      seen.opts = nil
+      local res = github.request_blocking(url, { token = "t", transport = transport })
+      ok(res, "github: a foreign URL is still requested: " .. url)
+      eq(seen.opts and seen.opts.bearer_token, nil, "github: ... but without the token: " .. url)
+    end
+
+    seen.url = nil
+    local res, err = github.request_blocking("/x", {
+      api_base = "http://ghe.example",
+      token = "t",
+      transport = transport,
+    })
+    eq(res, nil, "github: no token over plain http off loopback")
+    eq(
+      err,
+      "GitHub request refused: the token is never sent over http to ghe.example",
+      "github: ... the error says why"
+    )
+    eq(seen.url, nil, "github: ... and nothing is sent")
+    local got = request_and_wait("/x", {
+      api_base = "http://ghe.example",
+      token = "t",
+      transport = transport,
+    })
+    eq(got and got.err, err, "github.request: ditto, through cb")
+
+    local res2 = github.request_blocking("/x", {
+      api_base = "http://localhost:8080",
+      token = "t",
+      transport = transport,
+    })
+    ok(res2, "github: plain http to loopback is fine")
+    eq(seen.opts.bearer_token, "t", "github: ... and carries the token")
   end
 
   -- Without a transport: real curl against a local socket (`api_base`), never
@@ -352,6 +506,20 @@ return function(H)
     eq(tok2, "broad-actions-token", "github.token: GITHUB_TOKEN only when the caller names it")
     eq(src2, "env:GITHUB_TOKEN", "github.token: ... source named")
   end)
+
+  -- Windows: names are case-insensitive and gh reads any spelling; pinned
+  -- that `environ()` uppercases them, so `Github_Token` goes too.
+  if require("lib.nvim.cross.platform.is_windows")() then
+    with_env("GITHUB_TOKEN", nil, function()
+      with_env("Github_Token", "mixed-case-token", function()
+        local run, calls = runner(0, "ghtoken\n")
+        github.token({ runner = run })
+        for name in pairs(calls[1].opts.env) do
+          ok(name:upper() ~= "GITHUB_TOKEN", "github.token: stripped in any case: " .. name)
+        end
+      end)
+    end)
+  end
 
   -- No token anywhere: nil plus a reason that never carries stdout.
   with_env("LIB_SPEC_GH_TOKEN", nil, function()

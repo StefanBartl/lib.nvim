@@ -3,7 +3,7 @@
 
 ---Options for `require("lib.nvim.net.github").request` / `request_blocking`.
 ---@class Lib.Net.Github.RequestOpts
----@field token? string Sent as `Authorization: Bearer <token>` (curl's `-K -` config path, never argv)
+---@field token? string Sent as `Authorization: Bearer <token>` (curl's `-K -` config path, never argv), only to `api_base`'s origin and never over plain http off loopback
 ---@field etag? string Sent as `If-None-Match`; an unchanged resource answers `304` (`result.not_modified`)
 ---@field query? table<string, string> URL-encoded and appended as `?k=v&...`
 ---@field method? string HTTP method (default `"GET"`)

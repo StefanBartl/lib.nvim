@@ -41,6 +41,12 @@ M.token(opts: Lib.Net.Github.TokenOpts|nil): string|nil token, string source_or_
 to `opts.api_base` (default `https://api.github.com`), or an absolute URL such
 as the next page from a `Link` header (`result.headers.link`).
 
+The token goes only to the API's own origin: an absolute URL whose scheme, host
+or port differs from `api_base` is requested without it, and a token is never
+sent over plain `http://` except to a loopback host (`localhost`, `127.x.x.x`,
+`[::1]`); such a request is refused with
+`GitHub request refused: the token is never sent over http to <host>`.
+
 ### Request options
 
 | option       | effect                                                                 |
@@ -65,15 +71,20 @@ A usable answer (2xx or 304) is
 `x-ratelimit-*` headers (`reset` in epoch seconds). Everything else is
 `nil, err`:
 
-- curl failed: `GitHub request failed: <curl's message>`
+- curl failed: `GitHub request failed: <curl's message>`; so does a curl
+  (missing on `PATH`) or transport that throws, and a malformed response
 - 4xx/5xx: `GitHub API error: HTTP 404: Not Found` (GitHub's `message`, else
   the reason phrase)
+- any other 3xx (curl follows no redirect; a renamed repository answers 301):
+  `GitHub API error: HTTP 301: Moved Permanently (location: <url>)`
 - a `200` whose body is a GitHub error object (`message`, `documentation_url`
   and nothing else of substance): `GitHub API error: HTTP 200: Bad credentials`.
   A resource that merely has a `message` field (a commit) is data.
 - an exhausted rate limit (403/429 with `x-ratelimit-remaining: 0`):
   `GitHub API rate limit exhausted (HTTP 403); resets at 2026-10-31T12:00:00Z (in 600s)`
 - an undecodable 2xx body: `GitHub API error: HTTP 200: invalid JSON response`
+
+`request`'s `cb` always runs, exactly once, on the main loop.
 
 ## Token resolution
 
