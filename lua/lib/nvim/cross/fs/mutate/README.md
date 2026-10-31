@@ -78,6 +78,11 @@ long for the common case or too short for the rare one.
 - `mkdir_p` goes through `retry` for a uniform signature only. `vim.fn.mkdir`
   raises a Vim error (`Vim:E739: …`) carrying no libuv code, so the transient
   check never matches and it does not in practice retry.
+- `mkdir_p` survives other processes making the same folder chain at once:
+  an E739 "file already exists" is fine when the folder is there afterwards,
+  and a race lost on a parent (or several in a row, on deeper links each
+  time) is tried again as long as the chain grew, at most once per path link.
+  A file in the way, or no new link since the last try, is still an error.
 - `rmdir(path, opts?)` removes an *empty* directory, with the same
   Windows-retry behavior as every other primitive here — the counterpart to
   `mkdir_p` for callers (e.g. `lib.nvim.checkpoint`) that need to clean up a

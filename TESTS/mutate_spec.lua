@@ -189,6 +189,27 @@ return function(H)
     eq(parent_err, nil, "mkdir_p: ... and says nothing")
     eq(vim.fn.isdirectory(deep), 1, "mkdir_p: ... the whole chain is there")
 
+    -- Many processes at once: the race is lost twice in a row, on a different link each time.
+    local multi = dir .. "/raced-multi"
+    local multi_deep = multi .. "/a/b/c"
+    vim.fn.delete(multi, "rf")
+    local lost = { multi, multi .. "/a" }
+    calls = 0
+    vim.fn.mkdir = function(path, flags)
+      calls = calls + 1
+      local link = lost[calls]
+      if link then
+        real_mkdir(link, "p")
+        error("Vim:E739: Cannot create directory " .. link .. ": file already exists")
+      end
+      return real_mkdir(path, flags)
+    end
+    local multi_ok, multi_err = mutate.mkdir_p(multi_deep)
+    vim.fn.mkdir = real_mkdir
+    eq(multi_ok, true, "mkdir_p: losing the race twice on different links is ok")
+    eq(multi_err, nil, "mkdir_p: ... and says nothing")
+    eq(vim.fn.isdirectory(multi_deep), 1, "mkdir_p: ... the whole chain is there")
+
     local blocker = dir .. "/blocker"
     local fh = assert(io.open(blocker, "wb"))
     fh:write("a file")

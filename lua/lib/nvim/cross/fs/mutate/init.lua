@@ -132,6 +132,26 @@ function M.rename_file(src, dst, opts)
   end, opts)
 end
 
+---@internal
+---The deepest part of `path` that exists, if it is a directory.
+---@param path string
+---@return string|nil dir  nil when the deepest existing part is not a directory (a file in the way); `""` when
+---  nothing of `path` exists.
+local function deepest_existing(path)
+  local cur = path
+  while true do
+    local stat = uv().fs_stat(cur)
+    if stat then
+      return stat.type == "directory" and cur or nil
+    end
+    local parent = vim.fn.fnamemodify(cur, ":h")
+    if parent == cur or parent == "" or parent == "." then
+      return ""
+    end
+    cur = parent
+  end
+end
+
 ---Create `path` and all missing parent directories (`mkdir -p` semantics),
 ---without invoking a shell.
 ---@param path string
@@ -146,23 +166,36 @@ function M.mkdir_p(path, opts)
     -- code, so is_transient never matches and this in practice does not retry
     -- — it goes through M.retry for a uniform signature, not for the retry.
     local ok, err = pcall(vim.fn.mkdir, path, "p")
-    if not ok then
-      -- Two processes that make the same folder at once (the temp folder `nvim`, say) race: the one that loses
-      -- gets E739 "file already exists" although the folder is there and is what was asked for.
+    if ok then
+      return true, nil
+    end
+    -- Two processes that make the same folder at once (the temp folder `nvim`, say) race: the one that loses
+    -- gets E739 "file already exists" although the folder is there and is what was asked for. The race can also
+    -- be lost on a parent (`~/.cache/nvim` made by the other process while this one made the chain below it), and
+    -- with many processes it is lost again on a deeper link. Every lost race leaves one more link made, so try
+    -- again as long as the chain grew; that ends after at most as many tries as the path has links.
+    local reached = nil
+    for _ = 1, select(2, path:gsub("[/\\]", "")) + 1 do
       local stat = uv().fs_stat(path)
       if stat and stat.type == "directory" then
         return true, nil
       end
-      -- The race can also be lost on a parent (`~/.cache/nvim` made by the other process while this one made the
-      -- chain below it): the folders that are there now are fine, so the rest is made once more.
-      local again = pcall(vim.fn.mkdir, path, "p")
-      stat = uv().fs_stat(path)
-      if again and stat and stat.type == "directory" then
+      local now = deepest_existing(path)
+      if now == nil or (reached ~= nil and #now <= #reached) then
+        -- A file in the way, or no new link since the last try: a real failure, not a race.
+        break
+      end
+      reached = now
+      ok, err = pcall(vim.fn.mkdir, path, "p")
+      if ok then
         return true, nil
       end
-      return false, tostring(err)
     end
-    return true, nil
+    local stat = uv().fs_stat(path)
+    if stat and stat.type == "directory" then
+      return true, nil
+    end
+    return false, tostring(err)
   end, opts)
 end
 
