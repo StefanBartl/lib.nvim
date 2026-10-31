@@ -1,0 +1,100 @@
+---@module 'lib.lua.patterns.reducer'
+--- Reducer / MVU: state = reduce(state, action). All changes go through one function, so the state is
+--- predictable and every change can be logged, tested and replayed.
+---
+--- `reducer.store(reduce, initial)` keeps the state. `dispatch(action)` computes the next state; a
+--- reducer that raises leaves the state unchanged (the error is returned). Subscribers get
+--- `(new, old, action)` only when the state actually changed (`~=`), so return the same table when
+--- nothing changed. `reducer.combine({ slice = reducer })` builds a reducer for a state made of slices.
+---
+--- ```lua
+--- local reducer = require("lib.lua.patterns.reducer")
+--- local store = reducer.store(function(state, action)
+---   if action.type == "add" then return vim.list_extend({ unpack(state) }, { action.item }) end
+---   return state
+--- end, {})
+--- local off = store:subscribe(function(new) render(new) end)
+--- store:dispatch({ type = "add", item = "x" })
+--- ```
+
+require("lib.lua.patterns.reducer.@types")
+
+local M = {}
+
+---@class Lib.Patterns.ReducerStore
+local S = {}
+S.__index = S
+
+---@param reduce fun(state: any, action: table): any
+---@param initial any
+---@return Lib.Patterns.ReducerStore
+function M.store(reduce, initial)
+  if type(reduce) ~= "function" then
+    error("reducer.store: reduce must be a function", 2)
+  end
+  return setmetatable({ reduce = reduce, current = initial, listeners = {} }, S)
+end
+
+---@return any
+function S:state()
+  return self.current
+end
+
+---Apply an action. Returns `true, new_state` or `false, err` (state unchanged).
+---@param action table
+---@return boolean ok
+---@return any state_or_err
+function S:dispatch(action)
+  local ok, new = pcall(self.reduce, self.current, action)
+  if not ok then
+    return false, new
+  end
+  local old = self.current
+  self.current = new
+  if new ~= old then
+    local snapshot = {}
+    for i, l in ipairs(self.listeners) do
+      snapshot[i] = l
+    end
+    for _, l in ipairs(snapshot) do
+      pcall(l, new, old, action)
+    end
+  end
+  return true, new
+end
+
+---@param fn fun(new: any, old: any, action: table)
+---@return fun() unsubscribe
+function S:subscribe(fn)
+  self.listeners[#self.listeners + 1] = fn
+  return function()
+    for i, l in ipairs(self.listeners) do
+      if l == fn then
+        table.remove(self.listeners, i)
+        return
+      end
+    end
+  end
+end
+
+---Combine slice reducers: the state is a table `{ slice = state }`. A slice reducer that returns the same
+---value leaves the whole state table unchanged.
+---@param slices table<string, fun(state: any, action: table): any>
+---@return fun(state: table|nil, action: table): table
+function M.combine(slices)
+  return function(state, action)
+    state = state or {}
+    local changed, next_state = false, {}
+    for name, reduce in pairs(slices) do
+      local before = state[name]
+      local after = reduce(before, action)
+      next_state[name] = after
+      if after ~= before then
+        changed = true
+      end
+    end
+    return changed and next_state or state
+  end
+end
+
+return M

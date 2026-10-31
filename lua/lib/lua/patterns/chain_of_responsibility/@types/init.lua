@@ -1,0 +1,9 @@
+---@meta
+---@module 'lib.lua.patterns.chain_of_responsibility.@types'
+
+---@class Lib.Patterns.Chain
+---@field handlers { name: string, fn: function }[]
+---@field add fun(self: Lib.Patterns.Chain, name: string, fn: function, opts: { first: boolean|nil }|nil): Lib.Patterns.Chain
+---@field remove fun(self: Lib.Patterns.Chain, name: string): boolean
+---@field names fun(self: Lib.Patterns.Chain): string[]
+---@field handle fun(self: Lib.Patterns.Chain, request: any, ...: any): boolean, any, string|nil, any[]

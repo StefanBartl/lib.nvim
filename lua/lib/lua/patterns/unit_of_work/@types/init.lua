@@ -1,0 +1,12 @@
+---@meta
+---@module 'lib.lua.patterns.unit_of_work.@types'
+
+---@class Lib.Patterns.UnitOfWork
+---@field store Lib.Patterns.Store
+---@field queue { kind: string, id: any, value: any }[]
+---@field add fun(self: Lib.Patterns.UnitOfWork, id: any, value: any): Lib.Patterns.UnitOfWork
+---@field change fun(self: Lib.Patterns.UnitOfWork, id: any, value: any): Lib.Patterns.UnitOfWork
+---@field remove fun(self: Lib.Patterns.UnitOfWork, id: any): Lib.Patterns.UnitOfWork
+---@field pending fun(self: Lib.Patterns.UnitOfWork): integer
+---@field rollback fun(self: Lib.Patterns.UnitOfWork)
+---@field commit fun(self: Lib.Patterns.UnitOfWork): boolean, any, integer|nil

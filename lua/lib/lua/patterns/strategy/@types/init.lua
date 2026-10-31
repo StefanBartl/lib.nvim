@@ -1,0 +1,12 @@
+---@meta
+---@module 'lib.lua.patterns.strategy.@types'
+
+---@class Lib.Patterns.Strategy
+---@field strategies table<string, function>
+---@field current string|nil
+---@field register fun(self: Lib.Patterns.Strategy, name: string, fn: function): Lib.Patterns.Strategy
+---@field use fun(self: Lib.Patterns.Strategy, name: string): Lib.Patterns.Strategy
+---@field selected fun(self: Lib.Patterns.Strategy): string|nil
+---@field run fun(self: Lib.Patterns.Strategy, ...: any): any
+---@field call fun(self: Lib.Patterns.Strategy, name: string, ...: any): any
+---@field names fun(self: Lib.Patterns.Strategy): string[]

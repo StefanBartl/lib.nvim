@@ -1,0 +1,11 @@
+---@meta
+---@module 'lib.lua.patterns.mediator.@types'
+
+---@class Lib.Patterns.Mediator
+---@field components table<string, { handle: function }>
+---@field order string[]
+---@field register fun(self: Lib.Patterns.Mediator, name: string, component: { handle: function }): Lib.Patterns.Mediator
+---@field unregister fun(self: Lib.Patterns.Mediator, name: string): boolean
+---@field send fun(self: Lib.Patterns.Mediator, from: string, to: string, message: any, ...: any): any
+---@field broadcast fun(self: Lib.Patterns.Mediator, from: string, message: any, ...: any): integer, any[]
+---@field names fun(self: Lib.Patterns.Mediator): string[]

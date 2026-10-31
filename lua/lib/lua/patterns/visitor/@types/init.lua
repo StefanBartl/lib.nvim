@@ -1,0 +1,3 @@
+---@meta
+---@module 'lib.lua.patterns.visitor.@types'
+-- `visitor.new` returns the plain function `visit(node, ...)`; there is no class to describe.

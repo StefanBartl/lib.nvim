@@ -1,0 +1,3 @@
+---@meta
+---@module 'lib.lua.patterns.interpreter.@types'
+-- `interpreter.new` returns the plain function `eval(node, env)`; there is no class to describe.

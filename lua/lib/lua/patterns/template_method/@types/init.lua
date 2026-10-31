@@ -1,0 +1,3 @@
+---@meta
+---@module 'lib.lua.patterns.template_method.@types'
+-- `define` returns `{ implement = fun(impl): function }`; the implemented skeleton is a plain function.

@@ -1,0 +1,4 @@
+---@meta
+---@module 'lib.lua.patterns.state.@types'
+-- `state.new` returns a table whose methods come from the current state plus `set_state`,
+-- `current_state` and `is_state`; the method set depends on the spec, so there is no fixed class.
