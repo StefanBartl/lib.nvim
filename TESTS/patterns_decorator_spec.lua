@@ -77,4 +77,27 @@ return function(H)
   ok(not good and err == "bad", "timed re-raises errors")
   eq(seen, 0, "and still reports")
   eq(decorator.wrap(base)(1), 2, "wrap without decorators returns the function")
+
+  -- trailing nils in the results must survive after/timed
+  local function three()
+    return "a", nil, nil
+  end
+  eq(
+    select("#", decorator.wrap(three, decorator.after(function() end))()),
+    3,
+    "after keeps trailing nil results"
+  )
+  eq(
+    select(
+      "#",
+      decorator.wrap(
+        three,
+        decorator.timed(function() end, function()
+          return 0
+        end)
+      )()
+    ),
+    3,
+    "timed keeps trailing nil results"
+  )
 end

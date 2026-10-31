@@ -29,7 +29,7 @@ all:add(composite.new({ c, d }))
 ## When it helps / when it does not (Lua view)
 
 - **Helps when:** "do X on all of them" recurs and the elements may themselves be groups (progress styles, statusline pieces, multiple watchers).
-- **Does not help when:** a flat list and a `for` loop are enough, which is most of the time.
+- **Does not help when:** a flat list and a `for` loop are enough, which is most of the time. A child that returns nil adds no entry to `results`.
 - **Cheaper alternative in Lua:** `for _, c in ipairs(list) do c:refresh() end`.
 
 ## Related

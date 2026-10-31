@@ -18,6 +18,11 @@ local M = {}
 
 local unpack = table.unpack or unpack
 
+---Pack with an explicit count so trailing nils survive (`table.pack` is missing on plain LuaJIT).
+local function pack(...)
+  return { n = select("#", ...), ... }
+end
+
 ---`wrap(fn, d1, d2)` == `d1(d2(fn))`.
 ---@param fn function
 ---@param ... fun(fn: function): function
@@ -48,10 +53,10 @@ end
 function M.after(hook)
   return function(fn)
     return function(...)
-      local res = { n = select("#", ...), ... }
-      local out = { fn(...) }
+      local res = pack(...)
+      local out = pack(fn(...))
       hook(out, unpack(res, 1, res.n))
-      return unpack(out)
+      return unpack(out, 1, out.n)
     end
   end
 end
@@ -82,12 +87,12 @@ function M.timed(sink, clock)
   return function(fn)
     return function(...)
       local t0 = clock()
-      local out = { pcall(fn, ...) }
+      local out = pack(pcall(fn, ...))
       sink((clock() - t0) * 1000, ...)
       if not out[1] then
         error(out[2], 0)
       end
-      return unpack(out, 2)
+      return unpack(out, 2, out.n)
     end
   end
 end
