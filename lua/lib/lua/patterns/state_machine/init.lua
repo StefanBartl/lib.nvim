@@ -1,0 +1,161 @@
+---@module 'lib.lua.patterns.state_machine'
+--- State machine: declared states and transitions with optional guards and actions.
+---
+--- ```lua
+--- local sm = require("lib.lua.patterns.state_machine").new({
+---   initial = "idle",
+---   transitions = {
+---     { from = "idle", event = "start", to = "running" },
+---     { from = "running", event = "stop", to = "idle", guard = function(ctx) return not ctx.locked end },
+---   },
+---   on_enter = { running = function(from, event) print("now running") end },
+--- })
+--- sm:fire("start")   --> true, "running"
+--- sm:can("start")    --> false
+--- ```
+---
+--- `from` may be a list of states or `"*"` (any). Unknown events and failed guards return
+--- `false, reason` instead of raising, so the caller decides.
+
+require("lib.lua.patterns.state_machine.@types")
+
+local M = {}
+
+---@class Lib.Patterns.StateMachine
+local SM = {}
+SM.__index = SM
+
+---@param spec Lib.Patterns.StateMachine.Spec
+---@return Lib.Patterns.StateMachine
+function M.new(spec)
+  if type(spec) ~= "table" or type(spec.initial) ~= "string" then
+    error("state_machine.new: spec.initial (string) is required", 2)
+  end
+  local known = { [spec.initial] = true }
+  for i, t in ipairs(spec.transitions or {}) do
+    if type(t.event) ~= "string" or type(t.to) ~= "string" then
+      error(("state_machine.new: transition %d needs string event and to"):format(i), 2)
+    end
+    known[t.to] = true
+    local from = type(t.from) == "table" and t.from or { t.from }
+    for _, f in ipairs(from) do
+      if f ~= "*" then
+        known[f] = true
+      end
+    end
+  end
+  for name in pairs(spec.on_enter or {}) do
+    if not known[name] then
+      error(("state_machine.new: on_enter names unknown state %q"):format(name), 2)
+    end
+  end
+  for name in pairs(spec.on_exit or {}) do
+    if not known[name] then
+      error(("state_machine.new: on_exit names unknown state %q"):format(name), 2)
+    end
+  end
+  return setmetatable({
+    spec = spec,
+    current = spec.initial,
+    ctx = spec.ctx or {},
+    listeners = {},
+  }, SM)
+end
+
+---@return string
+function SM:state()
+  return self.current
+end
+
+---@param s string
+---@return boolean
+function SM:is(s)
+  return self.current == s
+end
+
+---@param self Lib.Patterns.StateMachine
+---@param event string
+---@return table|nil transition
+---@return string|nil reason
+local function find(self, event)
+  local seen_event, guard_rejected = false, false
+  for _, t in ipairs(self.spec.transitions or {}) do
+    if t.event == event then
+      seen_event = true
+      local from = type(t.from) == "table" and t.from or { t.from }
+      for _, f in ipairs(from) do
+        if f == "*" or f == self.current then
+          if not t.guard or t.guard(self.ctx, self.current, event) then
+            return t
+          end
+          -- keep looking: a later transition for the same event may have a guard that passes
+          guard_rejected = true
+          break
+        end
+      end
+    end
+  end
+  if guard_rejected then
+    return nil, "guard rejected"
+  end
+  return nil,
+    seen_event and ("event %q not allowed in state %q"):format(event, self.current)
+      or ("unknown event %q"):format(event)
+end
+
+---Whether `event` would be accepted now.
+---@param event string
+---@return boolean
+function SM:can(event)
+  return find(self, event) ~= nil
+end
+
+---Fire an event. Returns `true, new_state` or `false, reason`.
+---@param event string
+---@param ... any # passed to the transition action
+---@return boolean ok
+---@return string reason_or_state
+function SM:fire(event, ...)
+  local t, reason = find(self, event)
+  if not t then
+    return false, reason or "rejected"
+  end
+  local from, to = self.current, t.to
+  local exit = (self.spec.on_exit or {})[from]
+  if exit then
+    exit(to, event, self.ctx)
+  end
+  if t.action then
+    t.action(self.ctx, from, to, ...)
+  end
+  self.current = to
+  local enter = (self.spec.on_enter or {})[to]
+  if enter then
+    enter(from, event, self.ctx)
+  end
+  local snapshot = {}
+  for i, l in ipairs(self.listeners) do
+    snapshot[i] = l
+  end
+  for _, l in ipairs(snapshot) do
+    pcall(l, to, from, event)
+  end
+  return true, to
+end
+
+---Subscribe to every state change. Returns the unsubscribe function.
+---@param fn fun(new: string, old: string, event: string)
+---@return fun()
+function SM:on_change(fn)
+  self.listeners[#self.listeners + 1] = fn
+  return function()
+    for i, l in ipairs(self.listeners) do
+      if l == fn then
+        table.remove(self.listeners, i)
+        return
+      end
+    end
+  end
+end
+
+return M

@@ -1,0 +1,14 @@
+---@meta
+---@module 'lib.lua.patterns.result.@types'
+
+---@class Lib.Patterns.Result
+---@field ok boolean
+---@field value any          # Set when `ok`.
+---@field err any            # Set when not `ok`.
+---@field is_ok fun(self: Lib.Patterns.Result): boolean
+---@field map fun(self: Lib.Patterns.Result, fn: fun(v: any): any): Lib.Patterns.Result
+---@field map_err fun(self: Lib.Patterns.Result, fn: fun(e: any): any): Lib.Patterns.Result
+---@field and_then fun(self: Lib.Patterns.Result, fn: fun(v: any): Lib.Patterns.Result): Lib.Patterns.Result
+---@field unwrap_or fun(self: Lib.Patterns.Result, default: any): any
+---@field unwrap fun(self: Lib.Patterns.Result): any
+---@field to_pair fun(self: Lib.Patterns.Result): any, any

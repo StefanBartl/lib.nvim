@@ -1,0 +1,12 @@
+---@meta
+---@module 'lib.nvim.patterns.retry_backoff.@types'
+
+---@class Lib.Patterns.RetryBackoff.Opts
+---@field max_attempts integer|nil                    # Total tries including the first (default 5).
+---@field base_ms number|nil                          # Delay after the first failure (default 100).
+---@field factor number|nil                           # Growth per attempt (default 2).
+---@field max_ms number|nil                           # Delay cap (default 10000).
+---@field jitter boolean|nil                          # Use a random 50-100 % of the delay.
+---@field should_retry (fun(err: any, attempt: integer): boolean)|nil
+---@field on_done (fun(ok: boolean, value_or_err: any, attempts: integer))|nil
+---@field sleep (fun(ms: number, cb: fun()))|nil      # Injectable wait (default `vim.defer_fn`).

@@ -1,0 +1,21 @@
+---@meta
+---@module 'lib.lua.patterns.circuit_breaker.@types'
+
+---@class Lib.Patterns.CircuitBreaker.Opts
+---@field threshold integer|nil               # Consecutive failures that open the circuit (default 5).
+---@field reset_ms number|nil                 # Pause before one probe call is allowed (default 30000).
+---@field now (fun(): number)|nil             # Clock in milliseconds (default: hrtime).
+---@field on_change fun(new: string, old: string)|nil
+
+---@class Lib.Patterns.CircuitBreaker
+---@field threshold integer
+---@field reset_ms number
+---@field now fun(): number
+---@field on_change (fun(new: string, old: string))|nil
+---@field failures integer
+---@field opened_at number|nil
+---@field probing boolean
+---@field current string
+---@field state fun(self: Lib.Patterns.CircuitBreaker): string
+---@field call fun(self: Lib.Patterns.CircuitBreaker, fn: function, ...: any): boolean, any
+---@field reset fun(self: Lib.Patterns.CircuitBreaker)

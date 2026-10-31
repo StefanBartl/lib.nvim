@@ -1,0 +1,22 @@
+---@meta
+---@module 'lib.lua.patterns.object_pool.@types'
+
+---@class Lib.Patterns.ObjectPool.Opts
+---@field create fun(): any
+---@field reset fun(obj: any)|nil             # Called on release; a raise destroys the object instead.
+---@field destroy fun(obj: any)|nil           # Called for objects that do not fit or are cleared.
+---@field max integer|nil                     # Idle objects kept (default 16).
+
+---@class Lib.Patterns.ObjectPool
+---@field create fun(): any
+---@field reset (fun(obj: any))|nil
+---@field destroy (fun(obj: any))|nil
+---@field max integer
+---@field idle any[]
+---@field created integer
+---@field reused integer
+---@field acquire fun(self: Lib.Patterns.ObjectPool): any
+---@field release fun(self: Lib.Patterns.ObjectPool, obj: any)
+---@field with fun(self: Lib.Patterns.ObjectPool, fn: fun(obj: any): ...): ...
+---@field clear fun(self: Lib.Patterns.ObjectPool)
+---@field stats fun(self: Lib.Patterns.ObjectPool): { idle: integer, created: integer, reused: integer }
