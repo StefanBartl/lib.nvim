@@ -19,6 +19,7 @@ aggregator exists for convenience, not as the entry point.
 | `lib.nvim.bindings` | Named keymap actions, and `usercmd.composer`: the subcommand-verb builder every sibling plugin's `:Command <sub>` grammar is built on |
 | `lib.nvim.deps` | Declared optional external tools per plugin, and the popup, report and install command that go with them |
 | `lib.strategies` | How the `lib` aggregator resolves: eager, lazy, metatable, with optional telemetry |
+| [design patterns](patterns.md) | Catalogue of the GoF and common modern patterns: which existing module is the pattern (`reuse`), which get a small reference implementation (`impl`) and which are kept as documented ideas (`idea`) under `lib.lua.patterns.*` / `lib.nvim.patterns.*` (planned, see the catalogue) |
 
 > **Compatibility, stated plainly.** This library tracks its author's own
 > Neovim setup, and it stays in sync with *those* plugins by construction.
