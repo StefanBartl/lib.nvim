@@ -1,0 +1,3 @@
+---@meta
+---@module 'lib.lua.patterns.bridge.@types'
+-- `bridge.new` returns a plain table of bound functions; there is no class to describe.

@@ -1,0 +1,3 @@
+---@meta
+---@module 'lib.lua.patterns.decorator.@types'
+-- A decorator is `fun(fn: function): function`; there is no class to describe.

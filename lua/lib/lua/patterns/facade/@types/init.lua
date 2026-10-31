@@ -1,0 +1,3 @@
+---@meta
+---@module 'lib.lua.patterns.facade.@types'
+-- The facade is a table whose keys are the entry names plus `names()` and `loaded()`.

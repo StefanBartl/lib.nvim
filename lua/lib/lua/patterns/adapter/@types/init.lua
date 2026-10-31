@@ -1,0 +1,3 @@
+---@meta
+---@module 'lib.lua.patterns.adapter.@types'
+-- The adapter returns a plain table of the methods named in `interface`; there is no class to describe.

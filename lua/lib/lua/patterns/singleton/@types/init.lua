@@ -1,0 +1,11 @@
+---@meta
+---@module 'lib.lua.patterns.singleton.@types'
+
+---@class Lib.Patterns.Singleton
+---@field factory fun(): any
+---@field created boolean
+---@field creating boolean
+---@field instance any
+---@field get fun(self: Lib.Patterns.Singleton): any
+---@field is_created fun(self: Lib.Patterns.Singleton): boolean
+---@field reset fun(self: Lib.Patterns.Singleton)

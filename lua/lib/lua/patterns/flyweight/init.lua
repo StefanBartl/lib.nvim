@@ -1,0 +1,70 @@
+---@module 'lib.lua.patterns.flyweight'
+--- Flyweight: share identical immutable objects instead of creating one per use.
+---
+--- `get(...)` returns the shared instance for a key; the factory runs once per key. The key defaults to
+--- the arguments joined by a separator; pass `opts.key` for anything else. With `opts.weak = true` the
+--- cache holds its values weakly, so an instance no longer used elsewhere can be collected.
+---
+--- ```lua
+--- local flyweight = require("lib.lua.patterns.flyweight")
+--- local hl = flyweight.new(function(fg, bg) return { fg = fg, bg = bg } end)
+--- hl:get("red", "black") == hl:get("red", "black") --> true
+--- ```
+---
+--- Status: idea pool. It saves memory only when very many equal objects exist. The shared object must
+--- not be mutated by its users.
+
+require("lib.lua.patterns.flyweight.@types")
+
+local M = {}
+
+---@class Lib.Patterns.Flyweight
+local F = {}
+F.__index = F
+
+local function default_key(...)
+  local parts = {}
+  for i = 1, select("#", ...) do
+    parts[i] = tostring((select(i, ...)))
+  end
+  return table.concat(parts, "\31")
+end
+
+---@param make fun(...): any
+---@param opts { key: (fun(...): any)|nil, weak: boolean|nil }|nil
+---@return Lib.Patterns.Flyweight
+function M.new(make, opts)
+  opts = opts or {}
+  local cache = opts.weak and setmetatable({}, { __mode = "v" }) or {}
+  return setmetatable({ make = make, keyfn = opts.key or default_key, cache = cache }, F)
+end
+
+---@param ... any
+---@return any
+function F:get(...)
+  local key = self.keyfn(...)
+  local v = self.cache[key]
+  if v == nil then
+    v = self.make(...)
+    self.cache[key] = v
+  end
+  return v
+end
+
+---Number of cached instances.
+---@return integer
+function F:size()
+  local n = 0
+  for _ in pairs(self.cache) do
+    n = n + 1
+  end
+  return n
+end
+
+function F:clear()
+  for k in pairs(self.cache) do
+    self.cache[k] = nil
+  end
+end
+
+return M
