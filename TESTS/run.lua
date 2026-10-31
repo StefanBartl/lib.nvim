@@ -246,6 +246,8 @@ local specs = {
   "companion_launch_spec.lua",
   "companion_protocol_spec.lua",
   "companion_headless_spec.lua",
+  "data_classes_spec.lua",
+  "data_classes_cases_spec.lua",
 }
 
 --- Straight to stdout rather than through `print`.

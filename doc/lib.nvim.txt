@@ -200,6 +200,13 @@ Neovim adapters.
                            over msgpack-RPC: read-only content pushed from
                            here, keys there run actions here (see
                            lua/lib/nvim/companion/README.md)
+    lib.nvim.data_classes  the data classes of the areas on this device:
+                           reads the areas.json of tasks-desktop fail-closed
+                           (same config folder, schema 1 and 2, as strict as
+                           the hub's reader); load, parse, class_of_repo;
+                           no file, a broken file or no entry is
+                           "unclassified" (see
+                           lua/lib/nvim/data_classes/README.md)
     lib.nvim.require       safe / dir / lazy require
     lib.nvim.lua_ls        LuaLS: module path, @module annotation
     lib.nvim.core          misc Neovim helpers (has_exec, simple_echo)

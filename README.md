@@ -64,6 +64,7 @@ question.
 
 - [Namespaces & modules](docs/modules.md) — every `lib.lua.*` / `lib.nvim.*` module, one line each, with links to per-module docs.
 - [API reference](docs/API/README.md) — function signatures across a whole theme, without opening dozens of files.
+- [Data classes](lua/lib/nvim/data_classes/README.md) — `lib.nvim.data_classes`: may this area or repository leave the machine? Reads the per-device `areas.json` of the desktop apps (tasks-desktop) fail-closed; no file, a broken file or no entry is `unclassified`, released for nothing.
 - [Configuration](docs/configuration.md) — the aggregator strategies and their defaults.
 - [Bindings](docs/BINDINGS.md) — the deliberately small user command and autocommand surface, including `:Lib deps` and `:Lib helptags`.
 
