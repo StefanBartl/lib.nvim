@@ -33,6 +33,7 @@ with worked examples.
   `lib.nvim.window.*` (including the `ui.kit` toolkit — ~19 themed UI
   primitives), `lib.nvim.notify.*`, `lib.nvim.selection`,
   `lib.nvim.terminal`, `lib.nvim.companion`, `lib.nvim.buffer.*`.
+- **[patterns.md](patterns.md)** — `lib.lua.patterns.*` and `lib.nvim.patterns.*`: the design pattern reference modules, signature by signature.
 - **[commands-and-infra.md](commands-and-infra.md)** — `lib.nvim.bindings.usercmd`
   and the **`composer`** subsystem (the most widely-used module in the
   library — 30+ consuming plugins), plus `autocmd` (incl. `autocmd.dispatcher`),

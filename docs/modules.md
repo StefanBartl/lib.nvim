@@ -51,6 +51,7 @@ aggregator exists for convenience, not as the entry point.
 | [`lib.lua.uuid`](../lua/lib/lua/uuid/README.md) | UUIDv4 generation + formatting (not cryptographically secure — UI/temp-id use only) |
 | [`lib.lua.yaml`](../lua/lib/lua/yaml/README.md) | deliberately minimal, dependency-free YAML-ish decoder (no anchors/aliases, no multi-document streams) |
 | [`lib.lua.range`](../lua/lib/lua/range/README.md) | parse `"1-3,5,7"`-style range specs into a sorted, deduplicated `integer[]` — page/line/commit ranges |
+| [`lib.lua.patterns`](patterns.md) | design pattern reference modules (editor-independent): `result`, `specification`, `middleware`, `circuit_breaker`, `state_machine`, `object_pool`, `event_bus`, `builder`, `factory_method`, `prototype`, `singleton`, `abstract_factory`, `adapter`, `bridge`, `composite`, `decorator`, `facade`, `flyweight`, `chain_of_responsibility`, `command`, `interpreter`, `iterator`, `mediator`, `state`, `strategy`, `template_method`, `visitor`, `dependency_injection`, `repository`, `reducer`, `unit_of_work`, `saga` — one README each, catalogue in [patterns.md](patterns.md) ([`:help`](../doc/lib.nvim-patterns.txt)) |
 
 ## `lib.nvim.*` — Neovim
 
@@ -121,6 +122,15 @@ step 7, in that plugin's sibling.
 This repo keeps a thin caller, `lib.strategies.telemetry_wrap`, for
 instrumenting `require("lib")`'s own metatable-hidden aggregate specifically.
 
+### Design patterns (`lib.nvim.patterns.*`)
+
+| Module | Contents |
+| --- | --- |
+| [`lib.nvim.patterns.throttle`](../lua/lib/nvim/patterns/throttle/README.md) | at most one call per interval, leading and/or trailing |
+| [`lib.nvim.patterns.retry_backoff`](../lua/lib/nvim/patterns/retry_backoff/README.md) | retry a callback-style task with growing delay |
+
+The whole collection, including the pointers to the feature modules that already are a pattern, is catalogued in [patterns.md](patterns.md).
+
 ## Per-module documentation
 
 Larger modules carry their own detailed docs. Markdown references sit next to
@@ -157,10 +167,11 @@ and are generated on install by your plugin manager (see [Help docs](help.md)).
 - [`lib.nvim.data_classes`](../lua/lib/nvim/data_classes/README.md)
 - [`lib.nvim.cache`](../lua/lib/nvim/cache/README.md)
 - [`lib.nvim.companion`](../lua/lib/nvim/companion/README.md)
+- [Design pattern collection](patterns.md) — catalogue; modules under [`lua/lib/lua/patterns/`](../lua/lib/lua/patterns/) and [`lua/lib/nvim/patterns/`](../lua/lib/nvim/patterns/), one `README.md` each (template: [patterns-template.md](patterns-template.md))
 
 ### `:help` pages
 
-- `:help lib.nvim` — overview hub · `:help lib.nvim-modules` — module index
+- `:help lib.nvim` — overview hub · `:help lib.nvim-modules` — module index · `:help lib.nvim-patterns` — design pattern collection
 - `:help lib.nvim-window` · `:help lib.nvim-kit` · `:help lib.nvim-time_diff` · `:help lib.nvim-progress` · `:help lib.nvim-treesitter` · `:help lib.nvim-selection` · `:help lib.nvim-composer` · `:help lib.nvim-spawn-env` · `:help lib.nvim-async` · `:help lib.nvim-strings_width`
 
 See [Conventions](conventions.md) for the steps to follow when documenting a new module, and [Help docs](help.md) for how `:help` tags are generated.

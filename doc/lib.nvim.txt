@@ -358,6 +358,7 @@ Modules with dedicated `:help` documentation. Jump to one via its tag, or
     lib.nvim.async       coroutine async/await over libuv      |lib.nvim-async|
     lib.lua.strings.width  display-width (column) arithmetic  |lib.nvim-strings_width|
     lib.nvim.contextmenu  nvzone/menu item builder + mouse-trigger binder |lib.nvim-contextmenu|
+    lib.lua.patterns / lib.nvim.patterns  design pattern collection (GoF + modern) |lib.nvim-patterns|
 
 Every other module documents itself in a `README.md` next to its source; see
 the namespace tables under |lib.nvim-namespaces|.

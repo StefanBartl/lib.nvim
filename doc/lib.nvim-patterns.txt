@@ -1,0 +1,425 @@
+lib.nvim-patterns.txt   Design pattern collection          *lib.nvim-patterns*
+
+==============================================================================
+CONTENTS                                          *lib.nvim-patterns-contents*
+
+  1. Overview ................................ |lib.nvim-patterns-overview|
+  2. Stages .................................. |lib.nvim-patterns-stages|
+  3. Creational (GoF) ...................... |lib.nvim-patterns-creational|
+  4. Structural (GoF) ...................... |lib.nvim-patterns-structural|
+  5. Behavioral (GoF) ...................... |lib.nvim-patterns-behavioral|
+  6. Modern ................................ |lib.nvim-patterns-modern|
+
+==============================================================================
+1. OVERVIEW                                       *lib.nvim-patterns-overview*
+
+  A catalogue of the classic Gang of Four patterns and common modern ones.
+  Each pattern is either a pointer to the lib.nvim module that already is the
+  pattern, a small tested reference implementation, or a documented idea. The
+  editor-independent ones live in lib.lua.patterns.<name>, the ones that need
+  the editor in lib.nvim.patterns.<name>. Every module has a README.md next to
+  its source with a section "When it helps / when it does not (Lua view)": use
+  a pattern only when it simplifies the code, not for its own sake. The full
+  table is docs/patterns.md.
+
+==============================================================================
+2. STAGES                                           *lib.nvim-patterns-stages*
+
+  reuse   lib.nvim already has the pattern as a feature module (9).
+  impl    small tested reference implementation (26).
+  idea    rarely useful in Lua, kept as a documented reference (8).
+
+==============================================================================
+3. CREATIONAL (GOF)                             *lib.nvim-patterns-creational*
+
+abstract_factory                          *lib.nvim-patterns-abstract_factory*
+  Stage: idea    Module: lib.lua.patterns.abstract_factory
+  A table of constructors that always come as a matching set (e.g. one theme =
+  icons + highlights + borders).
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.abstract_factory")
+<
+  README: lua/lib/lua/patterns/abstract_factory/README.md
+
+builder                                            *lib.nvim-patterns-builder*
+  Stage: impl    Module: lib.lua.patterns.builder
+  See also: lib.nvim.bindings.usercmd.composer (fluent builder)
+  Chained setters that collect options and a final `build()` that validates
+  once.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.builder")
+<
+  README: lua/lib/lua/patterns/builder/README.md
+
+factory_method                              *lib.nvim-patterns-factory_method*
+  Stage: impl    Module: lib.lua.patterns.factory_method
+  A `new(kind, ...)` that picks the constructor from a table instead of an
+  if/elseif chain.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.factory_method")
+<
+  README: lua/lib/lua/patterns/factory_method/README.md
+
+prototype                                        *lib.nvim-patterns-prototype*
+  Stage: impl    Module: lib.lua.patterns.prototype
+  See also: lib.lua.class (extend)
+  Create objects by cloning a template (`vim.deepcopy`, `setmetatable({},
+  {__index = proto})`).
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.prototype")
+<
+  README: lua/lib/lua/patterns/prototype/README.md
+
+singleton                                        *lib.nvim-patterns-singleton*
+  Stage: impl    Module: lib.lua.patterns.singleton
+  In Lua a module table already is the singleton (`local M = {}`); this module
+  only adds a lazy `once()` holder.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.singleton")
+<
+  README: lua/lib/lua/patterns/singleton/README.md
+
+==============================================================================
+4. STRUCTURAL (GOF)                             *lib.nvim-patterns-structural*
+
+adapter                                            *lib.nvim-patterns-adapter*
+  Stage: impl    Module: lib.lua.patterns.adapter
+  Wrap a foreign API into the interface the caller expects (explorer
+  providers, picker backends).
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.adapter")
+<
+  README: lua/lib/lua/patterns/adapter/README.md
+
+bridge                                              *lib.nvim-patterns-bridge*
+  Stage: idea    Module: lib.lua.patterns.bridge
+  Split an abstraction from its implementation so both vary independently.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.bridge")
+<
+  README: lua/lib/lua/patterns/bridge/README.md
+
+composite                                        *lib.nvim-patterns-composite*
+  Stage: impl    Module: lib.lua.patterns.composite
+  See also: lib.nvim.progress (fan-out handle)
+  Treat a group like one element: the same call on a node and on a list of
+  nodes.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.composite")
+<
+  README: lua/lib/lua/patterns/composite/README.md
+
+decorator                                        *lib.nvim-patterns-decorator*
+  Stage: impl    Module: lib.lua.patterns.decorator
+  See also: lib.strategies.telemetry_wrap
+  Wrap a function or object to add behaviour (timing, logging, guards) without
+  changing its API.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.decorator")
+<
+  README: lua/lib/lua/patterns/decorator/README.md
+
+facade                                              *lib.nvim-patterns-facade*
+  Stage: impl    Module: lib.lua.patterns.facade
+  See also: lib.strategies.eager (the lib aggregator)
+  One small module API in front of several submodules; the helper re-exports
+  lazily.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.facade")
+<
+  README: lua/lib/lua/patterns/facade/README.md
+
+flyweight                                        *lib.nvim-patterns-flyweight*
+  Stage: idea    Module: lib.lua.patterns.flyweight
+  Share identical immutable state between many objects (interned
+  strings/tables, shared wrappers).
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.flyweight")
+<
+  README: lua/lib/lua/patterns/flyweight/README.md
+
+proxy                                                *lib.nvim-patterns-proxy*
+  Stage: reuse    Module: lib.lua.lazy
+  A stand-in with the same interface that controls access (lazy load, caching,
+  counting).
+
+==============================================================================
+5. BEHAVIORAL (GOF)                             *lib.nvim-patterns-behavioral*
+
+chain_of_responsibility            *lib.nvim-patterns-chain_of_responsibility*
+  Stage: impl    Module: lib.lua.patterns.chain_of_responsibility
+  See also: lib.nvim.bindings.autocmd.dispatcher
+  An ordered list of handlers; the first one that claims the request ends the
+  chain.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.chain_of_responsibility")
+<
+  README: lua/lib/lua/patterns/chain_of_responsibility/README.md
+
+command                                            *lib.nvim-patterns-command*
+  Stage: impl    Module: lib.lua.patterns.command
+  See also: lib.nvim.bindings.usercmd.composer
+  An action as data (`do`/`undo`, name, args) so it can be queued, logged or
+  undone.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.command")
+<
+  README: lua/lib/lua/patterns/command/README.md
+
+interpreter                                    *lib.nvim-patterns-interpreter*
+  Stage: idea    Module: lib.lua.patterns.interpreter
+  See also: lib.lua.range (tiny grammar)
+  Evaluate a small grammar by walking its parsed tree; mostly a parser plus an
+  evaluator table.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.interpreter")
+<
+  README: lua/lib/lua/patterns/interpreter/README.md
+
+iterator                                          *lib.nvim-patterns-iterator*
+  Stage: impl    Module: lib.lua.patterns.iterator
+  Walk a structure without exposing it: stateful `next()` objects and
+  stateless `for` iterators.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.iterator")
+<
+  README: lua/lib/lua/patterns/iterator/README.md
+
+mediator                                          *lib.nvim-patterns-mediator*
+  Stage: impl    Module: lib.lua.patterns.mediator
+  See also: lib.nvim.bindings.autocmd.dispatcher
+  Components talk to one coordinator instead of to each other.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.mediator")
+<
+  README: lua/lib/lua/patterns/mediator/README.md
+
+memento                                            *lib.nvim-patterns-memento*
+  Stage: reuse    Module: lib.nvim.checkpoint, lib.nvim.ui.kit.history
+  Snapshot state so it can be restored (undo stack, file checkpoints,
+  back/forward).
+
+observer                                          *lib.nvim-patterns-observer*
+  Stage: reuse    Module: lib.nvim.hooks
+  Subscribers are notified on change; `on()` returns the unsubscribe function.
+
+state                                                *lib.nvim-patterns-state*
+  Stage: impl    Module: lib.lua.patterns.state
+  Behaviour switches with the current state object (a table of handlers per
+  state).
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.state")
+<
+  README: lua/lib/lua/patterns/state/README.md
+
+strategy                                          *lib.nvim-patterns-strategy*
+  Stage: impl    Module: lib.lua.patterns.strategy
+  See also: lib.strategies
+  Interchangeable algorithms behind one call; in Lua usually a function table
+  with a fallback.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.strategy")
+<
+  README: lua/lib/lua/patterns/strategy/README.md
+
+template_method                            *lib.nvim-patterns-template_method*
+  Stage: impl    Module: lib.lua.patterns.template_method
+  See also: lib.lua.class
+  A fixed skeleton whose steps are overridable hooks.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.template_method")
+<
+  README: lua/lib/lua/patterns/template_method/README.md
+
+visitor                                            *lib.nvim-patterns-visitor*
+  Stage: idea    Module: lib.lua.patterns.visitor
+  Add operations to a node structure from outside via a table of per-kind
+  handlers.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.visitor")
+<
+  README: lua/lib/lua/patterns/visitor/README.md
+
+==============================================================================
+6. MODERN                                           *lib.nvim-patterns-modern*
+
+registry                                          *lib.nvim-patterns-registry*
+  Stage: reuse    Module: lib.nvim.registry
+  Keyed entries that register themselves; lookups answer in registration
+  order.
+
+dependency_injection                  *lib.nvim-patterns-dependency_injection*
+  Stage: impl    Module: lib.lua.patterns.dependency_injection
+  Pass collaborators in (constructor/`opts`) instead of requiring them inside;
+  makes fakes trivial in tests.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.dependency_injection")
+<
+  README: lua/lib/lua/patterns/dependency_injection/README.md
+
+event_bus                                        *lib.nvim-patterns-event_bus*
+  Stage: impl    Module: lib.lua.patterns.event_bus
+  See also: lib.nvim.hooks
+  Pure-Lua publish/subscribe on named topics, without the editor.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.event_bus")
+<
+  README: lua/lib/lua/patterns/event_bus/README.md
+
+middleware                                      *lib.nvim-patterns-middleware*
+  Stage: impl    Module: lib.lua.patterns.middleware
+  A stage list where each stage gets `(ctx, next)`; request/response
+  pipelines.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.middleware")
+<
+  README: lua/lib/lua/patterns/middleware/README.md
+
+repository                                      *lib.nvim-patterns-repository*
+  Stage: idea    Module: lib.lua.patterns.repository
+  See also: lib.nvim.store
+  Hide storage behind a collection-like API (`get`/`put`/`find`/`delete`).
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.repository")
+<
+  README: lua/lib/lua/patterns/repository/README.md
+
+lazy_init                                        *lib.nvim-patterns-lazy_init*
+  Stage: reuse    Module: lib.lua.lazy
+  Create or load on first access, not at startup.
+
+null_object                                    *lib.nvim-patterns-null_object*
+  Stage: reuse    Module: lib.lua.null
+  A do-nothing stand-in instead of `nil` checks.
+
+object_pool                                    *lib.nvim-patterns-object_pool*
+  Stage: impl    Module: lib.lua.patterns.object_pool
+  Reuse expensive objects (scratch buffers, timers) via acquire/release.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.object_pool")
+<
+  README: lua/lib/lua/patterns/object_pool/README.md
+
+promise                                            *lib.nvim-patterns-promise*
+  Stage: reuse    Module: lib.nvim.async
+  Futures/coroutine await for non-blocking flows.
+
+debounce                                          *lib.nvim-patterns-debounce*
+  Stage: reuse    Module: lib.nvim.debounce
+  Collapse bursts of calls into one trailing call.
+
+throttle                                          *lib.nvim-patterns-throttle*
+  Stage: impl    Module: lib.nvim.patterns.throttle
+  See also: lib.nvim.debounce
+  At most one call per interval (leading and/or trailing).
+  Usage: >lua
+
+      local m = require("lib.nvim.patterns.throttle")
+<
+  README: lua/lib/nvim/patterns/throttle/README.md
+
+circuit_breaker                            *lib.nvim-patterns-circuit_breaker*
+  Stage: impl    Module: lib.lua.patterns.circuit_breaker
+  After N failures stop calling for a while (closed/open/half-open).
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.circuit_breaker")
+<
+  README: lua/lib/lua/patterns/circuit_breaker/README.md
+
+retry_backoff                                *lib.nvim-patterns-retry_backoff*
+  Stage: impl    Module: lib.nvim.patterns.retry_backoff
+  See also: lib.nvim.cross.fs.mutate (retry)
+  Retry with growing delay and a budget.
+  Usage: >lua
+
+      local m = require("lib.nvim.patterns.retry_backoff")
+<
+  README: lua/lib/nvim/patterns/retry_backoff/README.md
+
+cache_aside                                    *lib.nvim-patterns-cache_aside*
+  Stage: reuse    Module: lib.lua.memo, lib.nvim.cache
+  Look in the cache first, compute and store on a miss.
+
+specification                                *lib.nvim-patterns-specification*
+  Stage: impl    Module: lib.lua.patterns.specification
+  Rules as composable predicates (`and_`, `or_`, `not_`).
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.specification")
+<
+  README: lua/lib/lua/patterns/specification/README.md
+
+result                                              *lib.nvim-patterns-result*
+  Stage: impl    Module: lib.lua.patterns.result
+  See also: lib.lua.error
+  Errors as values: `ok, err` pairs with helpers (`map`, `unwrap_or`).
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.result")
+<
+  README: lua/lib/lua/patterns/result/README.md
+
+reducer                                            *lib.nvim-patterns-reducer*
+  Stage: impl    Module: lib.lua.patterns.reducer
+  State = reduce(state, action); the Elm/MVU architecture for UI state.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.reducer")
+<
+  README: lua/lib/lua/patterns/reducer/README.md
+
+state_machine                                *lib.nvim-patterns-state_machine*
+  Stage: impl    Module: lib.lua.patterns.state_machine
+  Declared states and transitions with guards; a table-driven cousin of State.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.state_machine")
+<
+  README: lua/lib/lua/patterns/state_machine/README.md
+
+unit_of_work                                  *lib.nvim-patterns-unit_of_work*
+  Stage: idea    Module: lib.lua.patterns.unit_of_work
+  See also: lib.lua.context_manager
+  Collect changes and commit or roll back as one (bracket around a batch).
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.unit_of_work")
+<
+  README: lua/lib/lua/patterns/unit_of_work/README.md
+
+saga                                                  *lib.nvim-patterns-saga*
+  Stage: idea    Module: lib.lua.patterns.saga
+  A multi-step process with a compensating step per action.
+  Usage: >lua
+
+      local m = require("lib.lua.patterns.saga")
+<
+  README: lua/lib/lua/patterns/saga/README.md
+
+vim:tw=78:ts=8:sw=8:et:ft=help:norl:
